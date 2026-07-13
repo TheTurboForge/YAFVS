@@ -132,6 +132,7 @@ browser, direct API, production-posture, or release-readiness question.
 - `just feed-cache-sync`: start a full Community Feed cache sync in `tmux`.
 - `just feed-generation-stage`: create and verify a sealed, content-addressed feed generation without activating it.
 - `just feed-generation-state --status-only --json`: verify staged feed generations and report orphan or tampered state.
+- `just runtime-app-build`: explicitly build application images without changing feed state or starting services.
 - `just feed-generation-activate -- <generation-id> [--allow-first-activation]`: activate a verified generation through the service-coordinated, guarded activation path.
 - `just feed-generation-rollback -- <generation-id>`: perform verified compensating recovery only to the journaled known-good predecessor; this is not a transactional database rollback.
 - `just runtime-status`: show Docker runtime status.
@@ -148,6 +149,20 @@ browser, direct API, production-posture, or release-readiness question.
 - `just runtime-browser-smoke`: verify raw-report and scope-report workflows through a headless browser.
 - `just runtime-browser-regression`: run deeper browser route, link, and pagination regression checks.
 - `just runtime-credential-smoke`: verify credential creation through a headless browser.
+
+Because the development services consume read-only bind mounts from `build/`,
+runtime-affecting component builds and `runtime-app-build` refuse to run while
+application services are active. Run `runtime-app-down`, build and prepare the
+deployment, then use `runtime-app-up`. `runtime-app-build` prepares images but
+does not deploy them. Use
+`runtime-app-up` to deploy the prepared images explicitly on an installation
+that already has an active feed generation. First activation may deploy the
+prepared receipt after its import succeeds. Feed activation and rollback never
+build or pull application images. They journal both the exact prepared image
+IDs, a digest of the bind-mounted executable/static artifacts, and a digest of
+the rendered application execution contract. They fail closed if any part of
+that deployment identity changes or cannot be recreated. `build-ui` only
+builds the web assets; `runtime-app-build` stages them for deployment.
 - `just runtime-app-down`: stop experimental inherited application services.
 - `just gvmd-smoke`: run a narrow experimental manager profile smoke.
 

@@ -173,6 +173,7 @@ services:
 
   gvmd:
     profiles: ["app"]
+    image: turbovas-gvmd
     build:
       context: ..
       dockerfile: docker/dev/Dockerfile
@@ -260,6 +261,7 @@ services:
 
   ospd-openvas:
     profiles: ["app"]
+    image: turbovas-ospd-openvas
     build:
       context: ..
       dockerfile: docker/dev/Dockerfile
@@ -364,6 +366,7 @@ services:
 
   notus-scanner:
     profiles: ["app"]
+    image: turbovas-notus-scanner
     build:
       context: ..
       dockerfile: docker/dev/Dockerfile
@@ -429,6 +432,7 @@ services:
 
   gsad:
     profiles: ["app"]
+    image: turbovas-gsad
     build:
       context: ..
       dockerfile: docker/dev/Dockerfile
@@ -491,6 +495,7 @@ services:
 
   turbovas-api:
     profiles: ["app"]
+    image: turbovas-turbovas-api
     build:
       context: ..
       dockerfile: docker/turbovas-api/Dockerfile

@@ -88,7 +88,13 @@ Use `just feed-generation-activate -- <generation-id> [--allow-first-activation]
 state verification. Activation is verified and coordinated with the app
 services while the `feed-store/current` pointer changes, and it refuses to
 proceed unless no scan task is active. The first activation requires an
-explicit acknowledgement. If the verified activation must be
+explicit acknowledgement. On a new development installation, run
+`just runtime-app-build --json` before first activation; the activation may
+deploy that prepared receipt only after its import succeeds. After an
+intentional application change on an installation with an active generation,
+run `just runtime-app-build --json` and then `just runtime-app-up --json` to
+deploy the prepared identity before the next feed transition. If the verified
+activation must be
 undone, use `just feed-generation-rollback -- <generation-id>` for verified,
 service-coordinated compensating recovery to a prior generation. This is not a
 transactional database rollback: it reimports the prior generation as explicit
@@ -100,6 +106,26 @@ and `feed-store/current`. A later interrupted transition must recover to its
 recorded predecessor with `feed-generation-rollback`; an interrupted first
 activation may only resume the recorded target with the explicit first-
 activation acknowledgement.
+
+Activation and rollback do not build or pull application images. They consume
+an explicit prepared receipt containing the exact image identities, a
+deterministic digest of the bind-mounted executable, Python, shared-library,
+and staged web assets, and a digest of the rendered application execution
+contract. These identities are stored in the private durable journal. Import
+and restart remain pinned to them and fail closed if an image object is
+unavailable, a runtime artifact changes, or the Compose command, environment,
+mount, user, capability, or related execution configuration drifts. Deployment
+preparation is explicit through `runtime-app-build`; `runtime-app-up` deploys
+that receipt on an already initialized installation. `build-ui` builds but no
+longer stages or restarts the running UI implicitly.
+
+The development services consume runtime artifacts through read-only bind
+mounts. Read-only prevents container writes, not host-side replacement, so
+runtime-affecting component builds and `runtime-app-build` fail closed while
+application services are running. Use `runtime-app-down`, perform the build,
+then deploy the prepared receipt with `runtime-app-up`. This creates deliberate
+development downtime instead of allowing a running deployment to observe a
+partially replaced artifact tree.
 
 The generation boundary verifies Greenbone signatures and exact signed
 checksum coverage for NASL, Notus advisories/products, and CERT data. The
@@ -132,6 +158,7 @@ Useful development checks include:
 - `just runtime-nmap-capability-check --json`
 - `just feed-state --json`
 - `just feed-generation-state --status-only --json`
+- `just runtime-app-build --json`
 - `just feed-generation-activate -- <generation-id> [--allow-first-activation]`
 - `just feed-generation-rollback -- <generation-id>`
 - `just runtime-scope-smoke --json`

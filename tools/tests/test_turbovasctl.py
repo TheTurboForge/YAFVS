@@ -862,6 +862,38 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["findings"][0]["check"], "compose.logs.invalid_lines")
         run_command.assert_not_called()
 
+    def test_deployed_app_env_reuses_running_hosts_by_default(self):
+        with unittest.mock.patch.dict(os.environ, {}, clear=True), unittest.mock.patch.object(
+            turbovasctl,
+            "runtime_app_env",
+            return_value={turbovasctl.GSAD_HOSTS_ENV: turbovasctl.DEFAULT_GSAD_HOST},
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "current_gsad_published_hosts",
+            return_value=("192.0.2.10", "198.51.100.20"),
+        ):
+            env = turbovasctl.deployed_app_env(Path("/tmp"))
+
+        self.assertEqual(
+            env[turbovasctl.GSAD_HOSTS_ENV], "192.0.2.10,198.51.100.20"
+        )
+
+    def test_deployed_app_env_preserves_explicit_hosts(self):
+        explicit = "203.0.113.30"
+        with unittest.mock.patch.dict(
+            os.environ, {turbovasctl.GSAD_HOSTS_ENV: explicit}, clear=True
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "runtime_app_env",
+            return_value={turbovasctl.GSAD_HOSTS_ENV: explicit},
+        ), unittest.mock.patch.object(
+            turbovasctl, "current_gsad_published_hosts"
+        ) as current_hosts:
+            env = turbovasctl.deployed_app_env(Path("/tmp"))
+
+        self.assertEqual(env[turbovasctl.GSAD_HOSTS_ENV], explicit)
+        current_hosts.assert_not_called()
+
     def test_license_status_only_omits_pass_manifest_details(self):
         result = {
             "status": "pass",
@@ -876,7 +908,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 }
             ],
         }
-
         compact = turbovasctl.license_status_only_result(result)
 
         self.assertEqual(compact["details"], {"diff_scope": "staged", "modified_imported_only": True, "finding_count": 1, "non_pass_count": 0})
@@ -1225,11 +1256,10 @@ class TurboVASCtlTests(unittest.TestCase):
                 self.assertIn(f"{wrapper} *args:", justfile)
                 self.assertIn(f"tools/turbovasctl {wrapper} \"$@\"", justfile)
 
-    def test_build_ui_restarts_running_gsad_after_static_stage(self):
+    def test_build_ui_defers_runtime_staging_and_restart(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
-        self.assertIn("def restart_gsad_after_static_stage", source)
-        self.assertIn('compose_command(repo_root, "restart", "gsad")', source)
-        self.assertIn("findings.append(restart_gsad_after_static_stage(repo_root))", source)
+        self.assertNotIn("def restart_gsad_after_static_stage", source)
+        self.assertIn("gsa.deployment-deferred", source)
 
     def test_native_scope_report_finding_counts_exclude_scanner_errors(self):
         source = (Path(__file__).resolve().parents[2] / "services" / "turbovas-api" / "src" / "scope_reports.rs").read_text(encoding="utf-8")
@@ -2163,7 +2193,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+        for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             with self.subTest(command=command):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
@@ -13472,7 +13502,13 @@ db2:keys=5,expires=0,avg_ttl=0
 
             try:
                 turbovasctl.os.environ[turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV] = token
-                with unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(turbovasctl, "active_feed_generation_finding", return_value=turbovasctl.finding("pass", "feed-generation.current", "Mock completed activation.")), unittest.mock.patch.object(turbovasctl, "native_api_direct_admin_operator_uuid", return_value=(turbovasctl.subprocess.CompletedProcess([], 0, f"admin {operator_uuid}", ""), operator_uuid)), unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct_curl), unittest.mock.patch.object(turbovasctl, "direct_trash_empty_runtime_findings", return_value=[]), unittest.mock.patch.object(turbovasctl, "direct_task_target_replace_runtime_findings", return_value=[turbovasctl.finding("pass", "native-api-direct.task-target-replace-acknowledgement", "ok"), turbovasctl.finding("pass", "native-api-direct.task-target-replace-fixture-cleanup", "ok")]), unittest.mock.patch.object(turbovasctl.time, "time", return_value=1):
+                receipt = {
+                    "image_ids": {
+                        service: "sha256:" + f"{index + 1:x}" * 64
+                        for index, service in enumerate(turbovasctl.APP_SERVICES)
+                    }
+                }
+                with unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(turbovasctl, "active_feed_generation_finding", return_value=turbovasctl.finding("pass", "feed-generation.current", "Mock completed activation.")), unittest.mock.patch.object(turbovasctl, "require_app_deployment_receipt", return_value=(receipt, None)), unittest.mock.patch.object(turbovasctl, "refresh_app_deployment_receipt_after_image_build", return_value=(receipt, None)), unittest.mock.patch.object(turbovasctl, "native_api_direct_admin_operator_uuid", return_value=(turbovasctl.subprocess.CompletedProcess([], 0, f"admin {operator_uuid}", ""), operator_uuid)), unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct_curl), unittest.mock.patch.object(turbovasctl, "direct_trash_empty_runtime_findings", return_value=[]), unittest.mock.patch.object(turbovasctl, "direct_task_target_replace_runtime_findings", return_value=[turbovasctl.finding("pass", "native-api-direct.task-target-replace-acknowledgement", "ok"), turbovasctl.finding("pass", "native-api-direct.task-target-replace-fixture-cleanup", "ok")]), unittest.mock.patch.object(turbovasctl.time, "time", return_value=1):
                     result = turbovasctl.command_runtime_native_api_direct_write_smoke(root, status_only=True)
             finally:
                 if original_token is None:
@@ -14491,6 +14527,10 @@ db2:keys=5,expires=0,avg_ttl=0
                 "target_generation_id": None,
                 "previous_generation_id": None,
                 "rollback_generation_id": "b" * 64,
+                "app_image_ids": {
+                    service: "sha256:" + f"{index + 1:x}" * 64
+                    for index, service in enumerate(turbovasctl.APP_SERVICES)
+                },
                 "completed_at": "2026-07-13T00:00:00+00:00",
             }
             path = turbovasctl.feed_activation_state_path(root)
@@ -14520,6 +14560,11 @@ db2:keys=5,expires=0,avg_ttl=0
                 turbovasctl.write_feed_activation_state(
                     root,
                     {**payload, "current_generation_id": "../escape"},
+                )
+            with self.assertRaisesRegex(ValueError, "image identities are incomplete"):
+                turbovasctl.write_feed_activation_state(
+                    root,
+                    {**payload, "app_image_ids": {"gvmd": "sha256:" + "a" * 64}},
                 )
             self.assertEqual(
                 turbovasctl.read_feed_activation_state(root)["current_generation_id"],
@@ -14856,13 +14901,17 @@ db2:keys=5,expires=0,avg_ttl=0
         app_env = {
             turbovasctl.GSAD_HOSTS_ENV: "192.168.178.42,100.80.139.13"
         }
+        image_ids = {
+            service: "sha256:" + f"{index + 1:x}" * 64
+            for index, service in enumerate(turbovasctl.APP_SERVICES)
+        }
         compose = unittest.mock.Mock(return_value=["docker", "compose", "up"])
         run = unittest.mock.Mock(
             return_value=subprocess.CompletedProcess([], 0, "", "")
         )
         with unittest.mock.patch.multiple(
             turbovasctl,
-            compose_command=compose,
+            compose_command_with_app_images=compose,
             run_command=run,
         ):
             findings = turbovasctl.compose_app_services_up_with_retry(
@@ -14870,11 +14919,352 @@ db2:keys=5,expires=0,avg_ttl=0
                 "feed-generation.app-restart",
                 "Mock restart",
                 app_env=app_env,
+                app_image_ids=image_ids,
             )
 
         self.assertEqual(findings[0]["status"], "pass")
+        self.assertIs(compose.call_args.args[1], image_ids)
         self.assertIs(compose.call_args.kwargs["env"], app_env)
         self.assertIs(run.call_args.kwargs["env"], app_env)
+        self.assertIn("--no-build", compose.call_args.args)
+        self.assertIn("never", compose.call_args.args)
+        self.assertNotIn("--build", compose.call_args.args)
+
+    def test_feed_image_snapshot_rejects_partial_running_deployment(self):
+        running = {
+            turbovasctl.APP_SERVICES[0]: "sha256:" + "a" * 64,
+        }
+        with unittest.mock.patch.object(
+            turbovasctl,
+            "container_image_id",
+            side_effect=lambda _root, service: running.get(service),
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "configured_app_service_image_refs",
+        ) as configured:
+            image_ids, error = turbovasctl.resolve_app_service_image_ids(
+                Path("/tmp"),
+                prefer_running=True,
+                app_env={},
+            )
+
+        self.assertEqual(image_ids, {})
+        self.assertIn("partial", error)
+        configured.assert_not_called()
+
+    def test_runtime_artifact_manifest_is_deterministic_and_content_bound(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact_root = root / "runtime"
+            artifact_root.mkdir()
+            executable = artifact_root / "service"
+            executable.write_bytes(b"first")
+            executable.chmod(0o755)
+            (artifact_root / "service-link").symlink_to("service")
+            ignored = artifact_root / "__pycache__"
+            ignored.mkdir()
+            bytecode = ignored / "service.pyc"
+            bytecode.write_bytes(b"first-bytecode")
+            with unittest.mock.patch.object(
+                turbovasctl, "APP_RUNTIME_ARTIFACT_ROOTS", (Path("runtime"),)
+            ), unittest.mock.patch.object(
+                turbovasctl, "APP_RUNTIME_ARTIFACT_FILES", ()
+            ):
+                first = turbovasctl.app_runtime_artifact_manifest(root)
+                second = turbovasctl.app_runtime_artifact_manifest(root)
+                bytecode.write_bytes(b"second-bytecode")
+                bytecode_changed = turbovasctl.app_runtime_artifact_manifest(root)
+                bytecode.write_bytes(b"first-bytecode")
+                executable.write_bytes(b"second")
+                changed = turbovasctl.app_runtime_artifact_manifest(root)
+
+        self.assertEqual(first, second)
+        self.assertEqual(first["entry_count"], 3)
+        self.assertNotEqual(first["digest"], bytecode_changed["digest"])
+        self.assertNotEqual(first["digest"], changed["digest"])
+
+    def test_runtime_artifact_manifest_rejects_host_external_symlink(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact_root = root / "runtime"
+            artifact_root.mkdir()
+            (artifact_root / "escape").symlink_to("/home/example/outside")
+            with unittest.mock.patch.object(
+                turbovasctl, "APP_RUNTIME_ARTIFACT_ROOTS", (Path("runtime"),)
+            ), unittest.mock.patch.object(
+                turbovasctl, "APP_RUNTIME_ARTIFACT_FILES", ()
+            ):
+                with self.assertRaisesRegex(OSError, "escapes"):
+                    turbovasctl.app_runtime_artifact_manifest(root)
+
+    def test_runtime_artifact_manifest_rejects_absolute_dot_segment_escape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact_root = root / "runtime"
+            artifact_root.mkdir()
+            (artifact_root / "escape").symlink_to(
+                "/usr/../../workspace/unattested"
+            )
+            with unittest.mock.patch.object(
+                turbovasctl, "APP_RUNTIME_ARTIFACT_ROOTS", (Path("runtime"),)
+            ), unittest.mock.patch.object(
+                turbovasctl, "APP_RUNTIME_ARTIFACT_FILES", ()
+            ):
+                with self.assertRaisesRegex(OSError, "escapes"):
+                    turbovasctl.app_runtime_artifact_manifest(root)
+
+    def test_runtime_artifact_manifest_accepts_attested_virtualenv_link_chain(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            artifact_root = root / "runtime"
+            artifact_root.mkdir()
+            (artifact_root / "python").symlink_to("/usr/bin/python3")
+            (artifact_root / "python3").symlink_to("python")
+            with unittest.mock.patch.object(
+                turbovasctl, "APP_RUNTIME_ARTIFACT_ROOTS", (Path("runtime"),)
+            ), unittest.mock.patch.object(
+                turbovasctl, "APP_RUNTIME_ARTIFACT_FILES", ()
+            ):
+                manifest = turbovasctl.app_runtime_artifact_manifest(root)
+
+        self.assertEqual(manifest["entry_count"], 2)
+
+    def test_app_compose_contract_is_content_bound_without_storing_config(self):
+        image_ids = {
+            service: "sha256:" + f"{index + 1:x}" * 64
+            for index, service in enumerate(turbovasctl.APP_SERVICES)
+        }
+        base_services = {
+            service: {"image": image_ids[service], "command": [service]}
+            for service in turbovasctl.APP_SERVICES
+        }
+        changed_services = json.loads(json.dumps(base_services))
+        changed_services["gsad"]["command"] = ["gsad", "--changed"]
+        rendered = [
+            {"services": base_services, "networks": {"default": {}}},
+            {"services": changed_services, "networks": {"default": {}}},
+        ]
+        with unittest.mock.patch.object(
+            turbovasctl,
+            "compose_command_with_app_images",
+            return_value=["docker", "compose", "config"],
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "run_command",
+            side_effect=[
+                subprocess.CompletedProcess([], 0, json.dumps(item), "")
+                for item in rendered
+            ],
+        ):
+            first = turbovasctl.app_compose_contract_manifest(
+                Path("/tmp"), image_ids, app_env={}
+            )
+            changed = turbovasctl.app_compose_contract_manifest(
+                Path("/tmp"), image_ids, app_env={}
+            )
+
+        self.assertNotEqual(first["digest"], changed["digest"])
+        self.assertEqual(set(first), {"schema_version", "algorithm", "digest", "services"})
+        self.assertNotIn("command", json.dumps(first))
+
+    def test_app_deployment_receipt_requires_compose_contract(self):
+        image_ids = {
+            service: "sha256:" + f"{index + 1:x}" * 64
+            for index, service in enumerate(turbovasctl.APP_SERVICES)
+        }
+        payload = {
+            "schema_version": 1,
+            "image_ids": image_ids,
+            "runtime_artifacts": {
+                "schema_version": 1,
+                "algorithm": "sha256",
+                "digest": "d" * 64,
+                "entry_count": 1,
+                "byte_count": 1,
+                "roots": [
+                    str(path)
+                    for path in (
+                        *turbovasctl.APP_RUNTIME_ARTIFACT_ROOTS,
+                        *turbovasctl.APP_RUNTIME_ARTIFACT_FILES,
+                    )
+                ],
+            },
+            "compose_contract": {
+                "schema_version": 1,
+                "algorithm": "sha256",
+                "digest": "e" * 64,
+                "services": list(turbovasctl.APP_SERVICES),
+            },
+            "prepared_at": "2026-07-13T00:00:00+00:00",
+        }
+        self.assertEqual(
+            turbovasctl.validate_app_deployment_receipt(dict(payload)), payload
+        )
+        payload.pop("compose_contract")
+        with self.assertRaisesRegex(ValueError, "receipt"):
+            turbovasctl.validate_app_deployment_receipt(payload)
+
+    def test_app_oneoff_refuses_missing_receipt_without_running_compose(self):
+        with unittest.mock.patch.object(
+            turbovasctl, "deployed_app_env", return_value={}
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "require_app_deployment_receipt",
+            return_value=(None, "missing prepared receipt"),
+        ), unittest.mock.patch.object(turbovasctl, "run_command") as run_command:
+            result = turbovasctl.run_app_oneoff(
+                Path("/tmp"), "gvmd", ["gvmd", "--get-users"]
+            )
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("missing prepared receipt", result.stderr)
+        run_command.assert_not_called()
+
+    def test_runtime_app_build_refuses_running_bind_mount_consumers(self):
+        with unittest.mock.patch.object(
+            turbovasctl, "running_app_services", return_value=("gvmd", "gsad")
+        ), unittest.mock.patch.object(turbovasctl, "run_command") as run_command:
+            result = turbovasctl._command_runtime_app_build_unlocked(Path("/tmp"))
+
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(
+            result["findings"][0]["details"]["running_services"], ["gvmd", "gsad"]
+        )
+        run_command.assert_not_called()
+
+    def test_component_build_refuses_running_bind_mount_consumers(self):
+        with unittest.mock.patch.object(
+            turbovasctl, "running_app_services", return_value=("ospd-openvas",)
+        ), unittest.mock.patch.object(turbovasctl, "run_command") as run_command:
+            result = turbovasctl.command_build(
+                Path("/tmp"), "gvm-libs", lifecycle_managed=True
+            )
+
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("runtime-app-down", result["findings"][0]["message"])
+        run_command.assert_not_called()
+
+    def test_identity_failure_containment_stops_all_app_services(self):
+        completed = subprocess.CompletedProcess([], 0, "stopped\n", "")
+        with unittest.mock.patch.object(
+            turbovasctl, "compose_command", return_value=["docker", "compose", "stop"]
+        ), unittest.mock.patch.object(
+            turbovasctl, "run_command", return_value=completed
+        ) as run_command:
+            result = turbovasctl.stop_app_services_after_identity_failure(
+                Path("/tmp"), app_env={}, check="test.identity-stop"
+            )
+
+        self.assertEqual(result["status"], "pass")
+        run_command.assert_called_once()
+        self.assertIn("stopped", result["message"])
+
+    def test_app_start_and_feed_restart_contain_post_start_identity_drift(self):
+        source = TURBOVASCTL_PATH.read_text(encoding="utf-8")
+        app_up = source[
+            source.index("def _command_runtime_app_up_unlocked") : source.index(
+                "def command_runtime_app_up"
+            )
+        ]
+        feed_restart = source[
+            source.index("def restart_and_verify_feed_app_services") : source.index(
+                "def feed_import_summary_finding"
+            )
+        ]
+
+        self.assertLess(
+            app_up.index('check="runtime.app.artifacts-before-start"'),
+            app_up.index("compose_app_services_up_with_retry"),
+        )
+        self.assertGreater(
+            app_up.index('check="runtime.app.artifacts-after-start"'),
+            app_up.index("compose_app_services_up_with_retry"),
+        )
+        self.assertIn("stop_app_services_after_identity_failure", app_up)
+        self.assertIn("stop_app_services_after_identity_failure", feed_restart)
+
+    def test_receipt_identity_can_precede_explicit_compose_mode_transition(self):
+        image_ids = {
+            service: "sha256:" + f"{index + 1:x}" * 64
+            for index, service in enumerate(turbovasctl.APP_SERVICES)
+        }
+        receipt = {
+            "schema_version": 1,
+            "image_ids": image_ids,
+            "runtime_artifacts": {
+                "schema_version": 1,
+                "algorithm": "sha256",
+                "digest": "d" * 64,
+                "entry_count": 1,
+                "byte_count": 1,
+                "roots": [
+                    str(path)
+                    for path in (
+                        *turbovasctl.APP_RUNTIME_ARTIFACT_ROOTS,
+                        *turbovasctl.APP_RUNTIME_ARTIFACT_FILES,
+                    )
+                ],
+            },
+            "compose_contract": {
+                "schema_version": 1,
+                "algorithm": "sha256",
+                "digest": "e" * 64,
+                "services": list(turbovasctl.APP_SERVICES),
+            },
+            "prepared_at": "2026-07-13T00:00:00+00:00",
+        }
+        with unittest.mock.patch.object(
+            turbovasctl, "app_service_image_availability_error", return_value=None
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "app_runtime_artifact_finding",
+            return_value=turbovasctl.finding("pass", "artifacts", "ok"),
+        ), unittest.mock.patch.object(
+            turbovasctl, "app_compose_contract_finding"
+        ) as compose_finding:
+            error = turbovasctl.app_deployment_receipt_error(
+                Path("/tmp"),
+                receipt,
+                app_env={},
+                verify_compose_contract=False,
+            )
+
+        self.assertIsNone(error)
+        compose_finding.assert_not_called()
+
+    def test_runtime_artifact_manifest_rejects_relative_symlink_escape(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            outside = root / "outside"
+            outside.write_text("not attested", encoding="utf-8")
+            artifact_root = root / "runtime"
+            artifact_root.mkdir()
+            (artifact_root / "escape").symlink_to("../outside")
+            with unittest.mock.patch.object(
+                turbovasctl, "APP_RUNTIME_ARTIFACT_ROOTS", (Path("runtime"),)
+            ), unittest.mock.patch.object(
+                turbovasctl, "APP_RUNTIME_ARTIFACT_FILES", ()
+            ):
+                with self.assertRaisesRegex(OSError, "escapes"):
+                    turbovasctl.app_runtime_artifact_manifest(root)
+
+    def test_transitioning_feed_state_requires_complete_deployment_identity(self):
+        image_ids = {
+            service: "sha256:" + f"{index + 1:x}" * 64
+            for index, service in enumerate(turbovasctl.APP_SERVICES)
+        }
+        payload = {
+            "schema_version": 1,
+            "status": "transitioning",
+            "action": "activate",
+            "current_generation_id": None,
+            "target_generation_id": "a" * 64,
+            "previous_generation_id": "b" * 64,
+            "rollback_generation_id": "c" * 64,
+            "app_image_ids": image_ids,
+        }
+        with self.assertRaisesRegex(ValueError, "lacks deployment identity"):
+            turbovasctl.validate_feed_activation_state(payload)
 
     def test_feed_activation_state_validates_restore_gsad_hosts(self):
         payload = {
@@ -15092,6 +15482,13 @@ db2:keys=5,expires=0,avg_ttl=0
         original_run_command = turbovasctl.run_command
         original_smoke = turbovasctl.command_runtime_native_api_smoke
         original_active_feed = turbovasctl.active_feed_generation_finding
+        original_require_receipt = turbovasctl.require_app_deployment_receipt
+        original_refresh_receipt = turbovasctl.refresh_app_deployment_receipt_after_image_build
+        image_ids = {
+            service: "sha256:" + f"{index + 1:x}" * 64
+            for index, service in enumerate(turbovasctl.APP_SERVICES)
+        }
+        receipt = {"image_ids": image_ids}
         direct_override_path = ""
         direct_override_text = ""
         env_names = (
@@ -15111,6 +15508,8 @@ db2:keys=5,expires=0,avg_ttl=0
             turbovasctl.run_command = fake_run_command
             turbovasctl.command_runtime_native_api_smoke = lambda _root: {"status": "pass", "summary": "smoke passed", "findings": [], "artifacts": ["native-api-smoke.json"]}
             turbovasctl.active_feed_generation_finding = lambda _root: turbovasctl.finding("pass", "feed-generation.current", "Mock completed activation.")
+            turbovasctl.require_app_deployment_receipt = lambda _root, **_kwargs: (receipt, None)
+            turbovasctl.refresh_app_deployment_receipt_after_image_build = lambda *_args, **_kwargs: (receipt, None)
             with tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp) / "TurboVAS"
                 root.mkdir()
@@ -15131,6 +15530,8 @@ db2:keys=5,expires=0,avg_ttl=0
             turbovasctl.run_command = original_run_command
             turbovasctl.command_runtime_native_api_smoke = original_smoke
             turbovasctl.active_feed_generation_finding = original_active_feed
+            turbovasctl.require_app_deployment_receipt = original_require_receipt
+            turbovasctl.refresh_app_deployment_receipt_after_image_build = original_refresh_receipt
             for name, value in original_env.items():
                 if value is None:
                     turbovasctl.os.environ.pop(name, None)
@@ -15506,6 +15907,10 @@ db2:keys=5,expires=0,avg_ttl=0
     def run_mocked_runtime_feed_import(
         self, restart_status="pass", rebuild_returncode=0
     ):
+        image_ids = {
+            service: "sha256:" + f"{index + 1:x}" * 64
+            for index, service in enumerate(turbovasctl.APP_SERVICES)
+        }
         restart = unittest.mock.Mock(
             return_value=[
                 turbovasctl.finding(
@@ -15551,6 +15956,10 @@ db2:keys=5,expires=0,avg_ttl=0
                     return_value={"status": "pass", "summary": "keyring ready"}
                 ),
                 container_running=unittest.mock.Mock(return_value=True),
+                container_image_id=unittest.mock.Mock(
+                    side_effect=lambda _root, service: image_ids[service]
+                ),
+                app_service_image_findings=unittest.mock.Mock(return_value=[]),
                 wait_for_socket=wait_for_socket,
                 wait_for_ospd_vt_load=unittest.mock.Mock(
                     return_value=("pass", [])
@@ -15570,7 +15979,9 @@ db2:keys=5,expires=0,avg_ttl=0
                 ),
             ):
                 result = turbovasctl.command_runtime_feed_import_init(
-                    root, activation_managed=True
+                    root,
+                    activation_managed=True,
+                    app_image_ids=image_ids,
                 )
         return result, restart, rebuild, wait_for_socket
 
@@ -15619,6 +16030,9 @@ db2:keys=5,expires=0,avg_ttl=0
             function.index("scanner_up_command") : function.index("scanner_up =")
         ]
         self.assertIn('"--force-recreate"', scanner_start)
+        self.assertIn('"--no-build"', scanner_start)
+        self.assertIn('"never"', scanner_start)
+        self.assertNotIn('"--build"', scanner_start)
         self.assertLess(
             function.index("if import_failed:"),
             function.index("compose_app_services_up_with_retry"),
@@ -15718,6 +16132,30 @@ db2:keys=5,expires=0,avg_ttl=0
         select_error=False,
         journal_error=False,
     ):
+        image_ids = {
+            service: "sha256:" + f"{index + 1:x}" * 64
+            for index, service in enumerate(turbovasctl.APP_SERVICES)
+        }
+        runtime_artifacts = {
+            "schema_version": 1,
+            "algorithm": "sha256",
+            "digest": "d" * 64,
+            "entry_count": 7,
+            "byte_count": 1024,
+            "roots": [
+                str(path)
+                for path in (
+                    *turbovasctl.APP_RUNTIME_ARTIFACT_ROOTS,
+                    *turbovasctl.APP_RUNTIME_ARTIFACT_FILES,
+                )
+            ],
+        }
+        compose_contract = {
+            "schema_version": 1,
+            "algorithm": "sha256",
+            "digest": "e" * 64,
+            "services": list(turbovasctl.APP_SERVICES),
+        }
         current = (
             {"generation_id": current_id, "verified": True}
             if current_id is not None
@@ -15736,7 +16174,11 @@ db2:keys=5,expires=0,avg_ttl=0
             else None
         )
         if activation_state_override is not None:
-            activation_state = activation_state_override
+            activation_state = dict(activation_state_override)
+            if activation_state.get("status") == "transitioning":
+                activation_state.setdefault("app_image_ids", image_ids)
+                activation_state.setdefault("app_runtime_artifacts", runtime_artifacts)
+                activation_state.setdefault("app_compose_contract", compose_contract)
         import_results = [
             {
                 "status": status,
@@ -15847,6 +16289,57 @@ db2:keys=5,expires=0,avg_ttl=0
                         turbovasctl.GSAD_HOSTS_ENV: "192.168.178.42,100.80.139.13"
                     }
                 ),
+                require_app_deployment_receipt=unittest.mock.Mock(
+                    return_value=(
+                        {
+                            "schema_version": 1,
+                            "image_ids": image_ids,
+                            "runtime_artifacts": runtime_artifacts,
+                            "compose_contract": compose_contract,
+                            "prepared_at": "2026-07-13T00:00:00+00:00",
+                        },
+                        None,
+                    )
+                ),
+                app_service_image_findings=unittest.mock.Mock(
+                    return_value=[
+                        turbovasctl.finding(
+                            "pass",
+                            "feed-generation.running-app-image",
+                            f"Mock {service} image matches.",
+                        )
+                        for service in turbovasctl.APP_SERVICES
+                    ]
+                ),
+                resolve_app_service_image_ids=unittest.mock.Mock(
+                    return_value=(image_ids, None)
+                ),
+                app_service_image_availability_error=unittest.mock.Mock(
+                    return_value=None
+                ),
+                app_runtime_artifact_manifest=unittest.mock.Mock(
+                    return_value=runtime_artifacts
+                ),
+                app_runtime_artifact_finding=unittest.mock.Mock(
+                    return_value=turbovasctl.finding(
+                        "pass",
+                        "feed-generation.app-artifacts",
+                        "Mock runtime artifact identity matches.",
+                    )
+                ),
+                app_compose_contract_finding=unittest.mock.Mock(
+                    return_value=turbovasctl.finding(
+                        "pass",
+                        "feed-generation.app-compose",
+                        "Mock Compose execution contract matches.",
+                    )
+                ),
+                compose_command_with_app_images=unittest.mock.Mock(
+                    return_value=["docker", "compose", "config"]
+                ),
+                run_command=unittest.mock.Mock(
+                    return_value=subprocess.CompletedProcess([], 0, "", "")
+                ),
             ):
                 result = turbovasctl.command_feed_generation_transition(
                     root,
@@ -15877,9 +16370,67 @@ db2:keys=5,expires=0,avg_ttl=0
             unittest.mock.ANY,
             activation_managed=True,
             restart_services=False,
+            app_image_ids=unittest.mock.ANY,
         )
         stopped.assert_called_once()
         cleared.assert_not_called()
+
+    def test_normal_transition_refreshes_prior_journal_image_ids(self):
+        prior_image_ids = {
+            service: "sha256:" + "f" * 64
+            for service in turbovasctl.APP_SERVICES
+        }
+        state = {
+            "schema_version": 1,
+            "status": "active",
+            "current_generation_id": "b" * 64,
+            "target_generation_id": None,
+            "previous_generation_id": None,
+            "rollback_generation_id": "c" * 64,
+            "app_image_ids": prior_image_ids,
+        }
+
+        result, *_mocks = self.run_mocked_feed_generation_transition(
+            activation_state_override=state
+        )
+
+        finding = next(
+            item
+            for item in result["findings"]
+            if item["check"] == "feed-generation.app-images"
+        )
+        self.assertNotEqual(finding["details"]["image_ids"], prior_image_ids)
+
+    def test_interrupted_transition_reuses_journaled_image_ids(self):
+        recorded_image_ids = {
+            service: "sha256:" + "e" * 64
+            for service in turbovasctl.APP_SERVICES
+        }
+        state = {
+            "schema_version": 1,
+            "status": "transitioning",
+            "action": "activate",
+            "current_generation_id": None,
+            "target_generation_id": "a" * 64,
+            "previous_generation_id": "b" * 64,
+            "rollback_generation_id": "c" * 64,
+            "app_image_ids": recorded_image_ids,
+        }
+
+        result, *_mocks = self.run_mocked_feed_generation_transition(
+            target_id="b" * 64,
+            current_id="a" * 64,
+            post_verify_id="b" * 64,
+            rollback=True,
+            activation_state_override=state,
+        )
+
+        finding = next(
+            item
+            for item in result["findings"]
+            if item["check"] == "feed-generation.app-images"
+        )
+        self.assertEqual(finding["details"]["image_ids"], recorded_image_ids)
 
     def test_feed_activation_closes_scan_start_race_before_transition(self):
         result, selected, imported, stopped, cleared = (

@@ -259,6 +259,27 @@ RUNTIME_SERVICES = ("postgres", "redis-openvas", "mosquitto")
 APP_SERVICES = ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "turbovas-api")
 FEED_CONTROL_SERVICES = ("gvmd", "gsad", "turbovas-api")
 APP_EXECUTION_MOUNT_SERVICES = ("gvmd", "ospd-openvas", "notus-scanner", "gsad")
+APP_RUNTIME_ARTIFACT_ROOTS = (
+    Path("build/prefix"),
+    Path("build/venvs/ospd-openvas"),
+    Path("build/venvs/notus-scanner"),
+    Path("build/openvas-scanner/nasl"),
+    Path("build/openvas-scanner/misc"),
+    Path("components/ospd-openvas/ospd"),
+    Path("components/ospd-openvas/ospd_openvas"),
+    Path("components/notus-scanner/notus/scanner"),
+)
+APP_RUNTIME_ARTIFACT_FILES = (Path("build/openvas-scanner/src/openvas"),)
+APP_RUNTIME_ARTIFACT_IGNORED_DIRS = frozenset({".pytest_cache"})
+APP_RUNTIME_ARTIFACT_IGNORED_SUFFIXES: frozenset[str] = frozenset()
+APP_RUNTIME_ARTIFACT_IGNORED_PATHS = frozenset(
+    {
+        "build/prefix/include/cgreen",
+        "build/prefix/lib/libcgreen.so",
+        "build/prefix/lib/libcgreen.so.1",
+    }
+)
+APP_DEPLOYMENT_RECEIPT = Path("state/app-deployment.json")
 FULL_TEST_TARGET_CIDR = "192.168.178.0/24"
 FULL_TEST_TASK_NAME = f"TurboVAS full test scan {FULL_TEST_TARGET_CIDR}"
 COMPLETED_SCAN_RUN_STATUS = 1
@@ -2798,6 +2819,24 @@ def runtime_lock_timeout_finding(exc: RuntimeLockTimeout, check: str) -> dict[st
     )
 
 
+def stop_app_services_after_identity_failure(
+    repo_root: Path, *, app_env: dict[str, str], check: str
+) -> dict[str, Any]:
+    command = compose_command(
+        repo_root, "--profile", "app", "stop", *APP_SERVICES, env=app_env
+    )
+    stopped = run_command(command, repo_root, env=app_env, timeout=300)
+    return process_step_finding(
+        "pass" if stopped.returncode == 0 else "fail",
+        check,
+        "Application services were stopped after deployment identity verification failed."
+        if stopped.returncode == 0
+        else "Application services could not be stopped after deployment identity verification failed.",
+        stopped,
+        command,
+    )
+
+
 def direct_native_api_curl(
     repo_root: Path,
     path: str,
@@ -3183,6 +3222,61 @@ def feed_generation_id_valid(value: Any) -> bool:
     return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
 
+def validate_app_service_image_ids(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict) or set(value) != set(APP_SERVICES):
+        raise ValueError("feed activation app image identities are incomplete")
+    normalized: dict[str, str] = {}
+    for service in APP_SERVICES:
+        image_id = value.get(service)
+        if not isinstance(image_id, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", image_id) is None:
+            raise ValueError(f"feed activation app image identity is invalid for {service}")
+        normalized[service] = image_id
+    return normalized
+
+
+def validate_app_runtime_artifact_manifest(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {
+        "schema_version",
+        "algorithm",
+        "digest",
+        "entry_count",
+        "byte_count",
+        "roots",
+    }:
+        raise ValueError("feed activation runtime artifact identity is invalid")
+    expected_roots = [str(path) for path in (*APP_RUNTIME_ARTIFACT_ROOTS, *APP_RUNTIME_ARTIFACT_FILES)]
+    if (
+        value.get("schema_version") != 1
+        or value.get("algorithm") != "sha256"
+        or re.fullmatch(r"[0-9a-f]{64}", str(value.get("digest", ""))) is None
+        or not isinstance(value.get("entry_count"), int)
+        or value.get("entry_count", 0) < 1
+        or not isinstance(value.get("byte_count"), int)
+        or value.get("byte_count", -1) < 0
+        or value.get("roots") != expected_roots
+    ):
+        raise ValueError("feed activation runtime artifact identity is invalid")
+    return value
+
+
+def validate_app_compose_contract(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {
+        "schema_version",
+        "algorithm",
+        "digest",
+        "services",
+    }:
+        raise ValueError("application Compose execution contract is invalid")
+    if (
+        value.get("schema_version") != 1
+        or value.get("algorithm") != "sha256"
+        or re.fullmatch(r"[0-9a-f]{64}", str(value.get("digest", ""))) is None
+        or value.get("services") != list(APP_SERVICES)
+    ):
+        raise ValueError("application Compose execution contract is invalid")
+    return value
+
+
 def validate_feed_activation_state(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict) or payload.get("schema_version") != 1:
         raise ValueError("feed activation state schema is invalid")
@@ -3224,6 +3318,21 @@ def validate_feed_activation_state(payload: Any) -> dict[str, Any]:
                     "feed activation state restore_gsad_hosts is invalid"
                 ) from error
             seen_hosts.add(host)
+    app_image_ids = payload.get("app_image_ids")
+    app_artifacts = payload.get("app_runtime_artifacts")
+    app_compose_contract = payload.get("app_compose_contract")
+    if status == "transitioning" and (
+        app_image_ids is None
+        or app_artifacts is None
+        or app_compose_contract is None
+    ):
+        raise ValueError("transitioning feed activation state lacks deployment identity")
+    if app_image_ids is not None:
+        validate_app_service_image_ids(app_image_ids)
+    if app_artifacts is not None:
+        validate_app_runtime_artifact_manifest(app_artifacts)
+    if app_compose_contract is not None:
+        validate_app_compose_contract(app_compose_contract)
     return payload
 
 
@@ -5116,20 +5225,72 @@ def gvmd_runtime_args(repo_root: Path) -> list[str]:
     ]
 
 
-def run_app_oneoff(repo_root: Path, service: str, command: list[str], no_deps: bool = True, timeout: int = 300) -> subprocess.CompletedProcess[str]:
+def run_app_oneoff(
+    repo_root: Path,
+    service: str,
+    command: list[str],
+    no_deps: bool = True,
+    timeout: int = 300,
+    *,
+    app_image_ids: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    app_env = deployed_app_env(repo_root)
+    if app_image_ids is None:
+        receipt, receipt_error = require_app_deployment_receipt(
+            repo_root, app_env=app_env
+        )
+        if receipt_error is not None or receipt is None:
+            return subprocess.CompletedProcess(
+                ["docker", "compose", "run", service],
+                2,
+                "",
+                receipt_error
+                or "Prepared application deployment receipt is unavailable",
+            )
+        app_image_ids = receipt["image_ids"]
     args = ["--profile", "app", "run", "--rm", "-T"]
+    args.extend(["--pull", "never"])
     if no_deps:
         args.append("--no-deps")
     args.extend([service, *command])
-    return run_command(compose_command(repo_root, *args), repo_root, env=runtime_env(repo_root), timeout=timeout)
+    compose = compose_command_with_app_images(repo_root, app_image_ids, *args)
+    return run_command(compose, repo_root, env=app_env, timeout=timeout)
 
 
-def run_gvmd_oneoff(repo_root: Path, args: list[str], no_deps: bool = True, timeout: int = 300) -> subprocess.CompletedProcess[str]:
-    return run_app_oneoff(repo_root, "gvmd", ["gvmd", *gvmd_db_args(repo_root), *args], no_deps=no_deps, timeout=timeout)
+def run_gvmd_oneoff(
+    repo_root: Path,
+    args: list[str],
+    no_deps: bool = True,
+    timeout: int = 300,
+    *,
+    app_image_ids: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    return run_app_oneoff(
+        repo_root,
+        "gvmd",
+        ["gvmd", *gvmd_db_args(repo_root), *args],
+        no_deps=no_deps,
+        timeout=timeout,
+        app_image_ids=app_image_ids,
+    )
 
 
-def run_gvmd_runtime_oneoff(repo_root: Path, args: list[str], no_deps: bool = True, timeout: int = 300) -> subprocess.CompletedProcess[str]:
-    return run_app_oneoff(repo_root, "gvmd", ["gvmd", *gvmd_runtime_args(repo_root), *args], no_deps=no_deps, timeout=timeout)
+def run_gvmd_runtime_oneoff(
+    repo_root: Path,
+    args: list[str],
+    no_deps: bool = True,
+    timeout: int = 300,
+    *,
+    app_image_ids: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    return run_app_oneoff(
+        repo_root,
+        "gvmd",
+        ["gvmd", *gvmd_runtime_args(repo_root), *args],
+        no_deps=no_deps,
+        timeout=timeout,
+        app_image_ids=app_image_ids,
+    )
 
 
 def parse_user_uuid(output: str, username: str) -> str | None:
@@ -5489,8 +5650,17 @@ def runtime_app_env(repo_root: Path) -> dict[str, str]:
     return env
 
 
-def runtime_native_api_rebuild_env(repo_root: Path) -> dict[str, str]:
+def deployed_app_env(repo_root: Path) -> dict[str, str]:
     env = runtime_app_env(repo_root)
+    if GSAD_HOSTS_ENV not in os.environ:
+        hosts = current_gsad_published_hosts(repo_root)
+        if hosts:
+            env[GSAD_HOSTS_ENV] = ",".join(hosts)
+    return env
+
+
+def runtime_native_api_rebuild_env(repo_root: Path) -> dict[str, str]:
+    env = deployed_app_env(repo_root)
     if native_api_direct_requested(env):
         ensure_native_api_direct_runtime_env_defaults(repo_root, env)
     return env
@@ -5584,7 +5754,12 @@ def compose_file(repo_root: Path) -> Path:
     return repo_root / "compose" / "dev.yaml"
 
 
-def compose_command(repo_root: Path, *args: str, env: dict[str, str] | None = None) -> list[str]:
+def compose_command(
+    repo_root: Path,
+    *args: str,
+    env: dict[str, str] | None = None,
+    extra_files: Sequence[Path] = (),
+) -> list[str]:
     command = ["docker", "compose", "-f", str(compose_file(repo_root))]
     env = runtime_env(repo_root) if env is None else env
     gsad_override = ensure_gsad_ports_override(repo_root, env)
@@ -5593,8 +5768,583 @@ def compose_command(repo_root: Path, *args: str, env: dict[str, str] | None = No
     direct_api_override = ensure_native_api_direct_ports_override(repo_root, env)
     if direct_api_override is not None:
         command.extend(["-f", str(direct_api_override)])
+    for extra_file in extra_files:
+        command.extend(["-f", str(extra_file)])
     command.extend(args)
     return command
+
+
+def app_image_override_path(repo_root: Path) -> Path:
+    return runtime_path(repo_root, "state", "feed-generation", "app-images.json")
+
+
+def write_app_image_override(repo_root: Path, image_ids: dict[str, str]) -> Path:
+    normalized = validate_app_service_image_ids(image_ids)
+    ensure_feed_activation_state_directory(repo_root)
+    path = app_image_override_path(repo_root)
+    write_private_text(
+        path,
+        json.dumps(
+            {"services": {service: {"image": normalized[service]} for service in APP_SERVICES}},
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+    )
+    return path
+
+
+def compose_command_with_app_images(
+    repo_root: Path,
+    image_ids: dict[str, str],
+    *args: str,
+    env: dict[str, str] | None = None,
+) -> list[str]:
+    override = write_app_image_override(repo_root, image_ids)
+    return compose_command(repo_root, *args, env=env, extra_files=(override,))
+
+
+def configured_app_service_image_refs(
+    repo_root: Path, app_env: dict[str, str] | None = None
+) -> tuple[dict[str, str], str | None]:
+    app_env = deployed_app_env(repo_root) if app_env is None else app_env
+    result = run_command(
+        compose_command(repo_root, "--profile", "app", "config", "--format", "json", env=app_env),
+        repo_root,
+        env=app_env,
+        timeout=120,
+    )
+    if result.returncode != 0:
+        return {}, f"Compose config failed: {'; '.join(output_tail(result.stdout, 20))}"
+    try:
+        config = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        return {}, f"Compose config was not valid JSON: {error}"
+    services = config.get("services") if isinstance(config, dict) else None
+    if not isinstance(services, dict):
+        return {}, "Compose config does not contain services"
+    refs: dict[str, str] = {}
+    for service in APP_SERVICES:
+        service_config = services.get(service)
+        image = service_config.get("image") if isinstance(service_config, dict) else None
+        if not isinstance(image, str) or not image:
+            return {}, f"Compose service {service} has no explicit image name"
+        refs[service] = image
+    return refs, None
+
+
+def docker_image_id(repo_root: Path, image: str) -> str | None:
+    result = run_command(
+        ["docker", "image", "inspect", "--format", "{{.Id}}", image],
+        repo_root,
+        env=runtime_env(repo_root),
+        timeout=120,
+    )
+    value = result.stdout.strip().splitlines()[-1] if result.returncode == 0 and result.stdout.strip() else ""
+    return value if re.fullmatch(r"sha256:[0-9a-f]{64}", value) else None
+
+
+def app_service_image_availability_error(
+    repo_root: Path, image_ids: dict[str, str]
+) -> str | None:
+    normalized = validate_app_service_image_ids(image_ids)
+    unavailable = [
+        service
+        for service in APP_SERVICES
+        if docker_image_id(repo_root, normalized[service]) != normalized[service]
+    ]
+    if unavailable:
+        return (
+            "Pinned application image objects are unavailable for "
+            f"{', '.join(unavailable)}; restore those exact image objects by digest "
+            "from a trusted registry or docker load before continuing"
+        )
+    return None
+
+
+def _hash_app_runtime_artifact(
+    repo_root: Path,
+    path: Path,
+    digest: Any,
+) -> tuple[int, int]:
+    relative = path.relative_to(repo_root).as_posix()
+    before = path.lstat()
+    mode = stat.S_IMODE(before.st_mode)
+    entry_digest = hashlib.sha256()
+    if stat.S_ISLNK(before.st_mode):
+        target = os.readlink(path)
+        target_path = Path(target)
+        if target_path.is_absolute():
+            normalized_target = Path(os.path.abspath(target_path))
+            image_owned = normalized_target.parts[:2] in {
+                ("/", "bin"),
+                ("/", "lib"),
+                ("/", "lib64"),
+                ("/", "usr"),
+            }
+            if not image_owned:
+                raise OSError(
+                    f"runtime artifact symlink escapes the attested deployment roots: {relative}"
+                )
+        else:
+            resolved = Path(os.path.abspath(path.parent / target_path))
+            attested_roots = [
+                Path(os.path.abspath(repo_root / root))
+                for root in APP_RUNTIME_ARTIFACT_ROOTS
+            ]
+            attested_files = {
+                Path(os.path.abspath(repo_root / artifact))
+                for artifact in APP_RUNTIME_ARTIFACT_FILES
+            }
+            within_root = any(
+                resolved == root or path_is_within(resolved, root)
+                for root in attested_roots
+            )
+            if not within_root and resolved not in attested_files:
+                raise OSError(
+                    f"runtime artifact symlink escapes the attested deployment roots: {relative}"
+                )
+        if target.startswith("/workspace/"):
+            raise OSError(
+                f"runtime artifact symlink escapes the attested deployment roots: {relative}"
+            )
+        content = target.encode("utf-8", errors="surrogateescape")
+        entry_digest.update(content)
+        kind = "symlink"
+        byte_count = len(content)
+    elif stat.S_ISREG(before.st_mode):
+        byte_count = 0
+        with path.open("rb") as handle:
+            while chunk := handle.read(1024 * 1024):
+                entry_digest.update(chunk)
+                byte_count += len(chunk)
+        after = path.lstat()
+        before_identity = (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+            before.st_mode,
+        )
+        after_identity = (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+            after.st_mode,
+        )
+        if before_identity != after_identity:
+            raise OSError(f"runtime artifact changed while hashing: {relative}")
+        kind = "file"
+    else:
+        raise OSError(f"unsupported runtime artifact type: {relative}")
+    record = json.dumps(
+        [relative, kind, mode, byte_count, entry_digest.hexdigest()],
+        ensure_ascii=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+    digest.update(record)
+    digest.update(b"\n")
+    return 1, byte_count
+
+
+def app_runtime_artifact_manifest(repo_root: Path) -> dict[str, Any]:
+    digest = hashlib.sha256()
+    entry_count = 0
+    byte_count = 0
+
+    def visit(path: Path) -> None:
+        nonlocal entry_count, byte_count
+        relative = path.relative_to(repo_root).as_posix()
+        if relative in APP_RUNTIME_ARTIFACT_IGNORED_PATHS:
+            return
+        metadata = path.lstat()
+        if stat.S_ISDIR(metadata.st_mode):
+            for child in sorted(path.iterdir(), key=lambda item: item.name):
+                if child.name in APP_RUNTIME_ARTIFACT_IGNORED_DIRS:
+                    continue
+                if child.suffix in APP_RUNTIME_ARTIFACT_IGNORED_SUFFIXES:
+                    continue
+                visit(child)
+            return
+        entries, size = _hash_app_runtime_artifact(repo_root, path, digest)
+        entry_count += entries
+        byte_count += size
+
+    for relative in APP_RUNTIME_ARTIFACT_ROOTS:
+        root = repo_root / relative
+        if not root.is_dir() or root.is_symlink():
+            raise OSError(f"required runtime artifact directory is unavailable: {relative}")
+        visit(root)
+    for relative in APP_RUNTIME_ARTIFACT_FILES:
+        path = repo_root / relative
+        if not path.is_file() or path.is_symlink():
+            raise OSError(f"required runtime artifact file is unavailable: {relative}")
+        visit(path)
+
+    return validate_app_runtime_artifact_manifest(
+        {
+            "schema_version": 1,
+            "algorithm": "sha256",
+            "digest": digest.hexdigest(),
+            "entry_count": entry_count,
+            "byte_count": byte_count,
+            "roots": [
+                str(path)
+                for path in (*APP_RUNTIME_ARTIFACT_ROOTS, *APP_RUNTIME_ARTIFACT_FILES)
+            ],
+        }
+    )
+
+
+def app_compose_contract_manifest(
+    repo_root: Path,
+    image_ids: dict[str, str],
+    *,
+    app_env: dict[str, str],
+) -> dict[str, Any]:
+    command = compose_command_with_app_images(
+        repo_root,
+        image_ids,
+        "--profile",
+        "app",
+        "config",
+        "--format",
+        "json",
+        env=app_env,
+    )
+    rendered = run_command(command, repo_root, env=app_env, timeout=120)
+    if rendered.returncode != 0:
+        raise OSError(
+            "rendered application Compose contract is unavailable: "
+            + "; ".join(output_tail(rendered.stdout, 20))
+        )
+    try:
+        config = json.loads(rendered.stdout)
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            f"rendered application Compose contract is not valid JSON: {error}"
+        ) from error
+    services = config.get("services") if isinstance(config, dict) else None
+    if not isinstance(services, dict) or any(
+        not isinstance(services.get(service), dict) for service in APP_SERVICES
+    ):
+        raise ValueError("rendered application Compose services are incomplete")
+    contract = {
+        "services": {service: services[service] for service in APP_SERVICES},
+        "networks": config.get("networks", {}),
+        "volumes": config.get("volumes", {}),
+        "secrets": config.get("secrets", {}),
+        "configs": config.get("configs", {}),
+    }
+    canonical = json.dumps(
+        contract, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+    ).encode("ascii")
+    return validate_app_compose_contract(
+        {
+            "schema_version": 1,
+            "algorithm": "sha256",
+            "digest": hashlib.sha256(canonical).hexdigest(),
+            "services": list(APP_SERVICES),
+        }
+    )
+
+
+def app_compose_contract_finding(
+    repo_root: Path,
+    image_ids: dict[str, str],
+    expected: dict[str, Any],
+    *,
+    app_env: dict[str, str],
+    check: str,
+) -> dict[str, Any]:
+    normalized = validate_app_compose_contract(expected)
+    try:
+        observed = app_compose_contract_manifest(
+            repo_root, image_ids, app_env=app_env
+        )
+    except (OSError, ValueError) as error:
+        return finding(
+            "fail",
+            check,
+            f"Application Compose execution contract could not be verified: {error}",
+            details={"expected_digest": normalized["digest"]},
+        )
+    matches = hmac.compare_digest(observed["digest"], normalized["digest"])
+    return finding(
+        "pass" if matches else "fail",
+        check,
+        "Rendered application Compose execution contract matches the prepared deployment."
+        if matches
+        else "Rendered application Compose execution contract changed after deployment preparation.",
+        details={"expected": normalized, "observed": observed},
+    )
+
+
+def app_runtime_artifact_finding(
+    repo_root: Path,
+    expected: dict[str, Any],
+    *,
+    check: str,
+) -> dict[str, Any]:
+    normalized = validate_app_runtime_artifact_manifest(expected)
+    try:
+        observed = app_runtime_artifact_manifest(repo_root)
+    except (OSError, ValueError) as error:
+        return finding(
+            "fail",
+            check,
+            f"Runtime deployment artifact identity could not be verified: {error}",
+            details={"expected_digest": normalized["digest"]},
+        )
+    matches = hmac.compare_digest(observed["digest"], normalized["digest"])
+    return finding(
+        "pass" if matches else "fail",
+        check,
+        "Bind-mounted runtime artifacts match the captured deployment identity."
+        if matches
+        else "Bind-mounted runtime artifacts changed during the feed transition.",
+        details={"expected": normalized, "observed": observed},
+    )
+
+
+def app_deployment_receipt_path(repo_root: Path) -> Path:
+    return runtime_dir(repo_root) / APP_DEPLOYMENT_RECEIPT
+
+
+def validate_app_deployment_receipt(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {
+        "schema_version",
+        "image_ids",
+        "runtime_artifacts",
+        "compose_contract",
+        "prepared_at",
+    }:
+        raise ValueError("application deployment receipt is invalid")
+    if value.get("schema_version") != 1:
+        raise ValueError("application deployment receipt schema is invalid")
+    validate_app_service_image_ids(value.get("image_ids"))
+    validate_app_runtime_artifact_manifest(value.get("runtime_artifacts"))
+    validate_app_compose_contract(value.get("compose_contract"))
+    prepared_at = value.get("prepared_at")
+    if not isinstance(prepared_at, str):
+        raise ValueError("application deployment receipt timestamp is invalid")
+    try:
+        parsed = datetime.fromisoformat(prepared_at.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError("application deployment receipt timestamp is invalid") from error
+    if parsed.tzinfo is None:
+        raise ValueError("application deployment receipt timestamp is invalid")
+    return value
+
+
+def read_app_deployment_receipt(repo_root: Path) -> dict[str, Any] | None:
+    path = app_deployment_receipt_path(repo_root)
+    try:
+        text = read_private_text(path, 16 * 1024)
+    except FileNotFoundError:
+        return None
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"application deployment receipt is not valid JSON: {error}") from error
+    return validate_app_deployment_receipt(payload)
+
+
+def write_app_deployment_receipt(
+    repo_root: Path,
+    image_ids: dict[str, str],
+    runtime_artifacts: dict[str, Any],
+    *,
+    app_env: dict[str, str],
+) -> dict[str, Any]:
+    ensure_runtime_dirs(repo_root)
+    payload = validate_app_deployment_receipt(
+        {
+            "schema_version": 1,
+            "image_ids": validate_app_service_image_ids(image_ids),
+            "runtime_artifacts": validate_app_runtime_artifact_manifest(
+                runtime_artifacts
+            ),
+            "compose_contract": app_compose_contract_manifest(
+                repo_root, image_ids, app_env=app_env
+            ),
+            "prepared_at": datetime.now(timezone.utc)
+            .replace(microsecond=0)
+            .isoformat(),
+        }
+    )
+    write_private_text(
+        app_deployment_receipt_path(repo_root),
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+    )
+    return payload
+
+
+def app_deployment_receipt_error(
+    repo_root: Path,
+    receipt: dict[str, Any],
+    *,
+    app_env: dict[str, str],
+    verify_compose_contract: bool = True,
+) -> str | None:
+    normalized = validate_app_deployment_receipt(receipt)
+    image_error = app_service_image_availability_error(
+        repo_root, normalized["image_ids"]
+    )
+    if image_error is not None:
+        return image_error
+    artifact = app_runtime_artifact_finding(
+        repo_root,
+        normalized["runtime_artifacts"],
+        check="runtime.app-deployment-artifacts",
+    )
+    if artifact["status"] != "pass":
+        return artifact["message"]
+    if verify_compose_contract:
+        compose_contract = app_compose_contract_finding(
+            repo_root,
+            normalized["image_ids"],
+            normalized["compose_contract"],
+            app_env=app_env,
+            check="runtime.app-deployment-compose-contract",
+        )
+        if compose_contract["status"] != "pass":
+            return compose_contract["message"]
+    return None
+
+
+def require_app_deployment_receipt(
+    repo_root: Path,
+    *,
+    app_env: dict[str, str] | None = None,
+    verify_compose_contract: bool = True,
+) -> tuple[dict[str, Any] | None, str | None]:
+    try:
+        receipt = read_app_deployment_receipt(repo_root)
+    except (OSError, ValueError) as error:
+        return None, f"Prepared application deployment receipt is invalid: {error}"
+    if receipt is None:
+        return None, "Prepared application deployment receipt is missing; run runtime-app-build first"
+    app_env = runtime_app_env(repo_root) if app_env is None else app_env
+    error = app_deployment_receipt_error(
+        repo_root,
+        receipt,
+        app_env=app_env,
+        verify_compose_contract=verify_compose_contract,
+    )
+    return (None, error) if error is not None else (receipt, None)
+
+
+def refresh_app_deployment_receipt_after_image_build(
+    repo_root: Path,
+    receipt: dict[str, Any],
+    rebuilt_services: Sequence[str],
+    *,
+    app_env: dict[str, str],
+) -> tuple[dict[str, Any] | None, str | None]:
+    normalized = validate_app_deployment_receipt(receipt)
+    rebuilt = tuple(dict.fromkeys(rebuilt_services))
+    if not rebuilt or any(service not in APP_SERVICES for service in rebuilt):
+        return None, "Application deployment receipt refresh requested invalid services"
+    artifact = app_runtime_artifact_finding(
+        repo_root,
+        normalized["runtime_artifacts"],
+        check="runtime.app-deployment-artifacts",
+    )
+    if artifact["status"] != "pass":
+        return None, artifact["message"]
+    refs, refs_error = configured_app_service_image_refs(repo_root, app_env)
+    if refs_error is not None:
+        return None, refs_error
+    image_ids = dict(normalized["image_ids"])
+    for service in rebuilt:
+        image_id = docker_image_id(repo_root, refs[service])
+        if image_id is None:
+            return None, f"Rebuilt image identity is unavailable for {service}"
+        image_ids[service] = image_id
+    availability_error = app_service_image_availability_error(repo_root, image_ids)
+    if availability_error is not None:
+        return None, availability_error
+    try:
+        refreshed = write_app_deployment_receipt(
+            repo_root,
+            image_ids,
+            normalized["runtime_artifacts"],
+            app_env=app_env,
+        )
+    except (OSError, ValueError) as error:
+        return None, f"Application deployment receipt refresh failed: {error}"
+    return refreshed, None
+
+
+def container_image_id(repo_root: Path, service: str) -> str | None:
+    cid = container_id(repo_root, service)
+    if not cid:
+        return None
+    result = run_command(
+        ["docker", "inspect", "--format", "{{.Image}}", cid],
+        repo_root,
+        env=runtime_env(repo_root),
+        timeout=120,
+    )
+    value = result.stdout.strip().splitlines()[-1] if result.returncode == 0 and result.stdout.strip() else ""
+    return value if re.fullmatch(r"sha256:[0-9a-f]{64}", value) else None
+
+
+def resolve_app_service_image_ids(
+    repo_root: Path,
+    *,
+    prefer_running: bool,
+    app_env: dict[str, str] | None = None,
+) -> tuple[dict[str, str], str | None]:
+    if prefer_running:
+        running_ids = {
+            service: container_image_id(repo_root, service)
+            for service in APP_SERVICES
+        }
+        present = [service for service, image_id in running_ids.items() if image_id is not None]
+        if len(present) == len(APP_SERVICES):
+            normalized = validate_app_service_image_ids(running_ids)
+            availability_error = app_service_image_availability_error(repo_root, normalized)
+            return ({}, availability_error) if availability_error else (normalized, None)
+        if present:
+            return {}, (
+                "Application deployment is partial; feed activation refuses to mix "
+                f"running and newly built images ({', '.join(sorted(present))} are present)"
+            )
+    refs, error = configured_app_service_image_refs(repo_root, app_env)
+    if error is not None:
+        return {}, error
+    image_ids: dict[str, str] = {}
+    for service in APP_SERVICES:
+        image_id = docker_image_id(repo_root, refs[service])
+        if image_id is None:
+            return {}, f"No built image identity is available for {service}; run runtime-app-build first"
+        image_ids[service] = image_id
+    availability_error = app_service_image_availability_error(repo_root, image_ids)
+    return ({}, availability_error) if availability_error else (image_ids, None)
+
+
+def app_service_image_findings(
+    repo_root: Path, expected: dict[str, str], *, check: str
+) -> list[dict[str, Any]]:
+    normalized = validate_app_service_image_ids(expected)
+    findings: list[dict[str, Any]] = []
+    for service in APP_SERVICES:
+        observed = container_image_id(repo_root, service)
+        matches = observed == normalized[service]
+        findings.append(
+            finding(
+                "pass" if matches else "fail",
+                check,
+                f"{service} uses the pinned pre-transition image."
+                if matches
+                else f"{service} does not use the pinned pre-transition image.",
+                details={"service": service, "expected": normalized[service], "observed": observed},
+            )
+        )
+    return findings
 
 
 def path_is_within(path: Path, parent: Path) -> bool:
@@ -6023,6 +6773,29 @@ def container_running(repo_root: Path, service: str) -> bool:
         return False
     result = run_command(["docker", "inspect", "-f", "{{.State.Running}}", cid], repo_root, env=runtime_env(repo_root))
     return result.returncode == 0 and result.stdout.strip() == "true"
+
+
+def running_app_services(repo_root: Path) -> tuple[str, ...]:
+    return tuple(service for service in APP_SERVICES if container_running(repo_root, service))
+
+
+def live_app_build_guard(repo_root: Path, command: str) -> dict[str, Any] | None:
+    running = running_app_services(repo_root)
+    if not running:
+        return None
+    return make_result(
+        command,
+        repo_root,
+        "Build refused because running application services consume bind-mounted build artifacts.",
+        [
+            finding(
+                "fail",
+                "runtime.app-services-stopped",
+                "Stop the application deployment with runtime-app-down before changing runtime build artifacts.",
+                details={"running_services": list(running)},
+            )
+        ],
+    )
 
 
 def exec_in_service(repo_root: Path, service: str, command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -6567,19 +7340,24 @@ def compose_app_services_up_with_retry(
     timeout: int = 900,
     *,
     app_env: dict[str, str] | None = None,
+    app_image_ids: dict[str, str],
 ) -> list[dict[str, Any]]:
     app_env = runtime_app_env(repo_root) if app_env is None else app_env
-    command = compose_command(
-        repo_root,
+    validate_app_service_image_ids(app_image_ids)
+    up_args = [
         "--profile",
         "app",
         "up",
         "-d",
         "--no-deps",
-        "--build",
+        "--no-build",
+        "--pull",
+        "never",
         "--force-recreate",
         *APP_SERVICES,
-        env=app_env,
+    ]
+    command = compose_command_with_app_images(
+        repo_root, app_image_ids, *up_args, env=app_env
     )
     result = run_command(command, repo_root, env=app_env, timeout=timeout)
     if result.returncode == 0:
@@ -6597,16 +7375,20 @@ def compose_app_services_up_with_retry(
             command,
         )
     ]
-    retry_command = compose_command(
-        repo_root,
+    retry_args = [
         "--profile",
         "app",
         "up",
         "-d",
         "--no-deps",
+        "--no-build",
+        "--pull",
+        "never",
         "--force-recreate",
         *APP_SERVICES,
-        env=app_env,
+    ]
+    retry_command = compose_command_with_app_images(
+        repo_root, app_image_ids, *retry_args, env=app_env
     )
     for attempt in range(1, 3):
         time.sleep(8 * attempt)
@@ -14035,18 +14817,54 @@ def command_configure(repo_root: Path, component: str, profile: str | None = Non
         if profile is not None:
             return make_result("configure", repo_root, f"Configure profile {profile} only supports CMake components.", [finding("fail", "build.profile-unsupported", f"{component} uses {meta.build_system}, not cmake.")])
         return make_result("configure", repo_root, f"{component} is not a CMake component.", [finding("warn", "build.unsupported", f"{component} uses {meta.build_system}, not cmake.")])
+    if profile is None:
+        guard = live_app_build_guard(repo_root, "configure")
+        if guard is not None:
+            return guard
     result = cmake_configure(repo_root, meta, profile)
     _, build, _ = cmake_paths(repo_root, component, profile)
     status = "pass" if result.returncode == 0 else "fail"
     return make_result("configure", repo_root, f"Configure {component} completed with exit code {result.returncode}.", [finding(status, "cmake.configure", f"{component} configure {'succeeded' if status == 'pass' else 'failed'}.", str(build.relative_to(repo_root)), {"output_tail": result.stdout.splitlines()[-80:]})], [str(build.relative_to(repo_root))])
 
 
-def command_build(repo_root: Path, component: str, install: bool = False, configure_first: bool = True, profile: str | None = None) -> dict[str, Any]:
+def command_build(
+    repo_root: Path,
+    component: str,
+    install: bool = False,
+    configure_first: bool = True,
+    profile: str | None = None,
+    *,
+    lifecycle_managed: bool = False,
+) -> dict[str, Any]:
+    if not lifecycle_managed:
+        try:
+            with acquire_runtime_lock(
+                repo_root, FEED_ACTIVATION_LOCK, f"build {component}"
+            ):
+                return command_build(
+                    repo_root,
+                    component,
+                    install=install,
+                    configure_first=configure_first,
+                    profile=profile,
+                    lifecycle_managed=True,
+                )
+        except RuntimeLockTimeout as error:
+            return make_result(
+                "build",
+                repo_root,
+                f"Build {component} stopped while waiting for the feed lifecycle lock.",
+                [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
+            )
     meta = BUILD_META.get(component)
     if not meta:
         return make_result("build", repo_root, f"Unknown component {component}.", [finding("fail", "component.known", f"Unknown component {component}.")])
     if profile is not None and meta.build_system != "cmake":
         return make_result("build", repo_root, f"Build profile {profile} only supports CMake components.", [finding("fail", "build.profile-unsupported", f"{component} uses {meta.build_system}, not cmake.")])
+    if profile is None and meta.name != "gsa":
+        guard = live_app_build_guard(repo_root, "build")
+        if guard is not None:
+            return guard
     if meta.build_system == "node-npm":
         return command_build_node(repo_root, meta)
     if meta.build_system in ("python-uv", "python-poetry-core"):
@@ -14126,11 +14944,35 @@ def command_build_python(repo_root: Path, meta: BuildMeta) -> dict[str, Any]:
     return make_result("build", repo_root, f"Build {meta.name} completed.", findings, [str(venv.relative_to(repo_root))])
 
 
-def command_build_chain(repo_root: Path, command: str, chain: tuple[str, ...], profile: str | None = None) -> dict[str, Any]:
+def command_build_chain(
+    repo_root: Path,
+    command: str,
+    chain: tuple[str, ...],
+    profile: str | None = None,
+    *,
+    lifecycle_managed: bool = False,
+) -> dict[str, Any]:
+    if not lifecycle_managed:
+        try:
+            with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, command):
+                return command_build_chain(
+                    repo_root,
+                    command,
+                    chain,
+                    profile,
+                    lifecycle_managed=True,
+                )
+        except RuntimeLockTimeout as error:
+            return make_result(
+                command,
+                repo_root,
+                f"{command} stopped while waiting for the feed lifecycle lock.",
+                [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
+            )
     findings: list[dict[str, Any]] = []
     artifacts: list[str] = []
     for component in chain:
-        result = command_build(repo_root, component, install=BUILD_META[component].install_for_dependents, profile=profile)
+        result = command_build(repo_root, component, install=BUILD_META[component].install_for_dependents, profile=profile, lifecycle_managed=True)
         artifacts.extend(result["artifacts"])
         findings.append(finding(result["status"], f"{command}.component", f"{component}: {result['summary']}", details={"component": component}))
         for item in result["findings"]:
@@ -14976,28 +15818,19 @@ def command_c_hardening_check(repo_root: Path, status_only: bool = False, profil
     return c_hardening_status_only_result(result) if status_only else result
 
 
-def restart_gsad_after_static_stage(repo_root: Path) -> dict[str, Any]:
-    if not container_running(repo_root, "gsad"):
-        return finding("pass", "gsa.restart-gsad", "gsad is not running; no static-content restart was needed.")
-    result = run_command(compose_command(repo_root, "restart", "gsad"), repo_root, env=runtime_env(repo_root))
-    return finding(
-        "pass" if result.returncode == 0 else "fail",
-        "gsa.restart-gsad",
-        f"gsad static-content process restart exit code {result.returncode}.",
-        details={"output_tail": output_tail(result.stdout, 80)},
-    )
-
-
 def _command_build_ui_unlocked(repo_root: Path) -> dict[str, Any]:
-    result = command_build(repo_root, "gsa")
+    result = command_build(repo_root, "gsa", lifecycle_managed=True)
     findings = list(result["findings"])
     artifacts = list(result["artifacts"])
     if result["status"] == "pass":
-        stage_findings = stage_gsa_static(repo_root)
-        findings.extend(stage_findings)
-        artifacts.append(str(gsad_static_dir(repo_root)))
-        findings.append(restart_gsad_after_static_stage(repo_root))
-    return make_result("build-ui", repo_root, "Build and stage web UI completed.", findings, sorted(set(artifacts)))
+        findings.append(
+            finding(
+                "pass",
+                "gsa.deployment-deferred",
+                "Web UI build completed without changing the prepared or running application deployment; runtime-app-build stages it explicitly.",
+            )
+        )
+    return make_result("build-ui", repo_root, "Web UI build completed.", findings, sorted(set(artifacts)))
 
 
 def command_build_ui(repo_root: Path) -> dict[str, Any]:
@@ -15736,7 +16569,12 @@ def command_runtime_certs_init(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-certs-init", repo_root, "Runtime certificate initialization completed.", findings, [str(cert_public_dir(repo_root)), str(cert_private_dir(repo_root))])
 
 
-def _command_runtime_scanner_redis_init_unlocked(repo_root: Path, probe_openvas: bool = True) -> dict[str, Any]:
+def _command_runtime_scanner_redis_init_unlocked(
+    repo_root: Path,
+    probe_openvas: bool = True,
+    *,
+    app_image_ids: dict[str, str] | None = None,
+) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
     findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
@@ -15763,11 +16601,22 @@ def _command_runtime_scanner_redis_init_unlocked(repo_root: Path, probe_openvas:
     if not probe_openvas:
         findings.append(finding("pass", "openvas.config-probe", "OpenVAS settings probe deferred until app services are built and started."))
         return make_result("runtime-scanner-redis-init", repo_root, "Scanner Redis initialization completed.", findings, [str(runtime_dir(repo_root)), config_artifact])
-    app_build = run_command(compose_command(repo_root, "--profile", "app", "build", "ospd-openvas"), repo_root, env=runtime_env(repo_root), timeout=900)
-    findings.append(finding("pass" if app_build.returncode == 0 else "fail", "compose.ospd-build", f"docker compose build ospd-openvas exit code {app_build.returncode}.", details={"output_tail": output_tail(app_build.stdout, 120)}))
-    if app_build.returncode != 0:
-        return make_result("runtime-scanner-redis-init", repo_root, "Scanner Redis initialization stopped while building ospd-openvas image.", findings, [str(runtime_dir(repo_root))])
-    openvas_settings = run_app_oneoff(repo_root, "ospd-openvas", ["openvas", "-s"], no_deps=False)
+    if app_image_ids is None:
+        receipt, image_error = require_app_deployment_receipt(
+            repo_root, app_env=deployed_app_env(repo_root)
+        )
+        if image_error is not None or receipt is None:
+            findings.append(finding("fail", "compose.app-images", image_error))
+            return make_result("runtime-scanner-redis-init", repo_root, "Scanner Redis initialization stopped because a verified application deployment receipt is unavailable.", findings, [str(runtime_dir(repo_root))])
+        app_image_ids = receipt["image_ids"]
+    findings.append(finding("pass", "compose.app-images", "OpenVAS settings probe uses prepared application images without building."))
+    openvas_settings = run_app_oneoff(
+        repo_root,
+        "ospd-openvas",
+        ["openvas", "-s"],
+        no_deps=False,
+        app_image_ids=app_image_ids,
+    )
     db_lines = [line for line in openvas_settings.stdout.splitlines() if line.startswith("db_address")]
     plugin_lines = [line for line in openvas_settings.stdout.splitlines() if line.startswith("plugins_folder")]
     include_lines = [line for line in openvas_settings.stdout.splitlines() if line.startswith("include_folders")]
@@ -15785,12 +16634,17 @@ def command_runtime_scanner_redis_init(
     probe_openvas: bool = True,
     *,
     lifecycle_managed: bool = False,
+    app_image_ids: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     if lifecycle_managed:
-        return _command_runtime_scanner_redis_init_unlocked(repo_root, probe_openvas)
+        return _command_runtime_scanner_redis_init_unlocked(
+            repo_root, probe_openvas, app_image_ids=app_image_ids
+        )
     try:
         with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-scanner-redis-init"):
-            return _command_runtime_scanner_redis_init_unlocked(repo_root, probe_openvas)
+            return _command_runtime_scanner_redis_init_unlocked(
+                repo_root, probe_openvas, app_image_ids=app_image_ids
+            )
     except RuntimeLockTimeout as error:
         return make_result(
             "runtime-scanner-redis-init",
@@ -15805,12 +16659,22 @@ def command_runtime_manager_init(
     repo_root: Path,
     *,
     lifecycle_managed: bool = False,
+    build_image: bool = False,
+    app_image_ids: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     if lifecycle_managed:
-        return command_runtime_manager_init_with_manager_lock(repo_root)
+        return command_runtime_manager_init_with_manager_lock(
+            repo_root,
+            build_image=build_image,
+            app_image_ids=app_image_ids,
+        )
     try:
         with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-manager-init"):
-            return command_runtime_manager_init_with_manager_lock(repo_root)
+            return command_runtime_manager_init_with_manager_lock(
+                repo_root,
+                build_image=build_image,
+                app_image_ids=app_image_ids,
+            )
     except RuntimeLockTimeout as error:
         return make_result(
             "runtime-manager-init",
@@ -15821,10 +16685,19 @@ def command_runtime_manager_init(
         )
 
 
-def command_runtime_manager_init_with_manager_lock(repo_root: Path) -> dict[str, Any]:
+def command_runtime_manager_init_with_manager_lock(
+    repo_root: Path,
+    *,
+    build_image: bool = False,
+    app_image_ids: dict[str, str] | None = None,
+) -> dict[str, Any]:
     try:
         with acquire_runtime_lock(repo_root, RUNTIME_MANAGER_LOCK, "runtime-manager-init"):
-            return command_runtime_manager_init_unlocked(repo_root)
+            return command_runtime_manager_init_unlocked(
+                repo_root,
+                build_image=build_image,
+                app_image_ids=app_image_ids,
+            )
     except RuntimeLockTimeout as exc:
         return make_result(
             "runtime-manager-init",
@@ -15835,7 +16708,12 @@ def command_runtime_manager_init_with_manager_lock(repo_root: Path) -> dict[str,
         )
 
 
-def command_runtime_manager_init_unlocked(repo_root: Path) -> dict[str, Any]:
+def command_runtime_manager_init_unlocked(
+    repo_root: Path,
+    *,
+    build_image: bool = False,
+    app_image_ids: dict[str, str] | None = None,
+) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
     db_init = command_runtime_init(repo_root)
@@ -15855,12 +16733,21 @@ def command_runtime_manager_init_unlocked(repo_root: Path) -> dict[str, Any]:
         findings.append(finding("pass", "runtime.admin-secret", f"Development admin password {'created' if created else 'reused'} in persistent runtime secrets.", str(secret_path)))
     findings.extend(cert_file_findings(repo_root))
 
-    app_build = run_command(compose_command(repo_root, "--profile", "app", "build", "gvmd"), repo_root, env=runtime_env(repo_root), timeout=900)
-    findings.append(finding("pass" if app_build.returncode == 0 else "fail", "compose.app-build", f"docker compose build gvmd exit code {app_build.returncode}.", details={"output_tail": output_tail(app_build.stdout, 120, [password])}))
-    if app_build.returncode != 0:
-        return make_result("runtime-manager-init", repo_root, "Manager initialization stopped while building the app image.", findings, [str(runtime_dir(repo_root))])
+    if build_image:
+        findings.append(finding("fail", "compose.app-image", "Manager initialization no longer builds application images; run runtime-app-build explicitly."))
+        return make_result("runtime-manager-init", repo_root, "Manager initialization stopped because implicit application builds are disabled.", findings, [str(runtime_dir(repo_root))])
+    if app_image_ids is None:
+        receipt, image_error = require_app_deployment_receipt(
+            repo_root, app_env=deployed_app_env(repo_root)
+        )
+        if image_error is not None or receipt is None:
+            findings.append(finding("fail", "compose.app-image", image_error))
+            return make_result("runtime-manager-init", repo_root, "Manager initialization stopped because a verified application deployment receipt was unavailable.", findings, [str(runtime_dir(repo_root))])
+        app_image_ids = receipt["image_ids"]
+    validate_app_service_image_ids(app_image_ids)
+    findings.append(finding("pass", "compose.app-image", "Manager initialization uses prepared application images without rebuilding."))
 
-    migrate = run_gvmd_oneoff(repo_root, ["--migrate"], no_deps=False)
+    migrate = run_gvmd_oneoff(repo_root, ["--migrate"], no_deps=False, app_image_ids=app_image_ids)
     migrate_details: dict[str, Any] = {"output_tail": output_tail(migrate.stdout, 100, [password])}
     if migrate.returncode != 0:
         migrate_details["runtime_manager_diagnostics"] = runtime_manager_diagnostics(repo_root)
@@ -15868,27 +16755,27 @@ def command_runtime_manager_init_unlocked(repo_root: Path) -> dict[str, Any]:
     if migrate.returncode != 0:
         return make_result("runtime-manager-init", repo_root, "Manager initialization stopped at database migration.", findings, [str(runtime_dir(repo_root))])
 
-    users = run_gvmd_oneoff(repo_root, ["--get-users", "--verbose"], no_deps=False)
+    users = run_gvmd_oneoff(repo_root, ["--get-users", "--verbose"], no_deps=False, app_image_ids=app_image_ids)
     admin_uuid = parse_user_uuid(users.stdout, DEV_ADMIN_USER) if users.returncode == 0 else None
     findings.append(finding("pass" if users.returncode == 0 else "warn", "gvmd.get-users", f"gvmd --get-users --verbose exit code {users.returncode}.", details={"admin_uuid_found": bool(admin_uuid), "output_tail": output_tail(users.stdout, 80, [password])}))
 
     if not admin_uuid:
-        create = run_gvmd_oneoff(repo_root, [f"--create-user={DEV_ADMIN_USER}", f"--password={password}", "--disable-password-policy"], no_deps=False)
+        create = run_gvmd_oneoff(repo_root, [f"--create-user={DEV_ADMIN_USER}", f"--password={password}", "--disable-password-policy"], no_deps=False, app_image_ids=app_image_ids)
         findings.append(finding("pass" if create.returncode == 0 else "fail", "gvmd.create-admin", f"Create/verify development admin user exit code {create.returncode}.", details={"output_tail": output_tail(create.stdout, 80, [password])}))
         if create.returncode != 0:
             return make_result("runtime-manager-init", repo_root, "Manager initialization stopped at admin user creation.", findings, [str(runtime_dir(repo_root))])
-        users = run_gvmd_oneoff(repo_root, ["--get-users", "--verbose"], no_deps=False)
+        users = run_gvmd_oneoff(repo_root, ["--get-users", "--verbose"], no_deps=False, app_image_ids=app_image_ids)
         admin_uuid = parse_user_uuid(users.stdout, DEV_ADMIN_USER) if users.returncode == 0 else None
         findings.append(finding("pass" if admin_uuid else "warn", "gvmd.admin-uuid", f"Development admin UUID {'found' if admin_uuid else 'not found after creation'}.", details={"admin_uuid": admin_uuid, "output_tail": output_tail(users.stdout, 80, [password])}))
 
     if admin_uuid:
-        update_password = run_gvmd_oneoff(repo_root, [f"--user={DEV_ADMIN_USER}", f"--new-password={password}", "--disable-password-policy"], no_deps=False)
+        update_password = run_gvmd_oneoff(repo_root, [f"--user={DEV_ADMIN_USER}", f"--new-password={password}", "--disable-password-policy"], no_deps=False, app_image_ids=app_image_ids)
         findings.append(finding("pass" if update_password.returncode == 0 else "fail", "gvmd.admin-password", f"Set development admin password exit code {update_password.returncode}.", details={"output_tail": output_tail(update_password.stdout, 80, [password])}))
         if update_password.returncode != 0:
             return make_result("runtime-manager-init", repo_root, "Manager initialization stopped at admin password update.", findings, [str(runtime_dir(repo_root))])
 
     if admin_uuid:
-        owner = run_gvmd_oneoff(repo_root, [f"--modify-setting={FEED_IMPORT_OWNER_SETTING}", f"--value={admin_uuid}"], no_deps=False)
+        owner = run_gvmd_oneoff(repo_root, [f"--modify-setting={FEED_IMPORT_OWNER_SETTING}", f"--value={admin_uuid}"], no_deps=False, app_image_ids=app_image_ids)
         findings.append(finding("pass" if owner.returncode == 0 else "warn", "gvmd.feed-owner", f"Set feed import owner exit code {owner.returncode}.", details={"admin_uuid": admin_uuid, "output_tail": output_tail(owner.stdout, 80, [password])}))
     else:
         findings.append(finding("warn", "gvmd.feed-owner", "Feed import owner was not set because the admin UUID could not be determined."))
@@ -15977,14 +16864,28 @@ def browser_gmp_readiness_finding(repo_root: Path, *, check: str) -> dict[str, A
 
 def _command_runtime_scanner_register_unlocked(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
+    receipt, receipt_error = require_app_deployment_receipt(
+        repo_root, app_env=deployed_app_env(repo_root)
+    )
+    findings.append(
+        finding(
+            "pass" if receipt_error is None else "fail",
+            "runtime.app-deployment-receipt",
+            "Scanner registration uses the verified prepared application deployment."
+            if receipt_error is None
+            else receipt_error,
+            str(app_deployment_receipt_path(repo_root)),
+        )
+    )
     socket_path = ospd_socket_path(repo_root)
     findings.append(finding("pass" if socket_path.is_socket() else "fail", "ospd.socket", "ospd-openvas socket is ready." if socket_path.is_socket() else "ospd-openvas socket is not ready; run just runtime-app-up and inspect ospd-openvas logs.", str(socket_path)))
     gmp_smoke = command_runtime_gmp_smoke(repo_root)
     findings.append(finding(gmp_smoke["status"], "gvmd.gmp", gmp_smoke["summary"], details={"status": gmp_smoke["status"]}))
     if aggregate_status(findings) == "fail":
         return make_result("runtime-scanner-register", repo_root, "Scanner registration stopped at prerequisites.", findings, [str(runtime_dir(repo_root))])
+    app_image_ids = receipt["image_ids"]
 
-    scanners = run_gvmd_oneoff(repo_root, ["--get-scanners"], no_deps=False)
+    scanners = run_gvmd_oneoff(repo_root, ["--get-scanners"], no_deps=False, app_image_ids=app_image_ids)
     scanner_uuid = parse_named_uuid(scanners.stdout, "OpenVAS Default") if scanners.returncode == 0 else None
     findings.append(finding("pass" if scanners.returncode == 0 else "fail", "gvmd.get-scanners", f"gvmd --get-scanners exit code {scanners.returncode}.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(scanners.stdout, 80)}))
     if scanners.returncode != 0:
@@ -15998,18 +16899,18 @@ def _command_runtime_scanner_register_unlocked(repo_root: Path) -> dict[str, Any
         "--no-default-certs",
     ]
     if scanner_uuid:
-        change = run_gvmd_oneoff(repo_root, [f"--modify-scanner={scanner_uuid}", *scanner_args], no_deps=False)
+        change = run_gvmd_oneoff(repo_root, [f"--modify-scanner={scanner_uuid}", *scanner_args], no_deps=False, app_image_ids=app_image_ids)
         findings.append(finding("pass" if change.returncode == 0 else "fail", "gvmd.modify-scanner", f"Modify OpenVAS Default scanner exit code {change.returncode}.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(change.stdout, 80)}))
     else:
-        change = run_gvmd_oneoff(repo_root, ["--create-scanner=OpenVAS Default", *scanner_args[1:]], no_deps=False)
+        change = run_gvmd_oneoff(repo_root, ["--create-scanner=OpenVAS Default", *scanner_args[1:]], no_deps=False, app_image_ids=app_image_ids)
         scanner_uuid = parse_named_uuid(change.stdout, "OpenVAS Default") or parse_named_uuid(change.stdout, "Scanner")
         findings.append(finding("pass" if change.returncode == 0 else "fail", "gvmd.create-scanner", f"Create OpenVAS Default scanner exit code {change.returncode}.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(change.stdout, 80)}))
 
-    scanners_after = run_gvmd_oneoff(repo_root, ["--get-scanners"], no_deps=False)
+    scanners_after = run_gvmd_oneoff(repo_root, ["--get-scanners"], no_deps=False, app_image_ids=app_image_ids)
     scanner_uuid = parse_named_uuid(scanners_after.stdout, "OpenVAS Default") if scanners_after.returncode == 0 else scanner_uuid
     findings.append(finding("pass" if scanner_uuid else "fail", "gvmd.scanner.openvas-default", "OpenVAS Default scanner is registered." if scanner_uuid else "OpenVAS Default scanner registration could not be confirmed.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(scanners_after.stdout, 80)}))
     if scanner_uuid:
-        verify = run_gvmd_oneoff(repo_root, [f"--verify-scanner={scanner_uuid}"], no_deps=False)
+        verify = run_gvmd_oneoff(repo_root, [f"--verify-scanner={scanner_uuid}"], no_deps=False, app_image_ids=app_image_ids)
         findings.append(finding("pass" if verify.returncode == 0 else "warn", "gvmd.verify-scanner", f"Verify OpenVAS Default scanner exit code {verify.returncode}.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(verify.stdout, 100)}))
     return make_result("runtime-scanner-register", repo_root, "Runtime scanner registration completed.", findings, [str(runtime_dir(repo_root))])
 
@@ -16117,6 +17018,7 @@ def command_runtime_feed_import_init(
     *,
     activation_managed: bool = False,
     restart_services: bool = True,
+    app_image_ids: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     if not activation_managed:
@@ -16134,6 +17036,30 @@ def command_runtime_feed_import_init(
             findings,
             [str(runtime_dir(repo_root) / "feed-store")],
         )
+    if app_image_ids is None:
+        findings.append(
+            finding(
+                "fail",
+                "feed.import.app-images",
+                "Guarded feed import requires pinned app image identities.",
+            )
+        )
+        return make_result(
+            "runtime-feed-import-init",
+            repo_root,
+            "Feed import stopped because pinned application images were unavailable.",
+            findings,
+            [str(runtime_dir(repo_root) / "feed-store")],
+        )
+    validate_app_service_image_ids(app_image_ids)
+    findings.append(
+        finding(
+            "pass",
+            "feed.import.app-images",
+            "Feed import is pinned to pre-transition application images and cannot rebuild them.",
+            details={"services": list(APP_SERVICES)},
+        )
+    )
     feed_state = command_feed_state(repo_root)
     findings.extend(feed_state["findings"])
     runtime_findings = [item for item in feed_state["findings"] if item["check"].startswith("feed.runtime.")]
@@ -16152,7 +17078,12 @@ def command_runtime_feed_import_init(
     if pre_manager_stop.returncode != 0:
         return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because gvmd could not be stopped before manager initialization.", findings, [str(runtime_dir(repo_root))])
 
-    manager = command_runtime_manager_init(repo_root, lifecycle_managed=True)
+    manager = command_runtime_manager_init(
+        repo_root,
+        lifecycle_managed=True,
+        build_image=False,
+        app_image_ids=app_image_ids,
+    )
     findings.append(finding(manager["status"], "runtime.manager-init", manager["summary"], details={"status": manager["status"]}))
     scanner_redis = command_runtime_scanner_redis_init(repo_root, probe_openvas=False, lifecycle_managed=True)
     findings.append(finding(scanner_redis["status"], "runtime.scanner-redis", scanner_redis["summary"], details={"status": scanner_redis["status"]}))
@@ -16162,14 +17093,17 @@ def command_runtime_feed_import_init(
         return make_result("runtime-feed-import-init", repo_root, "Feed import stopped at runtime prerequisites.", findings, [str(runtime_dir(repo_root))])
 
     scanner_services = ("ospd-openvas", "notus-scanner")
-    scanner_up_command = compose_command(
+    scanner_up_command = compose_command_with_app_images(
         repo_root,
+        app_image_ids,
         "--profile",
         "app",
         "up",
         "-d",
         "--no-deps",
-        "--build",
+        "--no-build",
+        "--pull",
+        "never",
         "--force-recreate",
         *scanner_services,
     )
@@ -16178,6 +17112,17 @@ def command_runtime_feed_import_init(
     for service in scanner_services:
         running = container_running(repo_root, service)
         findings.append(finding("pass" if running else "fail", "runtime.scanner-service.running", f"{service} container is {'running' if running else 'not running'}.", details={"service": service, "logs_tail": [] if running else service_log_tail(repo_root, service)}))
+        observed_image = container_image_id(repo_root, service)
+        findings.append(
+            finding(
+                "pass" if observed_image == app_image_ids[service] else "fail",
+                "runtime.scanner-service.image",
+                f"{service} uses the pinned pre-transition image."
+                if observed_image == app_image_ids[service]
+                else f"{service} image identity changed during feed import.",
+                details={"service": service, "expected": app_image_ids[service], "observed": observed_image},
+            )
+        )
     if aggregate_status(findings) == "fail":
         return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because scanner-side services are not ready.", findings, [str(runtime_dir(repo_root))])
 
@@ -16246,7 +17191,13 @@ def command_runtime_feed_import_init(
     ]
     import_failed = False
     for check, args in import_steps:
-        result = run_gvmd_runtime_oneoff(repo_root, args, no_deps=False, timeout=GVMD_IMPORT_TIMEOUT_SECONDS)
+        result = run_gvmd_runtime_oneoff(
+            repo_root,
+            args,
+            no_deps=False,
+            timeout=GVMD_IMPORT_TIMEOUT_SECONDS,
+            app_image_ids=app_image_ids,
+        )
         findings.append(finding("pass" if result.returncode == 0 else "fail", check, f"gvmd {' '.join(args)} exit code {result.returncode}.", details={"output_tail": output_tail(result.stdout, 120)}))
         if result.returncode != 0:
             import_failed = True
@@ -16274,8 +17225,10 @@ def command_runtime_feed_import_init(
         repo_root,
         "runtime.app-restart",
         "Restart app services after feed import",
+        app_image_ids=app_image_ids,
     )
     findings.extend(restart_findings)
+    findings.extend(app_service_image_findings(repo_root, app_image_ids, check="runtime.app.image"))
     for service in APP_SERVICES:
         running = container_running(repo_root, service)
         findings.append(finding("pass" if running else "fail", "runtime.app.running", f"{service} container is {'running' if running else 'not running'} after feed import.", details={"service": service, "logs_tail": [] if running else service_log_tail(repo_root, service)}))
@@ -16387,14 +17340,45 @@ def feed_transition_restore_app_env(
 
 
 def restart_and_verify_feed_app_services(
-    repo_root: Path, *, app_env: dict[str, str] | None = None
+    repo_root: Path,
+    *,
+    app_env: dict[str, str] | None = None,
+    app_image_ids: dict[str, str],
+    app_runtime_artifacts: dict[str, Any],
+    app_compose_contract: dict[str, Any],
 ) -> dict[str, Any]:
-    findings = compose_app_services_up_with_retry(
+    app_env = runtime_app_env(repo_root) if app_env is None else app_env
+    findings = [
+        app_runtime_artifact_finding(
+            repo_root,
+            app_runtime_artifacts,
+            check="feed-generation.app-artifacts-before-restart",
+        )
+    ]
+    findings.append(
+        app_compose_contract_finding(
+            repo_root,
+            app_image_ids,
+            app_compose_contract,
+            app_env=app_env,
+            check="feed-generation.app-compose-before-restart",
+        )
+    )
+    if aggregate_status(findings) == "fail":
+        return make_result(
+            "feed-generation-runtime-verify",
+            repo_root,
+            "App restart was blocked because bind-mounted runtime artifacts changed.",
+            findings,
+            [str(runtime_dir(repo_root))],
+        )
+    findings.extend(compose_app_services_up_with_retry(
         repo_root,
         "feed-generation.app-restart",
         "Restart app services after durable feed activation commit",
         app_env=app_env,
-    )
+        app_image_ids=app_image_ids,
+    ))
     for service in APP_SERVICES:
         running = container_running(repo_root, service)
         findings.append(
@@ -16404,6 +17388,43 @@ def restart_and_verify_feed_app_services(
                 f"{service} container is {'running' if running else 'not running'} after feed activation.",
                 details={"service": service, "logs_tail": [] if running else service_log_tail(repo_root, service)},
             )
+        )
+    findings.extend(
+        app_service_image_findings(
+            repo_root,
+            app_image_ids,
+            check="feed-generation.app-image",
+        )
+    )
+    post_start_identity = [
+        app_compose_contract_finding(
+            repo_root,
+            app_image_ids,
+            app_compose_contract,
+            app_env=app_env,
+            check="feed-generation.app-compose-after-restart",
+        ),
+        app_runtime_artifact_finding(
+            repo_root,
+            app_runtime_artifacts,
+            check="feed-generation.app-artifacts-after-restart",
+        ),
+    ]
+    findings.extend(post_start_identity)
+    if aggregate_status(post_start_identity) == "fail":
+        findings.append(
+            stop_app_services_after_identity_failure(
+                repo_root,
+                app_env=app_env,
+                check="feed-generation.app-identity-failure-stop",
+            )
+        )
+        return make_result(
+            "feed-generation-runtime-verify",
+            repo_root,
+            "Feed activation is durable, but the restarted application deployment failed identity verification and was stopped.",
+            findings,
+            [str(runtime_dir(repo_root))],
         )
     gvmd_ready = wait_for_socket(gvmd_socket_path(repo_root), timeout_seconds=180)
     findings.append(finding("pass" if gvmd_ready else "fail", "feed-generation.gvmd-ready", "gvmd socket is ready after feed activation." if gvmd_ready else "gvmd socket is not ready after feed activation.", str(gvmd_socket_path(repo_root))))
@@ -16572,6 +17593,105 @@ def command_feed_generation_transition(
 
             restore_app_env = feed_transition_restore_app_env(repo_root, state)
             restore_gsad_hosts = list(gsad_hosts_from_env(restore_app_env))
+            if interrupted and state is not None:
+                try:
+                    app_image_ids = validate_app_service_image_ids(
+                        state.get("app_image_ids")
+                    )
+                    app_runtime_artifacts = validate_app_runtime_artifact_manifest(
+                        state.get("app_runtime_artifacts")
+                    )
+                    app_compose_contract = validate_app_compose_contract(
+                        state.get("app_compose_contract")
+                    )
+                except ValueError as error:
+                    findings.append(finding("fail", "feed-generation.app-images", f"Recorded application deployment identity is invalid: {error}"))
+                    return make_result(command_name, repo_root, "Feed generation transition stopped at application image verification.", findings, [str(feed_activation_state_path(repo_root))])
+            else:
+                receipt, receipt_error = require_app_deployment_receipt(
+                    repo_root, app_env=restore_app_env
+                )
+                if receipt_error is not None or receipt is None:
+                    findings.append(finding("fail", "feed-generation.app-images", receipt_error or "Prepared application deployment receipt is unavailable"))
+                    return make_result(command_name, repo_root, "Feed generation transition stopped because no verified application deployment was prepared.", findings, [str(app_deployment_receipt_path(repo_root))])
+                app_image_ids = receipt["image_ids"]
+                app_runtime_artifacts = receipt["runtime_artifacts"]
+                app_compose_contract = receipt["compose_contract"]
+                if state_before is not None:
+                    running_image_findings = app_service_image_findings(
+                        repo_root,
+                        app_image_ids,
+                        check="feed-generation.running-app-image",
+                    )
+                    findings.extend(running_image_findings)
+                    if any(item["status"] != "pass" for item in running_image_findings):
+                        return make_result(
+                            command_name,
+                            repo_root,
+                            "Feed generation transition stopped because the active application deployment does not match the prepared receipt; run runtime-app-up first.",
+                            findings,
+                            [str(app_deployment_receipt_path(repo_root))],
+                        )
+            image_error = app_service_image_availability_error(repo_root, app_image_ids)
+            if image_error is not None:
+                findings.append(finding("fail", "feed-generation.app-images", image_error))
+                return make_result(command_name, repo_root, "Feed generation transition stopped because pinned application image objects are unavailable; restore the exact recorded images or perform explicit manual recovery.", findings, [str(runtime_dir(repo_root))])
+            artifact_preflight = app_runtime_artifact_finding(
+                repo_root,
+                app_runtime_artifacts,
+                check="feed-generation.app-artifacts",
+            )
+            findings.append(artifact_preflight)
+            if artifact_preflight["status"] != "pass":
+                return make_result(command_name, repo_root, "Feed generation transition stopped because runtime artifacts do not match the recorded deployment.", findings, [str(feed_activation_state_path(repo_root))])
+            compose_preflight = app_compose_contract_finding(
+                repo_root,
+                app_image_ids,
+                app_compose_contract,
+                app_env=restore_app_env,
+                check="feed-generation.app-compose",
+            )
+            findings.append(compose_preflight)
+            if compose_preflight["status"] != "pass":
+                return make_result(command_name, repo_root, "Feed generation transition stopped because the application execution contract does not match the recorded deployment.", findings, [str(feed_activation_state_path(repo_root))])
+            try:
+                override_command = compose_command_with_app_images(
+                    repo_root,
+                    app_image_ids,
+                    "--profile",
+                    "app",
+                    "config",
+                    "--quiet",
+                    env=restore_app_env,
+                )
+                override_config = run_command(
+                    override_command,
+                    repo_root,
+                    env=restore_app_env,
+                    timeout=120,
+                )
+            except (OSError, ValueError) as error:
+                findings.append(finding("fail", "feed-generation.app-image-override", f"Pinned application image override could not be prepared: {error}"))
+                return make_result(command_name, repo_root, "Feed generation transition stopped before runtime changes because deployment pinning failed.", findings, [str(runtime_dir(repo_root))])
+            findings.append(
+                process_step_finding(
+                    "pass" if override_config.returncode == 0 else "fail",
+                    "feed-generation.app-image-override",
+                    f"Pinned application image Compose validation exit code {override_config.returncode}.",
+                    override_config,
+                    override_command,
+                )
+            )
+            if override_config.returncode != 0:
+                return make_result(command_name, repo_root, "Feed generation transition stopped before runtime changes because deployment pinning failed.", findings, [str(runtime_dir(repo_root))])
+            findings.append(
+                finding(
+                    "pass",
+                    "feed-generation.app-images",
+                    "Prepared application image and runtime artifact identities were verified before feed runtime changes.",
+                    details={"image_ids": app_image_ids, "runtime_artifacts": app_runtime_artifacts},
+                )
+            )
             initial_scan_quiescence = feed_activation_scan_quiescence_finding(repo_root)
             findings.append(initial_scan_quiescence)
             if initial_scan_quiescence["status"] != "pass":
@@ -16632,6 +17752,9 @@ def command_feed_generation_transition(
                             "previous_generation_id": current_id,
                             "rollback_generation_id": prior_rollback_id,
                             "restore_gsad_hosts": restore_gsad_hosts,
+                            "app_image_ids": app_image_ids,
+                            "app_runtime_artifacts": app_runtime_artifacts,
+                            "app_compose_contract": app_compose_contract,
                             "current_generation_id": None,
                             "started_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
                         },
@@ -16677,7 +17800,15 @@ def command_feed_generation_transition(
                         [str(runtime_root / "feed-store")],
                     )
                 try:
-                    write_feed_activation_state(repo_root, {key: value for key, value in state_before.items() if key != "schema_version"})
+                    restored_state = {
+                        key: value
+                        for key, value in state_before.items()
+                        if key != "schema_version"
+                    }
+                    restored_state["app_image_ids"] = app_image_ids
+                    restored_state["app_runtime_artifacts"] = app_runtime_artifacts
+                    restored_state["app_compose_contract"] = app_compose_contract
+                    write_feed_activation_state(repo_root, restored_state)
                 except (OSError, ValueError) as journal_error:
                     findings.append(
                         finding(
@@ -16695,7 +17826,11 @@ def command_feed_generation_transition(
                         [str(feed_activation_state_path(repo_root))],
                     )
                 runtime_result = restart_and_verify_feed_app_services(
-                    repo_root, app_env=restore_app_env
+                    repo_root,
+                    app_env=restore_app_env,
+                    app_image_ids=app_image_ids,
+                    app_runtime_artifacts=app_runtime_artifacts,
+                    app_compose_contract=app_compose_contract,
                 )
                 findings.append(
                     feed_import_summary_finding(
@@ -16709,8 +17844,18 @@ def command_feed_generation_transition(
                 repo_root,
                 activation_managed=True,
                 restart_services=False,
+                app_image_ids=app_image_ids,
             )
             findings.append(feed_import_summary_finding(imported, "feed-generation.import"))
+            artifact_post_import = app_runtime_artifact_finding(
+                repo_root,
+                app_runtime_artifacts,
+                check="feed-generation.app-artifacts-after-import",
+            )
+            findings.append(artifact_post_import)
+            if artifact_post_import["status"] != "pass":
+                findings.append(stop_app_services_for_feed_transition(repo_root, "feed-generation.artifact-change-stop"))
+                return make_result(command_name, repo_root, "Feed generation transition requires manual recovery because runtime artifacts changed during import.", findings, [str(feed_activation_state_path(repo_root))])
             transition_succeeded = imported.get("status") == "pass"
             if imported.get("status") == "pass":
                 try:
@@ -16733,6 +17878,9 @@ def command_feed_generation_transition(
                             "previous_generation_id": None,
                             "rollback_generation_id": success_rollback_id,
                             "restore_gsad_hosts": restore_gsad_hosts,
+                            "app_image_ids": app_image_ids,
+                            "app_runtime_artifacts": app_runtime_artifacts,
+                            "app_compose_contract": app_compose_contract,
                             "completed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
                         },
                     )
@@ -16743,7 +17891,11 @@ def command_feed_generation_transition(
                     findings.append(finding("pass", "feed-generation.journal-complete", "Durable activation journal matches the verified selector and completed import.", str(feed_activation_state_path(repo_root))))
             if transition_succeeded:
                 runtime_result = restart_and_verify_feed_app_services(
-                    repo_root, app_env=restore_app_env
+                    repo_root,
+                    app_env=restore_app_env,
+                    app_image_ids=app_image_ids,
+                    app_runtime_artifacts=app_runtime_artifacts,
+                    app_compose_contract=app_compose_contract,
                 )
                 findings.append(feed_import_summary_finding(runtime_result, "feed-generation.runtime-verify"))
                 summary = "Feed generation activation and import completed." if not rollback else "Feed generation rollback and compensating import completed."
@@ -16778,9 +17930,19 @@ def command_feed_generation_transition(
                 repo_root,
                 activation_managed=True,
                 restart_services=False,
+                app_image_ids=app_image_ids,
             )
             findings.append(feed_import_summary_finding(compensated, "feed-generation.compensation-import"))
             if compensated.get("status") == "pass":
+                compensation_artifacts = app_runtime_artifact_finding(
+                    repo_root,
+                    app_runtime_artifacts,
+                    check="feed-generation.app-artifacts-after-compensation",
+                )
+                findings.append(compensation_artifacts)
+                if compensation_artifacts["status"] != "pass":
+                    findings.append(stop_app_services_for_feed_transition(repo_root, "feed-generation.compensation-artifact-stop"))
+                    return make_result(command_name, repo_root, "Compensating import completed, but changed runtime artifacts require manual recovery.", findings, [str(feed_activation_state_path(repo_root))])
                 try:
                     write_feed_activation_state(
                         repo_root,
@@ -16791,13 +17953,22 @@ def command_feed_generation_transition(
                             "previous_generation_id": None,
                             "rollback_generation_id": prior_rollback_id,
                             "restore_gsad_hosts": restore_gsad_hosts,
+                            "app_image_ids": app_image_ids,
+                            "app_runtime_artifacts": app_runtime_artifacts,
+                            "app_compose_contract": app_compose_contract,
                             "completed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
                         },
                     )
                 except (OSError, ValueError) as error:
                     findings.append(finding("fail", "feed-generation.compensation-journal", f"Prior generation was reimported but its completed activation state could not be recorded: {error}"))
                     return make_result(command_name, repo_root, "Compensating import completed but durable recovery state is unavailable; app startup remains blocked.", findings, [str(feed_activation_state_path(repo_root))])
-                runtime_result = restart_and_verify_feed_app_services(repo_root)
+                runtime_result = restart_and_verify_feed_app_services(
+                    repo_root,
+                    app_env=restore_app_env,
+                    app_image_ids=app_image_ids,
+                    app_runtime_artifacts=app_runtime_artifacts,
+                    app_compose_contract=app_compose_contract,
+                )
                 findings.append(feed_import_summary_finding(runtime_result, "feed-generation.compensation-runtime-verify"))
                 findings.append(finding("warn", "feed-generation.compensation", "Target activation failed; the prior generation was reselected and reimported. This is compensating recovery, not a transactional database rollback.", details={"restored_generation_id": known_previous_id, "failed_generation_id": generation_id}))
                 return make_result(command_name, repo_root, "Feed generation transition failed, but compensating recovery restored and reimported the prior generation.", findings, [str(generations_root / known_previous_id), *compensated.get("artifacts", [])])
@@ -18525,11 +19696,113 @@ def runtime_app_up_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
+def _command_runtime_app_build_unlocked(repo_root: Path) -> dict[str, Any]:
+    guard = live_app_build_guard(repo_root, "runtime-app-build")
+    if guard is not None:
+        return guard
+    findings = ensure_runtime_dirs(repo_root)
+    app_env = deployed_app_env(repo_root)
+    config_command = compose_command(repo_root, "--profile", "app", "config", "--quiet", env=app_env)
+    config = run_command(config_command, repo_root, env=app_env, timeout=120)
+    findings.append(
+        process_step_finding(
+            "pass" if config.returncode == 0 else "fail",
+            "compose.config",
+            f"Compose app config validation exit code {config.returncode}.",
+            config,
+            config_command,
+        )
+    )
+    if config.returncode != 0:
+        return make_result("runtime-app-build", repo_root, "Application image build stopped at Compose validation.", findings, [str(compose_file(repo_root))])
+    build_command = compose_command(repo_root, "--profile", "app", "build", *APP_SERVICES, env=app_env)
+    built = run_command(build_command, repo_root, env=app_env, timeout=1800)
+    findings.append(
+        process_step_finding(
+            "pass" if built.returncode == 0 else "fail",
+            "compose.app-build",
+            f"Build explicit application images exit code {built.returncode}.",
+            built,
+            build_command,
+        )
+    )
+    if built.returncode != 0:
+        return make_result("runtime-app-build", repo_root, "Application image build failed.", findings, [str(compose_file(repo_root))])
+    findings.extend(stage_gsa_static(repo_root))
+    image_ids, image_error = resolve_app_service_image_ids(repo_root, prefer_running=False, app_env=app_env)
+    findings.append(
+        finding(
+            "pass" if image_error is None else "fail",
+            "compose.app-images",
+            "All application image identities were resolved after the explicit build."
+            if image_error is None
+            else image_error,
+            details={"image_ids": image_ids},
+        )
+    )
+    if image_error is None and aggregate_status(findings) != "fail":
+        try:
+            runtime_artifacts = app_runtime_artifact_manifest(repo_root)
+            receipt = write_app_deployment_receipt(
+                repo_root, image_ids, runtime_artifacts, app_env=app_env
+            )
+        except (OSError, ValueError) as error:
+            findings.append(finding("fail", "runtime.app-deployment-receipt", f"Prepared application deployment receipt could not be written: {error}"))
+        else:
+            findings.append(
+                finding(
+                    "pass",
+                    "runtime.app-deployment-receipt",
+                    "Prepared application images and bind-mounted runtime artifacts were recorded for explicit deployment.",
+                    str(app_deployment_receipt_path(repo_root)),
+                    receipt,
+                )
+            )
+    return make_result(
+        "runtime-app-build",
+        repo_root,
+        "Application deployment was built and recorded explicitly."
+        if aggregate_status(findings) != "fail"
+        else "Application deployment preparation failed.",
+        findings,
+        [str(compose_file(repo_root))],
+    )
+
+
+def command_runtime_app_build(repo_root: Path) -> dict[str, Any]:
+    try:
+        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-app-build"):
+            return _command_runtime_app_build_unlocked(repo_root)
+    except RuntimeLockTimeout as error:
+        return make_result(
+            "runtime-app-build",
+            repo_root,
+            "Application image build stopped while waiting for the feed lifecycle lock.",
+            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
+            [str(runtime_lock_dir(repo_root))],
+        )
+
+
 def _command_runtime_app_up_unlocked(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
     findings.append(active_feed_generation_finding(repo_root))
-    app_env = runtime_app_env(repo_root)
+    app_env = deployed_app_env(repo_root)
+    receipt, receipt_error = require_app_deployment_receipt(
+        repo_root, app_env=app_env
+    )
+    app_image_ids = receipt["image_ids"] if receipt is not None else {}
+    findings.append(
+        finding(
+            "pass" if receipt_error is None else "fail",
+            "runtime.app-deployment-receipt",
+            "Prepared application deployment receipt matches the current images and runtime artifacts."
+            if receipt_error is None
+            else receipt_error,
+            str(app_deployment_receipt_path(repo_root)),
+            {"image_ids": app_image_ids},
+        )
+    )
     config = run_command(compose_command(repo_root, "config", "--quiet", env=app_env), repo_root, env=app_env)
     findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
     findings.append(rendered_app_execution_mount_finding(repo_root, app_env))
@@ -18551,13 +19824,95 @@ def _command_runtime_app_up_unlocked(repo_root: Path, status_only: bool = False)
     if not certs_complete(repo_root):
         cert_findings = [dict(item, status="fail") for item in cert_findings]
     findings.extend(cert_findings)
-    findings.extend(stage_gsa_static(repo_root))
     findings.extend(gsad_binding_transition_findings(repo_root))
+    if receipt_error is None:
+        try:
+            override_command = compose_command_with_app_images(
+                repo_root,
+                app_image_ids,
+                "--profile",
+                "app",
+                "config",
+                "--quiet",
+                env=app_env,
+            )
+            override_config = run_command(
+                override_command, repo_root, env=app_env, timeout=120
+            )
+        except (OSError, ValueError) as error:
+            findings.append(finding("fail", "compose.app-image-override", f"Pinned application image override could not be prepared: {error}"))
+        else:
+            findings.append(
+                process_step_finding(
+                    "pass" if override_config.returncode == 0 else "fail",
+                    "compose.app-image-override",
+                    f"Pinned application image Compose validation exit code {override_config.returncode}.",
+                    override_config,
+                    override_command,
+                )
+            )
     if aggregate_status(findings) == "fail":
         result = make_result("runtime-app-up", repo_root, "Application runtime startup stopped at prerequisites.", findings, [str(runtime_dir(repo_root))])
         return runtime_app_up_status_only_result(result) if status_only else result
 
-    findings.extend(compose_app_services_up_with_retry(repo_root, "compose.app-up", "docker compose app up"))
+    pre_start_identity = [
+        app_runtime_artifact_finding(
+            repo_root,
+            receipt["runtime_artifacts"],
+            check="runtime.app.artifacts-before-start",
+        ),
+        app_compose_contract_finding(
+            repo_root,
+            app_image_ids,
+            receipt["compose_contract"],
+            app_env=app_env,
+            check="runtime.app.compose-before-start",
+        ),
+    ]
+    findings.extend(pre_start_identity)
+    if aggregate_status(pre_start_identity) == "fail":
+        result = make_result("runtime-app-up", repo_root, "Application runtime startup stopped because deployment identity changed before container start.", findings, [str(runtime_dir(repo_root))])
+        return runtime_app_up_status_only_result(result) if status_only else result
+
+    findings.extend(
+        compose_app_services_up_with_retry(
+            repo_root,
+            "compose.app-up",
+            "docker compose app up",
+            app_env=app_env,
+            app_image_ids=app_image_ids,
+        )
+    )
+    findings.extend(
+        app_service_image_findings(
+            repo_root, app_image_ids, check="runtime.app.image"
+        )
+    )
+    post_start_identity = [
+        app_runtime_artifact_finding(
+            repo_root,
+            receipt["runtime_artifacts"],
+            check="runtime.app.artifacts-after-start",
+        ),
+        app_compose_contract_finding(
+            repo_root,
+            app_image_ids,
+            receipt["compose_contract"],
+            app_env=app_env,
+            check="runtime.app.compose-after-start",
+        ),
+    ]
+    findings.extend(post_start_identity)
+    if aggregate_status(post_start_identity) == "fail":
+        findings.append(
+            stop_app_services_after_identity_failure(
+                repo_root,
+                app_env=app_env,
+                check="runtime.app.identity-failure-stop",
+            )
+        )
+        result = make_result("runtime-app-up", repo_root, "Application deployment identity changed during startup; application services were stopped.", findings, [str(runtime_dir(repo_root))])
+        return runtime_app_up_status_only_result(result) if status_only else result
     for service in APP_SERVICES:
         running = container_running(repo_root, service)
         findings.append(finding("pass" if running else "warn", "runtime.app.running", f"{service} container is {'running' if running else 'not running'}.", details={"service": service, "logs_tail": [] if running else service_log_tail(repo_root, service)}))
@@ -18600,14 +19955,45 @@ def _command_runtime_native_api_rebuild_unlocked(repo_root: Path) -> dict[str, A
     findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
     if aggregate_status(findings) == "fail":
         return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped at prerequisites.", findings, [str(runtime_dir(repo_root))])
+    receipt, receipt_error = require_app_deployment_receipt(
+        repo_root, app_env=app_env
+    )
+    findings.append(
+        finding(
+            "pass" if receipt_error is None else "fail",
+            "runtime.app-deployment-receipt",
+            "Prepared application deployment receipt is valid before the API-only rebuild."
+            if receipt_error is None
+            else receipt_error,
+            str(app_deployment_receipt_path(repo_root)),
+        )
+    )
+    if receipt_error is not None or receipt is None:
+        return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because no verified application deployment was prepared.", findings, [str(runtime_dir(repo_root))])
 
     build_command = compose_command(repo_root, "build", "turbovas-api", env=app_env)
     build = run_command(build_command, repo_root, env=app_env, timeout=1200)
     findings.append(process_step_finding("pass" if build.returncode == 0 else "fail", "compose.turbovas-api-build", f"docker compose build turbovas-api exit code {build.returncode}.", build, build_command))
     if build.returncode != 0:
         return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because image build failed.", findings, [str(runtime_dir(repo_root))])
+    receipt, receipt_error = refresh_app_deployment_receipt_after_image_build(
+        repo_root, receipt, ("turbovas-api",), app_env=app_env
+    )
+    findings.append(
+        finding(
+            "pass" if receipt_error is None else "fail",
+            "runtime.app-deployment-receipt-refresh",
+            "Prepared application deployment receipt now identifies the rebuilt native API image."
+            if receipt_error is None
+            else receipt_error,
+            str(app_deployment_receipt_path(repo_root)),
+        )
+    )
+    if receipt_error is not None or receipt is None:
+        return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because the deployment receipt could not be refreshed.", findings, [str(runtime_dir(repo_root))])
+    app_image_ids = receipt["image_ids"]
 
-    up_command = compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "turbovas-api", env=app_env)
+    up_command = compose_command_with_app_images(repo_root, app_image_ids, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "--no-build", "--pull", "never", "turbovas-api", env=app_env)
     up = run_command(up_command, repo_root, env=app_env, timeout=300)
     findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "compose.turbovas-api-up", f"docker compose up --no-deps turbovas-api exit code {up.returncode}.", up, up_command))
     if up.returncode != 0:
@@ -20071,8 +21457,21 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
     findings.append(active_feed_generation_finding(repo_root))
-
     base_env = native_api_direct_runtime_env(repo_root)
+    receipt, receipt_error = require_app_deployment_receipt(
+        repo_root, app_env=base_env
+    )
+    findings.append(
+        finding(
+            "pass" if receipt_error is None else "fail",
+            "runtime.app-deployment-receipt",
+            "Prepared application deployment receipt is valid before the direct write-control smoke."
+            if receipt_error is None
+            else receipt_error,
+            str(app_deployment_receipt_path(repo_root)),
+        )
+    )
+
     token_from_env = bool(base_env.get(TURBOVAS_API_BEARER_TOKEN_ENV))
     token_source = "environment" if token_from_env else "runtime-secret-file"
     token = native_api_direct_bearer_token(repo_root, base_env)
@@ -20191,11 +21590,27 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
     if aggregate_status(findings) != "fail":
         build = run_command(compose_command(repo_root, "build", "turbovas-api", env=env), repo_root, env=env, timeout=1200)
         findings.append(process_step_finding("pass" if build.returncode == 0 else "fail", "compose.turbovas-api-build", f"docker compose build turbovas-api exit code {build.returncode}.", build, compose_command(repo_root, "build", "turbovas-api", env=env)))
+        if build.returncode == 0 and receipt is not None:
+            receipt, receipt_error = refresh_app_deployment_receipt_after_image_build(
+                repo_root, receipt, ("turbovas-api",), app_env=base_env
+            )
+            findings.append(
+                finding(
+                    "pass" if receipt_error is None else "fail",
+                    "runtime.app-deployment-receipt-refresh",
+                    "Prepared application deployment receipt now identifies the direct write-control smoke image."
+                    if receipt_error is None
+                    else receipt_error,
+                    str(app_deployment_receipt_path(repo_root)),
+                )
+            )
 
     if aggregate_status(findings) != "fail":
-        up = run_command(compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "turbovas-api", env=env), repo_root, env=env, timeout=300)
+        app_image_ids = receipt["image_ids"]
+        up_command = compose_command_with_app_images(repo_root, app_image_ids, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "--no-build", "--pull", "never", "turbovas-api", env=env)
+        up = run_command(up_command, repo_root, env=env, timeout=300)
         started_write_control = up.returncode == 0
-        findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "native-api-direct.write-control-up", f"docker compose direct write-control turbovas-api up exit code {up.returncode}.", up, compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "turbovas-api", env=env)))
+        findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "native-api-direct.write-control-up", f"docker compose direct write-control turbovas-api up exit code {up.returncode}.", up, up_command))
 
     if aggregate_status(findings) != "fail":
         findings.append(
@@ -22426,8 +23841,9 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
 
     if started_write_control:
         restore_env = native_api_direct_runtime_env(repo_root)
-        restore = run_command(compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "turbovas-api", env=restore_env), repo_root, env=restore_env, timeout=300)
-        findings.append(process_step_finding("pass" if restore.returncode == 0 else "fail", "native-api-direct.write-control-restore", f"docker compose restored turbovas-api direct listener with write-control disabled exit code {restore.returncode}.", restore, compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "turbovas-api", env=restore_env)))
+        restore_command = compose_command_with_app_images(repo_root, receipt["image_ids"], "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "--no-build", "--pull", "never", "turbovas-api", env=restore_env)
+        restore = run_command(restore_command, repo_root, env=restore_env, timeout=300)
+        findings.append(process_step_finding("pass" if restore.returncode == 0 else "fail", "native-api-direct.write-control-restore", f"docker compose restored turbovas-api direct listener with write-control disabled exit code {restore.returncode}.", restore, restore_command))
 
     result = make_result("runtime-native-api-direct-write-smoke", repo_root, "Direct native API write-control smoke checks completed.", findings, [str(artifact_dir)])
     result["details"] = {
@@ -22486,8 +23902,21 @@ def _command_runtime_native_api_direct_smoke_unlocked(repo_root: Path, status_on
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
     findings.append(active_feed_generation_finding(repo_root))
-    content_type = (("Content-Type", "application/json"),)
     env = native_api_direct_runtime_env(repo_root)
+    receipt, receipt_error = require_app_deployment_receipt(
+        repo_root, app_env=env, verify_compose_contract=False
+    )
+    findings.append(
+        finding(
+            "pass" if receipt_error is None else "fail",
+            "runtime.app-deployment-receipt",
+            "Prepared application deployment receipt is valid before the direct native API smoke."
+            if receipt_error is None
+            else receipt_error,
+            str(app_deployment_receipt_path(repo_root)),
+        )
+    )
+    content_type = (("Content-Type", "application/json"),)
     token_from_env = bool(env.get(TURBOVAS_API_BEARER_TOKEN_ENV))
     token_source = "environment" if token_from_env else "runtime-secret-file"
     token = native_api_direct_bearer_token(repo_root, env)
@@ -22554,9 +23983,29 @@ def _command_runtime_native_api_direct_smoke_unlocked(repo_root: Path, status_on
         if status_only:
             result = direct_smoke_status_only_result(result)
         return result
+    receipt, receipt_error = refresh_app_deployment_receipt_after_image_build(
+        repo_root, receipt, ("turbovas-api",), app_env=env
+    )
+    findings.append(
+        finding(
+            "pass" if receipt_error is None else "fail",
+            "runtime.app-deployment-receipt-refresh",
+            "Prepared application deployment receipt now identifies the direct native API smoke image."
+            if receipt_error is None
+            else receipt_error,
+            str(app_deployment_receipt_path(repo_root)),
+        )
+    )
+    if receipt_error is not None or receipt is None:
+        result = make_result("runtime-native-api-direct-smoke", repo_root, "Direct native API smoke stopped because the deployment receipt could not be refreshed.", findings, [str(artifact_dir)])
+        result["details"] = {"base_url": native_api_direct_base_url(env)}
+        write_json_artifact(artifact_dir, "native-api-direct-smoke-failed.json", result)
+        return direct_smoke_status_only_result(result) if status_only else result
 
-    up = run_command(compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "turbovas-api", env=env), repo_root, env=env, timeout=300)
-    findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "compose.turbovas-api-direct-up", f"docker compose direct turbovas-api up exit code {up.returncode}.", up, compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "turbovas-api", env=env)))
+    app_image_ids = receipt["image_ids"]
+    up_command = compose_command_with_app_images(repo_root, app_image_ids, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "--no-build", "--pull", "never", "turbovas-api", env=env)
+    up = run_command(up_command, repo_root, env=env, timeout=300)
+    findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "compose.turbovas-api-direct-up", f"docker compose direct turbovas-api up exit code {up.returncode}.", up, up_command))
     if up.returncode != 0:
         result = make_result("runtime-native-api-direct-smoke", repo_root, "Direct native API smoke stopped because turbovas-api restart failed.", findings, [str(artifact_dir)])
         result["details"] = {"base_url": native_api_direct_base_url(env)}
@@ -32876,7 +34325,15 @@ def _command_gvmd_smoke_unlocked(repo_root: Path) -> dict[str, Any]:
     if pg_gvm_extension_status(repo_root)["status"] != "pass":
         findings.append(finding("fail", "gvmd.pg-gvm", "pg-gvm extension is not initialized; run just runtime-init before gvmd smoke."))
         return make_result("gvmd-smoke", repo_root, "gvmd smoke stopped before service startup.", findings)
-    result = run_command(compose_command(repo_root, "--profile", "app", "up", "-d", "gvmd"), repo_root, env=runtime_env(repo_root))
+    app_env = runtime_app_env(repo_root)
+    receipt, receipt_error = require_app_deployment_receipt(
+        repo_root, app_env=app_env
+    )
+    findings.append(finding("pass" if receipt_error is None else "fail", "runtime.app-deployment-receipt", "Prepared application deployment receipt is valid for the gvmd smoke." if receipt_error is None else receipt_error, str(app_deployment_receipt_path(repo_root))))
+    if receipt_error is not None or receipt is None:
+        return make_result("gvmd-smoke", repo_root, "gvmd smoke stopped because no verified application deployment was prepared.", findings)
+    up_command = compose_command_with_app_images(repo_root, receipt["image_ids"], "--profile", "app", "up", "-d", "--no-deps", "--no-build", "--pull", "never", "gvmd", env=app_env)
+    result = run_command(up_command, repo_root, env=app_env)
     findings.append(finding("pass" if result.returncode == 0 else "fail", "gvmd.up", f"docker compose up gvmd exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-80:]}))
     if result.returncode != 0:
         return make_result("gvmd-smoke", repo_root, "gvmd smoke stopped at container startup.", findings)
@@ -33458,6 +34915,7 @@ def build_parser() -> argparse.ArgumentParser:
     path_coupling.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe path-coupling checks")
     runtime_app_up = subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
     runtime_app_up.add_argument("--status-only", action="store_true", help="emit compact app startup status and only non-pass findings for chat-safe validation")
+    subparsers.add_parser("runtime-app-build", parents=[common], help="build application images explicitly without starting or changing feed state")
     subparsers.add_parser("runtime-app-down", parents=[common], help="stop experimental application services")
     subparsers.add_parser("runtime-app-smoke", parents=[common], help="run experimental application service smoke checks")
     native_api_smoke = subparsers.add_parser("runtime-native-api-smoke", parents=[common], help="verify the internal TurboVAS native API sidecar")
@@ -33867,6 +35325,8 @@ def main(argv: list[str] | None = None) -> int:
         result = command_path_coupling_state(repo_root, status_only=args.status_only)
     elif args.command == "runtime-app-up":
         result = command_runtime_app_up(repo_root, status_only=args.status_only)
+    elif args.command == "runtime-app-build":
+        result = command_runtime_app_build(repo_root)
     elif args.command == "runtime-app-down":
         result = command_runtime_app_down(repo_root)
     elif args.command == "runtime-app-smoke":

@@ -36,7 +36,6 @@ import {
 } from 'gmp/native-api/alerts';
 import {fetchNativeCredentials} from 'gmp/native-api/credentials';
 import {fetchNativeFilters} from 'gmp/native-api/filters';
-import {fetchNativeReportConfigs} from 'gmp/native-api/report-configs';
 import {fetchNativeReportFormats} from 'gmp/native-api/report-formats';
 import {fetchNativeTasks} from 'gmp/native-api/tasks';
 import {parseYesNo, YES_VALUE} from 'gmp/parser';
@@ -70,9 +69,6 @@ interface NewAlertElement {
     get_report_formats_response?: {
       report_format: ModelElement | ModelElement[];
     };
-    get_report_configs_response?: {
-      report_config: ModelElement | ModelElement[];
-    };
     get_credentials_response?: {
       credential: ModelElement | ModelElement[];
     };
@@ -93,9 +89,6 @@ interface EditAlertElement {
     get_report_formats_response?: {
       report_format: ModelElement | ModelElement[];
     };
-    get_report_configs_response?: {
-      report_config: ModelElement | ModelElement[];
-    };
     get_credentials_response?: {
       credential: ModelElement | ModelElement[];
     };
@@ -112,7 +105,6 @@ interface NewAlertSettings {
   filters: Filter[];
   credentials: Credential[];
   report_formats: Model[];
-  report_configs: Model[];
   tasks: Model[];
 }
 
@@ -146,10 +138,8 @@ const method_data_fields = [
   'subject',
   'notice',
   'notice_report_format',
-  'notice_report_config',
   'message',
   'notice_attach_format',
-  'notice_attach_config',
   'message_attach',
   'recipient_credential',
   'submethod', // FIXME remove constant submethod!!!
@@ -163,12 +153,10 @@ const method_data_fields = [
   'scp_known_hosts',
   'scp_path',
   'scp_port',
-  'scp_report_config',
   'scp_report_format',
   'smb_credential',
   'smb_file_path',
   'smb_max_protocol',
-  'smb_report_config',
   'smb_report_format',
   'smb_share_path',
 ];
@@ -183,10 +171,9 @@ const nativeAlertSettingsQuery = {
 const fetchNativeAlertSettings = async (
   http: Http,
 ): Promise<NewAlertSettings> => {
-  const [reportFormats, reportConfigs, credentials, tasks, filters] =
+  const [reportFormats, credentials, tasks, filters] =
     await Promise.all([
       fetchNativeReportFormats(http, nativeAlertSettingsQuery),
-      fetchNativeReportConfigs(http, nativeAlertSettingsQuery),
       fetchNativeCredentials(http, nativeAlertSettingsQuery),
       fetchNativeTasks(http, nativeAlertSettingsQuery),
       fetchNativeFilters(http, nativeAlertSettingsQuery),
@@ -194,7 +181,6 @@ const fetchNativeAlertSettings = async (
 
   return {
     report_formats: reportFormats.reportFormats,
-    report_configs: reportConfigs.reportConfigs,
     credentials: credentials.credentials,
     tasks: tasks.tasks,
     filters: filters.filters,
@@ -270,10 +256,6 @@ const nativeAlertCreateRequestFromParams = ({
       smb_share_path: other.method_data_smb_share_path,
       smb_file_path: other.method_data_smb_file_path,
       report_format_id: other.method_data_smb_report_format,
-      ...nativeAlertOptionalId(
-        'report_config_id',
-        other.method_data_smb_report_config,
-      ),
       ...(smbMaxProtocol === ''
         ? {smb_max_protocol: 'default'}
         : smbMaxProtocol !== undefined
@@ -301,10 +283,6 @@ const nativeAlertCreateRequestFromParams = ({
         ...email,
         notice: 'include',
         report_format_id: other.method_data_notice_report_format,
-        ...nativeAlertOptionalId(
-          'report_config_id',
-          other.method_data_notice_report_config,
-        ),
         message: other.method_data_message,
       };
     case '2':
@@ -312,10 +290,6 @@ const nativeAlertCreateRequestFromParams = ({
         ...email,
         notice: 'attach',
         report_format_id: other.method_data_notice_attach_format,
-        ...nativeAlertOptionalId(
-          'report_config_id',
-          other.method_data_notice_attach_config,
-        ),
         message: other.method_data_message_attach,
       };
     default:
@@ -449,10 +423,6 @@ class AlertCommand extends EntityCommand<Alert> {
         new_alert?.get_report_formats_response?.report_format,
         format => parseModelFromElement(format, 'reportformat'),
       ),
-      report_configs: map(
-        new_alert?.get_report_configs_response?.report_config,
-        config => parseModelFromElement(config, 'reportconfig'),
-      ),
       credentials: map(
         new_alert?.get_credentials_response?.credential,
         credential => Credential.fromElement(credential),
@@ -491,10 +461,6 @@ class AlertCommand extends EntityCommand<Alert> {
       report_formats: map(
         edit_alert?.get_report_formats_response?.report_format,
         format => parseModelFromElement(format, 'reportformat'),
-      ),
-      report_configs: map(
-        edit_alert?.get_report_configs_response?.report_config,
-        config => parseModelFromElement(config, 'reportconfig'),
       ),
       credentials: map(
         edit_alert?.get_credentials_response?.credential,

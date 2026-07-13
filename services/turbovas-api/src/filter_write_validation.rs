@@ -170,7 +170,6 @@ fn normalize_filter_type(value: Option<String>) -> Result<String, ApiError> {
         "permission" => "permission",
         "port_list" | "port list" => "port_list",
         "report" => "report",
-        "report_config" | "report config" => "report_config",
         "report_format" | "report format" => "report_format",
         "result" => "result",
         "role" => "role",

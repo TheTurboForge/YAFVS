@@ -63,7 +63,6 @@ export const NOTICE_ATTACH = '2';
 
 export const DEFAULT_NOTICE_REPORT_FORMAT =
   'a3810a62-1f62-11e1-9219-406186ea4fc5';
-export const DEFAULT_NOTICE_REPORT_CONFIG = UNSET_VALUE;
 export const DEFAULT_NOTICE_ATTACH_FORMAT =
   'a0b5bfb2-1f62-11e1-85db-406186ea4fc5';
 
@@ -148,8 +147,6 @@ const DEFAULTS = {
   method_data_notice: DEFAULT_NOTICE,
   method_data_notice_attach_format: DEFAULT_NOTICE_ATTACH_FORMAT,
   method_data_notice_report_format: DEFAULT_NOTICE_REPORT_FORMAT,
-  method_data_notice_attach_config: DEFAULT_NOTICE_REPORT_CONFIG,
-  method_data_notice_report_config: DEFAULT_NOTICE_REPORT_CONFIG,
   method_data_scp_path: DEFAULT_SCP_PATH,
   method_data_scp_host: '',
   method_data_scp_port: 22,
@@ -164,7 +161,6 @@ const DEFAULTS = {
   method_data_submethod: 'syslog',
   method_data_to_address: '',
   name: _('Unnamed'),
-  report_configs: [],
   report_formats: [],
   result_filters: [],
   secinfo_filters: [],
@@ -226,7 +222,6 @@ class AlertDialog extends React.Component {
       credentials,
       filter_id,
       title = _('New Alert'),
-      report_configs,
       report_formats,
       method_data_composer_ignore_pagination,
       method_data_composer_include_overrides,
@@ -468,13 +463,10 @@ class AlertDialog extends React.Component {
                   message={values.method_data_message}
                   messageAttach={values.method_data_message_attach}
                   notice={values.method_data_notice}
-                  noticeAttachConfig={values.method_data_notice_attach_config}
                   noticeAttachFormat={values.method_data_notice_attach_format}
-                  noticeReportConfig={values.method_data_notice_report_config}
                   noticeReportFormat={values.method_data_notice_report_format}
                   prefix="method_data"
                   recipientCredential={values.method_data_recipient_credential}
-                  reportConfigs={report_configs}
                   reportFormats={report_formats}
                   subject={values.method_data_subject}
                   toAddress={values.method_data_to_address}
@@ -489,14 +481,12 @@ class AlertDialog extends React.Component {
                 <ScpMethodPart
                   credentials={credentials}
                   prefix="method_data"
-                  reportConfigs={report_configs}
                   reportFormats={report_formats}
                   scpCredential={values.method_data_scp_credential}
                   scpHost={values.method_data_scp_host}
                   scpKnownHosts={values.method_data_scp_known_hosts}
                   scpPath={values.method_data_scp_path}
                   scpPort={values.method_data_scp_port}
-                  scpReportConfig={values.method_data_scp_report_config}
                   scpReportFormat={values.method_data_scp_report_format}
                   onChange={onValueChange}
                   onCredentialChange={onScpCredentialChange}
@@ -517,12 +507,10 @@ class AlertDialog extends React.Component {
                 <SmbMethodPart
                   credentials={credentials}
                   prefix="method_data"
-                  reportConfigs={report_configs}
                   reportFormats={report_formats}
                   smbCredential={values.method_data_smb_credential}
                   smbFilePath={values.method_data_smb_file_path}
                   smbMaxProtocol={values.method_data_smb_max_protocol}
-                  smbReportConfig={values.method_data_smb_report_config}
                   smbReportFormat={values.method_data_smb_report_format}
                   smbSharePath={values.method_data_smb_share_path}
                   onChange={onValueChange}
@@ -582,9 +570,7 @@ AlertDialog.propTypes = {
   method_data_message: PropTypes.string,
   method_data_message_attach: PropTypes.string,
   method_data_notice: PropTypes.string,
-  method_data_notice_attach_config: PropTypes.id,
   method_data_notice_attach_format: PropTypes.id,
-  method_data_notice_report_config: PropTypes.id,
   method_data_notice_report_format: PropTypes.id,
   method_data_recipient_credential: PropTypes.id,
   method_data_scp_credential: PropTypes.id,
@@ -592,11 +578,9 @@ AlertDialog.propTypes = {
   method_data_scp_known_hosts: PropTypes.string,
   method_data_scp_path: PropTypes.string,
   method_data_scp_port: PropTypes.number,
-  method_data_scp_report_config: PropTypes.id,
   method_data_scp_report_format: PropTypes.id,
   method_data_smb_credential: PropTypes.id,
   method_data_smb_file_path: PropTypes.string,
-  method_data_smb_report_config: PropTypes.id,
   method_data_smb_report_format: PropTypes.id,
   method_data_smb_share_path: PropTypes.string,
   method_data_snmp_agent: PropTypes.string,
@@ -606,7 +590,6 @@ AlertDialog.propTypes = {
   method_data_subject: PropTypes.string,
   method_data_to_address: PropTypes.string,
   name: PropTypes.string,
-  report_configs: PropTypes.array,
   report_formats: PropTypes.array,
   result_filters: PropTypes.array,
   secinfo_filters: PropTypes.array,

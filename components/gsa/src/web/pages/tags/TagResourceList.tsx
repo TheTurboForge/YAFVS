@@ -47,7 +47,6 @@ const NATIVE_TAG_RESOURCE_TYPES = new Set<EntityType>([
   'operatingsystem',
   'portlist',
   'report',
-  'reportconfig',
   'reportformat',
   'result',
   'scanconfig',

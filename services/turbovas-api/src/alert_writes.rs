@@ -139,7 +139,6 @@ pub(crate) fn alert_email_create_command(
     for field in [
         request.recipient_credential_id.as_bytes(),
         request.report_format_id.as_bytes(),
-        request.report_config_id.as_bytes(),
         request.message.as_bytes(),
     ] {
         command.push(b' ');
@@ -182,7 +181,6 @@ pub(crate) fn alert_smb_create_command(
         request.smb_share_path.as_bytes(),
         request.smb_file_path.as_bytes(),
         request.report_format_id.as_bytes(),
-        request.report_config_id.as_bytes(),
         request.smb_max_protocol.as_bytes(),
     ] {
         command.push(b' ');
@@ -232,10 +230,7 @@ pub(crate) fn parse_alert_create_response(response: &[u8]) -> Result<String, Api
         | b"9 condition_filter_not_found"
         | b"17 scp_format_not_found"
         | b"60 recipient_credential_not_found" => Err(ApiError::NotFound),
-        b"90 report_format_not_found" | b"91 report_config_not_found" => Err(ApiError::NotFound),
-        b"92 report_config_mismatch" => Err(ApiError::BadRequest(
-            "The report config does not belong to the selected report format.".to_string(),
-        )),
+        b"90 report_format_not_found" => Err(ApiError::NotFound),
         b"99 forbidden" => Err(ApiError::Forbidden),
         b"-2 malformed" => Err(ApiError::BadRequest(
             "The alert control request was rejected.".to_string(),

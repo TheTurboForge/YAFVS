@@ -32,7 +32,6 @@ class FilterType(Enum):
     OVERRIDE = "override"
     PORT_LIST = "port_list"
     REPORT = "report"
-    REPORT_CONFIG = "report_config"
     REPORT_FORMAT = "report_format"
     RESULT = "result"
     SCAN_CONFIG = "config"

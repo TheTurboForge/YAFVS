@@ -50,7 +50,7 @@ class GMPv226(GMPv225[T]):
             resource_type: Type must be either ALERT, CERT_BUND_ADV,
                 CONFIG, CPE, CREDENTIAL, CVE, DFN_CERT_ADV, FILTER,
                 HOST, NVT, OS, OVERRIDE, PORT_LIST, REPORT_FORMAT,
-                REPORT, REPORT_CONFIG, RESULT,
+                REPORT, RESULT,
                 SCANNER, SCHEDULE, TARGET, TASK, TLS_CERTIFICATE
                 or USER
             filter_string: Filter term to use for the query
@@ -73,7 +73,7 @@ class GMPv226(GMPv225[T]):
             resource_type: Type must be either ALERT, CERT_BUND_ADV,
                 CONFIG, CPE, CREDENTIAL, CVE, DFN_CERT_ADV, FILTER,
                 HOST, NVT, OS, OVERRIDE, PORT_LIST, REPORT_FORMAT,
-                REPORT, REPORT_CONFIG, RESULT,
+                REPORT, RESULT,
                 SCANNER, SCHEDULE, TARGET, TASK, TLS_CERTIFICATE
                 or USER
         """
@@ -98,7 +98,6 @@ class GMPv226(GMPv225[T]):
         filter_string: str | None = None,
         filter_id: str | None = None,
         report_format_id: str | ReportFormatType | None = None,
-        report_config_id: str | None = None,
         ignore_pagination: bool | None = None,
         details: bool | None = True,
     ) -> T:
@@ -110,7 +109,6 @@ class GMPv226(GMPv225[T]):
             filter_id: UUID of filter to use to filter results in the report
             report_format_id: UUID of report format to use
                               or ReportFormatType (enum)
-            report_config_id: UUID of report format config to use
             ignore_pagination: Whether to ignore the filter terms "first" and
                 "rows".
             details: Request additional report information details
@@ -122,7 +120,6 @@ class GMPv226(GMPv225[T]):
                 filter_string=filter_string,
                 filter_id=filter_id,
                 report_format_id=report_format_id,
-                report_config_id=report_config_id,
                 ignore_pagination=ignore_pagination,
                 details=details,
             )

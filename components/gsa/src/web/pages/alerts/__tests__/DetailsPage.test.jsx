@@ -96,9 +96,6 @@ const createGmp = ({
   reportformats: {
     get: getEntities,
   },
-  reportconfigs: {
-    get: getEntities,
-  },
   settings: {
     manualUrl,
     reloadInterval,

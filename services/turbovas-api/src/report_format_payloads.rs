@@ -46,9 +46,7 @@ pub(crate) struct ReportFormatAssetItem {
     configurable: bool,
     deprecated: bool,
     alert_count: i64,
-    report_config_count: i64,
     alerts: Vec<ReportFormatReference>,
-    report_configs: Vec<ReportFormatReference>,
     params: Vec<ReportFormatParamItem>,
     created_at: Option<String>,
     modified_at: Option<String>,
@@ -111,7 +109,6 @@ fn report_format_trust(trust: i32, predefined: bool) -> String {
 pub(crate) fn report_format_asset_from_row(
     row: &Row,
     alerts: Vec<ReportFormatReference>,
-    report_configs: Vec<ReportFormatReference>,
     params: Vec<ReportFormatParamItem>,
 ) -> ReportFormatAssetItem {
     let predefined = row.get::<_, i32>("predefined_int") != 0;
@@ -130,9 +127,7 @@ pub(crate) fn report_format_asset_from_row(
         configurable: row.get::<_, i32>("configurable_int") != 0,
         deprecated: row.get::<_, i32>("deprecated_int") != 0,
         alert_count: row.get("alert_count"),
-        report_config_count: row.get("report_config_count"),
         alerts,
-        report_configs,
         params,
         created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
         modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),

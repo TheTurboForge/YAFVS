@@ -176,7 +176,6 @@ const NATIVE_TAG_RESOURCE_NAME_TYPES = new Set([
   'override',
   'port_list',
   'report',
-  'report_config',
   'report_format',
   'result',
   'scanner',

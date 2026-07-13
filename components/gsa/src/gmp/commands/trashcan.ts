@@ -14,7 +14,6 @@ import Filter from 'gmp/models/filter';
 import {type ModelElement} from 'gmp/models/model';
 import Override from 'gmp/models/override';
 import PortList from 'gmp/models/port-list';
-import ReportConfig from 'gmp/models/report-config';
 import ReportFormat from 'gmp/models/report-format';
 import ScanConfig from 'gmp/models/scan-config';
 import Scanner from 'gmp/models/scanner';
@@ -45,7 +44,6 @@ export interface TrashCanGetData {
   filters: Filter[];
   overrides: Override[];
   portLists: PortList[];
-  reportConfigs: ReportConfig[];
   reportFormats: ReportFormat[];
   scanners: Scanner[];
   schedules: Schedule[];
@@ -86,10 +84,6 @@ interface OverridesResponseData {
 
 interface PortListsResponseData {
   get_port_lists_response?: {port_list: ModelElement[] | ModelElement};
-}
-
-interface ReportConfigsResponseData {
-  get_report_configs_response?: {report_config: ModelElement[] | ModelElement};
 }
 
 interface ReportFormatsResponseData {
@@ -167,9 +161,6 @@ const pushNativeTrashcanItem = (
     case 'portlist':
       data.portLists.push(PortList.fromElement(element));
       break;
-    case 'reportconfig':
-      data.reportConfigs.push(ReportConfig.fromElement(element));
-      break;
     case 'reportformat':
       data.reportFormats.push(ReportFormat.fromElement(element));
       break;
@@ -201,7 +192,6 @@ const nativeTrashcanItemsToData = (
     filters: [],
     overrides: [],
     portLists: [],
-    reportConfigs: [],
     reportFormats: [],
     scanners: [],
     schedules: [],
@@ -289,9 +279,6 @@ class TrashCanCommand extends HttpCommand {
         cmd: 'get_trash_port_lists',
       }) as TrashCanGetPromise<PortListsResponseData>,
       this.httpGetWithTransform({
-        cmd: 'get_trash_report_configs',
-      }) as TrashCanGetPromise<ReportConfigsResponseData>,
-      this.httpGetWithTransform({
         cmd: 'get_trash_report_formats',
       }) as TrashCanGetPromise<ReportFormatsResponseData>,
       this.httpGetWithTransform({
@@ -318,7 +305,6 @@ class TrashCanCommand extends HttpCommand {
       'filters',
       'overrides',
       'portLists',
-      'reportConfigs',
       'reportFormats',
       'scanners',
       'schedules',
@@ -351,19 +337,17 @@ class TrashCanCommand extends HttpCommand {
       getResponse<TrashCanGetResponse<OverridesResponseData>>(4);
     const portListsResponse =
       getResponse<TrashCanGetResponse<PortListsResponseData>>(5);
-    const reportConfigsResponse =
-      getResponse<TrashCanGetResponse<ReportConfigsResponseData>>(6);
     const reportFormatsResponse =
-      getResponse<TrashCanGetResponse<ReportFormatsResponseData>>(7);
+      getResponse<TrashCanGetResponse<ReportFormatsResponseData>>(6);
     const scannersResponse =
-      getResponse<TrashCanGetResponse<ScannersResponseData>>(8);
+      getResponse<TrashCanGetResponse<ScannersResponseData>>(7);
     const schedulesResponse =
-      getResponse<TrashCanGetResponse<SchedulesResponseData>>(9);
-    const tagsResponse = getResponse<TrashCanGetResponse<TagsResponseData>>(10);
+      getResponse<TrashCanGetResponse<SchedulesResponseData>>(8);
+    const tagsResponse = getResponse<TrashCanGetResponse<TagsResponseData>>(9);
     const targetsResponse =
-      getResponse<TrashCanGetResponse<TargetsResponseData>>(11);
+      getResponse<TrashCanGetResponse<TargetsResponseData>>(10);
     const tasksResponse =
-      getResponse<TrashCanGetResponse<TasksResponseData>>(12);
+      getResponse<TrashCanGetResponse<TasksResponseData>>(11);
 
     const alertsData = alertsResponse?.data.get_trash;
     const configsData = configsResponse?.data.get_trash;
@@ -371,7 +355,6 @@ class TrashCanCommand extends HttpCommand {
     const filtersData = filtersResponse?.data.get_trash;
     const overridesData = overridesResponse?.data.get_trash;
     const portListsData = portListsResponse?.data.get_trash;
-    const reportConfigsData = reportConfigsResponse?.data.get_trash;
     const reportFormatsData = reportFormatsResponse?.data.get_trash;
     const scannersData = scannersResponse?.data.get_trash;
     const schedulesData = schedulesResponse?.data.get_trash;
@@ -387,7 +370,6 @@ class TrashCanCommand extends HttpCommand {
       filtersResponse ||
       overridesResponse ||
       portListsResponse ||
-      reportConfigsResponse ||
       reportFormatsResponse ||
       scannersResponse ||
       schedulesResponse ||
@@ -418,10 +400,6 @@ class TrashCanCommand extends HttpCommand {
       portLists: map(
         portListsData?.get_port_lists_response?.port_list,
         element => PortList.fromElement(element),
-      ),
-      reportConfigs: map(
-        reportConfigsData?.get_report_configs_response?.report_config,
-        element => ReportConfig.fromElement(element),
       ),
       reportFormats: map(
         reportFormatsData?.get_report_formats_response?.report_format,

@@ -142,8 +142,6 @@ pub(crate) struct AlertEmailCreateRequest {
     #[serde(default)]
     pub(crate) report_format_id: Option<SensitiveAlertField>,
     #[serde(default)]
-    pub(crate) report_config_id: Option<SensitiveAlertField>,
-    #[serde(default)]
     pub(crate) message: Option<SensitiveAlertField>,
 }
 
@@ -159,8 +157,6 @@ pub(crate) struct AlertSmbCreateRequest {
     pub(crate) smb_share_path: SensitiveAlertField,
     pub(crate) smb_file_path: SensitiveAlertField,
     pub(crate) report_format_id: SensitiveAlertField,
-    #[serde(default)]
-    pub(crate) report_config_id: Option<SensitiveAlertField>,
     #[serde(default)]
     pub(crate) smb_max_protocol: AlertSmbMaxProtocol,
 }
@@ -185,7 +181,6 @@ pub(crate) struct ValidatedAlertEmailCreate {
     pub(crate) notice: AlertEmailNoticeMode,
     pub(crate) recipient_credential_id: SensitiveAlertField,
     pub(crate) report_format_id: SensitiveAlertField,
-    pub(crate) report_config_id: SensitiveAlertField,
     pub(crate) message: SensitiveAlertField,
 }
 
@@ -198,7 +193,6 @@ pub(crate) struct ValidatedAlertSmbCreate {
     pub(crate) smb_share_path: SensitiveAlertField,
     pub(crate) smb_file_path: SensitiveAlertField,
     pub(crate) report_format_id: SensitiveAlertField,
-    pub(crate) report_config_id: SensitiveAlertField,
     pub(crate) smb_max_protocol: AlertSmbMaxProtocol,
 }
 
@@ -250,8 +244,6 @@ pub(crate) fn validate_alert_email_create_request(
         validate_optional_alert_uuid(request.recipient_credential_id, "recipient_credential_id")?;
     let report_format_id =
         validate_optional_alert_uuid(request.report_format_id, "report_format_id")?;
-    let report_config_id =
-        validate_optional_alert_uuid(request.report_config_id, "report_config_id")?;
     let message = validate_sensitive_alert_message(
         request.message.unwrap_or_else(SensitiveAlertField::empty),
         "message",
@@ -259,12 +251,9 @@ pub(crate) fn validate_alert_email_create_request(
     )?;
 
     match request.notice {
-        AlertEmailNoticeMode::Simple
-            if !report_format_id.as_bytes().is_empty()
-                || !report_config_id.as_bytes().is_empty() =>
-        {
+        AlertEmailNoticeMode::Simple if !report_format_id.as_bytes().is_empty() => {
             return Err(ApiError::BadRequest(
-                "simple notice forbids report_format_id and report_config_id".to_string(),
+                "simple notice forbids report_format_id".to_string(),
             ));
         }
         AlertEmailNoticeMode::Include | AlertEmailNoticeMode::Attach
@@ -293,7 +282,6 @@ pub(crate) fn validate_alert_email_create_request(
         notice: request.notice,
         recipient_credential_id,
         report_format_id,
-        report_config_id,
         message,
     })
 }
@@ -314,8 +302,6 @@ pub(crate) fn validate_alert_smb_create_request(
     let smb_file_path = validate_smb_file_path(request.smb_file_path)?;
     let report_format_id =
         validate_required_alert_uuid(request.report_format_id, "report_format_id")?;
-    let report_config_id =
-        validate_optional_alert_uuid(request.report_config_id, "report_config_id")?;
 
     Ok(ValidatedAlertSmbCreate {
         name,
@@ -326,7 +312,6 @@ pub(crate) fn validate_alert_smb_create_request(
         smb_share_path,
         smb_file_path,
         report_format_id,
-        report_config_id,
         smb_max_protocol: request.smb_max_protocol,
     })
 }

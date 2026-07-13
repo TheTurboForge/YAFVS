@@ -123,7 +123,6 @@ const createGmp = ({
   }),
   getAllFilters = testing.fn().mockResolvedValue({data: []}),
   getCredentials = testing.fn().mockResolvedValue({data: []}),
-  getReportConfigs = testing.fn().mockResolvedValue({data: []}),
   getReportFormats = testing.fn().mockResolvedValue({data: []}),
   getReportComposerDefaults = testing.fn().mockResolvedValue({data: {}}),
   getTasks = testing.fn().mockResolvedValue({data: []}),
@@ -184,9 +183,6 @@ const createGmp = ({
     filters: {
       get: getFilters,
       getAll: getAllFilters,
-    },
-    reportconfigs: {
-      getAll: getReportConfigs,
     },
     reportformats: {
       getAll: getReportFormats,
@@ -338,10 +334,6 @@ describe('Alert ListPage tests', () => {
         page: {page: 1, page_size: 500, total: 1, sort: 'name', filter: ''},
         items: [{id: 'rf-1', name: 'PDF', active: true, trust: 'yes'}],
       },
-      'api/v1/report-configs': {
-        page: {page: 1, page_size: 500, total: 1, sort: 'name', filter: ''},
-        items: [{id: 'rc-1', name: 'Default Config'}],
-      },
       'api/v1/filters': {
         page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: ''},
         items: [
@@ -370,13 +362,11 @@ describe('Alert ListPage tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const getAllFilters = testing.fn();
-    const getReportConfigs = testing.fn();
     const getReportFormats = testing.fn();
     const getTasks = testing.fn();
     const gmp = createGmp({
       buildUrl,
       getAllFilters,
-      getReportConfigs,
       getReportFormats,
       getTasks,
       session: createSession({token: 'test-token', timezone: 'CET'}),
@@ -396,7 +386,6 @@ describe('Alert ListPage tests', () => {
     await screen.findByText('New Alert');
 
     expect(getReportFormats).not.toHaveBeenCalled();
-    expect(getReportConfigs).not.toHaveBeenCalled();
     expect(getAllFilters).not.toHaveBeenCalled();
     expect(getTasks).not.toHaveBeenCalled();
     for (const path of Object.keys(payloads)) {

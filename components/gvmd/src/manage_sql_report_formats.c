@@ -15,7 +15,6 @@
 #include "manage_sql_report_formats.h"
 #include "manage_acl.h"
 #include "manage_sql_permissions.h"
-#include "manage_sql_report_configs.h"
 #include "manage_sql_resources.h"
 #include "manage_sql_users.h"
 #include "manage_sql_settings.h"
@@ -2101,7 +2100,7 @@ report_format_trust (report_format_t report_format)
 #define REPORT_FORMAT_ITERATOR_FILTER_COLUMNS                                 \
  { ANON_GET_ITERATOR_FILTER_COLUMNS, "name", "extension", "content_type",     \
    "summary", "description", "trust", "trust_time", "active", "predefined",   \
-   "configurable", "report_type", NULL }
+   "report_type", NULL }
 
 /**
  * @brief Report Format iterator columns.
@@ -2129,12 +2128,6 @@ report_format_trust (report_format_t report_format)
    { "signature", NULL, KEYWORD_TYPE_STRING },                          \
    { "trust", NULL, KEYWORD_TYPE_INTEGER },                             \
    { "trust_time", NULL, KEYWORD_TYPE_INTEGER },                        \
-   {                                                                    \
-     "(SELECT count(*) > 0 FROM report_format_params"                   \
-     " WHERE report_format = report_formats.id)",                       \
-     "configurable",                                                    \
-     KEYWORD_TYPE_INTEGER                                               \
-   },                                                                   \
    { "flags & 1", "active", KEYWORD_TYPE_INTEGER },                     \
    { "predefined", NULL, KEYWORD_TYPE_INTEGER },                        \
    { "report_type", NULL, KEYWORD_TYPE_STRING },                        \
@@ -2168,12 +2161,6 @@ report_format_trust (report_format_t report_format)
    { "signature", NULL, KEYWORD_TYPE_STRING },                          \
    { "trust", NULL, KEYWORD_TYPE_INTEGER },                             \
    { "trust_time", NULL, KEYWORD_TYPE_INTEGER },                        \
-   {                                                                    \
-     "(SELECT count(*) > 0 FROM report_format_params_trash"             \
-     " WHERE report_format = report_formats_trash.id)",                 \
-     "configurable",                                                    \
-     KEYWORD_TYPE_INTEGER                                               \
-   },                                                                   \
    { "flags & 1", "active", KEYWORD_TYPE_INTEGER },                     \
    { "predefined", NULL, KEYWORD_TYPE_INTEGER },                        \
    { "report_type", NULL, KEYWORD_TYPE_STRING },                        \
@@ -2337,22 +2324,6 @@ report_format_iterator_trust_time (iterator_t* iterator)
 }
 
 /**
- * @brief Get whether a report format is configurable from an iterator.
- *
- * @param[in]  iterator  Iterator.
- *
- * @return Time report format was verified.
- */
-int
-report_format_iterator_configurable (iterator_t* iterator)
-{
-  int ret;
-  if (iterator->done) return -1;
-  ret = iterator_int (iterator, GET_ITERATOR_COLUMN_COUNT + 7);
-  return ret;
-}
-
-/**
  * @brief Get the active flag from a report format iterator.
  *
  * @param[in]  iterator  Iterator.
@@ -2363,7 +2334,7 @@ int
 report_format_iterator_active (iterator_t* iterator)
 {
   if (iterator->done) return -1;
-  return (iterator_int64 (iterator, GET_ITERATOR_COLUMN_COUNT + 8)
+  return (iterator_int64 (iterator, GET_ITERATOR_COLUMN_COUNT + 7)
           & REPORT_FORMAT_FLAG_ACTIVE) ? 1 : 0;
 }
 
@@ -2375,7 +2346,7 @@ report_format_iterator_active (iterator_t* iterator)
  * @return Report type, or NULL if iteration is complete.  Freed by
  *         cleanup_iterator.
  */
-DEF_ACCESS (report_format_iterator_report_type, GET_ITERATOR_COLUMN_COUNT + 10);
+DEF_ACCESS (report_format_iterator_report_type, GET_ITERATOR_COLUMN_COUNT + 9);
 
 /**
  * @brief Initialise a Report Format alert iterator.
@@ -2446,82 +2417,6 @@ DEF_ACCESS (report_format_alert_iterator_uuid, 1);
  */
 int
 report_format_alert_iterator_readable (iterator_t* iterator)
-{
-  if (iterator->done) return 0;
-  return iterator_int (iterator, 2);
-}
-
-/**
- * @brief Initialise a Report Format config iterator.
- *
- * Iterates over all report configs that use the Report Format.
- *
- * @param[in]  iterator          Iterator.
- * @param[in]  report_format_id  Report Format.
- */
-void
-init_report_format_report_config_iterator (iterator_t* iterator,
-                                           const char *report_format_id)
-{
-  gchar *quoted_report_format_id;
-  gchar *available, *with_clause;
-  get_data_t get;
-  array_t *permissions;
-
-  assert (report_format_id);
-
-  get.trash = 0;
-  permissions = make_array ();
-  array_add (permissions, g_strdup ("get_report_configs"));
-  available = acl_where_owned ("report_config", &get, 1, "any", 0, permissions,
-                               0, &with_clause);
-  array_free (permissions);
-
-  quoted_report_format_id = sql_quote (report_format_id);
-  init_iterator (iterator,
-                 "%s"
-                 " SELECT DISTINCT report_configs.name, report_configs.uuid, %s"
-                 " FROM report_configs"
-                 " WHERE report_configs.report_format_id = '%s'"
-                 " ORDER BY report_configs.name ASC;",
-                 with_clause ? with_clause : "",
-                 available,
-                 quoted_report_format_id);
-
-  g_free (quoted_report_format_id);
-  g_free (with_clause);
-  g_free (available);
-}
-
-/**
- * @brief Get the name from a report_format_report_config iterator.
- *
- * @param[in]  iterator  Iterator.
- *
- * @return The name of the Report Config, or NULL if iteration is complete.
- *         Freed by cleanup_iterator.
- */
-DEF_ACCESS (report_format_report_config_iterator_name, 0);
-
-/**
- * @brief Get the UUID from a report_format_report_config iterator.
- *
- * @param[in]  iterator  Iterator.
- *
- * @return The UUID of the Report Config, or NULL if iteration is complete.
- *         Freed by cleanup_iterator.
- */
-DEF_ACCESS (report_format_report_config_iterator_uuid, 1);
-
-/**
- * @brief Get the read permission status from a GET iterator.
- *
- * @param[in]  iterator  Iterator.
- *
- * @return 1 if may read, else 0.
- */
-int
-report_format_report_config_iterator_readable (iterator_t* iterator)
 {
   if (iterator->done) return 0;
   return iterator_int (iterator, 2);
@@ -2891,14 +2786,12 @@ report_format_extension_is_safe (const gchar *extension)
  * @param[in]   xml_start      Path of file containing start of report.
  * @param[in]   xml_full       Path to file to print full report to.
  * @param[in]   report_format  Format of report that will be created from XML.
- * @param[in]   report_config  Report config for report format param.
  *
  * @return 0 success, -1 error.
  */
 int
 print_report_xml_end (gchar *xml_start, gchar *xml_full,
-                      report_format_t report_format,
-                      report_config_t report_config)
+                      report_format_t report_format)
 {
   FILE *out;
 
@@ -2926,41 +2819,15 @@ print_report_xml_end (gchar *xml_start, gchar *xml_full,
 
   if (report_format > 0)
     {
-      gboolean can_use_config = FALSE;
+      iterator_t params;
       PRINT (out, "<report_format>");
-
-      if (report_config)
-        {
-          if (report_config_report_format (report_config) == report_format)
-            can_use_config = TRUE;
-          else
-            g_warning ("%s: report config not compatible with report format,"
-                       " using default params",
-                       __func__);
-        }
-
-      if (can_use_config)
-        {
-          iterator_t params;
-          init_report_config_param_iterator (&params, report_config, 0);
-          while (next (&params))
-            PRINT (out,
-                  "<param><name>%s</name><value>%s</value></param>",
-                  report_config_param_iterator_name (&params),
-                  report_config_param_iterator_value (&params));
-          cleanup_iterator (&params);
-        }
-      else
-        {
-          iterator_t params;
-          init_report_format_param_iterator (&params, report_format, 0, 1, NULL);
-          while (next (&params))
-            PRINT (out,
-                  "<param><name>%s</name><value>%s</value></param>",
-                  report_format_param_iterator_name (&params),
-                  report_format_param_iterator_value (&params));
-          cleanup_iterator (&params);
-        }
+      init_report_format_param_iterator (&params, report_format, 0, 1, NULL);
+      while (next (&params))
+        PRINT (out,
+               "<param><name>%s</name><value>%s</value></param>",
+               report_format_param_iterator_name (&params),
+               report_format_param_iterator_value (&params));
+      cleanup_iterator (&params);
 
       PRINT (out, "</report_format>");
     }
@@ -2982,7 +2849,6 @@ print_report_xml_end (gchar *xml_start, gchar *xml_full,
  * @brief Applies a report format to an XML report.
  *
  * @param[in]  report_format_id   Report format to apply.
- * @param[in]  report_config      Optional report config to apply.
  * @param[in]  xml_start          Path to the main part of the report XML.
  * @param[in]  xml_file           Path to the report XML file.
  * @param[in]  xml_dir            Path to the temporary dir.
@@ -2992,7 +2858,6 @@ print_report_xml_end (gchar *xml_start, gchar *xml_full,
  */
 gchar*
 apply_report_format (gchar *report_format_id,
-                     report_config_t report_config,
                      gchar *xml_start,
                      gchar *xml_file,
                      gchar *xml_dir,
@@ -3054,18 +2919,11 @@ apply_report_format (gchar *report_format_id,
 
   rf_dependencies_string
     = sql_string ("SELECT value"
-                  "  FROM report_config_params"
-                  "  WHERE report_config = %llu AND name = 'Attached report formats'",
-                  report_config);
-
-  if (!rf_dependencies_string || !strcmp (rf_dependencies_string, ""))
-    rf_dependencies_string
-      = sql_string ("SELECT value"
-                    "  FROM report_format_params"
-                    "  WHERE report_format = %llu"
-                    "    AND type = %i",
-                    report_format,
-                    REPORT_FORMAT_PARAM_TYPE_REPORT_FORMAT_LIST);
+                  "  FROM report_format_params"
+                  "  WHERE report_format = %llu"
+                  "    AND type = %i",
+                  report_format,
+                  REPORT_FORMAT_PARAM_TYPE_REPORT_FORMAT_LIST);
 
   if (rf_dependencies_string)
     {
@@ -3100,9 +2958,7 @@ apply_report_format (gchar *report_format_id,
           if (g_hash_table_contains (subreports, *current_rf_dependency)
               == FALSE)
             {
-              // TODO: Handle report configs for subreports
               subreport_file = apply_report_format (*current_rf_dependency,
-                                                    0,
                                                     xml_start,
                                                     subreport_xml,
                                                     subreport_dir,
@@ -3203,7 +3059,7 @@ apply_report_format (gchar *report_format_id,
 
   /* Add second half of input XML */
 
-  if (print_report_xml_end (xml_start, xml_file, report_format, report_config))
+  if (print_report_xml_end (xml_start, xml_file, report_format))
     {
       close (output_fd);
       g_free (output_file);

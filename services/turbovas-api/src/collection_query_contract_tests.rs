@@ -23,7 +23,6 @@ fn collection_handler_sources() -> Vec<(&'static str, &'static str)> {
             "report_applications.rs",
             include_str!("report_applications.rs"),
         ),
-        ("report_configs.rs", include_str!("report_configs.rs")),
         ("report_cves.rs", include_str!("report_cves.rs")),
         ("report_errors.rs", include_str!("report_errors.rs")),
         (
@@ -117,7 +116,7 @@ fn collection_handlers_use_api_query_contract_extractor() {
     );
     assert_eq!(
         source.matches(api_query).count(),
-        44,
+        43,
         "every checked collection contract should use ApiQuery"
     );
 }

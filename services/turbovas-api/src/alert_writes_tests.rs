@@ -85,7 +85,6 @@ fn email_and_smb_alert_references_are_locked_inside_create_transactions() {
         "acl_user_may (\"create_alert\")",
         "lock_alert_create_owner",
         "lock_alert_report_format",
-        "lock_alert_report_config",
         "lock_alert_recipient_credential",
         "EVENT_TASK_RUN_STATUS_CHANGED",
         "ALERT_CONDITION_ALWAYS",
@@ -127,7 +126,6 @@ fn email_and_smb_alert_references_are_locked_inside_create_transactions() {
         "lock_alert_create_owner",
         "lock_alert_smb_credential",
         "lock_alert_report_format",
-        "lock_alert_report_config",
         "EVENT_TASK_RUN_STATUS_CHANGED",
         "ALERT_CONDITION_ALWAYS",
         "ALERT_METHOD_SMB",
@@ -237,7 +235,6 @@ fn alert_create_openapi_metadata_is_direct_guarded_and_redacted() {
         "subject",
         "recipient_credential_id",
         "report_format_id",
-        "report_config_id",
         "message",
         "smb_credential_id",
         "smb_share_path",
@@ -308,7 +305,7 @@ fn alert_smb_create_requires_fixed_fields_and_rejects_unknown_fields() {
 
 #[test]
 fn alert_smb_create_validates_uuids_paths_caps_and_protocols() {
-    for field in ["smb_credential_id", "report_format_id", "report_config_id"] {
+    for field in ["smb_credential_id", "report_format_id"] {
         for invalid in [
             "not-a-uuid".to_string(),
             format!(" {TEST_UUID} "),
@@ -393,7 +390,7 @@ fn alert_smb_create_frame_is_exact_bounded_and_scrubbable() {
             "RGFpbHkgZmluZGluZ3M= T3BlcmF0b3IgZGVsaXZlcnk= RG9uZQ== ",
             "MTIzNDU2NzgtMTIzNC00MjM0LTgyMzQtMTIzNDU2Nzg5YWJj ",
             "XFxmaWxlc2VydmVyXHJlcG9ydHM= ZGFpbHktJVklbSVkLnBkZg== ",
-            "MTIzNDU2NzgtMTIzNC00MjM0LTgyMzQtMTIzNDU2Nzg5YWJj  U01CMw==\n"
+            "MTIzNDU2NzgtMTIzNC00MjM0LTgyMzQtMTIzNDU2Nzg5YWJj U01CMw==\n"
         )
         .as_bytes()
     );
@@ -491,7 +488,7 @@ fn alert_email_create_enforces_notice_mode_cross_fields() {
     assert_eq!(validated_email_create("attach").notice.control_token(), 2);
 
     let mut simple = email_create_json("simple");
-    for field in ["report_format_id", "report_config_id"] {
+    for field in ["report_format_id"] {
         simple[field] = serde_json::json!(TEST_UUID);
         let request = serde_json::from_value::<AlertEmailCreateRequest>(simple.clone()).unwrap();
         assert!(matches!(
@@ -515,7 +512,6 @@ fn alert_email_create_enforces_notice_mode_cross_fields() {
 
         let mut valid = email_create_json(notice);
         valid["report_format_id"] = serde_json::json!(TEST_UUID);
-        valid["report_config_id"] = serde_json::json!(TEST_UUID);
         valid["message"] = serde_json::json!("bounded body");
         let request = serde_json::from_value::<AlertEmailCreateRequest>(valid).unwrap();
         assert!(validate_alert_email_create_request(request).is_ok());
@@ -524,11 +520,7 @@ fn alert_email_create_enforces_notice_mode_cross_fields() {
 
 #[test]
 fn alert_email_create_rejects_bad_uuids_controls_blanks_and_byte_overflow() {
-    for field in [
-        "recipient_credential_id",
-        "report_format_id",
-        "report_config_id",
-    ] {
+    for field in ["recipient_credential_id", "report_format_id"] {
         let mut value = email_create_json("include");
         value["report_format_id"] = serde_json::json!(TEST_UUID);
         value[field] = serde_json::json!("not-a-uuid");
@@ -655,7 +647,7 @@ fn alert_email_create_frame_is_exact_bounded_and_scrubbable() {
             "RGFpbHkgZmluZGluZ3M= T3BlcmF0b3IgZGVsaXZlcnk= RG9uZQ== ",
             "c2VjdXJpdHlAZXhhbXBsZS5pbnZhbGlk c2Nhbm5lckBleGFtcGxlLmludmFsaWQ= ",
             "U2NhbiByZXBvcnQ= 0  ",
-            "MTIzNDU2NzgtMTIzNC00MjM0LTgyMzQtMTIzNDU2Nzg5YWJj  \n"
+            "MTIzNDU2NzgtMTIzNC00MjM0LTgyMzQtMTIzNDU2Nzg5YWJj \n"
         )
         .as_bytes()
     );
@@ -717,7 +709,6 @@ fn alert_create_maps_explicit_control_responses() {
         b"17 scp_format_not_found",
         b"60 recipient_credential_not_found",
         b"90 report_format_not_found",
-        b"91 report_config_not_found",
     ] {
         assert!(matches!(
             parse_alert_create_response(response),
@@ -727,10 +718,6 @@ fn alert_create_maps_explicit_control_responses() {
     assert!(matches!(
         parse_alert_create_response(b"1 exists"),
         Err(ApiError::Conflict(_))
-    ));
-    assert!(matches!(
-        parse_alert_create_response(b"92 report_config_mismatch"),
-        Err(ApiError::BadRequest(_))
     ));
     assert!(matches!(
         parse_alert_create_response(b"-3 committed_indeterminate"),
@@ -787,7 +774,6 @@ fn alert_create_handler_dispatches_methods_and_returns_only_redacted_asset_shape
         "message",
         "recipient_credential_id",
         "report_format_id",
-        "report_config_id",
         "smb_credential_id",
         "smb_share_path",
         "smb_file_path",
@@ -824,7 +810,6 @@ fn alert_smb_sensitive_fields_are_byte_backed_and_drop_scrubbed() {
         "smb_share_path: SensitiveAlertField",
         "smb_file_path: SensitiveAlertField",
         "report_format_id: SensitiveAlertField",
-        "report_config_id: SensitiveAlertField",
     ] {
         assert!(
             validation.contains(field),
@@ -869,17 +854,13 @@ fn alert_email_create_sensitive_sql_is_parameterized_unlogged_and_scrubbed() {
 #[test]
 fn alert_delivery_reference_deletes_lock_before_usage_checks() {
     let credential_sql = include_str!("../../../components/gvmd/src/manage_sql.c");
-    let config_sql = include_str!("../../../components/gvmd/src/manage_sql_report_configs.c");
-    for source in [credential_sql, config_sql] {
+    for source in [credential_sql] {
         let lock = source.find("FOR UPDATE;").expect("delete lock");
         let usage = source[lock..]
             .find("_in_use (")
             .expect("usage check after delete lock");
         assert!(usage > 0);
     }
-    assert!(config_sql.contains("'notice_report_config'"));
-    assert!(config_sql.contains("'notice_attach_config'"));
-    assert!(!config_sql.contains("TODO: Check for alerts using the report config"));
 }
 
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> AlertPatchRequest {

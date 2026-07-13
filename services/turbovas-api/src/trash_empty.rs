@@ -24,7 +24,7 @@ use crate::{
 
 pub(crate) const MAX_TRASH_EMPTY_BODY_BYTES: usize = 1024;
 const MAX_TRASH_EMPTY_TOTAL: u64 = i64::MAX as u64;
-const TRASH_EMPTY_RESOURCE_FAMILY_COUNT: usize = 13;
+const TRASH_EMPTY_RESOURCE_FAMILY_COUNT: usize = 12;
 
 #[derive(Debug, Serialize)]
 pub(crate) struct TrashEmptyPreviewItem {
@@ -266,27 +266,24 @@ pub(crate) fn trash_empty_preview_sql() -> &'static str {
          SELECT 6, 'port_lists'::text, count(*)::bigint
            FROM port_lists_trash WHERE owner = (SELECT id FROM operator_owner)
          UNION ALL
-         SELECT 7, 'report_configs'::text, count(*)::bigint
-           FROM report_configs_trash WHERE owner = (SELECT id FROM operator_owner)
-         UNION ALL
-         SELECT 8, 'scanners'::text, count(*)::bigint
+         SELECT 7, 'scanners'::text, count(*)::bigint
            FROM scanners_trash WHERE owner = (SELECT id FROM operator_owner)
          UNION ALL
-         SELECT 9, 'schedules'::text, count(*)::bigint
+         SELECT 8, 'schedules'::text, count(*)::bigint
            FROM schedules_trash WHERE owner = (SELECT id FROM operator_owner)
          UNION ALL
-         SELECT 10, 'tags'::text, count(*)::bigint
+         SELECT 9, 'tags'::text, count(*)::bigint
            FROM tags_trash WHERE owner = (SELECT id FROM operator_owner)
          UNION ALL
-         SELECT 11, 'targets'::text, count(*)::bigint
+         SELECT 10, 'targets'::text, count(*)::bigint
            FROM targets_trash WHERE owner = (SELECT id FROM operator_owner)
          UNION ALL
-         SELECT 12, 'tasks'::text, count(*)::bigint
+         SELECT 11, 'tasks'::text, count(*)::bigint
            FROM tasks
           WHERE hidden = 2
             AND owner = (SELECT id FROM operator_owner)
          UNION ALL
-         SELECT 13, 'report_formats'::text, count(*)::bigint
+         SELECT 12, 'report_formats'::text, count(*)::bigint
            FROM report_formats_trash WHERE owner = (SELECT id FROM operator_owner)
        )
        SELECT resource_type, item_count
@@ -320,9 +317,6 @@ fn trash_empty_identity_sql() -> &'static str {
            UNION ALL
            SELECT 'port_lists'::text, uuid::text
              FROM port_lists_trash WHERE owner = (SELECT id FROM operator_owner)
-           UNION ALL
-           SELECT 'report_configs'::text, uuid::text
-             FROM report_configs_trash WHERE owner = (SELECT id FROM operator_owner)
            UNION ALL
            SELECT 'report_formats'::text, uuid::text
              FROM report_formats_trash WHERE owner = (SELECT id FROM operator_owner)
@@ -441,13 +435,12 @@ mod tests {
 
     // These are deliberately outside the active operator mutation inventory:
     // startup-only migration/repair, followed by bulk helpers with no in-tree
-    // callers. None owns an active 13-family operator trash-count mutation.
-    const LEGACY_TRASH_COUNT_WRITER_EXCLUSIONS: [&str; 7] = [
+    // callers. None owns an active 12-family operator trash-count mutation.
+    const LEGACY_TRASH_COUNT_WRITER_EXCLUSIONS: [&str; 6] = [
         "components/gvmd/src/manage_sql_report_formats.c:migrate_predefined_report_formats (startup-only owner migration)",
         "components/gvmd/src/manage_sql_report_formats.c:check_db_trash_report_formats (startup-only report-format repair)",
         "components/gvmd/src/manage_sql_report_formats.c:check_db_report_formats (startup-only report-format check entrypoint)",
         "components/gvmd/src/manage_sql_port_lists.c:delete_port_lists_user (bulk helper with no in-tree caller)",
-        "components/gvmd/src/manage_sql_report_configs.c:delete_report_configs_user (bulk helper with no in-tree caller)",
         "components/gvmd/src/manage_sql_report_formats.c:delete_report_formats_user (bulk helper with no in-tree caller)",
         "components/gvmd/src/manage_sql_report_formats.c:delete_report_format_dirs_user (bulk helper with no in-tree caller)",
     ];
@@ -579,7 +572,6 @@ mod tests {
             "filters",
             "overrides",
             "port_lists",
-            "report_configs",
             "report_formats",
             "scanners",
             "schedules",
@@ -730,7 +722,6 @@ mod tests {
             ("filters", "filters_trash"),
             ("overrides", "overrides_trash"),
             ("port_lists", "port_lists_trash"),
-            ("report_configs", "report_configs_trash"),
             ("scanners", "scanners_trash"),
             ("schedules", "schedules_trash"),
             ("tags", "tags_trash"),
@@ -756,7 +747,11 @@ mod tests {
             1,
             "only the first UNION branch needs the resource_type alias"
         );
-        assert_eq!(sql.matches("UNION ALL").count() + 1, 13);
+        assert_eq!(
+            sql.matches("UNION ALL").count() + 1,
+            TRASH_EMPTY_RESOURCE_FAMILY_COUNT,
+            "the runtime completeness guard must match the SQL family inventory"
+        );
     }
 
     #[test]
@@ -767,8 +762,6 @@ mod tests {
         let filters = include_str!("../../../components/gvmd/src/manage_sql_filters.c");
         let overrides = include_str!("../../../components/gvmd/src/manage_sql_overrides.c");
         let port_lists = include_str!("../../../components/gvmd/src/manage_sql_port_lists.c");
-        let report_configs =
-            include_str!("../../../components/gvmd/src/manage_sql_report_configs.c");
         let schedules = include_str!("../../../components/gvmd/src/manage_sql_schedules.c");
         let tags = include_str!("../../../components/gvmd/src/manage_sql_tags.c");
         let targets = include_str!("../../../components/gvmd/src/manage_sql_targets.c");
@@ -842,12 +835,6 @@ mod tests {
                 first_resource_access: "find_port_list_with_permission",
             },
             LegacyTrashCountWriter {
-                file: "components/gvmd/src/manage_sql_report_configs.c",
-                source: report_configs,
-                definition: "delete_report_config (const char *report_config_id, int ultimate)",
-                first_resource_access: "find_report_config_with_permission",
-            },
-            LegacyTrashCountWriter {
                 file: "components/gvmd/src/manage_sql_schedules.c",
                 source: schedules,
                 definition: "delete_schedule (const char *schedule_id, int ultimate)",
@@ -869,12 +856,12 @@ mod tests {
 
         assert_eq!(
             writers.len(),
-            15,
+            14,
             "the remaining legacy trash writer inventory is explicit"
         );
         assert_eq!(
             LEGACY_TRASH_COUNT_WRITER_EXCLUSIONS.len(),
-            7,
+            6,
             "startup-only repair and no-caller bulk helpers stay outside the active inventory"
         );
         for writer in &writers {
@@ -940,7 +927,6 @@ mod tests {
             "filters_trash",
             "overrides_trash",
             "port_lists_trash",
-            "report_configs_trash",
             "scanners_trash",
             "schedules_trash",
             "tags_trash",

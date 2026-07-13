@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -18,7 +19,6 @@ import {
   EMAIL_CREDENTIAL_TYPES,
   email_credential_filter,
 } from 'gmp/models/credential';
-import type ReportConfig from 'gmp/models/report-config';
 import type ReportFormat from 'gmp/models/report-format';
 import {selectSaveId} from 'gmp/utils/id';
 import FormGroup from 'web/components/form/FormGroup';
@@ -44,13 +44,10 @@ interface EmailMethodPartProps {
   message?: string;
   messageAttach?: string;
   notice: AlertMethodNoticeType;
-  noticeAttachConfig?: string;
   noticeAttachFormat?: string;
-  noticeReportConfig?: string;
   noticeReportFormat?: string;
   prefix?: string;
   recipientCredential?: string;
-  reportConfigs?: ReportConfig[];
   reportFormats?: ReportFormat[];
   subject?: string;
   toAddress?: string;
@@ -68,11 +65,8 @@ const EmailMethodPart = ({
   notice,
   noticeAttachFormat,
   noticeReportFormat,
-  noticeAttachConfig,
-  noticeReportConfig,
   prefix: initialPrefix,
   recipientCredential,
-  reportConfigs = [],
   reportFormats = [],
   subject,
   toAddress,
@@ -85,9 +79,6 @@ const EmailMethodPart = ({
   const capabilities = useCapabilities();
   const taskEvent = isTaskEvent(event);
   const secinfoEvent = isSecinfoEvent(event);
-  const [reportConfigId, setReportConfigId] = useState<string>(
-    selectSaveId(reportConfigs, noticeReportConfig, UNSET_VALUE) as string,
-  );
   const [attachFormatId, setAttachFormatId] = useState(
     selectSaveId(reportFormats, noticeAttachFormat),
   );
@@ -101,42 +92,14 @@ const EmailMethodPart = ({
   const reportFormatItems = renderSelectItems(
     reportFormats as RenderSelectItemProps[],
   );
-  const attachReportConfigs = reportConfigs.filter(config => {
-    return attachFormatId === config.reportFormat?.id;
-  });
-  const attachConfigItems = renderSelectItems(
-    attachReportConfigs as RenderSelectItemProps[],
-    UNSET_VALUE,
-  );
-  const [attachConfigId, setAttachConfigId] = useState<string>(
-    selectSaveId(reportConfigs, noticeAttachConfig, UNSET_VALUE) as string,
-  );
-  const handleAttachConfigIdChange = (value: string, name?: string) => {
-    setAttachConfigId(value);
-    onChange(value, name);
-  };
   const handleAttachFormatIdChange = (value: string, name?: string) => {
-    setAttachConfigId(UNSET_VALUE);
-    onChange(UNSET_VALUE, prefix('notice_attach_config'));
     setAttachFormatId(value);
     onChange(value, name);
   };
   const [reportFormatId, setReportFormatId] = useState<string>(
     selectSaveId(reportFormats, noticeReportFormat) as string,
   );
-  const reportConfigItems = renderSelectItems(
-    reportConfigs.filter(config => {
-      return reportFormatId === config.reportFormat?.id;
-    }) as RenderSelectItemProps[],
-    UNSET_VALUE,
-  );
-  const handleReportConfigIdChange = (value: string, name?: string) => {
-    setReportConfigId(value);
-    onChange(value, name);
-  };
   const handleReportFormatIdChange = (value: string, name?: string) => {
-    setReportConfigId(UNSET_VALUE);
-    onChange(UNSET_VALUE, prefix('notice_report_config'));
     setReportFormatId(value);
     onChange(value, name);
   };
@@ -235,18 +198,6 @@ const EmailMethodPart = ({
                   />
                 )}
 
-                {capabilities.mayOp('get_report_configs') && (
-                  <Select
-                    aria-label="Include Report Config"
-                    disabled={notice !== EMAIL_NOTICE_INCLUDE}
-                    id="report-config-select"
-                    items={reportConfigItems}
-                    label={_('Report Config')}
-                    name={prefix('notice_report_config')}
-                    value={reportConfigId}
-                    onChange={handleReportConfigIdChange}
-                  />
-                )}
               </Row>
               <TextArea
                 cols="50"
@@ -287,16 +238,6 @@ const EmailMethodPart = ({
                     name={prefix('notice_attach_format')}
                     value={attachFormatId}
                     onChange={handleAttachFormatIdChange}
-                  />
-                )}
-                {capabilities.mayOp('get_report_configs') && (
-                  <Select
-                    disabled={notice !== EMAIL_NOTICE_ATTACH}
-                    items={attachConfigItems}
-                    label="Report Config"
-                    name={prefix('notice_attach_config')}
-                    value={attachConfigId}
-                    onChange={handleAttachConfigIdChange}
                   />
                 )}
               </Row>

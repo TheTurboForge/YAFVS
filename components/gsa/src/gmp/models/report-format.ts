@@ -76,12 +76,8 @@ interface ReportFormatElement extends ModelElement {
   deprecated?: boolean;
   extension?: string;
   invisible_alerts?: number;
-  invisible_report_configs?: number;
   param?: ParamElement | ParamElement[];
   predefined?: YesNo;
-  report_configs?: {
-    report_config: ModelElement | ModelElement[];
-  };
   report_type?: string;
   signature?: string;
   trust?: {
@@ -102,10 +98,8 @@ interface ReportFormatProperties extends ModelProperties {
   deprecated?: boolean;
   extension?: string;
   invisible_alerts?: number;
-  invisible_report_configs?: number;
   params?: Param[];
   predefined?: boolean;
-  report_configs?: Model[];
   report_type?: string;
   trust?: Trust;
 }
@@ -209,10 +203,8 @@ class ReportFormat extends Model {
   readonly deprecated?: boolean;
   readonly extension?: string;
   readonly invisible_alerts?: number;
-  readonly invisible_report_configs?: number;
   readonly params: Param[];
   readonly predefined?: boolean;
-  readonly report_configs: Model[];
   readonly report_type?: string;
   readonly trust?: Trust;
 
@@ -225,12 +217,8 @@ class ReportFormat extends Model {
     extension,
     // eslint-disable-next-line @typescript-eslint/naming-convention
     invisible_alerts,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    invisible_report_configs,
     params = [],
     predefined,
-    // eslint-disable-next-line @typescript-eslint/naming-convention
-    report_configs = [],
     // eslint-disable-next-line @typescript-eslint/naming-convention
     report_type,
     trust,
@@ -244,10 +232,8 @@ class ReportFormat extends Model {
     this.deprecated = deprecated;
     this.extension = extension;
     this.invisible_alerts = invisible_alerts;
-    this.invisible_report_configs = invisible_report_configs;
     this.params = params;
     this.predefined = predefined;
-    this.report_configs = report_configs;
     this.report_type = report_type;
     this.trust = trust;
   }
@@ -279,13 +265,6 @@ class ReportFormat extends Model {
     );
 
     ret.invisible_alerts = parseInt(element.invisible_alerts);
-    ret.invisible_report_configs = parseInt(element.invisible_report_configs);
-
-    ret.report_configs = map(
-      element.report_configs?.report_config,
-      reportConfig => Model.fromElement(reportConfig, 'reportconfig'),
-    );
-
     ret.active = isDefined(element.active)
       ? parseYesNo(element.active)
       : undefined;

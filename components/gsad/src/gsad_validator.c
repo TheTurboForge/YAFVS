@@ -33,7 +33,6 @@ gsad_init_validator ()
                      "|(create_override)"
                      "|(create_port_list)"
                      "|(create_port_range)"
-                     "|(create_report_config)"
                      "|(create_scanner)"
                      "|(create_scope)"
                      "|(create_tag)"
@@ -52,7 +51,6 @@ gsad_init_validator ()
                      "|(delete_port_list)"
                      "|(delete_port_range)"
                      "|(delete_report)"
-                     "|(delete_report_config)"
                      "|(delete_scanner)"
                      "|(delete_schedule)"
                      "|(delete_scope)"
@@ -121,8 +119,6 @@ gsad_init_validator ()
                      "|(get_port_lists)"
                      "|(get_report)"
                      "|(get_reports)"
-                     "|(get_report_config)"
-                     "|(get_report_configs)"
                      "|(get_report_format)"
                      "|(get_report_formats)"
                      "|(get_resource_names)"
@@ -151,7 +147,6 @@ gsad_init_validator ()
                      "|(get_trash_filters)"
                      "|(get_trash_overrides)"
                      "|(get_trash_port_lists)"
-                     "|(get_trash_report_configs)"
                      "|(get_trash_report_formats)"
                      "|(get_trash_scanners)"
                      "|(get_trash_schedules)"
@@ -186,7 +181,6 @@ gsad_init_validator ()
                      "|(save_my_settings)"
                      "|(save_override)"
                      "|(save_port_list)"
-                     "|(save_report_config)"
                      "|(save_scanner)"
                      "|(save_tag)"
                      "|(save_target)"
@@ -211,7 +205,7 @@ gsad_init_validator ()
   gvm_validator_add (
     validator, "aggregate_type",
     "^(alert|config|credential|filter|group|"
-    "host|nvt|os|override|permission|port_list|report|report_config|"
+    "host|nvt|os|override|permission|port_list|report|"
     "report_format|result|role|scanner|schedule|"
     "tag|target|task|user|cve|cpe|ovaldef|cert_bund_adv|dfn_cert_adv|"
     "vuln|tls_certificate)$");
@@ -488,7 +482,6 @@ gsad_init_validator ()
   gvm_validator_alias (validator, "override_id", "id");
   gvm_validator_alias (validator, "port_list_id", "id");
   gvm_validator_alias (validator, "port_range_id", "id");
-  gvm_validator_alias (validator, "report_config_id", "id");
   gvm_validator_alias (validator, "report_format_id", "id");
   gvm_validator_alias (validator, "report_id", "id");
   gvm_validator_alias (validator, "result_id", "id");

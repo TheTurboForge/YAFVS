@@ -36,11 +36,6 @@ use crate::{
         browser_proxy_import_port_list, browser_proxy_patch_port_list,
         browser_proxy_restore_port_list,
     },
-    browser_proxy_report_config::{
-        browser_proxy_clone_report_config, browser_proxy_create_report_config,
-        browser_proxy_delete_report_config, browser_proxy_hard_delete_report_config,
-        browser_proxy_patch_report_config, browser_proxy_restore_report_config,
-    },
     browser_proxy_scan_config::{
         browser_proxy_clone_scan_config, browser_proxy_create_scan_config,
         browser_proxy_delete_scan_config, browser_proxy_hard_delete_scan_config,
@@ -140,18 +135,6 @@ pub(crate) fn browser_proxy_native_api_router(
             "/api/v1/filters/:filter_id/trash",
             delete(browser_proxy_hard_delete_filter),
         )
-        .route(
-            "/api/v1/report-configs/:report_config_id",
-            patch(browser_proxy_patch_report_config),
-        )
-        .route(
-            "/api/v1/report-configs/:report_config_id",
-            delete(browser_proxy_delete_report_config),
-        )
-        .route(
-            "/api/v1/report-configs/:report_config_id/trash",
-            delete(browser_proxy_hard_delete_report_config),
-        )
         .route("/api/v1/tags/:tag_id", patch(browser_proxy_patch_tag))
         .route("/api/v1/tags/:tag_id", delete(browser_proxy_delete_tag))
         .route(
@@ -203,18 +186,6 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/port-lists/:port_list_id/restore",
             post(browser_proxy_restore_port_list),
-        )
-        .route(
-            "/api/v1/report-configs/:report_config_id/clone",
-            post(browser_proxy_clone_report_config),
-        )
-        .route(
-            "/api/v1/report-configs",
-            post(browser_proxy_create_report_config),
-        )
-        .route(
-            "/api/v1/report-configs/:report_config_id/restore",
-            post(browser_proxy_restore_report_config),
         )
         .route(
             "/api/v1/scan-configs",

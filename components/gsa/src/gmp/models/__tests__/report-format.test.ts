@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -19,10 +20,8 @@ describe('ReportFormat model tests', () => {
     expect(reportFormat.content_type).toBeUndefined();
     expect(reportFormat.extension).toBeUndefined();
     expect(reportFormat.invisible_alerts).toBeUndefined();
-    expect(reportFormat.invisible_report_configs).toBeUndefined();
     expect(reportFormat.params).toEqual([]);
     expect(reportFormat.predefined).toBeUndefined();
-    expect(reportFormat.report_configs).toEqual([]);
     expect(reportFormat.report_type).toBeUndefined();
     expect(reportFormat.trust).toBeUndefined();
   });
@@ -34,10 +33,8 @@ describe('ReportFormat model tests', () => {
     expect(reportFormat.content_type).toBeUndefined();
     expect(reportFormat.extension).toBeUndefined();
     expect(reportFormat.invisible_alerts).toBeUndefined();
-    expect(reportFormat.invisible_report_configs).toBeUndefined();
     expect(reportFormat.params).toEqual([]);
     expect(reportFormat.predefined).toBeUndefined();
-    expect(reportFormat.report_configs).toEqual([]);
     expect(reportFormat.report_type).toBeUndefined();
     expect(reportFormat.trust).toBeUndefined();
   });
@@ -123,14 +120,6 @@ describe('ReportFormat model tests', () => {
     });
 
     expect(reportFormat.invisible_alerts).toEqual(3);
-  });
-
-  test('should parse invisible report configs count', () => {
-    const reportFormat = ReportFormat.fromElement({
-      invisible_report_configs: 5,
-    });
-
-    expect(reportFormat.invisible_report_configs).toEqual(5);
   });
 
   test('should parse params', () => {

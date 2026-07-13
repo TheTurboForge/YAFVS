@@ -30,9 +30,8 @@ describe('FilterSettings', () => {
     const {render} = rendererWith({capabilities, gmp, store: true});
     render(<FilterSettings />);
     const rows = screen.getAllByRole('row');
-    expect(rows.length).toBe(26);
+    expect(rows.length).toBe(25);
   });
-
 
   test('handles filter selection changes and saves correctly', async () => {
     const gmp = createGmpMock();

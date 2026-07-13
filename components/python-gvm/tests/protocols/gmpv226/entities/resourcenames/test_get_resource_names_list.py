@@ -106,12 +106,6 @@ class GmpGetResourceNamesListTestMixin:
             b'<get_resource_names type="REPORT"/>'
         )
 
-        self.gmp.get_resource_names(ResourceType.REPORT_CONFIG)
-
-        self.connection.send.has_been_called_with(
-            b'<get_resource_names type="REPORT_CONFIG"/>'
-        )
-
         self.gmp.get_resource_names(ResourceType.RESULT)
 
         self.connection.send.has_been_called_with(

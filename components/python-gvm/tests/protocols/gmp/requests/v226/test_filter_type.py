@@ -39,9 +39,6 @@ class FilterTypeTestsCase(unittest.TestCase):
     def test_filter_type_report(self):
         self.assertEqual(FilterType.REPORT.value, "report")
 
-    def test_filter_type_report_config(self):
-        self.assertEqual(FilterType.REPORT_CONFIG.value, "report_config")
-
     def test_filter_type_report_format(self):
         self.assertEqual(FilterType.REPORT_FORMAT.value, "report_format")
 

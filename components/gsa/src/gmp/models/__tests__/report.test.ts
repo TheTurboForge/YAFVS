@@ -15,7 +15,6 @@ describe('Report tests', () => {
     const report = new Report();
     expect(report.content_type).toBeUndefined();
     expect(report.report).toBeUndefined();
-    expect(report.report_config).toBeUndefined();
     expect(report.report_format).toBeUndefined();
     expect(report.report_type).toBeUndefined();
     expect(report.task).toBeUndefined();
@@ -25,7 +24,6 @@ describe('Report tests', () => {
     const report = Report.fromElement();
     expect(report.content_type).toBeUndefined();
     expect(report.report).toBeUndefined();
-    expect(report.report_config).toBeUndefined();
     expect(report.report_format).toBeUndefined();
     expect(report.report_type).toBeUndefined();
     expect(report.task).toBeUndefined();
@@ -50,18 +48,6 @@ describe('Report tests', () => {
       _type: 'scan',
     });
     expect(report.report_type).toEqual('scan');
-  });
-
-  test('should parse report config', () => {
-    const report = Report.fromElement({
-      report_config: {
-        _id: 'config123',
-        name: 'Test Config',
-      },
-    });
-    expect(report.report_config).toBeDefined();
-    expect(report.report_config?.id).toEqual('config123');
-    expect(report.report_config?.name).toEqual('Test Config');
   });
 
   test('should parse report format', () => {

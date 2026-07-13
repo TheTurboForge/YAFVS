@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -14,10 +15,8 @@ import Credential, {
   SMB_CREDENTIAL_TYPES,
   SNMP_CREDENTIAL_TYPE,
 } from 'gmp/models/credential';
-import ReportConfig from 'gmp/models/report-config';
 import ReportFormat from 'gmp/models/report-format';
 import SmbMethodPart from 'web/pages/alerts/dialog/SmbMethodPart';
-import {UNSET_LABEL, UNSET_VALUE} from 'web/utils/Render';
 
 describe('SmbMethodPart tests', () => {
   test('should render SmbMethodPart component', () => {
@@ -47,15 +46,8 @@ describe('SmbMethodPart tests', () => {
     const smbReportFormatSelect = screen.getByName('smb_report_format');
     expect(smbReportFormatSelect).toBeInTheDocument();
 
-    const smbReportConfigSelect = screen.getByName('smb_report_config');
-    expect(smbReportConfigSelect).toBeInTheDocument();
-
     const smbMaxProtocolSelect = screen.getByName('smb_max_protocol');
     expect(smbMaxProtocolSelect).toBeInTheDocument();
-
-    expect(screen.getByRole('textbox', {name: 'Report Config'})).toHaveValue(
-      UNSET_LABEL,
-    );
   });
 
   test('should render with prefix', () => {
@@ -83,9 +75,6 @@ describe('SmbMethodPart tests', () => {
 
     const smbReportFormatSelect = screen.getByName('test_smb_report_format');
     expect(smbReportFormatSelect).toBeInTheDocument();
-
-    const smbReportConfigSelect = screen.getByName('test_smb_report_config');
-    expect(smbReportConfigSelect).toBeInTheDocument();
 
     const smbMaxProtocolSelect = screen.getByName('test_smb_max_protocol');
     expect(smbMaxProtocolSelect).toBeInTheDocument();
@@ -217,54 +206,6 @@ describe('SmbMethodPart tests', () => {
     expect(onChange).toHaveBeenCalledWith(
       reportFormat2.id,
       'smb_report_format',
-    );
-    expect(onChange).toHaveBeenCalledWith(UNSET_VALUE, 'smb_report_config');
-  });
-
-  test('should allow to change report config', async () => {
-    const onChange = testing.fn();
-    const onCredentialChange = testing.fn();
-    const onNewCredentialClick = testing.fn();
-    const {render} = rendererWith({capabilities: true});
-    const reportFormat1 = new ReportFormat({id: 'format1', name: 'Format 1'});
-    const reportConfig1 = new ReportConfig({
-      id: 'config1',
-      name: 'Config 1',
-      reportFormat: reportFormat1,
-    });
-    const reportConfig2 = new ReportConfig({
-      id: 'config2',
-      name: 'Config 2',
-      reportFormat: reportFormat1,
-    });
-    render(
-      <SmbMethodPart
-        reportConfigs={[reportConfig1, reportConfig2]}
-        reportFormats={[reportFormat1]}
-        smbReportConfig={reportConfig1.id}
-        smbReportFormat={reportFormat1.id}
-        onChange={onChange}
-        onCredentialChange={onCredentialChange}
-        onNewCredentialClick={onNewCredentialClick}
-      />,
-    );
-
-    const reportConfigSelect = screen.getByRole<HTMLSelectElement>('textbox', {
-      name: 'Report Config',
-    });
-    expect(reportConfigSelect).toHaveValue(reportConfig1.name);
-
-    const reportConfigOptions =
-      await getSelectItemElementsForSelect(reportConfigSelect);
-    expect(reportConfigOptions).toHaveLength(3);
-    expect(reportConfigOptions[0]).toHaveTextContent(UNSET_LABEL);
-    expect(reportConfigOptions[1]).toHaveTextContent('Config 1');
-    expect(reportConfigOptions[2]).toHaveTextContent('Config 2');
-
-    fireEvent.click(reportConfigOptions[2]);
-    expect(onChange).toHaveBeenCalledWith(
-      reportConfig2.id,
-      'smb_report_config',
     );
   });
 });

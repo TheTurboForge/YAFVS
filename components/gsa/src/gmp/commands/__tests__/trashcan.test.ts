@@ -24,7 +24,6 @@ const EMPTY_PREVIEW_RESOURCE_TYPES = [
   'filters',
   'overrides',
   'port_lists',
-  'report_configs',
   'scanners',
   'schedules',
   'tags',

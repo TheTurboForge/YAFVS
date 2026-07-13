@@ -968,7 +968,7 @@ mod tests {
         assert!(path.contains("$ref: '#/components/parameters/CanonicalPdfReportFormatId'"));
         assert!(path.contains("application/pdf"));
         assert!(path.contains("RequestTooLarge"));
-        assert!(path.contains("custom report configs, filters, and scripts"));
+        assert!(path.contains("custom filters and scripts"));
         assert!(CARGO_MANIFEST.contains("pdf-writer = \"0.15.0\""));
     }
 }

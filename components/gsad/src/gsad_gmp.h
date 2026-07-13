@@ -411,22 +411,6 @@ get_system_report_gmp_from_url (gvm_connection_t *, gsad_credentials_t *,
                                 gsad_command_response_data_t *);
 
 char *
-get_report_config_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                       gsad_command_response_data_t *);
-char *
-get_report_configs_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                        gsad_command_response_data_t *);
-char *
-create_report_config_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                          gsad_command_response_data_t *);
-char *
-delete_report_config_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                          gsad_command_response_data_t *);
-char *
-save_report_config_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                        gsad_command_response_data_t *);
-
-char *
 get_report_format_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                        gsad_command_response_data_t *);
 char *
@@ -527,9 +511,6 @@ get_trash_overrides_gmp (gvm_connection_t *, gsad_credentials_t *,
 char *
 get_trash_port_lists_gmp (gvm_connection_t *, gsad_credentials_t *,
                           params_t *params, gsad_command_response_data_t *);
-char *
-get_trash_report_configs_gmp (gvm_connection_t *, gsad_credentials_t *,
-                              params_t *params, gsad_command_response_data_t *);
 char *
 get_trash_report_formats_gmp (gvm_connection_t *, gsad_credentials_t *,
                               params_t *params, gsad_command_response_data_t *);

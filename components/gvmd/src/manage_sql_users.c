@@ -12,7 +12,6 @@
 #include "manage_sql_permissions.h"
 #include "manage_sql_permissions_cache.h"
 #include "manage_sql_port_lists.h"
-#include "manage_sql_report_configs.h"
 #include "manage_sql_report_formats.h"
 #include "manage_sql_resources.h"
 #include "manage_sql_schedules.h"

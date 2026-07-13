@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -9,7 +10,6 @@ import {
   SSH_CREDENTIAL_TYPES,
   ssh_credential_filter,
 } from 'gmp/models/credential';
-import type ReportConfig from 'gmp/models/report-config';
 import type ReportFormat from 'gmp/models/report-format';
 import {selectSaveId} from 'gmp/utils/id';
 import FormGroup from 'web/components/form/FormGroup';
@@ -31,13 +31,11 @@ interface ScpMethodPartProps {
   prefix?: string;
   credentials?: Credential[];
   reportFormats?: ReportFormat[];
-  reportConfigs?: ReportConfig[];
   scpCredential?: string;
   scpHost?: string;
   scpKnownHosts?: string;
   scpPath?: string;
   scpPort?: number;
-  scpReportConfig?: string;
   scpReportFormat?: string;
   onChange: (value: string | number, name?: string) => void;
   onCredentialChange: (value: string, name?: string) => void;
@@ -48,41 +46,23 @@ const ScpMethodPart = ({
   prefix: initialPrefix,
   credentials = [],
   reportFormats = [],
-  reportConfigs = [],
   scpCredential,
   scpHost,
   scpPort,
   scpKnownHosts,
   scpPath,
-  scpReportConfig,
   scpReportFormat,
   onChange,
   onCredentialChange,
   onNewCredentialClick,
 }: ScpMethodPartProps) => {
-  const capabilities = useCapabilities();
   const [_] = useTranslation();
   const prefix = addPrefix(initialPrefix);
 
   const [reportFormatId, setReportFormatId] = useState<string | undefined>(
     selectSaveId(reportFormats, scpReportFormat),
   );
-  const reportConfigItems = renderSelectItems(
-    reportConfigs.filter(config => {
-      return reportFormatId === config.reportFormat?.id;
-    }) as RenderSelectItemProps[],
-    UNSET_VALUE,
-  );
-  const [scpConfigId, setScpConfigId] = useState<string>(
-    selectSaveId(reportConfigs, scpReportConfig, UNSET_VALUE) as string,
-  );
-  const handleReportConfigIdChange = (value: string, name?: string) => {
-    setScpConfigId(value);
-    onChange(value, name);
-  };
   const handleReportFormatIdChange = (value: string, name?: string) => {
-    setScpConfigId(UNSET_VALUE);
-    onChange(UNSET_VALUE, prefix('scp_report_config'));
     setReportFormatId(value);
     onChange(value, name);
   };
@@ -163,16 +143,6 @@ const ScpMethodPart = ({
           value={reportFormatId}
           onChange={handleReportFormatIdChange}
         />
-        {capabilities.mayOp('get_report_configs') && (
-          <Select
-            id="scp-report-config-select"
-            items={reportConfigItems}
-            label={_('Report Config')}
-            name={prefix('scp_report_config')}
-            value={scpConfigId}
-            onChange={handleReportConfigIdChange}
-          />
-        )}
       </FormGroup>
     </>
   );

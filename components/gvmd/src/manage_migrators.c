@@ -4783,6 +4783,56 @@ migrate_283_to_284 ()
   return 0;
 }
 
+static int
+migrate_284_to_285 ()
+{
+  sql_begin_immediate ();
+
+  if (sql_int ("SELECT"
+               " (SELECT count(*) FROM report_configs)"
+               " + (SELECT count(*) FROM report_configs_trash)"
+               " + (SELECT count(*) FROM report_config_params)"
+               " + (SELECT count(*) FROM report_config_params_trash)"
+               " + (SELECT count(*) FROM alert_method_data"
+               "      WHERE name IN ('notice_report_config',"
+               "                     'notice_attach_config',"
+               "                     'scp_report_config',"
+               "                     'smb_report_config'))"
+               " + (SELECT count(*) FROM alert_method_data_trash"
+               "      WHERE name IN ('notice_report_config',"
+               "                     'notice_attach_config',"
+               "                     'scp_report_config',"
+               "                     'smb_report_config'))"
+               " + (SELECT count(*) FROM tag_resources"
+               "      WHERE resource_type = 'report_config')"
+               " + (SELECT count(*) FROM tag_resources_trash"
+               "      WHERE resource_type = 'report_config')"
+               " + (SELECT count(*) FROM tags"
+               "      WHERE resource_type = 'report_config')"
+               " + (SELECT count(*) FROM tags_trash"
+               "      WHERE resource_type = 'report_config')"
+               " + (SELECT count(*) FROM filters"
+               "      WHERE type = 'report_config')"
+               " + (SELECT count(*) FROM filters_trash"
+               "      WHERE type = 'report_config');"))
+    {
+      g_warning ("Refusing to remove report-config support while report-config data or references exist");
+      sql_rollback ();
+      return -1;
+    }
+
+  sql ("DROP TABLE report_config_params_trash;");
+  sql ("DROP TABLE report_configs_trash;");
+  sql ("DROP TABLE report_config_params;");
+  sql ("DROP TABLE report_configs;");
+
+  set_db_version (285);
+
+  sql_commit ();
+
+  return 0;
+}
+
 
 #undef UPDATE_DASHBOARD_SETTINGS
 
@@ -4874,6 +4924,7 @@ static migrator_t database_migrators[] = {
   {282, migrate_281_to_282},
   {283, migrate_282_to_283},
   {284, migrate_283_to_284},
+  {285, migrate_284_to_285},
   /* End marker. */
   {-1, NULL}};
 

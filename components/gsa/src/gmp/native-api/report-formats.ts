@@ -49,7 +49,6 @@ interface NativeReportFormatPayload {
   configurable?: boolean;
   deprecated?: boolean;
   alerts?: NativeReferencePayload[];
-  report_configs?: NativeReferencePayload[];
   params?: NativeReportFormatParamPayload[];
   created_at?: string;
   modified_at?: string;
@@ -236,9 +235,6 @@ const nativeReportFormatToModel = (
     },
     alerts: {
       alert: (item.alerts ?? []).map(referenceElement),
-    },
-    report_configs: {
-      report_config: (item.report_configs ?? []).map(referenceElement),
     },
     param: (item.params ?? []).map(nativeReportFormatParamToElement),
   });

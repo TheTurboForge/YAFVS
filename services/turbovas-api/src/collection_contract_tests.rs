@@ -420,13 +420,6 @@ const MANAGEMENT_COLLECTION_CONTRACTS: &[CollectionContract] = &[
         tie_breakers: &["name", "id"],
     },
     CollectionContract {
-        path: "/api/v1/report-configs",
-        default_sort: REPORT_CONFIG_DEFAULT_SORT,
-        allowed_sort_fields: REPORT_CONFIG_SORT_FIELDS,
-        filter_fields: &["id", "name", "comment", "report_format_name"],
-        tie_breakers: &["name", "id"],
-    },
-    CollectionContract {
         path: "/api/v1/report-formats",
         default_sort: REPORT_FORMAT_DEFAULT_SORT,
         allowed_sort_fields: REPORT_FORMAT_SORT_FIELDS,
@@ -503,7 +496,6 @@ fn management_collection_contracts_define_sort_filter_and_tie_breakers() {
             "/api/v1/tags/resource-names/{resource_type}",
             "/api/v1/port-lists",
             "/api/v1/schedules",
-            "/api/v1/report-configs",
             "/api/v1/report-formats",
             "/api/v1/trashcan/items",
         ]
@@ -519,7 +511,6 @@ fn management_collection_contracts_define_sort_filter_and_tie_breakers() {
     );
     assert!(sort_field_names(PORT_LIST_SORT_FIELDS).contains(&"total"));
     assert!(sort_field_names(SCHEDULE_SORT_FIELDS).contains(&"next_run"));
-    assert!(sort_field_names(REPORT_CONFIG_SORT_FIELDS).contains(&"report_format"));
     assert!(sort_field_names(REPORT_FORMAT_SORT_FIELDS).contains(&"content_type"));
     assert!(sort_field_names(TRASHCAN_ITEM_SORT_FIELDS).contains(&"resource_type"));
     assert!(sort_clause("-modified", REPORT_FORMAT_SORT_FIELDS).is_ok());

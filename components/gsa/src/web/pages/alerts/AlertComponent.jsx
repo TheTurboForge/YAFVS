@@ -16,7 +16,6 @@ import {selectSaveId} from 'gmp/utils/id';
 import {isDefined} from 'gmp/utils/identity';
 import {capitalizeFirstLetter, shorten} from 'gmp/utils/string';
 import {fetchNativeFilters} from 'gmp/native-api/filters';
-import {fetchNativeReportConfigs} from 'gmp/native-api/report-configs';
 import {fetchNativeReportFormats} from 'gmp/native-api/report-formats';
 import {fetchNativeTasks} from 'gmp/native-api/tasks';
 import FootNote from 'web/components/footnote/Footnote';
@@ -105,14 +104,10 @@ export const fetchNativeAlertCredentials = async gmp => {
 };
 
 export const fetchNativeAlertDialogLookups = async gmp => {
-  const [reportFormats, reportConfigs, filters, tasks] = await Promise.all([
+  const [reportFormats, filters, tasks] = await Promise.all([
     fetchAllNativeDialogItems(
       page => fetchNativeReportFormats(gmp, nativeDialogQuery(page)),
       'reportFormats',
-    ),
-    fetchAllNativeDialogItems(
-      page => fetchNativeReportConfigs(gmp, nativeDialogQuery(page)),
-      'reportConfigs',
     ),
     fetchAllNativeDialogItems(
       page => fetchNativeFilters(gmp, nativeDialogQuery(page)),
@@ -123,17 +118,16 @@ export const fetchNativeAlertDialogLookups = async gmp => {
       'tasks',
     ),
   ]);
-  return {reportFormats, reportConfigs, filters, tasks};
+  return {reportFormats, filters, tasks};
 };
 
 const fetchInheritedAlertDialogLookups = async gmp => {
-  const [reportFormats, reportConfigs, filters, tasks] = await Promise.all([
+  const [reportFormats, filters, tasks] = await Promise.all([
     gmp.reportformats.getAll().then(r => r.data),
-    gmp.reportconfigs.getAll().then(r => r.data),
     gmp.filters.getAll().then(r => r.data),
     gmp.tasks.getAll({schedulesOnly: true}).then(r => r.data),
   ]);
-  return {reportFormats, reportConfigs, filters, tasks};
+  return {reportFormats, filters, tasks};
 };
 
 const fetchAlertDialogLookups = gmp =>
@@ -205,7 +199,6 @@ const AlertComponent = ({
   const [resultFilters, setResultFilters] = useState([]);
   const [secinfoFilters, setSecinfoFilters] = useState([]);
   const [reportFormats, setReportFormats] = useState([]);
-  const [reportConfigs, setReportConfigs] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState('');
 
@@ -247,17 +240,11 @@ const AlertComponent = ({
   const [methodDataNotice, setMethodDataNotice] = useState(undefined);
   const [methodDataNoticeReportFormat, setMethodDataNoticeReportFormat] =
     useState(undefined);
-  const [methodDataNoticeReportConfig, setMethodDataNoticeReportConfig] =
-    useState(undefined);
   const [methodDataNoticeAttachFormat, setMethodDataNoticeAttachFormat] =
-    useState(undefined);
-  const [methodDataNoticeAttachConfig, setMethodDataNoticeAttachConfig] =
     useState(undefined);
   const [methodDataRecipientCredential, setMethodDataRecipientCredential] =
     useState(UNSET_VALUE);
   const [methodDataScpCredential, setMethodDataScpCredential] =
-    useState(undefined);
-  const [methodDataScpReportConfig, setMethodDataScpReportConfig] =
     useState(undefined);
   const [methodDataScpReportFormat, setMethodDataScpReportFormat] =
     useState(undefined);
@@ -272,8 +259,6 @@ const AlertComponent = ({
   const [methodDataSmbFilePathType, setMethodDataSmbFilePathType] =
     useState(undefined);
   const [methodDataSmbMaxProtocol, setMethodDataSmbMaxProtocol] =
-    useState(undefined);
-  const [methodDataSmbReportConfig, setMethodDataSmbReportConfig] =
     useState(undefined);
   const [methodDataSmbReportFormat, setMethodDataSmbReportFormat] =
     useState(undefined);
@@ -387,7 +372,7 @@ const AlertComponent = ({
         alertPromise,
         lookupsPromise,
       ]);
-      const {reportFormats, reportConfigs, filters, tasks} = lookups;
+      const {reportFormats, filters, tasks} = lookups;
       const {method, condition, event} = lalert;
 
       const emailCredentials = credentials.filter(email_credential_filter);
@@ -478,7 +463,6 @@ const AlertComponent = ({
       setResultFilters(resultFilters);
       setSecinfoFilters(secinfoFilters);
       setReportFormats(reportFormats);
-      setReportConfigs(reportConfigs);
 
       setCondition(condition.type);
       setConditionDataCount(parseInt(getValue(condition.data.count, 1)));
@@ -531,13 +515,6 @@ const AlertComponent = ({
           ),
         ),
       );
-      setMethodDataNoticeReportConfig(
-        selectSaveId(
-          reportConfigs,
-          getValue(method.data.notice_report_config, UNSET_VALUE),
-          UNSET_VALUE,
-        ),
-      );
       setMethodDataNoticeAttachFormat(
         selectSaveId(
           reportFormats,
@@ -547,21 +524,7 @@ const AlertComponent = ({
           ),
         ),
       );
-      setMethodDataNoticeAttachConfig(
-        selectSaveId(
-          reportConfigs,
-          getValue(method.data.notice_attach_config, UNSET_VALUE),
-          UNSET_VALUE,
-        ),
-      );
       setMethodDataScpCredential(selectSaveId(credentials, scpCredentialId));
-      setMethodDataScpReportConfig(
-        selectSaveId(
-          reportConfigs,
-          getValue(method.data.scp_report_config, UNSET_VALUE),
-          UNSET_VALUE,
-        ),
-      );
       setMethodDataScpReportFormat(
         selectSaveId(reportFormats, getValue(method.data.scp_report_format)),
       );
@@ -575,13 +538,6 @@ const AlertComponent = ({
         getValue(method.data.smb_file_path_type, ''),
       );
       setMethodDataSmbMaxProtocol(getValue(method.data.smb_max_protocol, ''));
-      setMethodDataSmbReportConfig(
-        selectSaveId(
-          reportConfigs,
-          getValue(method.data.smb_report_config, UNSET_VALUE),
-          UNSET_VALUE,
-        ),
-      );
       setMethodDataSmbReportFormat(
         selectSaveId(reportFormats, getValue(method.data.smb_report_format)),
       );
@@ -599,14 +555,13 @@ const AlertComponent = ({
         credentialsPromise,
         lookupsPromise,
       ]);
-      const {reportFormats, reportConfigs, filters, tasks} = lookups;
+      const {reportFormats, filters, tasks} = lookups;
       const resultFilters = filters.filter(filterResultsFilter);
       const secinfoFilters = filters.filter(filterSecinfoFilter);
       const smbCredentials = credentials.filter(smb_credential_filter);
 
       const resultFilterId = selectSaveId(resultFilters);
       const reportFormatId = selectSaveId(reportFormats);
-      const reportConfigId = UNSET_VALUE;
 
       const filterId = isDefined(reportComposerDefaults.reportResultFilterId)
         ? reportComposerDefaults.reportResultFilterId
@@ -649,14 +604,11 @@ const AlertComponent = ({
       setMethodDataNoticeReportFormat(
         selectSaveId(reportFormats, DEFAULT_NOTICE_REPORT_FORMAT),
       );
-      setMethodDataNoticeReportConfig(undefined);
       setMethodDataNoticeAttachFormat(
         selectSaveId(reportFormats, DEFAULT_NOTICE_ATTACH_FORMAT),
       );
-      setMethodDataNoticeAttachConfig(undefined);
       setMethodDataScpCredential(undefined);
       setMethodDataScpPath(DEFAULT_SCP_PATH);
-      setMethodDataScpReportConfig(reportConfigId);
       setMethodDataScpReportFormat(reportFormatId);
       setMethodDataScpHost(undefined);
       setMethodDataScpPort(22);
@@ -670,12 +622,10 @@ const AlertComponent = ({
       setMethodDataSmbSharePath(undefined);
       setMethodDataSmbFilePath(undefined);
       setMethodDataSmbFilePathType(undefined);
-      setMethodDataSmbReportConfig(reportConfigId);
       setMethodDataSmbReportFormat(reportFormatId);
       setResultFilters(resultFilters);
       setSecinfoFilters(secinfoFilters);
       setReportFormats(reportFormats);
-      setReportConfigs(reportConfigs);
       setTasks(tasks);
       setTitle(_('New Alert'));
     }
@@ -825,9 +775,7 @@ const AlertComponent = ({
               method_data_message={methodDataMessage}
               method_data_message_attach={methodDataMessageAttach}
               method_data_notice={methodDataNotice}
-              method_data_notice_attach_config={methodDataNoticeAttachConfig}
               method_data_notice_attach_format={methodDataNoticeAttachFormat}
-              method_data_notice_report_config={methodDataNoticeReportConfig}
               method_data_notice_report_format={methodDataNoticeReportFormat}
               method_data_recipient_credential={methodDataRecipientCredential}
               method_data_scp_credential={methodDataScpCredential}
@@ -835,13 +783,11 @@ const AlertComponent = ({
               method_data_scp_known_hosts={methodDataScpKnownHosts}
               method_data_scp_path={methodDataScpPath}
               method_data_scp_port={methodDataScpPort}
-              method_data_scp_report_config={methodDataScpReportConfig}
               method_data_scp_report_format={methodDataScpReportFormat}
               method_data_smb_credential={methodDataSmbCredential}
               method_data_smb_file_path={methodDataSmbFilePath}
               method_data_smb_file_path_type={methodDataSmbFilePathType}
               method_data_smb_max_protocol={methodDataSmbMaxProtocol}
-              method_data_smb_report_config={methodDataSmbReportConfig}
               method_data_smb_report_format={methodDataSmbReportFormat}
               method_data_smb_share_path={methodDataSmbSharePath}
               method_data_snmp_agent={methodDataSnmpAgent}
@@ -851,7 +797,6 @@ const AlertComponent = ({
               method_data_subject={methodDataSubject}
               method_data_to_address={methodDataToAddress}
               name={name}
-              report_configs={reportConfigs}
               report_formats={reportFormats}
               result_filters={resultFilters}
               secinfo_filters={secinfoFilters}

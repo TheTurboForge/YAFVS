@@ -747,8 +747,6 @@ modify_setting (const gchar *uuid, const gchar *name,
         setting_name = g_strdup ("Port Lists Filter");
       else if (strcmp (uuid, "48ae588e-9085-41bc-abcb-3d6389cf7237") == 0)
         setting_name = g_strdup ("Reports Filter");
-      else if (strcmp (uuid, "eca9738b-4339-4a3d-bd13-3c61173236ab") == 0)
-        setting_name = g_strdup ("Report Configs Filter");
       else if (strcmp (uuid, "249c7a55-065c-47fb-b453-78e11a665565") == 0)
         setting_name = g_strdup ("Report Formats Filter");
       else if (strcmp (uuid, "739ab810-163d-11e3-9af6-406186ea4fc5") == 0)

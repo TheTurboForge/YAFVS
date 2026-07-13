@@ -378,33 +378,6 @@ const loggedInRoutes = [
         }),
       },
 
-      // Report Config routes
-      {
-        path: 'reportconfigs',
-        loader: () => {
-          throw redirect('/report-configs');
-        },
-      },
-      {
-        path: 'report-configs',
-        lazy: async () => ({
-          Component: (await import('web/pages/reportconfigs/ListPage')).default,
-        }),
-      },
-      {
-        path: 'reportconfig/:id',
-        loader: ({params}) => {
-          throw redirect(`/report-config/${params.id}`);
-        },
-      },
-      {
-        path: 'report-config/:id',
-        lazy: async () => ({
-          Component: (await import('web/pages/reportconfigs/DetailsPage'))
-            .default,
-        }),
-      },
-
       // Report Format routes
       {
         path: 'reportformats',

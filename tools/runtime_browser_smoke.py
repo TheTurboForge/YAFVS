@@ -474,7 +474,7 @@ async function assertTagResourceNameProxy(page) {
 async function assertAlertMetadataProxy(page) {
   const alerts = await fetchNativeJsonWithBrowserToken(page, '/api/v1/alerts?page_size=1&sort=name');
   const alertItems = Array.isArray(alerts.body?.items) ? alerts.body.items : null;
-  const allowedKeys = new Set(['id', 'name', 'comment', 'owner', 'active', 'in_use', 'task_count', 'event', 'condition', 'method', 'method_data_redacted', 'filter', 'tasks', 'created_at', 'modified_at']);
+  const allowedKeys = new Set(['id', 'name', 'comment', 'owner_id', 'owner', 'active', 'in_use', 'task_count', 'event', 'condition', 'method', 'method_data_redacted', 'filter', 'tasks', 'created_at', 'modified_at']);
   const forbiddenKeys = new Set(['alert_method_data', 'method_data', 'event_data', 'condition_data', 'credential', 'credentials', 'password', 'secret', 'token', 'url', 'host', 'hosts', 'path', 'email', 'message', 'certificate', 'cert']);
   const unexpected = [];
   const forbidden = [];
@@ -522,7 +522,6 @@ function focusedRouteCatalog() {
     { label: 'port-lists', path: '/port-lists', nativePath: '/api/v1/port-lists', nativeCheck: 'port-list.list-native-api', nativePass: 'Top-level Port Lists loaded through same-origin native API.', nativeFail: 'Top-level Port Lists did not produce a successful same-origin native API response.' },
     { label: 'schedules', path: '/schedules', nativePath: '/api/v1/schedules', nativeCheck: 'schedule.list-native-api', nativePass: 'Top-level Schedules loaded through same-origin native API.', nativeFail: 'Top-level Schedules did not produce a successful same-origin native API response.' },
     { label: 'report-formats', path: '/reportformats', nativePath: '/api/v1/report-formats', nativeCheck: 'report-format.list-native-api', nativePass: 'Top-level Report Formats loaded through same-origin native API.', nativeFail: 'Top-level Report Formats did not produce a successful same-origin native API response.', aliases: ['reportformats'] },
-    { label: 'report-configs', path: '/reportconfigs', nativePath: '/api/v1/report-configs', nativeCheck: 'report-config.list-native-api', nativePass: 'Top-level Report Configs loaded through same-origin native API.', nativeFail: 'Top-level Report Configs did not produce a successful same-origin native API response.', aliases: ['reportconfigs'] },
     { label: 'targets', path: '/targets', nativePath: '/api/v1/targets', nativeCheck: 'target.list-native-api', nativePass: 'Target list loaded through same-origin native API.', nativeFail: 'Target list did not produce a successful same-origin native API response.' },
     { label: 'tasks', path: '/tasks', nativePath: '/api/v1/tasks', nativeCheck: 'task.list-native-api', nativePass: 'Task list loaded through same-origin native API.', nativeFail: 'Task list did not produce a successful same-origin native API response.', forbidden: [/Resume/i, /Task Wizard/i, /Advanced Task Wizard/i, /Import Task/i, /Delta Report/i] },
     { label: 'trashcan', path: '/trashcan', nativePath: '/api/v1/trashcan/items', nativeCheck: 'trashcan.items-native-api', nativePass: 'Trashcan redacted item metadata loaded through same-origin native API.', nativeFail: 'Trashcan route did not produce a successful same-origin native API item response.', aliases: ['trash'], waitUntil: 'domcontentloaded', readyText: 'Trashcan|Contents' },
@@ -628,7 +627,7 @@ async function runForBaseUrl(baseUrl) {
       if (url.pathname.startsWith('/api/v1/')) {
         const entry = { path: url.pathname, status: response.status() };
         nativeApiResponses.push(entry);
-        if (['/api/v1/cves', '/api/v1/cpes', '/api/v1/nvts', '/api/v1/targets', '/api/v1/tasks', '/api/v1/scan-configs', '/api/v1/filters', '/api/v1/tags', '/api/v1/overrides', '/api/v1/port-lists', '/api/v1/schedules', '/api/v1/report-formats', '/api/v1/report-configs', '/api/v1/cert-bund-advisories', '/api/v1/dfn-cert-advisories'].includes(url.pathname)) {
+        if (['/api/v1/cves', '/api/v1/cpes', '/api/v1/nvts', '/api/v1/targets', '/api/v1/tasks', '/api/v1/scan-configs', '/api/v1/filters', '/api/v1/tags', '/api/v1/overrides', '/api/v1/port-lists', '/api/v1/schedules', '/api/v1/report-formats', '/api/v1/cert-bund-advisories', '/api/v1/dfn-cert-advisories'].includes(url.pathname)) {
           response.json().then(body => {
             entry.itemIds = Array.isArray(body?.items)
               ? body.items.map(item => item?.id).filter(Boolean)

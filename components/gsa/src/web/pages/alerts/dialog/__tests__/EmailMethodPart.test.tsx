@@ -22,10 +22,9 @@ import Credential, {
   EMAIL_CREDENTIAL_TYPES,
   KRB5_CREDENTIAL_TYPE,
 } from 'gmp/models/credential';
-import ReportConfig from 'gmp/models/report-config';
 import ReportFormat from 'gmp/models/report-format';
 import EmailMethodPart from 'web/pages/alerts/dialog/EmailMethodPart';
-import {UNSET_LABEL, UNSET_VALUE} from 'web/utils/Render';
+import {UNSET_LABEL} from 'web/utils/Render';
 
 describe('EmailMethodPart tests', () => {
   test('should render the EmailMethodPart component', () => {
@@ -50,10 +49,8 @@ describe('EmailMethodPart tests', () => {
     expect(screen.getByName('recipient_credential')).toBeInTheDocument();
     expect(screen.getByName('notice')).toBeInTheDocument();
     expect(screen.getByName('notice_report_format')).toBeInTheDocument();
-    expect(screen.getByName('notice_report_config')).toBeInTheDocument();
     expect(screen.getByName('message')).toBeInTheDocument();
     expect(screen.getByName('notice_attach_format')).toBeInTheDocument();
-    expect(screen.getByName('notice_attach_config')).toBeInTheDocument();
     expect(screen.getByName('message_attach')).toBeInTheDocument();
   });
 
@@ -80,10 +77,8 @@ describe('EmailMethodPart tests', () => {
     expect(screen.getByName('test_recipient_credential')).toBeInTheDocument();
     expect(screen.getByName('test_notice')).toBeInTheDocument();
     expect(screen.getByName('test_notice_report_format')).toBeInTheDocument();
-    expect(screen.getByName('test_notice_report_config')).toBeInTheDocument();
     expect(screen.getByName('test_message')).toBeInTheDocument();
     expect(screen.getByName('test_notice_attach_format')).toBeInTheDocument();
-    expect(screen.getByName('test_notice_attach_config')).toBeInTheDocument();
     expect(screen.getByName('test_message_attach')).toBeInTheDocument();
   });
 
@@ -124,10 +119,8 @@ describe('EmailMethodPart tests', () => {
     expect(screen.getByLabelText('Attach report')).not.toBeChecked();
 
     expect(screen.getByName('notice_report_format')).toBeDisabled();
-    expect(screen.getByName('notice_report_config')).toBeDisabled();
     expect(screen.getByName('message')).toBeDisabled();
     expect(screen.getByName('notice_attach_format')).toBeDisabled();
-    expect(screen.getByName('notice_attach_config')).toBeDisabled();
     expect(screen.getByName('message_attach')).toBeDisabled();
   });
 
@@ -179,14 +172,11 @@ describe('EmailMethodPart tests', () => {
     expect(screen.getByName('notice_report_format')).toHaveValue(
       reportFormat.id,
     );
-    expect(screen.getByName('notice_report_config')).not.toBeDisabled();
-    expect(screen.getByName('notice_report_config')).toHaveValue(UNSET_VALUE);
     expect(screen.getByName('message')).not.toBeDisabled();
     expect(screen.getByName('message')).toHaveValue(
       'Some message to include in the notice',
     );
     expect(screen.getByName('notice_attach_format')).toBeDisabled();
-    expect(screen.getByName('notice_attach_config')).toBeDisabled();
     expect(screen.getByName('message_attach')).toBeDisabled();
   });
 
@@ -235,14 +225,11 @@ describe('EmailMethodPart tests', () => {
     expect(screen.getByLabelText('Attach report')).toBeChecked();
 
     expect(screen.getByName('notice_report_format')).toBeDisabled();
-    expect(screen.getByName('notice_report_config')).toBeDisabled();
     expect(screen.getByName('message')).toBeDisabled();
     expect(screen.getByName('notice_attach_format')).toHaveValue(
       reportFormat.id,
     );
     expect(screen.getByName('notice_attach_format')).not.toBeDisabled();
-    expect(screen.getByName('notice_attach_config')).not.toBeDisabled();
-    expect(screen.getByName('notice_attach_config')).toHaveValue(UNSET_VALUE);
     expect(screen.getByName('message_attach')).not.toBeDisabled();
     expect(screen.getByName('message_attach')).toHaveValue(
       'Some message to attach in the notice',
@@ -370,114 +357,6 @@ describe('EmailMethodPart tests', () => {
     expect(onChange).toHaveBeenCalledWith(
       'New message to attach',
       'message_attach',
-    );
-  });
-
-  test('should allow to select a report config for include report format', async () => {
-    const reportFormat1 = new ReportFormat({
-      id: '123',
-      name: 'Test Format',
-      content_type: 'text/xml',
-    });
-    const reportFormat2 = new ReportFormat({
-      id: '124',
-      name: 'Another Test Format',
-      content_type: 'text/html',
-    });
-    const reportConfig1 = new ReportConfig({
-      id: '321',
-      name: 'Test Config',
-      reportFormat: reportFormat1,
-    });
-    const reportConfig2 = new ReportConfig({
-      id: '322',
-      name: 'Another Test Config',
-      reportFormat: reportFormat1,
-    });
-    const onChange = testing.fn();
-    const onCredentialChange = testing.fn();
-    const onNewCredentialClick = testing.fn();
-    const {render} = rendererWith({capabilities: true});
-    render(
-      <EmailMethodPart
-        event={EVENT_TYPE_TASK_RUN_STATUS_CHANGED}
-        notice={EMAIL_NOTICE_INCLUDE}
-        noticeReportFormat={reportFormat1.id}
-        reportConfigs={[reportConfig1, reportConfig2]}
-        reportFormats={[reportFormat1, reportFormat2]}
-        onChange={onChange}
-        onCredentialChange={onCredentialChange}
-        onNewCredentialClick={onNewCredentialClick}
-      />,
-    );
-
-    const noticeIncludeReportConfigSelect = screen.getByRole<HTMLSelectElement>(
-      'textbox',
-      {
-        name: 'Include Report Config',
-      },
-    );
-    const noticeIncludeReportConfigOptions =
-      await getSelectItemElementsForSelect(noticeIncludeReportConfigSelect);
-    expect(noticeIncludeReportConfigOptions.length).toEqual(3);
-    fireEvent.click(noticeIncludeReportConfigOptions[1]);
-    expect(onChange).toHaveBeenCalledWith(
-      reportConfig1.id,
-      'notice_report_config',
-    );
-  });
-
-  test('should allow to select a report config for attach report format', async () => {
-    const reportFormat1 = new ReportFormat({
-      id: '123',
-      name: 'Test Format',
-      content_type: 'text/xml',
-    });
-    const reportFormat2 = new ReportFormat({
-      id: '124',
-      name: 'Another Test Format',
-      content_type: 'text/html',
-    });
-    const reportConfig1 = new ReportConfig({
-      id: '321',
-      name: 'Test Config',
-      reportFormat: reportFormat1,
-    });
-    const reportConfig2 = new ReportConfig({
-      id: '322',
-      name: 'Another Test Config',
-      reportFormat: reportFormat1,
-    });
-    const onChange = testing.fn();
-    const onCredentialChange = testing.fn();
-    const onNewCredentialClick = testing.fn();
-    const {render} = rendererWith({capabilities: true});
-    render(
-      <EmailMethodPart
-        event={EVENT_TYPE_TASK_RUN_STATUS_CHANGED}
-        notice={EMAIL_NOTICE_ATTACH}
-        noticeAttachFormat={reportFormat1.id}
-        reportConfigs={[reportConfig1, reportConfig2]}
-        reportFormats={[reportFormat1, reportFormat2]}
-        onChange={onChange}
-        onCredentialChange={onCredentialChange}
-        onNewCredentialClick={onNewCredentialClick}
-      />,
-    );
-
-    const noticeAttachReportConfigSelect = screen.getByRole<HTMLSelectElement>(
-      'textbox',
-      {
-        name: 'Report Config',
-      },
-    );
-    const noticeAttachReportConfigOptions =
-      await getSelectItemElementsForSelect(noticeAttachReportConfigSelect);
-    expect(noticeAttachReportConfigOptions.length).toEqual(3);
-    fireEvent.click(noticeAttachReportConfigOptions[1]);
-    expect(onChange).toHaveBeenCalledWith(
-      reportConfig1.id,
-      'notice_attach_config',
     );
   });
 

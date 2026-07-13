@@ -695,15 +695,6 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "raw-report-port-evidence-read",
         "raw-report-result-evidence-read",
         "raw-report-tls-certificate-evidence-read",
-        "report-config-metadata-detail-read",
-        "report-config-clone",
-        "report-config-hard-delete",
-        "report-config-metadata-export-read",
-        "report-config-metadata-list-read",
-        "report-config-metadata-param-create",
-        "report-config-metadata-param-modify",
-        "report-config-restore",
-        "report-config-trash-move",
         "result-detail-metadata-tags-and-overrides-read",
         "result-metadata-export-read",
         "report-format-metadata-detail-read",
@@ -964,13 +955,6 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("patch", "/scopes/{scope_id}"): "direct-write",
     ("delete", "/scopes/{scope_id}"): "direct-write",
     ("post", "/scopes/{scope_id}/reports"): "direct-write",
-    ("post", "/report-configs"): "direct-write",
-    ("patch", "/report-configs/{report_config_id}"): "direct-write",
-    ("delete", "/report-configs/{report_config_id}"): "direct-write",
-    ("get", "/report-configs/{report_config_id}/export"): "direct-read",
-    ("delete", "/report-configs/{report_config_id}/trash"): "direct-write",
-    ("post", "/report-configs/{report_config_id}/clone"): "direct-write",
-    ("post", "/report-configs/{report_config_id}/restore"): "direct-write",
     ("post", "/filters"): "direct-write",
     ("patch", "/filters/{filter_id}"): "direct-write",
     ("delete", "/filters/{filter_id}"): "direct-write",
@@ -1600,46 +1584,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "schedule-hard-delete",
     },
-    ("get", "/report-configs"): {
-        "x-turbovas-maturity": "live-read",
-        "x-turbovas-replaces": "report-config-metadata-list-read",
-    },
-    ("post", "/report-configs"): {
-        "x-turbovas-maturity": "live-write",
-        "x-turbovas-replaces": "report-config-metadata-param-create",
-    },
-    ("get", "/report-configs/{report_config_id}"): {
-        "x-turbovas-maturity": "live-read",
-        "x-turbovas-replaces": "report-config-metadata-detail-read",
-    },
-    ("get", "/report-configs/{report_config_id}/export"): {
-        "x-turbovas-maturity": "live-read",
-        "x-turbovas-replaces": "report-config-metadata-export-read",
-    },
-    ("patch", "/report-configs/{report_config_id}"): {
-        "x-turbovas-maturity": "live-write",
-        "x-turbovas-replaces": "report-config-metadata-param-modify",
-    },
-    ("delete", "/report-configs/{report_config_id}"): {
-        "x-turbovas-maturity": "live-write",
-        "x-turbovas-replaces": "report-config-trash-move",
-    },
-    ("post", "/report-configs/{report_config_id}/clone"): {
-        "x-turbovas-maturity": "live-write",
-        "x-turbovas-replaces": "report-config-clone",
-    },
-    ("post", "/report-configs/{report_config_id}/restore"): {
-        "x-turbovas-maturity": "live-write",
-        "x-turbovas-replaces": "report-config-restore",
-    },
-    ("delete", "/report-configs/{report_config_id}/trash"): {
-        "x-turbovas-maturity": "live-write",
-        "x-turbovas-operator-identity": "direct-token-operator",
-        "x-turbovas-owner-semantics": "preserve-existing-owner",
-        "x-turbovas-replaces": "report-config-hard-delete",
-        "x-turbovas-safety-contract": "write-control-v1",
-        "x-turbovas-side-effect": "metadata-delete",
-    },
     ("get", "/report-formats"): {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "report-format-metadata-list-read",
@@ -2059,9 +2003,6 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/scan-configs/{}",
         "/api/v1/scan-configs/{}/export",
         "/api/v1/scan-configs/{}/families",
-        "/api/v1/report-configs",
-        "/api/v1/report-configs/{}",
-        "/api/v1/report-configs/{}/export",
         "/api/v1/report-formats",
         "/api/v1/report-formats/{}",
         "/api/v1/report-formats/{}/export",
@@ -4245,8 +4186,6 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
         return "asset-action-or-rich-context", "Port-list imports, exports, and UI actions remain inherited."
     if name == "report.ts":
         return "report-export-delete-or-rich-context", "Report export/delete/upload and rich inherited report context remain inherited."
-    if name == "report-config.ts":
-        return "report-format-config-write-or-export", "Report config writes, imports, exports, and dialog side effects remain inherited."
     if name == "report-format.ts":
         return "report-format-file-import-export-verify-param-writes-and-deletes", "Report-format file import/export, verification, parameter mutations, deletes, and dialog side effects remain inherited."
     if name == "scan-configs.js":
@@ -8178,7 +8117,7 @@ OPENAPI_SCHEDULE_CREATE_SCHEMA_EXPECTED_VALUES = {
 }
 OPENAPI_SCHEDULE_CREATE_SCHEMA_EXPECTED_REQUIRED = ("name", "icalendar")
 
-OPENAPI_TAG_RESOURCE_TYPE_ENUM = "[alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, filter, host, nvt, os, override, port_list, report, report_config, report_format, result, scanner, schedule, config, target, task, tls_certificate, user]"
+OPENAPI_TAG_RESOURCE_TYPE_ENUM = "[alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, filter, host, nvt, os, override, port_list, report, report_format, result, scanner, schedule, config, target, task, tls_certificate, user]"
 OPENAPI_TAG_CREATE_SCHEMA_EXPECTED_VALUES = {
     "type": "object",
     "additionalProperties": "false",
@@ -9041,7 +8980,6 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         "override_prefix",
         "port_list_prefix",
         "schedule_prefix",
-        "report_config_prefix",
         "report_format_prefix",
         "scope_report_prefix",
         "target_prefix",
@@ -9074,7 +9012,6 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         ("task_prefix", "task_export_suffix"),
         ("tls_certificate_prefix", "tls_certificate_export_suffix"),
         ("tls_certificate_prefix", "tls_certificate_pem_suffix"),
-        ("report_config_prefix", "report_config_export_suffix"),
         ("report_format_prefix", "report_format_export_suffix"),
         ("scope_report_prefix", "scope_report_results_suffix"),
     ):
@@ -9134,7 +9071,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         stop_suffix = post_constants.get("stop_suffix")
         replace_target_suffix = post_constants.get("replace_target_suffix")
         replace_configuration_suffix = post_constants.get("replace_configuration_suffix")
-        for prefix_variable in ("alert_prefix", "filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
+        for prefix_variable in ("alert_prefix", "filter_prefix", "port_list_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{clone_suffix}")
@@ -9197,7 +9134,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
     patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
     if patch_function_body:
         patch_constants = c_string_constants(patch_function_body)
-        for prefix_variable in ("filter_prefix", "port_list_prefix", "report_config_prefix", "report_format_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
+        for prefix_variable in ("filter_prefix", "port_list_prefix", "report_format_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = patch_constants.get(prefix_variable)
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in patch_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}")
@@ -9212,7 +9149,6 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             "host_operating_system_prefix",
             "override_prefix",
             "port_list_prefix",
-            "report_config_prefix",
             "scan_config_prefix",
             "schedule_prefix",
             "scope_prefix",
@@ -9268,7 +9204,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
         resources_suffix = post_constants.get("resources_suffix")
         ranges_suffix = post_constants.get("ranges_suffix")
         verify_suffix = post_constants.get("verify_suffix")
-        for prefix_variable in ("alert_prefix", "filter_prefix", "port_list_prefix", "report_config_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
+        for prefix_variable in ("alert_prefix", "filter_prefix", "port_list_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{clone_suffix}")
@@ -9345,7 +9281,6 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             "filter_prefix",
             "host_prefix",
             "port_list_prefix",
-            "report_config_prefix",
             "report_format_prefix",
             "scan_config_prefix",
             "scanner_prefix",
@@ -9371,7 +9306,6 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             "host_operating_system_prefix",
             "override_prefix",
             "port_list_prefix",
-            "report_config_prefix",
             "scan_config_prefix",
             "schedule_prefix",
             "scope_prefix",
@@ -10403,65 +10337,6 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["direct native schedule hard delete from trash"],
             },
             {
-                "endpoint": "/api/v1/report-configs",
-                "status": "implemented_internal_and_browser_proxied",
-                "replacement_candidates": ["GSA top-level Report Configs list (migrated through gsad same-origin proxy)", "read-only report-config automation", "native-api-request helper"],
-            },
-            {
-                "endpoint": "/api/v1/report-configs/{report_config_id}",
-                "status": "implemented_internal_and_browser_proxied",
-                "replacement_candidates": ["GSA Report Config detail (migrated through gsad same-origin proxy)", "read-only report-config automation"],
-            },
-            {
-                "method": "get",
-                "endpoint": "/api/v1/report-configs/{report_config_id}/export",
-                "status": "implemented_internal_browser_proxied_and_scriptable_read",
-                "direct_access": "scriptable_read",
-                "replacement_candidates": ["GSA report-config metadata download", "direct native report-config metadata export", "read-only report-config automation"],
-            },
-            {
-                "method": "post",
-                "endpoint": "/api/v1/report-configs",
-                "status": "implemented_internal_and_browser_proxied",
-                "direct_access": "direct_write_control",
-                "replacement_candidates": ["direct native report-config metadata and parameter creation"],
-            },
-            {
-                "method": "patch",
-                "endpoint": "/api/v1/report-configs/{report_config_id}",
-                "status": "implemented_internal_and_browser_proxied",
-                "direct_access": "direct_write_control",
-                "replacement_candidates": ["direct native report-config metadata and parameter modification"],
-            },
-            {
-                "method": "delete",
-                "endpoint": "/api/v1/report-configs/{report_config_id}",
-                "status": "implemented_internal_and_browser_proxied",
-                "direct_access": "direct_write_control",
-                "replacement_candidates": ["direct native report-config trash move"],
-            },
-            {
-                "method": "post",
-                "endpoint": "/api/v1/report-configs/{report_config_id}/clone",
-                "status": "implemented_internal_and_browser_proxied",
-                "direct_access": "direct_write_control",
-                "replacement_candidates": ["direct native report-config clone"],
-            },
-            {
-                "method": "post",
-                "endpoint": "/api/v1/report-configs/{report_config_id}/restore",
-                "status": "implemented_internal_and_browser_proxied",
-                "direct_access": "direct_write_control",
-                "replacement_candidates": ["direct native report-config restore from trash"],
-            },
-            {
-                "method": "delete",
-                "endpoint": "/api/v1/report-configs/{report_config_id}/trash",
-                "status": "implemented_internal_and_browser_proxied",
-                "direct_access": "direct_write_control",
-                "replacement_candidates": ["direct native report-config hard delete from trash"],
-            },
-            {
                 "endpoint": "/api/v1/report-formats",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA top-level Report Formats list (migrated through gsad same-origin proxy)", "read-only report-format automation", "native-api-request helper"],
@@ -11272,47 +11147,6 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         "symbols": ("pub(crate) async fn execute_scanner_patch_transaction",),
     },
     {
-        "owner": "services/turbovas-api/src/report_config_write_validation.rs",
-        "forbidden": ("services/turbovas-api/src/report_config_writes.rs",),
-        "symbols": (
-            "pub(crate) struct ReportConfigCreateRequest",
-            "pub(crate) struct ReportConfigPatchRequest",
-            "pub(crate) fn validate_report_config_create_request",
-            "pub(crate) fn validate_report_config_patch_request",
-            "pub(crate) fn validate_report_config_param_values",
-        ),
-    },
-    {
-        "owner": "services/turbovas-api/src/report_config_write_sql.rs",
-        "forbidden": ("services/turbovas-api/src/report_config_writes.rs",),
-        "symbols": (
-            "pub(crate) fn report_config_insert_sql",
-            "pub(crate) fn report_config_update_metadata_sql",
-            "pub(crate) fn report_config_trash_insert_sql",
-            "pub(crate) fn report_config_clone_sql",
-        ),
-    },
-    {
-        "owner": "services/turbovas-api/src/report_config_write_transactions.rs",
-        "forbidden": ("services/turbovas-api/src/report_config_writes.rs",),
-        "symbols": (
-            "pub(crate) async fn execute_report_config_create_transaction",
-            "pub(crate) async fn execute_report_config_restore_transaction",
-            "pub(crate) async fn execute_report_config_trash_transaction",
-            "pub(crate) async fn execute_report_config_hard_delete_transaction",
-            "pub(crate) async fn execute_report_config_clone_transaction",
-            "pub(crate) async fn execute_report_config_patch_transaction",
-        ),
-    },
-    {
-        "owner": "services/turbovas-api/src/report_config_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/report_configs.rs",),
-        "symbols": (
-            "pub(crate) fn report_config_assets_sql",
-            "pub(crate) fn report_config_asset_detail_sql",
-        ),
-    },
-    {
         "owner": "services/turbovas-api/src/port_list_write_validation.rs",
         "forbidden": ("services/turbovas-api/src/port_list_writes.rs",),
         "symbols": (
@@ -11727,7 +11561,6 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
             "pub(crate) fn report_format_assets_sql",
             "pub(crate) fn report_format_asset_detail_sql",
             "pub(crate) fn report_format_alert_backlinks_sql",
-            "pub(crate) fn report_format_config_backlinks_sql",
             "pub(crate) fn report_format_params_sql",
             "pub(crate) fn report_format_param_options_sql",
         ),
@@ -19033,10 +18866,6 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.valid-token",
             "native-api-direct.read-only-method-guard",
             "native-api-direct.scope-write-disabled",
-            "native-api-direct.report-config-write-disabled",
-            "native-api-direct.report-config-patch-disabled",
-            "native-api-direct.report-config-restore-disabled",
-            "native-api-direct.report-config-hard-delete-disabled",
             "native-api-direct.filter-create-disabled",
             "native-api-direct.filter-patch-disabled",
             "native-api-direct.filter-delete-disabled",
@@ -19085,22 +18914,6 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.trash-empty-confirmed",
             "native-api-direct.trash-empty-confirmed-zero-residue",
             "native-api-direct.trash-empty-fixture-cleanup",
-            "native-api-direct.report-config-fixture",
-            "native-api-direct.report-config-missing-format-denied",
-            "native-api-direct.report-config-write-create",
-            "native-api-direct.report-config-metadata-export",
-            "native-api-direct.report-config-residue-cleanup",
-            "native-api-direct.report-config-write-update",
-            "native-api-direct.report-config-write-clone",
-            "native-api-direct.report-config-write-delete-original",
-            "native-api-direct.report-config-write-post-delete-original",
-            "native-api-direct.report-config-write-restore-original",
-            "native-api-direct.report-config-write-delete-clone",
-            "native-api-direct.report-config-write-post-delete-clone",
-            "native-api-direct.report-config-write-hard-delete-clone",
-            "native-api-direct.report-config-write-post-hard-delete-clone",
-            "native-api-direct.report-config-write-cleanup",
-            "native-api-direct.report-config-format-cleanup",
             "native-api-direct.filter-fixture",
             "native-api-direct.filter-write-update",
             "native-api-direct.filter-write-restore",
@@ -20322,11 +20135,6 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
     filter_id: str | None = None
     filter_clone_id: str | None = None
     filter_original_comment = "TurboVAS direct write smoke original saved-filter comment"
-    report_config_id: str | None = None
-    report_config_clone_id: str | None = None
-    report_config_format_id: str | None = None
-    report_config_format_fixture_created = False
-    report_config_format_name = f"turbovas-direct-write-smoke-report-format-{int(time.time())}-{os.getpid()}"
     predefined_port_list_id: str | None = None
     port_list_id: str | None = None
     port_list_clone_id: str | None = None
@@ -20346,8 +20154,6 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
     scope_name = f"turbovas-direct-write-smoke-scope-{int(time.time())}-{os.getpid()}"
     filter_name = f"turbovas-direct-write-smoke-filter-{int(time.time())}-{os.getpid()}"
     filter_clone_name = f"{filter_name}-clone"
-    report_config_name = f"turbovas-direct-write-smoke-report-config-{int(time.time())}-{os.getpid()}"
-    report_config_clone_name = f"{report_config_name}-clone"
     tag_name = f"turbovas-direct-write-smoke-{int(time.time())}-{os.getpid()}"
     tag_clone_name = f"{tag_name}-clone"
     alert_name = f"turbovas-direct-write-smoke-alert-{int(time.time())}-{os.getpid()}"
@@ -20558,194 +20364,6 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         tag_id = create_json.get("id") if isinstance(create_json, dict) and isinstance(create_json.get("id"), str) else None
         create_ok = create.returncode == 0 and create_status == 201 and bool(tag_id) and create_json.get("name") == tag_name and create_json.get("resource_count") == 1
         findings.append(native_api_probe_finding("pass" if create_ok else "fail", "native-api-direct.tag-write-create", "Direct write-control created a temporary tag from a bounded gvmd resource filter." if create_ok else "Direct write-control failed to create a temporary tag from a bounded gvmd resource filter.", create, direct_native_api_display_command("/api/v1/tags", token=token, env=env, method="POST", body=create_body, extra_headers=content_type), create_json, {"http_status": create_status, "tag_id": tag_id, **summarize_native_api_response(create_json)}))
-
-        report_config_fixture_sql = (
-            "WITH owner_row AS (SELECT id FROM users "
-            f"WHERE uuid = {sql_literal(admin_uuid or '')}), "
-            "inserted_format AS (INSERT INTO report_formats "
-            "(uuid, owner, name, extension, content_type, summary, description, "
-            "trust, trust_time, flags, predefined, report_type, creation_time, modification_time) "
-            "SELECT make_uuid(), id, "
-            f"{sql_literal(report_config_format_name)}, 'txt', 'text/plain', "
-            "'TurboVAS direct write smoke temporary report format', "
-            "'Temporary configurable report format used by runtime-native-api-direct-write-smoke.', "
-            "1, m_now(), 0, 0, 'all', m_now(), m_now() "
-            "FROM owner_row RETURNING id, uuid), "
-            "inserted_param AS (INSERT INTO report_format_params "
-            "(report_format, name, type, value, type_min, type_max, type_regex, fallback) "
-            "SELECT id, 'smoke_param', 3, '', 0, 4096, '', '' "
-            "FROM inserted_format RETURNING report_format) "
-            "SELECT uuid FROM inserted_format;"
-        )
-        report_config_fixture = psql(repo_root, report_config_fixture_sql)
-        report_config_format_id = psql_value(report_config_fixture) or None
-        report_config_fixture_ok = report_config_fixture.returncode == 0 and bool(report_config_format_id)
-        report_config_format_fixture_created = report_config_fixture_ok
-        fixture_finding = process_step_finding("pass" if report_config_fixture_ok else "fail", "native-api-direct.report-config-fixture", "Direct write-control smoke created a temporary configurable report-format fixture." if report_config_fixture_ok else "Direct write-control smoke failed to create a temporary configurable report-format fixture for positive report-config creation.", report_config_fixture, ["psql", "fixed-report-config-format-fixture"])
-        fixture_details = fixture_finding.setdefault("details", {})
-        if isinstance(fixture_details, dict):
-            fixture_details.update({"report_format_id": report_config_format_id, "report_format_name": report_config_format_name})
-        findings.append(fixture_finding)
-
-        if report_config_format_id:
-            report_config_create_body = json.dumps(
-                {
-                    "name": report_config_name,
-                    "comment": "TurboVAS direct write smoke temporary report config",
-                    "report_format_id": report_config_format_id,
-                    "params": [],
-                },
-                separators=(",", ":"),
-            )
-            report_config_create = direct_native_api_curl(repo_root, "/api/v1/report-configs", token=token, env=env, method="POST", body=report_config_create_body, extra_headers=content_type)
-            report_config_create_json, report_config_create_status = parse_json_output_with_http_status(report_config_create)
-            report_config_id = report_config_create_json.get("id") if isinstance(report_config_create_json, dict) and isinstance(report_config_create_json.get("id"), str) else None
-            created_report_format = report_config_create_json.get("report_format") if isinstance(report_config_create_json, dict) else None
-            created_report_format_id = created_report_format.get("id") if isinstance(created_report_format, dict) else None
-            report_config_create_ok = report_config_create.returncode == 0 and report_config_create_status == 201 and bool(report_config_id) and report_config_create_json.get("name") == report_config_name and created_report_format_id == report_config_format_id
-            findings.append(native_api_probe_finding("pass" if report_config_create_ok else "fail", "native-api-direct.report-config-write-create", "Direct write-control created a temporary report config." if report_config_create_ok else "Direct write-control failed to create a temporary report config.", report_config_create, direct_native_api_display_command("/api/v1/report-configs", token=token, env=env, method="POST", body=report_config_create_body, extra_headers=content_type), report_config_create_json, {"http_status": report_config_create_status, "report_config_id": report_config_id, "report_format_id": report_config_format_id, **summarize_native_api_response(report_config_create_json)}))
-
-            if report_config_id:
-                report_config_export = direct_native_api_curl(repo_root, f"/api/v1/report-configs/{urllib.parse.quote(report_config_id)}/export", token=token, env=env)
-                report_config_export_json, report_config_export_status = parse_json_output_with_http_status(report_config_export)
-                exported_report_format = report_config_export_json.get("report_format") if isinstance(report_config_export_json, dict) else None
-                exported_report_format_id = exported_report_format.get("id") if isinstance(exported_report_format, dict) else None
-                report_config_export_ok = report_config_export.returncode == 0 and report_config_export_status == 200 and isinstance(report_config_export_json, dict) and report_config_export_json.get("id") == report_config_id and report_config_export_json.get("name") == report_config_name and exported_report_format_id == report_config_format_id
-                findings.append(native_api_probe_finding("pass" if report_config_export_ok else "fail", "native-api-direct.report-config-metadata-export", "Direct native API exported temporary report-config metadata." if report_config_export_ok else "Direct native API failed to export temporary report-config metadata.", report_config_export, direct_native_api_display_command(f"/api/v1/report-configs/{urllib.parse.quote(report_config_id)}/export", token=token, env=env), report_config_export_json, {"http_status": report_config_export_status, "report_config_id": report_config_id, "report_format_id": report_config_format_id, **summarize_native_api_response(report_config_export_json)}))
-
-                report_config_patch_body = json.dumps({"comment": "TurboVAS direct write smoke updated temporary report config"})
-                report_config_patch = direct_native_api_curl(repo_root, f"/api/v1/report-configs/{urllib.parse.quote(report_config_id)}", token=token, env=env, method="PATCH", body=report_config_patch_body, extra_headers=content_type)
-                report_config_patch_json, report_config_patch_status = parse_json_output_with_http_status(report_config_patch)
-                report_config_patch_ok = report_config_patch.returncode == 0 and report_config_patch_status == 200 and isinstance(report_config_patch_json, dict) and report_config_patch_json.get("id") == report_config_id and report_config_patch_json.get("comment") == "TurboVAS direct write smoke updated temporary report config"
-                findings.append(native_api_probe_finding("pass" if report_config_patch_ok else "fail", "native-api-direct.report-config-write-update", "Direct write-control patched temporary report config metadata." if report_config_patch_ok else "Direct write-control failed to patch temporary report config metadata.", report_config_patch, direct_native_api_display_command(f"/api/v1/report-configs/{urllib.parse.quote(report_config_id)}", token=token, env=env, method="PATCH", body=report_config_patch_body, extra_headers=content_type), report_config_patch_json, {"http_status": report_config_patch_status, "report_config_id": report_config_id, **summarize_native_api_response(report_config_patch_json)}))
-
-                report_config_clone_body = json.dumps({"name": report_config_clone_name}, separators=(",", ":"))
-                report_config_clone = direct_native_api_curl(repo_root, f"/api/v1/report-configs/{urllib.parse.quote(report_config_id)}/clone", token=token, env=env, method="POST", body=report_config_clone_body, extra_headers=content_type)
-                report_config_clone_json, report_config_clone_status = parse_json_output_with_http_status(report_config_clone)
-                report_config_clone_id = report_config_clone_json.get("id") if isinstance(report_config_clone_json, dict) and isinstance(report_config_clone_json.get("id"), str) else None
-                cloned_report_format = report_config_clone_json.get("report_format") if isinstance(report_config_clone_json, dict) else None
-                cloned_report_format_id = cloned_report_format.get("id") if isinstance(cloned_report_format, dict) else None
-                report_config_clone_ok = report_config_clone.returncode == 0 and report_config_clone_status == 201 and bool(report_config_clone_id) and report_config_clone_id != report_config_id and report_config_clone_json.get("name") == report_config_clone_name and cloned_report_format_id == report_config_format_id
-                findings.append(native_api_probe_finding("pass" if report_config_clone_ok else "fail", "native-api-direct.report-config-write-clone", "Direct write-control cloned the temporary report config." if report_config_clone_ok else "Direct write-control failed to clone the temporary report config.", report_config_clone, direct_native_api_display_command(f"/api/v1/report-configs/{urllib.parse.quote(report_config_id)}/clone", token=token, env=env, method="POST", body=report_config_clone_body, extra_headers=content_type), report_config_clone_json, {"http_status": report_config_clone_status, "report_config_id": report_config_id, "report_config_clone_id": report_config_clone_id, **summarize_native_api_response(report_config_clone_json)}))
-
-                delete_targets = [(report_config_id, report_config_name, "original")]
-                if report_config_clone_id:
-                    delete_targets.append((report_config_clone_id, report_config_clone_name, "clone"))
-                for delete_report_config_id, _delete_report_config_name, delete_label in delete_targets:
-                    report_config_delete = direct_native_api_curl(repo_root, f"/api/v1/report-configs/{urllib.parse.quote(delete_report_config_id)}", token=token, env=env, method="DELETE")
-                    report_config_delete_json, report_config_delete_status = parse_json_output_with_http_status(report_config_delete)
-                    report_config_delete_ok = report_config_delete.returncode == 0 and report_config_delete_status == 204
-                    findings.append(native_api_probe_finding("pass" if report_config_delete_ok else "fail", f"native-api-direct.report-config-write-delete-{delete_label}", f"Direct write-control moved the temporary {delete_label} report config to trash." if report_config_delete_ok else f"Direct write-control failed to move the temporary {delete_label} report config to trash.", report_config_delete, direct_native_api_display_command(f"/api/v1/report-configs/{urllib.parse.quote(delete_report_config_id)}", token=token, env=env, method="DELETE"), report_config_delete_json, {"http_status": report_config_delete_status, "report_config_id": delete_report_config_id, **summarize_native_api_response(report_config_delete_json)}))
-
-                    report_config_after_delete = direct_native_api_curl(repo_root, f"/api/v1/report-configs/{urllib.parse.quote(delete_report_config_id)}", token=token, env=env)
-                    report_config_after_delete_json, report_config_after_delete_status = parse_json_output_with_http_status(report_config_after_delete)
-                    report_config_after_delete_ok = report_config_after_delete.returncode == 0 and report_config_after_delete_status == 404 and isinstance(report_config_after_delete_json, dict) and report_config_after_delete_json.get("error", {}).get("code") == "not_found"
-                    findings.append(native_api_probe_finding("pass" if report_config_after_delete_ok else "fail", f"native-api-direct.report-config-write-post-delete-{delete_label}", f"Direct API confirms the temporary {delete_label} report config is gone from live detail after delete." if report_config_after_delete_ok else f"Direct API still exposes the temporary {delete_label} report config as live after delete.", report_config_after_delete, direct_native_api_display_command(f"/api/v1/report-configs/{urllib.parse.quote(delete_report_config_id)}", token=token, env=env), report_config_after_delete_json, {"http_status": report_config_after_delete_status, "report_config_id": delete_report_config_id, **summarize_native_api_response(report_config_after_delete_json)}))
-
-                    if delete_label == "original":
-                        report_config_restore = direct_native_api_curl(repo_root, f"/api/v1/report-configs/{urllib.parse.quote(delete_report_config_id)}/restore", token=token, env=env, method="POST")
-                        report_config_restore_json, report_config_restore_status = parse_json_output_with_http_status(report_config_restore)
-                        report_config_restore_ok = report_config_restore.returncode == 0 and report_config_restore_status == 200 and isinstance(report_config_restore_json, dict) and report_config_restore_json.get("id") == delete_report_config_id and report_config_restore_json.get("name") == report_config_name
-                        findings.append(native_api_probe_finding("pass" if report_config_restore_ok else "fail", "native-api-direct.report-config-write-restore-original", "Direct write-control restored the temporary original report config from trash." if report_config_restore_ok else "Direct write-control failed to restore the temporary original report config from trash.", report_config_restore, direct_native_api_display_command(f"/api/v1/report-configs/{urllib.parse.quote(delete_report_config_id)}/restore", token=token, env=env, method="POST"), report_config_restore_json, {"http_status": report_config_restore_status, "report_config_id": delete_report_config_id, **summarize_native_api_response(report_config_restore_json)}))
-                    elif delete_label == "clone":
-                        report_config_hard_delete = direct_native_api_curl(repo_root, f"/api/v1/report-configs/{urllib.parse.quote(delete_report_config_id)}/trash", token=token, env=env, method="DELETE")
-                        report_config_hard_delete_json, report_config_hard_delete_status = parse_json_output_with_http_status(report_config_hard_delete)
-                        report_config_hard_delete_ok = report_config_hard_delete.returncode == 0 and report_config_hard_delete_status == 204
-                        findings.append(native_api_probe_finding("pass" if report_config_hard_delete_ok else "fail", "native-api-direct.report-config-write-hard-delete-clone", "Direct write-control hard-deleted the temporary clone report config from trash." if report_config_hard_delete_ok else "Direct write-control failed to hard-delete the temporary clone report config from trash.", report_config_hard_delete, direct_native_api_display_command(f"/api/v1/report-configs/{urllib.parse.quote(delete_report_config_id)}/trash", token=token, env=env, method="DELETE"), report_config_hard_delete_json, {"http_status": report_config_hard_delete_status, "report_config_id": delete_report_config_id, **summarize_native_api_response(report_config_hard_delete_json)}))
-
-                        report_config_after_hard_delete = direct_native_api_curl(repo_root, f"/api/v1/report-configs/{urllib.parse.quote(delete_report_config_id)}", token=token, env=env)
-                        report_config_after_hard_delete_json, report_config_after_hard_delete_status = parse_json_output_with_http_status(report_config_after_hard_delete)
-                        report_config_after_hard_delete_ok = report_config_after_hard_delete.returncode == 0 and report_config_after_hard_delete_status == 404 and isinstance(report_config_after_hard_delete_json, dict) and report_config_after_hard_delete_json.get("error", {}).get("code") == "not_found"
-                        findings.append(native_api_probe_finding("pass" if report_config_after_hard_delete_ok else "fail", "native-api-direct.report-config-write-post-hard-delete-clone", "Direct API confirms the temporary clone report config remains absent after hard delete." if report_config_after_hard_delete_ok else "Direct API did not confirm the temporary clone report config was absent after hard delete.", report_config_after_hard_delete, direct_native_api_display_command(f"/api/v1/report-configs/{urllib.parse.quote(delete_report_config_id)}", token=token, env=env), report_config_after_hard_delete_json, {"http_status": report_config_after_hard_delete_status, "report_config_id": delete_report_config_id, **summarize_native_api_response(report_config_after_hard_delete_json)}))
-
-                cleanup_targets = [
-                    f"(uuid = {sql_literal(report_config_id)} AND name = {sql_literal(report_config_name)})"
-                ]
-                if report_config_clone_id:
-                    cleanup_targets.append(
-                        f"(uuid = {sql_literal(report_config_clone_id)} AND name = {sql_literal(report_config_clone_name)})"
-                    )
-                cleanup_target_where = " OR ".join(cleanup_targets)
-                expected_cleanup_deleted = "1"
-                cleanup_sql = (
-                    "WITH live_target AS (SELECT id FROM report_configs "
-                    f"WHERE {cleanup_target_where}), "
-                    "trash_target AS (SELECT id FROM report_configs_trash "
-                    f"WHERE {cleanup_target_where}), "
-                    "deleted_live_tags AS (DELETE FROM tag_resources WHERE resource_type = 'report_config' AND resource_location = 0 AND resource IN (SELECT id FROM live_target)), "
-                    "deleted_trash_tags AS (DELETE FROM tag_resources WHERE resource_type = 'report_config' AND resource_location = 1 AND resource IN (SELECT id FROM trash_target)), "
-                    "deleted_live_params AS (DELETE FROM report_config_params WHERE report_config IN (SELECT id FROM live_target)), "
-                    "deleted_trash_params AS (DELETE FROM report_config_params_trash WHERE report_config IN (SELECT id FROM trash_target)), "
-                    "deleted_live_config AS (DELETE FROM report_configs WHERE id IN (SELECT id FROM live_target) RETURNING id), "
-                    "deleted_trash_config AS (DELETE FROM report_configs_trash WHERE id IN (SELECT id FROM trash_target) RETURNING id) "
-                    "SELECT (SELECT count(*) FROM deleted_live_config) + (SELECT count(*) FROM deleted_trash_config);"
-                )
-                cleanup = psql(repo_root, cleanup_sql)
-                cleanup_deleted = psql_value(cleanup)
-                cleanup_ok = cleanup.returncode == 0 and cleanup_deleted == expected_cleanup_deleted
-                cleanup_finding = process_step_finding("pass" if cleanup_ok else "fail", "native-api-direct.report-config-write-cleanup", "Direct write-control smoke removed temporary report-config live/trash residue through fixed test cleanup SQL." if cleanup_ok else "Direct write-control smoke failed to clean up temporary report-config live/trash residue.", cleanup, ["psql", "fixed-report-config-smoke-cleanup"])
-                cleanup_details = cleanup_finding.setdefault("details", {})
-                if isinstance(cleanup_details, dict):
-                    cleanup_details.update({"report_config_id": report_config_id, "report_config_clone_id": report_config_clone_id, "deleted_count": cleanup_deleted})
-                findings.append(cleanup_finding)
-
-                report_config_post_cleanup = direct_native_api_curl(repo_root, f"/api/v1/report-configs/{urllib.parse.quote(report_config_id)}", token=token, env=env)
-                report_config_post_cleanup_json, report_config_post_cleanup_status = parse_json_output_with_http_status(report_config_post_cleanup)
-                report_config_post_cleanup_ok = report_config_post_cleanup.returncode == 0 and report_config_post_cleanup_status == 404 and isinstance(report_config_post_cleanup_json, dict) and report_config_post_cleanup_json.get("error", {}).get("code") == "not_found"
-                findings.append(native_api_probe_finding("pass" if report_config_post_cleanup_ok else "fail", "native-api-direct.report-config-write-post-cleanup", "Direct API confirms the temporary report config is gone after cleanup." if report_config_post_cleanup_ok else "Direct API did not confirm the temporary report config was removed.", report_config_post_cleanup, direct_native_api_display_command(f"/api/v1/report-configs/{urllib.parse.quote(report_config_id)}", token=token, env=env), report_config_post_cleanup_json, {"http_status": report_config_post_cleanup_status, "report_config_id": report_config_id, **summarize_native_api_response(report_config_post_cleanup_json)}))
-        else:
-            missing_format_body = json.dumps(
-                {
-                    "name": report_config_name,
-                    "comment": "TurboVAS direct write smoke missing-format probe",
-                    "report_format_id": "00000000-0000-0000-0000-000000000000",
-                    "params": [],
-                },
-                separators=(",", ":"),
-            )
-            missing_format = direct_native_api_curl(repo_root, "/api/v1/report-configs", token=token, env=env, method="POST", body=missing_format_body, extra_headers=content_type)
-            missing_format_json, missing_format_status = parse_json_output_with_http_status(missing_format)
-            missing_format_ok = missing_format.returncode == 0 and missing_format_status == 404 and isinstance(missing_format_json, dict) and missing_format_json.get("error", {}).get("code") == "not_found"
-            findings.append(native_api_probe_finding("pass" if missing_format_ok else "fail", "native-api-direct.report-config-missing-format-denied", "Direct write-control rejects report-config creation for a missing report format without creating state." if missing_format_ok else "Direct write-control did not reject missing report-format report-config creation as expected.", missing_format, direct_native_api_display_command("/api/v1/report-configs", token=token, env=env, method="POST", body=missing_format_body, extra_headers=content_type), missing_format_json, {"http_status": missing_format_status, **summarize_native_api_response(missing_format_json)}))
-
-        if report_config_format_fixture_created and report_config_format_id and not report_config_id:
-            report_config_residue_cleanup_sql = (
-                "WITH target AS (SELECT id FROM report_configs "
-                f"WHERE name IN ({sql_literal(report_config_name)}, {sql_literal(report_config_clone_name)})), "
-                "deleted_tags AS (DELETE FROM tag_resources WHERE resource_type = 'report_config' AND resource IN (SELECT id FROM target)), "
-                "deleted_params AS (DELETE FROM report_config_params WHERE report_config IN (SELECT id FROM target)), "
-                "deleted_config AS (DELETE FROM report_configs WHERE id IN (SELECT id FROM target) RETURNING id) "
-                "SELECT count(*) FROM deleted_config;"
-            )
-            report_config_residue_cleanup = psql(repo_root, report_config_residue_cleanup_sql)
-            report_config_residue_cleanup_deleted = psql_value(report_config_residue_cleanup)
-            report_config_residue_cleanup_ok = report_config_residue_cleanup.returncode == 0
-            report_config_residue_cleanup_finding = process_step_finding("pass" if report_config_residue_cleanup_ok else "fail", "native-api-direct.report-config-residue-cleanup", "Direct write-control smoke cleaned any temporary report-config residue by deterministic name after an incomplete create response." if report_config_residue_cleanup_ok else "Direct write-control smoke failed to clean possible temporary report-config residue after an incomplete create response.", report_config_residue_cleanup, ["psql", "fixed-report-config-residue-cleanup"])
-            report_config_residue_cleanup_details = report_config_residue_cleanup_finding.setdefault("details", {})
-            if isinstance(report_config_residue_cleanup_details, dict):
-                report_config_residue_cleanup_details.update({"report_config_name": report_config_name, "report_config_clone_name": report_config_clone_name, "deleted_count": report_config_residue_cleanup_deleted})
-            findings.append(report_config_residue_cleanup_finding)
-
-        if report_config_format_fixture_created and report_config_format_id:
-            report_config_format_cleanup_sql = (
-                "WITH target AS (SELECT id FROM report_formats "
-                f"WHERE uuid = {sql_literal(report_config_format_id)} "
-                f"AND name = {sql_literal(report_config_format_name)}), "
-                "deleted_options AS (DELETE FROM report_format_param_options "
-                "WHERE report_format_param IN "
-                "(SELECT id FROM report_format_params WHERE report_format IN (SELECT id FROM target))), "
-                "deleted_params AS (DELETE FROM report_format_params WHERE report_format IN (SELECT id FROM target)), "
-                "deleted_format AS (DELETE FROM report_formats WHERE id IN (SELECT id FROM target) RETURNING id) "
-                "SELECT count(*) FROM deleted_format;"
-            )
-            report_config_format_cleanup = psql(repo_root, report_config_format_cleanup_sql)
-            report_config_format_cleanup_deleted = psql_value(report_config_format_cleanup)
-            report_config_format_cleanup_ok = report_config_format_cleanup.returncode == 0 and report_config_format_cleanup_deleted == "1"
-            report_config_format_cleanup_finding = process_step_finding("pass" if report_config_format_cleanup_ok else "fail", "native-api-direct.report-config-format-cleanup", "Direct write-control smoke removed the temporary report-format fixture through fixed cleanup SQL." if report_config_format_cleanup_ok else "Direct write-control smoke failed to clean up the temporary report-format fixture.", report_config_format_cleanup, ["psql", "fixed-report-config-format-cleanup"])
-            report_config_format_cleanup_details = report_config_format_cleanup_finding.setdefault("details", {})
-            if isinstance(report_config_format_cleanup_details, dict):
-                report_config_format_cleanup_details.update({"report_format_id": report_config_format_id, "report_format_name": report_config_format_name, "deleted_count": report_config_format_cleanup_deleted})
-            findings.append(report_config_format_cleanup_finding)
 
         predefined_scan_config_patch_body = json.dumps(
             {"comment": "predefined patch denied"},
@@ -22795,7 +22413,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         interesting_log_tail = [
             line
             for line in log_tail
-            if any(word in line.lower() for word in ("warn", "error", "failed", "tag write", "report config write", "database", "operator"))
+            if any(word in line.lower() for word in ("warn", "error", "failed", "tag write", "database", "operator"))
         ]
         findings.append(
             finding(
@@ -22819,11 +22437,6 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         "operator_uuid_found": bool(admin_uuid),
         "temporary_scope_id": scope_id,
         "temporary_scope_name": scope_name,
-        "temporary_report_config_id": report_config_id,
-        "temporary_report_config_clone_id": report_config_clone_id,
-        "temporary_report_config_name": report_config_name,
-        "temporary_report_config_clone_name": report_config_clone_name,
-        "temporary_report_config_format_id": report_config_format_id,
         "predefined_port_list_id": predefined_port_list_id,
         "temporary_port_list_id": port_list_id,
         "temporary_port_list_clone_id": port_list_clone_id,
@@ -23071,61 +22684,6 @@ def _command_runtime_native_api_direct_smoke_unlocked(repo_root: Path, status_on
     disabled_scope_write_json, disabled_scope_write_status = parse_json_output_with_http_status(disabled_scope_write)
     disabled_scope_write_ok = disabled_scope_write.returncode == 0 and disabled_scope_write_status == 405 and isinstance(disabled_scope_write_json, dict) and disabled_scope_write_json.get("error", {}).get("code") == "method_not_allowed"
     findings.append(native_api_probe_finding("pass" if disabled_scope_write_ok else "fail", "native-api-direct.scope-write-disabled", "Direct native API rejects scope writes while direct write-control is disabled." if disabled_scope_write_ok else "Direct native API did not reject a scope write while direct write-control is disabled.", disabled_scope_write, direct_native_api_display_command("/api/v1/scopes", token=token, env=env, method="POST"), disabled_scope_write_json, {"http_status": disabled_scope_write_status, **summarize_native_api_response(disabled_scope_write_json)}))
-
-    disabled_report_config_write = direct_native_api_curl(
-        repo_root,
-        "/api/v1/report-configs",
-        token=token,
-        env=env,
-        method="POST",
-    )
-    disabled_report_config_write_json, disabled_report_config_write_status = parse_json_output_with_http_status(disabled_report_config_write)
-    disabled_report_config_write_ok = disabled_report_config_write.returncode == 0 and disabled_report_config_write_status == 405 and isinstance(disabled_report_config_write_json, dict) and disabled_report_config_write_json.get("error", {}).get("code") == "method_not_allowed"
-    findings.append(native_api_probe_finding("pass" if disabled_report_config_write_ok else "fail", "native-api-direct.report-config-write-disabled", "Direct native API rejects report-config writes while direct write-control is disabled." if disabled_report_config_write_ok else "Direct native API did not reject a report-config write while direct write-control is disabled.", disabled_report_config_write, direct_native_api_display_command("/api/v1/report-configs", token=token, env=env, method="POST"), disabled_report_config_write_json, {"http_status": disabled_report_config_write_status, **summarize_native_api_response(disabled_report_config_write_json)}))
-
-    disabled_report_config_patch = direct_native_api_curl(
-        repo_root,
-        "/api/v1/report-configs/00000000-0000-0000-0000-000000000000",
-        token=token,
-        env=env,
-        method="PATCH",
-    )
-    disabled_report_config_patch_json, disabled_report_config_patch_status = parse_json_output_with_http_status(disabled_report_config_patch)
-    disabled_report_config_patch_ok = disabled_report_config_patch.returncode == 0 and disabled_report_config_patch_status == 405 and isinstance(disabled_report_config_patch_json, dict) and disabled_report_config_patch_json.get("error", {}).get("code") == "method_not_allowed"
-    findings.append(native_api_probe_finding("pass" if disabled_report_config_patch_ok else "fail", "native-api-direct.report-config-patch-disabled", "Direct native API rejects report-config patches while direct write-control is disabled." if disabled_report_config_patch_ok else "Direct native API did not reject a report-config patch while direct write-control is disabled.", disabled_report_config_patch, direct_native_api_display_command("/api/v1/report-configs/00000000-0000-0000-0000-000000000000", token=token, env=env, method="PATCH"), disabled_report_config_patch_json, {"http_status": disabled_report_config_patch_status, **summarize_native_api_response(disabled_report_config_patch_json)}))
-
-    disabled_report_config_restore = direct_native_api_curl(
-        repo_root,
-        "/api/v1/report-configs/00000000-0000-0000-0000-000000000000/restore",
-        token=token,
-        env=env,
-        method="POST",
-    )
-    disabled_report_config_restore_json, disabled_report_config_restore_status = parse_json_output_with_http_status(disabled_report_config_restore)
-    disabled_report_config_restore_ok = disabled_report_config_restore.returncode == 0 and disabled_report_config_restore_status == 405 and isinstance(disabled_report_config_restore_json, dict) and disabled_report_config_restore_json.get("error", {}).get("code") == "method_not_allowed"
-    findings.append(native_api_probe_finding("pass" if disabled_report_config_restore_ok else "fail", "native-api-direct.report-config-restore-disabled", "Direct native API rejects report-config restores while direct write-control is disabled." if disabled_report_config_restore_ok else "Direct native API did not reject a report-config restore while direct write-control is disabled.", disabled_report_config_restore, direct_native_api_display_command("/api/v1/report-configs/00000000-0000-0000-0000-000000000000/restore", token=token, env=env, method="POST"), disabled_report_config_restore_json, {"http_status": disabled_report_config_restore_status, **summarize_native_api_response(disabled_report_config_restore_json)}))
-
-    disabled_report_config_hard_delete = direct_native_api_curl(
-        repo_root,
-        "/api/v1/report-configs/00000000-0000-0000-0000-000000000000/trash",
-        token=token,
-        env=env,
-        method="DELETE",
-    )
-    disabled_report_config_hard_delete_json, disabled_report_config_hard_delete_status = parse_json_output_with_http_status(disabled_report_config_hard_delete)
-    disabled_report_config_hard_delete_ok = disabled_report_config_hard_delete.returncode == 0 and disabled_report_config_hard_delete_status == 405 and isinstance(disabled_report_config_hard_delete_json, dict) and disabled_report_config_hard_delete_json.get("error", {}).get("code") == "method_not_allowed"
-    findings.append(native_api_probe_finding("pass" if disabled_report_config_hard_delete_ok else "fail", "native-api-direct.report-config-hard-delete-disabled", "Direct native API rejects report-config hard deletes while direct write-control is disabled." if disabled_report_config_hard_delete_ok else "Direct native API did not reject a report-config hard delete while direct write-control is disabled.", disabled_report_config_hard_delete, direct_native_api_display_command("/api/v1/report-configs/00000000-0000-0000-0000-000000000000/trash", token=token, env=env, method="DELETE"), disabled_report_config_hard_delete_json, {"http_status": disabled_report_config_hard_delete_status, **summarize_native_api_response(disabled_report_config_hard_delete_json)}))
-
-    disabled_report_config_delete = direct_native_api_curl(
-        repo_root,
-        "/api/v1/report-configs/00000000-0000-0000-0000-000000000000",
-        token=token,
-        env=env,
-        method="DELETE",
-    )
-    disabled_report_config_delete_json, disabled_report_config_delete_status = parse_json_output_with_http_status(disabled_report_config_delete)
-    disabled_report_config_delete_ok = disabled_report_config_delete.returncode == 0 and disabled_report_config_delete_status == 405 and isinstance(disabled_report_config_delete_json, dict) and disabled_report_config_delete_json.get("error", {}).get("code") == "method_not_allowed"
-    findings.append(native_api_probe_finding("pass" if disabled_report_config_delete_ok else "fail", "native-api-direct.report-config-delete-disabled", "Direct native API rejects report-config deletes while direct write-control is disabled." if disabled_report_config_delete_ok else "Direct native API did not reject a report-config delete while direct write-control is disabled.", disabled_report_config_delete, direct_native_api_display_command("/api/v1/report-configs/00000000-0000-0000-0000-000000000000", token=token, env=env, method="DELETE"), disabled_report_config_delete_json, {"http_status": disabled_report_config_delete_status, **summarize_native_api_response(disabled_report_config_delete_json)}))
 
     disabled_filter_create_body = json.dumps(
         {"name": "disabled saved filter", "filter_type": "task"},
@@ -27469,7 +27027,6 @@ NATIVE_EMPTY_TRASH_RESOURCE_TYPES = frozenset(
         "filters",
         "overrides",
         "port_lists",
-        "report_configs",
         "report_formats",
         "scanners",
         "schedules",
@@ -32064,40 +31621,6 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             )
     else:
         findings.append(finding("warn", "native-api.report-format-detail", "No report formats exist yet, so the report-format detail probe was skipped."))
-
-    report_configs = native_api_curl(repo_root, "/api/v1/report-configs?page_size=1&sort=name")
-    report_configs_json = parse_json_output(report_configs)
-    details["report_configs"] = summarize_native_api_response(report_configs_json)
-    report_config_items = report_configs_json.get("items", []) if isinstance(report_configs_json, dict) else []
-    findings.append(
-        native_api_probe_finding(
-            "pass" if report_configs.returncode == 0 and isinstance(report_config_items, list) else "fail",
-            "native-api.report-configs",
-            f"Native API top-level Report Configs probe exit code {report_configs.returncode}.",
-            report_configs,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/report-configs?page_size=1"),
-            report_configs_json,
-        )
-    )
-    if report_config_items:
-        first_report_config = report_config_items[0]
-        report_config_detail_id = first_report_config.get("id") if isinstance(first_report_config, dict) else None
-        if report_config_detail_id:
-            report_config_detail = native_api_curl(repo_root, f"/api/v1/report-configs/{urllib.parse.quote(report_config_detail_id)}")
-            report_config_detail_json = parse_json_output(report_config_detail)
-            details["report_config_detail"] = summarize_native_api_response(report_config_detail_json)
-            findings.append(
-                native_api_probe_finding(
-                    "pass" if report_config_detail.returncode == 0 and isinstance(report_config_detail_json, dict) and report_config_detail_json.get("id") == report_config_detail_id else "fail",
-                    "native-api.report-config-detail",
-                    f"Native API report-config detail probe exit code {report_config_detail.returncode}.",
-                    report_config_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/report-configs/..."),
-                    report_config_detail_json,
-                )
-            )
-    else:
-        findings.append(finding("warn", "native-api.report-config-detail", "No report configs exist yet, so the report-config detail probe was skipped."))
 
     if raw_report_items:
         first_raw_report = raw_report_items[0]

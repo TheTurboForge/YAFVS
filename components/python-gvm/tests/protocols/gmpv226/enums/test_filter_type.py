@@ -107,10 +107,6 @@ class GetFilterTypeFomStringTestCase(unittest.TestCase):
         ft = FilterType.from_string("os")
         self.assertEqual(ft, FilterType.OPERATING_SYSTEM)
 
-    def test_filter_type_report_config(self):
-        ft = FilterType.from_string("report_config")
-        self.assertEqual(ft, FilterType.REPORT_CONFIG)
-
     def test_invalid_filter_type(self):
         with self.assertRaises(InvalidArgument):
             FilterType.from_string("foo")

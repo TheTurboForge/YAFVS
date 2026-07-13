@@ -52,7 +52,6 @@ const CANONICAL_EMPTY_PREVIEW_RESOURCE_TYPES = [
   'filters',
   'overrides',
   'port_lists',
-  'report_configs',
   'scanners',
   'schedules',
   'tags',
@@ -176,7 +175,6 @@ const writeNativeJson = async <T>(
 const RESTORE_PATHS: Partial<Record<EntityType, string>> = {
   filter: 'filters',
   portlist: 'port-lists',
-  reportconfig: 'report-configs',
   scanconfig: 'scan-configs',
   schedule: 'schedules',
   tag: 'tags',

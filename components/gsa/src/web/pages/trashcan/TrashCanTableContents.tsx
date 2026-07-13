@@ -57,11 +57,6 @@ const TrashCanTableContents = ({
     'port_lists',
     itemCount(trash.portLists),
   );
-  const reportConfigCount = countFor(
-    summary,
-    'report_configs',
-    itemCount(trash.reportConfigs),
-  );
   const reportFormatCount = countFor(
     summary,
     'report_formats',
@@ -113,13 +108,6 @@ const TrashCanTableContents = ({
           count={portListCount}
           title={_('Port Lists')}
           type="port-list"
-        />
-      )}
-      {reportConfigCount > 0 && (
-        <TrashCanTableRow
-          count={reportConfigCount}
-          title={_('Report Configs')}
-          type="report-config"
         />
       )}
       {reportFormatCount > 0 && (

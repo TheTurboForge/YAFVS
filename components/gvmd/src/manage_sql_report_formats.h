@@ -1,4 +1,5 @@
 /* Copyright (C) 2020-2022 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -35,8 +36,7 @@ int
 restore_report_format (const char *);
 
 gchar *
-apply_report_format (gchar *, report_config_t, gchar *, gchar *, gchar *,
-                     GList **);
+apply_report_format (gchar *, gchar *, gchar *, gchar *, GList **);
 
 gboolean
 delete_report_formats_user (user_t, iterator_t *);
@@ -75,6 +75,6 @@ int
 check_db_report_formats_trash ();
 
 int
-print_report_xml_end (gchar *, gchar *, report_format_t, report_config_t);
+print_report_xml_end (gchar *, gchar *, report_format_t);
 
 #endif /* not _GVMD_MANAGE_SQL_REPORT_FORMATS_H */

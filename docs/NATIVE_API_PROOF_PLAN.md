@@ -76,7 +76,7 @@ raw-report Hosts, raw-report Ports, raw-report CVEs, raw-report Error Messages,
 raw-report and scope-report Metrics, plus scope list/detail, target/task list
 reads, top-level result detail metadata/explanatory fields, top-level
 asset/security-info lists including Hosts, TLS Certificates, Operating Systems,
-Scanners, Scan Configs, Filters, Tags, Overrides, and Report Configs, NVT
+Scanners, Scan Configs, Filters, Tags, and Overrides, NVT
 detail Information fields, and every scope-report evidence tab through the authenticated same-origin
 `gsad` proxy defined in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
 NVT detail Information fields now read native catalog metadata through the
@@ -123,9 +123,11 @@ inside the development runtime boundary. Opt-in direct development access uses
 after `just runtime-native-api-direct-smoke --json` has created the bearer-auth
 listener and ignored runtime secret. These paths cover DB-backed report, scope,
 target, task, scan-config metadata, host asset metadata, tag metadata, override
-metadata, and report-config reads. This removes the need for covered inherited
-read-only GMP scripts while keeping write/control operations on inherited paths
-until a separate native write design exists.
+metadata, and related native reads. Report-config resources were intentionally
+removed because retained report formats are nonconfigurable; future export
+options will use explicit typed contracts. This removes the need for covered
+inherited read-only GMP scripts while keeping uncovered operations on their
+existing paths until native semantics are implemented and proven.
 Direct probes may add `--request-id 'operator-check-1'`; the value is sent as
 `X-Request-Id` and must use the bounded safe request-ID character set.
 Direct host/port env overrides are intentionally single-value settings:

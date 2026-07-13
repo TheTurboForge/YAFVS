@@ -137,7 +137,6 @@ typedef struct
   gchar *subject;
   gchar *recipient_credential_uuid;
   gchar *report_format_uuid;
-  gchar *report_config_uuid;
   gchar *message;
   gboolean active;
   unsigned int notice;
@@ -152,7 +151,6 @@ typedef struct
   gchar *share_path;
   gchar *file_path;
   gchar *report_format_uuid;
-  gchar *report_config_uuid;
   gchar *max_protocol;
   gboolean active;
 } turbovas_control_alert_smb_create_request_t;
@@ -736,7 +734,6 @@ turbovas_control_alert_smb_create_request_clear (
   turbovas_control_secure_free (request->share_path);
   turbovas_control_secure_free (request->file_path);
   turbovas_control_secure_free (request->report_format_uuid);
-  turbovas_control_secure_free (request->report_config_uuid);
   turbovas_control_secure_free (request->max_protocol);
   memset (request, 0, sizeof (*request));
 }
@@ -911,7 +908,6 @@ turbovas_control_alert_email_create_request_clear
   turbovas_control_secure_free (request->subject);
   turbovas_control_secure_free (request->recipient_credential_uuid);
   turbovas_control_secure_free (request->report_format_uuid);
-  turbovas_control_secure_free (request->report_config_uuid);
   turbovas_control_secure_free (request->message);
   memset (request, 0, sizeof (*request));
 }
@@ -1087,10 +1083,6 @@ turbovas_control_parse_alert_smb_create_request (
             &alert->report_format_uuid)
           && turbovas_control_next_field (&cursor, end, &field, &field_len)
           && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES, FALSE,
-            &alert->report_config_uuid)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
             field, field_len, TURBOVAS_CONTROL_ALERT_SMB_PROTOCOL_MAX_BYTES,
             FALSE, &alert->max_protocol)
           && cursor == end;
@@ -1099,7 +1091,6 @@ turbovas_control_parse_alert_smb_create_request (
       turbovas_control_alert_status_is_valid (alert->status)
       && turbovas_control_uuid_is_valid (alert->credential_uuid)
       && turbovas_control_uuid_is_valid (alert->report_format_uuid)
-      && turbovas_control_optional_uuid_is_valid (alert->report_config_uuid)
       && turbovas_control_smb_max_protocol_is_valid (alert->max_protocol)
       && turbovas_control_text_has_allowed_controls (
         alert->name, strlen (alert->name), FALSE)
@@ -1248,10 +1239,6 @@ turbovas_control_parse_alert_email_create_request
                 &alert->report_format_uuid)
           && turbovas_control_next_field (&cursor, end, &field, &field_len)
           && turbovas_control_decode_base64_field
-               (field, field_len, TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES, FALSE,
-                &alert->report_config_uuid)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
                (field, field_len, TURBOVAS_CONTROL_ALERT_MESSAGE_MAX_BYTES,
                 FALSE, &alert->message)
           && cursor == end
@@ -1259,10 +1246,8 @@ turbovas_control_parse_alert_email_create_request
           && turbovas_control_optional_uuid_is_valid
                (alert->recipient_credential_uuid)
           && turbovas_control_optional_uuid_is_valid (alert->report_format_uuid)
-          && turbovas_control_optional_uuid_is_valid (alert->report_config_uuid)
           && ((alert->notice == 1
-               && alert->report_format_uuid[0] == '\0'
-               && alert->report_config_uuid[0] == '\0')
+               && alert->report_format_uuid[0] == '\0')
               || (alert->notice != 1
                   && alert->report_format_uuid[0] != '\0'));
   if (!valid)
@@ -1889,8 +1874,6 @@ turbovas_control_alert_create_response (
       case 60: status = "60 recipient_credential_not_found\n"; break;
       case 61: status = "61 invalid_recipient_credential\n"; break;
       case 90: status = "90 report_format_not_found\n"; break;
-      case 91: status = "91 report_config_not_found\n"; break;
-      case 92: status = "92 report_config_mismatch\n"; break;
       case 99: status = "99 forbidden\n"; break;
       case -3: status = "-3 committed_indeterminate\n"; break;
       case -2: status = "-2 malformed\n"; break;
@@ -2241,9 +2224,6 @@ turbovas_control_create_alert_smb (
                                    request->file_path);
   turbovas_control_array_add_data (method_data, "smb_report_format",
                                    request->report_format_uuid);
-  if (request->report_config_uuid[0])
-    turbovas_control_array_add_data (method_data, "smb_report_config",
-                                     request->report_config_uuid);
   if (request->max_protocol[0])
     turbovas_control_array_add_data (method_data, "smb_max_protocol",
                                      request->max_protocol);
@@ -2253,8 +2233,7 @@ turbovas_control_create_alert_smb (
 
   result = create_alert_smb_with_report_refs (
     request->name, request->comment, active, event_data, condition_data,
-    method_data, request->credential_uuid, request->report_format_uuid,
-    request->report_config_uuid, &alert);
+    method_data, request->credential_uuid, request->report_format_uuid, &alert);
   if (result == 0)
     {
       committed = TRUE;
@@ -2378,17 +2357,11 @@ turbovas_control_create_alert_email
     {
       turbovas_control_array_add_data (method_data, "notice_report_format",
                                        request->report_format_uuid);
-      if (request->report_config_uuid[0])
-        turbovas_control_array_add_data (method_data, "notice_report_config",
-                                         request->report_config_uuid);
     }
   else if (request->notice == 2)
     {
       turbovas_control_array_add_data (method_data, "notice_attach_format",
                                        request->report_format_uuid);
-      if (request->report_config_uuid[0])
-        turbovas_control_array_add_data (method_data, "notice_attach_config",
-                                         request->report_config_uuid);
     }
   if (request->message[0])
     turbovas_control_array_add_data (method_data, "message", request->message);
@@ -2399,8 +2372,7 @@ turbovas_control_create_alert_email
   result = create_alert_email_with_report_refs
              (request->name, request->comment, active, event_data,
               condition_data, method_data, request->recipient_credential_uuid,
-              request->report_format_uuid, request->report_config_uuid,
-              &alert);
+              request->report_format_uuid, &alert);
   if (result == 0)
     {
       committed = TRUE;

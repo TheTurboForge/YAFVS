@@ -18,7 +18,6 @@ mod browser_proxy_filter;
 mod browser_proxy_host;
 mod browser_proxy_metadata_patch;
 mod browser_proxy_port_list;
-mod browser_proxy_report_config;
 mod browser_proxy_routes;
 mod browser_proxy_scan_config;
 mod browser_proxy_schedule;
@@ -101,15 +100,6 @@ mod port_lists;
 mod query;
 mod read_api_routes;
 mod report_applications;
-mod report_config_payloads;
-mod report_config_query_sql;
-mod report_config_write_db;
-#[cfg(test)]
-mod report_config_write_plans;
-mod report_config_write_sql;
-mod report_config_write_validation;
-mod report_config_writes;
-mod report_configs;
 mod report_cve_query_sql;
 mod report_cves;
 mod report_error_query_sql;
@@ -298,8 +288,6 @@ mod gsa_sort_contract_tests;
 mod metadata_export_characterization_tests;
 #[cfg(test)]
 mod port_list_characterization_tests;
-#[cfg(test)]
-mod report_config_characterization_tests;
 #[cfg(test)]
 mod report_format_characterization_tests;
 #[cfg(test)]

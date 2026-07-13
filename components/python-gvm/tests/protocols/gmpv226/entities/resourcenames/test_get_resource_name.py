@@ -131,14 +131,6 @@ class GmpGetResourceNameTestMixin:
         )
 
         self.gmp.get_resource_name(
-            resource_type=ResourceType.REPORT_CONFIG, resource_id="i1"
-        )
-
-        self.connection.send.has_been_called_with(
-            b'<get_resource_names resource_id="i1" type="REPORT_CONFIG"/>'
-        )
-
-        self.gmp.get_resource_name(
             resource_type=ResourceType.RESULT, resource_id="i1"
         )
 

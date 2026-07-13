@@ -361,14 +361,12 @@ fn direct_api_path_classifier_uses_positive_scriptable_allowlist() {
         "/api/v1/port-lists/12345678-1234-1234-1234-123456789abc/export/extra",
         "/api/v1/schedules/12345678-1234-1234-1234-123456789abc/export/extra",
         "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/export/extra",
-        "/api/v1/report-configs/12345678-1234-1234-1234-123456789abc/export/extra",
         "/api/v1/report-formats/12345678-1234-1234-1234-123456789abc/export/extra",
         "/api/v1/filters/../export",
         "/api/v1/tags/./export",
         "/api/v1/port-lists//export",
         "/api/v1/schedules/12345678-1234-1234-1234-123456789abc/../export",
         "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/./export",
-        "/api/v1/report-configs/12345678-1234-1234-1234-123456789abc//export",
         "/api/v1/report-formats/../export",
     ] {
         assert!(
@@ -468,46 +466,6 @@ fn direct_api_method_classifier_gates_scope_writes_on_write_control_flag() {
     assert!(!direct_api_v1_method_is_allowed(
         &Method::POST,
         "/api/v1/tags/not-a-uuid/resources",
-        true
-    ));
-    assert!(direct_api_v1_method_is_allowed(
-        &Method::POST,
-        "/api/v1/report-configs",
-        true
-    ));
-    assert!(!direct_api_v1_method_is_allowed(
-        &Method::POST,
-        "/api/v1/report-configs",
-        false
-    ));
-    assert!(direct_api_v1_method_is_allowed(
-        &Method::PATCH,
-        "/api/v1/report-configs/12345678-1234-1234-1234-123456789abc",
-        true
-    ));
-    assert!(!direct_api_v1_method_is_allowed(
-        &Method::PATCH,
-        "/api/v1/report-configs/not-a-uuid",
-        true
-    ));
-    assert!(direct_api_v1_method_is_allowed(
-        &Method::GET,
-        "/api/v1/report-configs/12345678-1234-1234-1234-123456789abc/export",
-        false
-    ));
-    assert!(!direct_api_v1_method_is_allowed(
-        &Method::GET,
-        "/api/v1/report-configs/12345678-1234-1234-1234-123456789abc/export/extra",
-        false
-    ));
-    assert!(direct_api_v1_method_is_allowed(
-        &Method::DELETE,
-        "/api/v1/report-configs/12345678-1234-1234-1234-123456789abc",
-        true
-    ));
-    assert!(!direct_api_v1_method_is_allowed(
-        &Method::DELETE,
-        "/api/v1/report-configs/not-a-uuid",
         true
     ));
     assert!(direct_api_v1_method_is_allowed(

@@ -20,7 +20,6 @@ use crate::{
     overrides::*,
     port_lists::*,
     report_applications::report_applications,
-    report_configs::*,
     report_cves::report_cves,
     report_errors::report_errors,
     report_formats::*,
@@ -195,15 +194,6 @@ pub(crate) fn native_api_router() -> Router<AppState> {
             get(export_schedule_metadata),
         )
         .route("/api/v1/timezones", get(timezones))
-        .route("/api/v1/report-configs", get(report_config_assets))
-        .route(
-            "/api/v1/report-configs/:report_config_id",
-            get(report_config_asset_detail),
-        )
-        .route(
-            "/api/v1/report-configs/:report_config_id/export",
-            get(export_report_config_metadata),
-        )
         .route("/api/v1/report-formats", get(report_format_assets))
         .route(
             "/api/v1/report-formats/:report_format_id",

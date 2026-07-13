@@ -508,7 +508,7 @@ is_tag_resource_type_segment (const gchar *value, gsize length)
     "alert",         "cert_bund_adv", "cpe",          "cve",
     "credential",    "dfn_cert_adv",  "host",         "nvt",
     "os",
-    "port_list",     "report_config", "report_format", "config",
+    "port_list",     "report_format", "config",
     "scanner",       "schedule",      "target",       "task",
     "tls_certificate"
   };
@@ -565,7 +565,6 @@ native_api_delete_path_is_allowed (const gchar *path)
   const gchar *host_operating_system_prefix = "/api/v1/host-operating-systems/";
   const gchar *override_prefix = "/api/v1/overrides/";
   const gchar *port_list_prefix = "/api/v1/port-lists/";
-  const gchar *report_config_prefix = "/api/v1/report-configs/";
   const gchar *scan_config_prefix = "/api/v1/scan-configs/";
   const gchar *schedule_prefix = "/api/v1/schedules/";
   const gchar *scope_prefix = "/api/v1/scopes/";
@@ -630,13 +629,6 @@ native_api_delete_path_is_allowed (const gchar *path)
              || is_uuid_segment_pair_with_middle (id, "/ranges/");
     }
 
-  if (g_str_has_prefix (path, report_config_prefix))
-    {
-      const gchar *id = path + strlen (report_config_prefix);
-      return is_uuid_segment (id, strlen (id))
-             || is_uuid_segment_with_suffix (id, trash_suffix);
-    }
-
   if (g_str_has_prefix (path, scan_config_prefix))
     {
       const gchar *id = path + strlen (scan_config_prefix);
@@ -696,7 +688,6 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *hosts_path = "/api/v1/hosts";
   const gchar *port_list_imports_path = "/api/v1/port-list-imports";
   const gchar *port_lists_path = "/api/v1/port-lists";
-  const gchar *report_configs_path = "/api/v1/report-configs";
   const gchar *scanners_path = "/api/v1/scanners";
   const gchar *schedules_path = "/api/v1/schedules";
   const gchar *scopes_path = "/api/v1/scopes";
@@ -708,7 +699,6 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *scope_prefix = "/api/v1/scopes/";
   const gchar *filter_prefix = "/api/v1/filters/";
   const gchar *port_list_prefix = "/api/v1/port-lists/";
-  const gchar *report_config_prefix = "/api/v1/report-configs/";
   const gchar *scan_config_prefix = "/api/v1/scan-configs/";
   const gchar *scanner_prefix = "/api/v1/scanners/";
   const gchar *schedule_prefix = "/api/v1/schedules/";
@@ -745,9 +735,6 @@ native_api_post_path_is_allowed (const gchar *path)
     return TRUE;
 
   if (g_strcmp0 (path, port_list_imports_path) == 0)
-    return TRUE;
-
-  if (g_strcmp0 (path, report_configs_path) == 0)
     return TRUE;
 
   if (g_strcmp0 (path, schedules_path) == 0)
@@ -799,13 +786,6 @@ native_api_post_path_is_allowed (const gchar *path)
       return is_uuid_segment_with_suffix (id, clone_suffix)
              || is_uuid_segment_with_suffix (id, restore_suffix)
              || is_uuid_segment_with_suffix (id, ranges_suffix);
-    }
-
-  if (g_str_has_prefix (path, report_config_prefix))
-    {
-      const gchar *id = path + strlen (report_config_prefix);
-      return is_uuid_segment_with_suffix (id, clone_suffix)
-             || is_uuid_segment_with_suffix (id, restore_suffix);
     }
 
   if (g_str_has_prefix (path, scan_config_prefix))
@@ -926,7 +906,6 @@ native_api_patch_path_is_allowed (const gchar *path)
   const gchar *filter_prefix = "/api/v1/filters/";
   const gchar *host_prefix = "/api/v1/hosts/";
   const gchar *port_list_prefix = "/api/v1/port-lists/";
-  const gchar *report_config_prefix = "/api/v1/report-configs/";
   const gchar *scan_config_prefix = "/api/v1/scan-configs/";
   const gchar *scanner_prefix = "/api/v1/scanners/";
   const gchar *schedule_prefix = "/api/v1/schedules/";
@@ -965,12 +944,6 @@ native_api_patch_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, port_list_prefix))
     {
       const gchar *id = path + strlen (port_list_prefix);
-      return is_uuid_segment (id, strlen (id));
-    }
-
-  if (g_str_has_prefix (path, report_config_prefix))
-    {
-      const gchar *id = path + strlen (report_config_prefix);
       return is_uuid_segment (id, strlen (id));
     }
 
@@ -1087,9 +1060,6 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *schedule_prefix = "/api/v1/schedules/";
   const gchar *schedule_export_suffix = "/export";
   const gchar *timezones_path = "/api/v1/timezones";
-  const gchar *report_configs_path = "/api/v1/report-configs";
-  const gchar *report_config_prefix = "/api/v1/report-configs/";
-  const gchar *report_config_export_suffix = "/export";
   const gchar *report_formats_path = "/api/v1/report-formats";
   const gchar *report_format_prefix = "/api/v1/report-formats/";
   const gchar *report_format_export_suffix = "/export";
@@ -1413,19 +1383,6 @@ native_api_path_is_allowed (const gchar *path)
         return is_uuid_segment (id,
                                 strlen (id)
                                 - strlen (schedule_export_suffix));
-      return is_uuid_segment (id, strlen (id));
-    }
-
-  if (g_strcmp0 (path, report_configs_path) == 0)
-    return TRUE;
-
-  if (g_str_has_prefix (path, report_config_prefix))
-    {
-      const gchar *id = path + strlen (report_config_prefix);
-      if (g_str_has_suffix (id, report_config_export_suffix))
-        return is_uuid_segment (id,
-                                strlen (id)
-                                - strlen (report_config_export_suffix));
       return is_uuid_segment (id, strlen (id));
     }
 

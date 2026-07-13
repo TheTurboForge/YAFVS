@@ -35,7 +35,6 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
             | ["", "api", "v1", "port-lists"]
             | ["", "api", "v1", "schedules"]
             | ["", "api", "v1", "timezones"]
-            | ["", "api", "v1", "report-configs"]
             | ["", "api", "v1", "report-formats"]
             | ["", "api", "v1", "trashcan", "summary"]
             | ["", "api", "v1", "trashcan", "items"]
@@ -79,8 +78,6 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
             | ["", "api", "v1", "port-lists", _, "export"]
             | ["", "api", "v1", "schedules", _]
             | ["", "api", "v1", "schedules", _, "export"]
-            | ["", "api", "v1", "report-configs", _]
-            | ["", "api", "v1", "report-configs", _, "export"]
             | ["", "api", "v1", "report-formats", _]
             | ["", "api", "v1", "report-formats", _, "export"]
             | ["", "api", "v1", "reports", _]
@@ -175,28 +172,6 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         }
         (&Method::DELETE, ["", "api", "v1", "tags", tag_id, "trash"]) => {
             direct_api_write_id_segment_is_allowed(tag_id)
-        }
-        (&Method::POST, ["", "api", "v1", "report-configs"]) => true,
-        (
-            &Method::PATCH | &Method::DELETE,
-            ["", "api", "v1", "report-configs", report_config_id],
-        ) => direct_api_write_id_segment_is_allowed(report_config_id),
-        (&Method::POST, ["", "api", "v1", "report-configs", report_config_id, "clone"]) => {
-            direct_api_write_id_segment_is_allowed(report_config_id)
-        }
-        (
-            &Method::POST,
-            [
-                "",
-                "api",
-                "v1",
-                "report-configs",
-                report_config_id,
-                "restore",
-            ],
-        ) => direct_api_write_id_segment_is_allowed(report_config_id),
-        (&Method::DELETE, ["", "api", "v1", "report-configs", report_config_id, "trash"]) => {
-            direct_api_write_id_segment_is_allowed(report_config_id)
         }
         (&Method::POST, ["", "api", "v1", "scan-configs"]) => true,
         (&Method::PATCH | &Method::DELETE, ["", "api", "v1", "scan-configs", scan_config_id]) => {

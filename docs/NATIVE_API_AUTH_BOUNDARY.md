@@ -39,7 +39,7 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   flag. It accepts only strict boolean values, requires
   `TURBOVAS_API_OPERATOR_UUID` when truthy, and currently exposes only the
   approved direct write-control route contracts for scopes, tags, filters, port
-  lists, report configs, scan configs, schedules, targets, selected alert
+  lists, scan configs, schedules, targets, selected alert
   metadata, credential name/comment metadata, scanner metadata, task metadata,
   and related clone/restore/trash operations where the native contract has been
   explicitly reviewed.

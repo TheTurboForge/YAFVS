@@ -129,7 +129,7 @@ host-binding posture tracked outside this development API.
   contract-listed `POST`, `PATCH`, and `DELETE` write/control routes. Current
   families cover scope metadata/membership, tag metadata/resources/clone/
   restore/trash, filter metadata/clone/restore/trash, port-list metadata/clone/
-  restore/trash, report-config metadata/clone/restore/trash, scan-config
+  restore/trash, scan-config
   metadata/clone/restore/trash, schedule metadata/clone/restore/trash, target
   metadata/create/clone/restore/trash, selected alert metadata, credential
   name/comment metadata, scanner metadata, task metadata, guarded task start
@@ -237,12 +237,12 @@ The first runtime implementation proof is scoped in
 adds opt-in direct read access for the same safe GET contracts. Current coverage
 includes raw report list/detail/result rows/result metadata/hosts/ports/applications/operating
 systems/CVEs/TLS certificates/errors, scope list/detail, target list/detail,
-task list/detail, scanner metadata list/detail Information, saved filter list/detail, override
-list/detail metadata, tag list/detail metadata, operating-system asset
+task list/detail, scanner metadata list/detail Information, saved filter
+list/detail, override list/detail metadata, tag list/detail metadata, operating-system asset
 list/detail metadata, host asset list/detail metadata, scan-config metadata
-list/detail, port-list list/detail, schedule list/detail, report-config
-list/detail, report-format list/detail, Security Information CVE catalog
-list/detail, Security Information CPE catalog list/detail, Security Information
+list/detail, port-list list/detail, schedule list/detail, report-format list/detail,
+Security Information CVE catalog list/detail, Security Information CPE catalog
+list/detail, Security Information
 CERT-Bund and DFN-CERT advisory catalog list/detail metadata, scope-report list,
 Results, Hosts, Ports, Applications,
 Operating Systems, CVEs, TLS Certificates, Error Messages, scope-report Metrics,
@@ -399,13 +399,6 @@ automation metadata, so these endpoints stay inside the authenticated operator
 boundary. Create, modify, clone, export, and delete actions remain inherited
 until native write semantics are designed.
 
-Native report-config rows include report-config identity, owner, report-format
-reference, alert backlinks, resolved parameter metadata, writable/in-use/orphan
-flags, and timestamps. Report configs are scanner output configuration, so these
-endpoints stay inside the authenticated operator boundary. Create, modify,
-clone, export, and delete actions remain inherited until native write semantics
-are designed.
-
 Native Trashcan summary reads are counts-only at
 `/api/v1/trashcan/summary`. The endpoint returns all supported Trashcan
 resource types with `resource_type`, `title`, and `count`, plus an aggregate
@@ -417,7 +410,7 @@ inherited because credential/target/scanner trash data is secret-adjacent.
 
 Native report-format rows include report-format identity, summary/description,
 extension/content type, trust state, active/predefined/configurable/deprecated
-flags, alert/report-config backlinks, parameters, and timestamps. Report formats
+flags, alert backlinks, parameters, and timestamps. Report formats
 are scanner output configuration, so these endpoints stay inside the
 authenticated operator boundary. Direct scriptable
 `GET /api/v1/report-formats/{report_format_id}/export` returns the same native

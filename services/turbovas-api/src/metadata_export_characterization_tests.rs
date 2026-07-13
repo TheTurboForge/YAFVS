@@ -65,15 +65,6 @@ const EXPORT_BOUNDARIES: &[MetadataExportBoundary] = &[
         inherited_tail: None,
         schema_ref: "#/components/schemas/ScanConfigAssetDetail",
     },
-    MetadataExportBoundary {
-        api_path: "/api/v1/report-configs/12345678-1234-1234-1234-123456789abc/export",
-        openapi_path: "/report-configs/{report_config_id}/export",
-        route_path: "/api/v1/report-configs/:report_config_id/export",
-        handler: "export_report_config_metadata",
-        replaces: "report-config-metadata-export-read",
-        inherited_tail: None,
-        schema_ref: "#/components/schemas/ReportConfigAsset",
-    },
 ];
 
 fn openapi_path_block(path: &str) -> String {

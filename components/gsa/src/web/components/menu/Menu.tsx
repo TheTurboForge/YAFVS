@@ -123,12 +123,6 @@ const Menu = () => {
   const scheduleMatch = useMatch('/schedule/*');
   const isSchedulesActive = Boolean(schedulesMatch || scheduleMatch);
 
-  const reportConfigsMatch = useMatch('/report-configs');
-  const reportConfigMatch = useMatch('/report-config/*');
-  const isReportConfigsActive = Boolean(
-    reportConfigsMatch || reportConfigMatch,
-  );
-
   const reportFormatsMatch = useMatch('/report-formats');
   const reportFormatMatch = useMatch('/report-format/*');
   const isReportFormatsActive = Boolean(
@@ -176,7 +170,6 @@ const Menu = () => {
     'scanconfig',
     'alert',
     'schedule',
-    'reportconfig',
     'reportformat',
     'scanner',
     'filter',
@@ -329,7 +322,6 @@ const Menu = () => {
           isScanConfigsActive,
           isAlertsActive,
           isSchedulesActive,
-          isReportConfigsActive,
           isReportFormatsActive,
           isScannersActive,
           isFiltersActive,
@@ -371,12 +363,6 @@ const Menu = () => {
             to: '/schedules',
             isPathMatch: Boolean(schedulesMatch),
             active: isSchedulesActive,
-          },
-          capabilities.mayAccess('reportconfig') && {
-            label: _('Report Configs'),
-            to: '/report-configs',
-            isPathMatch: Boolean(reportConfigsMatch),
-            active: isReportConfigsActive,
           },
           capabilities.mayAccess('reportformat') && {
             label: _('Report Formats'),

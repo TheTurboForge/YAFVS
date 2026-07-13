@@ -25,10 +25,6 @@ use crate::{
         delete_port_list_range, hard_delete_port_list, import_port_list, patch_port_list,
         restore_port_list,
     },
-    report_config_writes::{
-        clone_report_config, create_report_config, delete_report_config, hard_delete_report_config,
-        patch_report_config, restore_report_config,
-    },
     request_shapes::MAX_DIRECT_API_WRITE_BODY_BYTES,
     scan_config_writes::{
         clone_scan_config, create_scan_config, delete_scan_config, hard_delete_scan_config,
@@ -74,27 +70,6 @@ pub(crate) fn direct_native_api_router(
             .route(
                 "/api/v1/scopes/:scope_id/reports",
                 post(generate_scope_report),
-            )
-            .route("/api/v1/report-configs", post(create_report_config))
-            .route(
-                "/api/v1/report-configs/:report_config_id",
-                patch(patch_report_config),
-            )
-            .route(
-                "/api/v1/report-configs/:report_config_id",
-                delete(delete_report_config),
-            )
-            .route(
-                "/api/v1/report-configs/:report_config_id/clone",
-                post(clone_report_config),
-            )
-            .route(
-                "/api/v1/report-configs/:report_config_id/restore",
-                post(restore_report_config),
-            )
-            .route(
-                "/api/v1/report-configs/:report_config_id/trash",
-                delete(hard_delete_report_config),
             )
             .route("/api/v1/scan-configs", post(create_scan_config))
             .route(

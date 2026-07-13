@@ -44,7 +44,6 @@ import TrashActions from 'web/pages/extras/TrashActions';
 import FiltersTable from 'web/pages/filters/Table';
 import OverridesTable from 'web/pages/overrides/Table';
 import PortListTable from 'web/pages/portlists/PortListTable';
-import ReportConfigsTable from 'web/pages/reportconfigs/Table';
 import ReportFormatsTable from 'web/pages/reportformats/Table';
 import ScanConfigsTable from 'web/pages/scanconfigs/Table';
 import ScannerTable from 'web/pages/scanners/ScannerTable';
@@ -379,16 +378,6 @@ const TrashCan = () => {
             <h1>{_('Port Lists')}</h1>
             {/* @ts-expect-error */}
             <PortListTable entities={trash.portLists} {...tableProps} />
-          </span>
-        )}
-        {hasEntities(trash?.reportConfigs) && (
-          <span>
-            <LinkTarget id="report-config" />
-            <h1>{_('Report Configs')}</h1>
-            <ReportConfigsTable
-              entities={trash.reportConfigs}
-              {...tableProps}
-            />
           </span>
         )}
         {hasEntities(trash?.reportFormats) && (

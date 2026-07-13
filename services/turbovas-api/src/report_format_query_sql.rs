@@ -23,9 +23,6 @@ pub(crate) fn report_format_assets_sql(sort_sql: &str) -> String {
                                 FROM alerts a
                                 JOIN alert_method_data amd ON amd.alert = a.id
                                WHERE amd.data = rf.uuid), 0)::bigint AS alert_count,
-                    coalesce((SELECT count(DISTINCT rc.id)::bigint
-                                FROM report_configs rc
-                               WHERE rc.report_format_id = rf.uuid), 0)::bigint AS report_config_count,
                     coalesce(rf.creation_time, 0)::bigint AS created_at_unix,
                     coalesce(rf.modification_time, 0)::bigint AS modified_at_unix
                FROM report_formats rf
@@ -63,9 +60,6 @@ pub(crate) fn report_format_asset_detail_sql() -> &'static str {
                           FROM alerts a
                           JOIN alert_method_data amd ON amd.alert = a.id
                          WHERE amd.data = rf.uuid), 0)::bigint AS alert_count,
-              coalesce((SELECT count(DISTINCT rc.id)::bigint
-                          FROM report_configs rc
-                         WHERE rc.report_format_id = rf.uuid), 0)::bigint AS report_config_count,
               coalesce(rf.creation_time, 0)::bigint AS created_at_unix,
               coalesce(rf.modification_time, 0)::bigint AS modified_at_unix
          FROM report_formats rf
@@ -79,14 +73,6 @@ pub(crate) fn report_format_alert_backlinks_sql() -> &'static str {
          FROM alerts a
          JOIN alert_method_data amd ON amd.alert = a.id
         WHERE amd.data = $1
-        ORDER BY name ASC, id ASC;"#
-}
-
-pub(crate) fn report_format_config_backlinks_sql() -> &'static str {
-    r#"SELECT rc.uuid AS id,
-              coalesce(rc.name, '') AS name
-         FROM report_configs rc
-        WHERE rc.report_format_id = $1
         ORDER BY name ASC, id ASC;"#
 }
 

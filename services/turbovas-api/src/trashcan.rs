@@ -74,8 +74,6 @@ pub(crate) async fn trashcan_summary(
                    UNION ALL
                    SELECT 6 AS sort_order, 'port_lists'::text AS resource_type, 'Port Lists'::text AS title, count(*)::bigint AS item_count FROM port_lists_trash
                    UNION ALL
-                   SELECT 7 AS sort_order, 'report_configs'::text AS resource_type, 'Report Configs'::text AS title, count(*)::bigint AS item_count FROM report_configs_trash
-                   UNION ALL
                    SELECT 8 AS sort_order, 'report_formats'::text AS resource_type, 'Report Formats'::text AS title, count(*)::bigint AS item_count FROM report_formats_trash
                    UNION ALL
                    SELECT 9 AS sort_order, 'scanners'::text AS resource_type, 'Scanners'::text AS title, count(*)::bigint AS item_count FROM scanners_trash
@@ -141,10 +139,6 @@ fn trashcan_items_sql(sort_sql: &str) -> String {
              SELECT uuid::text, 'port_lists'::text, 'portlist'::text, 'Port Lists'::text,
                     name::text, comment::text, creation_time, modification_time, 6
                FROM port_lists_trash
-             UNION ALL
-             SELECT uuid::text, 'report_configs'::text, 'reportconfig'::text, 'Report Configs'::text,
-                    name::text, comment::text, creation_time, modification_time, 7
-               FROM report_configs_trash
              UNION ALL
              SELECT uuid::text, 'report_formats'::text, 'reportformat'::text, 'Report Formats'::text,
                     name::text, description::text, creation_time, modification_time, 8

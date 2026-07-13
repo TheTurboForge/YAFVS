@@ -30,7 +30,6 @@ class ResourceType(Enum):
     PORT_LIST = "PORT_LIST"
     REPORT_FORMAT = "REPORT_FORMAT"
     REPORT = "REPORT"
-    REPORT_CONFIG = "REPORT_CONFIG"
     RESULT = "RESULT"
     SCANNER = "SCANNER"
     SCHEDULE = "SCHEDULE"
@@ -54,7 +53,7 @@ class ResourceNames:
             resource_type: Type must be either ALERT, CERT_BUND_ADV,
                 CONFIG, CPE, CREDENTIAL, CVE, DFN_CERT_ADV, FILTER,
                 HOST, NVT, OS, OVERRIDE, PORT_LIST, REPORT_FORMAT,
-                REPORT, REPORT_CONFIG, RESULT,
+                REPORT, RESULT,
                 SCANNER, SCHEDULE, TARGET, TASK, TLS_CERTIFICATE
                 or USER
             filter_string: Filter term to use for the query
@@ -87,7 +86,7 @@ class ResourceNames:
             resource_type: Type must be either ALERT, CERT_BUND_ADV,
                 CONFIG, CPE, CREDENTIAL, CVE, DFN_CERT_ADV, FILTER,
                 HOST, NVT, OS, OVERRIDE, PORT_LIST, REPORT_FORMAT,
-                REPORT, REPORT_CONFIG, RESULT,
+                REPORT, RESULT,
                 SCANNER, SCHEDULE, TARGET, TASK, TLS_CERTIFICATE
                 or USER
         """

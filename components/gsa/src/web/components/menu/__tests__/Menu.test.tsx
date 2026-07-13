@@ -70,7 +70,6 @@ describe('Menu rendering', () => {
     'Performance',
     'Port Lists',
     'RADIUS',
-    'Report Configs',
     'Report Formats',
     'Reports',
     'Results',

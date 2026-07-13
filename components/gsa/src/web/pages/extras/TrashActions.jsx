@@ -45,9 +45,6 @@ const getRestorableDeletableForEntityType = {
   portlist: entity => {
     return {restorable: true, deletable: !entity.isInUse()};
   },
-  reportconfig: entity => {
-    return {restorable: true, deletable: !entity.isInUse()};
-  },
   reportformat: entity => {
     return {restorable: true, deletable: !entity.isInUse()};
   },

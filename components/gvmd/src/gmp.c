@@ -83,7 +83,6 @@
 #include "gmp_license.h"
 #include "gmp_logout.h"
 #include "gmp_port_lists.h"
-#include "gmp_report_configs.h"
 #include "gmp_tls_certificates.h"
 #include "manage.h"
 #include "manage_acl.h"
@@ -93,7 +92,6 @@
 #include "manage_overrides.h"
 #include "manage_permissions.h"
 #include "manage_port_lists.h"
-#include "manage_report_configs.h"
 #include "manage_report_formats.h"
 #include "manage_resources.h"
 #include "manage_runtime_flags.h"
@@ -1591,7 +1589,6 @@ typedef struct
 {
   get_data_t get;        ///< Get args with result filtering.
   get_data_t report_get; ///< Get args with report filtering.
-  char *config_id;       ///< ID of report config.
   char *format_id;       ///< ID of report format.
   char *alert_id;        ///< ID of alert.
   char *report_id;       ///< ID of single report to get.
@@ -1611,32 +1608,11 @@ get_reports_data_reset (get_reports_data_t *data)
 {
   get_data_reset (&data->get);
   get_data_reset (&data->report_get);
-  free (data->config_id);
   free (data->format_id);
   free (data->alert_id);
   free (data->report_id);
 
   memset (data, 0, sizeof (get_reports_data_t));
-}
-
-/**
- * @brief Command data for the get_report_configs command.
- */
-typedef struct
-{
-  get_data_t get;        ///< Get args.
-} get_report_configs_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-get_report_configs_data_reset (get_report_configs_data_t *data)
-{
-  get_data_reset (&data->get);
-  memset (data, 0, sizeof (get_report_configs_data_t));
 }
 
 /**
@@ -1647,7 +1623,6 @@ typedef struct
   get_data_t get;        ///< Get args.
   int alerts;   ///< Boolean.  Whether to include alerts that use Report Format
   int params;            ///< Boolean.  Whether to include params.
-  int report_configs;    ///< Boolean.  Whether to include report configs.
 } get_report_formats_data_t;
 
 /**
@@ -2758,7 +2733,6 @@ typedef union
   get_port_lists_data_t get_port_lists;               ///< get_port_lists
   get_preferences_data_t get_preferences;             ///< get_preferences
   get_reports_data_t get_reports;                     ///< get_reports
-  get_report_configs_data_t get_report_configs;       ///< get_report_configs
   get_report_formats_data_t get_report_formats;       ///< get_report_formats
   get_resource_names_data_t get_resource_names;       ///< get_resource_names
   scope_command_data_t get_scope;                     ///< get_scope
@@ -3067,12 +3041,6 @@ static get_preferences_data_t *get_preferences_data
  */
 static get_reports_data_t *get_reports_data
  = &(command_data.get_reports);
-
-/**
- * @brief Parser callback data for GET_REPORT_CONFIGS.
- */
-static get_report_configs_data_t *get_report_configs_data
- = &(command_data.get_report_configs);
 
 /**
  * @brief Parser callback data for GET_REPORT_FORMATS.
@@ -3398,7 +3366,6 @@ typedef enum
   CLIENT_CREATE_PORT_RANGE_PORT_LIST,
   CLIENT_CREATE_PORT_RANGE_START,
   CLIENT_CREATE_PORT_RANGE_TYPE,
-  CLIENT_CREATE_REPORT_CONFIG,
   CLIENT_CREATE_SCOPE,
   CLIENT_CREATE_SCANNER,
   CLIENT_CREATE_SCANNER_COMMENT,
@@ -3478,7 +3445,6 @@ typedef enum
   CLIENT_DELETE_PORT_LIST,
   CLIENT_DELETE_PORT_RANGE,
   CLIENT_DELETE_REPORT,
-  CLIENT_DELETE_REPORT_CONFIG,
   CLIENT_DELETE_SCOPE,
   CLIENT_DELETE_SCANNER,
   CLIENT_DELETE_SCHEDULE,
@@ -3511,7 +3477,6 @@ typedef enum
   CLIENT_GET_PORT_LISTS,
   CLIENT_GET_PREFERENCES,
   CLIENT_GET_REPORTS,
-  CLIENT_GET_REPORT_CONFIGS,
   CLIENT_GET_REPORT_FORMATS,
   CLIENT_GET_RESOURCE_NAMES,
   CLIENT_GET_SCOPE,
@@ -3602,7 +3567,6 @@ typedef enum
   CLIENT_MODIFY_PORT_LIST,
   CLIENT_MODIFY_PORT_LIST_COMMENT,
   CLIENT_MODIFY_PORT_LIST_NAME,
-  CLIENT_MODIFY_REPORT_CONFIG,
   CLIENT_MODIFY_SCOPE,
   CLIENT_MODIFY_SCANNER,
   CLIENT_MODIFY_SCANNER_COMMENT,
@@ -3898,12 +3862,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           }
         else if (strcasecmp ("CREATE_PORT_RANGE", element_name) == 0)
           set_client_state (CLIENT_CREATE_PORT_RANGE);
-        else if (strcasecmp ("CREATE_REPORT_CONFIG", element_name) == 0)
-          {
-            create_report_config_start (gmp_parser, attribute_names,
-                                        attribute_values);
-            set_client_state (CLIENT_CREATE_REPORT_CONFIG);
-          }
         else if (strcasecmp ("CREATE_SCOPE", element_name) == 0)
           {
             scope_command_data_start (create_scope_data, attribute_names,
@@ -4032,12 +3990,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             append_attribute (attribute_names, attribute_values, "report_id",
                               &delete_report_data->report_id);
             set_client_state (CLIENT_DELETE_REPORT);
-          }
-        else if (strcasecmp ("DELETE_REPORT_CONFIG", element_name) == 0)
-          {
-            delete_start ("report_config", "Report Config",
-                          attribute_names, attribute_values);
-            set_client_state (CLIENT_DELETE_REPORT_CONFIG);
           }
         else if (strcasecmp ("DELETE_SCOPE", element_name) == 0)
           {
@@ -4485,9 +4437,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             append_attribute (attribute_names, attribute_values, "alert_id",
                               &get_reports_data->alert_id);
 
-            append_attribute (attribute_names, attribute_values, "config_id",
-                              &get_reports_data->config_id);
-
             append_attribute (attribute_names, attribute_values, "format_id",
                               &get_reports_data->format_id);
 
@@ -4526,16 +4475,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             set_client_state (CLIENT_GET_REPORTS);
           }
 
-        else if (strcasecmp ("GET_REPORT_CONFIGS", element_name) == 0)
-          {
-            get_data_parse_attributes (&get_report_configs_data->get,
-                                       "report_config",
-                                       attribute_names,
-                                       attribute_values);
-
-            set_client_state (CLIENT_GET_REPORT_CONFIGS);
-          }
-
         else if (strcasecmp ("GET_REPORT_FORMATS", element_name) == 0)
           {
             const gchar* attribute;
@@ -4555,12 +4494,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
               get_report_formats_data->params = strcmp (attribute, "0");
             else
               get_report_formats_data->params = 0;
-
-            if (find_attribute (attribute_names, attribute_values,
-                                "report_configs", &attribute))
-              get_report_formats_data->report_configs = strcmp (attribute, "0");
-            else
-              get_report_formats_data->report_configs = 0;
 
             set_client_state (CLIENT_GET_REPORT_FORMATS);
           }
@@ -4849,12 +4782,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             append_attribute (attribute_names, attribute_values, "override_id",
                               &modify_override_data->override_id);
             set_client_state (CLIENT_MODIFY_OVERRIDE);
-          }
-        else if (strcasecmp ("MODIFY_REPORT_CONFIG", element_name) == 0)
-          {
-            modify_report_config_start (gmp_parser, attribute_names,
-                                        attribute_values);
-            set_client_state (CLIENT_MODIFY_REPORT_CONFIG);
           }
         else if (strcasecmp ("MODIFY_SCOPE", element_name) == 0)
           {
@@ -11905,8 +11832,7 @@ static void
 handle_get_reports (gmp_parser_t *gmp_parser, GError **error)
 {
   report_t request_report = 0, report;
-  char no_report_config, no_report_format;
-  report_config_t report_config = 0;
+  char no_report_format;
   report_format_t report_format = 0;
   iterator_t reports;
   int count, filtered, ret, first;
@@ -11959,8 +11885,6 @@ handle_get_reports (gmp_parser_t *gmp_parser, GError **error)
       return;
     }
 
-  no_report_config = (get_reports_data->config_id == NULL)
-                      || (strcmp(get_reports_data->config_id, "") == 0);
   no_report_format = (get_reports_data->format_id == NULL)
                       || (strcmp(get_reports_data->format_id, "") == 0);
 
@@ -12023,44 +11947,6 @@ handle_get_reports (gmp_parser_t *gmp_parser, GError **error)
               set_client_state (CLIENT_AUTHENTIC);
               return;
             }
-        }
-    }
-
-  if (!no_report_config)
-    {
-      if (find_report_config_with_permission (get_reports_data->config_id,
-                                              &report_config,
-                                              "get_report_configs"))
-        {
-          get_reports_data_reset (get_reports_data);
-          SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("get_reports"));
-          set_client_state (CLIENT_AUTHENTIC);
-          return;
-        }
-
-      if (report_config == 0)
-        {
-          if (send_find_error_to_client ("get_reports", "report config",
-                                         get_reports_data->config_id,
-                                         gmp_parser))
-            {
-              error_send_to_client (error);
-              return;
-            }
-          get_reports_data_reset (get_reports_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          return;
-        }
-
-      if (report_config_report_format (report_config) != report_format)
-        {
-          get_reports_data_reset (get_reports_data);
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_ERROR_SYNTAX ("get_reports",
-                              "Report config is not compatible with"
-                              " selected report format"));
-          set_client_state (CLIENT_AUTHENTIC);
-          return;
         }
     }
 
@@ -12287,16 +12173,12 @@ handle_get_reports (gmp_parser_t *gmp_parser, GError **error)
                                 "<report"
                                 " id=\"%s\""
                                 " format_id=\"%s\""
-                                " config_id=\"%s\""
                                 " extension=\"%s\""
                                 " content_type=\"%s\">",
                                 report_iterator_uuid (&reports),
                                 no_report_format
                                   ? ""
                                   : get_reports_data->format_id,
-                                no_report_config
-                                  ? ""
-                                  : get_reports_data->config_id,
                                 extension,
                                 content_type);
 
@@ -12380,21 +12262,6 @@ handle_get_reports (gmp_parser_t *gmp_parser, GError **error)
                 free (format_name);
               }
 
-            if (!no_report_config)
-              {
-                gchar *config_name = NULL;
-                config_name = report_config_name (report_config);
-
-                buffer_xml_append_printf
-                  (prefix,
-                   "<report_config id=\"%s\">"
-                   "<name>%s</name>"
-                   "</report_config>",
-                   get_reports_data->config_id,
-                   config_name ? config_name : "");
-                free (config_name);
-              }
-
         }
       /* If there's just one report then cleanup the iterator early.  This
         * closes the iterator transaction, allowing manage_schedule to lock
@@ -12407,7 +12274,6 @@ handle_get_reports (gmp_parser_t *gmp_parser, GError **error)
 
       ret = manage_send_report (report,
                                 no_report_format ? -1 : report_format,
-                                report_config,
                                 &get_reports_data->get,
                                 get_reports_data->overrides_details,
                                 get_reports_data->result_tags,
@@ -12590,268 +12456,6 @@ handle_get_reports (gmp_parser_t *gmp_parser, GError **error)
 }
 
 /**
- * @brief Print the params of a report config.
- *
- * @param[in]  gmp_parser     GMP parser.
- * @param[out] error          Error parameter.
- * @param[in]  report_config  The report config to print params of.
- * @param[in]  trash          Whether to get report config from trash.
- */
-static void
-print_report_config_params (gmp_parser_t *gmp_parser, GError **error,
-                            report_config_t report_config, int trash)
-{
-  iterator_t params;
-  init_report_config_param_iterator (&params, report_config, trash);
-  while (next (&params))
-    {
-      long long int min, max;
-      iterator_t options;
-
-      SENDF_TO_CLIENT_OR_FAIL
-        ("<param>"
-          "<name>%s</name>"
-          "<type>%s",
-         report_config_param_iterator_name (&params),
-         report_config_param_iterator_type_name (&params));
-
-      min = report_config_param_iterator_type_min (&params);
-      if (min > LLONG_MIN)
-        SENDF_TO_CLIENT_OR_FAIL ("<min>%lli</min>", min);
-
-      max = report_config_param_iterator_type_max (&params);
-      if (max < LLONG_MAX)
-        SENDF_TO_CLIENT_OR_FAIL ("<max>%lli</max>", max);
-
-      if (report_config_param_iterator_type (&params)
-          == REPORT_FORMAT_PARAM_TYPE_REPORT_FORMAT_LIST)
-        {
-          const char *value;
-          const char *fallback;
-          value = report_config_param_iterator_value (&params);
-          fallback = report_config_param_iterator_fallback_value
-                        (&params);
-
-          SENDF_TO_CLIENT_OR_FAIL
-            ("</type><value using_default=\"%d\">%s",
-              report_config_param_iterator_using_default (&params),
-              value ? value : "");
-          if (value)
-            {
-              gchar **ids, **current_id;
-              ids = g_strsplit (value, ",", -1);
-              current_id = ids;
-              while (*current_id)
-                {
-                  report_format_t value_rf;
-                  gchar *name;
-                  find_report_format_with_permission
-                        (*current_id, &value_rf,
-                          "get_report_formats");
-                  name = value_rf ? report_format_name (value_rf)
-                                  : NULL;
-
-                  SENDF_TO_CLIENT_OR_FAIL
-                    ("<report_format id=\"%s\">"
-                      "<name>%s</name>"
-                      "</report_format>",
-                      *current_id,
-                      name ? name : "");
-
-                  g_free (name);
-                  current_id ++;
-                }
-              g_strfreev (ids);
-            }
-
-          SENDF_TO_CLIENT_OR_FAIL
-            ("</value><default>%s",
-              fallback ? fallback : "");
-          if (fallback)
-            {
-              gchar **ids, **current_id;
-              ids = g_strsplit (fallback, ",", -1);
-              current_id = ids;
-              while (*current_id)
-                {
-                  report_format_t value_rf;
-                  gchar *name;
-                  find_report_format_with_permission
-                        (*current_id, &value_rf,
-                          "get_report_formats");
-                  name = value_rf ? report_format_name (value_rf)
-                                  : NULL;
-
-                  SENDF_TO_CLIENT_OR_FAIL
-                    ("<report_format id=\"%s\">"
-                      "<name>%s</name>"
-                      "</report_format>",
-                      *current_id,
-                      name ? name : "");
-
-                  g_free (name);
-                  current_id ++;
-                }
-              g_strfreev (ids);
-            }
-
-          SENDF_TO_CLIENT_OR_FAIL
-            ("</default>");
-        }
-      else
-        {
-          SENDF_TO_CLIENT_OR_FAIL
-            ("</type>"
-              "<value using_default=\"%d\">%s</value>"
-              "<default>%s</default>",
-              report_config_param_iterator_using_default (&params),
-              report_config_param_iterator_value (&params),
-              report_config_param_iterator_fallback_value (&params));
-        }
-
-      report_format_param_type_t param_type;
-      param_type = report_config_param_iterator_type (&params);
-      if (param_type == REPORT_FORMAT_PARAM_TYPE_SELECTION
-          || param_type == REPORT_FORMAT_PARAM_TYPE_MULTI_SELECTION)
-        {
-          SEND_TO_CLIENT_OR_FAIL ("<options>");
-          init_param_option_iterator
-            (&options,
-            report_config_param_iterator_format_param
-              (&params),
-            1,
-            NULL);
-          while (next (&options))
-            SENDF_TO_CLIENT_OR_FAIL
-              ("<option>%s</option>",
-              param_option_iterator_value (&options));
-          cleanup_iterator (&options);
-          SEND_TO_CLIENT_OR_FAIL ("</options>");
-        }
-
-      SEND_TO_CLIENT_OR_FAIL ("</param>");
-    }
-  cleanup_iterator (&params);
-}
-
-/**
- * @brief Handle end of GET_REPORT_CONFIGS element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_report_configs (gmp_parser_t *gmp_parser, GError **error)
-{
-  iterator_t report_configs;
-  int count, filtered, ret, first;
-
-  INIT_GET (report_config, Report Config);
-
-  ret = init_report_config_iterator (&report_configs,
-                                      &get_report_configs_data->get);
-  if (ret)
-    {
-      switch (ret)
-        {
-          case 1:
-            if (send_find_error_to_client ("get_report_configs",
-                                            "report_config",
-                                            get_report_configs_data->get.id,
-                                            gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            break;
-          case 2:
-            if (send_find_error_to_client
-                  ("get_report_configs", "filter",
-                    get_report_configs_data->get.filt_id, gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            break;
-          case -1:
-            SEND_TO_CLIENT_OR_FAIL
-              (XML_INTERNAL_ERROR ("get_report_configs"));
-            break;
-        }
-      get_report_configs_data_reset (get_report_configs_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  SEND_GET_START ("report_config");
-  while (1)
-    {
-      int orphan;
-
-      ret = get_next (&report_configs,
-                      &get_report_configs_data->get, &first, &count,
-                      init_report_config_iterator);
-      if (ret == 1)
-        break;
-      if (ret == -1)
-        {
-          internal_error_send_to_client (error);
-          return;
-        }
-
-      SEND_GET_COMMON (report_config,
-                        &get_report_configs_data->get,
-                        &report_configs);
-
-      orphan = (report_config_iterator_report_format (&report_configs) == 0);
-
-      if (orphan)
-        {
-          SEND_TO_CLIENT_OR_FAIL ("<orphan>1</orphan>");
-        }
-
-      SENDF_TO_CLIENT_OR_FAIL
-        ("<report_format id=\"%s\">",
-          report_config_iterator_report_format_id (&report_configs)
-        );
-
-      if (!orphan)
-        {
-          SENDF_TO_CLIENT_OR_FAIL
-            ("<name>%s</name>",
-              report_config_iterator_report_format_name (&report_configs)
-            );
-
-          if (report_config_iterator_report_format_readable (&report_configs) == 0)
-            {
-              SENDF_TO_CLIENT_OR_FAIL ("<permissions/>");
-            }
-        }
-
-      SENDF_TO_CLIENT_OR_FAIL ("</report_format>");
-
-      print_report_config_params (gmp_parser, error,
-                                  report_config_param_iterator_rowid (
-                                    &report_configs
-                                  ),
-                                  get_report_configs_data->get.trash);
-
-      SEND_TO_CLIENT_OR_FAIL ("</report_config>");
-      count++;
-    }
-
-  cleanup_iterator (&report_configs);
-  filtered = get_report_configs_data->get.id
-              ? 1
-              : report_config_count (&get_report_configs_data->get);
-  SEND_GET_END ("report_config", &get_report_configs_data->get,
-                count, filtered);
-
-  get_report_configs_data_reset (get_report_configs_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
  * @brief Handle end of GET_REPORT_FORMATS element.
  *
  * @param[in]  gmp_parser   GMP parser.
@@ -12936,7 +12540,6 @@ handle_get_report_formats (gmp_parser_t *gmp_parser, GError **error)
             "<summary>%s</summary>"
             "<description>%s</description>"
             "<predefined>%i</predefined>"
-            "<configurable>%i</configurable>"
             "<report_type>%s</report_type>",
             report_format_iterator_extension (&report_formats),
             report_format_iterator_content_type (&report_formats),
@@ -12947,7 +12550,6 @@ handle_get_report_formats (gmp_parser_t *gmp_parser, GError **error)
                  (get_iterator_resource (&report_formats))
               : report_format_predefined
                  (get_iterator_resource (&report_formats)),
-            report_format_iterator_configurable (&report_formats),
             report_format_iterator_report_type (&report_formats) ?: "");
 
           if (resource_id_deprecated ("report_format",
@@ -12987,42 +12589,6 @@ handle_get_report_formats (gmp_parser_t *gmp_parser, GError **error)
                                        "%d"
                                        "</invisible_alerts>",
                                        invisible_alerts);
-            }
-
-          if (get_report_formats_data->report_configs)
-            {
-              iterator_t report_configs;
-              int invisible_report_configs = 0;
-
-              SEND_TO_CLIENT_OR_FAIL ("<report_configs>");
-              init_report_format_report_config_iterator (&report_configs,
-                                                         get_iterator_uuid
-                                                           (&report_formats));
-              while (next (&report_configs))
-                {
-                  if (report_format_report_config_iterator_readable (
-                      &report_configs) == 0)
-                    {
-                      /* Only show report configs the user may see. */
-                      invisible_report_configs ++;
-                      continue;
-                    }
-
-                  SENDF_TO_CLIENT_OR_FAIL
-                   ("<report_config id=\"%s\">"
-                    "<name>%s</name>"
-                    "</report_config>",
-                    report_format_report_config_iterator_uuid (
-                      &report_configs),
-                    report_format_report_config_iterator_name (
-                      &report_configs));
-                }
-              cleanup_iterator (&report_configs);
-              SENDF_TO_CLIENT_OR_FAIL ("</report_configs>"
-                                       "<invisible_report_configs>"
-                                       "%d"
-                                       "</invisible_report_configs>",
-                                       invisible_report_configs);
             }
 
           if (get_report_formats_data->params
@@ -13284,10 +12850,6 @@ select_resource_iterator (get_resource_names_data_t *resource_names_data,
       get_data_set_extra (&resource_names_data->get,
                           "usage_type",
                           g_strdup ("scan"));
-    }
-  else if (g_strcmp0 ("report_config", resource_names_data->type) == 0)
-    {
-      *iterator = (int (*) (iterator_t*, get_data_t *))init_report_config_iterator;
     }
   else if (g_strcmp0 ("report_format", resource_names_data->type) == 0)
     {
@@ -16842,11 +16404,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         set_client_state (CLIENT_AUTHENTIC);
         break;
 
-      case CLIENT_DELETE_REPORT_CONFIG:
-        delete_run (gmp_parser, error);
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
-
 
       case CLIENT_DELETE_SCOPE:
         handle_delete_scope (gmp_parser, error);
@@ -17272,10 +16829,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
       case CLIENT_GET_REPORTS:
         handle_get_reports (gmp_parser, error);
-        break;
-
-      case CLIENT_GET_REPORT_CONFIGS:
-        handle_get_report_configs (gmp_parser, error);
         break;
 
       case CLIENT_GET_REPORT_FORMATS:
@@ -18694,10 +18247,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_CREATE_PORT_RANGE, START);
       CLOSE (CLIENT_CREATE_PORT_RANGE, TYPE);
       CLOSE (CLIENT_CREATE_PORT_RANGE, PORT_LIST);
-
-      case CLIENT_CREATE_REPORT_CONFIG:
-        create_report_config_element_end (gmp_parser, error, element_name);
-        break;
 
       case CLIENT_CREATE_SCOPE:
         handle_create_scope (gmp_parser, error);
@@ -20874,10 +20423,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_MODIFY_PORT_LIST, NAME);
 
 
-      case CLIENT_MODIFY_REPORT_CONFIG:
-        modify_report_config_element_end (gmp_parser, error, element_name);
-        break;
-
       case CLIENT_MODIFY_SCOPE:
         handle_modify_scope (gmp_parser, error);
         break;
@@ -22456,10 +22001,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
         break;
 #endif
 
-      case CLIENT_MODIFY_REPORT_CONFIG:
-        modify_report_config_element_text (text, text_len);
-        break;
-
 
 
 
@@ -22709,10 +22250,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
       APPEND (CLIENT_CREATE_PORT_RANGE_TYPE,
               &create_port_range_data->type);
 
-
-      case CLIENT_CREATE_REPORT_CONFIG:
-        create_report_config_element_text (text, text_len);
-        break;
 
 
       APPEND (CLIENT_CREATE_SCANNER_NAME,

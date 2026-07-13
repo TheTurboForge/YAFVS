@@ -48,7 +48,6 @@
 #include "manage_sql_permissions.h"
 #include "manage_sql_permissions_cache.h"
 #include "manage_sql_port_lists.h"
-#include "manage_sql_report_configs.h"
 #include "manage_sql_report_errors.h"
 #include "manage_sql_report_formats.h"
 #include "manage_sql_resources.h"
@@ -110,7 +109,6 @@
 #include <gvm/util/authutils.h>
 #include <gvm/util/ldaputils.h>
 #include <gvm/gmp/gmp.h>
-#include "manage_report_configs.h"
 #include "manage_sql_report_hosts.h"
 #include "manage_sql_report_ports.h"
 #include "manage_sql_report_tls_certificates.h"
@@ -13645,7 +13643,6 @@ print_report_xml_start (report_t report, task_t task,
  * @param[in]  report             Report.
  * @param[in]  get                GET data for report.
  * @param[in]  report_format      Report format.
- * @param[in]  report_config      Report config.
  * @param[in]  overrides_details  If overrides, Whether to include details.
  * @param[out] output_length      NULL or location for length of return.
  * @param[out] extension          NULL or location for report format extension.
@@ -13661,7 +13658,6 @@ print_report_xml_start (report_t report, task_t task,
 gchar *
 manage_report (report_t report, const get_data_t *get,
                const report_format_t report_format,
-               const report_config_t report_config,
                int overrides_details, gsize *output_length, gchar **extension,
                gchar **content_type,
                gchar **filter_term_return, gchar **zone_return,
@@ -13713,14 +13709,14 @@ manage_report (report_t report, const get_data_t *get,
       /* Apply report format(s) */
       gchar* report_format_id = report_format_uuid (report_format);
 
-      output_file = apply_report_format (report_format_id, report_config,
-                                         xml_start, xml_file, xml_dir,
+      output_file = apply_report_format (report_format_id, xml_start,
+                                         xml_file, xml_dir,
                                          &used_rfps);
       g_free (report_format_id);
     }
   else
     {
-      print_report_xml_end (xml_start, xml_file, -1, 0);
+      print_report_xml_end (xml_start, xml_file, -1);
       output_file = g_strdup(xml_file);
     }
 
@@ -13802,7 +13798,6 @@ manage_report (report_t report, const get_data_t *get,
  *
  * @param[in]  report             Report.
  * @param[in]  report_format      Report format.
- * @param[in]  report_config      Report config.
  * @param[in]  get                GET command data.
  * @param[in]  overrides_details  If overrides, Whether to include details.
  * @param[in]  result_tags        Whether to include tags in results.
@@ -13824,7 +13819,6 @@ manage_report (report_t report, const get_data_t *get,
 int
 manage_send_report (report_t report,
                     report_format_t report_format,
-                    report_config_t report_config,
                     const get_data_t *get,
                     int overrides_details, int result_tags,
                     int ignore_pagination, int lean, int base64,
@@ -13885,14 +13879,6 @@ manage_send_report (report_t report,
       && (report_format_trust (report_format) != TRUST_YES))
     return -1;
 
-  if (report_config
-      && report_config_report_format (report_config) != report_format)
-    {
-      g_warning ("%s: report config is not compatible with report_format",
-                 __func__);
-      return -1;
-    }
-
   if (mkdtemp (xml_dir) == NULL)
     {
       g_warning ("%s: mkdtemp failed", __func__);
@@ -13919,14 +13905,14 @@ manage_send_report (report_t report,
       /* Apply report format(s). */
       gchar* report_format_id = report_format_uuid (report_format);
 
-      output_file = apply_report_format (report_format_id, report_config,
-                                         xml_start, xml_file, xml_dir,
+      output_file = apply_report_format (report_format_id, xml_start,
+                                         xml_file, xml_dir,
                                          &used_rfps);
       g_free (report_format_id);
     }
   else
     {
-      print_report_xml_end (xml_start, xml_file, -1, 0);
+      print_report_xml_end (xml_start, xml_file, -1);
       output_file = g_strdup(xml_file);
     }
 
@@ -21334,11 +21320,6 @@ manage_restore (const char *id)
   if (ret != 2)
     return ret;
 
-  /* Report Config. */
-  ret = restore_report_config (id);
-  if (ret != 2)
-    return ret;
-
   /* Report Format. */
   ret = restore_report_format (id);
   if (ret != 2)
@@ -22286,12 +22267,6 @@ manage_empty_trashcan_locked ()
   sql ("DELETE FROM filters_trash" WHERE_OWNER);
   sql ("DELETE FROM overrides_trash" WHERE_OWNER);
   empty_trashcan_port_lists ();
-  sql ("DELETE FROM report_config_params_trash"
-       " WHERE report_config IN (SELECT id FROM report_configs_trash"
-       "                         WHERE owner = (SELECT id FROM users"
-       "                                        WHERE uuid = '%s'));",
-       current_credentials.uuid);
-  sql ("DELETE FROM report_configs_trash" WHERE_OWNER);
   sql ("DELETE FROM scanners_trash" WHERE_OWNER);
   sql ("DELETE FROM schedules_trash" WHERE_OWNER);
   // Remove resource data of all trash tags of the current user.
@@ -22360,8 +22335,6 @@ trash_empty_identity_digest (long long int operator_id)
     "  UNION ALL SELECT 'overrides'::text, uuid::text FROM overrides_trash"
     "   WHERE owner = %lld"
     "  UNION ALL SELECT 'port_lists'::text, uuid::text FROM port_lists_trash"
-    "   WHERE owner = %lld"
-    "  UNION ALL SELECT 'report_configs'::text, uuid::text FROM report_configs_trash"
     "   WHERE owner = %lld"
     "  UNION ALL SELECT 'report_formats'::text, uuid::text FROM report_formats_trash"
     "   WHERE owner = %lld"
@@ -22462,7 +22435,6 @@ manage_empty_trashcan_confirmed (long long int expected_total,
     " + (SELECT count(*) FROM filters_trash WHERE owner = %lld)"
     " + (SELECT count(*) FROM overrides_trash WHERE owner = %lld)"
     " + (SELECT count(*) FROM port_lists_trash WHERE owner = %lld)"
-    " + (SELECT count(*) FROM report_configs_trash WHERE owner = %lld)"
     " + (SELECT count(*) FROM scanners_trash WHERE owner = %lld)"
     " + (SELECT count(*) FROM schedules_trash WHERE owner = %lld)"
     " + (SELECT count(*) FROM tags_trash WHERE owner = %lld)"
@@ -22471,7 +22443,7 @@ manage_empty_trashcan_confirmed (long long int expected_total,
     " + (SELECT count(*) FROM report_formats_trash WHERE owner = %lld))"
     "::bigint;",
     operator_id, operator_id, operator_id, operator_id,
-    operator_id, operator_id, operator_id, operator_id,
+    operator_id, operator_id, operator_id,
     operator_id, operator_id, operator_id, operator_id,
     operator_id);
   if (ret)
@@ -23362,8 +23334,6 @@ type_select_columns (const char *type)
     return port_list_select_columns ();
   if (strcasecmp (type, "REPORT") == 0)
     return report_columns;
-  if (strcasecmp (type, "REPORT_CONFIG") == 0)
-    return report_config_select_columns ();
   if (strcasecmp (type, "REPORT_FORMAT") == 0)
     return report_format_select_columns ();
   if (strcasecmp (type, "RESULT") == 0)
@@ -23498,8 +23468,6 @@ type_filter_columns (const char *type)
       static const char *ret[] = REPORT_ITERATOR_FILTER_COLUMNS;
       return ret;
     }
-  if (strcasecmp (type, "REPORT_CONFIG") == 0)
-    return report_config_filter_columns ();
   if (strcasecmp (type, "REPORT_FORMAT") == 0)
     return report_format_filter_columns ();
   if (strcasecmp (type, "RESULT") == 0)

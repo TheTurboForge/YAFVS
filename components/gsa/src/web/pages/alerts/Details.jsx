@@ -25,7 +25,7 @@ import Method from 'web/pages/alerts/Method';
 import PropTypes from 'web/utils/PropTypes';
 import withCapabilities from 'web/utils/withCapabilities';
 
-const AlertDetails = ({capabilities, entity, reportFormats, reportConfigs}) => {
+const AlertDetails = ({capabilities, entity, reportFormats}) => {
   const [_] = useTranslation();
   const {comment, condition, event, method, tasks = [], filter} = entity;
   return (
@@ -63,7 +63,6 @@ const AlertDetails = ({capabilities, entity, reportFormats, reportConfigs}) => {
               <Method
                 details={true}
                 method={method}
-                reportConfigs={reportConfigs}
                 reportFormats={reportFormats}
               />
             </TableData>
@@ -123,7 +122,6 @@ const AlertDetails = ({capabilities, entity, reportFormats, reportConfigs}) => {
 AlertDetails.propTypes = {
   capabilities: PropTypes.capabilities.isRequired,
   entity: PropTypes.model.isRequired,
-  reportConfigs: PropTypes.array,
   reportFormats: PropTypes.array,
 };
 

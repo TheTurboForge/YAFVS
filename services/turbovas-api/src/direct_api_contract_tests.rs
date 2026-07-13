@@ -112,36 +112,6 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
     },
     NativeWriteRouteContract {
         method: "post",
-        path: "/api/v1/report-configs",
-        safety_contract: "write-control-v1",
-    },
-    NativeWriteRouteContract {
-        method: "patch",
-        path: "/api/v1/report-configs/:report_config_id",
-        safety_contract: "write-control-v1",
-    },
-    NativeWriteRouteContract {
-        method: "delete",
-        path: "/api/v1/report-configs/:report_config_id",
-        safety_contract: "write-control-v1",
-    },
-    NativeWriteRouteContract {
-        method: "post",
-        path: "/api/v1/report-configs/:report_config_id/clone",
-        safety_contract: "write-control-v1",
-    },
-    NativeWriteRouteContract {
-        method: "post",
-        path: "/api/v1/report-configs/:report_config_id/restore",
-        safety_contract: "write-control-v1",
-    },
-    NativeWriteRouteContract {
-        method: "delete",
-        path: "/api/v1/report-configs/:report_config_id/trash",
-        safety_contract: "write-control-v1",
-    },
-    NativeWriteRouteContract {
-        method: "post",
         path: "/api/v1/scan-configs",
         safety_contract: "write-control-v1",
     },
@@ -635,13 +605,10 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("/api/v1/port-lists"));
     assert!(browser_routes.contains("/api/v1/port-lists/:port_list_id"));
     assert!(browser_routes.contains("/api/v1/port-lists/:port_list_id/ranges/:port_range_id"));
-    assert!(browser_routes.contains("/api/v1/report-configs"));
-    assert!(browser_routes.contains("/api/v1/report-configs/:report_config_id"));
     assert!(browser_routes.contains("/api/v1/tags"));
     assert!(browser_routes.contains("/api/v1/tags/:tag_id"));
     assert!(browser_routes.contains("/api/v1/filters/:filter_id/clone"));
     assert!(browser_routes.contains("/api/v1/port-lists/:port_list_id/clone"));
-    assert!(browser_routes.contains("/api/v1/report-configs/:report_config_id/clone"));
     assert!(browser_routes.contains("/api/v1/scan-configs"));
     assert!(browser_routes.contains("/api/v1/scan-configs/:scan_config_id/clone"));
     assert!(browser_routes.contains("/api/v1/schedules"));
@@ -651,7 +618,6 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("/api/v1/targets/:target_id/clone"));
     assert!(browser_routes.contains("/api/v1/filters/:filter_id/restore"));
     assert!(browser_routes.contains("/api/v1/port-lists/:port_list_id/restore"));
-    assert!(browser_routes.contains("/api/v1/report-configs/:report_config_id/restore"));
     assert!(browser_routes.contains("/api/v1/scan-configs/:scan_config_id/restore"));
     assert!(browser_routes.contains("/api/v1/schedules/:schedule_id/restore"));
     assert!(browser_routes.contains("/api/v1/tags/:tag_id/restore"));
@@ -668,7 +634,6 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("post(browser_proxy_create_filter)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_filter)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_port_list)"));
-    assert!(browser_routes.contains("patch(browser_proxy_patch_report_config)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_scan_config)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_schedule)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_scope)"));
@@ -680,11 +645,9 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("post(browser_proxy_replace_task_target)"));
     assert!(browser_routes.contains("post(browser_proxy_create_scope)"));
     assert!(browser_routes.contains("post(browser_proxy_create_tag)"));
-    assert!(browser_routes.contains("post(browser_proxy_create_report_config)"));
     assert!(browser_routes.contains("post(browser_proxy_create_target)"));
     assert!(browser_routes.contains("post(browser_proxy_clone_filter)"));
     assert!(browser_routes.contains("post(browser_proxy_clone_port_list)"));
-    assert!(browser_routes.contains("post(browser_proxy_clone_report_config)"));
     assert!(browser_routes.contains("post(browser_proxy_clone_scan_config)"));
     assert!(browser_routes.contains("post(browser_proxy_create_schedule)"));
     assert!(browser_routes.contains("post(browser_proxy_clone_schedule)"));
@@ -692,7 +655,6 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("post(browser_proxy_clone_target)"));
     assert!(browser_routes.contains("post(browser_proxy_restore_filter)"));
     assert!(browser_routes.contains("post(browser_proxy_restore_port_list)"));
-    assert!(browser_routes.contains("post(browser_proxy_restore_report_config)"));
     assert!(browser_routes.contains("post(browser_proxy_restore_scan_config)"));
     assert!(browser_routes.contains("post(browser_proxy_restore_schedule)"));
     assert!(browser_routes.contains("post(browser_proxy_restore_tag)"));
@@ -709,8 +671,6 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("delete(browser_proxy_delete_port_list_range)"));
     assert!(browser_routes.contains("post(browser_proxy_create_port_list_range)"));
     assert!(browser_routes.contains("delete(browser_proxy_hard_delete_port_list)"));
-    assert!(browser_routes.contains("delete(browser_proxy_delete_report_config)"));
-    assert!(browser_routes.contains("delete(browser_proxy_hard_delete_report_config)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_scan_config)"));
     assert!(browser_routes.contains("delete(browser_proxy_hard_delete_scan_config)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_schedule)"));

@@ -2410,7 +2410,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, filter, host, nvt, os, override, port_list, report, report_config, report_format, result, scanner, schedule, config, target, task, tls_certificate, user]
+            enum: [alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, filter, host, nvt, os, override, port_list, report, report_format, result, scanner, schedule, config, target, task, tls_certificate, user]
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'
@@ -4223,347 +4223,6 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
-  /report-configs:
-    get:
-      operationId: getReportConfigs
-      x-turbovas-direct: true
-      x-turbovas-exposure: direct-read
-      x-turbovas-maturity: live-read
-      x-turbovas-replaces: report-config-metadata-list-read
-      summary: List report configs
-      description: Read-only report-config metadata backed by gvmd/PostgreSQL. Native direct write-control can create, patch, clone, restore, move live report configs to trash, permanently delete trashed report configs, and export native JSON metadata; browser bulk download composes native JSON metadata exports.
-      parameters:
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
-        - $ref: '#/components/parameters/Sort'
-        - $ref: '#/components/parameters/Filter'
-      responses:
-        '200':
-          description: Report-config collection
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReportConfigAssetCollection'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '405':
-          $ref: '#/components/responses/MethodNotAllowed'
-        '413':
-          $ref: '#/components/responses/RequestTooLarge'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    post:
-      operationId: postReportConfigs
-      x-turbovas-direct: true
-      x-turbovas-exposure: direct-write
-      x-turbovas-maturity: live-write
-      x-turbovas-replaces: report-config-metadata-param-create
-      x-turbovas-operator-identity: direct-token-operator
-      x-turbovas-owner-semantics: request-operator-owner
-      x-turbovas-safety-contract: write-control-v1
-      x-turbovas-side-effect: metadata-write
-      summary: Create report-config metadata and params
-      description: Direct write-control endpoint for creating report configs for an existing configurable report format. Patch can update metadata and params, clone can copy an existing report config, restore can move a trashed report config back to live state, delete can move a live report config to trash, and trash hard-delete can permanently delete trashed metadata; browser bulk download composes native JSON metadata exports.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReportConfigCreateRequest'
-      responses:
-        '201':
-          description: Report config created
-          headers:
-            Location:
-              description: Path of the created report config resource.
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReportConfigAsset'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '405':
-          $ref: '#/components/responses/MethodNotAllowed'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '413':
-          $ref: '#/components/responses/RequestTooLarge'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /report-configs/{report_config_id}:
-    get:
-      operationId: getReportConfigsByReportConfigId
-      x-turbovas-direct: true
-      x-turbovas-exposure: direct-read
-      x-turbovas-maturity: live-read
-      x-turbovas-replaces: report-config-metadata-detail-read
-      summary: Read one report config
-      parameters:
-        - $ref: '#/components/parameters/ReportConfigId'
-      responses:
-        '200':
-          description: Report-config detail
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReportConfigAsset'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '405':
-          $ref: '#/components/responses/MethodNotAllowed'
-        '413':
-          $ref: '#/components/responses/RequestTooLarge'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    patch:
-      operationId: patchReportConfigsByReportConfigId
-      x-turbovas-direct: true
-      x-turbovas-exposure: direct-write
-      x-turbovas-maturity: live-write
-      x-turbovas-replaces: report-config-metadata-param-modify
-      x-turbovas-operator-identity: direct-token-operator
-      x-turbovas-owner-semantics: preserve-existing-owner
-      x-turbovas-safety-contract: write-control-v1
-      x-turbovas-side-effect: metadata-write
-      summary: Patch report-config metadata and params
-      description: Direct write-control endpoint for changing a report config name, comment, or full explicit parameter override set. The report format itself is immutable through this endpoint; browser bulk download composes native JSON metadata exports.
-      parameters:
-        - $ref: '#/components/parameters/ReportConfigId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReportConfigPatchRequest'
-      responses:
-        '200':
-          description: Report config updated
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReportConfigAsset'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '405':
-          $ref: '#/components/responses/MethodNotAllowed'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '413':
-          $ref: '#/components/responses/RequestTooLarge'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    delete:
-      operationId: deleteReportConfigsByReportConfigId
-      x-turbovas-direct: true
-      x-turbovas-exposure: direct-write
-      x-turbovas-maturity: live-write
-      x-turbovas-replaces: report-config-trash-move
-      x-turbovas-operator-identity: direct-token-operator
-      x-turbovas-owner-semantics: preserve-existing-owner
-      x-turbovas-safety-contract: write-control-v1
-      x-turbovas-side-effect: metadata-write
-      summary: Move report config to trash
-      description: Direct write-control endpoint for moving a live report config and its parameter rows and active tag links to trash. Permanent deletion requires the explicit trash hard-delete endpoint.
-      parameters:
-        - $ref: '#/components/parameters/ReportConfigId'
-      responses:
-        '204':
-          description: Report config moved to trash
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '405':
-          $ref: '#/components/responses/MethodNotAllowed'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '413':
-          $ref: '#/components/responses/RequestTooLarge'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /report-configs/{report_config_id}/export:
-    get:
-      operationId: getReportConfigsByReportConfigIdExport
-      x-turbovas-direct: true
-      x-turbovas-exposure: direct-read
-      x-turbovas-maturity: live-read
-      x-turbovas-replaces: report-config-metadata-export-read
-      summary: Export report-config metadata
-      description: Read-only metadata export for one live report config, backed by the same PostgreSQL loader as report-config detail. This endpoint returns the native JSON metadata/parameter payload used by GSA downloads; browser bulk download composes native JSON metadata exports from this endpoint when native API is available.
-      parameters:
-        - $ref: '#/components/parameters/ReportConfigId'
-      responses:
-        '200':
-          description: Report-config metadata export
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReportConfigAsset'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '405':
-          $ref: '#/components/responses/MethodNotAllowed'
-        '413':
-          $ref: '#/components/responses/RequestTooLarge'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /report-configs/{report_config_id}/clone:
-    post:
-      operationId: postReportConfigsByReportConfigIdClone
-      x-turbovas-direct: true
-      x-turbovas-exposure: direct-write
-      x-turbovas-maturity: live-write
-      x-turbovas-replaces: report-config-clone
-      x-turbovas-operator-identity: direct-token-operator
-      x-turbovas-owner-semantics: request-operator-owner
-      x-turbovas-safety-contract: write-control-v1
-      x-turbovas-side-effect: metadata-write
-      summary: Clone report-config metadata and params
-      description: Direct write-control endpoint for copying an existing report config into a new report config owned by the direct API operator. The clone copies comment, report format, explicit params, and active-table tag links. If no name is supplied, the database generates the inherited-style unique Clone name.
-      parameters:
-        - $ref: '#/components/parameters/ReportConfigId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ReportConfigCloneRequest'
-      responses:
-        '201':
-          description: Report config cloned
-          headers:
-            Location:
-              description: Path of the cloned report config resource.
-              schema:
-                type: string
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReportConfigAsset'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '405':
-          $ref: '#/components/responses/MethodNotAllowed'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '413':
-          $ref: '#/components/responses/RequestTooLarge'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /report-configs/{report_config_id}/restore:
-    post:
-      operationId: postReportConfigsByReportConfigIdRestore
-      x-turbovas-direct: true
-      x-turbovas-exposure: direct-write
-      x-turbovas-maturity: live-write
-      x-turbovas-replaces: report-config-restore
-      x-turbovas-operator-identity: direct-token-operator
-      x-turbovas-owner-semantics: preserve-existing-owner
-      x-turbovas-safety-contract: write-control-v1
-      x-turbovas-side-effect: metadata-write
-      summary: Restore report config from trash
-      description: Direct write-control endpoint for restoring a trashed report config, its parameter rows, and its trash-table tag links back to live state. The restored report config keeps its original id and owner. Restore is rejected when a live report config with the same id already exists or when the original owner already has a live report config with the same name.
-      parameters:
-        - $ref: '#/components/parameters/ReportConfigId'
-      responses:
-        '200':
-          description: Report config restored
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ReportConfigAsset'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '405':
-          $ref: '#/components/responses/MethodNotAllowed'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '413':
-          $ref: '#/components/responses/RequestTooLarge'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
-  /report-configs/{report_config_id}/trash:
-    delete:
-      operationId: deleteReportConfigsByReportConfigIdTrash
-      x-turbovas-direct: true
-      x-turbovas-exposure: direct-write
-      x-turbovas-maturity: live-write
-      x-turbovas-replaces: report-config-hard-delete
-      x-turbovas-operator-identity: direct-token-operator
-      x-turbovas-owner-semantics: preserve-existing-owner
-      x-turbovas-safety-contract: write-control-v1
-      x-turbovas-side-effect: metadata-delete
-      summary: Permanently delete trashed report config
-      description: Direct write-control endpoint for permanently deleting a trashed report config. The endpoint deletes trash tag links, trash params, and trash metadata only; live report configs are not deleted by this route.
-      parameters:
-        - $ref: '#/components/parameters/ReportConfigId'
-      responses:
-        '204':
-          description: Trashed report config permanently deleted
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '405':
-          $ref: '#/components/responses/MethodNotAllowed'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '413':
-          $ref: '#/components/responses/RequestTooLarge'
-        '429':
-          $ref: '#/components/responses/TooManyRequests'
-        '500':
-          $ref: '#/components/responses/InternalError'
   /report-formats:
     get:
       operationId: getReportFormats
@@ -4887,7 +4546,7 @@ paths:
       x-turbovas-replaces: native-evidence-pdf-report-download
       x-turbovas-inherited-still-owns: non-pdf-custom-report-format-config-filter-and-script-rendering
       summary: Download a native evidence PDF report
-      description: Generates an application/pdf directly from a repeatable-read snapshot of typed PostgreSQL report metadata and every retained raw evidence row, including hostless scanner error rows. This is a TurboVAS evidence export, not byte, layout, or template parity with the inherited Greenbone PDF renderer. The canonical PDF format UUID selects this retained PDF outcome; custom report configs, filters, and scripts are not retained compatibility goals. The renderer uses core PDF fonts and represents non-ASCII evidence as visible ASCII \u{CODEPOINT} escapes so arbitrary scanner text cannot panic or disappear silently.
+      description: Generates an application/pdf directly from a repeatable-read snapshot of typed PostgreSQL report metadata and every retained raw evidence row, including hostless scanner error rows. This is a TurboVAS evidence export, not byte, layout, or template parity with the inherited Greenbone PDF renderer. The canonical PDF format UUID selects this retained PDF outcome; custom filters and scripts are not retained compatibility goals. The renderer uses core PDF fonts and represents non-ASCII evidence as visible ASCII \u{CODEPOINT} escapes so arbitrary scanner text cannot panic or disappear silently.
       parameters:
         - $ref: '#/components/parameters/ReportId'
         - $ref: '#/components/parameters/CanonicalPdfReportFormatId'
@@ -6930,7 +6589,7 @@ components:
       name: report_format_id
       in: query
       required: false
-      description: Optional canonical PDF report-format UUID. Omitting it selects the same native evidence PDF. Any other value is rejected; custom report configurations, filters, and scripts are not supported by this contract.
+      description: Optional canonical PDF report-format UUID. Omitting it selects the same native evidence PDF. Any other value is rejected; custom filters and scripts are not supported by this contract.
       schema:
         type: string
         format: uuid
@@ -7114,13 +6773,6 @@ components:
         format: uuid
     ReportFormatId:
       name: report_format_id
-      in: path
-      required: true
-      schema:
-        type: string
-        format: uuid
-    ReportConfigId:
-      name: report_config_id
       in: path
       required: true
       schema:
@@ -8183,7 +7835,7 @@ components:
           maxLength: 4096
         resource_type:
           type: string
-          enum: [alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, filter, host, nvt, os, override, port_list, report, report_config, report_format, result, scanner, schedule, config, target, task, tls_certificate, user]
+          enum: [alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, filter, host, nvt, os, override, port_list, report, report_format, result, scanner, schedule, config, target, task, tls_certificate, user]
         resource_ids:
           type: array
           maxItems: 200
@@ -8222,7 +7874,7 @@ components:
           type: boolean
         resource_type:
           type: string
-          enum: [alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, filter, host, nvt, os, override, port_list, report, report_config, report_format, result, scanner, schedule, config, target, task, tls_certificate, user]
+          enum: [alert, cert_bund_adv, credential, cpe, cve, dfn_cert_adv, filter, host, nvt, os, override, port_list, report, report_format, result, scanner, schedule, config, target, task, tls_certificate, user]
           description: New resource type. Requires resources.action=set in the same request.
         resources:
           $ref: '#/components/schemas/TagResourceUpdateRequest'
@@ -8647,77 +8299,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ScheduleAsset'
-    ReportConfigAssetCollection:
-      type: object
-      required: [page, items]
-      properties:
-        page:
-          $ref: '#/components/schemas/PageInfo'
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/ReportConfigAsset'
-    ReportConfigCreateRequest:
-      type: object
-      required: [name, report_format_id]
-      additionalProperties: false
-      properties:
-        name:
-          type: string
-          minLength: 1
-          maxLength: 4096
-        report_format_id:
-          type: string
-          format: uuid
-        comment:
-          type: string
-          maxLength: 4096
-        params:
-          type: array
-          maxItems: 256
-          items:
-            $ref: '#/components/schemas/ReportConfigParamWriteRequest'
-          uniqueItems: true
-    ReportConfigPatchRequest:
-      type: object
-      minProperties: 1
-      additionalProperties: false
-      properties:
-        name:
-          type: string
-          minLength: 1
-          maxLength: 4096
-        comment:
-          type: string
-          maxLength: 4096
-        params:
-          type: array
-          maxItems: 256
-          description: Full replacement set for explicit report-config parameter overrides. Empty array clears explicit overrides and uses report-format defaults.
-          items:
-            $ref: '#/components/schemas/ReportConfigParamWriteRequest'
-          uniqueItems: true
-    ReportConfigCloneRequest:
-      type: object
-      additionalProperties: false
-      description: Optional explicit name for a cloned report config. Empty object uses the inherited-style unique Clone name.
-      properties:
-        name:
-          type: string
-          minLength: 1
-          maxLength: 4096
-    ReportConfigParamWriteRequest:
-      type: object
-      required: [name, value]
-      additionalProperties: false
-      properties:
-        name:
-          type: string
-          minLength: 1
-          maxLength: 4096
-        value:
-          type: string
-          maxLength: 65536
     ReportFormatAssetCollection:
       type: object
       required: [page, items]
@@ -8745,7 +8326,7 @@ components:
       properties:
         resource_type:
           type: string
-          enum: [alerts, scan_configs, credentials, filters, overrides, port_lists, report_configs, report_formats, scanners, schedules, tags, targets, tasks]
+          enum: [alerts, scan_configs, credentials, filters, overrides, port_listss, report_formats, scanners, schedules, tags, targets, tasks]
         title:
           type: string
         count:
@@ -8760,8 +8341,8 @@ components:
           enum: [operator]
         items:
           type: array
-          minItems: 13
-          maxItems: 13
+          minItems: 12
+          maxItems: 12
           items:
             $ref: '#/components/schemas/TrashEmptyPreviewItem'
         total:
@@ -8776,7 +8357,7 @@ components:
       properties:
         resource_type:
           type: string
-          enum: [configs, alerts, credentials, filters, overrides, port_lists, report_configs, scanners, schedules, tags, targets, tasks, report_formats]
+          enum: [configs, alerts, credentials, filters, overrides, port_listss, scanners, schedules, tags, targets, tasks, report_formats]
         count:
           type: integer
           minimum: 0
@@ -8825,10 +8406,10 @@ components:
           format: uuid
         resource_type:
           type: string
-          enum: [alerts, scan_configs, credentials, filters, overrides, port_lists, report_configs, report_formats, scanners, schedules, tags, targets, tasks]
+          enum: [alerts, scan_configs, credentials, filters, overrides, port_listss, report_formats, scanners, schedules, tags, targets, tasks]
         entity_type:
           type: string
-          enum: [alert, scanconfig, credential, filter, override, portlist, reportconfig, reportformat, scanner, schedule, tag, target, task]
+          enum: [alert, scanconfig, credential, filter, override, portlist, reportformat, scanner, schedule, tag, target, task]
         title:
           type: string
         name:
@@ -10240,7 +9821,7 @@ components:
       type: object
       additionalProperties: false
       required: [method, name, active, status, to_address, subject, notice]
-      description: Strict write-only delivery contract for fixed TASK_RUN_STATUS_CHANGED + ALWAYS + EMAIL alert creation. Simple notices forbid report format and report config fields but may carry a plain-text message. Include and attach notices require a report format and may include a matching report config and message.
+      description: Strict write-only delivery contract for fixed TASK_RUN_STATUS_CHANGED + ALWAYS + EMAIL alert creation. Simple notices forbid report-format selection but may carry a plain-text message. Include and attach notices require a report format and may include a message.
       properties:
         method:
           type: string
@@ -10293,12 +9874,6 @@ components:
           maxLength: 36
           x-turbovas-max-bytes: 36
           writeOnly: true
-        report_config_id:
-          type: string
-          format: uuid
-          maxLength: 36
-          x-turbovas-max-bytes: 36
-          writeOnly: true
         message:
           type: string
           maxLength: 2000
@@ -10312,7 +9887,6 @@ components:
           not:
             anyOf:
               - required: [report_format_id]
-              - required: [report_config_id]
         - properties:
             notice:
               enum: [include, attach]
@@ -10321,7 +9895,7 @@ components:
       type: object
       additionalProperties: false
       required: [method, name, active, status, smb_credential_id, smb_share_path, smb_file_path, report_format_id]
-      description: Strict write-only delivery contract for fixed TASK_RUN_STATUS_CHANGED + ALWAYS + SMB alert creation. The SMB credential, share path, file path, report format, optional matching report config, and optional maximum protocol are validated and persisted by gvmd; none is returned in native alert metadata.
+      description: Strict write-only delivery contract for fixed TASK_RUN_STATUS_CHANGED + ALWAYS + SMB alert creation. The SMB credential, share path, file path, report format, and optional maximum protocol are validated and persisted by gvmd; none is returned in native alert metadata.
       properties:
         method:
           type: string
@@ -10361,12 +9935,6 @@ components:
           x-turbovas-max-bytes: 4096
           writeOnly: true
         report_format_id:
-          type: string
-          format: uuid
-          maxLength: 36
-          x-turbovas-max-bytes: 36
-          writeOnly: true
-        report_config_id:
           type: string
           format: uuid
           maxLength: 36
@@ -10698,77 +10266,6 @@ components:
           format: uuid
         name:
           type: string
-    ReportConfigParam:
-      type: object
-      required: [name, type, value, default, using_default, options, value_report_formats, default_report_formats]
-      properties:
-        name:
-          type: string
-        type:
-          type: string
-        value:
-          type: string
-        default:
-          type: string
-        using_default:
-          type: boolean
-        min:
-          type: integer
-          nullable: true
-        max:
-          type: integer
-          nullable: true
-        options:
-          type: array
-          items:
-            $ref: '#/components/schemas/ReportFormatParamOption'
-        value_report_formats:
-          type: array
-          items:
-            $ref: '#/components/schemas/ReportFormatReference'
-        default_report_formats:
-          type: array
-          items:
-            $ref: '#/components/schemas/ReportFormatReference'
-    ReportConfigAsset:
-      type: object
-      required: [id, name, owner, report_format, writable, in_use, orphan, alerts, params]
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        comment:
-          type: string
-        owner:
-          type: object
-          required: [name]
-          properties:
-            name:
-              type: string
-        report_format:
-          $ref: '#/components/schemas/ReportFormatReference'
-        writable:
-          type: boolean
-        in_use:
-          type: boolean
-        orphan:
-          type: boolean
-        alerts:
-          type: array
-          items:
-            $ref: '#/components/schemas/ReportFormatReference'
-        params:
-          type: array
-          items:
-            $ref: '#/components/schemas/ReportConfigParam'
-        created_at:
-          type: string
-          format: date-time
-        modified_at:
-          type: string
-          format: date-time
     ReportFormatParamOption:
       type: object
       properties:
@@ -10798,7 +10295,7 @@ components:
             $ref: '#/components/schemas/ReportFormatParamOption'
     ReportFormatAsset:
       type: object
-      required: [id, name, trust, active, predefined, configurable, deprecated, alert_count, report_config_count, alerts, report_configs, params]
+      required: [id, name, trust, active, predefined, configurable, deprecated, alert_count, alerts, params]
       properties:
         id:
           type: string
@@ -10832,13 +10329,7 @@ components:
           type: boolean
         alert_count:
           type: integer
-        report_config_count:
-          type: integer
         alerts:
-          type: array
-          items:
-            $ref: '#/components/schemas/ReportFormatReference'
-        report_configs:
           type: array
           items:
             $ref: '#/components/schemas/ReportFormatReference'

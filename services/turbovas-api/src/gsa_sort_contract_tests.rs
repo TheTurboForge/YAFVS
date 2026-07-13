@@ -46,11 +46,6 @@ fn gsa_native_sort_maps_are_backend_accepted() {
             CPE_CATALOG_SORT_FIELDS,
         ),
         (
-            include_str!("../../../components/gsa/src/gmp/native-api/report-configs.ts"),
-            "REPORT_CONFIG_SORT_FIELDS",
-            REPORT_CONFIG_SORT_FIELDS,
-        ),
-        (
             include_str!("../../../components/gsa/src/gmp/native-api/cves.ts"),
             "CVE_SORT_FIELDS",
             CVE_CATALOG_SORT_FIELDS,
@@ -182,7 +177,7 @@ fn gsa_native_sort_maps_are_backend_accepted() {
         ),
     ];
 
-    assert_eq!(checks.len(), 30, "expected all GSA native sort maps");
+    assert_eq!(checks.len(), 29, "expected all GSA native sort maps");
     for (source, map_name, rust_fields) in checks {
         for sort_field in gsa_native_sort_fields(source, map_name) {
             assert!(

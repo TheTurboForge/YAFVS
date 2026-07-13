@@ -257,12 +257,6 @@ const getIcons = (): Record<string, IconComponent> => {
       false,
     ),
     Clone: createIcon(Clone, 'clone-icon', 'Clone Icon', false),
-    ReportConfig: createIcon(
-      ReportFormat,
-      'report-config-icon',
-      'Report Config Icon',
-      false,
-    ),
     CpeLogo: createIcon(Cpe, 'cpe-logo-icon', 'CPE Logo Icon', false),
     Cve: createIcon(Cve, 'cve-icon', 'CVE Icon', false),
     DfnCertAdv: createIcon(
@@ -473,7 +467,6 @@ export const RadiusIcon = getIcons().Radius;
 export const RefreshIcon = getIcons().RefreshCcw;
 export const RemoveFromAssetsIcon = getIcons().RemoveFromAssets;
 export const ReportIcon = getIcons().Report;
-export const ReportConfigIcon = getIcons().ReportConfig;
 export const ReportFormatIcon = getIcons().ReportFormat;
 export const RestoreIcon = getIcons().Restore;
 export const ResultIcon = getIcons().Result;

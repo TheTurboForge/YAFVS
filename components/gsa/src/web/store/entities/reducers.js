@@ -17,7 +17,6 @@ import {reducer as nvt} from 'web/store/entities/nvts';
 import {reducer as operatingsystem} from 'web/store/entities/operatingsystems';
 import {reducer as override} from 'web/store/entities/overrides';
 import {reducer as portlist} from 'web/store/entities/portlists';
-import {reducer as reportconfig} from 'web/store/entities/reportconfigs';
 import {reducer as reportformat} from 'web/store/entities/reportformats';
 import {reducer as report} from 'web/store/entities/reports';
 import {reducer as result} from 'web/store/entities/results';
@@ -44,7 +43,6 @@ const entitiesReducer = combineReducers({
   operatingsystem,
   override,
   portlist,
-  reportconfig,
   reportformat,
   report,
   result,

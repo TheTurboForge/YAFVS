@@ -9,7 +9,6 @@
 #include "manage_sql.h"
 #include "manage_sql_filters.h"
 #include "manage_sql_permissions.h"
-#include "manage_report_configs.h"
 #include "manage_sql_report_formats.h"
 #include "manage_sql_resources.h"
 #include "manage_sql_tags.h"
@@ -1060,48 +1059,6 @@ lock_alert_recipient_credential (const char *credential_id)
   return ret;
 }
 
-static int
-lock_alert_report_config (const char *report_config_id,
-                          report_format_t report_format)
-{
-  report_config_t locked_report_config;
-  report_config_t report_config = 0;
-  report_format_t config_report_format;
-
-  if (find_report_config_with_permission (report_config_id, &report_config,
-                                          "get_report_configs"))
-    return -1;
-  if (report_config == 0)
-    return 91;
-
-  switch (sql_int64 (&locked_report_config,
-                     "SELECT id FROM report_configs"
-                     " WHERE id = %llu FOR SHARE;",
-                     report_config))
-    {
-      case 0:
-        if (locked_report_config != report_config)
-          return -1;
-        break;
-      case 1:
-        return 91;
-      default:
-        return -1;
-    }
-
-  switch (sql_int64 (&config_report_format,
-                     "SELECT id FROM report_formats"
-                     " WHERE uuid = (SELECT report_format_id"
-                     "               FROM report_configs WHERE id = %llu);",
-                     report_config))
-    {
-      case 0:
-        return config_report_format == report_format ? 0 : 92;
-      default:
-        return -1;
-    }
-}
-
 /**
  * @brief Atomically create a task-status EMAIL alert with delivery references.
  *
@@ -1111,15 +1068,14 @@ lock_alert_report_config (const char *report_config_id,
  * commits or rolls back the same transaction that creates the alert.
  *
  * @return See create_alert_body(), plus 60 unavailable recipient credential,
- *         61 invalid recipient credential type, 90 unavailable report format,
- *         91 unavailable report config, 92 report config format mismatch.
+ *         61 invalid recipient credential type and 90 unavailable report format.
  */
 int
 create_alert_email_with_report_refs
   (const char *name, const char *comment, const char *active,
    GPtrArray *event_data, GPtrArray *condition_data, GPtrArray *method_data,
    const char *recipient_credential_id, const char *report_format_id,
-   const char *report_config_id, alert_t *alert)
+   alert_t *alert)
 {
   report_format_t report_format = 0;
   int ret;
@@ -1138,14 +1094,8 @@ create_alert_email_with_report_refs
   if (ret == 0)
     ret = lock_alert_recipient_credential (recipient_credential_id);
 
-  if (ret == 0 && report_config_id && report_config_id[0]
-      && (report_format_id == NULL || report_format_id[0] == '\0'))
-    ret = 90;
-  else if (ret == 0 && report_format_id && report_format_id[0])
+  if (ret == 0 && report_format_id && report_format_id[0])
     ret = lock_alert_report_format (report_format_id, &report_format);
-
-  if (ret == 0 && report_config_id && report_config_id[0])
-    ret = lock_alert_report_config (report_config_id, report_format);
 
   if (ret == 0)
     ret = create_alert_body (name, comment, NULL, active,
@@ -1167,12 +1117,11 @@ create_alert_email_with_report_refs
  * @brief Atomically create a task-status SMB alert with delivery references.
  *
  * Permission is checked before reference resolution. The operator owner,
- * owned SMB credential, report format and optional report config remain locked
+ * owned SMB credential and report format remain locked
  * through the alert insert. create_alert_body() performs the inherited SMB
  * credential-content and path validation inside the same transaction.
  *
- * @return See create_alert_body(), plus 90 unavailable report format,
- *         91 unavailable report config and 92 report config format mismatch.
+ * @return See create_alert_body(), plus 90 unavailable report format.
  */
 int
 create_alert_smb_with_report_refs (const char *name, const char *comment,
@@ -1180,8 +1129,7 @@ create_alert_smb_with_report_refs (const char *name, const char *comment,
                                    GPtrArray *condition_data,
                                    GPtrArray *method_data,
                                    const char *smb_credential_id,
-                                   const char *report_format_id,
-                                   const char *report_config_id, alert_t *alert)
+                                   const char *report_format_id, alert_t *alert)
 {
   report_format_t report_format = 0;
   int ret;
@@ -1204,9 +1152,6 @@ create_alert_smb_with_report_refs (const char *name, const char *comment,
     ret = 90;
   else if (ret == 0)
     ret = lock_alert_report_format (report_format_id, &report_format);
-
-  if (ret == 0 && report_config_id && report_config_id[0])
-    ret = lock_alert_report_config (report_config_id, report_format);
 
   if (ret == 0)
     ret = create_alert_body (name, comment, NULL, active,

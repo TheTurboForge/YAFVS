@@ -35,8 +35,6 @@ import NvtFamiliesCommand from 'gmp/commands/nvt-families';
 import NvtsCommand from 'gmp/commands/nvts';
 import PerformanceCommand from 'gmp/commands/performance';
 import ReportCommand from 'gmp/commands/report';
-import ReportConfigCommand from 'gmp/commands/report-config';
-import ReportConfigsCommand from 'gmp/commands/report-configs';
 import ReportFormatCommand from 'gmp/commands/report-format';
 import ReportFormatsCommand from 'gmp/commands/report-formats';
 import ReportsCommand from 'gmp/commands/reports';
@@ -106,8 +104,6 @@ class Gmp {
   public readonly portlist: PortListCommand;
   public readonly portlists: PortListsCommand;
   public readonly report: ReportCommand;
-  public readonly reportconfig: ReportConfigCommand;
-  public readonly reportconfigs: ReportConfigsCommand;
   public readonly reportformat: ReportFormatCommand;
   public readonly reportformats: ReportFormatsCommand;
   public readonly reports: ReportsCommand;
@@ -181,8 +177,6 @@ class Gmp {
     this.portlist = new PortListCommand(this.http);
     this.portlists = new PortListsCommand(this.http);
     this.report = new ReportCommand(this.http);
-    this.reportconfig = new ReportConfigCommand(this.http);
-    this.reportconfigs = new ReportConfigsCommand(this.http);
     this.reportformat = new ReportFormatCommand(this.http);
     this.reportformats = new ReportFormatsCommand(this.http);
     this.reports = new ReportsCommand(this.http);

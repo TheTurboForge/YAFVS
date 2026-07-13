@@ -27,7 +27,6 @@ const FILTER_OPTIONS = [
   ['permission', _l('Permission')],
   ['port_list', _l('Port List')],
   ['report', _l('Report')],
-  ['report_config', _l('Report Config')],
   ['report_format', _l('Report Format')],
   ['result', _l('Result')],
   ['role', _l('Role')],

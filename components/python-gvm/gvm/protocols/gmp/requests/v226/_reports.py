@@ -39,7 +39,6 @@ class Reports:
         filter_string: str | None = None,
         filter_id: str | None = None,
         report_format_id: str | ReportFormatType | None = None,
-        report_config_id: str | None = None,
         ignore_pagination: bool | None = None,
         details: bool | None = True,
     ) -> Request:
@@ -51,7 +50,6 @@ class Reports:
             filter_id: UUID of filter to use to filter results in the report
             report_format_id: UUID of report format to use
                               or ReportFormatType (enum)
-            report_config_id: UUID of report format config to use
             ignore_pagination: Whether to ignore the filter terms "first" and
                 "rows".
             details: Request additional report information details
@@ -71,9 +69,6 @@ class Reports:
 
         if report_format_id:
             cmd.set_attribute("format_id", str(report_format_id))
-
-        if report_config_id:
-            cmd.set_attribute("config_id", str(report_config_id))
 
         if ignore_pagination is not None:
             cmd.set_attribute("ignore_pagination", to_bool(ignore_pagination))

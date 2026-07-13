@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -31,8 +32,6 @@ const ReportFormatDetails = ({entity}) => {
     description,
     alerts = [],
     invisible_alerts = 0,
-    report_configs = [],
-    invisible_report_configs = 0,
   } = entity;
 
   return (
@@ -120,32 +119,6 @@ const ReportFormatDetails = ({entity}) => {
             </TableRow>
           )}
 
-          {(report_configs.length > 0 || invisible_report_configs > 0) && (
-            <TableRow>
-              <TableDataAlignTop>
-                {_('Report Configs using this Report Format')}
-              </TableDataAlignTop>
-              <TableData>
-                {report_configs.map(report_config => {
-                  return (
-                    <span key={report_config.id}>
-                      <DetailsLink id={report_config.id} type="reportconfig">
-                        {report_config.name}
-                      </DetailsLink>
-                    </span>
-                  );
-                })}
-                {invisible_report_configs > 0 && (
-                  <span>
-                    {_(
-                      '{{count}} report config(s) only visible to other users',
-                      {count: invisible_report_configs},
-                    )}
-                  </span>
-                )}
-              </TableData>
-            </TableRow>
-          )}
         </TableBody>
       </InfoTable>
       <h2>{_('Description')}</h2>

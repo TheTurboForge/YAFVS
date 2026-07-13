@@ -9,15 +9,13 @@ import CollectionCounts from 'gmp/collection/collection-counts';
 import type {EntitiesMeta} from 'gmp/commands/entities';
 import Response from 'gmp/http/response';
 import type {XmlMeta} from 'gmp/http/transform/fast-xml';
-import Filter, {ALL_FILTER, RESULTS_FILTER_FILTER} from 'gmp/models/filter';
+import Filter, {RESULTS_FILTER_FILTER} from 'gmp/models/filter';
 import type Report from 'gmp/models/report';
-import type ReportConfig from 'gmp/models/report-config';
 import type ReportFormat from 'gmp/models/report-format';
 import {
   fetchNativeFilters,
   nativeFiltersQueryFromFilter,
 } from 'gmp/native-api/filters';
-import {fetchNativeReportConfigs} from 'gmp/native-api/report-configs';
 import {fetchNativeReportFormats} from 'gmp/native-api/report-formats';
 import {fetchNativeReport} from 'gmp/native-api/reports';
 import {isDefined} from 'gmp/utils/identity';
@@ -83,29 +81,6 @@ const fetchAllNativeReportFormatsForDropdown = async (
   return reportFormats.filter(
     format => format.isActive() && format.isTrusted(),
   );
-};
-
-const fetchAllNativeReportConfigsForDropdown = async (
-  gmp: Parameters<typeof fetchNativeReportConfigs>[0],
-): Promise<ReportConfig[]> => {
-  const reportConfigs: ReportConfig[] = [];
-
-  for (let page = 1; ; page += 1) {
-    const response = await fetchNativeReportConfigs(
-      gmp,
-      nativeDropdownQuery(page),
-    );
-    reportConfigs.push(...response.reportConfigs);
-
-    if (
-      response.reportConfigs.length === 0 ||
-      reportConfigs.length >= response.page.total
-    ) {
-      break;
-    }
-  }
-
-  return reportConfigs;
 };
 
 export const useGetReport = ({
@@ -174,28 +149,6 @@ export const useGetReportFormats = () => {
     },
     queryId: 'get_report_formats',
     filter: REPORT_FORMATS_FILTER,
-    refetchInterval: false,
-    keepPreviousData: true,
-  });
-};
-
-export const useGetReportConfigs = () => {
-  const gmp = useGmp();
-  const canUseNativeApi = typeof gmp?.buildUrl === 'function';
-
-  return useGetEntities<ReportConfig>({
-    gmpMethod: async ({filter}) => {
-      const queryFilter = filter instanceof Filter ? filter : ALL_FILTER;
-
-      if (!canUseNativeApi) {
-        return gmp.reportconfigs.get({filter: queryFilter});
-      }
-
-      const reportConfigs = await fetchAllNativeReportConfigsForDropdown(gmp);
-      return nativeDropdownResponse(reportConfigs, queryFilter);
-    },
-    queryId: 'get_report_configs',
-    filter: ALL_FILTER,
     refetchInterval: false,
     keepPreviousData: true,
   });

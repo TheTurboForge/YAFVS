@@ -95,7 +95,7 @@ create_alert (const char*, const char*, const char*, const char*, event_t,
 int
 create_alert_email_with_report_refs
   (const char *, const char *, const char *, GPtrArray *, GPtrArray *,
-   GPtrArray *, const char *, const char *, const char *, alert_t *);
+   GPtrArray *, const char *, const char *, alert_t *);
 
 int
 modify_alert (const char*, const char*, const char*, const char*,

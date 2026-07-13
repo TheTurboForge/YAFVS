@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -15,10 +16,8 @@ import Credential, {
   SNMP_CREDENTIAL_TYPE,
   SSH_CREDENTIAL_TYPES,
 } from 'gmp/models/credential';
-import ReportConfig from 'gmp/models/report-config';
 import ReportFormat from 'gmp/models/report-format';
 import ScpMethodPart from 'web/pages/alerts/dialog/ScpMethodPart';
-import {UNSET_VALUE} from 'web/utils/Render';
 
 describe('ScpMethodPart tests', () => {
   test('should render with values', () => {
@@ -36,11 +35,6 @@ describe('ScpMethodPart tests', () => {
       id: 'report_format_id',
       name: 'Report Format',
     });
-    const reportConfig1 = new ReportConfig({
-      id: 'report_config_id',
-      name: 'Report Config',
-      reportFormat: reportFormat1,
-    });
     const onChange = testing.fn();
     const onCredentialChange = testing.fn();
     const onNewCredentialClick = testing.fn();
@@ -48,14 +42,12 @@ describe('ScpMethodPart tests', () => {
     render(
       <ScpMethodPart
         credentials={[credential1, credential2]}
-        reportConfigs={[reportConfig1]}
         reportFormats={[reportFormat1]}
         scpCredential={credential1.id}
         scpHost="example.com"
         scpKnownHosts="known_hosts_content"
         scpPath="/path/to/file"
         scpPort={22}
-        scpReportConfig="report_config_id"
         scpReportFormat="report_format_id"
         onChange={onChange}
         onCredentialChange={onCredentialChange}
@@ -78,9 +70,6 @@ describe('ScpMethodPart tests', () => {
     );
     expect(screen.getByRole('textbox', {name: 'Report'})).toHaveValue(
       reportFormat1.name,
-    );
-    expect(screen.getByRole('textbox', {name: 'Report Config'})).toHaveValue(
-      reportConfig1.name,
     );
   });
 
@@ -123,16 +112,6 @@ describe('ScpMethodPart tests', () => {
       id: 'report_format_id_2',
       name: 'Report Format 2',
     });
-    const reportConfig1 = new ReportConfig({
-      id: 'report_config_id',
-      name: 'Report Config',
-      reportFormat: reportFormat1,
-    });
-    const reportConfig2 = new ReportConfig({
-      id: 'report_config_id_2',
-      name: 'Report Config 2',
-      reportFormat: reportFormat2,
-    });
     const onChange = testing.fn();
     const onCredentialChange = testing.fn();
     const onNewCredentialClick = testing.fn();
@@ -140,7 +119,6 @@ describe('ScpMethodPart tests', () => {
     render(
       <ScpMethodPart
         credentials={[credential1, credential2]}
-        reportConfigs={[reportConfig1, reportConfig2]}
         reportFormats={[reportFormat1, reportFormat2]}
         onChange={onChange}
         onCredentialChange={onCredentialChange}
@@ -192,22 +170,9 @@ describe('ScpMethodPart tests', () => {
       await getSelectItemElementsForSelect(reportFormatSelect);
     expect(reportFormatOptions.length).toEqual(2);
     fireEvent.click(reportFormatOptions[1]);
-    expect(onChange).toHaveBeenCalledWith(UNSET_VALUE, 'scp_report_config');
     expect(onChange).toHaveBeenCalledWith(
       reportFormat2.id,
       'scp_report_format',
-    );
-
-    const reportConfigSelect = screen.getByRole<HTMLSelectElement>('textbox', {
-      name: 'Report Config',
-    });
-    const reportConfigOptions =
-      await getSelectItemElementsForSelect(reportConfigSelect);
-    expect(reportConfigOptions.length).toEqual(2);
-    fireEvent.click(reportConfigOptions[1]);
-    expect(onChange).toHaveBeenCalledWith(
-      reportConfig2.id,
-      'scp_report_config',
     );
   });
 
@@ -243,7 +208,6 @@ describe('ScpMethodPart tests', () => {
       'method_scp_path',
     );
     expect(screen.getByName('method_scp_report_format')).toBeInTheDocument();
-    expect(screen.getByName('method_scp_report_config')).toBeInTheDocument();
   });
 
   test('should only render ssh credentials in credential select', async () => {

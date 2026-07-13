@@ -33,10 +33,6 @@ import AlertComponent from 'web/pages/alerts/AlertComponent';
 import AlertDetails from 'web/pages/alerts/Details';
 import {selector, loadEntity} from 'web/store/entities/alerts';
 import {
-  loadAllEntities as loadAllReportConfigs,
-  selector as reportConfigsSelector,
-} from 'web/store/entities/reportconfigs';
-import {
   loadAllEntities as loadAllReportFormats,
   selector as reportFormatsSelector,
 } from 'web/store/entities/reportformats';
@@ -87,7 +83,6 @@ ToolBarIcons.propTypes = {
 
 const Page = ({
   entity,
-  reportConfigs,
   reportFormats,
   onChanged,
   onDownloaded,
@@ -140,7 +135,6 @@ const Page = ({
                       <TabPanel>
                         <AlertDetails
                           entity={entity}
-                          reportConfigs={reportConfigs}
                           reportFormats={reportFormats}
                         />
                       </TabPanel>
@@ -165,7 +159,6 @@ const Page = ({
 
 Page.propTypes = {
   entity: PropTypes.model,
-  reportConfigs: PropTypes.array,
   reportFormats: PropTypes.array,
   onChanged: PropTypes.func.isRequired,
   onDownloaded: PropTypes.func.isRequired,
@@ -175,21 +168,17 @@ Page.propTypes = {
 const load = gmp => {
   const loadEntityFunc = loadEntity(gmp);
   const loadAllReportFormatsFunc = loadAllReportFormats(gmp);
-  const loadAllReportConfigsFunc = loadAllReportConfigs(gmp);
   return id => dispatch =>
     Promise.all([
       dispatch(loadEntityFunc(id)),
       dispatch(loadAllReportFormatsFunc()),
-      dispatch(loadAllReportConfigsFunc()),
     ]);
 };
 
 const mapStateToProps = (rootState, {id}) => {
   const reportFormatsSel = reportFormatsSelector(rootState);
-  const reportConfigsSel = reportConfigsSelector(rootState);
   return {
     reportFormats: reportFormatsSel.getAllEntities(),
-    reportConfigs: reportConfigsSel.getAllEntities(),
   };
 };
 

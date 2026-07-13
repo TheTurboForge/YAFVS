@@ -89,12 +89,7 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
         ("native alert query SQL", ALERT_QUERY_SQL),
         ("native alert writes", ALERT_WRITES),
     ] {
-        for key in [
-            "send_host",
-            "send_port",
-            "send_report_config",
-            "send_report_format",
-        ] {
+        for key in ["send_host", "send_port", "send_report_format"] {
             assert!(
                 !source.contains(key),
                 "{path} still contains retired alert field {key}"
@@ -139,7 +134,6 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
         for key in [
             "verinice_server_credential",
             "verinice_server_url",
-            "verinice_server_report_config",
             "verinice_server_report_format",
         ] {
             assert!(
@@ -498,7 +492,6 @@ fn gsad_and_gsa_alert_commands_proxy_delivery_payloads_and_control_verbs() {
         "scp_credential",
         "smb_credential",
         "recipient_credential",
-        "notice_report_config",
         "notice_report_format",
         "composer_include_overrides",
         "composer_ignore_pagination",

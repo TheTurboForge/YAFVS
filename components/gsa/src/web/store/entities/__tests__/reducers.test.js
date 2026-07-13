@@ -33,7 +33,6 @@ describe('entities reducer tests', () => {
       operatingsystem: initState,
       override: initState,
       portlist: initState,
-      reportconfig: initState,
       reportformat: initState,
       report: initState,
       result: initState,

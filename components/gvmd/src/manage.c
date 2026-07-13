@@ -43,7 +43,6 @@
 #include "manage_nvts.h"
 #include "manage_osp.h"
 #include "manage_port_lists.h"
-#include "manage_report_configs.h"
 #include "manage_report_exports.h"
 #include "manage_report_formats.h"
 #include "manage_scan_queue.h"
@@ -6343,8 +6342,6 @@ manage_timezone_supported (const char *zone)
 int
 delete_resource (const char *type, const char *resource_id, int ultimate)
 {
-  if (strcasecmp (type, "report_config") == 0)
-    return delete_report_config (resource_id, ultimate);
   if (strcasecmp (type, "tls_certificate") == 0)
     return delete_tls_certificate (resource_id, ultimate);
   assert (0);

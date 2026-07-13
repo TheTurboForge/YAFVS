@@ -81,10 +81,6 @@ class GetResourceTypeFromStringTestCase(unittest.TestCase):
         ct = ResourceType.from_string("report")
         self.assertEqual(ct, ResourceType.REPORT)
 
-    def test_report_config(self):
-        ct = ResourceType.from_string("report_config")
-        self.assertEqual(ct, ResourceType.REPORT_CONFIG)
-
     def test_result(self):
         ct = ResourceType.from_string("result")
         self.assertEqual(ct, ResourceType.RESULT)

@@ -98,12 +98,6 @@ describe('native API report formats', () => {
             name: 'Send report',
           },
         ],
-        report_configs: [
-          {
-            id: 'afde48df-7f26-4b2b-9c1e-03b0e1bfb3a6',
-            name: 'Default config',
-          },
-        ],
         params: [
           {
             name: 'StringParam',
@@ -151,8 +145,6 @@ describe('native API report formats', () => {
     expect(format.id).toEqual('a994b278-1f62-11e1-96ac-406186ea4fc5');
     expect(format.alerts).toHaveLength(1);
     expect(format.alerts[0].name).toEqual('Send report');
-    expect(format.report_configs).toHaveLength(1);
-    expect(format.report_configs[0].name).toEqual('Default config');
     expect(format.params).toHaveLength(4);
     expect(format.params[0].name).toEqual('StringParam');
     expect(format.params[0].type).toEqual('string');

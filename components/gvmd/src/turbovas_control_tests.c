@@ -72,9 +72,7 @@ static gchar *received_from_address;
 static gchar *received_message;
 static gchar *received_notice;
 static gchar *received_recipient_credential;
-static gchar *received_report_config;
 static gchar *received_report_format;
-static gchar *received_atomic_report_config;
 static gchar *received_atomic_report_format;
 static gchar *received_subject;
 static gchar *received_to_address;
@@ -223,7 +221,7 @@ __wrap_create_alert_email_with_report_refs
   (const char *name, const char *comment, const char *active,
    GPtrArray *event_data, GPtrArray *condition_data, GPtrArray *method_data,
    const char *recipient_credential_id, const char *report_format_id,
-   const char *report_config_id, alert_t *alert)
+   alert_t *alert)
 {
   (void) name;
   (void) comment;
@@ -239,9 +237,7 @@ __wrap_create_alert_email_with_report_refs
   g_free (received_notice);
   g_free (received_recipient_credential);
   g_free (received_report_format);
-  g_free (received_report_config);
   g_free (received_atomic_report_format);
-  g_free (received_atomic_report_config);
   g_free (received_message);
   received_active = g_strdup (active);
   received_event_status = g_strdup (test_alert_data_value (event_data,
@@ -259,14 +255,8 @@ __wrap_create_alert_email_with_report_refs
   if (received_report_format == NULL)
     received_report_format =
       g_strdup (test_alert_data_value (method_data, "notice_attach_format"));
-  received_report_config =
-    g_strdup (test_alert_data_value (method_data, "notice_report_config"));
-  if (received_report_config == NULL)
-    received_report_config =
-      g_strdup (test_alert_data_value (method_data, "notice_attach_config"));
   received_message = g_strdup (test_alert_data_value (method_data, "message"));
   received_atomic_report_format = g_strdup (report_format_id);
-  received_atomic_report_config = g_strdup (report_config_id);
   assert_that (
     recipient_credential_id,
     is_equal_to_string (received_recipient_credential
@@ -281,8 +271,7 @@ int
 __wrap_create_alert_smb_with_report_refs (
   const char *name, const char *comment, const char *active,
   GPtrArray *event_data, GPtrArray *condition_data, GPtrArray *method_data,
-  const char *smb_credential_id, const char *report_format_id,
-  const char *report_config_id, alert_t *alert)
+  const char *smb_credential_id, const char *report_format_id, alert_t *alert)
 {
   (void) name;
   (void) comment;
@@ -296,9 +285,7 @@ __wrap_create_alert_smb_with_report_refs (
   g_free (received_smb_share_path);
   g_free (received_smb_file_path);
   g_free (received_report_format);
-  g_free (received_report_config);
   g_free (received_atomic_report_format);
-  g_free (received_atomic_report_config);
   g_free (received_smb_max_protocol);
   received_active = g_strdup (active);
   received_event_status =
@@ -311,12 +298,9 @@ __wrap_create_alert_smb_with_report_refs (
     g_strdup (test_alert_data_value (method_data, "smb_file_path"));
   received_report_format =
     g_strdup (test_alert_data_value (method_data, "smb_report_format"));
-  received_report_config =
-    g_strdup (test_alert_data_value (method_data, "smb_report_config"));
   received_smb_max_protocol =
     g_strdup (test_alert_data_value (method_data, "smb_max_protocol"));
   received_atomic_report_format = g_strdup (report_format_id);
-  received_atomic_report_config = g_strdup (report_config_id);
   assert_that (smb_credential_id, is_equal_to_string (received_smb_credential));
   assert_that (condition_data->len, is_equal_to (1));
   assert_that (g_ptr_array_index (condition_data, 0), is_null);
@@ -663,9 +647,6 @@ enum alert_smb_db_event
   ALERT_SMB_DB_CREDENTIAL_TYPE,
   ALERT_SMB_DB_FORMAT_RESOLVE,
   ALERT_SMB_DB_FORMAT_LOCK,
-  ALERT_SMB_DB_CONFIG_RESOLVE,
-  ALERT_SMB_DB_CONFIG_LOCK,
-  ALERT_SMB_DB_CONFIG_MATCH,
   ALERT_SMB_DB_BODY_INSERT,
   ALERT_SMB_DB_METHOD_INSERT,
   ALERT_SMB_DB_ROLLBACK,
@@ -683,9 +664,6 @@ static const char *alert_smb_db_credential_type;
 static const char *alert_smb_db_credential_username;
 static gboolean alert_smb_db_format_readable;
 static gboolean alert_smb_db_format_lock_exists;
-static gboolean alert_smb_db_config_readable;
-static gboolean alert_smb_db_config_lock_exists;
-static gboolean alert_smb_db_config_matches;
 static const char *alert_smb_db_report_format_uuid;
 static unsigned int alert_smb_db_method_inserts;
 static unsigned int alert_smb_db_credential_resolves;
@@ -779,9 +757,6 @@ reset_alert_smb_db (void)
   alert_smb_db_credential_username = "operator";
   alert_smb_db_format_readable = TRUE;
   alert_smb_db_format_lock_exists = TRUE;
-  alert_smb_db_config_readable = TRUE;
-  alert_smb_db_config_lock_exists = TRUE;
-  alert_smb_db_config_matches = TRUE;
   alert_smb_db_report_format_uuid = "123e4567-e89b-12d3-a456-426614174011";
   alert_smb_db_method_inserts = 0;
   alert_smb_db_credential_resolves = 0;
@@ -912,21 +887,6 @@ __wrap_sql_int64 (long long int *value, const char *statement, ...)
           if (!alert_smb_db_credential_owned)
             return 1;
           *value = 51;
-          return 0;
-        }
-      if (strstr (statement, "FROM report_configs") != NULL
-          && strstr (statement, "FOR SHARE") != NULL)
-        {
-          alert_smb_record_db_event (ALERT_SMB_DB_CONFIG_LOCK);
-          if (!alert_smb_db_config_lock_exists)
-            return 1;
-          *value = 71;
-          return 0;
-        }
-      if (strstr (statement, "FROM report_configs") != NULL)
-        {
-          alert_smb_record_db_event (ALERT_SMB_DB_CONFIG_MATCH);
-          *value = alert_smb_db_config_matches ? 61 : 62;
           return 0;
         }
       if (strstr (statement, "FROM report_formats") != NULL)
@@ -1119,20 +1079,6 @@ __wrap_find_report_format_with_permission (const char *uuid,
   assert_that (permission, is_equal_to_string ("get_report_formats"));
   alert_smb_record_db_event (ALERT_SMB_DB_FORMAT_RESOLVE);
   *report_format = alert_smb_db_format_readable ? 61 : 0;
-  return FALSE;
-}
-
-gboolean
-__wrap_find_report_config_with_permission (const char *uuid,
-                                           report_config_t *report_config,
-                                           const char *permission)
-{
-  assert_that (alert_smb_db_active, is_true);
-  assert_that (uuid,
-               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174012"));
-  assert_that (permission, is_equal_to_string ("get_report_configs"));
-  alert_smb_record_db_event (ALERT_SMB_DB_CONFIG_RESOLVE);
-  *report_config = alert_smb_db_config_readable ? 71 : 0;
   return FALSE;
 }
 
@@ -1451,8 +1397,8 @@ Ensure (turbovas_control, locks_before_count_and_skips_delete_on_mismatch)
 {
   static const char *base_tables[] = {
     "alerts_trash", "configs_trash", "credentials_trash", "filters_trash",
-    "overrides_trash", "port_lists_trash", "report_configs_trash",
-    "report_formats_trash", "scanners_trash", "schedules_trash",
+    "overrides_trash", "port_lists_trash", "report_formats_trash",
+    "scanners_trash", "schedules_trash",
     "tags_trash", "targets_trash", "tasks",
   };
   long long int actual_total = -1;
@@ -1660,12 +1606,14 @@ test_alert_email_create_request (const char *active, const char *name,
                                  const char *subject, const char *notice,
                                  const char *recipient_credential_uuid,
                                  const char *report_format_uuid,
-                                 const char *report_config_uuid,
+                                 const char *unused,
                                  const char *message)
 {
-  gchar *fields[10];
+  gchar *fields[9];
   gchar *request;
   size_t index;
+
+  (void) unused;
 
   fields[0] = g_base64_encode ((const guchar *) name, strlen (name));
   fields[1] = g_base64_encode ((const guchar *) comment, strlen (comment));
@@ -1679,15 +1627,13 @@ test_alert_email_create_request (const char *active, const char *name,
                                strlen (recipient_credential_uuid));
   fields[7] = g_base64_encode ((const guchar *) report_format_uuid,
                                strlen (report_format_uuid));
-  fields[8] = g_base64_encode ((const guchar *) report_config_uuid,
-                               strlen (report_config_uuid));
-  fields[9] = g_base64_encode ((const guchar *) message, strlen (message));
+  fields[8] = g_base64_encode ((const guchar *) message, strlen (message));
   request = g_strdup_printf (
     "alert-email-create " TEST_CONTROL_SECRET " "
-    "123e4567-e89b-12d3-a456-426614174000 %s %s %s %s %s %s %s %s %s %s %s "
+    "123e4567-e89b-12d3-a456-426614174000 %s %s %s %s %s %s %s %s %s %s "
     "%s\n",
     active, fields[0], fields[1], fields[2], fields[3], fields[4], fields[5],
-    notice, fields[6], fields[7], fields[8], fields[9]);
+    notice, fields[6], fields[7], fields[8]);
   for (index = 0; index < G_N_ELEMENTS (fields); index++)
     g_free (fields[index]);
   return request;
@@ -1699,7 +1645,7 @@ test_alert_smb_create_request (const char *active, const char *name,
                                const char *credential_uuid,
                                const char *share_path, const char *file_path,
                                const char *report_format_uuid,
-                               const char *report_config_uuid,
+                               const char *unused,
                                const char *max_protocol)
 {
   const char *values[] = {
@@ -1710,21 +1656,22 @@ test_alert_smb_create_request (const char *active, const char *name,
     share_path,
     file_path,
     report_format_uuid,
-    report_config_uuid,
     max_protocol,
   };
   gchar *fields[G_N_ELEMENTS (values)];
   gchar *request;
   size_t index;
 
+  (void) unused;
+
   for (index = 0; index < G_N_ELEMENTS (values); index++)
     fields[index] =
       g_base64_encode ((const guchar *) values[index], strlen (values[index]));
   request = g_strdup_printf (
     "alert-smb-create " TEST_CONTROL_SECRET " "
-    "123e4567-e89b-12d3-a456-426614174000 %s %s %s %s %s %s %s %s %s %s\n",
+    "123e4567-e89b-12d3-a456-426614174000 %s %s %s %s %s %s %s %s %s\n",
     active, fields[0], fields[1], fields[2], fields[3], fields[4], fields[5],
-    fields[6], fields[7], fields[8]);
+    fields[6], fields[7]);
   for (index = 0; index < G_N_ELEMENTS (fields); index++)
     g_free (fields[index]);
   return request;
@@ -1740,7 +1687,6 @@ Ensure (turbovas_control, parses_canonical_bounded_alert_email_request)
   };
   const char *recipient = "123e4567-e89b-12d3-a456-426614174010";
   const char *format = "123e4567-e89b-12d3-a456-426614174011";
-  const char *config = "123e4567-e89b-12d3-a456-426614174012";
   char operator_uuid[37];
   size_t index;
 
@@ -1748,7 +1694,7 @@ Ensure (turbovas_control, parses_canonical_bounded_alert_email_request)
     {
       gchar *request = test_alert_email_create_request (
         "1", "Email alert", "comment", statuses[index], "ops@example.com",
-        "sender@example.com", "subject", "0", recipient, format, config,
+        "sender@example.com", "subject", "0", recipient, format,
         "Line one\nLine two");
       turbovas_control_alert_email_create_request_t alert = {0};
 
@@ -1767,7 +1713,6 @@ Ensure (turbovas_control, parses_canonical_bounded_alert_email_request)
       assert_that (alert.recipient_credential_uuid,
                    is_equal_to_string (recipient));
       assert_that (alert.report_format_uuid, is_equal_to_string (format));
-      assert_that (alert.report_config_uuid, is_equal_to_string (config));
       assert_that (alert.message,
                    is_equal_to_string ("Line one\nLine two"));
       turbovas_control_alert_email_create_request_clear (&alert);
@@ -1816,8 +1761,8 @@ Ensure (turbovas_control, enforces_alert_email_notice_mode_semantics)
     "1", "Simple format", "", "Running", "ops@example.com", "", "subject",
     "1", "", format, "", "");
   invalid[2] = test_alert_email_create_request (
-    "1", "Simple config", "", "Running", "ops@example.com", "", "subject",
-    "1", "", "", "123e4567-e89b-12d3-a456-426614174012", "");
+    "1", "Simple format duplicate", "", "Running", "ops@example.com", "",
+    "subject", "1", "", format, "", "");
   invalid[3] = test_alert_email_create_request (
     "1", "Include no format", "", "Running", "ops@example.com", "",
     "subject", "0", "", "", "", "");
@@ -1949,7 +1894,6 @@ Ensure (turbovas_control, maps_alert_email_arrays_session_and_success_audit)
     .subject = "subject",
     .recipient_credential_uuid = "123e4567-e89b-12d3-a456-426614174010",
     .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
-    .report_config_uuid = "123e4567-e89b-12d3-a456-426614174012",
     .message = "selected include message",
     .active = TRUE,
     .notice = 0,
@@ -1987,12 +1931,8 @@ Ensure (turbovas_control, maps_alert_email_arrays_session_and_success_audit)
                is_equal_to_string (request.recipient_credential_uuid));
   assert_that (received_report_format,
                is_equal_to_string (request.report_format_uuid));
-  assert_that (received_report_config,
-               is_equal_to_string (request.report_config_uuid));
   assert_that (received_atomic_report_format,
                is_equal_to_string (request.report_format_uuid));
-  assert_that (received_atomic_report_config,
-               is_equal_to_string (request.report_config_uuid));
   assert_that (received_message, is_equal_to_string (request.message));
   assert_that (audit_success_calls, is_equal_to (1));
   assert_that (audit_fail_calls, is_equal_to (0));
@@ -2011,7 +1951,6 @@ Ensure (turbovas_control, maps_selected_attach_message_and_failure_audit)
     .to_address = "ops@example.com", .from_address = "", .subject = "subject",
     .recipient_credential_uuid = "",
     .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
-    .report_config_uuid = "123e4567-e89b-12d3-a456-426614174012",
     .message = "selected attach message", .active = FALSE, .notice = 2,
   };
   char created_uuid[37];
@@ -2032,8 +1971,6 @@ Ensure (turbovas_control, maps_selected_attach_message_and_failure_audit)
   assert_that (received_recipient_credential, is_null);
   assert_that (received_report_format,
                is_equal_to_string (request.report_format_uuid));
-  assert_that (received_report_config,
-               is_equal_to_string (request.report_config_uuid));
   assert_that (received_message, is_equal_to_string (request.message));
   assert_that (audit_success_calls, is_equal_to (0));
   assert_that (audit_fail_calls, is_equal_to (1));
@@ -2045,7 +1982,7 @@ Ensure (turbovas_control, maps_simple_notice_without_report_selectors)
     .name = "Simple alert", .comment = "", .status = "Stopped",
     .to_address = "ops@example.com", .from_address = "", .subject = "subject",
     .recipient_credential_uuid = "", .report_format_uuid = "",
-    .report_config_uuid = "", .message = "simple message",
+    .message = "simple message",
     .active = TRUE, .notice = 1,
   };
   char created_uuid[37];
@@ -2060,9 +1997,7 @@ Ensure (turbovas_control, maps_simple_notice_without_report_selectors)
                is_equal_to (0));
   assert_that (received_notice, is_equal_to_string ("1"));
   assert_that (received_report_format, is_null);
-  assert_that (received_report_config, is_null);
   assert_that (received_atomic_report_format, is_equal_to_string (""));
-  assert_that (received_atomic_report_config, is_equal_to_string (""));
   assert_that (received_from_address, is_null);
   assert_that (received_recipient_credential, is_null);
   assert_that (received_message, is_equal_to_string (request.message));
@@ -2077,7 +2012,7 @@ Ensure (turbovas_control, omits_empty_optional_report_method_data)
     .to_address = "ops@example.com", .from_address = "", .subject = "subject",
     .recipient_credential_uuid = "",
     .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
-    .report_config_uuid = "", .message = "", .active = TRUE, .notice = 0,
+    .message = "", .active = TRUE, .notice = 0,
   };
   char created_uuid[37];
 
@@ -2091,7 +2026,6 @@ Ensure (turbovas_control, omits_empty_optional_report_method_data)
                is_equal_to (0));
   assert_that (received_report_format,
                is_equal_to_string (request.report_format_uuid));
-  assert_that (received_report_config, is_null);
   assert_that (received_from_address, is_null);
   assert_that (received_recipient_credential, is_null);
   assert_that (received_message, is_null);
@@ -2103,7 +2037,7 @@ Ensure (turbovas_control, rejects_missing_alert_operator_before_authority)
     .name = "Email alert", .comment = "", .status = "Running",
     .to_address = "ops@example.com", .from_address = "", .subject = "subject",
     .recipient_credential_uuid = "", .report_format_uuid = "",
-    .report_config_uuid = "", .message = "", .active = TRUE, .notice = 1,
+    .message = "", .active = TRUE, .notice = 1,
   };
   char created_uuid[37];
 
@@ -2131,7 +2065,7 @@ Ensure (turbovas_control, maps_atomic_unavailable_alert_report_format)
     .to_address = "ops@example.com", .from_address = "", .subject = "subject",
     .recipient_credential_uuid = "",
     .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
-    .report_config_uuid = "", .message = "delivery payload",
+    .message = "delivery payload",
     .active = TRUE, .notice = 0,
   };
   char created_uuid[37];
@@ -2149,73 +2083,6 @@ Ensure (turbovas_control, maps_atomic_unavailable_alert_report_format)
   assert_that (create_alert_calls, is_equal_to (1));
   assert_that (received_atomic_report_format,
                is_equal_to_string (request.report_format_uuid));
-  assert_that (received_atomic_report_config, is_equal_to_string (""));
-  assert_that (audit_fail_calls, is_equal_to (1));
-  assert_that (cleanup_calls, is_equal_to (1));
-  assert_that (current_credentials.uuid, is_null);
-  assert_that (current_credentials.username, is_null);
-}
-
-Ensure (turbovas_control, maps_atomic_unavailable_alert_report_config)
-{
-  const turbovas_control_alert_email_create_request_t request = {
-    .name = "Attach alert", .comment = "", .status = "Done",
-    .to_address = "ops@example.com", .from_address = "", .subject = "subject",
-    .recipient_credential_uuid = "",
-    .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
-    .report_config_uuid = "123e4567-e89b-12d3-a456-426614174012",
-    .message = "delivery payload", .active = TRUE, .notice = 2,
-  };
-  char created_uuid[37];
-
-  cleanup_calls = 0;
-  create_alert_calls = 0;
-  audit_fail_calls = 0;
-  create_alert_result = 91;
-  mock_operator_name = "operator";
-
-  assert_that (turbovas_control_create_alert_email (
-                 "123e4567-e89b-12d3-a456-426614174000", &request,
-                 created_uuid),
-               is_equal_to (91));
-  assert_that (create_alert_calls, is_equal_to (1));
-  assert_that (received_atomic_report_format,
-               is_equal_to_string (request.report_format_uuid));
-  assert_that (received_atomic_report_config,
-               is_equal_to_string (request.report_config_uuid));
-  assert_that (audit_fail_calls, is_equal_to (1));
-  assert_that (cleanup_calls, is_equal_to (1));
-  assert_that (current_credentials.uuid, is_null);
-  assert_that (current_credentials.username, is_null);
-}
-
-Ensure (turbovas_control, maps_atomic_alert_report_config_mismatch)
-{
-  const turbovas_control_alert_email_create_request_t request = {
-    .name = "Include alert", .comment = "", .status = "Done",
-    .to_address = "ops@example.com", .from_address = "", .subject = "subject",
-    .recipient_credential_uuid = "",
-    .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
-    .report_config_uuid = "123e4567-e89b-12d3-a456-426614174012",
-    .message = "delivery payload", .active = TRUE, .notice = 0,
-  };
-  char created_uuid[37];
-
-  cleanup_calls = 0;
-  create_alert_calls = 0;
-  audit_fail_calls = 0;
-  create_alert_result = 92;
-  mock_operator_name = "operator";
-
-  assert_that (turbovas_control_create_alert_email (
-                 "123e4567-e89b-12d3-a456-426614174000", &request,
-                 created_uuid),
-               is_equal_to (92));
-  assert_that (create_alert_calls, is_equal_to (1));
-  assert_that (received_atomic_report_format,
-               is_equal_to_string (request.report_format_uuid));
-  assert_that (received_atomic_report_config,
-               is_equal_to_string (request.report_config_uuid));
   assert_that (audit_fail_calls, is_equal_to (1));
   assert_that (cleanup_calls, is_equal_to (1));
   assert_that (current_credentials.uuid, is_null);
@@ -2228,7 +2095,7 @@ Ensure (turbovas_control, reports_postcommit_alert_uuid_failure_without_failed_a
     .name = "Simple alert", .comment = "", .status = "Done",
     .to_address = "ops@example.com", .from_address = "", .subject = "subject",
     .recipient_credential_uuid = "", .report_format_uuid = "",
-    .report_config_uuid = "", .message = "delivery payload",
+    .message = "delivery payload",
     .active = TRUE, .notice = 1,
   };
   char created_uuid[37];
@@ -2265,7 +2132,6 @@ Ensure (turbovas_control, rejects_missing_alert_smb_operator_before_authority)
     .share_path = "\\\\fileserver\\reports",
     .file_path = "scan/report.pdf",
     .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
-    .report_config_uuid = "",
     .max_protocol = "",
     .active = TRUE,
   };
@@ -2312,9 +2178,7 @@ Ensure (turbovas_control, maps_every_alert_create_response)
     {42, "42 invalid_smb_path\n"}, {43, "43 dotted_smb_path\n"},
     {60, "60 recipient_credential_not_found\n"},
     {61, "61 invalid_recipient_credential\n"},
-    {90, "90 report_format_not_found\n"},
-    {91, "91 report_config_not_found\n"},
-    {92, "92 report_config_mismatch\n"}, {99, "99 forbidden\n"},
+    {90, "90 report_format_not_found\n"}, {99, "99 forbidden\n"},
     {-3, "-3 committed_indeterminate\n"}, {-2, "-2 malformed\n"},
     {-1, "-1 internal\n"},
   };
@@ -3204,7 +3068,6 @@ Ensure (turbovas_control, maps_alert_smb_arrays_session_and_success_audit)
     .share_path = "\\\\fileserver\\reports",
     .file_path = "scan/report.pdf",
     .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
-    .report_config_uuid = "123e4567-e89b-12d3-a456-426614174012",
     .max_protocol = "SMB3",
     .active = TRUE,
   };
@@ -3240,8 +3103,6 @@ Ensure (turbovas_control, maps_alert_smb_arrays_session_and_success_audit)
   assert_that (received_smb_file_path, is_equal_to_string (request.file_path));
   assert_that (received_report_format,
                is_equal_to_string (request.report_format_uuid));
-  assert_that (received_report_config,
-               is_equal_to_string (request.report_config_uuid));
   assert_that (received_smb_max_protocol,
                is_equal_to_string (request.max_protocol));
   assert_that (audit_success_calls, is_equal_to (1));
@@ -3261,7 +3122,6 @@ Ensure (turbovas_control, audits_alert_smb_failure_and_cleans_session)
     .share_path = "invalid",
     .file_path = "scan/report.pdf",
     .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
-    .report_config_uuid = "",
     .max_protocol = "",
     .active = FALSE,
   };
@@ -3277,7 +3137,6 @@ Ensure (turbovas_control, audits_alert_smb_failure_and_cleans_session)
     turbovas_control_create_alert_smb ("123e4567-e89b-12d3-a456-426614174000",
                                        &request, created_uuid),
     is_equal_to (41));
-  assert_that (received_report_config, is_null);
   assert_that (received_smb_max_protocol, is_null);
   assert_that (audit_success_calls, is_equal_to (0));
   assert_that (audit_fail_calls, is_equal_to (1));
@@ -3296,7 +3155,6 @@ Ensure (turbovas_control, preserves_alert_smb_postcommit_indeterminate_audit)
     .share_path = "\\\\fileserver\\reports",
     .file_path = "scan/report.pdf",
     .report_format_uuid = "123e4567-e89b-12d3-a456-426614174011",
-    .report_config_uuid = "",
     .max_protocol = "SMB2",
     .active = TRUE,
   };
@@ -3321,13 +3179,15 @@ Ensure (turbovas_control, preserves_alert_smb_postcommit_indeterminate_audit)
 
 static int
 call_real_alert_smb_create (const char *share_path, const char *file_path,
-                            const char *report_config_uuid)
+                            const char *unused)
 {
   array_t *condition_data = make_array ();
   array_t *event_data = make_array ();
   array_t *method_data = make_array ();
   alert_t alert = 0;
   int result;
+
+  (void) unused;
 
   current_credentials.uuid = g_strdup ("123e4567-e89b-12d3-a456-426614174000");
   current_credentials.username = g_strdup ("operator");
@@ -3338,9 +3198,6 @@ call_real_alert_smb_create (const char *share_path, const char *file_path,
   turbovas_control_array_add_data (method_data, "smb_file_path", file_path);
   turbovas_control_array_add_data (method_data, "smb_report_format",
                                    "123e4567-e89b-12d3-a456-426614174011");
-  if (report_config_uuid[0])
-    turbovas_control_array_add_data (method_data, "smb_report_config",
-                                     report_config_uuid);
   turbovas_control_array_add_data (method_data, "smb_max_protocol", "SMB3");
   array_terminate (condition_data);
   array_terminate (event_data);
@@ -3349,7 +3206,7 @@ call_real_alert_smb_create (const char *share_path, const char *file_path,
   result = __real_create_alert_smb_with_report_refs (
     "SMB alert", "private delivery", "1", event_data, condition_data,
     method_data, "123e4567-e89b-12d3-a456-426614174010",
-    alert_smb_db_report_format_uuid, report_config_uuid, &alert);
+    alert_smb_db_report_format_uuid, &alert);
   turbovas_control_secure_array_free (condition_data);
   turbovas_control_secure_array_free (event_data);
   turbovas_control_secure_array_free (method_data);
@@ -3378,12 +3235,7 @@ Ensure (turbovas_control, locks_alert_smb_references_and_commits_atomically)
   assert_that (alert_smb_db_events[6],
                is_equal_to (ALERT_SMB_DB_FORMAT_RESOLVE));
   assert_that (alert_smb_db_events[7], is_equal_to (ALERT_SMB_DB_FORMAT_LOCK));
-  assert_that (alert_smb_db_events[8],
-               is_equal_to (ALERT_SMB_DB_CONFIG_RESOLVE));
-  assert_that (alert_smb_db_events[9], is_equal_to (ALERT_SMB_DB_CONFIG_LOCK));
-  assert_that (alert_smb_db_events[10],
-               is_equal_to (ALERT_SMB_DB_CONFIG_MATCH));
-  assert_that (alert_smb_db_events[11], is_equal_to (ALERT_SMB_DB_BODY_INSERT));
+  assert_that (alert_smb_db_events[8], is_equal_to (ALERT_SMB_DB_BODY_INSERT));
   assert_that (alert_smb_db_events[alert_smb_db_event_count - 1],
                is_equal_to (ALERT_SMB_DB_COMMIT));
   assert_that (alert_smb_db_method_inserts, is_equal_to (6));
@@ -3442,26 +3294,6 @@ Ensure (turbovas_control, rejects_alert_smb_reference_failures_atomically)
                                            "scan/report.pdf", ""),
                is_equal_to (90));
 
-  reset_alert_smb_db ();
-  alert_smb_db_config_readable = FALSE;
-  assert_that (
-    call_real_alert_smb_create ("\\\\fileserver\\reports", "scan/report.pdf",
-                                "123e4567-e89b-12d3-a456-426614174012"),
-    is_equal_to (91));
-
-  reset_alert_smb_db ();
-  alert_smb_db_config_lock_exists = FALSE;
-  assert_that (
-    call_real_alert_smb_create ("\\\\fileserver\\reports", "scan/report.pdf",
-                                "123e4567-e89b-12d3-a456-426614174012"),
-    is_equal_to (91));
-
-  reset_alert_smb_db ();
-  alert_smb_db_config_matches = FALSE;
-  assert_that (
-    call_real_alert_smb_create ("\\\\fileserver\\reports", "scan/report.pdf",
-                                "123e4567-e89b-12d3-a456-426614174012"),
-    is_equal_to (92));
 }
 
 Ensure (turbovas_control, preserves_authoritative_alert_smb_validation)
@@ -4283,10 +4115,6 @@ main (int argc, char **argv)
                          rejects_missing_alert_operator_before_authority);
   add_test_with_context (suite, turbovas_control,
                          maps_atomic_unavailable_alert_report_format);
-  add_test_with_context (suite, turbovas_control,
-                         maps_atomic_unavailable_alert_report_config);
-  add_test_with_context (suite, turbovas_control,
-                         maps_atomic_alert_report_config_mismatch);
   add_test_with_context (
     suite, turbovas_control,
     reports_postcommit_alert_uuid_failure_without_failed_audit);

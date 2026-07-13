@@ -112,13 +112,6 @@ fn tag_resource_sql_spec(resource_type: &str) -> Result<TagResourceSqlSpec, ApiE
             name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
             extra_where: "coalesce(r.usage_type, 'scan') = 'scan'",
         }),
-        "report_config" => Ok(TagResourceSqlSpec {
-            table: "report_configs",
-            join_on: "r.id = tr.resource",
-            id_expr: "r.uuid",
-            name_expr: "coalesce(nullif(r.name, ''), r.uuid)",
-            extra_where: "",
-        }),
         "report_format" => Ok(TagResourceSqlSpec {
             table: "report_formats",
             join_on: "r.id = tr.resource",
@@ -230,7 +223,6 @@ pub(crate) fn tag_resource_direct_write_type_is_supported(resource_type: &str) -
             | "override"
             | "port_list"
             | "report"
-            | "report_config"
             | "report_format"
             | "result"
             | "scanner"
@@ -261,7 +253,6 @@ pub(crate) fn tag_resource_direct_write_requires_owner_match(resource_type: &str
             | "override"
             | "port_list"
             | "report"
-            | "report_config"
             | "report_format"
             | "result"
             | "scanner"

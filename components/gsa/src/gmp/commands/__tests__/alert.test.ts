@@ -441,7 +441,6 @@ describe('AlertCommand tests', () => {
       method_data_notice: '0',
       method_data_recipient_credential: 'recipient-id',
       method_data_notice_report_format: 'format-id',
-      method_data_notice_report_config: 0,
       method_data_message: '[REDACTED MESSAGE]',
     });
 
@@ -508,7 +507,6 @@ describe('AlertCommand tests', () => {
           subject: '[REDACTED SUBJECT]',
           notice: 'attach',
           report_format_id: 'format-id',
-          report_config_id: 'config-id',
           message: '[REDACTED MESSAGE]',
         }),
       }),
@@ -542,7 +540,6 @@ describe('AlertCommand tests', () => {
       method_data_smb_share_path: '[REDACTED SHARE]',
       method_data_smb_file_path: '[REDACTED FILE]',
       method_data_smb_report_format: 'format-id',
-      method_data_smb_report_config: 0,
       method_data_smb_max_protocol: '',
     });
 
@@ -918,9 +915,6 @@ describe('AlertCommand tests', () => {
         get_report_formats_response: {
           report_format: [{_id: 'rf1'}, {_id: 'rf2'}],
         },
-        get_report_configs_response: {
-          report_config: [{_id: 'rc1'}, {_id: 'rc2'}],
-        },
         get_credentials_response: {
           credential: [{_id: 'cr1'}, {_id: 'cr2'}],
         },
@@ -941,7 +935,6 @@ describe('AlertCommand tests', () => {
       },
     });
     expect(resp.data.report_formats.length).toBe(2);
-    expect(resp.data.report_configs.length).toBe(2);
     expect(resp.data.credentials.length).toBe(2);
     expect(resp.data.tasks.length).toBe(2);
     expect(resp.data.filters.length).toBe(2);
@@ -988,10 +981,6 @@ describe('AlertCommand tests', () => {
       expect.objectContaining({page: 1, page_size: 500, sort: 'name'}),
     );
     expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
-      'api/v1/report-configs',
-      expect.objectContaining({page: 1, page_size: 500, sort: 'name'}),
-    );
-    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
       'api/v1/credentials',
       expect.objectContaining({page: 1, page_size: 500, sort: 'name'}),
     );
@@ -1004,7 +993,6 @@ describe('AlertCommand tests', () => {
       expect.objectContaining({page: 1, page_size: 500, sort: 'name'}),
     );
     expect(resp.data.report_formats.length).toBe(1);
-    expect(resp.data.report_configs.length).toBe(1);
     expect(resp.data.credentials.length).toBe(1);
     expect(resp.data.tasks.length).toBe(1);
     expect(resp.data.filters.length).toBe(1);
@@ -1018,9 +1006,6 @@ describe('AlertCommand tests', () => {
         },
         get_report_formats_response: {
           report_format: [{_id: 'rf1'}, {_id: 'rf2'}],
-        },
-        get_report_configs_response: {
-          report_config: [{_id: 'rc1'}, {_id: 'rc2'}],
         },
         get_credentials_response: {
           credential: [{_id: 'cr1'}, {_id: 'cr2'}],
@@ -1044,7 +1029,6 @@ describe('AlertCommand tests', () => {
     });
     expect(resp.data.alert.id).toBe('a1');
     expect(resp.data.report_formats.length).toBe(2);
-    expect(resp.data.report_configs.length).toBe(2);
     expect(resp.data.credentials.length).toBe(2);
     expect(resp.data.tasks.length).toBe(2);
     expect(resp.data.filters.length).toBe(2);
@@ -1099,7 +1083,6 @@ describe('AlertCommand tests', () => {
     });
     expect(resp.data.alert.id).toBe('alert_id1');
     expect(resp.data.report_formats.length).toBe(1);
-    expect(resp.data.report_configs.length).toBe(1);
     expect(resp.data.credentials.length).toBe(1);
     expect(resp.data.tasks.length).toBe(1);
     expect(resp.data.filters.length).toBe(1);

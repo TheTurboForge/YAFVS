@@ -123,7 +123,6 @@ describe('resourceType function tests', () => {
     expect(resourceType('filter')).toEqual('filter');
     expect(resourceType('portlist')).toEqual('port_list');
     expect(resourceType('report')).toEqual('report');
-    expect(resourceType('reportconfig')).toEqual('report_config');
     expect(resourceType('reportformat')).toEqual('report_format');
     expect(resourceType('target')).toEqual('target');
     expect(resourceType('task')).toEqual('task');

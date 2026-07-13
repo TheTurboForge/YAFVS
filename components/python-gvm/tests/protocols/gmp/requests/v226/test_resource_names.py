@@ -92,12 +92,6 @@ class ResourceNamesTestCase(unittest.TestCase):
 
         self.assertEqual(bytes(request), b'<get_resource_names type="REPORT"/>')
 
-        request = ResourceNames.get_resource_names(ResourceType.REPORT_CONFIG)
-
-        self.assertEqual(
-            bytes(request), b'<get_resource_names type="REPORT_CONFIG"/>'
-        )
-
         request = ResourceNames.get_resource_names(ResourceType.RESULT)
 
         self.assertEqual(bytes(request), b'<get_resource_names type="RESULT"/>')
@@ -285,15 +279,6 @@ class ResourceNamesTestCase(unittest.TestCase):
         self.assertEqual(
             bytes(request),
             b'<get_resource_names resource_id="i1" type="REPORT"/>',
-        )
-
-        request = ResourceNames.get_resource_name(
-            resource_type=ResourceType.REPORT_CONFIG, resource_id="i1"
-        )
-
-        self.assertEqual(
-            bytes(request),
-            b'<get_resource_names resource_id="i1" type="REPORT_CONFIG"/>',
         )
 
         request = ResourceNames.get_resource_name(

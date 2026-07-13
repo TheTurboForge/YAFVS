@@ -1287,13 +1287,12 @@ int
 report_progress (report_t);
 
 gchar *
-manage_report (report_t, const get_data_t *,
-               report_format_t, report_config_t,
+manage_report (report_t, const get_data_t *, report_format_t,
                int, gsize *, gchar **, gchar **, gchar **, gchar **,
                gchar **);
 
 int
-manage_send_report (report_t, report_format_t, report_config_t,
+manage_send_report (report_t, report_format_t,
                     const get_data_t *,
                     int, int, int, int, int,
                     gboolean (*) (const char *,

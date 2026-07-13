@@ -40,8 +40,7 @@ fn native_pdf_contract_keeps_only_the_canonical_format_and_no_legacy_rendering_i
         .map(|(path, _)| path)
         .expect("OpenAPI native PDF path must be present");
     assert!(OPENAPI.contains(CANONICAL_PDF_REPORT_FORMAT_ID));
-    assert!(path.contains("custom report configs, filters, and scripts"));
-    assert!(!path.contains("report_config_id"));
+    assert!(path.contains("custom filters and scripts"));
     assert!(!path.contains("filter_id"));
     assert!(!PDF_SOURCE.contains("quick_xml"));
     assert!(!PDF_SOURCE.contains("gvmd_control"));

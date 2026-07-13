@@ -23,8 +23,7 @@ use crate::{
     },
     report_format_query_sql::{
         report_format_alert_backlinks_sql, report_format_asset_detail_sql,
-        report_format_assets_sql, report_format_config_backlinks_sql,
-        report_format_param_options_sql, report_format_params_sql,
+        report_format_assets_sql, report_format_param_options_sql, report_format_params_sql,
     },
 };
 
@@ -53,7 +52,7 @@ pub(crate) async fn report_format_assets(
     .await?;
     let items = rows
         .iter()
-        .map(|row| report_format_asset_from_row(row, Vec::new(), Vec::new(), Vec::new()))
+        .map(|row| report_format_asset_from_row(row, Vec::new(), Vec::new()))
         .collect();
     Ok(Json(Collection {
         page: params.page_info(total),
@@ -95,16 +94,6 @@ pub(crate) async fn load_report_format_asset_detail(
         .iter()
         .map(report_format_reference_from_row)
         .collect();
-    let report_configs = client
-        .query(report_format_config_backlinks_sql(), &[&report_format_id])
-        .await
-        .map_err(|error| {
-            tracing::warn!(%error, "report format config backlink query failed");
-            ApiError::Database
-        })?
-        .iter()
-        .map(report_format_reference_from_row)
-        .collect();
     let mut params = Vec::new();
     for param_row in client
         .query(report_format_params_sql(), &[&internal_id])
@@ -128,12 +117,7 @@ pub(crate) async fn load_report_format_asset_detail(
         params.push(report_format_param_from_row(&param_row, options));
     }
 
-    Ok(report_format_asset_from_row(
-        &row,
-        alerts,
-        report_configs,
-        params,
-    ))
+    Ok(report_format_asset_from_row(&row, alerts, params))
 }
 
 pub(crate) async fn export_report_format_metadata(

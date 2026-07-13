@@ -24,8 +24,7 @@ use crate::{
     query::sort_clause,
     report_format_query_sql::{
         report_format_alert_backlinks_sql, report_format_asset_detail_sql,
-        report_format_assets_sql, report_format_config_backlinks_sql,
-        report_format_param_options_sql, report_format_params_sql,
+        report_format_assets_sql, report_format_param_options_sql, report_format_params_sql,
     },
     scan_config_query_sql::{
         scan_config_asset_detail_sql, scan_config_asset_list_sql, scan_config_task_references_sql,
@@ -156,19 +155,15 @@ fn report_format_read_sql_is_metadata_params_and_backlinks_only() {
     let list_sql = report_format_assets_sql("name ASC");
     let detail_sql = report_format_asset_detail_sql();
     let alerts_sql = report_format_alert_backlinks_sql();
-    let configs_sql = report_format_config_backlinks_sql();
     let params_sql = report_format_params_sql();
     let options_sql = report_format_param_options_sql();
-    let combined = format!(
-        "{list_sql}\n{detail_sql}\n{alerts_sql}\n{configs_sql}\n{params_sql}\n{options_sql}"
-    );
+    let combined = format!("{list_sql}\n{detail_sql}\n{alerts_sql}\n{params_sql}\n{options_sql}");
 
     for required in [
         "FROM report_formats rf",
         "FROM report_format_params rfp",
         "FROM deprecated_feed_data dfd",
         "JOIN alert_method_data amd ON amd.alert = a.id",
-        "FROM report_configs rc",
         "FROM report_format_param_options",
     ] {
         assert!(

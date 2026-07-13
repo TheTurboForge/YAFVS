@@ -106,7 +106,6 @@ const RESOURCE_TYPES: EntityType[] = [
   'override',
   'portlist',
   'report',
-  'reportconfig',
   'reportformat',
   'result',
   'scanconfig',

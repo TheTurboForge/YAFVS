@@ -46,7 +46,6 @@ const Method = ({
   method = {},
   details = false,
   reportFormats = [],
-  reportConfigs = [],
 }) => {
   const [_] = useTranslation();
 
@@ -62,13 +61,6 @@ const Method = ({
     const reportFormat = reportFormats.find(format => format.id === id);
     if (isDefined(reportFormat)) {
       return reportFormat.name;
-    }
-    return null;
-  };
-  const getReportConfigName = id => {
-    const reportConfig = reportConfigs.find(config => config.id === id);
-    if (isDefined(reportConfig)) {
-      return reportConfig.name;
     }
     return null;
   };
@@ -146,15 +138,6 @@ const Method = ({
                     </TableData>
                   </TableRow>
                 )}
-              {isDefined(data.scp_report_config?.value) &&
-                reportConfigs.length > 0 && (
-                  <TableRow>
-                    <TableData>{_('Report Config')}</TableData>
-                    <TableData>
-                      {getReportConfigName(data.scp_report_config.value)}
-                    </TableData>
-                  </TableRow>
-                )}
             </TableBody>
           </Table>
         </div>
@@ -223,15 +206,6 @@ const Method = ({
                     <TableData>{_('Report Format')}</TableData>
                     <TableData>
                       {getReportFormatName(data.smb_report_format.value)}
-                    </TableData>
-                  </TableRow>
-                )}
-              {isDefined(data.smb_report_config?.value) &&
-                reportConfigs.length > 0 && (
-                  <TableRow>
-                    <TableData>{_('Report Config')}</TableData>
-                    <TableData>
-                      {getReportConfigName(data.smb_report_config.value)}
                     </TableData>
                   </TableRow>
                 )}
@@ -369,28 +343,6 @@ const Method = ({
                   </TableRow>
                 )}
 
-              {details &&
-                isDefined(data.notice_report_config?.value) &&
-                reportConfigs.length > 0 && (
-                  <TableRow>
-                    <TableData>{_('Report Config')}</TableData>
-                    <TableData>
-                      {getReportConfigName(data.notice_report_config.value)}
-                    </TableData>
-                  </TableRow>
-                )}
-
-              {details &&
-                isDefined(data.notice_attach_config?.value) &&
-                reportConfigs.length > 0 && (
-                  <TableRow>
-                    <TableData>{_('Report Config')}</TableData>
-                    <TableData>
-                      {getReportConfigName(data.notice_attach_config.value)}
-                    </TableData>
-                  </TableRow>
-                )}
-
               {details && isDefined(data.subject?.value) && (
                 <TableRow>
                   <TableData>{_('Subject')}</TableData>
@@ -429,7 +381,6 @@ const Method = ({
 Method.propTypes = {
   details: PropTypes.bool,
   method: PropTypes.object.isRequired,
-  reportConfigs: PropTypes.array,
   reportFormats: PropTypes.array,
 };
 

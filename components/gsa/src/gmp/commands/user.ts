@@ -160,7 +160,6 @@ export const DEFAULT_FILTER_SETTINGS: Record<
   override: 'eaaaebf1-01ef-4c49-b7bb-955461c78e0a',
   portlist: '7d52d575-baeb-4d98-bb68-e1730dbc6236',
   report: '48ae588e-9085-41bc-abcb-3d6389cf7237',
-  reportconfig: 'eca9738b-4339-4a3d-bd13-3c61173236ab',
   reportformat: '249c7a55-065c-47fb-b453-78e11a665565',
   result: '739ab810-163d-11e3-9af6-406186ea4fc5',
   scanconfig: '1a9fbd91-0182-44cd-bc88-a13a9b3b1bef',

@@ -16142,12 +16142,19 @@ def command_runtime_feed_import_init(repo_root: Path) -> dict[str, Any]:
             import_failed = True
             break
 
-    findings.extend(compose_app_services_up_with_retry(repo_root, "runtime.app-restart", "Restart app services after feed import"))
+    restart_findings = compose_app_services_up_with_retry(
+        repo_root,
+        "runtime.app-restart",
+        "Restart app services after feed import",
+    )
+    findings.extend(restart_findings)
     for service in APP_SERVICES:
         running = container_running(repo_root, service)
         findings.append(finding("pass" if running else "fail", "runtime.app.running", f"{service} container is {'running' if running else 'not running'} after feed import.", details={"service": service, "logs_tail": [] if running else service_log_tail(repo_root, service)}))
-    if import_failed or restart.returncode != 0:
+    if import_failed:
         return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because a rebuild/import step failed.", findings, [str(runtime_dir(repo_root))])
+    if aggregate_status(restart_findings) == "fail":
+        return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because app services could not be restarted.", findings, [str(runtime_dir(repo_root))])
 
     gvmd_ready = wait_for_socket(gvmd_socket_path(repo_root), timeout_seconds=180)
     findings.append(finding("pass" if gvmd_ready else "fail", "gvmd.socket-wait", "gvmd socket became ready after feed import restart." if gvmd_ready else "gvmd socket did not become ready after feed import restart.", str(gvmd_socket_path(repo_root))))

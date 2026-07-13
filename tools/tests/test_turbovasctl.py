@@ -15670,6 +15670,106 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertNotIn("feed-objects.gmp", source)
         self.assertNotIn("runtime_feed_objects_probe_path", source)
 
+    def run_mocked_runtime_feed_import(
+        self, restart_status="pass", rebuild_returncode=0
+    ):
+        restart = unittest.mock.Mock(
+            return_value=[
+                turbovasctl.finding(
+                    restart_status,
+                    "runtime.app-restart",
+                    f"Mock app restart {restart_status}.",
+                )
+            ]
+        )
+        rebuild = unittest.mock.Mock(
+            return_value=subprocess.CompletedProcess(
+                [], rebuild_returncode, "mock rebuild", ""
+            )
+        )
+        wait_for_socket = unittest.mock.Mock(return_value=True)
+        completed = subprocess.CompletedProcess([], 0, "", "")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            with unittest.mock.patch.multiple(
+                turbovasctl,
+                command_feed_state=unittest.mock.Mock(
+                    return_value={
+                        "findings": [
+                            turbovasctl.finding(
+                                "pass",
+                                "feed.runtime.nasl",
+                                "Mock runtime feed is ready.",
+                            )
+                        ]
+                    }
+                ),
+                ensure_runtime_feed_mappings=unittest.mock.Mock(return_value=[]),
+                run_command=unittest.mock.Mock(return_value=completed),
+                runtime_env=unittest.mock.Mock(return_value={}),
+                command_runtime_manager_init=unittest.mock.Mock(
+                    return_value={"status": "pass", "summary": "manager ready"}
+                ),
+                command_runtime_scanner_redis_init=unittest.mock.Mock(
+                    return_value={"status": "pass", "summary": "scanner ready"}
+                ),
+                command_runtime_feed_keyring_init=unittest.mock.Mock(
+                    return_value={"status": "pass", "summary": "keyring ready"}
+                ),
+                container_running=unittest.mock.Mock(return_value=True),
+                wait_for_socket=wait_for_socket,
+                wait_for_ospd_vt_load=unittest.mock.Mock(
+                    return_value=("pass", [])
+                ),
+                wait_for_ospd_vts_version=unittest.mock.Mock(
+                    return_value=("202607130100", [])
+                ),
+                psql=unittest.mock.Mock(
+                    return_value=subprocess.CompletedProcess(
+                        [], 0, "202607130100\n", ""
+                    )
+                ),
+                run_gvmd_runtime_oneoff=rebuild,
+                compose_app_services_up_with_retry=restart,
+                native_required_feed_object_findings=unittest.mock.Mock(
+                    return_value=[]
+                ),
+            ):
+                result = turbovasctl.command_runtime_feed_import_init(root)
+        return result, restart, rebuild, wait_for_socket
+
+    def test_runtime_feed_import_accepts_successful_app_restart(self):
+        result, restart, rebuild, wait_for_socket = (
+            self.run_mocked_runtime_feed_import()
+        )
+
+        self.assertEqual(result["status"], "pass")
+        restart.assert_called_once()
+        self.assertEqual(rebuild.call_count, 2)
+        self.assertEqual(wait_for_socket.call_count, 2)
+
+    def test_runtime_feed_import_reports_failed_app_restart(self):
+        result, restart, rebuild, wait_for_socket = (
+            self.run_mocked_runtime_feed_import(restart_status="fail")
+        )
+
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("could not be restarted", result["summary"])
+        restart.assert_called_once()
+        self.assertEqual(rebuild.call_count, 2)
+        self.assertEqual(wait_for_socket.call_count, 1)
+
+    def test_runtime_feed_import_restarts_services_after_failed_rebuild(self):
+        result, restart, rebuild, wait_for_socket = (
+            self.run_mocked_runtime_feed_import(rebuild_returncode=1)
+        )
+
+        self.assertEqual(result["status"], "fail")
+        restart.assert_called_once()
+        rebuild.assert_called_once()
+        self.assertEqual(wait_for_socket.call_count, 1)
+
     def test_full_test_scan_constants_are_fixed_to_authorized_lan(self):
         self.assertEqual(runtime_full_test_scan.AUTHORIZED_TARGET_CIDR, "192.168.178.0/24")
         self.assertEqual(runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID, turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID)

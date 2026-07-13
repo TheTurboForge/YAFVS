@@ -647,11 +647,6 @@ Prerequisites for SMB alert:
 * python3
 * smbclient
 
-Prerequisites for Tipping Point alert:
-
-* python3
-* python3-lxml
-
 Prerequisites for key generation on systems with low entropy:
 
 * haveged (or a similar tool)

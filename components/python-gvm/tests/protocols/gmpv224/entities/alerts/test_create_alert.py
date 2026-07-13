@@ -131,14 +131,6 @@ class GmpCreateAlertTestMixin:
             self.gmp.create_alert(
                 name="foo",
                 condition=AlertCondition.ALWAYS,
-                event=AlertEvent.UPDATED_SECINFO_ARRIVED,
-                method=AlertMethod.TIPPINGPOINT_SMS,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            self.gmp.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
                 event=AlertEvent.NEW_SECINFO_ARRIVED,
                 method=AlertMethod.HTTP_GET,
             )
@@ -157,14 +149,6 @@ class GmpCreateAlertTestMixin:
                 condition=AlertCondition.ALWAYS,
                 event=AlertEvent.NEW_SECINFO_ARRIVED,
                 method=AlertMethod.START_TASK,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            self.gmp.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.NEW_SECINFO_ARRIVED,
-                method=AlertMethod.TIPPINGPOINT_SMS,
             )
 
     def test_invalid_condition_for_task_run_status_changed(self):

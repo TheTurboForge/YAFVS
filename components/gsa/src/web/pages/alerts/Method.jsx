@@ -17,10 +17,8 @@ import {
   METHOD_TYPE_EMAIL,
   METHOD_TYPE_START_TASK,
   METHOD_TYPE_HTTP_GET,
-  METHOD_TYPE_TIPPING_POINT,
 } from 'gmp/models/alert';
 import {isDefined} from 'gmp/utils/identity';
-import CertInfo from 'web/components/certinfo/CertInfo';
 import HorizontalSep from 'web/components/layout/HorizontalSep';
 import DetailsLink from 'web/components/link/DetailsLink';
 import SimpleTable from 'web/components/table/SimpleTable';
@@ -543,61 +541,6 @@ const Method = ({
     }
 
     return _('HTTP GET request');
-  }
-
-  if (method.type === METHOD_TYPE_TIPPING_POINT) {
-    // data.tp_sms_credential has no name, only id!
-    const {data = {}} = method;
-    if (details) {
-      return (
-        <div>
-          <div>{_('TippingPoint SMS')}</div>
-          <Table>
-            <colgroup>
-              <TableCol width="12%" />
-              <TableCol width="88%" />
-            </colgroup>
-            <TableBody>
-              {isDefined(data.tp_sms_hostname?.value) && (
-                <TableRow>
-                  <TableData>{_('Hostname / IP')}</TableData>
-                  <TableData>{data.tp_sms_hostname.value}</TableData>
-                </TableRow>
-              )}
-              {isDefined(data.tp_sms_tls_workaround?.value) && (
-                <TableRow>
-                  <TableData>
-                    {_('Use workaround for default certificate')}
-                  </TableData>
-                  <TableData>
-                    {data.tp_sms_tls_workaround.value === 1 ? 'Yes' : 'No'}
-                  </TableData>
-                </TableRow>
-              )}
-              {isDefined(data.tp_sms_tls_certificate?.value) && (
-                <TableRow>
-                  <TableData>{_('TLS Certificate')}</TableData>
-                  <TableData>
-                    {isDefined(
-                      data.tp_sms_tls_certificate?.certificate_info,
-                    ) ? (
-                      <CertInfo
-                        info={data.tp_sms_tls_certificate.certificate_info}
-                      />
-                    ) : (
-                      _(
-                        'No information available for existing file. File may not be a correct certificate.',
-                      )
-                    )}
-                  </TableData>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-    return _('TippingPoint SMS');
   }
 
   return method.type;

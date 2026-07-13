@@ -8846,70 +8846,6 @@ handle_get_alerts (gmp_parser_t *gmp_parser, GError **error)
                   g_free (username);
                 }
             }
-          else if (strcmp (name, "tp_sms_tls_certificate") == 0)
-            {
-              const char *certificate = alert_data_iterator_data (&data);
-              time_t activation_time, expiration_time;
-              gchar *md5_fingerprint, *sha256_fingerprint;
-              gchar *subject, *issuer, *serial;
-
-              if (certificate && strcmp (certificate, "")
-                  && get_certificate_info ((gchar*)certificate,
-                                           strlen (certificate),
-                                           TRUE,
-                                           &activation_time,
-                                           &expiration_time,
-                                           &md5_fingerprint,
-                                           &sha256_fingerprint,
-                                           &subject,
-                                           &issuer,
-                                           &serial,
-                                           NULL) == 0)
-                {
-                  gchar *activation_time_str, *expiration_time_str;
-
-                  activation_time_str = certificate_iso_time (activation_time);
-                  expiration_time_str = certificate_iso_time (expiration_time);
-
-                  SENDF_TO_CLIENT_OR_FAIL (
-                    "<data>"
-                    "<name>%s</name>"
-                    "<certificate_info>"
-                    "<activation_time>%s</activation_time>"
-                    "<expiration_time>%s</expiration_time>"
-                    "<md5_fingerprint>%s</md5_fingerprint>"
-                    "<sha256_fingerprint>%s</sha256_fingerprint>"
-                    "<subject>%s</subject>"
-                    "<issuer>%s</issuer>"
-                    "<serial>%s</serial>"
-                    "</certificate_info>"
-                    "%s"
-                    "</data>",
-                    name,
-                    activation_time_str,
-                    expiration_time_str,
-                    md5_fingerprint,
-                    sha256_fingerprint,
-                    subject,
-                    issuer,
-                    serial,
-                    certificate);
-                }
-              else
-                {
-                  SENDF_TO_CLIENT_OR_FAIL ("<data>"
-                                           "<name>%s</name>"
-                                           "%s"
-                                           "</data>",
-                                           name,
-                                           certificate);
-                }
-              g_free (md5_fingerprint);
-              g_free (sha256_fingerprint);
-              g_free (subject);
-              g_free (issuer);
-              g_free (serial);
-            }
           else
             {
               SENDF_TO_CLIENT_OR_FAIL ("<data>"
@@ -17932,32 +17868,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                                         " a dot (.)."));
                     log_event_fail ("alert", "Alert", NULL, "created");
                     break;
-                  case 50:
-                    SEND_TO_CLIENT_OR_FAIL
-                     (XML_ERROR_SYNTAX ("create_alert",
-                                        "Error in TippingPoint credential"));
-                    log_event_fail ("alert", "Alert", NULL, "created");
-                    break;
-                  case 51:
-                    SEND_TO_CLIENT_OR_FAIL
-                     (XML_ERROR_SYNTAX ("create_alert",
-                                        "Error in TippingPoint hostname"));
-                    log_event_fail ("alert", "Alert", NULL, "created");
-                    break;
-                  case 52:
-                    SEND_TO_CLIENT_OR_FAIL
-                     (XML_ERROR_SYNTAX ("create_alert",
-                                        "Error in TippingPoint TLS"
-                                        " certificate"));
-                    log_event_fail ("alert", "Alert", NULL, "created");
-                    break;
-                  case 53:
-                    SEND_TO_CLIENT_OR_FAIL
-                     (XML_ERROR_SYNTAX ("create_alert",
-                                        "TippingPoint TLS workaround must be"
-                                        " set to 0 or 1"));
-                    log_event_fail ("alert", "Alert", NULL, "created");
-                    break;
                   case 60:
                     {
                       SEND_TO_CLIENT_OR_FAIL
@@ -20095,32 +20005,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                                     " any file or subdirectory ending in"
                                     " a dot (.)."));
                 log_event_fail ("alert", "Alert", NULL, "modified");
-                break;
-              case 50:
-                SEND_TO_CLIENT_OR_FAIL
-                  (XML_ERROR_SYNTAX ("create_alert",
-                                     "Error in TippingPoint credential"));
-                log_event_fail ("alert", "Alert", NULL, "created");
-                break;
-              case 51:
-                SEND_TO_CLIENT_OR_FAIL
-                  (XML_ERROR_SYNTAX ("create_alert",
-                                     "Error in TippingPoint hostname"));
-                log_event_fail ("alert", "Alert", NULL, "created");
-                break;
-              case 52:
-                SEND_TO_CLIENT_OR_FAIL
-                  (XML_ERROR_SYNTAX ("create_alert",
-                                     "Error in TippingPoint TLS"
-                                     " certificate"));
-                log_event_fail ("alert", "Alert", NULL, "created");
-                break;
-              case 53:
-                SEND_TO_CLIENT_OR_FAIL
-                  (XML_ERROR_SYNTAX ("create_alert",
-                                     "TippingPoint TLS workaround must be"
-                                     " set to 0 or 1"));
-                log_event_fail ("alert", "Alert", NULL, "created");
                 break;
               case 60:
                 SEND_TO_CLIENT_OR_FAIL

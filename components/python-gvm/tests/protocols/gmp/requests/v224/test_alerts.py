@@ -269,14 +269,6 @@ class AlertsTestCase(unittest.TestCase):
             Alerts.create_alert(
                 name="foo",
                 condition=AlertCondition.ALWAYS,
-                event=AlertEvent.UPDATED_SECINFO_ARRIVED,
-                method=AlertMethod.TIPPINGPOINT_SMS,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
                 event=AlertEvent.NEW_SECINFO_ARRIVED,
                 method=AlertMethod.HTTP_GET,
             )
@@ -295,14 +287,6 @@ class AlertsTestCase(unittest.TestCase):
                 condition=AlertCondition.ALWAYS,
                 event=AlertEvent.NEW_SECINFO_ARRIVED,
                 method=AlertMethod.START_TASK,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.NEW_SECINFO_ARRIVED,
-                method=AlertMethod.TIPPINGPOINT_SMS,
             )
 
     def test_create_alert_invalid_condition_for_task_run_status_changed(self):

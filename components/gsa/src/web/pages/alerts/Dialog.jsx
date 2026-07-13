@@ -18,11 +18,10 @@ import {
   METHOD_TYPE_EMAIL,
   METHOD_TYPE_START_TASK,
   METHOD_TYPE_HTTP_GET,
-  METHOD_TYPE_TIPPING_POINT,
   isTaskEvent,
   isSecinfoEvent,
 } from 'gmp/models/alert';
-import {NO_VALUE, YES_VALUE} from 'gmp/parser';
+import {YES_VALUE} from 'gmp/parser';
 import {selectSaveId} from 'gmp/utils/id';
 import {isDefined} from 'gmp/utils/identity';
 import SaveDialog from 'web/components/dialog/SaveDialog';
@@ -40,7 +39,6 @@ import ScpMethodPart from 'web/pages/alerts/dialog/ScpMethodPart';
 import SmbMethodPart from 'web/pages/alerts/dialog/SmbMethodPart';
 import SnmpMethodPart from 'web/pages/alerts/dialog/SnmpMethodPart';
 import StartTaskMethodPart from 'web/pages/alerts/dialog/StartTaskMethodPart';
-import TippingPontMethodPart from 'web/pages/alerts/dialog/TippingPointMethodPart';
 import FilterCountChangedConditionPart from 'web/pages/alerts/FilterCountChangedConditionPart';
 import FilterCountLeastConditionPart from 'web/pages/alerts/FilterCountLeastConditionPart';
 import SecInfoEventPart from 'web/pages/alerts/SecInfoEventPart';
@@ -184,8 +182,6 @@ const DEFAULTS = {
   method_data_subject: TASK_SUBJECT,
   method_data_submethod: 'syslog',
   method_data_to_address: '',
-  method_data_tp_sms_hostname: '',
-  method_data_tp_sms_tls_workaround: NO_VALUE,
   method_data_URL: '',
   name: _('Unnamed'),
   report_configs: [],
@@ -261,7 +257,6 @@ class AlertDialog extends React.Component {
       method_data_recipient_credential,
       method_data_scp_credential,
       method_data_smb_credential,
-      method_data_tp_sms_credential,
       method_data_vfire_base_url,
       method_data_vfire_credential,
       method_data_vfire_session_type,
@@ -278,14 +273,12 @@ class AlertDialog extends React.Component {
       onNewScpCredentialClick,
       onNewSmbCredentialClick,
       onNewVfireCredentialClick,
-      onNewTippingPointCredentialClick,
       onOpenContentComposerDialogClick,
       onReportConfigsChange,
       onReportFormatsChange,
       onSave,
       onScpCredentialChange,
       onSmbCredentialChange,
-      onTippingPointCredentialChange,
       onVfireCredentialChange,
       ...props
     } = this.props;
@@ -328,10 +321,6 @@ class AlertDialog extends React.Component {
           label: _('System Logger'),
         },
         {
-          value: METHOD_TYPE_TIPPING_POINT,
-          label: _('TippingPoint SMS'),
-        },
-        {
           value: METHOD_TYPE_ALEMBA_VFIRE,
           label: _('Alemba vFire'),
         },
@@ -361,10 +350,6 @@ class AlertDialog extends React.Component {
         {
           value: METHOD_TYPE_SYSLOG,
           label: _('System Logger'),
-        },
-        {
-          value: METHOD_TYPE_TIPPING_POINT,
-          label: _('TippingPoint SMS'),
         },
         {
           value: METHOD_TYPE_ALEMBA_VFIRE,
@@ -401,7 +386,6 @@ class AlertDialog extends React.Component {
       method_data_recipient_credential,
       method_data_scp_credential,
       method_data_smb_credential,
-      method_data_tp_sms_credential,
       method_data_vfire_credential,
       report_config_ids,
       report_format_ids,
@@ -627,22 +611,6 @@ class AlertDialog extends React.Component {
                 />
               )}
 
-              {values.method === METHOD_TYPE_TIPPING_POINT && (
-                <TippingPontMethodPart
-                  credentials={credentials}
-                  prefix="method_data"
-                  tpSmsCredential={values.method_data_tp_sms_credential}
-                  tpSmsHostname={values.method_data_tp_sms_hostname}
-                  tpSmsTlsCertificate={
-                    values.method_data_tp_sms_tls_certificate
-                  }
-                  tpSmsTlsWorkaround={values.method_data_tp_sms_tls_workaround}
-                  onChange={onValueChange}
-                  onCredentialChange={onTippingPointCredentialChange}
-                  onNewCredentialClick={onNewTippingPointCredentialClick}
-                />
-              )}
-
               {values.method === METHOD_TYPE_ALEMBA_VFIRE && (
                 <AlembaVfireMethodPart
                   credentials={credentials}
@@ -742,9 +710,6 @@ AlertDialog.propTypes = {
   method_data_start_task_task: PropTypes.id,
   method_data_subject: PropTypes.string,
   method_data_to_address: PropTypes.string,
-  method_data_tp_sms_credential: PropTypes.id,
-  method_data_tp_sms_hostname: PropTypes.string,
-  method_data_tp_sms_tls_workaround: PropTypes.yesno,
   method_data_vfire_base_url: PropTypes.string,
   method_data_vfire_call_description: PropTypes.string,
   method_data_vfire_call_impact_name: PropTypes.string,
@@ -769,7 +734,6 @@ AlertDialog.propTypes = {
   onNewEmailCredentialClick: PropTypes.func.isRequired,
   onNewScpCredentialClick: PropTypes.func.isRequired,
   onNewSmbCredentialClick: PropTypes.func.isRequired,
-  onNewTippingPointCredentialClick: PropTypes.func.isRequired,
   onNewVfireCredentialClick: PropTypes.func.isRequired,
   onOpenContentComposerDialogClick: PropTypes.func.isRequired,
   onReportConfigsChange: PropTypes.func.isRequired,
@@ -777,7 +741,6 @@ AlertDialog.propTypes = {
   onSave: PropTypes.func.isRequired,
   onScpCredentialChange: PropTypes.func.isRequired,
   onSmbCredentialChange: PropTypes.func.isRequired,
-  onTippingPointCredentialChange: PropTypes.func.isRequired,
   onVfireCredentialChange: PropTypes.func.isRequired,
 };
 

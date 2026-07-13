@@ -43,7 +43,6 @@ class AlertMethod(Enum):
     EMAIL = "Email"
     START_TASK = "Start Task"
     HTTP_GET = "HTTP Get"
-    TIPPINGPOINT_SMS = "TippingPoint SMS"
     ALEMBA_VFIRE = "Alemba vFire"
 
 

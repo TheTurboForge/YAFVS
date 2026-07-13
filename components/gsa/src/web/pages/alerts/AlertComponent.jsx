@@ -288,12 +288,6 @@ const AlertComponent = ({
   const [methodDataSnmpMessage, setMethodDataSnmpMessage] = useState(undefined);
   const [methodDataStartTaskTask, setMethodDataStartTaskTask] =
     useState(undefined);
-  const [methodDataTpSmsCredential, setMethodDataTpSmsCredential] =
-    useState(undefined);
-  const [methodDataTpSmsHostname, setMethodDataTpSmsHostname] =
-    useState(undefined);
-  const [methodDataTpSmsTlsWorkaround, setMethodDataTpSmsTlsWorkaround] =
-    useState(undefined);
   const [methodDataVfireCredential, setMethodDataVfireCredential] =
     useState(undefined);
   const [methodDataVfireBaseUrl, setMethodDataVfireBaseUrl] =
@@ -337,8 +331,6 @@ const AlertComponent = ({
           setMethodDataSmbCredential(credentialId);
         } else if (String(credentialTypeRef.current) === 'vfire') {
           setMethodDataVfireCredential(credentialId);
-        } else if (String(credentialTypeRef.current) === 'tippingpoint') {
-          setMethodDataTpSmsCredential(credentialId);
         } else if (String(credentialTypeRef.current) === 'email') {
           setMethodDataRecipientCredential(credentialId);
         }
@@ -409,10 +401,6 @@ const AlertComponent = ({
 
   const openVfireCredentialDialog = types => {
     openCredentialDialog({type: 'vfire', types});
-  };
-
-  const openTippingPointCredentialDialog = types => {
-    openCredentialDialog({type: 'tippingpoint', types});
   };
 
   const openEmailCredentialDialog = types => {
@@ -495,10 +483,6 @@ const AlertComponent = ({
 
       const scpCredentialId = isDefined(method.data.scp_credential)
         ? method.data.scp_credential.credential.id
-        : undefined;
-
-      const tpSmsCredentialId = isDefined(method.data.tp_sms_credential)
-        ? getValue(method.data.tp_sms_credential)
         : undefined;
 
       const recipientCredentialId = isDefined(method.data.recipient_credential)
@@ -647,13 +631,6 @@ const AlertComponent = ({
       setMethodDataStartTaskTask(
         selectSaveId(tasks, getValue(method.data.start_task_task)),
       );
-      setMethodDataTpSmsCredential(
-        selectSaveId(credentials, tpSmsCredentialId),
-      );
-      setMethodDataTpSmsHostname(getValue(method.data.tp_sms_hostname, ''));
-      setMethodDataTpSmsTlsWorkaround(
-        parseYesNo(getValue(method.data.tp_sms_tls_workaround, NO_VALUE)),
-      );
       setMethodDataVfireCredential(
         selectSaveId(vFireCredentials, vfireCredentialId),
       );
@@ -751,9 +728,6 @@ const AlertComponent = ({
       setMethodDataSnmpAgent(undefined);
       setMethodDataSnmpCommunity(undefined);
       setMethodDataSnmpMessage(undefined);
-      setMethodDataTpSmsCredential(undefined);
-      setMethodDataTpSmsHostname(undefined);
-      setMethodDataTpSmsTlsWorkaround(undefined);
       setMethodDataURL(undefined);
       setMethodDataRecipientCredential(UNSET_VALUE);
       setMethodDataStartTaskTask(selectSaveId(tasks));
@@ -851,10 +825,6 @@ const AlertComponent = ({
 
   const handleSmbCredentialChange = credential => {
     setMethodDataSmbCredential(credential);
-  };
-
-  const handleTippingPointCredentialChange = credential => {
-    setMethodDataTpSmsCredential(credential);
   };
 
   const handleEmailCredentialChange = credential => {
@@ -970,9 +940,6 @@ const AlertComponent = ({
               method_data_start_task_task={methodDataStartTaskTask}
               method_data_subject={methodDataSubject}
               method_data_to_address={methodDataToAddress}
-              method_data_tp_sms_credential={methodDataTpSmsCredential}
-              method_data_tp_sms_hostname={methodDataTpSmsHostname}
-              method_data_tp_sms_tls_workaround={methodDataTpSmsTlsWorkaround}
               method_data_vfire_base_url={methodDataVfireBaseUrl}
               method_data_vfire_call_description={
                 methodDataVfireCallDescription
@@ -1005,9 +972,6 @@ const AlertComponent = ({
               onNewEmailCredentialClick={openEmailCredentialDialog}
               onNewScpCredentialClick={openScpCredentialDialog}
               onNewSmbCredentialClick={openSmbCredentialDialog}
-              onNewTippingPointCredentialClick={
-                openTippingPointCredentialDialog
-              }
               onNewVfireCredentialClick={openVfireCredentialDialog}
               onOpenContentComposerDialogClick={handleOpenContentComposerDialog}
               onReportConfigsChange={handleReportConfigsChange}
@@ -1018,9 +982,6 @@ const AlertComponent = ({
               }}
               onScpCredentialChange={handleScpCredentialChange}
               onSmbCredentialChange={handleSmbCredentialChange}
-              onTippingPointCredentialChange={
-                handleTippingPointCredentialChange
-              }
               onVfireCredentialChange={handleVfireCredentialChange}
             />
           )}

@@ -623,76 +623,6 @@ validate_smb_data (alert_method_t method, const gchar *name, gchar **data)
 }
 
 /**
- * @brief Validate method data for the TippingPoint method.
- *
- * @param[in]  method          Method that data corresponds to.
- * @param[in]  name            Name of data.
- * @param[in]  data            The data.
- *
- * @return 0 valid, 50 invalid credential, 51 invalid hostname,
- *  52 invalid certificate, 53 invalid TLS workaround setting.
- */
-static int
-validate_tippingpoint_data (alert_method_t method, const gchar *name,
-                             gchar **data)
-{
-  if (method == ALERT_METHOD_TIPPINGPOINT)
-    {
-      if (strcmp (name, "tp_sms_credential") == 0)
-        {
-          credential_t credential;
-          if (find_credential_with_permission (*data, &credential,
-                                               "get_credentials"))
-            return -1;
-          else if (credential == 0)
-            return 50;
-          else
-            {
-              if (strcmp (credential_type (credential), "up"))
-                return 50;
-
-            }
-        }
-
-      if (strcmp (name, "tp_sms_hostname") == 0)
-        {
-          if (g_regex_match_simple ("^[0-9A-Za-z][0-9A-Za-z.\\-]*$",
-                                    *data, 0, 0)
-              == FALSE)
-            {
-              return 51;
-            }
-        }
-
-      if (strcmp (name, "tp_sms_tls_certificate") == 0)
-        {
-          // Check certificate, return 52 on failure
-          int ret;
-          gnutls_x509_crt_fmt_t crt_fmt;
-
-          ret = get_certificate_info (*data, strlen(*data), FALSE,
-                                      NULL, NULL, NULL,
-                                      NULL, NULL, NULL, NULL, &crt_fmt);
-          if (ret || crt_fmt != GNUTLS_X509_FMT_PEM)
-            {
-              return 52;
-            }
-        }
-
-      if (strcmp (name, "tp_sms_tls_workaround") == 0)
-        {
-          if (g_regex_match_simple ("^0|1$", *data, 0, 0)
-              == FALSE)
-            {
-              return 53;
-            }
-        }
-    }
-
-  return 0;
-}
-
-/**
  * @brief Validate method data for the vFire alert method.
  *
  * @param[in]  method          Method that data corresponds to.
@@ -783,9 +713,7 @@ check_alert_params (event_t event, alert_condition_t condition,
  *         name, 32 syntax error in event data, 40 invalid SMB credential
  *       , 41 invalid SMB share path, 42 invalid SMB file path,
  *         43 SMB file path contains dot,
- *         50 invalid TippingPoint credential, 51 invalid TippingPoint hostname,
- *         52 invalid TippingPoint certificate, 53 invalid TippingPoint TLS
- *         workaround setting, 60 recipient credential not found, 61 invalid
+ *         60 recipient credential not found, 61 invalid
  *         recipient credential type, 70 vFire credential not found,
  *         71 invalid vFire credential type,
  *         99 permission denied, -1 error.
@@ -954,14 +882,6 @@ create_alert_body (const char* name, const char* comment,
         }
 
       ret = validate_smb_data (method, data_name, &data);
-      if (ret)
-        {
-          g_free (data_name);
-          secure_gfree (data, sensitive);
-          return ret;
-        }
-
-      ret = validate_tippingpoint_data (method, data_name, &data);
       if (ret)
         {
           g_free (data_name);
@@ -1388,9 +1308,7 @@ create_alert_smb_with_report_refs (const char *name, const char *comment,
  *         name, 32 syntax error in event data, 40 invalid SMB credential
  *       , 41 invalid SMB share path, 42 invalid SMB file path,
  *         43 SMB file path contains dot,
- *         50 invalid TippingPoint credential, 51 invalid TippingPoint hostname,
- *         52 invalid TippingPoint certificate, 53 invalid TippingPoint TLS
- *         workaround setting, 60 recipient credential not found, 61 invalid
+ *         60 recipient credential not found, 61 invalid
  *         recipient credential type, 70 vFire credential not found,
  *         71 invalid vFire credential type,
  *         99 permission denied, -1 internal error.
@@ -1634,15 +1552,6 @@ modify_alert (const char *alert_id, const char *name, const char *comment,
             }
 
           ret = validate_smb_data (method, data_name, &data);
-          if (ret)
-            {
-              g_free (data_name);
-              g_free (data);
-              sql_rollback ();
-              return ret;
-            }
-
-          ret = validate_tippingpoint_data (method, data_name, &data);
           if (ret)
             {
               g_free (data_name);

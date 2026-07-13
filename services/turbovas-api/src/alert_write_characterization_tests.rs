@@ -58,6 +58,13 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
         ["source", "fire"].concat(),
         ["verinice", " connector"].concat(),
     ];
+    let retired_method_name = ["tip", "ping", "point sms"].concat();
+    let retired_method_fields = [
+        ["tp", "_sms_credential"].concat(),
+        ["tp", "_sms_hostname"].concat(),
+        ["tp", "_sms_tls_certificate"].concat(),
+        ["tp", "_sms_tls_workaround"].concat(),
+    ];
     for (path, source) in [
         ("GSA snake-case allowlist", GSA_ALLOWED_SNAKE_CASE),
         ("GSA alert command", GSA_ALERT_COMMAND),
@@ -95,10 +102,18 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
         }
         for retired_connector_name in &retired_connector_names {
             assert!(
-                !source
-                    .to_ascii_lowercase()
-                    .contains(retired_connector_name),
+                !source.to_ascii_lowercase().contains(retired_connector_name),
                 "{path} still contains the retired connector"
+            );
+        }
+        assert!(
+            !source.to_ascii_lowercase().contains(&retired_method_name),
+            "{path} still contains the retired alert method"
+        );
+        for retired_method_field in &retired_method_fields {
+            assert!(
+                !source.contains(retired_method_field),
+                "{path} still contains retired alert field {retired_method_field}"
             );
         }
     }
@@ -143,7 +158,7 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
         "ALERT_METHOD_SCP = 8",
         "ALERT_METHOD_SNMP = 9",
         "ALERT_METHOD_SMB = 10",
-        "ALERT_METHOD_TIPPINGPOINT = 11",
+        "Value 11 is retired; alert method IDs are persisted and must not shift.",
         "ALERT_METHOD_VFIRE = 12",
     ] {
         assert!(
@@ -160,11 +175,19 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
         "retired alert method must not remain in the enum"
     );
     assert!(
+        !MANAGE_ALERTS_H.contains(&["ALERT_METHOD_", "TIPP", "INGPOINT"].concat()),
+        "retired alert method must not remain in the enum"
+    );
+    assert!(
         !MANAGE_ALERTS_C.contains("case ALERT_METHOD_SEND"),
         "retired alert method must not remain executable"
     );
     assert!(
         !MANAGE_ALERTS_C.contains("case ALERT_METHOD_VERINICE"),
+        "retired alert method must not remain executable"
+    );
+    assert!(
+        !MANAGE_ALERTS_C.contains(&["case ALERT_METHOD_", "TIPP", "INGPOINT"].concat()),
         "retired alert method must not remain executable"
     );
     assert!(
@@ -177,6 +200,10 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
     );
     assert!(
         !ALERT_QUERY_SQL.contains("WHEN 6 THEN 'verinice Connector'"),
+        "native SQL must not label the retired alert method"
+    );
+    assert!(
+        !ALERT_QUERY_SQL.contains(&format!("WHEN 11 THEN '{}'", retired_method_name)),
         "native SQL must not label the retired alert method"
     );
     assert!(
@@ -196,6 +223,7 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let retired_connector_directory = ["Source", "fire"].concat();
+    let retired_method_directory = ["Tip", "ping", "Point"].concat();
     assert!(
         !root
             .join("components/gvmd/src/alert_methods")
@@ -233,6 +261,19 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
         !root
             .join("components/gsa/src/web/pages/alerts/dialog")
             .join("VeriniceMethodPart.tsx")
+            .exists()
+    );
+    assert!(
+        !root
+            .join("components/gvmd/src/alert_methods")
+            .join(&retired_method_directory)
+            .join("alert")
+            .exists()
+    );
+    assert!(
+        !root
+            .join("components/gsa/src/web/pages/alerts/dialog")
+            .join(["Tip", "ping", "PointMethodPart.tsx"].concat())
             .exists()
     );
 }
@@ -302,9 +343,7 @@ fn inherited_alert_create_and_modify_are_acl_filter_and_payload_guarded() {
         "INSERT INTO alert_event_data (alert, name, data)",
         "validate_email_data (method, data_name, &data, 0)",
         "validate_scp_data (method, data_name, &data)",
-        "validate_send_data (method, data_name, &data)",
         "validate_smb_data (method, data_name, &data)",
-        "validate_tippingpoint_data (method, data_name, &data)",
         "validate_vfire_data (method, data_name, &data)",
         "INSERT INTO alert_method_data (alert, name, data)",
         "sql_commit ();",
@@ -423,7 +462,6 @@ fn gsad_and_gsa_alert_commands_proxy_delivery_payloads_and_control_verbs() {
     for required in [
         "scp_credential",
         "smb_credential",
-        "tp_sms_credential",
         "vfire_credential",
         "recipient_credential",
         "notice_report_config",

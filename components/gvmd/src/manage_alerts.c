@@ -389,7 +389,6 @@ alert_method_name (alert_method_t method)
       case ALERT_METHOD_SNMP:        return "SNMP";
       case ALERT_METHOD_START_TASK:  return "Start Task";
       case ALERT_METHOD_SYSLOG:      return "Syslog";
-      case ALERT_METHOD_TIPPINGPOINT:return "TippingPoint SMS";
       case ALERT_METHOD_VFIRE:       return "Alemba vFire";
       default:                       return "Internal Error";
     }
@@ -419,8 +418,6 @@ alert_method_from_name (const char* name)
     return ALERT_METHOD_START_TASK;
   if (strcasecmp (name, "Syslog") == 0)
     return ALERT_METHOD_SYSLOG;
-  if (strcasecmp (name, "TippingPoint SMS") == 0)
-    return ALERT_METHOD_TIPPINGPOINT;
   if (strcasecmp (name, "Alemba vFire") == 0)
     return ALERT_METHOD_VFIRE;
   return ALERT_METHOD_ERROR;
@@ -2218,123 +2215,6 @@ send_to_vfire (const char *base_url, const char *client_id,
   g_free (alert_script);
   g_unlink (config_xml_filename);
 
-  return ret;
-}
-
-/**
- * @brief Convert an XML report and send it to a TippingPoint SMS.
- *
- * @param[in]  report           Report to send.
- * @param[in]  report_size      Size of report.
- * @param[in]  username         Username.
- * @param[in]  password         Password.
- * @param[in]  hostname         Hostname.
- * @param[in]  certificate      Certificate.
- * @param[in]  cert_workaround  Whether to use cert workaround.
- * @param[out] message          Custom error message of the script.
- *
- * @return 0 success, -1 error.
- */
-static int
-send_to_tippingpoint (const char *report, size_t report_size,
-                      const char *username, const char *password,
-                      const char *hostname, const char *certificate,
-                      int cert_workaround, gchar **message)
-{
-  const char *alert_id = "5b39c481-9137-4876-b734-263849dd96ce";
-  char report_dir[] = "/tmp/gvmd_alert_XXXXXX";
-  gchar *auth_config, *report_path, *error_path, *extra_path, *cert_path;
-  gchar *command_args, *hostname_clean, *convert_script;
-  int report_fd, error_fd, extra_fd, cert_fd;
-  int ret;
-
-  /* Setup auth file contents */
-  auth_config = g_strdup_printf ("machine %s\n"
-                                 "login %s\n"
-                                 "password %s\n",
-                                 cert_workaround ? "Tippingpoint" : hostname,
-                                 username, password);
-
-  /* Setup common files. */
-  ret = alert_script_init ("report", report, report_size,
-                           auth_config, strlen (auth_config),
-                           report_dir,
-                           &report_path, &error_path, &extra_path,
-                           &report_fd, &error_fd, &extra_fd);
-  g_free (auth_config);
-
-  if (ret)
-    return ret;
-
-  /* Setup certificate file */
-  cert_path = g_build_filename (report_dir, "cacert.pem", NULL);
-
-  cert_fd = open_private_write (cert_path);
-  if (cert_fd == -1 || write_all (cert_fd, certificate, strlen (certificate)))
-    {
-      g_warning ("%s: Failed to write TLS certificate to file: %s",
-                 __func__, strerror (errno));
-      close_alert_fd (&cert_fd);
-      close_alert_fd (&report_fd);
-      close_alert_fd (&error_fd);
-      close_alert_fd (&extra_fd);
-      alert_script_cleanup (report_dir, report_path, error_path, extra_path);
-      g_free (cert_path);
-      return -1;
-    }
-
-  if (geteuid () == 0)
-    {
-      struct passwd *nobody;
-
-      /* Run the command with lower privileges in a fork. */
-
-      nobody = getpwnam ("nobody");
-      if ((nobody == NULL)
-          || fchown (cert_fd, nobody->pw_uid, nobody->pw_gid))
-        {
-          g_warning ("%s: Failed to set permissions for user nobody: %s",
-                      __func__,
-                      strerror (errno));
-          close_alert_fd (&cert_fd);
-          close_alert_fd (&report_fd);
-          close_alert_fd (&error_fd);
-          close_alert_fd (&extra_fd);
-          g_free (cert_path);
-          alert_script_cleanup (report_dir, report_path, error_path,
-                                extra_path);
-          return -1;
-        }
-    }
-  close_alert_fd (&cert_fd);
-
-  /* Build args and run the script */
-  hostname_clean = g_shell_quote (hostname);
-  convert_script = g_build_filename (GVMD_DATA_DIR,
-                                     "global_alert_methods",
-                                     alert_id,
-                                     "report-convert.py",
-                                     NULL);
-
-  command_args = g_strdup_printf ("%s %s %d %s",
-                                  hostname_clean, cert_path, cert_workaround,
-                                  convert_script);
-
-  g_free (hostname_clean);
-  g_free (cert_path);
-  g_free (convert_script);
-
-  ret = alert_script_exec (alert_id, command_args, report_path, report_dir,
-                           error_path, extra_path, report_fd, error_fd,
-                           extra_fd, message);
-  if (ret)
-    {
-      alert_script_cleanup (report_dir, report_path, error_path, extra_path);
-      return ret;
-    }
-
-  /* Remove the directory. */
-  ret = alert_script_cleanup (report_dir, report_path, error_path, extra_path);
   return ret;
 }
 
@@ -4419,94 +4299,6 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
           g_free (message);
 
           return 0;
-        }
-      case ALERT_METHOD_TIPPINGPOINT:
-        {
-          int ret;
-          report_format_t report_format;
-          gchar *report_content, *extension;
-          size_t content_length;
-          char *credential_id, *username, *password, *hostname, *certificate;
-          credential_t credential;
-          char *tls_cert_workaround_str;
-          int tls_cert_workaround;
-
-          /* TLS certificate subject workaround setting */
-          tls_cert_workaround_str
-            = alert_data (alert, "method",
-                          "tp_sms_tls_workaround");
-          if (tls_cert_workaround_str)
-            tls_cert_workaround = !!(atoi (tls_cert_workaround_str));
-          else
-            tls_cert_workaround = 0;
-          g_free (tls_cert_workaround_str);
-
-          /* SSL / TLS Certificate */
-          certificate = alert_data (alert, "method",
-                                    "tp_sms_tls_certificate");
-
-          /* Hostname / IP address */
-          hostname = alert_data (alert, "method",
-                                 "tp_sms_hostname");
-
-          /* Credential */
-          credential_id = alert_data (alert, "method",
-                                      "tp_sms_credential");
-          if (find_credential_with_permission (credential_id, &credential,
-                                               "get_credentials"))
-            {
-              g_free (certificate);
-              g_free (hostname);
-              g_free (credential_id);
-              return -1;
-            }
-          else if (credential == 0)
-            {
-              g_free (certificate);
-              g_free (hostname);
-              g_free (credential_id);
-              return -4;
-            }
-          else
-            {
-              g_free (credential_id);
-              username = credential_value (credential, "username");
-              password = credential_encrypted_value (credential, "password");
-            }
-
-          /* Report content */
-          extension = NULL;
-          ret = report_content_for_alert
-                  (alert, report, task, get,
-                   NULL, /* Report format not configurable */
-                   NULL,
-                   REPORT_FORMAT_UUID_XML, /* XML fallback */
-                   NULL,
-                   overrides_details,
-                   &report_content, &content_length, &extension,
-                   NULL, NULL, NULL, NULL, &report_format, NULL);
-          g_free (extension);
-          if (ret)
-            {
-              g_free (username);
-              g_free (password);
-              g_free (hostname);
-              g_free (certificate);
-              return ret;
-            }
-
-          /* Send report */
-          ret = send_to_tippingpoint (report_content, content_length,
-                                      username, password, hostname,
-                                      certificate, tls_cert_workaround,
-                                      script_message);
-
-          g_free (username);
-          g_free (password);
-          g_free (hostname);
-          g_free (certificate);
-          g_free (report_content);
-          return ret;
         }
       case ALERT_METHOD_VFIRE:
         {

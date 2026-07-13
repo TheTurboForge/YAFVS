@@ -87,7 +87,7 @@ typedef enum
   ALERT_METHOD_SCP = 8,
   ALERT_METHOD_SNMP = 9,
   ALERT_METHOD_SMB = 10,
-  ALERT_METHOD_TIPPINGPOINT = 11,
+  /* Value 11 is retired; alert method IDs are persisted and must not shift. */
   ALERT_METHOD_VFIRE = 12,
 } alert_method_t;
 

@@ -134,6 +134,23 @@ signed checksum manifests in the Community Feed cache; TurboVAS relies on the
 hardened transport boundary and records their complete local hashes, but does
 not describe that as independent publisher authentication.
 
+A completed activation also records a strict JSON attestation in
+`public.meta` for the exact generation ID. Its contract covers the synchronous
+NVT, GVMD data-object, and SCAP rebuilds plus post-import selector verification;
+it does not claim transactional import, asynchronous CERT completion, or
+semantic completeness. Application readiness fails closed unless selector,
+activation journal, and database attestation agree. To establish or repair the
+record for an installation that predates this contract, re-import the current
+immutable generation explicitly:
+
+```sh
+just feed-generation-activate -- <active-generation-id> --repair-attestation
+```
+
+This command only accepts the completed active generation and performs the real
+imports before writing metadata. Missing, malformed, or mismatched metadata is
+never inferred from the filesystem selector.
+
 Useful development checks include:
 
 - `just runtime-status`

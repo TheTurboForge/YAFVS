@@ -134,6 +134,7 @@ browser, direct API, production-posture, or release-readiness question.
 - `just feed-generation-state --status-only --json`: verify staged feed generations and report orphan or tampered state.
 - `just runtime-app-build`: explicitly build application images without changing feed state or starting services.
 - `just feed-generation-activate -- <generation-id> [--allow-first-activation]`: activate a verified generation through the service-coordinated, guarded activation path.
+- `just feed-generation-activate -- <active-generation-id> --repair-attestation`: explicitly re-import the already active generation to establish or repair its database attestation.
 - `just feed-generation-rollback -- <generation-id>`: perform verified compensating recovery only to the journaled known-good predecessor; this is not a transactional database rollback.
 - `just runtime-status`: show Docker runtime status.
 - `just runtime-smoke`: run infrastructure smoke checks.
@@ -163,6 +164,13 @@ IDs, a digest of the bind-mounted executable/static artifacts, and a digest of
 the rendered application execution contract. They fail closed if any part of
 that deployment identity changes or cannot be recreated. `build-ui` only
 builds the web assets; `runtime-app-build` stages them for deployment.
+Successful activation also writes a strict generation attestation to
+`public.meta` after the synchronous NVT, GVMD data-object, and SCAP imports and
+selector verification complete. Runtime readiness requires the filesystem
+selector, durable activation journal, and database attestation to agree. An
+older installation establishes this record through the explicit
+`--repair-attestation` re-import; TurboVAS never fabricates it from the current
+selector.
 - `just runtime-app-down`: stop experimental inherited application services.
 - `just gvmd-smoke`: run a narrow experimental manager profile smoke.
 

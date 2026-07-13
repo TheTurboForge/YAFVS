@@ -32,7 +32,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterable, Sequence
 
@@ -431,6 +431,9 @@ DEV_ADMIN_SECRET = "gvmd-admin-password"
 FEED_IMPORT_OWNER_SETTING = "78eceaec-3385-11ea-b237-28d24461215b"
 UUID_PATTERN = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 FEED_RELEASE = "22.04"
+FEED_DB_ATTESTATION_META_NAME = "turbovas_feed_generation_attestation"
+FEED_DB_ATTESTATION_IMPORT_CONTRACT = "gvmd-nvt+gvmd-data-all+scap/v1"
+FEED_DB_ATTESTATION_MAX_BYTES = 4096
 FEED_SYNC_TYPE = "all"
 FEED_SYNC_SESSION = "turbovas-feed-sync"
 GREENBONE_COMMUNITY_FEED_URL = "rsync://feed.community.greenbone.net/community"
@@ -3416,7 +3419,133 @@ def write_feed_activation_state(repo_root: Path, payload: dict[str, Any]) -> Non
     write_private_text(path, text)
 
 
-def active_feed_generation_finding(repo_root: Path) -> dict[str, Any]:
+def validate_feed_generation_db_attestation(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {
+        "schema_version",
+        "generation_id",
+        "feed_release",
+        "manifest_schema_version",
+        "import_contract",
+        "completed_at",
+    }:
+        raise ValueError("feed generation database attestation is invalid")
+    if (
+        type(value.get("schema_version")) is not int
+        or value.get("schema_version") != 1
+        or not feed_generation_id_valid(value.get("generation_id"))
+        or value.get("feed_release") != FEED_RELEASE
+        or type(value.get("manifest_schema_version")) is not int
+        or value.get("manifest_schema_version") != 1
+        or value.get("import_contract") != FEED_DB_ATTESTATION_IMPORT_CONTRACT
+    ):
+        raise ValueError("feed generation database attestation is invalid")
+    completed_at = value.get("completed_at")
+    if not isinstance(completed_at, str):
+        raise ValueError("feed generation database attestation timestamp is invalid")
+    try:
+        parsed = datetime.fromisoformat(completed_at.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError(
+            "feed generation database attestation timestamp is invalid"
+        ) from error
+    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
+        raise ValueError("feed generation database attestation timestamp is invalid")
+    return value
+
+
+def reject_duplicate_json_object_keys(
+    pairs: list[tuple[str, Any]],
+) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError(f"duplicate JSON object key: {key}")
+        value[key] = item
+    return value
+
+
+def feed_generation_db_attestation_payload(
+    generation_id: str, completed_at: str
+) -> dict[str, Any]:
+    return validate_feed_generation_db_attestation(
+        {
+            "schema_version": 1,
+            "generation_id": generation_id,
+            "feed_release": FEED_RELEASE,
+            "manifest_schema_version": 1,
+            "import_contract": FEED_DB_ATTESTATION_IMPORT_CONTRACT,
+            "completed_at": completed_at,
+        }
+    )
+
+
+def read_feed_generation_db_attestation(repo_root: Path) -> dict[str, Any] | None:
+    result = psql(
+        repo_root,
+        "SELECT CASE "
+        f"WHEN octet_length(value) > {FEED_DB_ATTESTATION_MAX_BYTES} THEN '__OVERSIZED__' "
+        "ELSE COALESCE(encode(convert_to(value, 'UTF8'), 'hex'), '') END "
+        "FROM public.meta "
+        f"WHERE name = {sql_literal(FEED_DB_ATTESTATION_META_NAME)};",
+    )
+    if result.returncode != 0:
+        raise OSError(
+            "feed generation database attestation query failed: "
+            + "; ".join(output_tail(result.stdout, 20))
+        )
+    raw_hex = psql_value(result)
+    if not raw_hex:
+        return None
+    if raw_hex == "__OVERSIZED__":
+        raise ValueError("feed generation database attestation is oversized")
+    if (
+        len(raw_hex) > FEED_DB_ATTESTATION_MAX_BYTES * 2
+        or len(raw_hex) % 2
+        or re.fullmatch(r"[0-9a-f]+", raw_hex) is None
+    ):
+        raise ValueError("feed generation database attestation encoding is invalid")
+    try:
+        raw = bytes.fromhex(raw_hex).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as error:
+        raise ValueError(
+            "feed generation database attestation encoding is invalid"
+        ) from error
+    try:
+        payload = json.loads(raw, object_pairs_hook=reject_duplicate_json_object_keys)
+    except json.JSONDecodeError as error:
+        raise ValueError(
+            f"feed generation database attestation is not valid JSON: {error}"
+        ) from error
+    return validate_feed_generation_db_attestation(payload)
+
+
+def write_feed_generation_db_attestation(
+    repo_root: Path, generation_id: str, completed_at: str
+) -> dict[str, Any]:
+    payload = feed_generation_db_attestation_payload(generation_id, completed_at)
+    encoded = json.dumps(
+        payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+    )
+    result = psql(
+        repo_root,
+        "INSERT INTO public.meta (name, value) VALUES "
+        f"({sql_literal(FEED_DB_ATTESTATION_META_NAME)}, {sql_literal(encoded)}) "
+        "ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;",
+    )
+    if result.returncode != 0:
+        raise OSError(
+            "feed generation database attestation write failed: "
+            + "; ".join(output_tail(result.stdout, 20))
+        )
+    observed = read_feed_generation_db_attestation(repo_root)
+    if observed != payload:
+        raise OSError("feed generation database attestation readback mismatch")
+    return payload
+
+
+def active_feed_generation_selector_journal_finding(
+    repo_root: Path,
+) -> dict[str, Any]:
     try:
         state = read_feed_activation_state(repo_root)
         current = read_current_generation(
@@ -3425,8 +3554,8 @@ def active_feed_generation_finding(repo_root: Path) -> dict[str, Any]:
     except (FeedGenerationError, OSError, ValueError) as error:
         return finding(
             "fail",
-            "feed-generation.current",
-            f"Active feed generation state failed closed: {error}",
+            "feed-generation.selector-journal",
+            f"Active feed selector or completed import journal failed closed: {error}",
             str(feed_activation_state_path(repo_root)),
         )
     current_id = current.get("generation_id") if current else None
@@ -3434,12 +3563,47 @@ def active_feed_generation_finding(repo_root: Path) -> dict[str, Any]:
     valid = current_id is not None and current_id == state_id
     return finding(
         "pass" if valid else "fail",
-        "feed-generation.current",
+        "feed-generation.selector-journal",
         "Active feed selector and completed import journal agree."
         if valid
-        else "No completed feed activation matches the current selector; recover or activate a verified generation before starting app services.",
+        else "No completed feed activation journal matches the current selector; recover before starting app services.",
         str(feed_activation_state_path(repo_root)),
         {"selector_generation_id": current_id, "journal_generation_id": state_id, "journal_status": state.get("status") if state else None},
+    )
+
+
+def active_feed_generation_finding(repo_root: Path) -> dict[str, Any]:
+    selector_journal = active_feed_generation_selector_journal_finding(repo_root)
+    if selector_journal["status"] != "pass":
+        return finding(
+            "fail",
+            "feed-generation.current",
+            selector_journal["message"],
+            selector_journal.get("subject"),
+            selector_journal.get("details"),
+        )
+    try:
+        database = read_feed_generation_db_attestation(repo_root)
+    except (OSError, ValueError) as error:
+        return finding(
+            "fail",
+            "feed-generation.current",
+            f"Active feed generation database attestation failed closed: {error}",
+            str(feed_activation_state_path(repo_root)),
+            selector_journal.get("details"),
+        )
+    details = dict(selector_journal.get("details") or {})
+    database_id = database.get("generation_id") if database else None
+    details["database_generation_id"] = database_id
+    valid = database_id == details.get("selector_generation_id")
+    return finding(
+        "pass" if valid else "fail",
+        "feed-generation.current",
+        "Active feed selector, completed import journal, and database attestation agree."
+        if valid
+        else "No completed feed activation and database attestation match the current selector; recover or explicitly re-import the verified generation before starting app services.",
+        str(feed_activation_state_path(repo_root)),
+        details,
     )
 
 
@@ -6030,8 +6194,21 @@ def app_compose_contract_manifest(
         not isinstance(services.get(service), dict) for service in APP_SERVICES
     ):
         raise ValueError("rendered application Compose services are incomplete")
+    normalized_services: dict[str, dict[str, Any]] = {}
+    for service in APP_SERVICES:
+        normalized_service = dict(services[service])
+        ports = normalized_service.get("ports")
+        if isinstance(ports, list):
+            # Compose port declaration order does not change the execution contract.
+            normalized_service["ports"] = sorted(
+                ports,
+                key=lambda item: json.dumps(
+                    item, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+                ),
+            )
+        normalized_services[service] = normalized_service
     contract = {
-        "services": {service: services[service] for service in APP_SERVICES},
+        "services": normalized_services,
         "networks": config.get("networks", {}),
         "volumes": config.get("volumes", {}),
         "secrets": config.get("secrets", {}),
@@ -17512,6 +17689,7 @@ def command_feed_generation_transition(
     *,
     rollback: bool = False,
     allow_first_activation: bool = False,
+    repair_attestation: bool = False,
 ) -> dict[str, Any]:
     action = "rollback" if rollback else "activate"
     command_name = f"feed-generation-{action}"
@@ -17548,6 +17726,8 @@ def command_feed_generation_transition(
             state_before = state if state is not None and state.get("status") == "active" else None
             recovery_only = False
             prior_rollback_id = state_before.get("rollback_generation_id") if state_before else None
+            database_attestation: dict[str, Any] | None = None
+            database_attestation_error: str | None = None
 
             if state_before is not None and state_before.get("current_generation_id") != current_id:
                 findings.append(finding("fail", "feed-generation.journal-selector", "Completed feed activation journal does not match the verified selector.", details={"journal": state_before.get("current_generation_id"), "selector": current_id}))
@@ -17555,6 +17735,74 @@ def command_feed_generation_transition(
             if state is None and current_id is not None:
                 findings.append(finding("fail", "feed-generation.journal-missing", "A feed selector exists without a completed activation journal; refusing to infer database state.", details={"selector": current_id}))
                 return make_result(command_name, repo_root, "Feed generation transition requires explicit recovery of unjournaled state.", findings, [str(feed_activation_state_path(repo_root))])
+            if state_before is not None:
+                try:
+                    database_attestation = read_feed_generation_db_attestation(
+                        repo_root
+                    )
+                except (OSError, ValueError) as error:
+                    database_attestation_error = str(error)
+                database_attestation_matches_current = (
+                    database_attestation_error is None
+                    and database_attestation is not None
+                    and database_attestation.get("generation_id") == current_id
+                )
+                if not repair_attestation and not database_attestation_matches_current:
+                    findings.append(
+                        finding(
+                            "fail",
+                            "feed-generation.database-attestation-preflight",
+                            "The active database import attestation does not match the selector and journal; explicitly re-import the active generation with --repair-attestation before another transition.",
+                            details={
+                                "current_generation_id": current_id,
+                                "database_generation_id": database_attestation.get("generation_id")
+                                if database_attestation
+                                else None,
+                                "error": database_attestation_error,
+                            },
+                        )
+                    )
+                    return make_result(
+                        command_name,
+                        repo_root,
+                        "Feed generation transition stopped because the active database import is not attested.",
+                        findings,
+                        [str(feed_activation_state_path(repo_root))],
+                    )
+                if database_attestation_matches_current:
+                    findings.append(
+                        finding(
+                            "pass",
+                            "feed-generation.database-attestation-preflight",
+                            "Active database import attestation matches the selector and journal.",
+                            details={"generation_id": current_id},
+                        )
+                    )
+            else:
+                database_attestation_matches_current = False
+            if repair_attestation:
+                if rollback or interrupted or state_before is None or current_id != generation_id:
+                    findings.append(
+                        finding(
+                            "fail",
+                            "feed-generation.attestation-repair-scope",
+                            "Database attestation repair is limited to explicitly re-importing the completed active generation.",
+                            details={
+                                "requested_generation_id": generation_id,
+                                "current_generation_id": current_id,
+                                "journal_status": state.get("status") if state else None,
+                            },
+                        )
+                    )
+                    return make_result(command_name, repo_root, "Feed generation attestation repair stopped outside its active-generation boundary.", findings, [str(feed_activation_state_path(repo_root))])
+                findings.append(
+                    finding(
+                        "warn",
+                        "feed-generation.attestation-repair",
+                        "The active immutable generation will be re-imported before its database attestation is written; metadata is never fabricated.",
+                        details={"generation_id": generation_id},
+                    )
+                )
             if interrupted:
                 interrupted_target = state.get("target_generation_id")
                 interrupted_previous = state.get("previous_generation_id")
@@ -17585,7 +17833,7 @@ def command_feed_generation_transition(
                 )
                 return make_result(command_name, repo_root, "Feed generation activation requires explicit first-activation acknowledgement.", findings, [str(generations_root / generation_id)])
 
-            if current_id == generation_id and state_before is not None:
+            if current_id == generation_id and state_before is not None and not repair_attestation:
                 findings.append(finding("pass", "feed-generation.noop", "Requested feed generation is already active.", details={"generation_id": generation_id}))
                 return make_result(command_name, repo_root, "Requested feed generation is already active.", findings, [str(generations_root / generation_id)])
             if current is not None:
@@ -17618,19 +17866,37 @@ def command_feed_generation_transition(
                 app_runtime_artifacts = receipt["runtime_artifacts"]
                 app_compose_contract = receipt["compose_contract"]
                 if state_before is not None:
-                    running_image_findings = app_service_image_findings(
-                        repo_root,
-                        app_image_ids,
-                        check="feed-generation.running-app-image",
-                    )
-                    findings.extend(running_image_findings)
-                    if any(item["status"] != "pass" for item in running_image_findings):
-                        return make_result(
-                            command_name,
+                    running_services = [
+                        service
+                        for service in APP_SERVICES
+                        if container_running(repo_root, service)
+                    ]
+                    if running_services:
+                        running_image_findings = app_service_image_findings(
                             repo_root,
-                            "Feed generation transition stopped because the active application deployment does not match the prepared receipt; run runtime-app-up first.",
-                            findings,
-                            [str(app_deployment_receipt_path(repo_root))],
+                            app_image_ids,
+                            check="feed-generation.running-app-image",
+                        )
+                        findings.extend(running_image_findings)
+                        if any(
+                            item["status"] != "pass"
+                            for item in running_image_findings
+                        ):
+                            return make_result(
+                                command_name,
+                                repo_root,
+                                "Feed generation transition stopped because the active application deployment does not match the prepared receipt; run runtime-app-up first.",
+                                findings,
+                                [str(app_deployment_receipt_path(repo_root))],
+                            )
+                    else:
+                        findings.append(
+                            finding(
+                                "pass",
+                                "feed-generation.running-app-image",
+                                "Application services are fully stopped; the pinned deployment receipt will govern restart after import.",
+                                details={"running_services": []},
+                            )
                         )
             image_error = app_service_image_availability_error(repo_root, app_image_ids)
             if image_error is not None:
@@ -17704,7 +17970,9 @@ def command_feed_generation_transition(
                 )
 
             known_previous_id = state.get("previous_generation_id") if interrupted else current_id
-            success_rollback_id = prior_rollback_id if interrupted else current_id
+            success_rollback_id = (
+                prior_rollback_id if interrupted or repair_attestation else current_id
+            )
 
             control_quiesce = stop_feed_control_services_for_preflight(repo_root)
             findings.append(control_quiesce)
@@ -17799,6 +18067,22 @@ def command_feed_generation_transition(
                         findings,
                         [str(runtime_root / "feed-store")],
                     )
+                if not database_attestation_matches_current:
+                    findings.append(
+                        finding(
+                            "fail",
+                            "feed-generation.select-repair-state",
+                            "Selection failed before database attestation repair; application services remain stopped because the prior database import is not attested.",
+                            details={"generation_id": current_id},
+                        )
+                    )
+                    return make_result(
+                        command_name,
+                        repo_root,
+                        "Feed generation attestation repair failed before import; application services remain stopped.",
+                        findings,
+                        [str(feed_activation_state_path(repo_root))],
+                    )
                 try:
                     restored_state = {
                         key: value
@@ -17867,6 +18151,32 @@ def command_feed_generation_transition(
                     active_ok = active is not None and active.get("generation_id") == generation_id
                     findings.append(finding("pass" if active_ok else "fail", "feed-generation.post-verify", "Active generation and imported runtime agree." if active_ok else "Active generation changed after import.", details={"expected": generation_id, "observed": active.get("generation_id") if active else None}))
                     transition_succeeded = active_ok
+            completed_at: str | None = None
+            if transition_succeeded:
+                completed_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+                try:
+                    database_attestation = write_feed_generation_db_attestation(
+                        repo_root, generation_id, completed_at
+                    )
+                except (OSError, ValueError) as error:
+                    findings.append(
+                        finding(
+                            "fail",
+                            "feed-generation.database-attestation",
+                            f"Feed imports completed but database attestation failed closed: {error}",
+                            details={"generation_id": generation_id},
+                        )
+                    )
+                    transition_succeeded = False
+                else:
+                    findings.append(
+                        finding(
+                            "pass",
+                            "feed-generation.database-attestation",
+                            "Database import attestation matches the selected immutable generation.",
+                            details=database_attestation,
+                        )
+                    )
             if transition_succeeded:
                 try:
                     write_feed_activation_state(
@@ -17881,7 +18191,7 @@ def command_feed_generation_transition(
                             "app_image_ids": app_image_ids,
                             "app_runtime_artifacts": app_runtime_artifacts,
                             "app_compose_contract": app_compose_contract,
-                            "completed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+                            "completed_at": completed_at,
                         },
                     )
                 except (OSError, ValueError) as error:
@@ -17944,6 +18254,28 @@ def command_feed_generation_transition(
                     findings.append(stop_app_services_for_feed_transition(repo_root, "feed-generation.compensation-artifact-stop"))
                     return make_result(command_name, repo_root, "Compensating import completed, but changed runtime artifacts require manual recovery.", findings, [str(feed_activation_state_path(repo_root))])
                 try:
+                    compensated_active = read_current_generation(
+                        runtime_root, FEED_RELEASE, specs
+                    )
+                except (FeedGenerationError, OSError) as error:
+                    findings.append(finding("fail", "feed-generation.compensation-post-verify", f"Compensating selector verification failed: {error}"))
+                    return make_result(command_name, repo_root, "Compensating import completed but selector verification failed; app startup remains blocked.", findings, [str(feed_activation_state_path(repo_root))])
+                compensated_active_id = (
+                    compensated_active.get("generation_id") if compensated_active else None
+                )
+                if compensated_active_id != known_previous_id:
+                    findings.append(finding("fail", "feed-generation.compensation-post-verify", "Compensating import no longer matches the restored selector.", details={"expected": known_previous_id, "observed": compensated_active_id}))
+                    return make_result(command_name, repo_root, "Compensating import completed against an uncertain selector; app startup remains blocked.", findings, [str(feed_activation_state_path(repo_root))])
+                compensation_completed_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+                try:
+                    compensation_attestation = write_feed_generation_db_attestation(
+                        repo_root, known_previous_id, compensation_completed_at
+                    )
+                except (OSError, ValueError) as error:
+                    findings.append(finding("fail", "feed-generation.compensation-database-attestation", f"Compensating import database attestation failed closed: {error}"))
+                    return make_result(command_name, repo_root, "Compensating import completed but database attestation is unavailable; app startup remains blocked.", findings, [str(feed_activation_state_path(repo_root))])
+                findings.append(finding("pass", "feed-generation.compensation-database-attestation", "Database import attestation matches the restored immutable generation.", details=compensation_attestation))
+                try:
                     write_feed_activation_state(
                         repo_root,
                         {
@@ -17956,7 +18288,7 @@ def command_feed_generation_transition(
                             "app_image_ids": app_image_ids,
                             "app_runtime_artifacts": app_runtime_artifacts,
                             "app_compose_contract": app_compose_contract,
-                            "completed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+                            "completed_at": compensation_completed_at,
                         },
                     )
                 except (OSError, ValueError) as error:
@@ -19786,7 +20118,7 @@ def command_runtime_app_build(repo_root: Path) -> dict[str, Any]:
 def _command_runtime_app_up_unlocked(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
-    findings.append(active_feed_generation_finding(repo_root))
+    findings.append(active_feed_generation_selector_journal_finding(repo_root))
     app_env = deployed_app_env(repo_root)
     receipt, receipt_error = require_app_deployment_receipt(
         repo_root, app_env=app_env
@@ -19814,6 +20146,16 @@ def _command_runtime_app_up_unlocked(repo_root: Path, status_only: bool = False)
     findings.append(refresh_mqtt_broker(repo_root))
     db_init = command_runtime_init(repo_root)
     findings.append(finding(db_init["status"], "runtime.database-init", db_init["summary"], details={"status": db_init["status"]}))
+    findings.append(active_feed_generation_finding(repo_root))
+    if aggregate_status(findings) == "fail":
+        result = make_result(
+            "runtime-app-up",
+            repo_root,
+            "Application runtime startup stopped because the database import attestation is unavailable or inconsistent.",
+            findings,
+            [str(runtime_dir(repo_root))],
+        )
+        return runtime_app_up_status_only_result(result) if status_only else result
     scanner_redis = command_runtime_scanner_redis_init(
         repo_root, probe_openvas=False, lifecycle_managed=True
     )
@@ -34890,6 +35232,7 @@ def build_parser() -> argparse.ArgumentParser:
     feed_generation_activate = subparsers.add_parser("feed-generation-activate", parents=[common], help="activate and import one verified immutable feed generation")
     feed_generation_activate.add_argument("generation_id", help="verified immutable generation identifier")
     feed_generation_activate.add_argument("--allow-first-activation", action="store_true", help="acknowledge that first activation has no known-good generation for compensation")
+    feed_generation_activate.add_argument("--repair-attestation", action="store_true", help="re-import the already active generation and establish its database attestation")
     feed_generation_rollback = subparsers.add_parser("feed-generation-rollback", parents=[common], help="reselect and reimport a prior verified feed generation")
     feed_generation_rollback.add_argument("generation_id", help="prior verified immutable generation identifier")
     subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
@@ -35294,7 +35637,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "feed-generation-state":
         result = command_feed_generation_state(repo_root, status_only=args.status_only)
     elif args.command == "feed-generation-activate":
-        result = command_feed_generation_transition(repo_root, args.generation_id, allow_first_activation=args.allow_first_activation)
+        result = command_feed_generation_transition(repo_root, args.generation_id, allow_first_activation=args.allow_first_activation, repair_attestation=args.repair_attestation)
     elif args.command == "feed-generation-rollback":
         result = command_feed_generation_transition(repo_root, args.generation_id, rollback=True)
     elif args.command == "runtime-status":

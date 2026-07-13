@@ -1040,7 +1040,9 @@ class TurboVASCtlTests(unittest.TestCase):
         function = source[source.index("def _command_runtime_app_up_unlocked"):source.index("def command_runtime_app_up")]
 
         self.assertLess(function.index("rendered_app_execution_mount_finding"), function.index("command_up(repo_root)"))
-        self.assertLess(function.index("active_feed_generation_finding"), function.index("command_up(repo_root)"))
+        self.assertLess(function.index("active_feed_generation_selector_journal_finding"), function.index("command_up(repo_root)"))
+        self.assertLess(function.index("command_runtime_init(repo_root)"), function.index("active_feed_generation_finding"))
+        self.assertLess(function.index("active_feed_generation_finding"), function.index("compose_app_services_up_with_retry"))
         self.assertIn('"Application runtime startup stopped at mount prerequisites."', function)
 
     def test_runtime_app_up_refuses_missing_active_feed_generation(self):
@@ -1057,9 +1059,9 @@ class TurboVASCtlTests(unittest.TestCase):
                 turbovasctl,
                 ensure_runtime_dirs=unittest.mock.Mock(return_value=[]),
                 ensure_build_runtime_dirs=unittest.mock.Mock(return_value=[]),
-                active_feed_generation_finding=unittest.mock.Mock(
+                active_feed_generation_selector_journal_finding=unittest.mock.Mock(
                     return_value=turbovasctl.finding(
-                        "fail", "feed-generation.current", "No completed activation."
+                        "fail", "feed-generation.selector-journal", "No completed activation."
                     )
                 ),
                 runtime_app_env=unittest.mock.Mock(return_value={}),
@@ -12672,7 +12674,7 @@ db2:keys=5,expires=0,avg_ttl=0
             try:
                 turbovasctl.os.environ[turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV] = "0.0.0.0:9999"
                 turbovasctl.os.environ[turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV] = token
-                with unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                with unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(turbovasctl, "active_feed_generation_finding", return_value=turbovasctl.finding("pass", "feed-generation.current", "Mock attested generation.")), unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
                     result = turbovasctl.command_runtime_native_api_direct_smoke(root)
             finally:
                 if original_bind is None:
@@ -12709,7 +12711,7 @@ db2:keys=5,expires=0,avg_ttl=0
             try:
                 turbovasctl.os.environ[turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV] = "192.0.2.10"
                 turbovasctl.os.environ[turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV] = token
-                with unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                with unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(turbovasctl, "active_feed_generation_finding", return_value=turbovasctl.finding("pass", "feed-generation.current", "Mock attested generation.")), unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
                     result = turbovasctl.command_runtime_native_api_direct_smoke(root)
             finally:
                 if original_host is None:
@@ -14599,10 +14601,66 @@ db2:keys=5,expires=0,avg_ttl=0
                         "action": "activate",
                     }
                 ),
+                read_feed_generation_db_attestation=unittest.mock.Mock(
+                    return_value={"generation_id": "a" * 64}
+                ),
             ):
                 item = turbovasctl.active_feed_generation_finding(root)
         self.assertEqual(item["status"], "fail")
         self.assertIn("No completed feed activation", item["message"])
+
+    def test_active_feed_generation_requires_matching_database_attestation(self):
+        generation_id = "a" * 64
+        current = {"generation_id": generation_id, "verified": True}
+        state = {
+            "schema_version": 1,
+            "status": "active",
+            "current_generation_id": generation_id,
+            "target_generation_id": None,
+            "previous_generation_id": None,
+            "rollback_generation_id": None,
+        }
+        with unittest.mock.patch.multiple(
+            turbovasctl,
+            read_current_generation=unittest.mock.Mock(return_value=current),
+            read_feed_activation_state=unittest.mock.Mock(return_value=state),
+            read_feed_generation_db_attestation=unittest.mock.Mock(
+                return_value=None
+            ),
+        ):
+            missing = turbovasctl.active_feed_generation_finding(Path("/tmp"))
+        with unittest.mock.patch.multiple(
+            turbovasctl,
+            read_current_generation=unittest.mock.Mock(return_value=current),
+            read_feed_activation_state=unittest.mock.Mock(return_value=state),
+            read_feed_generation_db_attestation=unittest.mock.Mock(
+                return_value={"generation_id": "b" * 64}
+            ),
+        ):
+            mismatch = turbovasctl.active_feed_generation_finding(Path("/tmp"))
+        with unittest.mock.patch.multiple(
+            turbovasctl,
+            read_current_generation=unittest.mock.Mock(return_value=current),
+            read_feed_activation_state=unittest.mock.Mock(return_value=state),
+            read_feed_generation_db_attestation=unittest.mock.Mock(
+                side_effect=ValueError("malformed attestation")
+            ),
+        ):
+            malformed = turbovasctl.active_feed_generation_finding(Path("/tmp"))
+        with unittest.mock.patch.multiple(
+            turbovasctl,
+            read_current_generation=unittest.mock.Mock(return_value=current),
+            read_feed_activation_state=unittest.mock.Mock(return_value=state),
+            read_feed_generation_db_attestation=unittest.mock.Mock(
+                return_value={"generation_id": generation_id}
+            ),
+        ):
+            matching = turbovasctl.active_feed_generation_finding(Path("/tmp"))
+
+        self.assertEqual(missing["status"], "fail")
+        self.assertEqual(mismatch["status"], "fail")
+        self.assertEqual(malformed["status"], "fail")
+        self.assertEqual(matching["status"], "pass")
 
     def test_feed_generation_parser_and_just_contracts_are_wired(self):
         parser = turbovasctl.build_parser()
@@ -14612,7 +14670,7 @@ db2:keys=5,expires=0,avg_ttl=0
         rollback = parser.parse_args(["feed-generation-rollback", "b" * 64, "--json"])
         self.assertEqual((state.command, state.status_only, state.json), ("feed-generation-state", True, True))
         self.assertEqual((stage.command, stage.json), ("feed-generation-stage", True))
-        self.assertEqual((activate.command, activate.generation_id, activate.allow_first_activation), ("feed-generation-activate", "a" * 64, True))
+        self.assertEqual((activate.command, activate.generation_id, activate.allow_first_activation, activate.repair_attestation), ("feed-generation-activate", "a" * 64, True, False))
         self.assertEqual((rollback.command, rollback.generation_id), ("feed-generation-rollback", "b" * 64))
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         for command in ("feed-generation-stage", "feed-generation-state", "feed-generation-activate", "feed-generation-rollback"):
@@ -15066,6 +15124,44 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertNotEqual(first["digest"], changed["digest"])
         self.assertEqual(set(first), {"schema_version", "algorithm", "digest", "services"})
         self.assertNotIn("command", json.dumps(first))
+
+    def test_app_compose_contract_ignores_port_declaration_order(self):
+        image_ids = {
+            service: "sha256:" + f"{index + 1:x}" * 64
+            for index, service in enumerate(turbovasctl.APP_SERVICES)
+        }
+        services = {
+            service: {"image": image_ids[service], "command": [service]}
+            for service in turbovasctl.APP_SERVICES
+        }
+        services["gsad"]["ports"] = [
+            {"host_ip": "192.168.178.42", "published": "19392", "target": 9392},
+            {"host_ip": "100.80.139.13", "published": "19392", "target": 9392},
+        ]
+        reversed_services = json.loads(json.dumps(services))
+        reversed_services["gsad"]["ports"].reverse()
+        with unittest.mock.patch.object(
+            turbovasctl,
+            "compose_command_with_app_images",
+            return_value=["docker", "compose", "config"],
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "run_command",
+            side_effect=[
+                subprocess.CompletedProcess(
+                    [], 0, json.dumps({"services": item}), ""
+                )
+                for item in (services, reversed_services)
+            ],
+        ):
+            first = turbovasctl.app_compose_contract_manifest(
+                Path("/tmp"), image_ids, app_env={}
+            )
+            reversed_order = turbovasctl.app_compose_contract_manifest(
+                Path("/tmp"), image_ids, app_env={}
+            )
+
+        self.assertEqual(first["digest"], reversed_order["digest"])
 
     def test_app_deployment_receipt_requires_compose_contract(self):
         image_ids = {
@@ -16131,6 +16227,9 @@ db2:keys=5,expires=0,avg_ttl=0
         scan_quiescence_status="pass",
         select_error=False,
         journal_error=False,
+        repair_attestation=False,
+        database_attestation="matching",
+        running_services=None,
     ):
         image_ids = {
             service: "sha256:" + f"{index + 1:x}" * 64
@@ -16173,7 +16272,9 @@ db2:keys=5,expires=0,avg_ttl=0
             if current_id is not None
             else None
         )
-        if activation_state_override is not None:
+        if activation_state_override == "missing":
+            activation_state = None
+        elif activation_state_override is not None:
             activation_state = dict(activation_state_override)
             if activation_state.get("status") == "transitioning":
                 activation_state.setdefault("app_image_ids", image_ids)
@@ -16195,6 +16296,13 @@ db2:keys=5,expires=0,avg_ttl=0
             read_results.append(
                 {"generation_id": post_verify_id, "verified": True}
                 if post_verify_id is not None
+                else None
+            )
+        if len(import_statuses) > 1 or post_verify_id != target_id:
+            compensation_id = target_id if rollback else current_id
+            read_results.append(
+                {"generation_id": compensation_id, "verified": True}
+                if compensation_id is not None
                 else None
             )
         stopped = unittest.mock.Mock(
@@ -16241,6 +16349,51 @@ db2:keys=5,expires=0,avg_ttl=0
             if journal_error
             else None
         )
+        database_attestation_write = unittest.mock.Mock(
+            side_effect=lambda _root, generation, completed_at: turbovasctl.feed_generation_db_attestation_payload(
+                generation, completed_at
+            )
+        )
+        if database_attestation == "matching":
+            database_attestation_value = (
+                turbovasctl.feed_generation_db_attestation_payload(
+                    current_id, "2026-07-13T00:00:00+00:00"
+                )
+                if current_id is not None
+                else None
+            )
+            database_attestation_read = unittest.mock.Mock(
+                return_value=database_attestation_value
+            )
+        elif database_attestation == "missing":
+            database_attestation_read = unittest.mock.Mock(return_value=None)
+        elif database_attestation == "mismatch":
+            database_attestation_read = unittest.mock.Mock(
+                return_value=turbovasctl.feed_generation_db_attestation_payload(
+                    "d" * 64, "2026-07-13T00:00:00+00:00"
+                )
+            )
+        elif isinstance(database_attestation, BaseException):
+            database_attestation_read = unittest.mock.Mock(
+                side_effect=database_attestation
+            )
+        else:
+            database_attestation_read = unittest.mock.Mock(
+                return_value=database_attestation
+            )
+        running_service_set = set(
+            turbovasctl.APP_SERVICES
+            if running_services is None
+            else running_services
+        )
+        runtime_restart = unittest.mock.Mock(
+            return_value={
+                "status": "pass",
+                "summary": "Mock feed runtime verified.",
+                "findings": [],
+                "artifacts": [],
+            }
+        )
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
@@ -16256,6 +16409,8 @@ db2:keys=5,expires=0,avg_ttl=0
                     return_value=activation_state
                 ),
                 write_feed_activation_state=journal_write,
+                read_feed_generation_db_attestation=database_attestation_read,
+                write_feed_generation_db_attestation=database_attestation_write,
                 feed_activation_scan_quiescence_finding=scan_quiescence,
                 stop_feed_control_services_for_preflight=unittest.mock.Mock(
                     return_value=turbovasctl.finding(
@@ -16276,13 +16431,10 @@ db2:keys=5,expires=0,avg_ttl=0
                 select_generation=selected,
                 clear_current_generation=cleared,
                 command_runtime_feed_import_init=imported,
-                restart_and_verify_feed_app_services=unittest.mock.Mock(
-                    return_value={
-                        "status": "pass",
-                        "summary": "Mock feed runtime verified.",
-                        "findings": [],
-                        "artifacts": [],
-                    }
+                restart_and_verify_feed_app_services=runtime_restart,
+                container_running=unittest.mock.Mock(
+                    side_effect=lambda _root, service: service
+                    in running_service_set
                 ),
                 feed_transition_restore_app_env=unittest.mock.Mock(
                     return_value={
@@ -16346,7 +16498,12 @@ db2:keys=5,expires=0,avg_ttl=0
                     target_id,
                     rollback=rollback,
                     allow_first_activation=allow_first_activation,
+                    repair_attestation=repair_attestation,
                 )
+        self.last_feed_journal_write = journal_write
+        self.last_feed_database_attestation_write = database_attestation_write
+        self.last_feed_database_attestation_read = database_attestation_read
+        self.last_feed_runtime_restart = runtime_restart
         return result, selected, imported, stopped, cleared
 
     def test_feed_generation_activation_requires_first_activation_acknowledgement(self):
@@ -16374,6 +16531,216 @@ db2:keys=5,expires=0,avg_ttl=0
         )
         stopped.assert_called_once()
         cleared.assert_not_called()
+        database_completed_at = self.last_feed_database_attestation_write.call_args.args[2]
+        journal_payload = self.last_feed_journal_write.call_args_list[-1].args[1]
+        self.assertEqual(journal_payload["completed_at"], database_completed_at)
+        self.assertEqual(
+            self.last_feed_database_attestation_write.call_args.args[1], "a" * 64
+        )
+
+    def test_feed_generation_attestation_repair_reimports_active_generation(self):
+        current_id = "b" * 64
+        result, selected, imported, stopped, cleared = (
+            self.run_mocked_feed_generation_transition(
+                target_id=current_id,
+                current_id=current_id,
+                post_verify_id=current_id,
+                repair_attestation=True,
+                database_attestation="missing",
+            )
+        )
+        self.assertEqual(result["status"], "warn")
+        self.assertEqual([call.args[1] for call in selected.call_args_list], [current_id])
+        imported.assert_called_once()
+        stopped.assert_called_once()
+        cleared.assert_not_called()
+        self.assertTrue(
+            any(
+                item["check"] == "feed-generation.attestation-repair"
+                for item in result["findings"]
+            )
+        )
+
+    def test_feed_generation_noop_requires_matching_database_attestation(self):
+        current_id = "b" * 64
+        for database_attestation in ("missing", "mismatch", OSError("query failed")):
+            with self.subTest(database_attestation=database_attestation):
+                result, selected, imported, stopped, _cleared = (
+                    self.run_mocked_feed_generation_transition(
+                        target_id=current_id,
+                        current_id=current_id,
+                        post_verify_id=current_id,
+                        database_attestation=database_attestation,
+                    )
+                )
+                self.assertEqual(result["status"], "fail")
+                self.assertIn("not attested", result["summary"])
+                selected.assert_not_called()
+                imported.assert_not_called()
+                stopped.assert_not_called()
+
+    def test_feed_generation_attestation_repair_selector_failure_keeps_apps_stopped(self):
+        current_id = "b" * 64
+        result, selected, imported, stopped, _cleared = (
+            self.run_mocked_feed_generation_transition(
+                target_id=current_id,
+                current_id=current_id,
+                select_error=True,
+                repair_attestation=True,
+                database_attestation="missing",
+            )
+        )
+
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("services remain stopped", result["summary"])
+        selected.assert_called_once()
+        imported.assert_not_called()
+        stopped.assert_called_once()
+        self.last_feed_runtime_restart.assert_not_called()
+        self.assertEqual(self.last_feed_journal_write.call_count, 1)
+
+    def test_feed_generation_transition_accepts_fully_stopped_app(self):
+        result, selected, imported, stopped, _cleared = (
+            self.run_mocked_feed_generation_transition(running_services=())
+        )
+
+        self.assertEqual(result["status"], "pass")
+        selected.assert_called_once()
+        imported.assert_called_once()
+        stopped.assert_called_once()
+        finding = next(
+            item
+            for item in result["findings"]
+            if item["check"] == "feed-generation.running-app-image"
+        )
+        self.assertEqual(finding["details"]["running_services"], [])
+
+    def test_feed_generation_attestation_repair_rejects_unsafe_scope(self):
+        non_current, _selected, imported, _stopped, _cleared = (
+            self.run_mocked_feed_generation_transition(repair_attestation=True)
+        )
+        self.assertEqual(non_current["status"], "fail")
+        imported.assert_not_called()
+        self.last_feed_database_attestation_write.assert_not_called()
+
+        missing_journal, _selected, imported, _stopped, _cleared = (
+            self.run_mocked_feed_generation_transition(
+                target_id="b" * 64,
+                current_id="b" * 64,
+                post_verify_id="b" * 64,
+                repair_attestation=True,
+                activation_state_override="missing",
+            )
+        )
+        self.assertEqual(missing_journal["status"], "fail")
+        imported.assert_not_called()
+        self.last_feed_database_attestation_write.assert_not_called()
+
+        transitioning = {
+            "schema_version": 1,
+            "status": "transitioning",
+            "action": "activate",
+            "current_generation_id": None,
+            "target_generation_id": "a" * 64,
+            "previous_generation_id": "b" * 64,
+            "rollback_generation_id": "c" * 64,
+        }
+        interrupted, _selected, imported, _stopped, _cleared = (
+            self.run_mocked_feed_generation_transition(
+                target_id="b" * 64,
+                current_id="b" * 64,
+                post_verify_id="b" * 64,
+                repair_attestation=True,
+                activation_state_override=transitioning,
+            )
+        )
+        self.assertEqual(interrupted["status"], "fail")
+        imported.assert_not_called()
+        self.last_feed_database_attestation_write.assert_not_called()
+
+    def test_feed_generation_database_attestation_is_strict_and_read_back(self):
+        generation_id = "a" * 64
+        completed_at = "2026-07-13T12:00:00+00:00"
+        payload = turbovasctl.feed_generation_db_attestation_payload(
+            generation_id, completed_at
+        )
+        encoded = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+        calls = []
+
+        def fake_psql(_root, sql, database=None):
+            calls.append((sql, database))
+            if sql.startswith("SELECT"):
+                return subprocess.CompletedProcess([], 0, encoded.encode().hex() + "\n", "")
+            return subprocess.CompletedProcess([], 0, "INSERT 0 1\n", "")
+
+        with unittest.mock.patch.object(turbovasctl, "psql", side_effect=fake_psql):
+            observed = turbovasctl.write_feed_generation_db_attestation(
+                Path("/tmp"), generation_id, completed_at
+            )
+
+        self.assertEqual(observed, payload)
+        self.assertIn("public.meta", calls[0][0])
+        self.assertIn("ON CONFLICT (name)", calls[0][0])
+        self.assertTrue(calls[1][0].startswith("SELECT"))
+        with self.assertRaisesRegex(ValueError, "invalid"):
+            turbovasctl.validate_feed_generation_db_attestation(
+                {**payload, "unexpected": True}
+            )
+        with self.assertRaisesRegex(ValueError, "timestamp"):
+            turbovasctl.feed_generation_db_attestation_payload(
+                generation_id, "2026-07-13T12:00:00"
+            )
+        for field in ("schema_version", "manifest_schema_version"):
+            for invalid in (True, 1.0):
+                with self.subTest(field=field, invalid=invalid), self.assertRaisesRegex(
+                    ValueError, "invalid"
+                ):
+                    turbovasctl.validate_feed_generation_db_attestation(
+                        {**payload, field: invalid}
+                    )
+
+    def test_feed_generation_database_attestation_rejects_duplicate_json_keys(self):
+        generation_id = "a" * 64
+        duplicate = (
+            '{"schema_version":1,"schema_version":1,'
+            f'"generation_id":"{generation_id}",'
+            '"feed_release":"22.04","manifest_schema_version":1,'
+            '"import_contract":"gvmd-nvt+gvmd-data-all+scap/v1",'
+            '"completed_at":"2026-07-13T12:00:00+00:00"}'
+        )
+        with unittest.mock.patch.object(
+            turbovasctl,
+            "psql",
+            return_value=subprocess.CompletedProcess(
+                [], 0, duplicate.encode().hex() + "\n", ""
+            ),
+        ):
+            with self.assertRaisesRegex(ValueError, "duplicate JSON object key"):
+                turbovasctl.read_feed_generation_db_attestation(Path("/tmp"))
+
+    def test_feed_generation_database_attestation_rejects_entire_multiline_value(self):
+        generation_id = "a" * 64
+        payload = turbovasctl.feed_generation_db_attestation_payload(
+            generation_id, "2026-07-13T12:00:00+00:00"
+        )
+        multiline = "invalid-prefix\n" + json.dumps(payload, sort_keys=True)
+        with unittest.mock.patch.object(
+            turbovasctl,
+            "psql",
+            return_value=subprocess.CompletedProcess(
+                [], 0, multiline.encode().hex() + "\n", ""
+            ),
+        ):
+            with self.assertRaisesRegex(ValueError, "valid JSON"):
+                turbovasctl.read_feed_generation_db_attestation(Path("/tmp"))
+
+        with unittest.mock.patch.object(
+            turbovasctl,
+            "psql",
+            return_value=subprocess.CompletedProcess([], 0, "__OVERSIZED__\n", ""),
+        ):
+            with self.assertRaisesRegex(ValueError, "oversized"):
+                turbovasctl.read_feed_generation_db_attestation(Path("/tmp"))
 
     def test_normal_transition_refreshes_prior_journal_image_ids(self):
         prior_image_ids = {
@@ -16536,6 +16903,9 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(imported.call_count, 2)
         self.assertEqual(stopped.call_count, 2)
         cleared.assert_not_called()
+        self.assertEqual(
+            self.last_feed_database_attestation_write.call_args.args[1], "b" * 64
+        )
 
     def test_feed_generation_rollback_rejects_unrecorded_target(self):
         result, selected, imported, stopped, cleared = (

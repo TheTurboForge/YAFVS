@@ -19,7 +19,10 @@ use crate::{
     host_writes::{
         create_host, delete_host, delete_host_identifier, delete_host_operating_system, patch_host,
     },
-    override_writes::delete_override,
+    override_writes::{
+        clone_override, create_override, delete_override, hard_delete_override, patch_override,
+        restore_override,
+    },
     port_list_writes::{
         clone_port_list, create_port_list, create_port_list_range, delete_port_list,
         delete_port_list_range, hard_delete_port_list, import_port_list, patch_port_list,
@@ -119,7 +122,18 @@ pub(crate) fn direct_native_api_router(
             .route("/api/v1/alerts/:alert_id", patch(patch_alert))
             .route("/api/v1/alerts/:alert_id", delete(delete_alert))
             .route("/api/v1/alerts", post(create_alert))
+            .route("/api/v1/overrides", post(create_override))
+            .route("/api/v1/overrides/:override_id", patch(patch_override))
             .route("/api/v1/overrides/:override_id", delete(delete_override))
+            .route("/api/v1/overrides/:override_id/clone", post(clone_override))
+            .route(
+                "/api/v1/overrides/:override_id/restore",
+                post(restore_override),
+            )
+            .route(
+                "/api/v1/overrides/:override_id/trash",
+                delete(hard_delete_override),
+            )
             .route("/api/v1/alerts/:alert_id/clone", post(clone_alert))
             .route(
                 "/api/v1/credentials/:credential_id",

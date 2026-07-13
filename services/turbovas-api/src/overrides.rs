@@ -6,6 +6,7 @@ use axum::{
     Json,
     extract::{Path, State},
 };
+use tokio_postgres::Client;
 
 use crate::{
     app_state::AppState,
@@ -79,6 +80,15 @@ pub(crate) async fn override_asset_detail(
 ) -> Result<Json<OverrideAssetItem>, ApiError> {
     parse_uuid(&override_id)?;
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    Ok(Json(
+        load_override_asset_detail(&client, &override_id).await?,
+    ))
+}
+
+pub(crate) async fn load_override_asset_detail(
+    client: &Client,
+    override_id: &str,
+) -> Result<OverrideAssetItem, ApiError> {
     let row = client
         .query_opt(override_asset_detail_sql(), &[&override_id])
         .await
@@ -87,7 +97,7 @@ pub(crate) async fn override_asset_detail(
             ApiError::Database
         })?
         .ok_or(ApiError::NotFound)?;
-    Ok(Json(override_asset_from_row(&row)))
+    Ok(override_asset_from_row(&row))
 }
 
 pub(crate) async fn override_asset_export(

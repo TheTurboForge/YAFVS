@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -49,7 +50,7 @@ const OverrideDetailsPageToolBarIcons = ({
         <EditIcon entity={entity} onClick={onOverrideEditClick} />
         <TrashIcon entity={entity} onClick={onOverrideDeleteClick} />
         <ExportIcon
-          title={_('Export Override as XML')}
+          title={_('Export Override as JSON')}
           value={entity}
           onClick={onOverrideDownloadClick}
         />

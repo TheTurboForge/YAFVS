@@ -70,46 +70,54 @@ describe('TrashCanCommand tests', () => {
     });
   });
 
-  test('should restore supported trash entities through native API when available', async () => {
-    const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({id: '1234'}),
-      ok: true,
-      status: 200,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
-    const cmd = new TrashCanCommand(fakeHttp);
+  test.each([
+    ['filter', 'filters'],
+    ['override', 'overrides'],
+  ] as const)(
+    'should restore supported %s trash entities through native API',
+    async (entityType, path) => {
+      const fetchMock = testing.fn().mockResolvedValue({
+        json: testing.fn().mockResolvedValue({id: '1234'}),
+        ok: true,
+        status: 200,
+      });
+      testing.stubGlobal('fetch', fetchMock);
+      const fakeHttp = createHttp(undefined) as ReturnType<
+        typeof createHttp
+      > & {
+        buildUrl: ReturnType<typeof testing.fn>;
+        session: ReturnType<typeof createSession>;
+      };
+      fakeHttp.buildUrl = testing.fn(
+        (path: string) => `https://turbovas.example/${path}`,
+      );
+      fakeHttp.session = createSession();
+      fakeHttp.session.token = 'test-token';
+      fakeHttp.session.jwt = 'jwt-token';
+      const cmd = new TrashCanCommand(fakeHttp);
 
-    await cmd.restore({id: '1234', entityType: 'filter'});
+      await cmd.restore({id: '1234', entityType});
 
-    expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
-      'api/v1/filters/1234/restore',
-    );
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/filters/1234/restore',
-      {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
-          Authorization: 'Bearer jwt-token',
+      expect(fakeHttp.request).not.toHaveBeenCalled();
+      expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+        `api/v1/${path}/1234/restore`,
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        `https://turbovas.example/api/v1/${path}/1234/restore`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            'X-TurboVAS-Token': 'test-token',
+            Authorization: 'Bearer jwt-token',
+          },
+          body: JSON.stringify({}),
         },
-        body: JSON.stringify({}),
-      },
-    );
-  });
+      );
+    },
+  );
 
   test('should fall back to GMP restore for unsupported native trash entities', async () => {
     const response = createResponse({});
@@ -340,41 +348,51 @@ describe('TrashCanCommand tests', () => {
     });
   });
 
-  test('should delete supported trash entities through native API when available', async () => {
-    const fetchMock = testing.fn().mockResolvedValue({
-      ok: true,
-      status: 204,
-    });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
-    fakeHttp.session.jwt = 'jwt-token';
-    const cmd = new TrashCanCommand(fakeHttp);
+  test.each([
+    ['filter', 'filters'],
+    ['override', 'overrides'],
+  ] as const)(
+    'should delete supported %s trash entities through native API',
+    async (entityType, path) => {
+      const fetchMock = testing.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+      });
+      testing.stubGlobal('fetch', fetchMock);
+      const fakeHttp = createHttp(undefined) as ReturnType<
+        typeof createHttp
+      > & {
+        buildUrl: ReturnType<typeof testing.fn>;
+        session: ReturnType<typeof createSession>;
+      };
+      fakeHttp.buildUrl = testing.fn(
+        (path: string) => `https://turbovas.example/${path}`,
+      );
+      fakeHttp.session = createSession();
+      fakeHttp.session.token = 'test-token';
+      fakeHttp.session.jwt = 'jwt-token';
+      const cmd = new TrashCanCommand(fakeHttp);
 
-    await cmd.delete({id: '1234', entityType: 'filter'});
+      await cmd.delete({id: '1234', entityType});
 
-    expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/filters/1234/trash');
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/filters/1234/trash',
-      {
-        method: 'DELETE',
-        credentials: 'include',
-        headers: {
-          Accept: 'application/json',
-          'X-TurboVAS-Token': 'test-token',
-          Authorization: 'Bearer jwt-token',
+      expect(fakeHttp.request).not.toHaveBeenCalled();
+      expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+        `api/v1/${path}/1234/trash`,
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        `https://turbovas.example/api/v1/${path}/1234/trash`,
+        {
+          method: 'DELETE',
+          credentials: 'include',
+          headers: {
+            Accept: 'application/json',
+            'X-TurboVAS-Token': 'test-token',
+            Authorization: 'Bearer jwt-token',
+          },
         },
-      },
-    );
-  });
+      );
+    },
+  );
 
   test('should fall back to GMP delete for unsupported native trash entities', async () => {
     const response = createResponse({});

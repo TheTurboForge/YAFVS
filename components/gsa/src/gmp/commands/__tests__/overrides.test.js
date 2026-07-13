@@ -24,6 +24,12 @@ const createNativeHttp = response => {
   return fakeHttp;
 };
 
+const nativeJsonResponse = (payload, status = 200) => ({
+  json: testing.fn().mockResolvedValue(payload),
+  ok: true,
+  status,
+});
+
 describe('OverridesCommand tests', () => {
   test('should fetch override detail through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
@@ -68,34 +74,171 @@ describe('OverridesCommand tests', () => {
     expect(result.data.newSeverity).toEqual(-1);
   });
 
-  test('should keep filtered override detail on GMP until native parity is characterized', async () => {
-    const response = createResponse({
-      get_override: {
-        get_overrides_response: {
-          override: {
-            _id: 'override-id',
-            text: 'Accepted compensating control',
-          },
-        },
-      },
-    });
-    const fetchMock = testing.fn();
+  test('should fetch filtered override detail through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue(
+      nativeJsonResponse({
+        id: 'override-id',
+        text: 'Accepted compensating control',
+        result: {id: 'result-id', name: 'Result 1'},
+      }),
+    );
     testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createNativeHttp(response);
+    const fakeHttp = createNativeHttp();
 
     const cmd = new OverrideCommand(fakeHttp);
     const result = await cmd.get({id: 'override-id'}, {filter: 'results=1'});
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_override',
-        override_id: 'override-id',
-        filter: 'results=1',
-      },
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/overrides/override-id',
+      {token: 'test-token'},
+    );
+    expect(result.data.id).toEqual('override-id');
+    expect(result.data.result.id).toEqual('result-id');
+  });
+
+  test('should create an override through native API with translated fields', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValue(nativeJsonResponse({id: 'created-override-id'}, 201));
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new OverrideCommand(fakeHttp);
+    const result = await cmd.create({
+      oid: 'nvt-oid',
+      text: 'Accepted compensating control',
+      active: '1',
+      days: 14,
+      hosts: '1',
+      hosts_manual: '192.0.2.10',
+      port: '1',
+      port_manual: '443/tcp',
+      severity: 7.5,
+      custom_severity: 1,
+      newSeverity: 6.5,
+      task_id: '0',
+      task_uuid: 'task-id',
+      result_id: '0',
+      result_uuid: 'result-id',
     });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/overrides',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          nvt_id: 'nvt-oid',
+          text: 'Accepted compensating control',
+          hosts: '192.0.2.10',
+          port: '443/tcp',
+          severity: 7.5,
+          new_severity: 6.5,
+          task_id: 'task-id',
+          result_id: 'result-id',
+          activation: {mode: 'for_days', days: 14},
+        }),
+      },
+    );
+    expect(result.data.id).toEqual('created-override-id');
+  });
+
+  test('should patch an override partially and preserve activation for until-active edits', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValue(nativeJsonResponse({id: 'override-id'}));
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new OverrideCommand(fakeHttp);
+    const result = await cmd.save({
+      id: 'override-id',
+      text: 'Updated text',
+      active: '-2',
+      hosts: '0',
+      custom_severity: 0,
+      new_severity_from_list: -1,
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/overrides/override-id',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          text: 'Updated text',
+          hosts: null,
+          new_severity: -1,
+        }),
+      }),
+    );
     expect(result.data.id).toEqual('override-id');
   });
+
+  test('should clone an override through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValue(nativeJsonResponse({id: 'cloned-override-id'}, 201));
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new OverrideCommand(fakeHttp);
+    const result = await cmd.clone({id: 'override/id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/overrides/override%2Fid/clone',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({}),
+      },
+    );
+    expect(result.data.id).toEqual('cloned-override-id');
+  });
+
+  test.each(['create', 'save', 'clone'])(
+    'should not fall back to GMP when native override %s fails',
+    async operation => {
+      const fetchMock = testing.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+      });
+      testing.stubGlobal('fetch', fetchMock);
+      const response = createResponse({
+        action_result: {id: 'fallback-id', action: operation, message: 'OK'},
+      });
+      const fakeHttp = createNativeHttp(response);
+      const cmd = new OverrideCommand(fakeHttp);
+
+      const promise = {
+        create: () =>
+          cmd.create({oid: 'nvt-oid', text: 'text', new_severity: -1}),
+        save: () => cmd.save({id: 'override-id', text: 'text'}),
+        clone: () => cmd.clone({id: 'override-id'}),
+      }[operation]();
+
+      await expect(promise).rejects.toThrow(
+        'Native API request failed with status 500',
+      );
+      expect(fakeHttp.request).not.toHaveBeenCalled();
+    },
+  );
 
   test('should export override metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
@@ -176,7 +319,13 @@ describe('OverridesCommand tests', () => {
   test('should fetch overrides through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 25, total: 1, sort: 'text', filter: 'control'},
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: 'text',
+          filter: 'control',
+        },
         items: [
           {
             id: '9f6c71ce-4f9c-41e2-8c8d-74b8a1aef001',

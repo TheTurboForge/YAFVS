@@ -214,78 +214,155 @@ fn inherited_override_result_detail_uses_result_expansion_semantics() {
 }
 
 #[test]
-fn native_direct_api_allows_owner_scoped_override_trash_only() {
-    assert!(direct_api_v1_method_is_allowed(
-        &Method::GET,
+fn native_direct_api_allows_override_writes_under_write_control() {
+    let id = "12345678-1234-1234-1234-123456789abc";
+    for path in [
         "/api/v1/overrides",
-        false
-    ));
-    assert!(direct_api_v1_method_is_allowed(
-        &Method::GET,
         "/api/v1/overrides/12345678-1234-1234-1234-123456789abc",
-        false
-    ));
-    assert!(direct_api_v1_method_is_allowed(
-        &Method::GET,
         "/api/v1/overrides/12345678-1234-1234-1234-123456789abc/export",
-        false
-    ));
-    for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
+    ] {
+        assert!(direct_api_v1_method_is_allowed(&Method::GET, path, false));
+        assert!(direct_api_v1_method_is_allowed(&Method::GET, path, true));
+    }
+
+    let write_routes = [
+        (Method::POST, "/api/v1/overrides"),
+        (
+            Method::PATCH,
+            "/api/v1/overrides/12345678-1234-1234-1234-123456789abc",
+        ),
+        (
+            Method::DELETE,
+            "/api/v1/overrides/12345678-1234-1234-1234-123456789abc",
+        ),
+        (
+            Method::POST,
+            "/api/v1/overrides/12345678-1234-1234-1234-123456789abc/clone",
+        ),
+        (
+            Method::POST,
+            "/api/v1/overrides/12345678-1234-1234-1234-123456789abc/restore",
+        ),
+        (
+            Method::DELETE,
+            "/api/v1/overrides/12345678-1234-1234-1234-123456789abc/trash",
+        ),
+    ];
+    for (method, path) in write_routes {
         assert!(
-            !direct_api_v1_method_is_allowed(&method, "/api/v1/overrides", true),
-            "{method} /api/v1/overrides must remain closed"
+            !direct_api_v1_method_is_allowed(&method, path, false),
+            "{method} {path} must require write control"
+        );
+        assert!(
+            direct_api_v1_method_is_allowed(&method, path, true),
+            "{method} {path} must be open under write control"
         );
     }
-    assert!(direct_api_v1_method_is_allowed(
-        &Method::DELETE,
-        "/api/v1/overrides/12345678-1234-1234-1234-123456789abc",
-        true,
-    ));
-    for method in [Method::POST, Method::PATCH, Method::DELETE, Method::PUT] {
-        if method != Method::DELETE {
-            assert!(
-                !direct_api_v1_method_is_allowed(
-                    &method,
-                    "/api/v1/overrides/12345678-1234-1234-1234-123456789abc",
-                    true,
-                ),
-                "{method} /api/v1/overrides/{{id}} must remain closed"
-            );
-        }
+
+    for (method, path) in [
+        (Method::PATCH, "/api/v1/overrides"),
+        (Method::DELETE, "/api/v1/overrides"),
+        (
+            Method::POST,
+            "/api/v1/overrides/12345678-1234-1234-1234-123456789abc",
+        ),
+        (
+            Method::PUT,
+            "/api/v1/overrides/12345678-1234-1234-1234-123456789abc",
+        ),
+        (
+            Method::PATCH,
+            "/api/v1/overrides/12345678-1234-1234-1234-123456789abc/restore",
+        ),
+        (
+            Method::POST,
+            "/api/v1/overrides/12345678-1234-1234-1234-123456789abc/trash",
+        ),
+        (
+            Method::POST,
+            "/api/v1/overrides/12345678-1234-1234-1234-123456789abc/export",
+        ),
+    ] {
         assert!(
-            !direct_api_v1_method_is_allowed(
-                &method,
-                "/api/v1/overrides/12345678-1234-1234-1234-123456789abc/export",
-                true,
-            ),
-            "{method} /api/v1/overrides/{{id}}/export must remain closed"
+            !direct_api_v1_method_is_allowed(&method, path, true),
+            "{method} {path} must remain closed"
         );
     }
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::PATCH,
+        &format!("/api/v1/overrides/{id}"),
+        false,
+    ));
 }
 
 #[test]
-fn openapi_documents_owner_scoped_override_trash_contract() {
+fn openapi_documents_override_native_contract() {
     let list = openapi_path_block("/overrides");
     assert!(list.contains("get:"));
-    assert!(!list.contains("post:"));
+    assert!(list.contains("post:"));
     assert!(list.contains("x-turbovas-exposure: direct-read"));
-    assert!(list.contains(
-        "x-turbovas-inherited-still-owns: override-create-modify-clone-xml-export-restore-hard-delete-and-result-expansion"
-    ));
+    assert!(list.contains("x-turbovas-exposure: direct-write"));
+    assert!(list.contains("x-turbovas-replaces: override-create"));
+    assert!(list.contains("x-turbovas-operator-identity: direct-token-operator"));
+    assert!(list.contains("x-turbovas-owner-semantics: request-operator-owner"));
+    assert!(list.contains("x-turbovas-safety-contract: write-control-v1"));
+    assert!(!list.contains("x-turbovas-inherited-still-owns:"));
+    assert!(list.contains("XML metadata export"));
+    assert!(list.contains("override aggregate dashboards"));
+    assert!(list.contains("filtered override-detail result expansion"));
 
     let detail = openapi_path_block("/overrides/{override_id}");
     assert!(detail.contains("get:"));
-    assert!(!detail.contains("patch:"));
+    assert!(detail.contains("patch:"));
     assert!(detail.contains("delete:"));
-    assert!(detail.contains("operationId: deleteOverridesByOverrideId"));
+    assert!(detail.contains("operationId: patchOverridesByOverrideId"));
     assert!(detail.contains("x-turbovas-exposure: direct-write"));
+    assert!(detail.contains("x-turbovas-replaces: override-metadata-modify"));
     assert!(detail.contains("x-turbovas-replaces: override-trash-move"));
     assert!(detail.contains("x-turbovas-owner-semantics: preserve-existing-owner"));
     assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(detail.contains("x-turbovas-exposure: direct-read"));
-    assert!(detail.contains(
-        "x-turbovas-inherited-still-owns: override-create-modify-clone-xml-export-restore-hard-delete-and-result-expansion"
-    ));
+    assert!(!detail.contains("x-turbovas-inherited-still-owns:"));
+
+    for (path, required) in [
+        (
+            "/overrides/{override_id}/clone",
+            &[
+                "post:",
+                "operationId: postOverridesByOverrideIdClone",
+                "x-turbovas-exposure: direct-write",
+                "x-turbovas-owner-semantics: request-operator-owner",
+                "x-turbovas-safety-contract: write-control-v1",
+                "OverrideCloneRequest",
+            ][..],
+        ),
+        (
+            "/overrides/{override_id}/restore",
+            &[
+                "post:",
+                "operationId: postOverridesByOverrideIdRestore",
+                "x-turbovas-exposure: direct-write",
+                "x-turbovas-owner-semantics: preserve-existing-owner",
+                "x-turbovas-safety-contract: write-control-v1",
+            ][..],
+        ),
+        (
+            "/overrides/{override_id}/trash",
+            &[
+                "delete:",
+                "operationId: deleteOverridesByOverrideIdTrash",
+                "x-turbovas-exposure: direct-write",
+                "x-turbovas-owner-semantics: preserve-existing-owner",
+                "x-turbovas-safety-contract: write-control-v1",
+            ][..],
+        ),
+    ] {
+        let block = openapi_path_block(path);
+        for required in required {
+            assert!(block.contains(required), "{path} missing {required}");
+        }
+        assert!(!block.contains("x-turbovas-inherited-still-owns:"));
+    }
 
     let export = openapi_path_block("/overrides/{override_id}/export");
     for required in [
@@ -302,19 +379,57 @@ fn openapi_documents_owner_scoped_override_trash_contract() {
             "override metadata export OpenAPI block missing {required}"
         );
     }
-    assert!(export.contains(
-        "x-turbovas-inherited-still-owns: override-create-modify-clone-xml-export-restore-hard-delete-and-result-expansion"
-    ));
-    for forbidden in [
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-safety-contract: write-control-v1",
-        "\n    post:",
-        "\n    patch:",
-        "\n    delete:",
+    assert!(!export.contains("x-turbovas-inherited-still-owns:"));
+
+    let create_schema = OPENAPI
+        .split_once("    OverrideCreateRequest:\n")
+        .expect("override create schema must exist")
+        .1
+        .split_once("    OverridePatchRequest:\n")
+        .expect("override patch schema must follow create schema")
+        .0;
+    for required in [
+        "required: [nvt_id, text, new_severity]",
+        "        hosts:",
+        "          nullable: true",
+        "        port:",
+        "        severity:",
+        "        task_id:",
+        "        result_id:",
+        "        activation:",
+        "$ref: '#/components/schemas/OverrideActivation'",
     ] {
         assert!(
-            !export.contains(forbidden),
-            "override metadata export must not expose inherited write/export/trash/result effects: {forbidden}"
+            create_schema.contains(required),
+            "create schema missing {required}"
         );
     }
+    let patch_schema = OPENAPI
+        .split_once("    OverridePatchRequest:\n")
+        .expect("override patch schema must exist")
+        .1
+        .split_once("    OverrideCloneRequest:\n")
+        .expect("override clone schema must follow patch schema")
+        .0;
+    assert!(patch_schema.contains("minProperties: 1"));
+    assert!(patch_schema.contains("        nvt_id:"));
+    assert!(patch_schema.contains("        new_severity:"));
+    assert!(patch_schema.contains("        activation:"));
+    assert!(patch_schema.matches("nullable: true").count() >= 5);
+    let clone_schema = OPENAPI
+        .split_once("    OverrideCloneRequest:\n")
+        .expect("override clone schema must exist")
+        .1;
+    assert!(clone_schema.contains("maxProperties: 0"));
+    let activation_schema = OPENAPI
+        .split_once("    OverrideActivation:\n")
+        .expect("override activation schema must exist")
+        .1
+        .split_once("    OverrideCreateRequest:\n")
+        .expect("override activation schema must precede create schema")
+        .0;
+    for mode in ["always", "inactive", "for_days"] {
+        assert!(activation_schema.contains(&format!("enum: [{mode}]")));
+    }
+    assert!(activation_schema.contains("minimum: 1"));
 }

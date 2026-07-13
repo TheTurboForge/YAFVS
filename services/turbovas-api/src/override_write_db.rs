@@ -19,9 +19,166 @@ pub(crate) struct OverrideWriteState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OverrideTrashState {
+    pub(crate) write_state: OverrideWriteState,
+    pub(crate) uuid: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OverrideWriteRecord {
+    pub(crate) internal_id: i32,
+    pub(crate) uuid: String,
+}
+
+pub(crate) async fn load_override_trash_state(
+    tx: &Transaction<'_>,
+    override_id: &str,
+) -> Result<OverrideTrashState, ApiError> {
+    let override_id = parse_uuid(override_id)?.to_string();
+    tx.query_opt(override_trash_state_sql(), &[&override_id])
+        .await
+        .map_err(|error| map_override_write_db_error(error, "load override trash state"))?
+        .map(|row| OverrideTrashState {
+            write_state: OverrideWriteState {
+                internal_id: row.get(0),
+                owner_id: row.get(1),
+                nvt: row.get(2),
+                task_id: row.get(3),
+                result_id: row.get(4),
+            },
+            uuid: row.get(5),
+        })
+        .ok_or(ApiError::NotFound)
+}
+
+pub(crate) async fn ensure_override_live_uuid_available(
+    tx: &Transaction<'_>,
+    override_id: &str,
+) -> Result<(), ApiError> {
+    let exists: bool = tx
+        .query_one(override_live_uuid_conflict_sql(), &[&override_id])
+        .await
+        .map_err(|error| map_override_write_db_error(error, "check override live UUID"))?
+        .get(0);
+    if exists {
+        Err(ApiError::Conflict(
+            "a live override already uses this id".to_string(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OverrideResultScope {
+    pub(crate) internal_id: i32,
+    pub(crate) task_id: i32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OverrideTrashRecord {
     pub(crate) internal_id: i32,
     pub(crate) uuid: String,
+}
+
+pub(crate) async fn ensure_override_nvt_exists(
+    tx: &Transaction<'_>,
+    nvt_id: &str,
+) -> Result<(), ApiError> {
+    let exists: bool = tx
+        .query_one(override_nvt_exists_sql(), &[&nvt_id])
+        .await
+        .map_err(|error| map_override_write_db_error(error, "validate override NVT"))?
+        .get(0);
+    if exists {
+        Ok(())
+    } else {
+        Err(ApiError::BadRequest(
+            "nvt_id does not identify an available NVT or CVE".to_string(),
+        ))
+    }
+}
+
+pub(crate) async fn resolve_override_task_scope(
+    tx: &Transaction<'_>,
+    task_uuid: &str,
+    operator_owner_id: i32,
+) -> Result<i32, ApiError> {
+    let row = tx
+        .query_opt(override_task_scope_sql(), &[&task_uuid])
+        .await
+        .map_err(|error| map_override_write_db_error(error, "resolve override task scope"))?
+        .ok_or_else(|| ApiError::BadRequest("task_id was not found".to_string()))?;
+    let task_id: i32 = row.get(0);
+    let owner_id: i32 = row.get(1);
+    ensure_override_owner_matches_operator(owner_id, operator_owner_id)?;
+    Ok(task_id)
+}
+
+pub(crate) async fn resolve_override_result_scope(
+    tx: &Transaction<'_>,
+    result_uuid: &str,
+    operator_owner_id: i32,
+) -> Result<OverrideResultScope, ApiError> {
+    let row = tx
+        .query_opt(override_result_scope_sql(), &[&result_uuid])
+        .await
+        .map_err(|error| map_override_write_db_error(error, "resolve override result scope"))?
+        .ok_or_else(|| ApiError::BadRequest("result_id was not found".to_string()))?;
+    let owner_id: i32 = row.get(2);
+    ensure_override_owner_matches_operator(owner_id, operator_owner_id)?;
+    Ok(OverrideResultScope {
+        internal_id: row.get(0),
+        task_id: row.get(1),
+    })
+}
+
+pub(crate) async fn load_override_result_scope(
+    tx: &Transaction<'_>,
+    result_id: i32,
+    operator_owner_id: i32,
+) -> Result<OverrideResultScope, ApiError> {
+    let row = tx
+        .query_opt(override_result_scope_by_internal_id_sql(), &[&result_id])
+        .await
+        .map_err(|error| map_override_write_db_error(error, "load override result scope"))?
+        .ok_or_else(|| ApiError::Conflict("the override result no longer exists".to_string()))?;
+    let owner_id: i32 = row.get(2);
+    ensure_override_owner_matches_operator(owner_id, operator_owner_id)?;
+    Ok(OverrideResultScope {
+        internal_id: row.get(0),
+        task_id: row.get(1),
+    })
+}
+
+pub(crate) fn ensure_override_task_result_match(
+    task_id: i32,
+    result: Option<&OverrideResultScope>,
+) -> Result<(), ApiError> {
+    if let Some(result) = result {
+        if task_id != 0 && result.task_id != 0 && task_id != result.task_id {
+            return Err(ApiError::BadRequest(
+                "task_id and result_id must refer to the same task".to_string(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) async fn query_override_write_record(
+    tx: &Transaction<'_>,
+    sql: &str,
+    params: &[&(dyn ToSql + Sync)],
+    action: &'static str,
+) -> Result<OverrideWriteRecord, ApiError> {
+    tx.query_opt(sql, params)
+        .await
+        .map_err(|error| map_override_write_db_error(error, action))?
+        .map(|row| OverrideWriteRecord {
+            internal_id: row.get(0),
+            uuid: row.get(1),
+        })
+        .ok_or(ApiError::NotFound)
 }
 
 pub(crate) fn require_override_write_operator(

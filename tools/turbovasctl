@@ -698,6 +698,11 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "override-metadata-detail-read",
         "override-metadata-export-read",
         "override-metadata-list-read",
+        "override-create",
+        "override-metadata-modify",
+        "override-clone",
+        "override-restore",
+        "override-hard-delete",
         "override-trash-move",
         "port-list-clone",
         "port-list-create",
@@ -837,7 +842,6 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "feed-sync-import-control",
         "host-os-catalog-target-creation-tags-export-and-rich-history",
         "operating-system-writes-deletes-and-rich-history",
-        "override-create-modify-clone-xml-export-restore-hard-delete-and-result-expansion",
         "non-pdf-custom-report-format-config-filter-and-script-rendering",
         "raw-report-generation-non-pdf-export-retention-and-mutations",
         "report-format-file-import-export-verify-param-writes-and-deletes",
@@ -893,6 +897,15 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/nvts/{nvt_id}/export"): "direct-read",
     ("get", "/operating-systems"): "direct-read",
     ("get", "/operating-systems/{os_id}"): "direct-read",
+    ("post", "/overrides"): "direct-write",
+    ("get", "/overrides"): "direct-read",
+    ("get", "/overrides/{override_id}"): "direct-read",
+    ("patch", "/overrides/{override_id}"): "direct-write",
+    ("delete", "/overrides/{override_id}"): "direct-write",
+    ("post", "/overrides/{override_id}/clone"): "direct-write",
+    ("post", "/overrides/{override_id}/restore"): "direct-write",
+    ("delete", "/overrides/{override_id}/trash"): "direct-write",
+    ("get", "/overrides/{override_id}/export"): "direct-read",
     ("get", "/hosts"): "direct-read",
     ("post", "/hosts"): "direct-write",
     ("get", "/hosts/{host_id}"): "direct-read",
@@ -1204,23 +1217,60 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("get", "/overrides"): {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "override-metadata-list-read",
-        "x-turbovas-inherited-still-owns": "override-create-modify-clone-xml-export-restore-hard-delete-and-result-expansion",
+    },
+    ("post", "/overrides"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "request-operator-owner",
+        "x-turbovas-replaces": "override-create",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/overrides/{override_id}"): {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "override-metadata-detail-read",
-        "x-turbovas-inherited-still-owns": "override-create-modify-clone-xml-export-restore-hard-delete-and-result-expansion",
+    },
+    ("patch", "/overrides/{override_id}"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "override-metadata-modify",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-write",
     },
     ("get", "/overrides/{override_id}/export"): {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "override-metadata-export-read",
-        "x-turbovas-inherited-still-owns": "override-create-modify-clone-xml-export-restore-hard-delete-and-result-expansion",
     },
     ("delete", "/overrides/{override_id}"): {
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "preserve-existing-owner",
         "x-turbovas-replaces": "override-trash-move",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-delete",
+    },
+    ("post", "/overrides/{override_id}/clone"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "request-operator-owner",
+        "x-turbovas-replaces": "override-clone",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-write",
+    },
+    ("post", "/overrides/{override_id}/restore"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "override-restore",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-write",
+    },
+    ("delete", "/overrides/{override_id}/trash"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "override-hard-delete",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "metadata-delete",
     },
@@ -4457,8 +4507,6 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
         return "scanner-control-or-credential", "Scanner and credential surfaces remain inherited until control/secret handling is designed."
     if name == "hosts.js":
         return "asset-action-or-rich-context", "Host actions and richer inherited context remain outside the current native read contract."
-    if name == "overrides.js":
-        return "asset-action-or-rich-context", "Override writes and result-expansion behavior remain inherited."
     if name == "port-lists.ts":
         return "asset-action-or-rich-context", "Port-list imports, exports, and UI actions remain inherited."
     if name == "report.ts":
@@ -8145,6 +8193,8 @@ def native_tooling_category(relative_path: str) -> tuple[str, str] | None:
         return "compatibility_bridge", "Diagnostic tests characterize and guard inherited GMP/python-gvm/gvm-tools retirement; they do not require legacy clients at runtime."
     if relative_path == "components/gsa/src/gmp/commands/entity.ts":
         return "compatibility_bridge", "Shared GSA command base remains compatibility plumbing until the last inherited command owner is removed; it is not an independent product workflow."
+    if relative_path == "components/gsa/src/gmp/commands/overrides.js":
+        return "compatibility_bridge", "GSA Override command adapter delegates retained create, read, modify, clone, export, and delete behavior to the native API; it has no inherited command execution."
     if relative_path.startswith("components/gsa/src/gmp/commands/") and "/__tests__/" not in relative_path:
         return "product_workflow", "GSA product workflow still reads or writes through an inherited GMP command owner."
     if relative_path.startswith("components/gsa/src/gmp/"):
@@ -9056,7 +9106,12 @@ def openapi_request_body_schema_contract_drift(repo_root: Path | None, operation
             continue
         if values.get("type") != "object":
             invalid.append({"operation": label, "field": f"components.schemas.{schema_name}.type", "actual": values.get("type"), "expected": "object"})
-        if "properties" not in top_level_keys:
+        is_closed_empty_object = (
+            values.get("type") == "object"
+            and values.get("maxProperties") == "0"
+            and values.get("additionalProperties") == "false"
+        )
+        if "properties" not in top_level_keys and not is_closed_empty_object:
             invalid.append({"operation": label, "field": f"components.schemas.{schema_name}.properties", "actual": None, "expected": "top-level properties"})
 
     return {
@@ -10036,7 +10091,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         stop_suffix = post_constants.get("stop_suffix")
         replace_target_suffix = post_constants.get("replace_target_suffix")
         replace_configuration_suffix = post_constants.get("replace_configuration_suffix")
-        for prefix_variable in ("alert_prefix", "filter_prefix", "port_list_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
+        for prefix_variable in ("alert_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{clone_suffix}")
@@ -10099,7 +10154,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
     patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
     if patch_function_body:
         patch_constants = c_string_constants(patch_function_body)
-        for prefix_variable in ("filter_prefix", "port_list_prefix", "report_format_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
+        for prefix_variable in ("filter_prefix", "override_prefix", "port_list_prefix", "report_format_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = patch_constants.get(prefix_variable)
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in patch_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}")
@@ -10124,7 +10179,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             prefix = delete_constants.get(prefix_variable)
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in delete_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}")
-                if prefix_variable not in {"host_identifier_prefix", "host_operating_system_prefix", "override_prefix", "scope_prefix", "tls_certificate_prefix"} and trash_suffix and "trash_suffix" in delete_function_body:
+                if prefix_variable not in {"host_identifier_prefix", "host_operating_system_prefix", "scope_prefix", "tls_certificate_prefix"} and trash_suffix and "trash_suffix" in delete_function_body:
                     templates.add(f"{prefix.rstrip('/')}/{{}}{trash_suffix}")
         port_list_prefix = delete_constants.get("port_list_prefix")
         if (
@@ -10169,7 +10224,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
         resources_suffix = post_constants.get("resources_suffix")
         ranges_suffix = post_constants.get("ranges_suffix")
         verify_suffix = post_constants.get("verify_suffix")
-        for prefix_variable in ("alert_prefix", "filter_prefix", "port_list_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
+        for prefix_variable in ("alert_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{clone_suffix}")
@@ -10245,6 +10300,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             "credential_prefix",
             "filter_prefix",
             "host_prefix",
+            "override_prefix",
             "port_list_prefix",
             "report_format_prefix",
             "scan_config_prefix",
@@ -10283,7 +10339,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             prefix = delete_constants.get(prefix_variable)
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in delete_function_body:
                 operations.add(f"DELETE {prefix.rstrip('/')}/{{}}")
-                if prefix_variable not in {"alert_prefix", "host_identifier_prefix", "host_operating_system_prefix", "host_prefix", "override_prefix", "scope_prefix", "scope_report_prefix", "task_prefix", "tls_certificate_prefix"} and trash_suffix and "trash_suffix" in delete_function_body:
+                if prefix_variable not in {"alert_prefix", "host_identifier_prefix", "host_operating_system_prefix", "host_prefix", "scope_prefix", "scope_report_prefix", "task_prefix", "tls_certificate_prefix"} and trash_suffix and "trash_suffix" in delete_function_body:
                     operations.add(f"DELETE {prefix.rstrip('/')}/{{}}{trash_suffix}")
         port_list_prefix = delete_constants.get("port_list_prefix")
         if (
@@ -11135,22 +11191,58 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["GSA top-level Overrides list (migrated through gsad same-origin proxy)", "read-only override metadata automation", "native-api-request helper"],
             },
             {
+                "method": "post",
+                "endpoint": "/api/v1/overrides",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser Override create", "direct native Override create"],
+            },
+            {
                 "endpoint": "/api/v1/overrides/{override_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Override detail (migrated through gsad same-origin proxy)", "read-only override metadata automation"],
             },
             {
-                "endpoint": "/api/v1/overrides/{override_id}/export",
-                "status": "implemented_internal_browser_proxied_and_scriptable_read",
-                "direct_access": "scriptable_read",
-                "replacement_candidates": ["direct native JSON override metadata export", "read-only override metadata automation"],
+                "method": "patch",
+                "endpoint": "/api/v1/overrides/{override_id}",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser Override metadata save", "direct native Override metadata modification"],
             },
             {
                 "method": "delete",
                 "endpoint": "/api/v1/overrides/{override_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
-                "replacement_candidates": ["direct native owner-scoped override trash move", "retired filter-based GMP override deletion script"],
+                "replacement_candidates": ["same-origin browser Override trash move", "direct native owner-scoped Override trash move"],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/overrides/{override_id}/clone",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser Override clone", "direct native Override clone"],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/overrides/{override_id}/restore",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser Override restore", "direct native Override restore"],
+            },
+            {
+                "method": "delete",
+                "endpoint": "/api/v1/overrides/{override_id}/trash",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser Override permanent delete", "direct native Override permanent delete"],
+            },
+            {
+                "endpoint": "/api/v1/overrides/{override_id}/export",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["same-origin browser native JSON Override export", "direct native JSON Override export", "read-only override metadata automation"],
+                "notes": ["XML metadata export, aggregate dashboards, and filtered detail result expansion are intentionally not retained."],
             },
             {
                 "endpoint": "/api/v1/port-lists",
@@ -20018,8 +20110,17 @@ def command_runtime_native_api_direct_bootstrap(repo_root: Path, status_only: bo
     return result
 
 
-def native_api_direct_admin_operator_uuid(repo_root: Path) -> tuple[subprocess.CompletedProcess[str], str | None]:
-    returncode_only = run_gvmd_oneoff(repo_root, ["--get-users", "--verbose"], no_deps=False)
+def native_api_direct_admin_operator_uuid(
+    repo_root: Path,
+    *,
+    app_image_ids: dict[str, str] | None = None,
+) -> tuple[subprocess.CompletedProcess[str], str | None]:
+    returncode_only = run_gvmd_oneoff(
+        repo_root,
+        ["--get-users", "--verbose"],
+        no_deps=False,
+        app_image_ids=app_image_ids,
+    )
     admin_uuid = parse_user_uuid(returncode_only.stdout, DEV_ADMIN_USER) if returncode_only.returncode == 0 else None
     return returncode_only, admin_uuid
 
@@ -20155,6 +20256,20 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.port-list-write-post-hard-delete",
             "native-api-direct.port-list-write-cleanup",
             "native-api-direct.port-list-write-post-cleanup",
+            "native-api-direct.override-nvt-fixture",
+            "native-api-direct.override-write-create",
+            "native-api-direct.override-write-update",
+            "native-api-direct.override-write-clone",
+            "native-api-direct.override-write-delete",
+            "native-api-direct.override-write-post-delete",
+            "native-api-direct.override-write-restore",
+            "native-api-direct.override-write-delete-after-restore",
+            "native-api-direct.override-write-hard-delete",
+            "native-api-direct.override-write-post-hard-delete",
+            "native-api-direct.override-write-delete-clone",
+            "native-api-direct.override-write-hard-delete-clone",
+            "native-api-direct.override-write-post-hard-delete-clone",
+            "native-api-direct.override-write-cleanup",
             "native-api-direct.tag-write-update",
             "native-api-direct.tag-resource-fixture",
             "native-api-direct.tag-resource-add",
@@ -21077,10 +21192,17 @@ def direct_trash_empty_runtime_findings(
     return findings
 
 
-def native_api_cleanup_identity_predicate(resource_id: str | None, name: str) -> str:
+def native_api_cleanup_identity_predicate(
+    resource_id: str | None,
+    value: str,
+    *,
+    value_column: str = "name",
+) -> str:
+    if value_column not in {"name", "text"}:
+        raise ValueError("cleanup identity column is not allowed")
     if resource_id:
-        return f"uuid = {sql_literal(resource_id)} AND name = {sql_literal(name)}"
-    return f"name = {sql_literal(name)}"
+        return f"uuid = {sql_literal(resource_id)} AND {value_column} = {sql_literal(value)}"
+    return f"{value_column} = {sql_literal(value)}"
 
 
 def native_api_create_cleanup_state(
@@ -21278,7 +21400,10 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         )
     )
 
-    users, admin_uuid = native_api_direct_admin_operator_uuid(repo_root)
+    users, admin_uuid = native_api_direct_admin_operator_uuid(
+        repo_root,
+        app_image_ids=receipt["image_ids"] if receipt is not None else None,
+    )
     findings.append(
         finding(
             "pass" if admin_uuid else "fail",
@@ -21341,6 +21466,11 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
     scan_config_clone_id: str | None = None
     scan_config_name = f"turbovas-direct-write-smoke-scan-config-{int(time.time())}-{os.getpid()}"
     scan_config_clone_name = f"{scan_config_name}-clone"
+    override_id: str | None = None
+    override_clone_id: str | None = None
+    override_nvt_id: str | None = None
+    override_text = f"turbovas-direct-write-smoke-override-{int(time.time())}-{os.getpid()}"
+    override_cleanup_required = False
     scope_name = f"turbovas-direct-write-smoke-scope-{int(time.time())}-{os.getpid()}"
     filter_name = f"turbovas-direct-write-smoke-filter-{int(time.time())}-{os.getpid()}"
     filter_clone_name = f"{filter_name}-clone"
@@ -23604,6 +23734,125 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
             hard_delete_ok = hard_delete.returncode == 0 and hard_delete_status == 204
             findings.append(native_api_probe_finding("pass" if hard_delete_ok else "fail", "native-api-direct.tag-write-hard-delete", "Direct write-control hard-deleted the temporary trashed tag." if hard_delete_ok else "Direct write-control failed to hard-delete the temporary trashed tag.", hard_delete, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}/trash", token=token, env=env, method="DELETE"), hard_delete_json, {"http_status": hard_delete_status, "tag_id": tag_id, **summarize_native_api_response(hard_delete_json)}))
 
+    if aggregate_status(findings) != "fail" and admin_uuid:
+        content_type = (("Content-Type", "application/json"),)
+        override_nvt_probe = direct_native_api_curl(repo_root, "/api/v1/nvts?page_size=1&sort=oid", token=token, env=env)
+        override_nvt_probe_json, override_nvt_probe_status = parse_json_output_with_http_status(override_nvt_probe)
+        override_nvt_items = override_nvt_probe_json.get("items") if isinstance(override_nvt_probe_json, dict) else None
+        if isinstance(override_nvt_items, list) and override_nvt_items and isinstance(override_nvt_items[0], dict):
+            candidate_nvt_id = override_nvt_items[0].get("id")
+            override_nvt_id = candidate_nvt_id if isinstance(candidate_nvt_id, str) and candidate_nvt_id else None
+        override_nvt_probe_ok = override_nvt_probe.returncode == 0 and override_nvt_probe_status == 200 and bool(override_nvt_id)
+        findings.append(native_api_probe_finding("pass" if override_nvt_probe_ok else "fail", "native-api-direct.override-nvt-fixture", "Direct write-control selected one existing NVT identifier without changing feed data." if override_nvt_probe_ok else "Direct write-control could not select an existing NVT identifier for the disposable override.", override_nvt_probe, direct_native_api_display_command("/api/v1/nvts?page_size=1&sort=oid", token=token, env=env), override_nvt_probe_json, {"http_status": override_nvt_probe_status, "nvt_id_found": bool(override_nvt_id), **summarize_native_api_response(override_nvt_probe_json)}))
+
+        if override_nvt_id:
+            override_create_body = json.dumps({"nvt_id": override_nvt_id, "text": override_text, "severity": 0.0, "new_severity": 4.2, "activation": {"mode": "inactive"}}, separators=(",", ":"))
+            override_cleanup_required = True
+            override_create = direct_native_api_curl(repo_root, "/api/v1/overrides", token=token, env=env, method="POST", body=override_create_body, extra_headers=content_type)
+            override_create_json, override_create_status = parse_json_output_with_http_status(override_create)
+            candidate_override_id = override_create_json.get("id") if isinstance(override_create_json, dict) else None
+            override_id = candidate_override_id if isinstance(candidate_override_id, str) else None
+            override_create_ok = override_create.returncode == 0 and override_create_status == 201 and bool(override_id) and override_create_json.get("text") == override_text and override_create_json.get("new_severity") == 4.2 and override_create_json.get("active") is False
+            findings.append(native_api_probe_finding("pass" if override_create_ok else "fail", "native-api-direct.override-write-create", "Direct write-control created one disposable unscoped inactive override." if override_create_ok else "Direct write-control failed to create the disposable unscoped override.", override_create, direct_native_api_display_command("/api/v1/overrides", token=token, env=env, method="POST", body=override_create_body, extra_headers=content_type), override_create_json, {"http_status": override_create_status, "override_id": override_id, "nvt_id": override_nvt_id, **summarize_native_api_response(override_create_json)}))
+
+            if override_id:
+                override_patch_body = json.dumps({"new_severity": 4.3, "activation": {"mode": "always"}}, separators=(",", ":"))
+                override_patch = direct_native_api_curl(repo_root, f"/api/v1/overrides/{urllib.parse.quote(override_id)}", token=token, env=env, method="PATCH", body=override_patch_body, extra_headers=content_type)
+                override_patch_json, override_patch_status = parse_json_output_with_http_status(override_patch)
+                override_patch_ok = override_patch.returncode == 0 and override_patch_status == 200 and isinstance(override_patch_json, dict) and override_patch_json.get("id") == override_id and override_patch_json.get("new_severity") == 4.3 and override_patch_json.get("active") is True
+                findings.append(native_api_probe_finding("pass" if override_patch_ok else "fail", "native-api-direct.override-write-update", "Direct write-control patched only disposable override severity and activation metadata." if override_patch_ok else "Direct write-control failed to patch the disposable override.", override_patch, direct_native_api_display_command(f"/api/v1/overrides/{urllib.parse.quote(override_id)}", token=token, env=env, method="PATCH", body=override_patch_body, extra_headers=content_type), override_patch_json, {"http_status": override_patch_status, "override_id": override_id, **summarize_native_api_response(override_patch_json)}))
+
+                override_clone_body = "{}"
+                override_clone = direct_native_api_curl(repo_root, f"/api/v1/overrides/{urllib.parse.quote(override_id)}/clone", token=token, env=env, method="POST", body=override_clone_body, extra_headers=content_type)
+                override_clone_json, override_clone_status = parse_json_output_with_http_status(override_clone)
+                candidate_override_clone_id = override_clone_json.get("id") if isinstance(override_clone_json, dict) else None
+                override_clone_id = candidate_override_clone_id if isinstance(candidate_override_clone_id, str) else None
+                override_clone_ok = override_clone.returncode == 0 and override_clone_status == 201 and bool(override_clone_id) and override_clone_id != override_id and override_clone_json.get("text") == override_text and override_clone_json.get("new_severity") == 4.3
+                findings.append(native_api_probe_finding("pass" if override_clone_ok else "fail", "native-api-direct.override-write-clone", "Direct write-control cloned the disposable override with the required empty object." if override_clone_ok else "Direct write-control failed to clone the disposable override.", override_clone, direct_native_api_display_command(f"/api/v1/overrides/{urllib.parse.quote(override_id)}/clone", token=token, env=env, method="POST", body=override_clone_body, extra_headers=content_type), override_clone_json, {"http_status": override_clone_status, "override_id": override_id, "override_clone_id": override_clone_id, **summarize_native_api_response(override_clone_json)}))
+
+                override_delete = direct_native_api_curl(repo_root, f"/api/v1/overrides/{urllib.parse.quote(override_id)}", token=token, env=env, method="DELETE")
+                override_delete_json, override_delete_status = parse_json_output_with_http_status(override_delete)
+                override_delete_ok = override_delete.returncode == 0 and override_delete_status == 204
+                findings.append(native_api_probe_finding("pass" if override_delete_ok else "fail", "native-api-direct.override-write-delete", "Direct write-control moved the disposable override to trash." if override_delete_ok else "Direct write-control failed to move the disposable override to trash.", override_delete, direct_native_api_display_command(f"/api/v1/overrides/{urllib.parse.quote(override_id)}", token=token, env=env, method="DELETE"), override_delete_json, {"http_status": override_delete_status, "override_id": override_id, **summarize_native_api_response(override_delete_json)}))
+
+                override_post_delete = direct_native_api_curl(repo_root, f"/api/v1/overrides/{urllib.parse.quote(override_id)}", token=token, env=env)
+                override_post_delete_json, override_post_delete_status = parse_json_output_with_http_status(override_post_delete)
+                override_post_delete_ok = override_post_delete.returncode == 0 and override_post_delete_status == 404 and isinstance(override_post_delete_json, dict) and override_post_delete_json.get("error", {}).get("code") == "not_found"
+                findings.append(native_api_probe_finding("pass" if override_post_delete_ok else "fail", "native-api-direct.override-write-post-delete", "Direct API confirms the disposable override is absent after trash move." if override_post_delete_ok else "Direct API did not confirm the disposable override left live rows after trash move.", override_post_delete, direct_native_api_display_command(f"/api/v1/overrides/{urllib.parse.quote(override_id)}", token=token, env=env), override_post_delete_json, {"http_status": override_post_delete_status, "override_id": override_id, **summarize_native_api_response(override_post_delete_json)}))
+
+                override_restore = direct_native_api_curl(repo_root, f"/api/v1/overrides/{urllib.parse.quote(override_id)}/restore", token=token, env=env, method="POST")
+                override_restore_json, override_restore_status = parse_json_output_with_http_status(override_restore)
+                override_restore_ok = override_restore.returncode == 0 and override_restore_status == 200 and isinstance(override_restore_json, dict) and override_restore_json.get("id") == override_id and override_restore_json.get("text") == override_text
+                findings.append(native_api_probe_finding("pass" if override_restore_ok else "fail", "native-api-direct.override-write-restore", "Direct write-control restored the disposable override with its UUID intact." if override_restore_ok else "Direct write-control failed to restore the disposable override.", override_restore, direct_native_api_display_command(f"/api/v1/overrides/{urllib.parse.quote(override_id)}/restore", token=token, env=env, method="POST"), override_restore_json, {"http_status": override_restore_status, "override_id": override_id, **summarize_native_api_response(override_restore_json)}))
+
+                override_delete_after_restore = direct_native_api_curl(repo_root, f"/api/v1/overrides/{urllib.parse.quote(override_id)}", token=token, env=env, method="DELETE")
+                override_delete_after_restore_json, override_delete_after_restore_status = parse_json_output_with_http_status(override_delete_after_restore)
+                override_delete_after_restore_ok = override_delete_after_restore.returncode == 0 and override_delete_after_restore_status == 204
+                findings.append(native_api_probe_finding("pass" if override_delete_after_restore_ok else "fail", "native-api-direct.override-write-delete-after-restore", "Direct write-control moved the restored disposable override back to trash." if override_delete_after_restore_ok else "Direct write-control failed to re-trash the restored disposable override.", override_delete_after_restore, direct_native_api_display_command(f"/api/v1/overrides/{urllib.parse.quote(override_id)}", token=token, env=env, method="DELETE"), override_delete_after_restore_json, {"http_status": override_delete_after_restore_status, "override_id": override_id, **summarize_native_api_response(override_delete_after_restore_json)}))
+
+                override_hard_delete = direct_native_api_curl(repo_root, f"/api/v1/overrides/{urllib.parse.quote(override_id)}/trash", token=token, env=env, method="DELETE")
+                override_hard_delete_json, override_hard_delete_status = parse_json_output_with_http_status(override_hard_delete)
+                override_hard_delete_ok = override_hard_delete.returncode == 0 and override_hard_delete_status == 204
+                findings.append(native_api_probe_finding("pass" if override_hard_delete_ok else "fail", "native-api-direct.override-write-hard-delete", "Direct write-control hard-deleted the disposable trashed override." if override_hard_delete_ok else "Direct write-control failed to hard-delete the disposable trashed override.", override_hard_delete, direct_native_api_display_command(f"/api/v1/overrides/{urllib.parse.quote(override_id)}/trash", token=token, env=env, method="DELETE"), override_hard_delete_json, {"http_status": override_hard_delete_status, "override_id": override_id, **summarize_native_api_response(override_hard_delete_json)}))
+
+                override_post_hard_delete = direct_native_api_curl(repo_root, f"/api/v1/overrides/{urllib.parse.quote(override_id)}", token=token, env=env)
+                override_post_hard_delete_json, override_post_hard_delete_status = parse_json_output_with_http_status(override_post_hard_delete)
+                override_post_hard_delete_ok = override_post_hard_delete.returncode == 0 and override_post_hard_delete_status == 404 and isinstance(override_post_hard_delete_json, dict) and override_post_hard_delete_json.get("error", {}).get("code") == "not_found"
+                findings.append(native_api_probe_finding("pass" if override_post_hard_delete_ok else "fail", "native-api-direct.override-write-post-hard-delete", "Direct API confirms the disposable override is gone after hard delete." if override_post_hard_delete_ok else "Direct API did not confirm the disposable override was removed after hard delete.", override_post_hard_delete, direct_native_api_display_command(f"/api/v1/overrides/{urllib.parse.quote(override_id)}", token=token, env=env), override_post_hard_delete_json, {"http_status": override_post_hard_delete_status, "override_id": override_id, **summarize_native_api_response(override_post_hard_delete_json)}))
+
+                if override_clone_id:
+                    override_clone_delete = direct_native_api_curl(repo_root, f"/api/v1/overrides/{urllib.parse.quote(override_clone_id)}", token=token, env=env, method="DELETE")
+                    override_clone_delete_json, override_clone_delete_status = parse_json_output_with_http_status(override_clone_delete)
+                    override_clone_delete_ok = override_clone_delete.returncode == 0 and override_clone_delete_status == 204
+                    findings.append(native_api_probe_finding("pass" if override_clone_delete_ok else "fail", "native-api-direct.override-write-delete-clone", "Direct write-control moved the disposable override clone to trash." if override_clone_delete_ok else "Direct write-control failed to move the disposable override clone to trash.", override_clone_delete, direct_native_api_display_command(f"/api/v1/overrides/{urllib.parse.quote(override_clone_id)}", token=token, env=env, method="DELETE"), override_clone_delete_json, {"http_status": override_clone_delete_status, "override_clone_id": override_clone_id, **summarize_native_api_response(override_clone_delete_json)}))
+
+                    override_clone_hard_delete = direct_native_api_curl(repo_root, f"/api/v1/overrides/{urllib.parse.quote(override_clone_id)}/trash", token=token, env=env, method="DELETE")
+                    override_clone_hard_delete_json, override_clone_hard_delete_status = parse_json_output_with_http_status(override_clone_hard_delete)
+                    override_clone_hard_delete_ok = override_clone_hard_delete.returncode == 0 and override_clone_hard_delete_status == 204
+                    findings.append(native_api_probe_finding("pass" if override_clone_hard_delete_ok else "fail", "native-api-direct.override-write-hard-delete-clone", "Direct write-control hard-deleted the disposable override clone." if override_clone_hard_delete_ok else "Direct write-control failed to hard-delete the disposable override clone.", override_clone_hard_delete, direct_native_api_display_command(f"/api/v1/overrides/{urllib.parse.quote(override_clone_id)}/trash", token=token, env=env, method="DELETE"), override_clone_hard_delete_json, {"http_status": override_clone_hard_delete_status, "override_clone_id": override_clone_id, **summarize_native_api_response(override_clone_hard_delete_json)}))
+
+                    override_clone_post_hard_delete = direct_native_api_curl(repo_root, f"/api/v1/overrides/{urllib.parse.quote(override_clone_id)}", token=token, env=env)
+                    override_clone_post_hard_delete_json, override_clone_post_hard_delete_status = parse_json_output_with_http_status(override_clone_post_hard_delete)
+                    override_clone_post_hard_delete_ok = override_clone_post_hard_delete.returncode == 0 and override_clone_post_hard_delete_status == 404 and isinstance(override_clone_post_hard_delete_json, dict) and override_clone_post_hard_delete_json.get("error", {}).get("code") == "not_found"
+                    findings.append(native_api_probe_finding("pass" if override_clone_post_hard_delete_ok else "fail", "native-api-direct.override-write-post-hard-delete-clone", "Direct API confirms the disposable override clone is gone after hard delete." if override_clone_post_hard_delete_ok else "Direct API did not confirm the disposable override clone was removed after hard delete.", override_clone_post_hard_delete, direct_native_api_display_command(f"/api/v1/overrides/{urllib.parse.quote(override_clone_id)}", token=token, env=env), override_clone_post_hard_delete_json, {"http_status": override_clone_post_hard_delete_status, "override_clone_id": override_clone_id, **summarize_native_api_response(override_clone_post_hard_delete_json)}))
+
+            if override_cleanup_required:
+                override_residue_predicates = [native_api_cleanup_identity_predicate(override_id, override_text, value_column="text"), native_api_cleanup_identity_predicate(override_clone_id, override_text, value_column="text"), f"text = {sql_literal(override_text)}"]
+                override_residue_filter = " OR ".join(sorted(set(override_residue_predicates)))
+                override_cleanup_sql = (
+                    "/* fixed-override-smoke-cleanup */ LOCK TABLE users IN ROW SHARE MODE; "
+                    "WITH operator_owner AS (SELECT id FROM users "
+                    f"WHERE uuid = {sql_literal(admin_uuid)}), "
+                    "live_override AS (SELECT id FROM overrides "
+                    f"WHERE owner = (SELECT id FROM operator_owner) AND ({override_residue_filter})), "
+                    "trash_override AS (SELECT id FROM overrides_trash "
+                    f"WHERE owner = (SELECT id FROM operator_owner) AND ({override_residue_filter})), "
+                    "deleted_live_tags AS (DELETE FROM tag_resources WHERE resource_type = 'override' AND resource_location = 0 AND resource IN (SELECT id FROM live_override)), "
+                    "deleted_trash_tags AS (DELETE FROM tag_resources WHERE resource_type = 'override' AND resource_location = 1 AND resource IN (SELECT id FROM trash_override)), "
+                    "deleted_live_trash_tags AS (DELETE FROM tag_resources_trash WHERE resource_type = 'override' AND resource_location = 0 AND resource IN (SELECT id FROM live_override)), "
+                    "deleted_trash_trash_tags AS (DELETE FROM tag_resources_trash WHERE resource_type = 'override' AND resource_location = 1 AND resource IN (SELECT id FROM trash_override)), "
+                    "deleted_live_override AS (DELETE FROM overrides WHERE id IN (SELECT id FROM live_override) RETURNING id), "
+                    "deleted_trash_override AS (DELETE FROM overrides_trash WHERE id IN (SELECT id FROM trash_override) RETURNING id) "
+                    "SELECT (SELECT count(*) FROM deleted_live_override)::text || '|' || (SELECT count(*) FROM deleted_trash_override)::text;"
+                )
+                override_cleanup = psql(repo_root, override_cleanup_sql)
+                override_residue_sql = (
+                    "/* fixed-override-smoke-residue */ WITH operator_owner AS (SELECT id FROM users "
+                    f"WHERE uuid = {sql_literal(admin_uuid)}) "
+                    "SELECT (SELECT count(*)::text FROM overrides "
+                    f"WHERE owner = (SELECT id FROM operator_owner) AND ({override_residue_filter})) || '|' || "
+                    "(SELECT count(*)::text FROM overrides_trash "
+                    f"WHERE owner = (SELECT id FROM operator_owner) AND ({override_residue_filter}));"
+                )
+                override_residue = psql(repo_root, override_residue_sql)
+                override_residue_state = psql_value(override_residue)
+                override_cleanup_ok = override_cleanup.returncode == 0 and override_residue.returncode == 0 and override_residue_state == "0|0"
+                override_cleanup_finding = process_step_finding("pass" if override_cleanup_ok else "fail", "native-api-direct.override-write-cleanup", "Direct write-control smoke found no exact UUID/text override fixture residue after native lifecycle cleanup." if override_cleanup_ok else "Direct write-control smoke could not prove cleanup of exact UUID/text override fixture residue.", override_cleanup, ["psql", "fixed-override-smoke-cleanup"])
+                override_cleanup_details = override_cleanup_finding.setdefault("details", {})
+                if isinstance(override_cleanup_details, dict):
+                    override_cleanup_details.update({"override_id": override_id, "override_clone_id": override_clone_id, "residue_state": override_residue_state})
+                findings.append(override_cleanup_finding)
+
     if started_write_control and aggregate_status(findings) != "fail" and admin_uuid:
         findings.extend(
             direct_task_target_replace_runtime_findings(
@@ -23655,6 +23904,9 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         "temporary_schedule_clone_name": schedule_clone_name,
         "temporary_scan_config_id": scan_config_id,
         "temporary_scan_config_name": scan_config_name,
+        "temporary_override_id": override_id,
+        "temporary_override_clone_id": override_clone_id,
+        "temporary_override_nvt_id": override_nvt_id,
         "temporary_tag_id": tag_id,
         "temporary_tag_clone_id": tag_clone_id,
         "temporary_tag_name": tag_name,

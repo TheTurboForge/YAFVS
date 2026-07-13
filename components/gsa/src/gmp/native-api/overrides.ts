@@ -7,6 +7,7 @@
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
+import ActionResult from 'gmp/models/action-result';
 import type QueryFilter from 'gmp/models/filter';
 import Override from 'gmp/models/override';
 
@@ -70,6 +71,31 @@ interface NativeOverridePayload {
 interface NativeOverridesPayload {
   page?: Partial<NativePage>;
   items?: NativeOverridePayload[];
+}
+
+export type NativeOverrideActivation =
+  | {mode: 'always'}
+  | {mode: 'inactive'}
+  | {mode: 'for_days'; days: number};
+
+export interface NativeOverrideCreateArgs {
+  nvt_id: string;
+  text: string;
+  hosts?: string | null;
+  port?: string | null;
+  severity?: number | null;
+  new_severity: number;
+  task_id?: string | null;
+  result_id?: string | null;
+  activation?: NativeOverrideActivation;
+}
+
+export interface NativeOverridePatchArgs extends Partial<
+  Omit<NativeOverrideCreateArgs, 'nvt_id' | 'new_severity'>
+> {
+  id: string;
+  nvt_id?: string;
+  new_severity?: number;
 }
 
 export interface NativeOverridesQuery {
@@ -175,6 +201,31 @@ const fetchNativeJson = async <T>(
       Accept: 'application/json',
       ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
     },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+};
+
+const writeNativeJson = async <T>(
+  gmp: NativeApiGmp,
+  path: string,
+  body: unknown,
+  method = 'POST',
+): Promise<T> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method,
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+    },
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -296,6 +347,57 @@ export const fetchNativeOverride = async (
     {token: gmp.session.token},
   );
   return nativeOverrideToModel(payload);
+};
+
+const nativeOverrideActionResponse = (
+  payload: NativeOverridePayload,
+  action: string,
+): Response<ActionResult> =>
+  new Response(
+    new ActionResult({
+      action_result: {
+        action,
+        id: stringValue(payload.id),
+        message: 'OK',
+      },
+    }),
+  );
+
+export const createNativeOverride = async (
+  gmp: NativeApiGmp,
+  args: NativeOverrideCreateArgs,
+): Promise<Response<ActionResult>> => {
+  const payload = await writeNativeJson<NativeOverridePayload>(
+    gmp,
+    'api/v1/overrides',
+    args,
+  );
+  return nativeOverrideActionResponse(payload, 'create_override');
+};
+
+export const patchNativeOverride = async (
+  gmp: NativeApiGmp,
+  {id, ...args}: NativeOverridePatchArgs,
+): Promise<Response<ActionResult>> => {
+  const payload = await writeNativeJson<NativeOverridePayload>(
+    gmp,
+    `api/v1/overrides/${encodeURIComponent(id)}`,
+    args,
+    'PATCH',
+  );
+  return nativeOverrideActionResponse(payload, 'save_override');
+};
+
+export const cloneNativeOverride = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeOverridePayload>(
+    gmp,
+    `api/v1/overrides/${encodeURIComponent(id)}/clone`,
+    {},
+  );
+  return new Response({id: stringValue(payload.id)});
 };
 
 export const exportNativeOverrideMetadata = async (

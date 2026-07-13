@@ -123,7 +123,6 @@ describe('OverrideDetailsPage tests', () => {
       'Owner:admin',
     );
 
-
     expect(screen.getByRole('row', {name: /^NVT Name/i})).toHaveTextContent(
       'foo nvt',
     );
@@ -167,7 +166,7 @@ describe('OverrideDetailsPage tests', () => {
     fireEvent.click(cloneIcon);
     expect(gmp.override.clone).toHaveBeenCalledWith(override);
 
-    const exportIcon = screen.getByTitle('Export Override as XML');
+    const exportIcon = screen.getByTitle('Export Override as JSON');
     expect(exportIcon).toBeInTheDocument();
     fireEvent.click(exportIcon);
     expect(gmp.override.export).toHaveBeenCalledWith(override);

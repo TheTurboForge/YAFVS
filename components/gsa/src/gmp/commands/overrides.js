@@ -8,31 +8,161 @@ import registerCommand from 'gmp/command';
 import EntitiesCommand from 'gmp/commands/entities';
 import EntityCommand from 'gmp/commands/entity';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
 } from 'gmp/commands/native';
 import Response from 'gmp/http/response';
-import logger from 'gmp/log';
 import Override, {
   ANY,
   MANUAL,
   ACTIVE_YES_ALWAYS_VALUE,
+  ACTIVE_YES_FOR_NEXT_VALUE,
+  ACTIVE_YES_UNTIL_VALUE,
   DEFAULT_DAYS,
+  RESULT_UUID,
   SEVERITY_FALSE_POSITIVE,
+  TASK_SELECTED,
 } from 'gmp/models/override';
 import {
+  cloneNativeOverride,
+  createNativeOverride,
   deleteNativeOverride,
   exportNativeOverrideMetadata,
   exportNativeOverridesMetadata,
   fetchNativeOverride,
   fetchNativeOverrides,
   nativeOverridesQueryFromFilter,
+  patchNativeOverride,
 } from 'gmp/native-api/overrides';
-import {NO_VALUE} from 'gmp/parser';
+import {NO_VALUE, YES_VALUE} from 'gmp/parser';
 
-const log = logger.getLogger('gmp.commands.overrides');
+const canUseNativeApi = http => typeof http?.buildUrl === 'function';
+
+const requireNativeOverrideApi = http => {
+  if (!canUseNativeApi(http)) {
+    throw new Error('Native override API is required for override command');
+  }
+};
+
+const nullableValue = value => (value === '' ? null : value);
+
+const nativeHostsOrPort = (selection, manual) =>
+  selection === MANUAL ? nullableValue(manual) : null;
+
+const nativeReferenceId = (selection, uuid, selectedValue) =>
+  selection === selectedValue ? nullableValue(uuid) : null;
+
+const nativeActivation = (active, days, isCreate = false) => {
+  const value =
+    active === undefined && isCreate ? ACTIVE_YES_ALWAYS_VALUE : active;
+
+  switch (String(value)) {
+    case ACTIVE_YES_ALWAYS_VALUE:
+      return {mode: 'always'};
+    case ACTIVE_YES_FOR_NEXT_VALUE:
+      return {mode: 'for_days', days: Number(days)};
+    case ACTIVE_YES_UNTIL_VALUE:
+      return undefined;
+    default:
+      return {mode: 'inactive'};
+  }
+};
+
+const isCustomSeverity = value =>
+  value === YES_VALUE || value === String(YES_VALUE);
+
+const nativeNewSeverity = ({
+  custom_severity,
+  newSeverity,
+  new_severity_from_list,
+}) =>
+  isCustomSeverity(custom_severity) ? newSeverity : new_severity_from_list;
+
+const nativeOverrideCreateArgs = ({
+  oid,
+  active = ACTIVE_YES_ALWAYS_VALUE,
+  days = DEFAULT_DAYS,
+  hosts = ANY,
+  hosts_manual = '',
+  port = ANY,
+  port_manual = '',
+  result_id = '',
+  result_uuid = '',
+  severity = '',
+  task_id = '',
+  task_uuid = '',
+  text,
+  custom_severity = NO_VALUE,
+  newSeverity = '',
+  new_severity_from_list = SEVERITY_FALSE_POSITIVE,
+}) => ({
+  nvt_id: oid,
+  text,
+  hosts: nativeHostsOrPort(hosts, hosts_manual),
+  port: nativeHostsOrPort(port, port_manual),
+  severity: nullableValue(severity),
+  new_severity: nativeNewSeverity({
+    custom_severity,
+    newSeverity,
+    new_severity_from_list,
+  }),
+  task_id: nativeReferenceId(task_id, task_uuid, TASK_SELECTED),
+  result_id: nativeReferenceId(result_id, result_uuid, RESULT_UUID),
+  activation: nativeActivation(active, days, true),
+});
+
+const nativeOverridePatchArgs = ({
+  id,
+  oid,
+  active,
+  days,
+  hosts,
+  hosts_manual,
+  port,
+  port_manual,
+  result_id,
+  result_uuid,
+  severity,
+  task_id,
+  task_uuid,
+  text,
+  custom_severity,
+  newSeverity,
+  new_severity_from_list,
+}) => {
+  const args = {id};
+
+  if (oid !== undefined) args.nvt_id = oid;
+  if (text !== undefined) args.text = text;
+  if (hosts !== undefined) args.hosts = nativeHostsOrPort(hosts, hosts_manual);
+  if (port !== undefined) args.port = nativeHostsOrPort(port, port_manual);
+  if (severity !== undefined) args.severity = nullableValue(severity);
+  if (task_id !== undefined) {
+    args.task_id = nativeReferenceId(task_id, task_uuid, TASK_SELECTED);
+  }
+  if (result_id !== undefined) {
+    args.result_id = nativeReferenceId(result_id, result_uuid, RESULT_UUID);
+  }
+  if (
+    custom_severity !== undefined ||
+    newSeverity !== undefined ||
+    new_severity_from_list !== undefined
+  ) {
+    const value = nativeNewSeverity({
+      custom_severity,
+      newSeverity,
+      new_severity_from_list,
+    });
+    if (value !== undefined && value !== '') args.new_severity = value;
+  }
+  if (active !== undefined) {
+    const activation = nativeActivation(active, days);
+    if (activation !== undefined) args.activation = activation;
+  }
+
+  return args;
+};
 
 const shouldExportAllByFilter = filter => {
   const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
@@ -48,19 +178,24 @@ class OverrideCommand extends EntityCommand {
     return root.get_override.get_overrides_response.override;
   }
 
-  async get({id}, {filter, ...options} = {}) {
-    if (filter === undefined && canUseNativeApi(this.http)) {
-      return new Response(await fetchNativeOverride(this.http, id));
-    }
-    return super.get({id}, {filter, ...options});
+  async get({id}) {
+    requireNativeOverrideApi(this.http);
+    return new Response(await fetchNativeOverride(this.http, id));
   }
 
   create(args) {
-    return this._save({...args, cmd: 'create_override'});
+    requireNativeOverrideApi(this.http);
+    return createNativeOverride(this.http, nativeOverrideCreateArgs(args));
   }
 
   save(args) {
-    return this._save({...args, cmd: 'save_override'});
+    requireNativeOverrideApi(this.http);
+    return patchNativeOverride(this.http, nativeOverridePatchArgs(args));
+  }
+
+  async clone({id}) {
+    requireNativeOverrideApi(this.http);
+    return await cloneNativeOverride(this.http, id);
   }
 
   async export({id}) {
@@ -68,55 +203,7 @@ class OverrideCommand extends EntityCommand {
   }
 
   async delete({id}) {
-    if (canUseNativeApi(this.http)) {
-      await deleteNativeOverride(this.http, id);
-      return;
-    }
-    return super.delete({id});
-  }
-
-  _save(args) {
-    const {
-      cmd,
-      oid,
-      id,
-      active = ACTIVE_YES_ALWAYS_VALUE,
-      days = DEFAULT_DAYS,
-      hosts = ANY,
-      hosts_manual = '',
-      result_id = '',
-      result_uuid = '',
-      port = ANY,
-      port_manual = '',
-      severity = '',
-      task_id = '',
-      task_uuid = '',
-      text,
-      custom_severity = NO_VALUE,
-      newSeverity = '',
-      new_severity_from_list = SEVERITY_FALSE_POSITIVE,
-    } = args;
-    log.debug('Saving override', args);
-    return this.action({
-      cmd,
-      oid,
-      id,
-      active,
-      custom_severity,
-      new_severity: newSeverity,
-      new_severity_from_list,
-      days,
-      hosts: hosts === MANUAL ? '--' : '',
-      hosts_manual,
-      result_id,
-      result_uuid,
-      task_id,
-      task_uuid,
-      port: port === MANUAL ? '--' : '',
-      port_manual,
-      severity,
-      text,
-    });
+    await deleteNativeOverride(this.http, id);
   }
 }
 
@@ -225,33 +312,6 @@ class OverridesCommand extends EntitiesCommand {
         Number.isFinite(total) ? total : 0,
       ),
     );
-  }
-
-  getActiveDaysAggregates({filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'override',
-      group_column: 'active_days',
-      filter,
-      maxGroups: 250,
-    });
-  }
-
-  getCreatedAggregates({filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'override',
-      group_column: 'created',
-      aggregate_mode: 'count',
-      filter,
-    });
-  }
-
-  getWordCountsAggregates({filter} = {}) {
-    return this.getAggregates({
-      aggregate_type: 'override',
-      group_column: 'text',
-      aggregate_mode: 'word_counts',
-      filter,
-    });
   }
 }
 

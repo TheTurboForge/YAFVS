@@ -84,6 +84,7 @@ mod override_query_sql;
 mod override_write_db;
 mod override_write_sql;
 mod override_write_transactions;
+mod override_write_validation;
 mod override_writes;
 mod overrides;
 mod path_ids;

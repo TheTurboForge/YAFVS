@@ -174,6 +174,7 @@ const writeNativeJson = async <T>(
 
 const RESTORE_PATHS: Partial<Record<EntityType, string>> = {
   filter: 'filters',
+  override: 'overrides',
   portlist: 'port-lists',
   scanconfig: 'scan-configs',
   schedule: 'schedules',

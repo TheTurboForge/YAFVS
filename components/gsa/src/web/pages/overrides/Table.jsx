@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -104,6 +105,6 @@ export default createEntitiesTable({
   footer: createEntitiesFooter({
     span: 10,
     trash: true,
-    download: 'overrides.xml',
+    download: 'overrides.json',
   }),
 });

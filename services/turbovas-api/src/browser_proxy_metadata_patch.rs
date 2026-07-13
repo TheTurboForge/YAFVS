@@ -20,7 +20,14 @@ use crate::{
     credential_write_validation::{CredentialCreateRequest, CredentialPatchRequest},
     credential_writes::{create_credential, patch_credential},
     errors::ApiError,
-    override_writes::delete_override,
+    override_payloads::OverrideAssetItem,
+    override_write_validation::{
+        OverrideCloneRequest, OverrideCreateRequest, OverridePatchRequest,
+    },
+    override_writes::{
+        clone_override, create_override, delete_override, hard_delete_override, patch_override,
+        restore_override,
+    },
     scanner_asset_payloads::ScannerAssetDetail,
     scanner_verify::{ScannerVerifyResult, verify_scanner},
     scanner_write_validation::{ScannerConfigurationRequest, ScannerPatchRequest},
@@ -44,6 +51,70 @@ pub(crate) async fn browser_proxy_create_alert(
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     let request = parse_alert_create_payload(payload)?;
     create_alert(State(state), Some(Extension(operator)), Ok(Json(request))).await
+}
+
+pub(crate) async fn browser_proxy_restore_override(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(override_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<OverrideAssetItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    restore_override(State(state), Path(override_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_hard_delete_override(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(override_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    hard_delete_override(State(state), Path(override_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_create_override(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    headers: HeaderMap,
+    Json(request): Json<OverrideCreateRequest>,
+) -> Result<(StatusCode, Json<OverrideAssetItem>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    create_override(State(state), Some(Extension(operator)), Json(request)).await
+}
+
+pub(crate) async fn browser_proxy_patch_override(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(override_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<OverridePatchRequest>,
+) -> Result<Json<OverrideAssetItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    patch_override(
+        State(state),
+        Path(override_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_clone_override(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(override_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<OverrideCloneRequest>,
+) -> Result<(StatusCode, Json<OverrideAssetItem>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    clone_override(
+        State(state),
+        Path(override_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
 }
 
 pub(crate) async fn browser_proxy_patch_scanner(

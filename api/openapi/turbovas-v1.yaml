@@ -2782,9 +2782,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: override-metadata-list-read
-      x-turbovas-inherited-still-owns: override-create-modify-clone-xml-export-restore-hard-delete-and-result-expansion
       summary: List overrides
-      description: Read-only override metadata backed by gvmd/PostgreSQL. Create, modify, clone, XML/file export, restore, trash hard-delete, and result-specific override expansion remain on inherited compatibility paths.
+      description: Override metadata backed by gvmd/PostgreSQL. Native direct write-control creates, patches, clones, trashes, restores, permanently deletes, and exports native JSON override metadata. XML metadata export, override aggregate dashboards, and filtered override-detail result expansion are intentionally not retained because production has no caller; native result detail owns result evidence.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -2809,6 +2808,49 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postOverrides
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: override-create
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Create an override
+      description: Direct write-control endpoint for creating an override owned by the direct API operator. The request accepts bounded override metadata, optional nullable task/result scope, and tagged activation semantics; report count caches are refreshed for affected results. XML metadata export, override aggregate dashboards, and filtered override-detail result expansion are intentionally not retained because production has no caller; native result detail owns result evidence.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OverrideCreateRequest'
+      responses:
+        '201':
+          description: Created override detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverrideAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /overrides/{override_id}:
     get:
       operationId: getOverridesByOverrideId
@@ -2816,8 +2858,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: override-metadata-detail-read
-      x-turbovas-inherited-still-owns: override-create-modify-clone-xml-export-restore-hard-delete-and-result-expansion
       summary: Read one override
+      description: Override metadata detail backed by gvmd/PostgreSQL. Native result detail owns result evidence; filtered override-detail result expansion and override aggregate dashboards are intentionally not retained because production has no caller.
       parameters:
         - $ref: '#/components/parameters/OverrideId'
       responses:
@@ -2852,7 +2894,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-delete
       summary: Move one override to trash
-      description: Direct write-control endpoint for moving one operator-owned live override to trash. The transaction preserves override metadata, relocates tag links, and clears overridden count-cache rows for the exact reports affected by the override. It never hard-deletes. Override create/modify/clone, inherited XML export, restore/hard-delete, and result-expansion workflows remain on inherited compatibility paths.
+      description: Direct write-control endpoint for moving one operator-owned live override to trash. The transaction preserves override metadata, relocates tag links, and clears overridden count-cache rows for the exact reports affected by the override. It never hard-deletes; permanent deletion is exposed at the trash subresource.
       parameters:
         - $ref: '#/components/parameters/OverrideId'
       responses:
@@ -2874,6 +2916,51 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+    patch:
+      operationId: patchOverridesByOverrideId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: override-metadata-modify
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Patch override metadata
+      description: Direct write-control endpoint for patching one operator-owned override. At least one field is required; nullable scope fields clear their existing values and activation updates the tagged active, inactive, or time-bounded state.
+      parameters:
+        - $ref: '#/components/parameters/OverrideId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OverridePatchRequest'
+      responses:
+        '200':
+          description: Updated override detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverrideAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /overrides/{override_id}/export:
     get:
       operationId: getOverridesByOverrideIdExport
@@ -2881,9 +2968,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: override-metadata-export-read
-      x-turbovas-inherited-still-owns: override-create-modify-clone-xml-export-restore-hard-delete-and-result-expansion
       summary: Export one override as native JSON metadata
-      description: Direct scriptable override metadata export backed by the same PostgreSQL loader as override detail. This endpoint returns native JSON metadata only; inherited compatibility paths still own create, modify, clone, XML/file export, restore, trash hard-delete, and result-specific override expansion.
+      description: Direct scriptable override metadata export backed by the same PostgreSQL loader as override detail. JSON export replaces the retained programmatic metadata export. XML metadata export, override aggregate dashboards, and filtered override-detail result expansion are intentionally not retained because production has no caller; native result detail owns result evidence.
       parameters:
         - $ref: '#/components/parameters/OverrideId'
       responses:
@@ -2897,6 +2983,126 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /overrides/{override_id}/clone:
+    post:
+      operationId: postOverridesByOverrideIdClone
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: override-clone
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Clone an override
+      description: Direct write-control endpoint for cloning an operator-owned live override. The empty request object copies the source override metadata into a new override owned by the direct API operator.
+      parameters:
+        - $ref: '#/components/parameters/OverrideId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OverrideCloneRequest'
+      responses:
+        '201':
+          description: Cloned override detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverrideAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /overrides/{override_id}/restore:
+    post:
+      operationId: postOverridesByOverrideIdRestore
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: override-restore
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Restore an override from trash
+      description: Direct write-control endpoint for restoring one operator-owned override from trash. Restore preserves the override UUID and owner and returns the restored native JSON metadata.
+      parameters:
+        - $ref: '#/components/parameters/OverrideId'
+      responses:
+        '200':
+          description: Restored override detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OverrideAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /overrides/{override_id}/trash:
+    delete:
+      operationId: deleteOverridesByOverrideIdTrash
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: override-hard-delete
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-delete
+      summary: Permanently delete a trashed override
+      description: Direct write-control endpoint for permanently deleting one operator-owned override already in trash, including its retained metadata and trash-side tag links.
+      parameters:
+        - $ref: '#/components/parameters/OverrideId'
+      responses:
+        '204':
+          description: Trashed override permanently deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '405':
@@ -7922,6 +8128,118 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TagResourceReference'
+    OverrideActivation:
+      oneOf:
+        - type: object
+          required: [mode]
+          additionalProperties: false
+          properties:
+            mode:
+              type: string
+              enum: [always]
+        - type: object
+          required: [mode]
+          additionalProperties: false
+          properties:
+            mode:
+              type: string
+              enum: [inactive]
+        - type: object
+          required: [mode, days]
+          additionalProperties: false
+          properties:
+            mode:
+              type: string
+              enum: [for_days]
+            days:
+              type: integer
+              minimum: 1
+              maximum: 36500
+      description: Tagged override activation mode. Always and inactive take no additional fields; for_days requires positive days.
+    OverrideCreateRequest:
+      type: object
+      required: [nvt_id, text, new_severity]
+      additionalProperties: false
+      properties:
+        nvt_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+        text:
+          type: string
+          maxLength: 8192
+        hosts:
+          type: string
+          maxLength: 4096
+          nullable: true
+        port:
+          type: string
+          maxLength: 512
+          nullable: true
+        severity:
+          type: number
+          minimum: 0
+          maximum: 10
+          nullable: true
+        new_severity:
+          type: number
+          minimum: -1
+          maximum: 10
+        task_id:
+          type: string
+          format: uuid
+          nullable: true
+        result_id:
+          type: string
+          format: uuid
+          nullable: true
+        activation:
+          $ref: '#/components/schemas/OverrideActivation'
+    OverridePatchRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        nvt_id:
+          type: string
+          minLength: 1
+          maxLength: 255
+        text:
+          type: string
+          maxLength: 8192
+        hosts:
+          type: string
+          maxLength: 4096
+          nullable: true
+        port:
+          type: string
+          maxLength: 512
+          nullable: true
+        severity:
+          type: number
+          minimum: 0
+          maximum: 10
+          nullable: true
+        new_severity:
+          type: number
+          minimum: -1
+          maximum: 10
+          nullable: true
+        task_id:
+          type: string
+          format: uuid
+          nullable: true
+        result_id:
+          type: string
+          format: uuid
+          nullable: true
+        activation:
+          $ref: '#/components/schemas/OverrideActivation'
+    OverrideCloneRequest:
+      type: object
+      maxProperties: 0
+      additionalProperties: false
+      description: Empty object required for an override clone; source metadata is copied and ownership moves to the direct API operator.
     OverrideAssetCollection:
       type: object
       required: [page, items]

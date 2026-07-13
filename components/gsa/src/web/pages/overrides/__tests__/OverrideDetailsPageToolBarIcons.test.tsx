@@ -77,7 +77,7 @@ describe('OverrideDetailsPageToolBarIcons tests', () => {
     expect(screen.getByTitle('Clone Override')).toBeInTheDocument();
     expect(screen.getByTitle('Edit Override')).toBeInTheDocument();
     expect(screen.getByTitle('Move Override to trashcan')).toBeInTheDocument();
-    expect(screen.getByTitle('Export Override as XML')).toBeInTheDocument();
+    expect(screen.getByTitle('Export Override as JSON')).toBeInTheDocument();
   });
 
   test('should call click handlers', () => {
@@ -109,7 +109,7 @@ describe('OverrideDetailsPageToolBarIcons tests', () => {
     const cloneIcon = screen.getByTitle('Clone Override');
     const editIcon = screen.getByTitle('Edit Override');
     const deleteIcon = screen.getByTitle('Move Override to trashcan');
-    const exportIcon = screen.getByTitle('Export Override as XML');
+    const exportIcon = screen.getByTitle('Export Override as JSON');
 
     fireEvent.click(cloneIcon);
     expect(handleOverrideCloneClick).toHaveBeenCalledWith(override);
@@ -174,7 +174,7 @@ describe('OverrideDetailsPageToolBarIcons tests', () => {
     const deleteIcon = screen.getByTitle(
       'Move Override to trashcan command unavailable',
     );
-    const exportIcon = screen.getByTitle('Export Override as XML');
+    const exportIcon = screen.getByTitle('Export Override as JSON');
 
     fireEvent.click(cloneIcon);
     expect(handleOverrideCloneClick).toHaveBeenCalledWith(noPermOverride);
@@ -236,7 +236,7 @@ describe('OverrideDetailsPageToolBarIcons tests', () => {
     const cloneIcon = screen.getByTitle('Clone Override');
     const editIcon = screen.getByTitle('Edit Override');
     const deleteIcon = screen.getByTitle('Override is still in use');
-    const exportIcon = screen.getByTitle('Export Override as XML');
+    const exportIcon = screen.getByTitle('Export Override as JSON');
 
     fireEvent.click(cloneIcon);
     expect(handleOverrideCloneClick).toHaveBeenCalledWith(overrideInUse);

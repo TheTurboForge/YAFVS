@@ -24,9 +24,6 @@ class FilterTypeTestsCase(unittest.TestCase):
     def test_filter_type_filter(self):
         self.assertEqual(FilterType.FILTER.value, "filter")
 
-    def test_filter_type_group(self):
-        self.assertEqual(FilterType.GROUP.value, "group")
-
     def test_filter_type_host(self):
         self.assertEqual(FilterType.HOST.value, "host")
 
@@ -35,9 +32,6 @@ class FilterTypeTestsCase(unittest.TestCase):
 
     def test_filter_type_override(self):
         self.assertEqual(FilterType.OVERRIDE.value, "override")
-
-    def test_filter_type_permission(self):
-        self.assertEqual(FilterType.PERMISSION.value, "permission")
 
     def test_filter_type_port_list(self):
         self.assertEqual(FilterType.PORT_LIST.value, "port_list")
@@ -53,9 +47,6 @@ class FilterTypeTestsCase(unittest.TestCase):
 
     def test_filter_type_result(self):
         self.assertEqual(FilterType.RESULT.value, "result")
-
-    def test_filter_type_role(self):
-        self.assertEqual(FilterType.ROLE.value, "role")
 
     def test_filter_type_scan_config(self):
         self.assertEqual(FilterType.SCAN_CONFIG.value, "config")

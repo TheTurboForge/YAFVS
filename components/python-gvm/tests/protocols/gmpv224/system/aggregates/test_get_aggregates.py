@@ -92,21 +92,9 @@ class GmpGetAggregatesTestMixin:
 
     def test_get_aggregates_resource_types_with_usage_type(self):
         """
-        Test special cases of resource_type in get_aggregates calls that
-        should add a usage_type parameter: audit, policy, scan_config and task.
+        Test resource types in get_aggregates calls that add a usage_type
+        parameter: scan_config and task.
         """
-        self.gmp.get_aggregates(EntityType.AUDIT)
-
-        self.connection.send.has_been_called_with(
-            b'<get_aggregates usage_type="audit" type="task"/>'
-        )
-
-        self.gmp.get_aggregates(EntityType.POLICY)
-
-        self.connection.send.has_been_called_with(
-            b'<get_aggregates usage_type="policy" type="config"/>'
-        )
-
         self.gmp.get_aggregates(EntityType.SCAN_CONFIG)
 
         self.connection.send.has_been_called_with(

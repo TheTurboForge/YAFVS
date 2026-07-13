@@ -55,7 +55,6 @@ class ReportsTestCase(unittest.TestCase):
             b'<get_reports report_id="report_id" filt_id="filter_id" details="1"/>',
         )
 
-
     def test_get_report_with_report_format_id(self):
         request = Reports.get_report(
             "report_id", report_format_id="report_format_id"
@@ -98,19 +97,6 @@ class ReportsTestCase(unittest.TestCase):
         self.assertEqual(
             bytes(request),
             b'<get_reports report_filt_id="filter_id"/>',
-        )
-
-    def test_get_reports_with_note_details(self):
-        request = Reports.get_reports(note_details=True)
-        self.assertEqual(
-            bytes(request),
-            b'<get_reports note_details="1"/>',
-        )
-
-        request = Reports.get_reports(note_details=False)
-        self.assertEqual(
-            bytes(request),
-            b'<get_reports note_details="0"/>',
         )
 
     def test_get_reports_with_override_details(self):

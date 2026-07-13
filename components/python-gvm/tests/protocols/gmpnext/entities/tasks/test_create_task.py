@@ -152,7 +152,6 @@ class GmpCreateTaskTestMixin:
             b"</create_task>"
         )
 
-
     def test_create_task_with_hosts_ordering(self):
         self.gmp.create_task(
             name="foo",
@@ -267,7 +266,6 @@ class GmpCreateTaskTestMixin:
                 schedule_periods=-1,
             )
 
-
     def test_create_task_with_preferences(self):
         self.gmp.create_task(
             name="foo",
@@ -297,16 +295,7 @@ class GmpCreateTaskTestMixin:
             b"</create_task>"
         )
 
-    def test_create_task_don_t_allow_container_task(self):
-        with self.assertRaises(InvalidArgument):
-            self.gmp.create_task(
-                name="foo",
-                config_id="c1",
-                target_id="0",
-                scanner_id="s1",
-            )
-
-        # target_id=0 is considered as False
+    def test_create_task_rejects_false_target_id(self):
         with self.assertRaises(RequiredArgument):
             self.gmp.create_task(
                 name="foo",

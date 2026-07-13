@@ -49,10 +49,6 @@ class GetEntityTypeFromStringTestCase(unittest.TestCase):
         ct = EntityType.from_string("filter")
         self.assertEqual(ct, EntityType.FILTER)
 
-    def test_group(self):
-        ct = EntityType.from_string("group")
-        self.assertEqual(ct, EntityType.GROUP)
-
     def test_host(self):
         ct = EntityType.from_string("host")
         self.assertEqual(ct, EntityType.HOST)
@@ -80,10 +76,6 @@ class GetEntityTypeFromStringTestCase(unittest.TestCase):
         ct = EntityType.from_string("override")
         self.assertEqual(ct, EntityType.OVERRIDE)
 
-    def test_permission(self):
-        ct = EntityType.from_string("permission")
-        self.assertEqual(ct, EntityType.PERMISSION)
-
     def test_port_list(self):
         ct = EntityType.from_string("port_list")
         self.assertEqual(ct, EntityType.PORT_LIST)
@@ -99,10 +91,6 @@ class GetEntityTypeFromStringTestCase(unittest.TestCase):
     def test_result(self):
         ct = EntityType.from_string("result")
         self.assertEqual(ct, EntityType.RESULT)
-
-    def test_role(self):
-        ct = EntityType.from_string("role")
-        self.assertEqual(ct, EntityType.ROLE)
 
     def test_scan_config(self):
         ct = EntityType.from_string("config")

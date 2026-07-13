@@ -53,10 +53,6 @@ class GetResourceTypeFromStringTestCase(unittest.TestCase):
         ct = ResourceType.from_string("filter")
         self.assertEqual(ct, ResourceType.FILTER)
 
-    def test_group(self):
-        ct = ResourceType.from_string("group")
-        self.assertEqual(ct, ResourceType.GROUP)
-
     def test_host(self):
         ct = ResourceType.from_string("host")
         self.assertEqual(ct, ResourceType.HOST)
@@ -72,10 +68,6 @@ class GetResourceTypeFromStringTestCase(unittest.TestCase):
     def test_override(self):
         ct = ResourceType.from_string("override")
         self.assertEqual(ct, ResourceType.OVERRIDE)
-
-    def test_permission(self):
-        ct = ResourceType.from_string("permission")
-        self.assertEqual(ct, ResourceType.PERMISSION)
 
     def test_port_list(self):
         ct = ResourceType.from_string("port_list")
@@ -96,10 +88,6 @@ class GetResourceTypeFromStringTestCase(unittest.TestCase):
     def test_result(self):
         ct = ResourceType.from_string("result")
         self.assertEqual(ct, ResourceType.RESULT)
-
-    def test_role(self):
-        ct = ResourceType.from_string("role")
-        self.assertEqual(ct, ResourceType.ROLE)
 
     def test_scanner(self):
         ct = ResourceType.from_string("scanner")

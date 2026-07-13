@@ -1,3 +1,5 @@
+<!-- TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. -->
+
 (gmpnext)=
 
 # GMP Next
@@ -95,13 +97,6 @@
 
 ```{eval-rst}
 .. autoclass:: gvm.protocols.gmp.requests.next.InfoType
-    :members:
-    :undoc-members:
-    :no-index:
-```
-
-```{eval-rst}
-.. autoclass:: gvm.protocols.gmp.requests.next.PermissionSubjectType
     :members:
     :undoc-members:
     :no-index:

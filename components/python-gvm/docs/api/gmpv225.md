@@ -1,3 +1,5 @@
+<!-- TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. -->
+
 # GMP v22.5
 
 (gmpv225)=
@@ -95,13 +97,6 @@
 
 ```{eval-rst}
 .. autoclass:: gvm.protocols.gmp.requests.v225.InfoType
-    :members:
-    :undoc-members:
-    :no-index:
-```
-
-```{eval-rst}
-.. autoclass:: gvm.protocols.gmp.requests.v225.PermissionSubjectType
     :members:
     :undoc-members:
     :no-index:

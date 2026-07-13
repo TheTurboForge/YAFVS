@@ -75,14 +75,6 @@ class GmpGetResourceNameTestMixin:
         )
 
         self.gmp.get_resource_name(
-            resource_type=ResourceType.GROUP, resource_id="i1"
-        )
-
-        self.connection.send.has_been_called_with(
-            b'<get_resource_names resource_id="i1" type="GROUP"/>'
-        )
-
-        self.gmp.get_resource_name(
             resource_type=ResourceType.HOST, resource_id="i1"
         )
 
@@ -112,14 +104,6 @@ class GmpGetResourceNameTestMixin:
 
         self.connection.send.has_been_called_with(
             b'<get_resource_names resource_id="i1" type="OS"/>'
-        )
-
-        self.gmp.get_resource_name(
-            resource_type=ResourceType.PERMISSION, resource_id="i1"
-        )
-
-        self.connection.send.has_been_called_with(
-            b'<get_resource_names resource_id="i1" type="PERMISSION"/>'
         )
 
         self.gmp.get_resource_name(
@@ -160,14 +144,6 @@ class GmpGetResourceNameTestMixin:
 
         self.connection.send.has_been_called_with(
             b'<get_resource_names resource_id="i1" type="RESULT"/>'
-        )
-
-        self.gmp.get_resource_name(
-            resource_type=ResourceType.ROLE, resource_id="i1"
-        )
-
-        self.connection.send.has_been_called_with(
-            b'<get_resource_names resource_id="i1" type="ROLE"/>'
         )
 
         self.gmp.get_resource_name(

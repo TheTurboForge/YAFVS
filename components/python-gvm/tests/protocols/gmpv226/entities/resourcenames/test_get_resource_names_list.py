@@ -58,12 +58,6 @@ class GmpGetResourceNamesListTestMixin:
             b'<get_resource_names type="FILTER"/>'
         )
 
-        self.gmp.get_resource_names(ResourceType.GROUP)
-
-        self.connection.send.has_been_called_with(
-            b'<get_resource_names type="GROUP"/>'
-        )
-
         self.gmp.get_resource_names(ResourceType.HOST)
 
         self.connection.send.has_been_called_with(
@@ -94,12 +88,6 @@ class GmpGetResourceNamesListTestMixin:
             b'<get_resource_names type="OVERRIDE"/>'
         )
 
-        self.gmp.get_resource_names(ResourceType.PERMISSION)
-
-        self.connection.send.has_been_called_with(
-            b'<get_resource_names type="PERMISSION"/>'
-        )
-
         self.gmp.get_resource_names(ResourceType.PORT_LIST)
 
         self.connection.send.has_been_called_with(
@@ -128,12 +116,6 @@ class GmpGetResourceNamesListTestMixin:
 
         self.connection.send.has_been_called_with(
             b'<get_resource_names type="RESULT"/>'
-        )
-
-        self.gmp.get_resource_names(ResourceType.ROLE)
-
-        self.connection.send.has_been_called_with(
-            b'<get_resource_names type="ROLE"/>'
         )
 
         self.gmp.get_resource_names(ResourceType.SCANNER)

@@ -6,31 +6,18 @@
 from ...gmpnext import GMPTestCase
 from ...gmpnext.entities.tasks import (
     GmpCloneTaskTestMixin,
-    GmpCreateContainerTaskTestMixin,
-    GmpCreateImportTaskTestMixin,
     GmpCreateTaskTestMixin,
     GmpDeleteTaskTestMixin,
     GmpGetTasksTestMixin,
     GmpGetTaskTestMixin,
     GmpModifyTaskTestMixin,
     GmpMoveTaskTestMixin,
-    GmpResumeTaskTestMixin,
     GmpStartTaskTestMixin,
     GmpStopTaskTestMixin,
 )
 
 
 class GMPCloneTaskTestCase(GmpCloneTaskTestMixin, GMPTestCase):
-    pass
-
-
-class GMPCreateContainerTaskTestCase(
-    GmpCreateContainerTaskTestMixin, GMPTestCase
-):
-    pass
-
-
-class GMPCreateImportTaskTestCase(GmpCreateImportTaskTestMixin, GMPTestCase):
     pass
 
 
@@ -55,10 +42,6 @@ class GMPModifyTaskTestCase(GmpModifyTaskTestMixin, GMPTestCase):
 
 
 class GMPMoveTaskTestCase(GmpMoveTaskTestMixin, GMPTestCase):
-    pass
-
-
-class GMPResumeTaskTestCase(GmpResumeTaskTestMixin, GMPTestCase):
     pass
 
 

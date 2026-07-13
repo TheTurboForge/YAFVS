@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2023-2025 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -7,7 +8,6 @@ from ...gmpv226.entities.reports import (
     GmpDeleteReportTestMixin,
     GmpGetReportsTestMixin,
     GmpGetReportTestMixin,
-    GmpImportReportTestMixin,
 )
 from ...gmpv227 import GMPTestCase
 
@@ -21,8 +21,4 @@ class GMPGetReportTestCase(GmpGetReportTestMixin, GMPTestCase):
 
 
 class GMPGetReportsTestCase(GmpGetReportsTestMixin, GMPTestCase):
-    pass
-
-
-class GMPImportReportTestCase(GmpImportReportTestMixin, GMPTestCase):
     pass

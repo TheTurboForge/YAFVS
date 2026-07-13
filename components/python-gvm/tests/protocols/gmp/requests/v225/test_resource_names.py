@@ -54,10 +54,6 @@ class ResourceNamesTestCase(unittest.TestCase):
 
         self.assertEqual(bytes(request), b'<get_resource_names type="FILTER"/>')
 
-        request = ResourceNames.get_resource_names(ResourceType.GROUP)
-
-        self.assertEqual(bytes(request), b'<get_resource_names type="GROUP"/>')
-
         request = ResourceNames.get_resource_names(ResourceType.HOST)
 
         self.assertEqual(bytes(request), b'<get_resource_names type="HOST"/>')
@@ -80,12 +76,6 @@ class ResourceNamesTestCase(unittest.TestCase):
             bytes(request), b'<get_resource_names type="OVERRIDE"/>'
         )
 
-        request = ResourceNames.get_resource_names(ResourceType.PERMISSION)
-
-        self.assertEqual(
-            bytes(request), b'<get_resource_names type="PERMISSION"/>'
-        )
-
         request = ResourceNames.get_resource_names(ResourceType.PORT_LIST)
 
         self.assertEqual(
@@ -105,10 +95,6 @@ class ResourceNamesTestCase(unittest.TestCase):
         request = ResourceNames.get_resource_names(ResourceType.RESULT)
 
         self.assertEqual(bytes(request), b'<get_resource_names type="RESULT"/>')
-
-        request = ResourceNames.get_resource_names(ResourceType.ROLE)
-
-        self.assertEqual(bytes(request), b'<get_resource_names type="ROLE"/>')
 
         request = ResourceNames.get_resource_names(ResourceType.SCANNER)
 
@@ -235,15 +221,6 @@ class ResourceNamesTestCase(unittest.TestCase):
         )
 
         request = ResourceNames.get_resource_name(
-            resource_type=ResourceType.GROUP, resource_id="i1"
-        )
-
-        self.assertEqual(
-            bytes(request),
-            b'<get_resource_names resource_id="i1" type="GROUP"/>',
-        )
-
-        request = ResourceNames.get_resource_name(
             resource_type=ResourceType.HOST, resource_id="i1"
         )
 
@@ -275,15 +252,6 @@ class ResourceNamesTestCase(unittest.TestCase):
 
         self.assertEqual(
             bytes(request), b'<get_resource_names resource_id="i1" type="OS"/>'
-        )
-
-        request = ResourceNames.get_resource_name(
-            resource_type=ResourceType.PERMISSION, resource_id="i1"
-        )
-
-        self.assertEqual(
-            bytes(request),
-            b'<get_resource_names resource_id="i1" type="PERMISSION"/>',
         )
 
         request = ResourceNames.get_resource_name(
@@ -320,15 +288,6 @@ class ResourceNamesTestCase(unittest.TestCase):
         self.assertEqual(
             bytes(request),
             b'<get_resource_names resource_id="i1" type="RESULT"/>',
-        )
-
-        request = ResourceNames.get_resource_name(
-            resource_type=ResourceType.ROLE, resource_id="i1"
-        )
-
-        self.assertEqual(
-            bytes(request),
-            b'<get_resource_names resource_id="i1" type="ROLE"/>',
         )
 
         request = ResourceNames.get_resource_name(

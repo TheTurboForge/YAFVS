@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2018-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -24,20 +25,6 @@ class GmpGetReportsTestMixin:
 
         self.connection.send.has_been_called_with(
             b'<get_reports usage_type="scan" report_filt_id="f1"/>'
-        )
-
-    def test_get_reports_without_note_details(self):
-        self.gmp.get_reports(note_details=False)
-
-        self.connection.send.has_been_called_with(
-            b'<get_reports usage_type="scan" note_details="0"/>'
-        )
-
-    def test_get_reports_with_note_details(self):
-        self.gmp.get_reports(note_details=True, ignore_pagination=False)
-
-        self.connection.send.has_been_called_with(
-            b'<get_reports usage_type="scan" note_details="1" ignore_pagination="0"/>'
         )
 
     def test_get_reports_without_override_details(self):

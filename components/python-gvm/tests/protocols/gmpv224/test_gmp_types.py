@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2018-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -15,9 +16,6 @@ class GmpWithStatementTestMixin:
             self.assertEqual(
                 self.gmp.types.AlertEvent.TASK_RUN_STATUS_CHANGED.value,
                 "Task run status changed",
-            )
-            self.assertEqual(
-                self.gmp.types.PermissionSubjectType.USER.value, "user"
             )
             self.assertEqual(
                 self.gmp.types.HostsOrdering.RANDOM.value, "random"

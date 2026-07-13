@@ -78,22 +78,9 @@ class AggregatesTestCase(unittest.TestCase):
 
     def test_get_aggregates_resource_types_with_usage_type(self):
         """
-        Test special cases of resource_type in get_aggregates calls that
-        should add a usage_type parameter: audit, policy, scan_config and task.
+        Test resource types in get_aggregates calls that add a usage_type
+        parameter: scan_config and task.
         """
-        request = Aggregates.get_aggregates(EntityType.AUDIT)
-
-        self.assertEqual(
-            bytes(request), b'<get_aggregates usage_type="audit" type="task"/>'
-        )
-
-        request = Aggregates.get_aggregates(EntityType.POLICY)
-
-        self.assertEqual(
-            bytes(request),
-            b'<get_aggregates usage_type="policy" type="config"/>',
-        )
-
         request = Aggregates.get_aggregates(EntityType.SCAN_CONFIG)
 
         self.assertEqual(

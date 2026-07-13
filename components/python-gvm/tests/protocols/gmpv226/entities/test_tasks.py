@@ -1,18 +1,17 @@
 # SPDX-FileCopyrightText: 2023-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
 from ...gmpv224.entities.tasks import (
     GmpCloneTaskTestMixin,
-    GmpCreateContainerTaskTestMixin,
     GmpCreateTaskTestMixin,
     GmpDeleteTaskTestMixin,
     GmpGetTasksTestMixin,
     GmpGetTaskTestMixin,
     GmpModifyTaskTestMixin,
     GmpMoveTaskTestMixin,
-    GmpResumeTaskTestMixin,
     GmpStartTaskTestMixin,
     GmpStopTaskTestMixin,
 )
@@ -20,12 +19,6 @@ from ...gmpv226 import GMPTestCase
 
 
 class GMPCloneTaskTestCase(GmpCloneTaskTestMixin, GMPTestCase):
-    pass
-
-
-class GMPCreateContainerTaskTestCase(
-    GmpCreateContainerTaskTestMixin, GMPTestCase
-):
     pass
 
 
@@ -50,10 +43,6 @@ class GMPModifyTaskTestCase(GmpModifyTaskTestMixin, GMPTestCase):
 
 
 class GMPMoveTaskTestCase(GmpMoveTaskTestMixin, GMPTestCase):
-    pass
-
-
-class GMPResumeTaskTestCase(GmpResumeTaskTestMixin, GMPTestCase):
     pass
 
 

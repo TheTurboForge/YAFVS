@@ -83,12 +83,6 @@ class Tasks:
                 function=cls.create_task.__name__, argument="scanner_id"
             )
 
-        # don't allow to create a container task with create_task
-        if target_id == "0":
-            raise InvalidArgument(
-                function=cls.create_task.__name__, argument="target_id"
-            )
-
         cmd = XmlCommand("create_task")
         cmd.add_element("name", name)
         cmd.add_element("usage_type", "scan")
@@ -121,7 +115,6 @@ class Tasks:
                         "than 0"
                     )
                 cmd.add_element("schedule_periods", str(schedule_periods))
-
 
         if preferences is not None:
             xml_prefs = cmd.add_element("preferences")
@@ -295,7 +288,6 @@ class Tasks:
             else:
                 for alert in alert_ids:
                     cmd.add_element("alert", attrs={"id": str(alert)})
-
 
         if preferences is not None:
             xml_prefs = cmd.add_element("preferences")

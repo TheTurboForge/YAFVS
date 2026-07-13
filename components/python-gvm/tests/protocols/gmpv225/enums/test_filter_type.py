@@ -27,10 +27,6 @@ class GetFilterTypeFomStringTestCase(unittest.TestCase):
         ft = FilterType.from_string("filter")
         self.assertEqual(ft, FilterType.FILTER)
 
-    def test_filter_type_group(self):
-        ft = FilterType.from_string("group")
-        self.assertEqual(ft, FilterType.GROUP)
-
     def test_filter_type_host(self):
         ft = FilterType.from_string("host")
         self.assertEqual(ft, FilterType.HOST)
@@ -38,10 +34,6 @@ class GetFilterTypeFomStringTestCase(unittest.TestCase):
     def test_filter_type_override(self):
         ft = FilterType.from_string("override")
         self.assertEqual(ft, FilterType.OVERRIDE)
-
-    def test_filter_type_permission(self):
-        ft = FilterType.from_string("permission")
-        self.assertEqual(ft, FilterType.PERMISSION)
 
     def test_filter_type_port_list(self):
         ft = FilterType.from_string("port_list")
@@ -58,10 +50,6 @@ class GetFilterTypeFomStringTestCase(unittest.TestCase):
     def test_filter_type_result(self):
         ft = FilterType.from_string("result")
         self.assertEqual(ft, FilterType.RESULT)
-
-    def test_filter_type_role(self):
-        ft = FilterType.from_string("role")
-        self.assertEqual(ft, FilterType.ROLE)
 
     def test_filter_type_schedule(self):
         ft = FilterType.from_string("schedule")

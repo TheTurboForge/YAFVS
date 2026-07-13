@@ -16136,10 +16136,11 @@ db2:keys=5,expires=0,avg_ttl=0
 
     def test_feed_activation_commits_journal_before_restarting_services(self):
         source = TURBOVASCTL_PATH.read_text(encoding="utf-8")
-        transition = source[
-            source.index("def command_feed_generation_transition") : source.index(
-                "def command_runtime_scanner_capability_check"
-            )
+        transition_source = (
+            TURBOVASCTL_PATH.parent / "feed_transition.py"
+        ).read_text(encoding="utf-8")
+        transition = transition_source[
+            transition_source.index("def run_feed_generation_transition") :
         ]
         success = transition[transition.index("if transition_succeeded:") :]
         active_journal = success.index("write_feed_activation_state(")
@@ -16230,6 +16231,7 @@ db2:keys=5,expires=0,avg_ttl=0
         repair_attestation=False,
         database_attestation="matching",
         running_services=None,
+        phase_interrupt=None,
     ):
         image_ids = {
             service: "sha256:" + f"{index + 1:x}" * 64
@@ -16394,6 +16396,15 @@ db2:keys=5,expires=0,avg_ttl=0
                 "artifacts": [],
             }
         )
+        phase_events = []
+
+        class MockTransitionInterruption(BaseException):
+            pass
+
+        def transition_phase(phase, details):
+            phase_events.append((phase, details))
+            if phase == phase_interrupt:
+                raise MockTransitionInterruption(phase)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
@@ -16428,6 +16439,9 @@ db2:keys=5,expires=0,avg_ttl=0
                     )
                 ),
                 stop_app_services_for_feed_transition=stopped,
+                feed_transition_phase=unittest.mock.Mock(
+                    side_effect=transition_phase
+                ),
                 select_generation=selected,
                 clear_current_generation=cleared,
                 command_runtime_feed_import_init=imported,
@@ -16493,17 +16507,21 @@ db2:keys=5,expires=0,avg_ttl=0
                     return_value=subprocess.CompletedProcess([], 0, "", "")
                 ),
             ):
-                result = turbovasctl.command_feed_generation_transition(
-                    root,
-                    target_id,
-                    rollback=rollback,
-                    allow_first_activation=allow_first_activation,
-                    repair_attestation=repair_attestation,
-                )
+                try:
+                    result = turbovasctl.command_feed_generation_transition(
+                        root,
+                        target_id,
+                        rollback=rollback,
+                        allow_first_activation=allow_first_activation,
+                        repair_attestation=repair_attestation,
+                    )
+                except MockTransitionInterruption as error:
+                    result = error
         self.last_feed_journal_write = journal_write
         self.last_feed_database_attestation_write = database_attestation_write
         self.last_feed_database_attestation_read = database_attestation_read
         self.last_feed_runtime_restart = runtime_restart
+        self.last_feed_phase_events = phase_events
         return result, selected, imported, stopped, cleared
 
     def test_feed_generation_activation_requires_first_activation_acknowledgement(self):
@@ -16614,6 +16632,34 @@ db2:keys=5,expires=0,avg_ttl=0
             if item["check"] == "feed-generation.running-app-image"
         )
         self.assertEqual(finding["details"]["running_services"], [])
+
+    def test_feed_generation_transition_interruption_boundaries(self):
+        expectations = {
+            "transition-journal-recorded": (0, 0, 0, 1, 0, 0),
+            "selector-selected": (1, 0, 0, 1, 0, 1),
+            "target-import-returned": (1, 1, 0, 1, 0, 1),
+            "database-attested": (1, 1, 1, 1, 0, 1),
+            "activation-journal-completed": (1, 1, 1, 2, 0, 1),
+        }
+        for phase, expected in expectations.items():
+            with self.subTest(phase=phase):
+                result, selected, imported, stopped, _cleared = (
+                    self.run_mocked_feed_generation_transition(
+                        phase_interrupt=phase
+                    )
+                )
+                counts = (
+                    selected.call_count,
+                    imported.call_count,
+                    self.last_feed_database_attestation_write.call_count,
+                    self.last_feed_journal_write.call_count,
+                    self.last_feed_runtime_restart.call_count,
+                    stopped.call_count,
+                )
+                self.assertIsInstance(result, BaseException)
+                self.assertEqual(str(result), phase)
+                self.assertEqual(counts, expected)
+                self.assertEqual(self.last_feed_phase_events[-1][0], phase)
 
     def test_feed_generation_attestation_repair_rejects_unsafe_scope(self):
         non_current, _selected, imported, _stopped, _cleared = (

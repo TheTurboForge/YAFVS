@@ -3263,6 +3263,26 @@ def validate_feed_activation_state(payload: Any) -> dict[str, Any]:
     for name, value in (("previous_generation_id", previous_id), ("rollback_generation_id", rollback_id)):
         if value is not None and not feed_generation_id_valid(value):
             raise ValueError(f"feed activation state {name} is invalid")
+    restore_gsad_hosts = payload.get("restore_gsad_hosts")
+    if restore_gsad_hosts is not None:
+        if (
+            not isinstance(restore_gsad_hosts, list)
+            or not restore_gsad_hosts
+            or len(restore_gsad_hosts) > 16
+        ):
+            raise ValueError("feed activation state restore_gsad_hosts is invalid")
+        seen_hosts: set[str] = set()
+        for host in restore_gsad_hosts:
+            if not isinstance(host, str) or host in seen_hosts:
+                raise ValueError("feed activation state restore_gsad_hosts is invalid")
+            try:
+                if str(ipaddress.ip_address(host)) != host:
+                    raise ValueError
+            except ValueError as error:
+                raise ValueError(
+                    "feed activation state restore_gsad_hosts is invalid"
+                ) from error
+            seen_hosts.add(host)
     return payload
 
 
@@ -6601,7 +6621,15 @@ def app_services_running(repo_root: Path) -> bool:
     return all(container_running(repo_root, service) for service in APP_SERVICES)
 
 
-def compose_app_services_up_with_retry(repo_root: Path, check: str, message: str, timeout: int = 900) -> list[dict[str, Any]]:
+def compose_app_services_up_with_retry(
+    repo_root: Path,
+    check: str,
+    message: str,
+    timeout: int = 900,
+    *,
+    app_env: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    app_env = runtime_app_env(repo_root) if app_env is None else app_env
     command = compose_command(
         repo_root,
         "--profile",
@@ -6612,8 +6640,9 @@ def compose_app_services_up_with_retry(repo_root: Path, check: str, message: str
         "--build",
         "--force-recreate",
         *APP_SERVICES,
+        env=app_env,
     )
-    result = run_command(command, repo_root, env=runtime_app_env(repo_root), timeout=timeout)
+    result = run_command(command, repo_root, env=app_env, timeout=timeout)
     if result.returncode == 0:
         return [process_step_finding("pass", check, f"{message} exit code 0.", result, command)]
 
@@ -6638,10 +6667,11 @@ def compose_app_services_up_with_retry(repo_root: Path, check: str, message: str
         "--no-deps",
         "--force-recreate",
         *APP_SERVICES,
+        env=app_env,
     )
     for attempt in range(1, 3):
         time.sleep(8 * attempt)
-        retry = run_command(retry_command, repo_root, env=runtime_app_env(repo_root), timeout=300)
+        retry = run_command(retry_command, repo_root, env=app_env, timeout=300)
         if retry.returncode == 0:
             findings.append(process_step_finding("pass", f"{check}.retry", f"{message} retry {attempt} exit code 0.", retry, retry_command))
             return findings
@@ -16509,11 +16539,28 @@ def restart_feed_control_services_after_preflight(
     return item
 
 
-def restart_and_verify_feed_app_services(repo_root: Path) -> dict[str, Any]:
+def feed_transition_restore_app_env(
+    repo_root: Path, state: dict[str, Any] | None
+) -> dict[str, str]:
+    env = runtime_app_env(repo_root)
+    hosts = current_gsad_published_hosts(repo_root)
+    if not hosts and state is not None:
+        saved_hosts = state.get("restore_gsad_hosts")
+        if isinstance(saved_hosts, list):
+            hosts = tuple(saved_hosts)
+    if hosts:
+        env[GSAD_HOSTS_ENV] = ",".join(hosts)
+    return env
+
+
+def restart_and_verify_feed_app_services(
+    repo_root: Path, *, app_env: dict[str, str] | None = None
+) -> dict[str, Any]:
     findings = compose_app_services_up_with_retry(
         repo_root,
         "feed-generation.app-restart",
         "Restart app services after durable feed activation commit",
+        app_env=app_env,
     )
     for service in APP_SERVICES:
         running = container_running(repo_root, service)
@@ -16690,6 +16737,8 @@ def command_feed_generation_transition(
             if current is not None:
                 findings.append(finding("pass", "feed-generation.current", "Existing active feed generation is verified for compensating recovery.", current_id, current))
 
+            restore_app_env = feed_transition_restore_app_env(repo_root, state)
+            restore_gsad_hosts = list(gsad_hosts_from_env(restore_app_env))
             initial_scan_quiescence = feed_activation_scan_quiescence_finding(repo_root)
             findings.append(initial_scan_quiescence)
             if initial_scan_quiescence["status"] != "pass":
@@ -16749,6 +16798,7 @@ def command_feed_generation_transition(
                             "target_generation_id": generation_id,
                             "previous_generation_id": current_id,
                             "rollback_generation_id": prior_rollback_id,
+                            "restore_gsad_hosts": restore_gsad_hosts,
                             "current_generation_id": None,
                             "started_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
                         },
@@ -16811,7 +16861,9 @@ def command_feed_generation_transition(
                         findings,
                         [str(feed_activation_state_path(repo_root))],
                     )
-                runtime_result = restart_and_verify_feed_app_services(repo_root)
+                runtime_result = restart_and_verify_feed_app_services(
+                    repo_root, app_env=restore_app_env
+                )
                 findings.append(
                     feed_import_summary_finding(
                         runtime_result, "feed-generation.restart-unchanged"
@@ -16847,6 +16899,7 @@ def command_feed_generation_transition(
                             "target_generation_id": None,
                             "previous_generation_id": None,
                             "rollback_generation_id": success_rollback_id,
+                            "restore_gsad_hosts": restore_gsad_hosts,
                             "completed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
                         },
                     )
@@ -16856,7 +16909,9 @@ def command_feed_generation_transition(
                 else:
                     findings.append(finding("pass", "feed-generation.journal-complete", "Durable activation journal matches the verified selector and completed import.", str(feed_activation_state_path(repo_root))))
             if transition_succeeded:
-                runtime_result = restart_and_verify_feed_app_services(repo_root)
+                runtime_result = restart_and_verify_feed_app_services(
+                    repo_root, app_env=restore_app_env
+                )
                 findings.append(feed_import_summary_finding(runtime_result, "feed-generation.runtime-verify"))
                 summary = "Feed generation activation and import completed." if not rollback else "Feed generation rollback and compensating import completed."
                 if runtime_result.get("status") == "fail":
@@ -16902,6 +16957,7 @@ def command_feed_generation_transition(
                             "target_generation_id": None,
                             "previous_generation_id": None,
                             "rollback_generation_id": prior_rollback_id,
+                            "restore_gsad_hosts": restore_gsad_hosts,
                             "completed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
                         },
                     )

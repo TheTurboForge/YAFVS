@@ -15278,6 +15278,91 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertIn('"--wait"', broker_helper)
         self.assertIn('"--force-recreate"', app_helper)
 
+    def test_feed_transition_restore_env_preserves_running_gsad_hosts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            with unittest.mock.patch.multiple(
+                turbovasctl,
+                runtime_app_env=unittest.mock.Mock(
+                    return_value={turbovasctl.GSAD_HOST_ENV: "127.0.0.1"}
+                ),
+                current_gsad_published_hosts=unittest.mock.Mock(
+                    return_value=("192.168.178.42", "100.80.139.13")
+                ),
+            ):
+                env = turbovasctl.feed_transition_restore_app_env(root, None)
+
+        self.assertEqual(
+            env[turbovasctl.GSAD_HOSTS_ENV],
+            "192.168.178.42,100.80.139.13",
+        )
+
+    def test_feed_app_restart_uses_restore_env_for_compose_and_process(self):
+        app_env = {
+            turbovasctl.GSAD_HOSTS_ENV: "192.168.178.42,100.80.139.13"
+        }
+        compose = unittest.mock.Mock(return_value=["docker", "compose", "up"])
+        run = unittest.mock.Mock(
+            return_value=subprocess.CompletedProcess([], 0, "", "")
+        )
+        with unittest.mock.patch.multiple(
+            turbovasctl,
+            compose_command=compose,
+            run_command=run,
+        ):
+            findings = turbovasctl.compose_app_services_up_with_retry(
+                Path("/tmp"),
+                "feed-generation.app-restart",
+                "Mock restart",
+                app_env=app_env,
+            )
+
+        self.assertEqual(findings[0]["status"], "pass")
+        self.assertIs(compose.call_args.kwargs["env"], app_env)
+        self.assertIs(run.call_args.kwargs["env"], app_env)
+
+    def test_feed_activation_state_validates_restore_gsad_hosts(self):
+        payload = {
+            "schema_version": 1,
+            "status": "active",
+            "current_generation_id": "a" * 64,
+            "target_generation_id": None,
+            "previous_generation_id": None,
+            "rollback_generation_id": None,
+            "restore_gsad_hosts": ["192.168.178.42", "100.80.139.13"],
+        }
+        self.assertEqual(
+            turbovasctl.validate_feed_activation_state(dict(payload))[
+                "restore_gsad_hosts"
+            ],
+            payload["restore_gsad_hosts"],
+        )
+        payload["restore_gsad_hosts"] = ["not-an-ip"]
+        with self.assertRaisesRegex(ValueError, "restore_gsad_hosts"):
+            turbovasctl.validate_feed_activation_state(payload)
+
+    def test_feed_transition_restore_env_uses_journal_after_container_removal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            state = {
+                "restore_gsad_hosts": ["192.168.178.42", "100.80.139.13"]
+            }
+            with unittest.mock.patch.multiple(
+                turbovasctl,
+                runtime_app_env=unittest.mock.Mock(
+                    return_value={turbovasctl.GSAD_HOST_ENV: "127.0.0.1"}
+                ),
+                current_gsad_published_hosts=unittest.mock.Mock(return_value=()),
+            ):
+                env = turbovasctl.feed_transition_restore_app_env(root, state)
+
+        self.assertEqual(
+            env[turbovasctl.GSAD_HOSTS_ENV],
+            "192.168.178.42,100.80.139.13",
+        )
+
     def test_runtime_scanner_config_artifact_is_runtime_relative(self):
         source = TURBOVASCTL_PATH.read_text(encoding="utf-8")
         helper = source.split("def _command_runtime_scanner_redis_init_unlocked", 1)[1]
@@ -16201,6 +16286,11 @@ db2:keys=5,expires=0,avg_ttl=0
                         "summary": "Mock feed runtime verified.",
                         "findings": [],
                         "artifacts": [],
+                    }
+                ),
+                feed_transition_restore_app_env=unittest.mock.Mock(
+                    return_value={
+                        turbovasctl.GSAD_HOSTS_ENV: "192.168.178.42,100.80.139.13"
                     }
                 ),
             ):

@@ -119,7 +119,6 @@ browser, direct API, production-posture, or release-readiness question.
 - `just runtime-scanner-process-check`: verify scanner process hygiene, including zombie child processes.
 - `just runtime-nmap-capability-check`: verify non-root Nmap raw scan capability for `Full and fast`.
 - `just runtime-feed-keyring-init`: initialize the shared feed signature GnuPG keyring.
-- `just runtime-feed-import-init`: import the runtime feed copy into gvmd/OpenVAS state.
 - `just runtime-full-test-scan-preflight`: verify readiness for the fixed authorized `192.168.178.0/24` full test scan.
 - `just runtime-full-test-scan-start --confirm-authorized-lan`: start the fixed authorized full test scan.
 - `just runtime-full-test-scan-status`: report the fixed full test scan task status.
@@ -129,11 +128,12 @@ browser, direct API, production-posture, or release-readiness question.
 - `just runtime-scope-smoke`: verify scope reporting without starting scans.
 - `just runtime-scope-report-summary`: summarize the latest `Organization` scope report.
 - `just runtime-scope-report-metrics`: read CVSS Load and authenticated coverage metrics for a scope report through the internal native API.
-- `just feed-state`: show persistent feed cache and runtime-copy state.
+- `just feed-state`: show persistent feed cache and active-generation state.
 - `just feed-cache-sync`: start a full Community Feed cache sync in `tmux`.
-- `just feed-copy-to-runtime`: copy cached feed data into the runtime feed tree.
 - `just feed-generation-stage`: create and verify a sealed, content-addressed feed generation without activating it.
 - `just feed-generation-state --status-only --json`: verify staged feed generations and report orphan or tampered state.
+- `just feed-generation-activate -- <generation-id> [--allow-first-activation]`: activate a verified generation through the service-coordinated, guarded activation path.
+- `just feed-generation-rollback -- <generation-id>`: perform verified compensating recovery only to the journaled known-good predecessor; this is not a transactional database rollback.
 - `just runtime-status`: show Docker runtime status.
 - `just runtime-smoke`: run infrastructure smoke checks.
 - `just runtime-log-review`: review recent full-stack runtime logs for high-signal regressions.

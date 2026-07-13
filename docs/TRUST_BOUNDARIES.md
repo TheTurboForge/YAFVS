@@ -130,7 +130,7 @@ Checks to consider:
 ### Mosquitto And Notus
 
 Mosquitto supports Notus runtime messaging. Notus consumes signed feed content
-from the runtime feed copy and uses the shared feed keyring. The development
+from the journaled active immutable feed generation and uses the shared feed keyring. The development
 broker requires runtime-only role credentials and ACLs: OpenVAS can submit
 Notus work and read status, Notus can consume that work and publish status or
 results, and OSPD can consume results. This boundary should be kept until its
@@ -142,11 +142,11 @@ Checks to consider:
 - feed keyring/import checks;
 - feed-content and signature-validation review for feed changes.
 
-### Feed Cache And Runtime Feed Copy
+### Feed Cache And Active Generation
 
 The canonical downloaded feed cache is local untracked state. Runtime services
-consume a working copy. TurboVAS must not bundle, commit, or redistribute feed
-content without separate feed-terms review.
+consume only a verified, journaled active generation. TurboVAS must not bundle,
+commit, or redistribute feed content without separate feed-terms review.
 
 Checks to consider:
 

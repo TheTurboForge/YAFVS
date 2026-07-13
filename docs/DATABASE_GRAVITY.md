@@ -42,7 +42,7 @@ Keep data outside PostgreSQL when it is not product state:
 - `diagnostic_artifact`: browser, credential, log-review, quality-gate,
   full-test-scan, performance, and runtime-log artifacts that explain command or
   service behavior but are not product truth;
-- `feed_content`: canonical feed cache and runtime feed copy;
+- `feed_content`: canonical feed cache and immutable active feed generation;
 - `temporary_runtime_state`: service state such as keyrings, sockets, and
   runtime-local files.
 

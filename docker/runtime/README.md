@@ -18,7 +18,7 @@ The experimental `app` profile adds inherited application services:
 
 - `gvmd`, using the persistent Postgres database and a runtime Unix socket
 - `ospd-openvas`, wired to the built OpenVAS scanner binary, scanner Redis Unix socket, and runtime OSP socket path
-- `notus-scanner`, wired to the runtime Notus feed copy and Mosquitto
+- `notus-scanner`, wired to the active Notus feed generation and Mosquitto
 - `gsad`, exposed on `127.0.0.1:19392` by default for local HTTPS UI/API smoke checks
 - `turbovas-api`, a Rust proof service for DB-backed typed HTTP/JSON reads;
   internal by default, with an opt-in bearer-auth direct development listener
@@ -73,9 +73,10 @@ Use the root `justfile` command surface:
 - `just runtime-scanner-process-check`
 - `just runtime-nmap-capability-check`
 - `just runtime-feed-keyring-init`
-- `just runtime-feed-import-init`
 - `just feed-generation-stage`
 - `just feed-generation-state --status-only`
+- `just feed-generation-activate -- <generation-id> [--allow-first-activation]`
+- `just feed-generation-rollback -- <generation-id>`
 - `just runtime-app-smoke`
 - `just runtime-native-api-smoke`
 - `just runtime-native-api-direct-smoke`
@@ -113,6 +114,18 @@ installation. It does not create or change the `feed-store/current` pointer and
 therefore does not activate content. `feed-generation-state` performs a full
 manifest, layout, permission, size, and digest verification of installed
 generations and reports orphan staging directories.
+`feed-generation-activate` accepts only a verified generation, coordinates the
+app services while switching the `feed-store/current` pointer, and verifies the
+active runtime after the switch. It first stops scanner-control services and
+rechecks the database so no scan can cross the transition boundary. NVT
+metadata is rebuilt for every selected generation; a matching publisher
+version string is not treated as content identity. A durable owner-only journal
+blocks app startup after an interrupted or mismatched transition. The first
+activation requires an explicit acknowledgement and may resume only its recorded target.
+Later interrupted transitions recover only through `feed-generation-rollback`
+to the journaled known-good predecessor. Recovery is service-coordinated and
+verified; it reimports prior data but does not claim a transactional database
+rollback.
 Available Greenbone signatures and exact signed checksum coverage are required
 for NASL, Notus, and CERT content. SCAP and GVMD data objects are fully hashed
 and generation-bound, but the upstream cache currently supplies no equivalent
@@ -188,7 +201,7 @@ The current app profile reaches inherited manager-scanner connectivity:
 - `ospd-openvas` starts and creates `/runtime/run/ospd/ospd-openvas.sock`.
 - `ospd-openvas` runs as the development UID/GID with only the raw-socket
   capabilities needed for scanner alive detection.
-- `notus-scanner` starts against the runtime Notus feed copy.
+- `notus-scanner` starts against the active Notus feed generation.
 - `OpenVAS Default` is registered and verified by `gvmd` against the OSPD socket.
 - `gsad` serves the staged GSA web UI and responds on the configured HTTPS host binding.
 - `turbovas-api` is available inside the Docker network as the DB-first native
@@ -196,5 +209,6 @@ The current app profile reaches inherited manager-scanner connectivity:
   explicit bearer-auth direct mode, which defaults to loopback and is not a
   production exposure model.
 
-Full feed population, feed import, scan execution, and production packaging
-remain guarded development surfaces rather than production deployment behavior.
+Full feed population, feed generation activation or rollback, scan execution,
+and production packaging remain guarded development surfaces rather than
+production deployment behavior.

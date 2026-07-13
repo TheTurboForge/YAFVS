@@ -202,8 +202,10 @@ services:
         target: ${TURBOVAS_REPO_MOUNT_PATH:-/home/turboforge/Projects/TurboVAS}
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feeds
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feed-store/current
         target: /runtime/feeds
+        bind:
+          create_host_path: false
         read_only: true
       - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/feed-update.lock
@@ -307,12 +309,10 @@ services:
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/state/feed-gnupg
         target: /runtime/state/feed-gnupg
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feeds/openvas
-        target: /runtime/feeds/openvas
-        read_only: true
-      - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feeds/notus
-        target: /runtime/feeds/notus
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feed-store/current
+        target: /runtime/feeds
+        bind:
+          create_host_path: false
         read_only: true
       - type: bind
         source: ../build
@@ -397,8 +397,10 @@ services:
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/state/feed-gnupg
         target: /runtime/state/feed-gnupg
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feeds/notus
-        target: /runtime/feeds/notus
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feed-store/current
+        target: /runtime/feeds
+        bind:
+          create_host_path: false
         read_only: true
       - type: bind
         source: ../build
@@ -492,7 +494,6 @@ services:
     build:
       context: ..
       dockerfile: docker/turbovas-api/Dockerfile
-    restart: unless-stopped
     depends_on:
       gvmd:
         condition: service_started
@@ -515,8 +516,10 @@ services:
       TURBOVAS_FEED_LOCK_DIR: /runtime/run
     volumes:
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feeds
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feed-store/current
         target: /runtime/feeds
+        bind:
+          create_host_path: false
         read_only: true
       - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/feed-update.lock

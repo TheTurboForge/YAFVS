@@ -49,7 +49,8 @@
  * @brief Generate SQL for global or effective ownership check.
  */
 #define ACL_GLOBAL_OR_USER_OWNS()                          \
-  " (EXISTS (SELECT 1 FROM users WHERE users.uuid = '%s'))"
+  " ((" ACL_IS_GLOBAL () ")"                              \
+  "  OR EXISTS (SELECT 1 FROM users WHERE users.uuid = '%s'))"
 
 command_t *
 acl_commands (gchar **);

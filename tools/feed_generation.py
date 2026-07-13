@@ -775,6 +775,158 @@ def verify_generation(generations_root: Path, generation_id: str,
         os.close(root_fd)
 
 
+def _current_generation_id(store_fd: int) -> str | None:
+    try:
+        current = os.stat("current", dir_fd=store_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISLNK(current.st_mode) or current.st_uid != os.getuid():
+        raise FeedGenerationError("current feed generation selector is not a user-owned symlink")
+    target = os.readlink("current", dir_fd=store_fd)
+    parts = PurePosixPath(target).parts
+    if PurePosixPath(target).is_absolute() or len(parts) != 2 or parts[0] != "generations" or not _is_digest(parts[1]):
+        raise FeedGenerationError("current feed generation selector target is invalid")
+    return parts[1]
+
+
+def read_current_generation(runtime_root: Path, expected_feed_release: str,
+                            expected_classes: Sequence[FeedClassSpec],
+                            limits: FeedGenerationLimits = FeedGenerationLimits()) -> dict[str, Any] | None:
+    store_root = runtime_root / "feed-store"
+    try:
+        store_fd = _open_absolute_dir(store_root)
+    except FileNotFoundError:
+        return None
+    try:
+        store = os.fstat(store_fd)
+        if store.st_uid != os.getuid() or stat.S_IMODE(store.st_mode) & 0o077:
+            raise FeedGenerationError("feed generation store is not private and user-owned")
+        generation_id = _current_generation_id(store_fd)
+        if generation_id is None:
+            return None
+        verified = verify_generation(
+            store_root / "generations",
+            generation_id,
+            expected_feed_release,
+            expected_classes,
+            limits,
+        )
+        current = os.stat("current", dir_fd=store_fd, follow_symlinks=False)
+        if not stat.S_ISLNK(current.st_mode) or current.st_uid != os.getuid() or _current_generation_id(store_fd) != generation_id:
+            raise FeedGenerationError("current feed generation selector changed while verifying")
+        return verified
+    finally:
+        os.close(store_fd)
+
+
+def _replace_current_selector(store_fd: int, generation_id: str) -> None:
+    temporary_name = f".current-{os.getpid()}-{secrets.token_hex(8)}"
+    try:
+        os.symlink(f"generations/{generation_id}", temporary_name, dir_fd=store_fd)
+        temporary = os.stat(temporary_name, dir_fd=store_fd, follow_symlinks=False)
+        if not stat.S_ISLNK(temporary.st_mode) or temporary.st_uid != os.getuid():
+            raise FeedGenerationError("temporary feed generation selector is unsafe")
+        os.replace(
+            temporary_name,
+            "current",
+            src_dir_fd=store_fd,
+            dst_dir_fd=store_fd,
+        )
+        temporary_name = ""
+        os.fsync(store_fd)
+    finally:
+        if temporary_name:
+            try:
+                os.unlink(temporary_name, dir_fd=store_fd)
+            except FileNotFoundError:
+                pass
+
+
+def select_generation(runtime_root: Path, generation_id: str,
+                      expected_feed_release: str,
+                      expected_classes: Sequence[FeedClassSpec],
+                      limits: FeedGenerationLimits = FeedGenerationLimits()) -> dict[str, Any]:
+    if not _is_digest(generation_id):
+        raise FeedGenerationError("feed generation identifier is invalid")
+    generations_fd, generations_root = _prepare_store(runtime_root)
+    store_fd = lock_fd = -1
+    try:
+        store_fd = _open_absolute_dir(runtime_root / "feed-store")
+        lock_fd = _lock_store(generations_fd)
+        previous_generation_id = _current_generation_id(store_fd)
+        if previous_generation_id is not None:
+            verify_generation(
+                generations_root,
+                previous_generation_id,
+                expected_feed_release,
+                expected_classes,
+                limits,
+            )
+        verified = verify_generation(
+            generations_root,
+            generation_id,
+            expected_feed_release,
+            expected_classes,
+            limits,
+        )
+        try:
+            _replace_current_selector(store_fd, generation_id)
+            selected = read_current_generation(
+                runtime_root,
+                expected_feed_release,
+                expected_classes,
+                limits,
+            )
+            if selected is None or selected["generation_id"] != generation_id:
+                raise FeedGenerationError("feed generation selector did not retain the requested generation")
+        except (FeedGenerationError, OSError) as error:
+            try:
+                if previous_generation_id is None:
+                    if _current_generation_id(store_fd) == generation_id:
+                        os.unlink("current", dir_fd=store_fd)
+                        os.fsync(store_fd)
+                else:
+                    _replace_current_selector(store_fd, previous_generation_id)
+            except (FeedGenerationError, OSError) as restore_error:
+                raise FeedGenerationError(
+                    f"feed generation selection failed and prior selector restoration failed: {restore_error}"
+                ) from error
+            raise FeedGenerationError(
+                f"feed generation selection failed; prior selector was restored: {error}"
+            ) from error
+        return {
+            **verified,
+            "previous_generation_id": previous_generation_id,
+            "current_generation_id": generation_id,
+        }
+    finally:
+        if lock_fd >= 0:
+            os.close(lock_fd)
+        if store_fd >= 0:
+            os.close(store_fd)
+        os.close(generations_fd)
+
+
+def clear_current_generation(runtime_root: Path, expected_generation_id: str) -> None:
+    if not _is_digest(expected_generation_id):
+        raise FeedGenerationError("expected feed generation identifier is invalid")
+    generations_fd, _generations_root = _prepare_store(runtime_root)
+    store_fd = lock_fd = -1
+    try:
+        store_fd = _open_absolute_dir(runtime_root / "feed-store")
+        lock_fd = _lock_store(generations_fd)
+        if _current_generation_id(store_fd) != expected_generation_id:
+            raise FeedGenerationError("current feed generation differs from the expected selector")
+        os.unlink("current", dir_fd=store_fd)
+        os.fsync(store_fd)
+    finally:
+        if lock_fd >= 0:
+            os.close(lock_fd)
+        if store_fd >= 0:
+            os.close(store_fd)
+        os.close(generations_fd)
+
+
 def _prepare_store(runtime_root: Path) -> tuple[int, Path]:
     runtime_fd = _open_absolute_dir(runtime_root)
     store_fd = generations_fd = -1
@@ -962,12 +1114,22 @@ def generation_state(runtime_root: Path, expected_feed_release: str,
                      limits: FeedGenerationLimits = FeedGenerationLimits()) -> dict[str, Any]:
     generations_root = runtime_root / "feed-store" / "generations"
     current_exists = (runtime_root / "feed-store" / "current").is_symlink()
+    current_generation_id: str | None = None
+    current_error: str | None = None
+    try:
+        current = read_current_generation(runtime_root, expected_feed_release, expected_classes, limits)
+        if current is not None:
+            current_generation_id = current["generation_id"]
+    except (FeedGenerationError, OSError) as error:
+        current_error = str(error)
     try:
         generations_fd = _open_absolute_dir(generations_root)
     except FileNotFoundError:
         return {"generations_root": str(generations_root), "store_exists": False,
                 "generations": [], "generation_count": 0, "orphan_staging": [],
-                "invalid_entries": [], "current_pointer_exists": current_exists}
+                "invalid_entries": [], "current_pointer_exists": current_exists,
+                "current_generation_id": current_generation_id,
+                "current_error": current_error}
     try:
         store_stat = os.fstat(generations_fd)
         if store_stat.st_uid != os.getuid() or stat.S_IMODE(store_stat.st_mode) & 0o077:
@@ -1004,6 +1166,8 @@ def generation_state(runtime_root: Path, expected_feed_release: str,
                 "generations": generations,
                 "generation_count": len(generations), "orphan_staging": orphan_staging,
                 "invalid_entries": invalid_entries,
-                "current_pointer_exists": current_exists}
+                "current_pointer_exists": current_exists,
+                "current_generation_id": current_generation_id,
+                "current_error": current_error}
     finally:
         os.close(generations_fd)

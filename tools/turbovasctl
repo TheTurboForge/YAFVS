@@ -44,8 +44,12 @@ sys.path.insert(0, str(TOOLS_MODULE_DIR))
 from feed_generation import (  # noqa: E402
     FeedClassSpec as GenerationFeedClassSpec,
     FeedGenerationError,
+    clear_current_generation,
     generation_state,
+    read_current_generation,
+    select_generation,
     stage_generation,
+    verify_generation,
 )
 
 try:
@@ -253,6 +257,7 @@ PYTHON_CHAIN = (*LEGACY_GMP_PYTHON_CHAIN, *RUNTIME_PYTHON_CHAIN)
 BASELINE_CHAIN = (*C_SERVICES_CHAIN, "gsa", *RUNTIME_PYTHON_CHAIN)
 RUNTIME_SERVICES = ("postgres", "redis-openvas", "mosquitto")
 APP_SERVICES = ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "turbovas-api")
+FEED_CONTROL_SERVICES = ("gvmd", "gsad", "turbovas-api")
 APP_EXECUTION_MOUNT_SERVICES = ("gvmd", "ospd-openvas", "notus-scanner", "gsad")
 FULL_TEST_TARGET_CIDR = "192.168.178.0/24"
 FULL_TEST_TASK_NAME = f"TurboVAS full test scan {FULL_TEST_TARGET_CIDR}"
@@ -460,6 +465,8 @@ NATIVE_OVERRIDE_DELETE_MAX_LIMIT = 500
 NATIVE_BULK_MODIFY_SCHEDULES_DEFAULT_MAX = 100
 NATIVE_BULK_MODIFY_SCHEDULES_MAX_LIMIT = 500
 NATIVE_TASK_ACTIVE_STATUSES = frozenset({"Running", "Requested", "Queued"})
+# Persisted gvmd task_status_t values that can still own scanner/control work.
+FEED_TRANSITION_BLOCKING_TASK_STATUS_IDS = (0, 3, 4, 10, 11, 14, 16, 17, 18, 19)
 GVMD_IMPORT_TIMEOUT_SECONDS = 7200
 OSPD_REQUIRED_CAPS = {"NET_ADMIN": 12, "NET_RAW": 13}
 OSPD_STABLE_HOSTNAME = "turbovas-ospd-openvas"
@@ -477,6 +484,7 @@ RETAINED_PERFORMANCE_ARTIFACTS = 30
 RETAINED_C_HARDENING_ARTIFACTS = 30
 GSA_OPERATION_LOCK = "gsa-quality"
 RUNTIME_MANAGER_LOCK = "runtime-manager"
+FEED_ACTIVATION_LOCK = "feed-generation-activation"
 DEFAULT_RUNTIME_LOCK_TIMEOUT_SECONDS = 1800
 QUALITY_GATE_SYSTEMD_UNITS = ("turbovas-quality-gate.service", "turbovas-quality-gate.timer")
 QUALITY_GATE_TIMER_NAME = "turbovas-quality-gate.timer"
@@ -3223,7 +3231,146 @@ def feed_cache_var_lib(repo_root: Path) -> Path:
 
 
 def feed_runtime_root(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "feeds")
+    return runtime_path(repo_root, "feed-store", "current")
+
+
+def feed_activation_state_path(repo_root: Path) -> Path:
+    return runtime_path(repo_root, "state", "feed-generation", "activation.json")
+
+
+def feed_generation_id_valid(value: Any) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+
+
+def validate_feed_activation_state(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        raise ValueError("feed activation state schema is invalid")
+    status = payload.get("status")
+    if status not in {"active", "transitioning"}:
+        raise ValueError("feed activation state status is invalid")
+    current_id = payload.get("current_generation_id")
+    target_id = payload.get("target_generation_id")
+    previous_id = payload.get("previous_generation_id")
+    rollback_id = payload.get("rollback_generation_id")
+    if status == "active":
+        if not feed_generation_id_valid(current_id) or target_id is not None or previous_id is not None:
+            raise ValueError("active feed activation state identifiers are invalid")
+    else:
+        if payload.get("action") not in {"activate", "rollback"} or not feed_generation_id_valid(target_id):
+            raise ValueError("transitioning feed activation state is invalid")
+        if current_id is not None:
+            raise ValueError("transitioning feed activation state must not claim an active generation")
+    for name, value in (("previous_generation_id", previous_id), ("rollback_generation_id", rollback_id)):
+        if value is not None and not feed_generation_id_valid(value):
+            raise ValueError(f"feed activation state {name} is invalid")
+    return payload
+
+
+def read_feed_activation_state(repo_root: Path) -> dict[str, Any] | None:
+    path = feed_activation_state_path(repo_root)
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return None
+    try:
+        payload = json.loads(read_private_text(path, 16 * 1024))
+    except json.JSONDecodeError as error:
+        raise ValueError(f"feed activation state is not valid JSON: {error}") from error
+    return validate_feed_activation_state(payload)
+
+
+def ensure_feed_activation_state_directory(repo_root: Path) -> None:
+    root = runtime_dir(repo_root)
+    try:
+        current_fd, _ = open_absolute_directory_nofollow(root)
+    except FileNotFoundError:
+        parent_fd, _ = open_absolute_directory_nofollow(root.parent)
+        try:
+            try:
+                os.mkdir(root.name, mode=0o700, dir_fd=parent_fd)
+            except FileExistsError:
+                pass
+            else:
+                os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
+        current_fd, _ = open_absolute_directory_nofollow(root)
+    root_metadata = os.fstat(current_fd)
+    if root_metadata.st_uid != os.geteuid():
+        os.close(current_fd)
+        raise PermissionError(f"Runtime directory is not owner-owned: {root}")
+    try:
+        for name in ("state", "feed-generation"):
+            child_fd = -1
+            try:
+                try:
+                    os.mkdir(name, mode=0o700, dir_fd=current_fd)
+                except FileExistsError:
+                    pass
+                else:
+                    # Every new journal directory entry must survive a crash.
+                    os.fsync(current_fd)
+                metadata = os.stat(name, dir_fd=current_fd, follow_symlinks=False)
+                if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISDIR(metadata.st_mode):
+                    raise OSError(
+                        errno.EINVAL,
+                        f"Feed activation state path component is not a real directory: {name}",
+                    )
+                child_fd = os.open(
+                    name,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                    dir_fd=current_fd,
+                )
+                opened = os.fstat(child_fd)
+                if opened.st_uid != os.geteuid():
+                    raise PermissionError(
+                        f"Feed activation state directory is not owner-owned: {name}"
+                    )
+                os.fchmod(child_fd, 0o700)
+                os.fsync(child_fd)
+            except BaseException:
+                if child_fd >= 0:
+                    os.close(child_fd)
+                raise
+            os.close(current_fd)
+            current_fd = child_fd
+    finally:
+        os.close(current_fd)
+
+
+def write_feed_activation_state(repo_root: Path, payload: dict[str, Any]) -> None:
+    candidate = validate_feed_activation_state({"schema_version": 1, **payload})
+    path = feed_activation_state_path(repo_root)
+    text = json.dumps(candidate, indent=2, sort_keys=True) + "\n"
+    ensure_feed_activation_state_directory(repo_root)
+    write_private_text(path, text)
+
+
+def active_feed_generation_finding(repo_root: Path) -> dict[str, Any]:
+    try:
+        state = read_feed_activation_state(repo_root)
+        current = read_current_generation(
+            runtime_dir(repo_root), FEED_RELEASE, feed_generation_specs()
+        )
+    except (FeedGenerationError, OSError, ValueError) as error:
+        return finding(
+            "fail",
+            "feed-generation.current",
+            f"Active feed generation state failed closed: {error}",
+            str(feed_activation_state_path(repo_root)),
+        )
+    current_id = current.get("generation_id") if current else None
+    state_id = state.get("current_generation_id") if state and state.get("status") == "active" else None
+    valid = current_id is not None and current_id == state_id
+    return finding(
+        "pass" if valid else "fail",
+        "feed-generation.current",
+        "Active feed selector and completed import journal agree."
+        if valid
+        else "No completed feed activation matches the current selector; recover or activate a verified generation before starting app services.",
+        str(feed_activation_state_path(repo_root)),
+        {"selector_generation_id": current_id, "journal_generation_id": state_id, "journal_status": state.get("status") if state else None},
+    )
 
 
 def feed_sync_log_dir(repo_root: Path) -> Path:
@@ -3311,12 +3458,6 @@ def feed_sync_command(repo_root: Path, selftest: bool = False) -> list[str]:
         "--rsync-timeout",
         str(FEED_RSYNC_TIMEOUT_SECONDS),
     ]
-
-
-def feed_copy_pairs(repo_root: Path) -> list[tuple[FeedClass, Path, Path]]:
-    cache_root = feed_cache_var_lib(repo_root)
-    runtime_root = feed_runtime_root(repo_root)
-    return [(feed_class, cache_root / feed_class.cache_rel, runtime_root / feed_class.runtime_rel) for feed_class in FEED_CLASSES]
 
 
 def feed_generation_specs() -> tuple[GenerationFeedClassSpec, ...]:
@@ -5871,12 +6012,12 @@ def ensure_runtime_feed_mappings(repo_root: Path) -> list[dict[str, Any]]:
         if path.is_symlink():
             current = os.readlink(path)
             if current == desired:
-                findings.append(finding("pass", f"feed-map.{mapping.key}", f"{mapping.label} mapping points at runtime feed copy.", str(path), {"target": current, "expected_target": desired}))
+                findings.append(finding("pass", f"feed-map.{mapping.key}", f"{mapping.label} mapping points at the active feed generation.", str(path), {"target": current, "expected_target": desired}))
             else:
                 try:
                     path.unlink()
                     path.symlink_to(desired)
-                    findings.append(finding("pass", f"feed-map.{mapping.key}", f"Stale {mapping.label} symlink retargeted to runtime feed copy.", str(path), {"old_target": current, "target": desired}))
+                    findings.append(finding("pass", f"feed-map.{mapping.key}", f"Stale {mapping.label} symlink retargeted to the active feed generation.", str(path), {"old_target": current, "target": desired}))
                 except OSError as error:
                     findings.append(finding("fail", f"feed-map.{mapping.key}", f"Could not retarget stale {mapping.label} symlink: {error}", str(path), {"target": current, "expected_target": desired}))
             continue
@@ -14984,7 +15125,7 @@ def restart_gsad_after_static_stage(repo_root: Path) -> dict[str, Any]:
     )
 
 
-def command_build_ui(repo_root: Path) -> dict[str, Any]:
+def _command_build_ui_unlocked(repo_root: Path) -> dict[str, Any]:
     result = command_build(repo_root, "gsa")
     findings = list(result["findings"])
     artifacts = list(result["artifacts"])
@@ -14994,6 +15135,19 @@ def command_build_ui(repo_root: Path) -> dict[str, Any]:
         artifacts.append(str(gsad_static_dir(repo_root)))
         findings.append(restart_gsad_after_static_stage(repo_root))
     return make_result("build-ui", repo_root, "Build and stage web UI completed.", findings, sorted(set(artifacts)))
+
+
+def command_build_ui(repo_root: Path) -> dict[str, Any]:
+    try:
+        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "build-ui"):
+            return _command_build_ui_unlocked(repo_root)
+    except RuntimeLockTimeout as error:
+        return make_result(
+            "build-ui",
+            repo_root,
+            "Web UI build stopped while waiting for the feed lifecycle lock.",
+            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
+        )
 
 
 def command_build_python_chain(repo_root: Path) -> dict[str, Any]:
@@ -15014,7 +15168,7 @@ def command_runtime_plan(repo_root: Path) -> dict[str, Any]:
         finding("pass", "runtime.ports", "Infrastructure ports are loopback-only; gsad defaults to loopback but can be explicitly bound with TURBOVAS_GSAD_HOST or TURBOVAS_GSAD_HOSTS.", details={**RUNTIME_PORTS, "gsad": list(gsad_port_bindings(repo_root))}),
         finding("pass", "runtime.scanner-redis", "OpenVAS scanner KB Redis uses a runtime Unix socket, not host TCP exposure.", str(scanner_redis_socket_path(repo_root))),
         finding("pass", "runtime.feed-cache", "Community feed downloads use a persistent host-local cache outside the repository.", str(feed_cache_var_lib(repo_root))),
-        finding("pass", "runtime.feed-copy", "Runtime services consume physical copies of the cache under the runtime feed tree.", str(feed_runtime_root(repo_root))),
+        finding("pass", "runtime.feed-generation", "Runtime services consume only the journaled active immutable feed generation.", str(feed_runtime_root(repo_root))),
         finding("pass", "runtime.feed-keyring", "OSPD and Notus share a persistent feed signature keyring under runtime state.", str(feed_gnupg_home(repo_root))),
         finding("pass", "runtime.pg-gvm", "Postgres pg-gvm extension initialization is handled by just runtime-init after pg-gvm is built."),
         finding("pass", "runtime.certs", "Certificate initialization is handled by just runtime-certs-init and persists outside the repository."),
@@ -15719,7 +15873,7 @@ def command_runtime_certs_init(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-certs-init", repo_root, "Runtime certificate initialization completed.", findings, [str(cert_public_dir(repo_root)), str(cert_private_dir(repo_root))])
 
 
-def command_runtime_scanner_redis_init(repo_root: Path, probe_openvas: bool = True) -> dict[str, Any]:
+def _command_runtime_scanner_redis_init_unlocked(repo_root: Path, probe_openvas: bool = True) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
     findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
@@ -15763,7 +15917,48 @@ def command_runtime_scanner_redis_init(repo_root: Path, probe_openvas: bool = Tr
     return make_result("runtime-scanner-redis-init", repo_root, "Scanner Redis initialization completed.", findings, [str(runtime_dir(repo_root)), config_artifact])
 
 
-def command_runtime_manager_init(repo_root: Path) -> dict[str, Any]:
+def command_runtime_scanner_redis_init(
+    repo_root: Path,
+    probe_openvas: bool = True,
+    *,
+    lifecycle_managed: bool = False,
+) -> dict[str, Any]:
+    if lifecycle_managed:
+        return _command_runtime_scanner_redis_init_unlocked(repo_root, probe_openvas)
+    try:
+        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-scanner-redis-init"):
+            return _command_runtime_scanner_redis_init_unlocked(repo_root, probe_openvas)
+    except RuntimeLockTimeout as error:
+        return make_result(
+            "runtime-scanner-redis-init",
+            repo_root,
+            "Scanner Redis initialization stopped while waiting for the feed lifecycle lock.",
+            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
+            [str(runtime_dir(repo_root))],
+        )
+
+
+def command_runtime_manager_init(
+    repo_root: Path,
+    *,
+    lifecycle_managed: bool = False,
+) -> dict[str, Any]:
+    if lifecycle_managed:
+        return command_runtime_manager_init_with_manager_lock(repo_root)
+    try:
+        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-manager-init"):
+            return command_runtime_manager_init_with_manager_lock(repo_root)
+    except RuntimeLockTimeout as error:
+        return make_result(
+            "runtime-manager-init",
+            repo_root,
+            "Runtime manager initialization stopped while waiting for the feed lifecycle lock.",
+            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
+            [str(runtime_dir(repo_root))],
+        )
+
+
+def command_runtime_manager_init_with_manager_lock(repo_root: Path) -> dict[str, Any]:
     try:
         with acquire_runtime_lock(repo_root, RUNTIME_MANAGER_LOCK, "runtime-manager-init"):
             return command_runtime_manager_init_unlocked(repo_root)
@@ -15917,7 +16112,7 @@ def browser_gmp_readiness_finding(repo_root: Path, *, check: str) -> dict[str, A
     )
 
 
-def command_runtime_scanner_register(repo_root: Path) -> dict[str, Any]:
+def _command_runtime_scanner_register_unlocked(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     socket_path = ospd_socket_path(repo_root)
     findings.append(finding("pass" if socket_path.is_socket() else "fail", "ospd.socket", "ospd-openvas socket is ready." if socket_path.is_socket() else "ospd-openvas socket is not ready; run just runtime-app-up and inspect ospd-openvas logs.", str(socket_path)))
@@ -15954,6 +16149,20 @@ def command_runtime_scanner_register(repo_root: Path) -> dict[str, Any]:
         verify = run_gvmd_oneoff(repo_root, [f"--verify-scanner={scanner_uuid}"], no_deps=False)
         findings.append(finding("pass" if verify.returncode == 0 else "warn", "gvmd.verify-scanner", f"Verify OpenVAS Default scanner exit code {verify.returncode}.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(verify.stdout, 100)}))
     return make_result("runtime-scanner-register", repo_root, "Runtime scanner registration completed.", findings, [str(runtime_dir(repo_root))])
+
+
+def command_runtime_scanner_register(repo_root: Path) -> dict[str, Any]:
+    try:
+        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-scanner-register"):
+            return _command_runtime_scanner_register_unlocked(repo_root)
+    except RuntimeLockTimeout as error:
+        return make_result(
+            "runtime-scanner-register",
+            repo_root,
+            "Scanner registration stopped while waiting for the feed lifecycle lock.",
+            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
+            [str(runtime_dir(repo_root))],
+        )
 
 
 def command_runtime_feed_keyring_init(repo_root: Path) -> dict[str, Any]:
@@ -16040,8 +16249,28 @@ def native_required_feed_object_findings(repo_root: Path) -> list[dict[str, Any]
     return findings
 
 
-def command_runtime_feed_import_init(repo_root: Path) -> dict[str, Any]:
+def command_runtime_feed_import_init(
+    repo_root: Path,
+    *,
+    activation_managed: bool = False,
+    restart_services: bool = True,
+) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
+    if not activation_managed:
+        findings.append(
+            finding(
+                "fail",
+                "feed.import.activation-boundary",
+                "Standalone feed import is disabled; use feed-generation-activate or feed-generation-rollback.",
+            )
+        )
+        return make_result(
+            "runtime-feed-import-init",
+            repo_root,
+            "Feed import stopped outside the guarded generation-activation boundary.",
+            findings,
+            [str(runtime_dir(repo_root) / "feed-store")],
+        )
     feed_state = command_feed_state(repo_root)
     findings.extend(feed_state["findings"])
     runtime_findings = [item for item in feed_state["findings"] if item["check"].startswith("feed.runtime.")]
@@ -16060,9 +16289,9 @@ def command_runtime_feed_import_init(repo_root: Path) -> dict[str, Any]:
     if pre_manager_stop.returncode != 0:
         return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because gvmd could not be stopped before manager initialization.", findings, [str(runtime_dir(repo_root))])
 
-    manager = command_runtime_manager_init(repo_root)
+    manager = command_runtime_manager_init(repo_root, lifecycle_managed=True)
     findings.append(finding(manager["status"], "runtime.manager-init", manager["summary"], details={"status": manager["status"]}))
-    scanner_redis = command_runtime_scanner_redis_init(repo_root, probe_openvas=False)
+    scanner_redis = command_runtime_scanner_redis_init(repo_root, probe_openvas=False, lifecycle_managed=True)
     findings.append(finding(scanner_redis["status"], "runtime.scanner-redis", scanner_redis["summary"], details={"status": scanner_redis["status"]}))
     keyring = command_runtime_feed_keyring_init(repo_root)
     findings.append(finding(keyring["status"], "runtime.feed-keyring", keyring["summary"], details={"status": keyring["status"]}))
@@ -16070,7 +16299,18 @@ def command_runtime_feed_import_init(repo_root: Path) -> dict[str, Any]:
         return make_result("runtime-feed-import-init", repo_root, "Feed import stopped at runtime prerequisites.", findings, [str(runtime_dir(repo_root))])
 
     scanner_services = ("ospd-openvas", "notus-scanner")
-    scanner_up = run_command(compose_command(repo_root, "--profile", "app", "up", "-d", "--no-deps", "--build", *scanner_services), repo_root, env=runtime_env(repo_root), timeout=900)
+    scanner_up_command = compose_command(
+        repo_root,
+        "--profile",
+        "app",
+        "up",
+        "-d",
+        "--no-deps",
+        "--build",
+        "--force-recreate",
+        *scanner_services,
+    )
+    scanner_up = run_command(scanner_up_command, repo_root, env=runtime_env(repo_root), timeout=900)
     findings.append(finding("pass" if scanner_up.returncode == 0 else "fail", "runtime.scanner-services-up", f"Start scanner-side app services for feed import exit code {scanner_up.returncode}.", details={"services": list(scanner_services), "output_tail": output_tail(scanner_up.stdout, 120)}))
     for service in scanner_services:
         running = container_running(repo_root, service)
@@ -16125,15 +16365,22 @@ def command_runtime_feed_import_init(repo_root: Path) -> dict[str, Any]:
     if stop_gvmd.returncode != 0:
         return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because gvmd could not be stopped cleanly.", findings, [str(runtime_dir(repo_root))])
 
-    import_steps: list[tuple[str, list[str]]] = []
-    if db_feed_version == ospd_feed_version:
-        findings.append(finding("pass", "gvmd.rebuild-nvt", f"NVT database already matches OSPD feed version {ospd_feed_version}; skipped full NVT rebuild."))
-    else:
-        import_steps.append(("gvmd.rebuild-nvt", ["--rebuild", f"--osp-vt-update=/runtime/run/ospd/{ospd_socket_path(repo_root).name}"]))
-    import_steps.extend([
+    findings.append(
+        finding(
+            "pass",
+            "gvmd.rebuild-nvt-generation",
+            "NVT metadata will be rebuilt for the selected immutable generation; matching publisher version strings do not prove content identity.",
+            details={
+                "database_feed_version": db_feed_version,
+                "ospd_feed_version": ospd_feed_version,
+            },
+        )
+    )
+    import_steps: list[tuple[str, list[str]]] = [
+        ("gvmd.rebuild-nvt", ["--rebuild", f"--osp-vt-update=/runtime/run/ospd/{ospd_socket_path(repo_root).name}"]),
         ("gvmd.rebuild-gvmd-data", ["--rebuild-gvmd-data=all"]),
         ("gvmd.rebuild-scap", ["--rebuild-scap"]),
-    ])
+    ]
     import_failed = False
     for check, args in import_steps:
         result = run_gvmd_runtime_oneoff(repo_root, args, no_deps=False, timeout=GVMD_IMPORT_TIMEOUT_SECONDS)
@@ -16141,6 +16388,24 @@ def command_runtime_feed_import_init(repo_root: Path) -> dict[str, Any]:
         if result.returncode != 0:
             import_failed = True
             break
+
+    if import_failed:
+        stopped = stop_app_services_for_feed_transition(repo_root, "runtime.import-failure-stop")
+        findings.append(stopped)
+        return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because a rebuild/import step failed.", findings, [str(runtime_dir(repo_root))])
+
+    if not restart_services:
+        stopped = stop_app_services_for_feed_transition(repo_root, "runtime.import-complete-stop")
+        findings.append(stopped)
+        return make_result(
+            "runtime-feed-import-init",
+            repo_root,
+            "Feed database imports completed and all app services are stopped for durable activation commit."
+            if stopped["status"] == "pass"
+            else "Feed database imports completed but app services could not be stopped before activation commit.",
+            findings,
+            [str(runtime_dir(repo_root)), str(feed_runtime_root(repo_root))],
+        )
 
     restart_findings = compose_app_services_up_with_retry(
         repo_root,
@@ -16151,8 +16416,6 @@ def command_runtime_feed_import_init(repo_root: Path) -> dict[str, Any]:
     for service in APP_SERVICES:
         running = container_running(repo_root, service)
         findings.append(finding("pass" if running else "fail", "runtime.app.running", f"{service} container is {'running' if running else 'not running'} after feed import.", details={"service": service, "logs_tail": [] if running else service_log_tail(repo_root, service)}))
-    if import_failed:
-        return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because a rebuild/import step failed.", findings, [str(runtime_dir(repo_root))])
     if aggregate_status(restart_findings) == "fail":
         return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because app services could not be restarted.", findings, [str(runtime_dir(repo_root))])
 
@@ -16167,6 +16430,493 @@ def command_runtime_feed_import_init(repo_root: Path) -> dict[str, Any]:
     if aggregate_status(findings) == "fail":
         summary = "Feed import completed but native feed object verification failed."
     return make_result("runtime-feed-import-init", repo_root, summary, findings, [str(runtime_dir(repo_root)), str(feed_runtime_root(repo_root))])
+
+
+def stop_app_services_for_feed_transition(repo_root: Path, check: str) -> dict[str, Any]:
+    command = compose_command(
+        repo_root, "--profile", "app", "rm", "-f", "-s", *APP_SERVICES
+    )
+    stopped = run_command(command, repo_root, env=runtime_app_env(repo_root), timeout=300)
+    remaining_services = [
+        service
+        for service in APP_SERVICES
+        if docker_container_state(repo_root, service) is not None
+    ]
+    item = process_step_finding(
+        "pass" if stopped.returncode == 0 and not remaining_services else "fail",
+        check,
+        f"Remove all app service containers for feed generation transition exit code {stopped.returncode}; {len(remaining_services)} service container(s) remain.",
+        stopped,
+        command,
+    )
+    item["details"]["remaining_services"] = remaining_services
+    return item
+
+
+def stop_feed_control_services_for_preflight(repo_root: Path) -> dict[str, Any]:
+    running_services = [
+        service for service in FEED_CONTROL_SERVICES if container_running(repo_root, service)
+    ]
+    if not running_services:
+        return finding(
+            "pass",
+            "feed-generation.control-quiesce",
+            "No running scanner-control service needed to be stopped before the stable scan-state check.",
+            details={"previously_running_services": []},
+        )
+    command = compose_command(
+        repo_root, "--profile", "app", "stop", *running_services
+    )
+    stopped = run_command(command, repo_root, env=runtime_app_env(repo_root), timeout=300)
+    still_running = [
+        service for service in running_services if container_running(repo_root, service)
+    ]
+    item = process_step_finding(
+        "pass" if stopped.returncode == 0 and not still_running else "fail",
+        "feed-generation.control-quiesce",
+        f"Stop scanner-control services before stable scan-state verification exit code {stopped.returncode}; {len(still_running)} remain running.",
+        stopped,
+        command,
+    )
+    item["details"]["previously_running_services"] = running_services
+    item["details"]["still_running_services"] = still_running
+    return item
+
+
+def restart_feed_control_services_after_preflight(
+    repo_root: Path, services: Sequence[str]
+) -> dict[str, Any]:
+    selected = [service for service in services if service in FEED_CONTROL_SERVICES]
+    if not selected:
+        return finding(
+            "pass",
+            "feed-generation.control-restore",
+            "No scanner-control service needed restoration.",
+            details={"services": []},
+        )
+    command = compose_command(repo_root, "--profile", "app", "start", *selected)
+    restarted = run_command(command, repo_root, env=runtime_app_env(repo_root), timeout=300)
+    missing = [service for service in selected if not container_running(repo_root, service)]
+    item = process_step_finding(
+        "pass" if restarted.returncode == 0 and not missing else "fail",
+        "feed-generation.control-restore",
+        f"Restore scanner-control services after aborted feed preflight exit code {restarted.returncode}; {len(missing)} failed to restart.",
+        restarted,
+        command,
+    )
+    item["details"]["services"] = selected
+    item["details"]["missing_services"] = missing
+    return item
+
+
+def restart_and_verify_feed_app_services(repo_root: Path) -> dict[str, Any]:
+    findings = compose_app_services_up_with_retry(
+        repo_root,
+        "feed-generation.app-restart",
+        "Restart app services after durable feed activation commit",
+    )
+    for service in APP_SERVICES:
+        running = container_running(repo_root, service)
+        findings.append(
+            finding(
+                "pass" if running else "fail",
+                "feed-generation.app-running",
+                f"{service} container is {'running' if running else 'not running'} after feed activation.",
+                details={"service": service, "logs_tail": [] if running else service_log_tail(repo_root, service)},
+            )
+        )
+    gvmd_ready = wait_for_socket(gvmd_socket_path(repo_root), timeout_seconds=180)
+    findings.append(finding("pass" if gvmd_ready else "fail", "feed-generation.gvmd-ready", "gvmd socket is ready after feed activation." if gvmd_ready else "gvmd socket is not ready after feed activation.", str(gvmd_socket_path(repo_root))))
+    native_ready = container_running(repo_root, "turbovas-api")
+    findings.append(finding("pass" if native_ready else "fail", "feed-generation.native-api-ready", "turbovas-api is running after feed activation." if native_ready else "turbovas-api is not running after feed activation."))
+    if native_ready:
+        findings.extend(native_required_feed_object_findings(repo_root))
+    return make_result(
+        "feed-generation-runtime-verify",
+        repo_root,
+        "Feed activation app services restarted and verified."
+        if aggregate_status(findings) == "pass"
+        else "Feed activation is durable, but app service restart or runtime verification failed.",
+        findings,
+        [str(runtime_dir(repo_root))],
+    )
+
+
+def feed_import_summary_finding(result: dict[str, Any], check: str) -> dict[str, Any]:
+    non_pass_items = [
+        item
+        for item in result.get("findings", [])
+        if isinstance(item, dict) and item.get("status") != "pass"
+    ]
+    non_pass = [
+        compact_doctor_finding(item)
+        for item in non_pass_items
+    ]
+    failed_output_tails = {
+        str(item.get("check")): item.get("details", {}).get("output_tail", [])[-20:]
+        for item in non_pass_items
+        if isinstance(item.get("details"), dict)
+        and isinstance(item.get("details", {}).get("output_tail"), list)
+    }
+    return finding(
+        result.get("status", "fail"),
+        check,
+        str(result.get("summary") or "Feed import returned no summary."),
+        details={
+            "non_pass_findings": non_pass,
+            "failed_output_tails": failed_output_tails,
+            "artifacts": result.get("artifacts", []),
+        },
+    )
+
+
+def feed_activation_scan_quiescence_finding(repo_root: Path) -> dict[str, Any]:
+    status_ids = ", ".join(
+        str(status) for status in FEED_TRANSITION_BLOCKING_TASK_STATUS_IDS
+    )
+    result = psql(
+        repo_root,
+        "SELECT count(*) FROM tasks "
+        f"WHERE run_status IN ({status_ids});",
+    )
+    if result.returncode != 0:
+        return finding(
+            "fail",
+            "feed-generation.active-scans",
+            "Could not prove that no scan task is active; feed activation fails closed.",
+            details={"output_tail": output_tail(result.stdout, 40)},
+        )
+    try:
+        active_count = int(psql_value(result))
+    except ValueError:
+        return finding(
+            "fail",
+            "feed-generation.active-scans",
+            "Active scan task count was not a valid integer; feed activation fails closed.",
+            details={"output_tail": output_tail(result.stdout, 40)},
+        )
+    return finding(
+        "pass" if active_count == 0 else "fail",
+        "feed-generation.active-scans",
+        "No active scan task blocks the feed transition."
+        if active_count == 0
+        else f"{active_count} active scan task(s) block the feed transition.",
+        details={"active_task_count": active_count},
+    )
+
+
+def command_feed_generation_transition(
+    repo_root: Path,
+    generation_id: str,
+    *,
+    rollback: bool = False,
+    allow_first_activation: bool = False,
+) -> dict[str, Any]:
+    action = "rollback" if rollback else "activate"
+    command_name = f"feed-generation-{action}"
+    findings: list[dict[str, Any]] = []
+    runtime_root = runtime_dir(repo_root)
+    generations_root = runtime_root / "feed-store" / "generations"
+    specs = feed_generation_specs()
+
+    try:
+        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, command_name):
+            try:
+                target = verify_generation(
+                    generations_root,
+                    generation_id,
+                    FEED_RELEASE,
+                    specs,
+                )
+                current = read_current_generation(runtime_root, FEED_RELEASE, specs)
+                state = read_feed_activation_state(repo_root)
+            except (FeedGenerationError, OSError, ValueError) as error:
+                findings.append(
+                    finding(
+                        "fail",
+                        "feed-generation.transition-preflight",
+                        f"Feed generation transition preflight failed closed: {error}",
+                        str(generations_root),
+                    )
+                )
+                return make_result(command_name, repo_root, "Feed generation transition stopped at verification.", findings, [str(generations_root)])
+
+            current_id = current["generation_id"] if current else None
+            findings.append(finding("pass", "feed-generation.target", "Target feed generation is complete and verified.", target.get("generation_id"), target))
+            interrupted = state is not None and state.get("status") == "transitioning"
+            state_before = state if state is not None and state.get("status") == "active" else None
+            recovery_only = False
+            prior_rollback_id = state_before.get("rollback_generation_id") if state_before else None
+
+            if state_before is not None and state_before.get("current_generation_id") != current_id:
+                findings.append(finding("fail", "feed-generation.journal-selector", "Completed feed activation journal does not match the verified selector.", details={"journal": state_before.get("current_generation_id"), "selector": current_id}))
+                return make_result(command_name, repo_root, "Feed generation transition stopped because journal and selector disagree.", findings, [str(feed_activation_state_path(repo_root))])
+            if state is None and current_id is not None:
+                findings.append(finding("fail", "feed-generation.journal-missing", "A feed selector exists without a completed activation journal; refusing to infer database state.", details={"selector": current_id}))
+                return make_result(command_name, repo_root, "Feed generation transition requires explicit recovery of unjournaled state.", findings, [str(feed_activation_state_path(repo_root))])
+            if interrupted:
+                interrupted_target = state.get("target_generation_id")
+                interrupted_previous = state.get("previous_generation_id")
+                prior_rollback_id = state.get("rollback_generation_id")
+                if interrupted_previous is None:
+                    if rollback or generation_id != interrupted_target or not allow_first_activation:
+                        findings.append(finding("fail", "feed-generation.interrupted-first", "Interrupted first activation may only resume the recorded target with --allow-first-activation.", details={"recorded_target": interrupted_target, "requested_target": generation_id}))
+                        return make_result(command_name, repo_root, "Feed generation transition stopped at interrupted first-activation recovery.", findings, [str(feed_activation_state_path(repo_root))])
+                else:
+                    if not rollback or generation_id != interrupted_previous:
+                        findings.append(finding("fail", "feed-generation.interrupted-recovery", "Interrupted transition must recover to its recorded prior generation through feed-generation-rollback.", details={"recorded_previous": interrupted_previous, "requested_target": generation_id}))
+                        return make_result(command_name, repo_root, "Feed generation transition requires rollback to the recorded known-good generation.", findings, [str(feed_activation_state_path(repo_root))])
+                    recovery_only = True
+                findings.append(finding("warn", "feed-generation.interrupted", "Resuming explicit recovery from an interrupted feed transition journal.", details=state))
+            elif rollback:
+                recorded_previous = state_before.get("rollback_generation_id") if state_before else None
+                if current is None or recorded_previous != generation_id:
+                    findings.append(finding("fail", "feed-generation.rollback-source", "Rollback target must be the recorded prior known-good generation.", details={"recorded_previous": recorded_previous, "requested_target": generation_id}))
+                    return make_result(command_name, repo_root, "Feed generation rollback stopped because the target is not the recorded predecessor.", findings, [str(feed_activation_state_path(repo_root))])
+            elif current is None and not allow_first_activation:
+                findings.append(
+                    finding(
+                        "fail",
+                        "feed-generation.first-activation",
+                        "First activation requires --allow-first-activation because no known-good active generation exists for compensation.",
+                        details={"generation_id": generation_id},
+                    )
+                )
+                return make_result(command_name, repo_root, "Feed generation activation requires explicit first-activation acknowledgement.", findings, [str(generations_root / generation_id)])
+
+            if current_id == generation_id and state_before is not None:
+                findings.append(finding("pass", "feed-generation.noop", "Requested feed generation is already active.", details={"generation_id": generation_id}))
+                return make_result(command_name, repo_root, "Requested feed generation is already active.", findings, [str(generations_root / generation_id)])
+            if current is not None:
+                findings.append(finding("pass", "feed-generation.current", "Existing active feed generation is verified for compensating recovery.", current_id, current))
+
+            initial_scan_quiescence = feed_activation_scan_quiescence_finding(repo_root)
+            findings.append(initial_scan_quiescence)
+            if initial_scan_quiescence["status"] != "pass":
+                return make_result(
+                    command_name,
+                    repo_root,
+                    "Feed generation transition stopped before service changes because scan quiescence was not proven.",
+                    findings,
+                    [str(generations_root / generation_id)],
+                )
+
+            known_previous_id = state.get("previous_generation_id") if interrupted else current_id
+            success_rollback_id = prior_rollback_id if interrupted else current_id
+
+            control_quiesce = stop_feed_control_services_for_preflight(repo_root)
+            findings.append(control_quiesce)
+            previous_control_services = control_quiesce.get("details", {}).get(
+                "previously_running_services", []
+            )
+            if control_quiesce["status"] != "pass":
+                findings.append(
+                    restart_feed_control_services_after_preflight(
+                        repo_root, previous_control_services
+                    )
+                )
+                return make_result(
+                    command_name,
+                    repo_root,
+                    "Feed generation transition stopped because scanner-control services could not be quiesced.",
+                    findings,
+                    [str(runtime_dir(repo_root))],
+                )
+
+            stable_scan_quiescence = feed_activation_scan_quiescence_finding(repo_root)
+            findings.append(stable_scan_quiescence)
+            if stable_scan_quiescence["status"] != "pass":
+                findings.append(
+                    restart_feed_control_services_after_preflight(
+                        repo_root, previous_control_services
+                    )
+                )
+                return make_result(
+                    command_name,
+                    repo_root,
+                    "Feed generation transition stopped because scan quiescence changed before the scanner-control boundary closed.",
+                    findings,
+                    [str(generations_root / generation_id)],
+                )
+
+            if not interrupted:
+                try:
+                    write_feed_activation_state(
+                        repo_root,
+                        {
+                            "status": "transitioning",
+                            "action": action,
+                            "target_generation_id": generation_id,
+                            "previous_generation_id": current_id,
+                            "rollback_generation_id": prior_rollback_id,
+                            "current_generation_id": None,
+                            "started_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+                        },
+                    )
+                except (OSError, ValueError) as error:
+                    findings.append(finding("fail", "feed-generation.journal", f"Could not record the transition journal before changing runtime state: {error}", str(feed_activation_state_path(repo_root))))
+                    return make_result(
+                        command_name,
+                        repo_root,
+                        "Feed generation transition stopped before selector changes; scanner-control services remain stopped because journal durability is uncertain.",
+                        findings,
+                        [str(feed_activation_state_path(repo_root))],
+                    )
+                findings.append(finding("pass", "feed-generation.journal", "Durable transition journal was recorded before service or selector changes.", str(feed_activation_state_path(repo_root))))
+
+            stopped = stop_app_services_for_feed_transition(repo_root, "feed-generation.stop-app")
+            findings.append(stopped)
+            if stopped["status"] == "fail":
+                return make_result(command_name, repo_root, "Feed generation transition stopped before changing the selector.", findings, [str(generations_root / generation_id)])
+
+            try:
+                selected = select_generation(runtime_root, generation_id, FEED_RELEASE, specs)
+            except (FeedGenerationError, OSError) as error:
+                findings.append(finding("fail", "feed-generation.select", f"Atomic feed generation selection failed closed: {error}", str(runtime_root / "feed-store" / "current")))
+                try:
+                    observed = read_current_generation(runtime_root, FEED_RELEASE, specs)
+                except (FeedGenerationError, OSError) as selector_error:
+                    findings.append(finding("fail", "feed-generation.select-state", f"Selector state is uncertain after failed selection: {selector_error}"))
+                    return make_result(command_name, repo_root, "Feed generation selection failed with uncertain selector state; app services remain stopped for manual recovery.", findings, [str(runtime_root / "feed-store")])
+                observed_id = observed.get("generation_id") if observed else None
+                if observed_id != current_id:
+                    findings.append(finding("fail", "feed-generation.select-state", "Failed selection did not retain the prior selector; app services remain stopped for manual recovery.", details={"expected": current_id, "observed": observed_id}))
+                    return make_result(command_name, repo_root, "Feed generation selection failed without a verified prior selector; manual recovery is required.", findings, [str(runtime_root / "feed-store")])
+                findings.append(finding("pass", "feed-generation.select-state", "Failed selection retained the verified prior selector.", details={"generation_id": observed_id}))
+                if interrupted:
+                    return make_result(command_name, repo_root, "Interrupted feed recovery could not select its target; app services remain stopped.", findings, [str(feed_activation_state_path(repo_root))])
+                if state_before is None:
+                    return make_result(
+                        command_name,
+                        repo_root,
+                        "First feed generation selection failed; no active generation exists and app services remain removed.",
+                        findings,
+                        [str(runtime_root / "feed-store")],
+                    )
+                try:
+                    write_feed_activation_state(repo_root, {key: value for key, value in state_before.items() if key != "schema_version"})
+                except (OSError, ValueError) as journal_error:
+                    findings.append(
+                        finding(
+                            "fail",
+                            "feed-generation.journal-restore",
+                            f"Prior selector was retained but its active journal could not be restored: {journal_error}",
+                            str(feed_activation_state_path(repo_root)),
+                        )
+                    )
+                    return make_result(
+                        command_name,
+                        repo_root,
+                        "Feed generation selection failed and the prior activation journal could not be restored; app services remain removed.",
+                        findings,
+                        [str(feed_activation_state_path(repo_root))],
+                    )
+                runtime_result = restart_and_verify_feed_app_services(repo_root)
+                findings.append(
+                    feed_import_summary_finding(
+                        runtime_result, "feed-generation.restart-unchanged"
+                    )
+                )
+                return make_result(command_name, repo_root, "Feed generation transition failed before import; the prior selector was verified and retained.", findings, [str(generations_root / generation_id)])
+            findings.append(finding("pass", "feed-generation.select", "Active feed selector changed atomically to the verified generation.", str(runtime_root / "feed-store" / "current"), selected))
+
+            imported = command_runtime_feed_import_init(
+                repo_root,
+                activation_managed=True,
+                restart_services=False,
+            )
+            findings.append(feed_import_summary_finding(imported, "feed-generation.import"))
+            transition_succeeded = imported.get("status") == "pass"
+            if imported.get("status") == "pass":
+                try:
+                    active = read_current_generation(runtime_root, FEED_RELEASE, specs)
+                except (FeedGenerationError, OSError) as error:
+                    findings.append(finding("fail", "feed-generation.post-verify", f"Active generation verification failed after import: {error}"))
+                    transition_succeeded = False
+                else:
+                    active_ok = active is not None and active.get("generation_id") == generation_id
+                    findings.append(finding("pass" if active_ok else "fail", "feed-generation.post-verify", "Active generation and imported runtime agree." if active_ok else "Active generation changed after import.", details={"expected": generation_id, "observed": active.get("generation_id") if active else None}))
+                    transition_succeeded = active_ok
+            if transition_succeeded:
+                try:
+                    write_feed_activation_state(
+                        repo_root,
+                        {
+                            "status": "active",
+                            "current_generation_id": generation_id,
+                            "target_generation_id": None,
+                            "previous_generation_id": None,
+                            "rollback_generation_id": success_rollback_id,
+                            "completed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+                        },
+                    )
+                except (OSError, ValueError) as error:
+                    findings.append(finding("fail", "feed-generation.journal-complete", f"Feed import completed but durable activation completion could not be recorded: {error}", str(feed_activation_state_path(repo_root))))
+                    transition_succeeded = False
+                else:
+                    findings.append(finding("pass", "feed-generation.journal-complete", "Durable activation journal matches the verified selector and completed import.", str(feed_activation_state_path(repo_root))))
+            if transition_succeeded:
+                runtime_result = restart_and_verify_feed_app_services(repo_root)
+                findings.append(feed_import_summary_finding(runtime_result, "feed-generation.runtime-verify"))
+                summary = "Feed generation activation and import completed." if not rollback else "Feed generation rollback and compensating import completed."
+                if runtime_result.get("status") == "fail":
+                    summary = "Feed generation activation is durable, but app restart or runtime verification failed."
+                return make_result(command_name, repo_root, summary, findings, [str(generations_root / generation_id), *imported.get("artifacts", [])])
+
+            compensation_stop = stop_app_services_for_feed_transition(repo_root, "feed-generation.compensation-stop")
+            findings.append(compensation_stop)
+            if compensation_stop["status"] == "fail":
+                findings.append(finding("fail", "feed-generation.manual-recovery", "Could not stop app services before compensation; selector and database state require manual recovery.", details={"prior_generation_id": current_id, "failed_generation_id": generation_id}))
+                return make_result(command_name, repo_root, "Feed generation transition failed and compensation could not start safely.", findings, [str(runtime_root / "feed-store")])
+            if recovery_only:
+                findings.append(finding("fail", "feed-generation.manual-recovery", "Recovery import failed; no further automatic selector transition is safe.", details={"recovery_generation_id": generation_id}))
+                return make_result(command_name, repo_root, "Interrupted feed recovery failed and requires manual recovery.", findings, [str(feed_activation_state_path(repo_root))])
+            if known_previous_id is None:
+                try:
+                    clear_current_generation(runtime_root, generation_id)
+                except (FeedGenerationError, OSError) as error:
+                    findings.append(finding("fail", "feed-generation.compensation-clear", f"Failed to clear the first-activation selector after import failure: {error}"))
+                else:
+                    findings.append(finding("pass", "feed-generation.compensation-clear", "Cleared failed first-activation selector; app services remain stopped for manual recovery."))
+                return make_result(command_name, repo_root, "First feed activation failed; no database rollback is claimed and app services remain stopped.", findings, [str(runtime_root / "feed-store")])
+
+            try:
+                restored = select_generation(runtime_root, known_previous_id, FEED_RELEASE, specs)
+            except (FeedGenerationError, OSError) as error:
+                findings.append(finding("fail", "feed-generation.compensation-select", f"Failed to restore the prior selector: {error}", details={"prior_generation_id": known_previous_id, "failed_generation_id": generation_id}))
+                return make_result(command_name, repo_root, "Feed activation and selector compensation failed; manual recovery is required.", findings, [str(runtime_root / "feed-store")])
+            findings.append(finding("pass", "feed-generation.compensation-select", "Prior verified feed generation selector was restored.", details=restored))
+            compensated = command_runtime_feed_import_init(
+                repo_root,
+                activation_managed=True,
+                restart_services=False,
+            )
+            findings.append(feed_import_summary_finding(compensated, "feed-generation.compensation-import"))
+            if compensated.get("status") == "pass":
+                try:
+                    write_feed_activation_state(
+                        repo_root,
+                        {
+                            "status": "active",
+                            "current_generation_id": known_previous_id,
+                            "target_generation_id": None,
+                            "previous_generation_id": None,
+                            "rollback_generation_id": prior_rollback_id,
+                            "completed_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+                        },
+                    )
+                except (OSError, ValueError) as error:
+                    findings.append(finding("fail", "feed-generation.compensation-journal", f"Prior generation was reimported but its completed activation state could not be recorded: {error}"))
+                    return make_result(command_name, repo_root, "Compensating import completed but durable recovery state is unavailable; app startup remains blocked.", findings, [str(feed_activation_state_path(repo_root))])
+                runtime_result = restart_and_verify_feed_app_services(repo_root)
+                findings.append(feed_import_summary_finding(runtime_result, "feed-generation.compensation-runtime-verify"))
+                findings.append(finding("warn", "feed-generation.compensation", "Target activation failed; the prior generation was reselected and reimported. This is compensating recovery, not a transactional database rollback.", details={"restored_generation_id": known_previous_id, "failed_generation_id": generation_id}))
+                return make_result(command_name, repo_root, "Feed generation transition failed, but compensating recovery restored and reimported the prior generation.", findings, [str(generations_root / known_previous_id), *compensated.get("artifacts", [])])
+            findings.append(finding("fail", "feed-generation.manual-recovery", "Target activation and compensating reimport both failed; manual recovery is required.", details={"restored_generation_id": known_previous_id, "failed_generation_id": generation_id}))
+            return make_result(command_name, repo_root, "Feed generation transition and compensating recovery failed.", findings, [str(runtime_root / "feed-store"), *compensated.get("artifacts", [])])
+    except RuntimeLockTimeout as error:
+        findings.append(runtime_lock_timeout_finding(error, "feed-generation.activation-lock"))
+        return make_result(command_name, repo_root, "Feed generation transition stopped while waiting for the activation lock.", findings, [str(runtime_lock_dir(repo_root))])
 
 
 def command_runtime_scanner_capability_check(repo_root: Path) -> dict[str, Any]:
@@ -17689,34 +18439,22 @@ def command_feed_cache_sync(repo_root: Path) -> dict[str, Any]:
 
 
 def command_feed_copy_to_runtime(repo_root: Path) -> dict[str, Any]:
-    findings = ensure_runtime_dirs(repo_root)
-    findings.append(finding("pass" if shutil.which("rsync") else "fail", "rsync.available", "rsync is available." if shutil.which("rsync") else "rsync is missing."))
-    if aggregate_status(findings) == "fail":
-        return make_result("feed-copy-to-runtime", repo_root, "Feed copy stopped at prerequisites.", findings, [str(feed_runtime_root(repo_root))])
-
-    for feed_class, source, _destination in feed_copy_pairs(repo_root):
-        summary = feed_path_summary(source, feed_class.markers)
-        marker_missing = [row["path"] for row in summary["markers"] if not row["exists"]]
-        if not summary["exists"] or summary["file_count"] == 0:
-            findings.append(finding("fail", f"feed.cache.{feed_class.key}", f"{feed_class.label} cache is missing or empty; refusing to copy an incomplete feed cache.", str(source), {"summary": summary}))
-        elif marker_missing:
-            findings.append(finding("warn", f"feed.cache.{feed_class.key}", f"{feed_class.label} cache has files but expected markers are missing.", str(source), {"summary": summary, "missing_markers": marker_missing}))
-        else:
-            findings.append(finding("pass", f"feed.cache.{feed_class.key}", f"{feed_class.label} cache is ready to copy.", str(source), {"summary": summary}))
-    if aggregate_status(findings) == "fail":
-        return make_result("feed-copy-to-runtime", repo_root, "Feed copy stopped because the cache is incomplete.", findings, [str(feed_cache_var_lib(repo_root)), str(feed_runtime_root(repo_root))])
-
-    for feed_class, source, destination in feed_copy_pairs(repo_root):
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        copy = run_command(["rsync", "-a", "--delete", f"{source}/", f"{destination}/"], repo_root, timeout=3600)
-        findings.append(finding("pass" if copy.returncode == 0 else "fail", f"feed.copy.{feed_class.key}", f"Copy {feed_class.label} to runtime exit code {copy.returncode}.", details={"source": str(source), "destination": str(destination), "output_tail": output_tail(copy.stdout, 80)}))
-        if copy.returncode != 0:
-            break
-    findings.extend(feed_location_findings(repo_root, "runtime", feed_runtime_root(repo_root), "runtime_rel"))
-    return make_result("feed-copy-to-runtime", repo_root, "Feed cache copy to runtime attempted.", findings, [str(feed_cache_var_lib(repo_root)), str(feed_runtime_root(repo_root))])
+    return make_result(
+        "feed-copy-to-runtime",
+        repo_root,
+        "Legacy live feed copying is disabled; stage and activate a verified immutable generation.",
+        [
+            finding(
+                "fail",
+                "feed.copy.activation-boundary",
+                "Sequential rsync into live consumer paths is unsafe; use feed-generation-stage followed by feed-generation-activate.",
+            )
+        ],
+        [str(runtime_dir(repo_root) / "feed-store")],
+    )
 
 
-def command_feed_generation_stage(repo_root: Path) -> dict[str, Any]:
+def _command_feed_generation_stage_unlocked(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     cache_root = feed_cache_var_lib(repo_root)
     runtime_root = runtime_dir(repo_root)
@@ -17772,6 +18510,20 @@ def command_feed_generation_stage(repo_root: Path) -> dict[str, Any]:
     )
 
 
+def command_feed_generation_stage(repo_root: Path) -> dict[str, Any]:
+    try:
+        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "feed-generation-stage"):
+            return _command_feed_generation_stage_unlocked(repo_root)
+    except RuntimeLockTimeout as error:
+        return make_result(
+            "feed-generation-stage",
+            repo_root,
+            "Feed generation staging stopped while waiting for the feed lifecycle lock.",
+            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
+            [str(runtime_lock_dir(repo_root))],
+        )
+
+
 def command_feed_generation_state(repo_root: Path, *, status_only: bool = False) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     root = runtime_dir(repo_root) / "feed-store" / "generations"
@@ -17792,13 +18544,32 @@ def command_feed_generation_state(repo_root: Path, *, status_only: bool = False)
             findings.append(finding("warn", "feed-generation.orphan-staging", "Orphan feed-generation staging directories require review.", str(root), {"orphan_staging": orphaned}))
         else:
             findings.append(finding("pass", "feed-generation.orphan-staging", "No orphan feed-generation staging directories were found.", str(root)))
+        if state.get("current_error"):
+            findings.append(finding("fail", "feed-generation.current", f"Active feed generation selector is invalid: {state['current_error']}", str(runtime_dir(repo_root) / "feed-store" / "current")))
+        elif state.get("current_generation_id"):
+            findings.append(finding("pass", "feed-generation.current", "Active feed generation selector resolves to a fully verified generation.", str(runtime_dir(repo_root) / "feed-store" / "current"), {"current_generation_id": state["current_generation_id"]}))
+        else:
+            findings.append(finding("warn", "feed-generation.current", "No feed generation is active.", str(runtime_dir(repo_root) / "feed-store" / "current")))
+        try:
+            activation_state = read_feed_activation_state(repo_root)
+        except (OSError, ValueError) as error:
+            findings.append(finding("fail", "feed-generation.journal", f"Feed activation journal is invalid: {error}", str(feed_activation_state_path(repo_root))))
+        else:
+            journal_id = activation_state.get("current_generation_id") if activation_state and activation_state.get("status") == "active" else None
+            selector_id = state.get("current_generation_id")
+            if activation_state is None and selector_id is None:
+                findings.append(finding("warn", "feed-generation.journal", "No feed activation has completed yet.", str(feed_activation_state_path(repo_root))))
+            elif activation_state is not None and activation_state.get("status") == "active" and journal_id == selector_id:
+                findings.append(finding("pass", "feed-generation.journal", "Completed feed activation journal matches the verified selector.", str(feed_activation_state_path(repo_root)), {"current_generation_id": journal_id, "rollback_generation_id": activation_state.get("rollback_generation_id")}))
+            else:
+                findings.append(finding("fail", "feed-generation.journal", "Feed activation is interrupted or its journal does not match the selector; app startup is blocked.", str(feed_activation_state_path(repo_root)), {"selector_generation_id": selector_id, "journal": activation_state}))
         findings.append(
             finding(
                 "pass",
                 "feed-generation.activation-boundary",
-                "Generation verification did not change the active runtime feed pointer.",
+                "Generation state verification did not change the active runtime feed selector.",
                 str(runtime_dir(repo_root) / "feed-store" / "current"),
-                {"current_pointer_exists": state["current_pointer_exists"]},
+                {"current_pointer_exists": state["current_pointer_exists"], "current_generation_id": state.get("current_generation_id")},
             )
         )
         for generation in state["generations"]:
@@ -17839,6 +18610,7 @@ def runtime_app_up_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
         for check in (
             "compose.config",
             "production.app-execution-mounts",
+            "feed-generation.current",
             "runtime.infrastructure",
             "runtime.database-init",
             "runtime.scanner-redis",
@@ -17864,9 +18636,10 @@ def runtime_app_up_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
-def command_runtime_app_up(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+def _command_runtime_app_up_unlocked(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
+    findings.append(active_feed_generation_finding(repo_root))
     app_env = runtime_app_env(repo_root)
     config = run_command(compose_command(repo_root, "config", "--quiet", env=app_env), repo_root, env=app_env)
     findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
@@ -17879,7 +18652,9 @@ def command_runtime_app_up(repo_root: Path, status_only: bool = False) -> dict[s
     findings.append(refresh_mqtt_broker(repo_root))
     db_init = command_runtime_init(repo_root)
     findings.append(finding(db_init["status"], "runtime.database-init", db_init["summary"], details={"status": db_init["status"]}))
-    scanner_redis = command_runtime_scanner_redis_init(repo_root, probe_openvas=False)
+    scanner_redis = command_runtime_scanner_redis_init(
+        repo_root, probe_openvas=False, lifecycle_managed=True
+    )
     findings.append(finding(scanner_redis["status"], "runtime.scanner-redis", scanner_redis["summary"], details={"status": scanner_redis["status"]}))
     keyring = command_runtime_feed_keyring_init(repo_root)
     findings.append(finding(keyring["status"], "runtime.feed-keyring", keyring["summary"], details={"status": keyring["status"]}))
@@ -17911,9 +18686,25 @@ def command_runtime_app_up(repo_root: Path, status_only: bool = False) -> dict[s
     return runtime_app_up_status_only_result(result) if status_only else result
 
 
-def command_runtime_native_api_rebuild(repo_root: Path) -> dict[str, Any]:
+def command_runtime_app_up(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+    try:
+        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-app-up"):
+            return _command_runtime_app_up_unlocked(repo_root, status_only=status_only)
+    except RuntimeLockTimeout as error:
+        result = make_result(
+            "runtime-app-up",
+            repo_root,
+            "Application runtime startup stopped while waiting for the feed lifecycle lock.",
+            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
+            [str(runtime_lock_dir(repo_root))],
+        )
+        return runtime_app_up_status_only_result(result) if status_only else result
+
+
+def _command_runtime_native_api_rebuild_unlocked(repo_root: Path) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
+    findings.append(active_feed_generation_finding(repo_root))
     app_env = runtime_native_api_rebuild_env(repo_root)
     config_command = compose_command(repo_root, "config", "--quiet", env=app_env)
     config = run_command(config_command, repo_root, env=app_env)
@@ -17937,6 +18728,20 @@ def command_runtime_native_api_rebuild(repo_root: Path) -> dict[str, Any]:
     findings.append(finding(smoke["status"], "native-api.smoke", smoke["summary"], details={"status": smoke["status"], "artifacts": smoke.get("artifacts", [])}))
     artifacts = sorted(set([str(runtime_dir(repo_root)), *smoke.get("artifacts", [])]))
     return make_result("runtime-native-api-rebuild", repo_root, "Native API sidecar rebuild attempted.", findings, artifacts)
+
+
+def command_runtime_native_api_rebuild(repo_root: Path) -> dict[str, Any]:
+    try:
+        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-native-api-rebuild"):
+            return _command_runtime_native_api_rebuild_unlocked(repo_root)
+    except RuntimeLockTimeout as error:
+        return make_result(
+            "runtime-native-api-rebuild",
+            repo_root,
+            "Native API rebuild stopped while waiting for the feed lifecycle lock.",
+            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
+            [str(runtime_lock_dir(repo_root))],
+        )
 
 
 def command_runtime_native_api_direct_token(repo_root: Path, *, rotate: bool) -> dict[str, Any]:
@@ -19391,11 +20196,12 @@ def native_api_direct_write_smb_fixture_cleanup(
     return findings
 
 
-def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     artifact_dir = native_api_artifact_dir(repo_root)
     artifact_dir.mkdir(parents=True, exist_ok=True)
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
+    findings.append(active_feed_generation_finding(repo_root))
 
     base_env = native_api_direct_runtime_env(repo_root)
     token_from_env = bool(base_env.get(TURBOVAS_API_BEARER_TOKEN_ENV))
@@ -21990,11 +22796,27 @@ def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: 
     return result
 
 
-def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+def command_runtime_native_api_direct_write_smoke(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+    try:
+        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-native-api-direct-write-smoke"):
+            return _command_runtime_native_api_direct_write_smoke_unlocked(repo_root, status_only=status_only)
+    except RuntimeLockTimeout as error:
+        result = make_result(
+            "runtime-native-api-direct-write-smoke",
+            repo_root,
+            "Direct write-control smoke stopped while waiting for the feed lifecycle lock.",
+            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
+            [str(runtime_lock_dir(repo_root))],
+        )
+        return direct_smoke_status_only_result(result) if status_only else result
+
+
+def _command_runtime_native_api_direct_smoke_unlocked(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     artifact_dir = native_api_artifact_dir(repo_root)
     artifact_dir.mkdir(parents=True, exist_ok=True)
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
+    findings.append(active_feed_generation_finding(repo_root))
     content_type = (("Content-Type", "application/json"),)
     env = native_api_direct_runtime_env(repo_root)
     token_from_env = bool(env.get(TURBOVAS_API_BEARER_TOKEN_ENV))
@@ -22830,7 +23652,22 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
     return result
 
 
-def command_runtime_app_down(repo_root: Path) -> dict[str, Any]:
+def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+    try:
+        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-native-api-direct-smoke"):
+            return _command_runtime_native_api_direct_smoke_unlocked(repo_root, status_only=status_only)
+    except RuntimeLockTimeout as error:
+        result = make_result(
+            "runtime-native-api-direct-smoke",
+            repo_root,
+            "Direct native API smoke stopped while waiting for the feed lifecycle lock.",
+            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
+            [str(runtime_lock_dir(repo_root))],
+        )
+        return direct_smoke_status_only_result(result) if status_only else result
+
+
+def _command_runtime_app_down_unlocked(repo_root: Path) -> dict[str, Any]:
     stop = run_command(compose_command(repo_root, "--profile", "app", "stop", *APP_SERVICES), repo_root, env=runtime_env(repo_root))
     remove = run_command(compose_command(repo_root, "--profile", "app", "rm", "-f", *APP_SERVICES), repo_root, env=runtime_env(repo_root))
     findings = [
@@ -22838,6 +23675,20 @@ def command_runtime_app_down(repo_root: Path) -> dict[str, Any]:
         finding("pass" if remove.returncode == 0 else "fail", "compose.app-rm", f"docker compose app rm exit code {remove.returncode}.", details={"output_tail": output_tail(remove.stdout, 80)}),
     ]
     return make_result("runtime-app-down", repo_root, "Application runtime shutdown attempted.", findings, [str(runtime_dir(repo_root))])
+
+
+def command_runtime_app_down(repo_root: Path) -> dict[str, Any]:
+    try:
+        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-app-down"):
+            return _command_runtime_app_down_unlocked(repo_root)
+    except RuntimeLockTimeout as error:
+        return make_result(
+            "runtime-app-down",
+            repo_root,
+            "Application runtime shutdown stopped while waiting for the feed lifecycle lock.",
+            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
+            [str(runtime_lock_dir(repo_root))],
+        )
 
 
 def command_runtime_app_smoke(repo_root: Path) -> dict[str, Any]:
@@ -32032,10 +32883,24 @@ def command_runtime_credential_smoke(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-credential-smoke", repo_root, summary, findings, artifacts)
 
 
-def command_down(repo_root: Path) -> dict[str, Any]:
+def _command_down_unlocked(repo_root: Path) -> dict[str, Any]:
     result = run_command(compose_command(repo_root, "--profile", "app", "--profile", "tools", "down"), repo_root, env=runtime_env(repo_root))
     findings = [finding("pass" if result.returncode == 0 else "fail", "compose.down", f"docker compose down exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-80:]})]
     return make_result("down", repo_root, "Runtime infrastructure shutdown attempted.", findings)
+
+
+def command_down(repo_root: Path) -> dict[str, Any]:
+    try:
+        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "down"):
+            return _command_down_unlocked(repo_root)
+    except RuntimeLockTimeout as error:
+        return make_result(
+            "down",
+            repo_root,
+            "Runtime shutdown stopped while waiting for the feed lifecycle lock.",
+            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
+            [str(runtime_dir(repo_root))],
+        )
 
 
 def command_logs(repo_root: Path, service: str | None = None, lines: int = 120) -> dict[str, Any]:
@@ -32424,8 +33289,11 @@ def command_runtime_smoke(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-smoke", repo_root, "Runtime smoke checks completed.", findings, [str(runtime_dir(repo_root))])
 
 
-def command_gvmd_smoke(repo_root: Path) -> dict[str, Any]:
+def _command_gvmd_smoke_unlocked(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
+    findings.append(active_feed_generation_finding(repo_root))
+    if aggregate_status(findings) == "fail":
+        return make_result("gvmd-smoke", repo_root, "gvmd smoke stopped at feed activation prerequisites.", findings)
     if pg_gvm_extension_status(repo_root)["status"] != "pass":
         findings.append(finding("fail", "gvmd.pg-gvm", "pg-gvm extension is not initialized; run just runtime-init before gvmd smoke."))
         return make_result("gvmd-smoke", repo_root, "gvmd smoke stopped before service startup.", findings)
@@ -32449,6 +33317,20 @@ def command_gvmd_smoke(repo_root: Path) -> dict[str, Any]:
     return make_result("gvmd-smoke", repo_root, "gvmd profile smoke completed.", findings, [str(runtime_dir(repo_root))])
 
 
+def command_gvmd_smoke(repo_root: Path) -> dict[str, Any]:
+    try:
+        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "gvmd-smoke"):
+            return _command_gvmd_smoke_unlocked(repo_root)
+    except RuntimeLockTimeout as error:
+        return make_result(
+            "gvmd-smoke",
+            repo_root,
+            "gvmd smoke stopped while waiting for the feed lifecycle lock.",
+            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
+            [str(runtime_lock_dir(repo_root))],
+        )
+
+
 def command_doctor(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     findings.append(finding("pass" if (repo_root / ".git").exists() else "fail", "repo.git", "Repository metadata is present." if (repo_root / ".git").exists() else "Repository metadata is missing.", ".git"))
@@ -32468,7 +33350,7 @@ def command_doctor(repo_root: Path, status_only: bool = False) -> dict[str, Any]
     license_result = command_license_report(repo_root)
     findings.append(finding(license_result["status"], "license.compliance", license_result["summary"], details={"status": license_result["status"], "findings": license_result["findings"]}))
     findings.append(finding("pass", "surface.available", "Build readiness surface is available.", details={"commands": ["just deps", "just configure", "just build", "just build-core-c", "just build-c-services", "just build-ui", "just build-python", "just build-baseline"]}))
-    findings.append(finding("pass" if compose_file(repo_root).is_file() else "warn", "surface.available", "Runtime infrastructure command surface is available." if compose_file(repo_root).is_file() else "Runtime infrastructure command surface is not available.", details={"commands": ["just runtime-plan", "just up", "just down", "just logs", "just runtime-init", "just runtime-certs-init", "just runtime-manager-init", "just runtime-scanner-redis-init", "just runtime-gmp-smoke", "just runtime-scanner-register", "just runtime-scanner-capability-check", "just runtime-scanner-process-check", "just runtime-nmap-capability-check", "just runtime-feed-keyring-init", "just runtime-feed-import-init", "just runtime-full-test-scan-preflight", "just runtime-full-test-scan-start", "just runtime-full-test-scan-status", "just runtime-report-summary", "just runtime-report-export", "just runtime-certbund-report", "just runtime-report-metrics", "just runtime-scope-smoke", "just runtime-scope-report-summary", "just runtime-scope-report-metrics", "just runtime-rbac-smoke", "just feed-state", "just feed-cache-sync", "just feed-copy-to-runtime", "just runtime-status", "just runtime-smoke", "just runtime-log-review", "just runtime-data-state", "just runtime-db-introspect", "just runtime-performance-snapshot", "just runtime-app-up", "just runtime-app-smoke", "just runtime-native-api-smoke", "just runtime-native-api-rebuild", "just runtime-webui-smoke", "just runtime-browser-smoke", "just runtime-browser-regression", "just runtime-credential-smoke", "just runtime-app-down", "just gvmd-smoke", "just quality-gate", "just quality-gate-state", "just quality-gate-schedule"]}))
+    findings.append(finding("pass" if compose_file(repo_root).is_file() else "warn", "surface.available", "Runtime infrastructure command surface is available." if compose_file(repo_root).is_file() else "Runtime infrastructure command surface is not available.", details={"commands": ["just runtime-plan", "just up", "just down", "just logs", "just runtime-init", "just runtime-certs-init", "just runtime-manager-init", "just runtime-scanner-redis-init", "just runtime-gmp-smoke", "just runtime-scanner-register", "just runtime-scanner-capability-check", "just runtime-scanner-process-check", "just runtime-nmap-capability-check", "just runtime-feed-keyring-init", "just feed-generation-stage", "just feed-generation-state", "just feed-generation-activate", "just feed-generation-rollback", "just runtime-full-test-scan-preflight", "just runtime-full-test-scan-start", "just runtime-full-test-scan-status", "just runtime-report-summary", "just runtime-report-export", "just runtime-certbund-report", "just runtime-report-metrics", "just runtime-scope-smoke", "just runtime-scope-report-summary", "just runtime-scope-report-metrics", "just runtime-rbac-smoke", "just feed-state", "just feed-cache-sync", "just runtime-status", "just runtime-smoke", "just runtime-log-review", "just runtime-data-state", "just runtime-db-introspect", "just runtime-performance-snapshot", "just runtime-app-up", "just runtime-app-smoke", "just runtime-native-api-smoke", "just runtime-native-api-rebuild", "just runtime-webui-smoke", "just runtime-browser-smoke", "just runtime-browser-regression", "just runtime-credential-smoke", "just runtime-app-down", "just gvmd-smoke", "just quality-gate", "just quality-gate-state", "just quality-gate-schedule"]}))
     findings.append(finding("pass", "surface.diagnostics", "Native API, Redis, path-coupling, and security-policy diagnostics are available.", details={"commands": ["just native-tooling-state", "just runtime-redis-state", "just path-coupling-state", "just security-policy-check"]}))
     findings.append(finding("warn", "surface.deferred", "Test command surface is deferred until component checks are mapped.", details={"command": "just test"}))
     findings.append(finding("warn", "surface.deferred", "Full inherited service orchestration remains experimental until feed, scanner registration, and first UI/API connectivity are stabilized.", details={"commands": ["gvmd", "gsad", "ospd-openvas", "notus-scanner"]}))
@@ -32937,7 +33819,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-scanner-process-check", parents=[common], help="verify ospd-openvas process hygiene")
     subparsers.add_parser("runtime-nmap-capability-check", parents=[common], help="verify non-root Nmap raw scan capability for Full and fast")
     subparsers.add_parser("runtime-feed-keyring-init", parents=[common], help="initialize the shared feed signature GnuPG keyring")
-    subparsers.add_parser("runtime-feed-import-init", parents=[common], help="import runtime feed copies into gvmd/OpenVAS state")
+    subparsers.add_parser("runtime-feed-import-init", parents=[common], help="refuse standalone feed import outside guarded generation activation")
     subparsers.add_parser("runtime-full-test-scan-preflight", parents=[common], help="preflight the fixed authorized full test scan")
     full_test_start = subparsers.add_parser("runtime-full-test-scan-start", parents=[common], help="start the fixed authorized full test scan")
     full_test_start.add_argument("--confirm-authorized-lan", action="store_true", help="confirm authorization for 192.168.178.0/24")
@@ -32963,12 +33845,17 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-scope-report-summary", parents=[common], help="summarize the latest Organization scope report")
     scope_report_metrics = subparsers.add_parser("runtime-scope-report-metrics", parents=[common], help="read CVSS Load and authenticated coverage for a scope report")
     scope_report_metrics.add_argument("--scope-report-id", help="optional scope report id; defaults to the latest Organization scope report")
-    subparsers.add_parser("feed-state", parents=[common], help="show Greenbone Community Feed cache and runtime-copy state")
+    subparsers.add_parser("feed-state", parents=[common], help="show Greenbone Community Feed cache and active-generation state")
     subparsers.add_parser("feed-cache-sync", parents=[common], help="start full Greenbone Community Feed cache sync in tmux")
-    subparsers.add_parser("feed-copy-to-runtime", parents=[common], help="copy cached feed data into the runtime feed tree")
+    subparsers.add_parser("feed-copy-to-runtime", parents=[common], help="refuse retired sequential copying into live feed paths")
     subparsers.add_parser("feed-generation-stage", parents=[common], help="stage and verify an immutable content-addressed feed generation")
     feed_generation_state_parser = subparsers.add_parser("feed-generation-state", parents=[common], help="verify immutable content-addressed feed generations")
     feed_generation_state_parser.add_argument("--status-only", action="store_true", help="emit only non-pass findings and compact generation state")
+    feed_generation_activate = subparsers.add_parser("feed-generation-activate", parents=[common], help="activate and import one verified immutable feed generation")
+    feed_generation_activate.add_argument("generation_id", help="verified immutable generation identifier")
+    feed_generation_activate.add_argument("--allow-first-activation", action="store_true", help="acknowledge that first activation has no known-good generation for compensation")
+    feed_generation_rollback = subparsers.add_parser("feed-generation-rollback", parents=[common], help="reselect and reimport a prior verified feed generation")
+    feed_generation_rollback.add_argument("generation_id", help="prior verified immutable generation identifier")
     subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
     subparsers.add_parser("runtime-log-review", parents=[common], help="review recent full-stack runtime logs")
@@ -33369,6 +34256,10 @@ def main(argv: list[str] | None = None) -> int:
         result = command_feed_generation_stage(repo_root)
     elif args.command == "feed-generation-state":
         result = command_feed_generation_state(repo_root, status_only=args.status_only)
+    elif args.command == "feed-generation-activate":
+        result = command_feed_generation_transition(repo_root, args.generation_id, allow_first_activation=args.allow_first_activation)
+    elif args.command == "feed-generation-rollback":
+        result = command_feed_generation_transition(repo_root, args.generation_id, rollback=True)
     elif args.command == "runtime-status":
         result = command_runtime_status(repo_root)
     elif args.command == "runtime-smoke":

@@ -84,6 +84,23 @@ currently consumed runtime feed; activation remains a separate guarded step.
 `just feed-generation-state --status-only --json` rehashes staged content and
 reports tampering or interrupted staging directories.
 
+Use `just feed-generation-activate -- <generation-id> [--allow-first-activation]` only after staging and
+state verification. Activation is verified and coordinated with the app
+services while the `feed-store/current` pointer changes, and it refuses to
+proceed unless no scan task is active. The first activation requires an
+explicit acknowledgement. If the verified activation must be
+undone, use `just feed-generation-rollback -- <generation-id>` for verified,
+service-coordinated compensating recovery to a prior generation. This is not a
+transactional database rollback: it reimports the prior generation as explicit
+compensation and reports any failed recovery step.
+
+TurboVAS records activation progress in an owner-only durable journal. App
+startup refuses an interrupted transition or a mismatch between the journal
+and `feed-store/current`. A later interrupted transition must recover to its
+recorded predecessor with `feed-generation-rollback`; an interrupted first
+activation may only resume the recorded target with the explicit first-
+activation acknowledgement.
+
 The generation boundary verifies Greenbone signatures and exact signed
 checksum coverage for NASL, Notus advisories/products, and CERT data. The
 upstream SCAP and GVMD data-object trees do not currently provide corresponding
@@ -115,6 +132,8 @@ Useful development checks include:
 - `just runtime-nmap-capability-check --json`
 - `just feed-state --json`
 - `just feed-generation-state --status-only --json`
+- `just feed-generation-activate -- <generation-id> [--allow-first-activation]`
+- `just feed-generation-rollback -- <generation-id>`
 - `just runtime-scope-smoke --json`
 - `just runtime-scope-report-summary --json`
 - `just runtime-certbund-report --json`

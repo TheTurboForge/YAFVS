@@ -118,13 +118,15 @@ just runtime-gmp-smoke
 just runtime-scanner-register
 just runtime-scanner-capability-check
 just runtime-feed-keyring-init
-just runtime-feed-import-init
 just runtime-full-test-scan-preflight
 just runtime-full-test-scan-start --confirm-authorized-lan
 just runtime-full-test-scan-status
 just feed-state
 just feed-cache-sync
-just feed-copy-to-runtime
+just feed-generation-stage
+just feed-generation-state --status-only
+just feed-generation-activate -- <generation-id> [--allow-first-activation]
+just feed-generation-rollback -- <generation-id>
 just runtime-status
 just runtime-smoke
 just runtime-log-review # service-specific high-signal runtime log review
@@ -145,9 +147,10 @@ just down
 Runtime state is host-visible and persistent under the sibling
 `TurboVAS-runtime` directory by default when commands are run through
 `tools/turbovasctl`. `runtime-certs-init`, `runtime-init`,
-`runtime-manager-init`, scanner Redis/config initialization, scanner
-registration, and feed copy commands are designed to be idempotent and must not
-delete or recreate unrelated runtime data.
+`runtime-manager-init`, scanner Redis/config initialization, and scanner
+registration are designed to be idempotent and must not delete or recreate
+unrelated runtime data. Feed generation activation and rollback are separate
+guarded operations and must be treated as service-coordinated changes.
 
 The current app profile can start `gvmd`, `ospd-openvas`, `notus-scanner`, and
 `gsad` for service-health checks. `ospd-openvas` starts through a root
@@ -156,13 +159,21 @@ entrypoint that immediately drops to the development UID/GID with only
 sockets without a privileged container or host networking.
 `runtime-scanner-capability-check` verifies that runtime state before scans.
 Feed downloads use a persistent local Community Feed cache under
-`TurboVAS-runtime/feed-cache/`, then runtime services
-consume physical copies under `TurboVAS-runtime/feeds/`. OSPD and Notus share a
-persistent feed signature keyring under `TurboVAS-runtime/state/feed-gnupg`.
-`runtime-feed-import-init` maps gvmd/OpenVAS build-time feed data paths to the
-runtime feed copy, then rebuilds VT metadata, gvmd data objects, and SCAP data
-from local files. The mapping points to `/runtime/feeds`; it never points at the
-canonical feed cache. The full-test scan commands are fixed to the authorized
+`TurboVAS-runtime/feed-cache/`. `feed-generation-stage` seals that cache into a
+content-addressed generation, and retained app services consume only the
+verified `TurboVAS-runtime/feed-store/current` generation through
+`/runtime/feeds`. OSPD and Notus share a persistent feed signature keyring under
+`TurboVAS-runtime/state/feed-gnupg`.
+`feed-generation-activate` verifies the selected generation, coordinates the
+app services around the pointer switch, and verifies the resulting runtime
+state. It fails closed unless the database proves that no scan task is active.
+A durable owner-only journal distinguishes a completed import from an
+interrupted transition, and app startup refuses any selector/journal mismatch.
+The first activation requires an explicit acknowledgement. If a
+verified activation needs to be undone, `feed-generation-rollback` performs
+service-coordinated, verified compensating recovery to a prior generation; it
+accepts only the journaled known-good predecessor and does not claim a
+transactional database rollback. The full-test scan commands are fixed to the authorized
 `192.168.178.0/24` target, the `Full and fast` scan config, and the `All IANA
 assigned TCP and UDP` port list; starting the scan requires the explicit
 `--confirm-authorized-lan` flag.

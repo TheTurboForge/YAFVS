@@ -87,7 +87,7 @@ TurboVAS still keeps the scanner fundamentals:
 - generic runtime report summary/export helpers;
 - Docker-based development/runtime infrastructure;
 - Trashcan support for retained resource types;
-- feed validation and local feed-cache/runtime-copy separation.
+- feed validation, immutable generations, and guarded service/database activation.
 
 Future inventory onboarding and vulnerability matching should be designed as
 TurboVAS-native workflows instead of preserving removed inherited subsystems.

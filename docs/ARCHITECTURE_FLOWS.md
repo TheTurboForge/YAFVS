@@ -62,12 +62,14 @@ without an explicit authorized scope.
 Local feed handling:
 
 ```text
-canonical feed cache -> runtime feed copy -> OSPD/Notus/OpenVAS/gvmd import -> database/scanner state
+canonical feed cache -> verified immutable generation -> journaled activation -> OSPD/Notus/OpenVAS/gvmd import -> database/scanner state
 ```
 
 The canonical cache under the sibling runtime directory is source material and
-must not be mutated by daemons. Runtime services consume physical working copies
-under `TurboVAS-runtime/feeds`. Feed signature verification stays enabled, and
+must not be mutated by daemons. Runtime services consume only the verified
+`feed-store/current` generation after its durable activation journal records a
+completed import. Interrupted transitions block app startup until explicit
+recovery. Feed signature verification stays enabled, and
 feed content remains local/untracked unless a separate feed-term review approves
 packaging or redistribution.
 

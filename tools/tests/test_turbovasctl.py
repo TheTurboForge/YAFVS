@@ -8,7 +8,9 @@ import inspect
 import io
 import json
 import os
+import re
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -1032,10 +1034,79 @@ class TurboVASCtlTests(unittest.TestCase):
 
     def test_runtime_app_up_validates_mount_graph_before_infrastructure(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
-        function = source[source.index("def command_runtime_app_up"):source.index("def command_runtime_native_api_rebuild")]
+        function = source[source.index("def _command_runtime_app_up_unlocked"):source.index("def command_runtime_app_up")]
 
         self.assertLess(function.index("rendered_app_execution_mount_finding"), function.index("command_up(repo_root)"))
+        self.assertLess(function.index("active_feed_generation_finding"), function.index("command_up(repo_root)"))
         self.assertIn('"Application runtime startup stopped at mount prerequisites."', function)
+
+    def test_runtime_app_up_refuses_missing_active_feed_generation(self):
+        command_up = unittest.mock.Mock(
+            return_value={"status": "pass", "summary": "should not run"}
+        )
+        completed = subprocess.CompletedProcess([], 0, "", "")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            (root / "compose").mkdir()
+            (root / "compose/dev.yaml").write_text("services: {}\n", encoding="utf-8")
+            with unittest.mock.patch.multiple(
+                turbovasctl,
+                ensure_runtime_dirs=unittest.mock.Mock(return_value=[]),
+                ensure_build_runtime_dirs=unittest.mock.Mock(return_value=[]),
+                active_feed_generation_finding=unittest.mock.Mock(
+                    return_value=turbovasctl.finding(
+                        "fail", "feed-generation.current", "No completed activation."
+                    )
+                ),
+                runtime_app_env=unittest.mock.Mock(return_value={}),
+                run_command=unittest.mock.Mock(return_value=completed),
+                rendered_app_execution_mount_finding=unittest.mock.Mock(
+                    return_value=turbovasctl.finding(
+                        "pass", "production.app-execution-mounts", "Mock mounts."
+                    )
+                ),
+                command_up=command_up,
+            ):
+                result = turbovasctl.command_runtime_app_up(root)
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("mount prerequisites", result["summary"])
+        command_up.assert_not_called()
+
+    def test_feed_lifecycle_lock_serializes_stage_and_runtime_mutations(self):
+        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(
+            encoding="utf-8"
+        )
+        for function_name in (
+            "command_build_ui",
+            "command_feed_generation_stage",
+            "command_runtime_manager_init",
+            "command_runtime_scanner_redis_init",
+            "command_runtime_scanner_register",
+            "command_runtime_app_up",
+            "command_runtime_native_api_rebuild",
+            "command_runtime_native_api_direct_write_smoke",
+            "command_runtime_native_api_direct_smoke",
+            "command_runtime_app_down",
+            "command_gvmd_smoke",
+            "command_down",
+        ):
+            start = source.index(f"def {function_name}")
+            body = source[start : source.find("\ndef ", start + 5)]
+            self.assertIn("acquire_runtime_lock", body)
+            self.assertIn("FEED_ACTIVATION_LOCK", body)
+
+        error = turbovasctl.RuntimeLockTimeout(
+            turbovasctl.FEED_ACTIVATION_LOCK,
+            "runtime-app-up",
+            {"operation": "feed-generation-activate"},
+        )
+        with unittest.mock.patch.object(
+            turbovasctl, "acquire_runtime_lock", side_effect=error
+        ):
+            result = turbovasctl.command_runtime_app_up(Path("/tmp"))
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("feed lifecycle lock", result["summary"])
 
     def test_runtime_app_up_status_only_omits_pass_output_tails(self):
         result = {
@@ -2129,6 +2200,7 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertIn(command, source)
             self.assertIn(f"{command} *args:", justfile)
             self.assertIn(f'tools/turbovasctl {command} "$@"', justfile)
+
         self.assertIn("def command_native_tooling_state", source)
         self.assertIn("def command_native_api_request", source)
         self.assertIn('native_api_request.add_argument("--status-only"', source)
@@ -13832,7 +13904,7 @@ db2:keys=5,expires=0,avg_ttl=0
 
             try:
                 turbovasctl.os.environ[turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV] = token
-                with unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(turbovasctl, "native_api_direct_admin_operator_uuid", return_value=(turbovasctl.subprocess.CompletedProcess([], 0, f"admin {operator_uuid}", ""), operator_uuid)), unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct_curl), unittest.mock.patch.object(turbovasctl, "direct_trash_empty_runtime_findings", return_value=[]), unittest.mock.patch.object(turbovasctl, "direct_task_target_replace_runtime_findings", return_value=[turbovasctl.finding("pass", "native-api-direct.task-target-replace-acknowledgement", "ok"), turbovasctl.finding("pass", "native-api-direct.task-target-replace-fixture-cleanup", "ok")]), unittest.mock.patch.object(turbovasctl.time, "time", return_value=1):
+                with unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(turbovasctl, "active_feed_generation_finding", return_value=turbovasctl.finding("pass", "feed-generation.current", "Mock completed activation.")), unittest.mock.patch.object(turbovasctl, "native_api_direct_admin_operator_uuid", return_value=(turbovasctl.subprocess.CompletedProcess([], 0, f"admin {operator_uuid}", ""), operator_uuid)), unittest.mock.patch.object(turbovasctl, "direct_native_api_curl", side_effect=fake_direct_curl), unittest.mock.patch.object(turbovasctl, "direct_trash_empty_runtime_findings", return_value=[]), unittest.mock.patch.object(turbovasctl, "direct_task_target_replace_runtime_findings", return_value=[turbovasctl.finding("pass", "native-api-direct.task-target-replace-acknowledgement", "ok"), turbovasctl.finding("pass", "native-api-direct.task-target-replace-fixture-cleanup", "ok")]), unittest.mock.patch.object(turbovasctl.time, "time", return_value=1):
                     result = turbovasctl.command_runtime_native_api_direct_write_smoke(root, status_only=True)
             finally:
                 if original_token is None:
@@ -14472,7 +14544,7 @@ db2:keys=5,expires=0,avg_ttl=0
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
             self.assertEqual(turbovasctl.feed_cache_var_lib(root), Path(tmp) / "TurboVAS-runtime" / "feed-cache" / "community" / "22.04" / "var-lib")
-            self.assertEqual(turbovasctl.feed_runtime_root(root), Path(tmp) / "TurboVAS-runtime" / "feeds")
+            self.assertEqual(turbovasctl.feed_runtime_root(root), Path(tmp) / "TurboVAS-runtime" / "feed-store" / "current")
             self.assertEqual(turbovasctl.feed_sync_log_dir(root), Path(tmp) / "TurboVAS-runtime" / "logs" / "feed-sync")
 
     def test_feed_keyring_paths_live_under_runtime_dir(self):
@@ -14796,7 +14868,7 @@ db2:keys=5,expires=0,avg_ttl=0
             self.assertEqual(command[3], str(turbovasctl.feed_community_key_path(root)))
             self.assertEqual(command[4], turbovasctl.GREENBONE_COMMUNITY_KEY_URL)
 
-    def test_notus_signature_files_use_runtime_copy(self):
+    def test_notus_signature_files_use_active_generation(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
@@ -14806,13 +14878,13 @@ db2:keys=5,expires=0,avg_ttl=0
                 [
                     (
                         "advisories",
-                        Path(tmp) / "TurboVAS-runtime" / "feeds" / "notus" / "advisories" / "sha256sums",
-                        Path(tmp) / "TurboVAS-runtime" / "feeds" / "notus" / "advisories" / "sha256sums.asc",
+                        Path(tmp) / "TurboVAS-runtime" / "feed-store" / "current" / "notus" / "advisories" / "sha256sums",
+                        Path(tmp) / "TurboVAS-runtime" / "feed-store" / "current" / "notus" / "advisories" / "sha256sums.asc",
                     ),
                     (
                         "products",
-                        Path(tmp) / "TurboVAS-runtime" / "feeds" / "notus" / "products" / "sha256sums",
-                        Path(tmp) / "TurboVAS-runtime" / "feeds" / "notus" / "products" / "sha256sums.asc",
+                        Path(tmp) / "TurboVAS-runtime" / "feed-store" / "current" / "notus" / "products" / "sha256sums",
+                        Path(tmp) / "TurboVAS-runtime" / "feed-store" / "current" / "notus" / "products" / "sha256sums.asc",
                     ),
                 ],
             )
@@ -14844,25 +14916,6 @@ db2:keys=5,expires=0,avg_ttl=0
             self.assertEqual(turbovasctl.enterprise_feed_key_support_markers(root), [])
             self.assertEqual(turbovasctl.enterprise_feed_key_support_finding(root)["status"], "pass")
 
-    def test_feed_copy_pairs_are_known_subtrees(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            pairs = [
-                (feed_class.key, source.relative_to(turbovasctl.feed_cache_var_lib(root)), destination.relative_to(turbovasctl.feed_runtime_root(root)))
-                for feed_class, source, destination in turbovasctl.feed_copy_pairs(root)
-            ]
-            self.assertEqual(
-                pairs,
-                [
-                    ("nasl", Path("openvas/plugins"), Path("openvas/plugins")),
-                    ("notus", Path("notus"), Path("notus")),
-                    ("scap", Path("gvm/scap-data"), Path("gvm/scap-data")),
-                    ("cert", Path("gvm/cert-data"), Path("gvm/cert-data")),
-                    ("gvmd", Path("gvm/data-objects/gvmd/22.04"), Path("gvm/data-objects/gvmd/22.04")),
-                ],
-            )
-
     def test_feed_generation_specs_cover_all_feed_classes(self):
         specs = turbovasctl.feed_generation_specs()
         self.assertEqual([spec.key for spec in specs], [feed_class.key for feed_class in turbovasctl.FEED_CLASSES])
@@ -14874,16 +14927,152 @@ db2:keys=5,expires=0,avg_ttl=0
         )
         self.assertEqual(notus.unsigned_metadata, ("LICENSE", "LICENSE.GPLv2", "LICENSE.ODbLv1", "timestamp"))
 
+    def test_feed_activation_state_is_private_atomic_and_validated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            payload = {
+                "status": "active",
+                "current_generation_id": "a" * 64,
+                "target_generation_id": None,
+                "previous_generation_id": None,
+                "rollback_generation_id": "b" * 64,
+                "completed_at": "2026-07-13T00:00:00+00:00",
+            }
+            path = turbovasctl.feed_activation_state_path(root)
+            original_fsync = os.fsync
+            fsynced_paths = []
+
+            def record_fsync(descriptor):
+                try:
+                    fsynced_paths.append(os.readlink(f"/proc/self/fd/{descriptor}"))
+                except OSError:
+                    pass
+                original_fsync(descriptor)
+
+            with unittest.mock.patch.object(
+                turbovasctl.os, "fsync", side_effect=record_fsync
+            ):
+                turbovasctl.write_feed_activation_state(root, payload)
+
+            self.assertIn(str(path.parent.parent), fsynced_paths)
+            self.assertEqual(stat.S_IMODE(path.parent.stat().st_mode), 0o700)
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+            self.assertEqual(
+                turbovasctl.read_feed_activation_state(root)["current_generation_id"],
+                "a" * 64,
+            )
+            with self.assertRaisesRegex(ValueError, "identifiers are invalid"):
+                turbovasctl.write_feed_activation_state(
+                    root,
+                    {**payload, "current_generation_id": "../escape"},
+                )
+            self.assertEqual(
+                turbovasctl.read_feed_activation_state(root)["current_generation_id"],
+                "a" * 64,
+            )
+
+    def test_missing_feed_activation_state_read_does_not_create_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            path = turbovasctl.feed_activation_state_path(root)
+
+            self.assertIsNone(turbovasctl.read_feed_activation_state(root))
+            self.assertFalse(path.parent.exists())
+
+    def test_active_feed_generation_requires_completed_matching_journal(self):
+        current = {"generation_id": "a" * 64, "verified": True}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            with unittest.mock.patch.multiple(
+                turbovasctl,
+                read_current_generation=unittest.mock.Mock(return_value=current),
+                read_feed_activation_state=unittest.mock.Mock(
+                    return_value={
+                        "schema_version": 1,
+                        "status": "transitioning",
+                        "current_generation_id": None,
+                        "target_generation_id": "a" * 64,
+                        "previous_generation_id": None,
+                        "rollback_generation_id": None,
+                        "action": "activate",
+                    }
+                ),
+            ):
+                item = turbovasctl.active_feed_generation_finding(root)
+        self.assertEqual(item["status"], "fail")
+        self.assertIn("No completed feed activation", item["message"])
+
     def test_feed_generation_parser_and_just_contracts_are_wired(self):
         parser = turbovasctl.build_parser()
         state = parser.parse_args(["feed-generation-state", "--status-only", "--json"])
         stage = parser.parse_args(["feed-generation-stage", "--json"])
+        activate = parser.parse_args(["feed-generation-activate", "a" * 64, "--allow-first-activation", "--json"])
+        rollback = parser.parse_args(["feed-generation-rollback", "b" * 64, "--json"])
         self.assertEqual((state.command, state.status_only, state.json), ("feed-generation-state", True, True))
         self.assertEqual((stage.command, stage.json), ("feed-generation-stage", True))
+        self.assertEqual((activate.command, activate.generation_id, activate.allow_first_activation), ("feed-generation-activate", "a" * 64, True))
+        self.assertEqual((rollback.command, rollback.generation_id), ("feed-generation-rollback", "b" * 64))
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for command in ("feed-generation-stage", "feed-generation-state"):
+        for command in ("feed-generation-stage", "feed-generation-state", "feed-generation-activate", "feed-generation-rollback"):
             self.assertIn(f"{command} *args:", justfile)
             self.assertIn(f'tools/turbovasctl {command} "$@"', justfile)
+
+    def test_app_feed_consumers_use_guarded_active_generation_mount(self):
+        compose = (Path(__file__).resolve().parents[2] / "compose/dev.yaml").read_text(
+            encoding="utf-8"
+        )
+        mounts = re.findall(
+            r"source: \$\{TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime\}/feed-store/current\n"
+            r"\s+target: /runtime/feeds",
+            compose,
+        )
+        guarded_mounts = re.findall(
+            r"source: \$\{TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime\}/feed-store/current\n"
+            r"\s+target: /runtime/feeds\n"
+            r"\s+bind:\n"
+            r"\s+create_host_path: false",
+            compose,
+        )
+        self.assertEqual(len(mounts), 4)
+        self.assertEqual(len(guarded_mounts), 4)
+        app_section = compose.split("  gvmd:\n", 1)[1]
+        self.assertNotIn("restart: unless-stopped", app_section)
+        self.assertNotIn(
+            "source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feeds/openvas",
+            compose,
+        )
+        self.assertNotIn(
+            "source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feeds/notus",
+            compose,
+        )
+
+    def test_public_feed_docs_expose_only_guarded_generation_workflow(self):
+        root = Path(__file__).resolve().parents[2]
+        docs = "\n".join(
+            (root / path).read_text(encoding="utf-8")
+            for path in (
+                "README.md",
+                "BUILDING.md",
+                "docker/runtime/README.md",
+                "docs/USER_MANUAL.md",
+            )
+        )
+        for marker in (
+            "feed-generation-stage",
+            "feed-generation-activate",
+            "feed-generation-rollback",
+            "--allow-first-activation",
+            "explicit acknowledgement",
+            "service-coordinated",
+            "compensating recovery",
+            "database rollback",
+        ):
+            self.assertIn(marker, docs)
+        self.assertNotIn("runtime-feed-import-init", docs)
+        self.assertNotIn("feed-copy-to-runtime", docs)
 
     def test_runtime_feed_mappings_point_to_runtime_copy(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -15091,7 +15280,7 @@ db2:keys=5,expires=0,avg_ttl=0
 
     def test_runtime_scanner_config_artifact_is_runtime_relative(self):
         source = TURBOVASCTL_PATH.read_text(encoding="utf-8")
-        helper = source.split("def command_runtime_scanner_redis_init", 1)[1]
+        helper = source.split("def _command_runtime_scanner_redis_init_unlocked", 1)[1]
         helper = helper.split("\ndef ", 1)[0]
 
         self.assertIn(
@@ -15173,9 +15362,11 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertNotIn("/run/gvmd-gmp", turbovas_api)
         self.assertIn("/run/ospd", app_services["ospd-openvas"])
         self.assertIn("/run/redis-openvas", app_services["ospd-openvas"])
-        self.assertIn("/feeds/openvas", app_services["ospd-openvas"])
+        self.assertIn("/feed-store/current", app_services["ospd-openvas"])
+        self.assertIn("target: /runtime/feeds", app_services["ospd-openvas"])
         self.assertIn("/state/ospd/openvas.conf", app_services["ospd-openvas"])
-        self.assertIn("/feeds/notus", app_services["notus-scanner"])
+        self.assertIn("/feed-store/current", app_services["notus-scanner"])
+        self.assertIn("target: /runtime/feeds", app_services["notus-scanner"])
         self.assertIn("allow_anonymous false", broker)
         self.assertIn("password_file /mosquitto/config-secrets/passwords", broker)
         self.assertIn("acl_file /mosquitto/config-secrets/mosquitto.acl", broker)
@@ -15261,6 +15452,7 @@ db2:keys=5,expires=0,avg_ttl=0
         calls = []
         original_run_command = turbovasctl.run_command
         original_smoke = turbovasctl.command_runtime_native_api_smoke
+        original_active_feed = turbovasctl.active_feed_generation_finding
         direct_override_path = ""
         direct_override_text = ""
         env_names = (
@@ -15279,6 +15471,7 @@ db2:keys=5,expires=0,avg_ttl=0
 
             turbovasctl.run_command = fake_run_command
             turbovasctl.command_runtime_native_api_smoke = lambda _root: {"status": "pass", "summary": "smoke passed", "findings": [], "artifacts": ["native-api-smoke.json"]}
+            turbovasctl.active_feed_generation_finding = lambda _root: turbovasctl.finding("pass", "feed-generation.current", "Mock completed activation.")
             with tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp) / "TurboVAS"
                 root.mkdir()
@@ -15298,6 +15491,7 @@ db2:keys=5,expires=0,avg_ttl=0
         finally:
             turbovasctl.run_command = original_run_command
             turbovasctl.command_runtime_native_api_smoke = original_smoke
+            turbovasctl.active_feed_generation_finding = original_active_feed
             for name, value in original_env.items():
                 if value is None:
                     turbovasctl.os.environ.pop(name, None)
@@ -15736,7 +15930,9 @@ db2:keys=5,expires=0,avg_ttl=0
                     return_value=[]
                 ),
             ):
-                result = turbovasctl.command_runtime_feed_import_init(root)
+                result = turbovasctl.command_runtime_feed_import_init(
+                    root, activation_managed=True
+                )
         return result, restart, rebuild, wait_for_socket
 
     def test_runtime_feed_import_accepts_successful_app_restart(self):
@@ -15746,7 +15942,8 @@ db2:keys=5,expires=0,avg_ttl=0
 
         self.assertEqual(result["status"], "pass")
         restart.assert_called_once()
-        self.assertEqual(rebuild.call_count, 2)
+        self.assertEqual(rebuild.call_count, 3)
+        self.assertEqual(rebuild.call_args_list[0].args[1][0], "--rebuild")
         self.assertEqual(wait_for_socket.call_count, 2)
 
     def test_runtime_feed_import_reports_failed_app_restart(self):
@@ -15757,18 +15954,477 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(result["status"], "fail")
         self.assertIn("could not be restarted", result["summary"])
         restart.assert_called_once()
-        self.assertEqual(rebuild.call_count, 2)
+        self.assertEqual(rebuild.call_count, 3)
         self.assertEqual(wait_for_socket.call_count, 1)
 
-    def test_runtime_feed_import_restarts_services_after_failed_rebuild(self):
+    def test_runtime_feed_import_leaves_services_stopped_after_failed_rebuild(self):
         result, restart, rebuild, wait_for_socket = (
             self.run_mocked_runtime_feed_import(rebuild_returncode=1)
         )
 
         self.assertEqual(result["status"], "fail")
-        restart.assert_called_once()
+        restart.assert_not_called()
         rebuild.assert_called_once()
         self.assertEqual(wait_for_socket.call_count, 1)
+
+    def test_runtime_feed_import_force_recreates_scanner_consumers(self):
+        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(
+            encoding="utf-8"
+        )
+        function = source[
+            source.index("def command_runtime_feed_import_init") : source.index(
+                "def stop_app_services_for_feed_transition"
+            )
+        ]
+        scanner_start = function[
+            function.index("scanner_up_command") : function.index("scanner_up =")
+        ]
+        self.assertIn('"--force-recreate"', scanner_start)
+        self.assertLess(
+            function.index("if import_failed:"),
+            function.index("compose_app_services_up_with_retry"),
+        )
+
+    def test_feed_activation_commits_journal_before_restarting_services(self):
+        source = TURBOVASCTL_PATH.read_text(encoding="utf-8")
+        transition = source[
+            source.index("def command_feed_generation_transition") : source.index(
+                "def command_runtime_scanner_capability_check"
+            )
+        ]
+        success = transition[transition.index("if transition_succeeded:") :]
+        active_journal = success.index("write_feed_activation_state(")
+        restart = success.index("restart_and_verify_feed_app_services(")
+
+        self.assertLess(active_journal, restart)
+        importer = source[
+            source.index("def command_runtime_feed_import_init") : source.index(
+                "def stop_app_services_for_feed_transition"
+            )
+        ]
+        no_restart = importer[importer.index("if not restart_services:") :]
+        self.assertLess(
+            no_restart.index("stop_app_services_for_feed_transition"),
+            no_restart.index("compose_app_services_up_with_retry"),
+        )
+        quiesce = source[
+            source.index("def stop_app_services_for_feed_transition") : source.index(
+                "def restart_and_verify_feed_app_services"
+            )
+        ]
+        self.assertIn('"rm", "-f", "-s"', quiesce)
+        self.assertIn("docker_container_state", quiesce)
+
+    def test_feed_import_summary_preserves_failed_output_tail(self):
+        item = turbovasctl.feed_import_summary_finding(
+            {
+                "status": "fail",
+                "summary": "Mock import failed.",
+                "findings": [
+                    turbovasctl.finding(
+                        "fail",
+                        "gvmd.rebuild-gvmd-data",
+                        "Mock rebuild failed.",
+                        details={"output_tail": ["first", "last"]},
+                    )
+                ],
+                "artifacts": [],
+            },
+            "feed-generation.import",
+        )
+
+        self.assertEqual(
+            item["details"]["failed_output_tails"]["gvmd.rebuild-gvmd-data"],
+            ["first", "last"],
+        )
+
+    def test_operator_acl_keeps_global_maintenance_settings_visible(self):
+        acl = (
+            Path(__file__).resolve().parents[2]
+            / "components"
+            / "gvmd"
+            / "src"
+            / "manage_acl.h"
+        ).read_text(encoding="utf-8")
+        macro = acl.split("#define ACL_GLOBAL_OR_USER_OWNS()", 1)[1].split(
+            "\n\n", 1
+        )[0]
+
+        self.assertIn("ACL_IS_GLOBAL", macro)
+        self.assertIn("EXISTS (SELECT 1 FROM users", macro)
+
+    def test_standalone_feed_import_and_legacy_live_copy_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            imported = turbovasctl.command_runtime_feed_import_init(root)
+            copied = turbovasctl.command_feed_copy_to_runtime(root)
+        self.assertEqual(imported["status"], "fail")
+        self.assertIn("guarded generation-activation", imported["summary"])
+        self.assertEqual(copied["status"], "fail")
+        self.assertIn("Legacy live feed copying is disabled", copied["summary"])
+
+    def run_mocked_feed_generation_transition(
+        self,
+        *,
+        target_id="a" * 64,
+        current_id="b" * 64,
+        import_statuses=("pass",),
+        post_verify_id="a" * 64,
+        stop_statuses=("pass", "pass"),
+        allow_first_activation=False,
+        rollback=False,
+        activation_state_override=None,
+        scan_quiescence_status="pass",
+        select_error=False,
+        journal_error=False,
+    ):
+        current = (
+            {"generation_id": current_id, "verified": True}
+            if current_id is not None
+            else None
+        )
+        activation_state = (
+            {
+                "schema_version": 1,
+                "status": "active",
+                "current_generation_id": current_id,
+                "target_generation_id": None,
+                "previous_generation_id": None,
+                "rollback_generation_id": "c" * 64,
+            }
+            if current_id is not None
+            else None
+        )
+        if activation_state_override is not None:
+            activation_state = activation_state_override
+        import_results = [
+            {
+                "status": status,
+                "summary": f"Mock feed import {status}.",
+                "findings": [],
+                "artifacts": [],
+            }
+            for status in import_statuses
+        ]
+        read_results = [current]
+        if select_error:
+            read_results.append(current)
+        elif import_statuses[0] == "pass":
+            read_results.append(
+                {"generation_id": post_verify_id, "verified": True}
+                if post_verify_id is not None
+                else None
+            )
+        stopped = unittest.mock.Mock(
+            side_effect=[
+                turbovasctl.finding(
+                    status,
+                    "feed-generation.stop",
+                    f"Mock app services stop {status}.",
+                )
+                for status in stop_statuses
+            ]
+        )
+        if select_error:
+            selected = unittest.mock.Mock(
+                side_effect=turbovasctl.FeedGenerationError("mock selection failure")
+            )
+        else:
+            selected = unittest.mock.Mock(
+                side_effect=lambda _root, generation, *_args: {
+                    "generation_id": generation,
+                    "current_generation_id": generation,
+                    "previous_generation_id": current_id,
+                }
+            )
+        cleared = unittest.mock.Mock()
+        imported = unittest.mock.Mock(side_effect=import_results)
+        scan_statuses = (
+            list(scan_quiescence_status)
+            if isinstance(scan_quiescence_status, tuple)
+            else [scan_quiescence_status, scan_quiescence_status]
+        )
+        scan_quiescence = unittest.mock.Mock(
+            side_effect=[
+                turbovasctl.finding(
+                    status,
+                    "feed-generation.active-scans",
+                    f"Mock scan quiescence {status}.",
+                )
+                for status in scan_statuses
+            ]
+        )
+        journal_write = unittest.mock.Mock(
+            side_effect=OSError("mock journal durability failure")
+            if journal_error
+            else None
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "TurboVAS"
+            root.mkdir()
+            with unittest.mock.patch.multiple(
+                turbovasctl,
+                verify_generation=unittest.mock.Mock(
+                    return_value={"generation_id": target_id, "verified": True}
+                ),
+                read_current_generation=unittest.mock.Mock(
+                    side_effect=read_results
+                ),
+                read_feed_activation_state=unittest.mock.Mock(
+                    return_value=activation_state
+                ),
+                write_feed_activation_state=journal_write,
+                feed_activation_scan_quiescence_finding=scan_quiescence,
+                stop_feed_control_services_for_preflight=unittest.mock.Mock(
+                    return_value=turbovasctl.finding(
+                        "pass",
+                        "feed-generation.control-quiesce",
+                        "Mock control services stopped.",
+                        details={"previously_running_services": ["gvmd"]},
+                    )
+                ),
+                restart_feed_control_services_after_preflight=unittest.mock.Mock(
+                    return_value=turbovasctl.finding(
+                        "pass",
+                        "feed-generation.control-restore",
+                        "Mock control services restored.",
+                    )
+                ),
+                stop_app_services_for_feed_transition=stopped,
+                select_generation=selected,
+                clear_current_generation=cleared,
+                command_runtime_feed_import_init=imported,
+                restart_and_verify_feed_app_services=unittest.mock.Mock(
+                    return_value={
+                        "status": "pass",
+                        "summary": "Mock feed runtime verified.",
+                        "findings": [],
+                        "artifacts": [],
+                    }
+                ),
+            ):
+                result = turbovasctl.command_feed_generation_transition(
+                    root,
+                    target_id,
+                    rollback=rollback,
+                    allow_first_activation=allow_first_activation,
+                )
+        return result, selected, imported, stopped, cleared
+
+    def test_feed_generation_activation_requires_first_activation_acknowledgement(self):
+        result, selected, imported, stopped, _cleared = (
+            self.run_mocked_feed_generation_transition(current_id=None)
+        )
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("acknowledgement", result["summary"])
+        selected.assert_not_called()
+        imported.assert_not_called()
+        stopped.assert_not_called()
+
+    def test_feed_generation_activation_selects_imports_and_verifies(self):
+        result, selected, imported, stopped, cleared = (
+            self.run_mocked_feed_generation_transition()
+        )
+        self.assertEqual(result["status"], "pass")
+        self.assertIn("activation and import completed", result["summary"])
+        self.assertEqual(selected.call_count, 1)
+        imported.assert_called_once_with(
+            unittest.mock.ANY,
+            activation_managed=True,
+            restart_services=False,
+        )
+        stopped.assert_called_once()
+        cleared.assert_not_called()
+
+    def test_feed_activation_closes_scan_start_race_before_transition(self):
+        result, selected, imported, stopped, cleared = (
+            self.run_mocked_feed_generation_transition(
+                scan_quiescence_status=("pass", "fail")
+            )
+        )
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("boundary closed", result["summary"])
+        selected.assert_not_called()
+        imported.assert_not_called()
+        stopped.assert_not_called()
+        cleared.assert_not_called()
+
+    def test_feed_activation_journal_failure_keeps_controls_stopped(self):
+        result, selected, imported, stopped, cleared = (
+            self.run_mocked_feed_generation_transition(journal_error=True)
+        )
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("control services remain stopped", result["summary"])
+        self.assertNotIn(
+            "feed-generation.control-restore",
+            [item["check"] for item in result["findings"]],
+        )
+        selected.assert_not_called()
+        imported.assert_not_called()
+        stopped.assert_not_called()
+        cleared.assert_not_called()
+
+    def test_feed_generation_activation_refuses_unproven_scan_quiescence(self):
+        result, selected, imported, stopped, cleared = (
+            self.run_mocked_feed_generation_transition(
+                scan_quiescence_status="fail"
+            )
+        )
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("scan quiescence", result["summary"])
+        selected.assert_not_called()
+        imported.assert_not_called()
+        stopped.assert_not_called()
+        cleared.assert_not_called()
+
+    def test_first_feed_selection_failure_leaves_services_removed(self):
+        result, selected, imported, stopped, cleared = (
+            self.run_mocked_feed_generation_transition(
+                current_id=None,
+                allow_first_activation=True,
+                select_error=True,
+            )
+        )
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("services remain removed", result["summary"])
+        selected.assert_called_once()
+        imported.assert_not_called()
+        stopped.assert_called_once()
+        cleared.assert_not_called()
+
+    def test_feed_activation_scan_quiescence_fails_closed(self):
+        clear_query = unittest.mock.Mock(
+            return_value=subprocess.CompletedProcess([], 0, "0\n", "")
+        )
+        with unittest.mock.patch.object(turbovasctl, "psql", clear_query):
+            clear = turbovasctl.feed_activation_scan_quiescence_finding(
+                Path("/tmp")
+            )
+        with unittest.mock.patch.object(
+            turbovasctl,
+            "psql",
+            return_value=subprocess.CompletedProcess([], 0, "2\n", ""),
+        ):
+            active = turbovasctl.feed_activation_scan_quiescence_finding(
+                Path("/tmp")
+            )
+        with unittest.mock.patch.object(
+            turbovasctl,
+            "psql",
+            return_value=subprocess.CompletedProcess([], 1, "database unavailable", ""),
+        ):
+            unknown = turbovasctl.feed_activation_scan_quiescence_finding(
+                Path("/tmp")
+            )
+
+        self.assertEqual(clear["status"], "pass")
+        query = clear_query.call_args.args[1]
+        for status in (0, 3, 4, 10, 11, 14, 16, 17, 18, 19):
+            self.assertIn(str(status), query)
+        self.assertEqual(active["status"], "fail")
+        self.assertEqual(active["details"]["active_task_count"], 2)
+        self.assertEqual(unknown["status"], "fail")
+
+    def test_feed_generation_failed_import_compensates_to_prior_generation(self):
+        result, selected, imported, stopped, cleared = (
+            self.run_mocked_feed_generation_transition(
+                import_statuses=("fail", "pass")
+            )
+        )
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("compensating recovery", result["summary"])
+        self.assertEqual(
+            [call.args[1] for call in selected.call_args_list],
+            ["a" * 64, "b" * 64],
+        )
+        self.assertEqual(imported.call_count, 2)
+        self.assertEqual(stopped.call_count, 2)
+        cleared.assert_not_called()
+
+    def test_feed_generation_rollback_rejects_unrecorded_target(self):
+        result, selected, imported, stopped, cleared = (
+            self.run_mocked_feed_generation_transition(rollback=True)
+        )
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("not the recorded predecessor", result["summary"])
+        selected.assert_not_called()
+        imported.assert_not_called()
+        stopped.assert_not_called()
+        cleared.assert_not_called()
+
+    def test_interrupted_transition_recovers_only_to_recorded_predecessor(self):
+        interrupted = {
+            "schema_version": 1,
+            "status": "transitioning",
+            "action": "activate",
+            "current_generation_id": None,
+            "target_generation_id": "a" * 64,
+            "previous_generation_id": "b" * 64,
+            "rollback_generation_id": "c" * 64,
+        }
+        result, selected, imported, stopped, cleared = (
+            self.run_mocked_feed_generation_transition(
+                target_id="b" * 64,
+                current_id="a" * 64,
+                post_verify_id="b" * 64,
+                rollback=True,
+                activation_state_override=interrupted,
+            )
+        )
+        self.assertEqual(result["status"], "warn")
+        self.assertIn("rollback and compensating import completed", result["summary"])
+        self.assertEqual([call.args[1] for call in selected.call_args_list], ["b" * 64])
+        imported.assert_called_once()
+        stopped.assert_called_once()
+        cleared.assert_not_called()
+
+    def test_failed_first_activation_clears_selector_and_leaves_apps_stopped(self):
+        result, selected, imported, stopped, cleared = (
+            self.run_mocked_feed_generation_transition(
+                current_id=None,
+                import_statuses=("fail",),
+                allow_first_activation=True,
+            )
+        )
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("no database rollback is claimed", result["summary"])
+        self.assertEqual(selected.call_count, 1)
+        imported.assert_called_once()
+        self.assertEqual(stopped.call_count, 2)
+        cleared.assert_called_once_with(unittest.mock.ANY, "a" * 64)
+
+    def test_post_import_selector_mismatch_triggers_compensating_reimport(self):
+        result, selected, imported, stopped, cleared = (
+            self.run_mocked_feed_generation_transition(
+                import_statuses=("pass", "pass"),
+                post_verify_id="c" * 64,
+                stop_statuses=("pass", "pass"),
+            )
+        )
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("compensating recovery", result["summary"])
+        self.assertEqual(
+            [call.args[1] for call in selected.call_args_list],
+            ["a" * 64, "b" * 64],
+        )
+        self.assertEqual(imported.call_count, 2)
+        self.assertEqual(stopped.call_count, 2)
+        cleared.assert_not_called()
+
+    def test_failed_compensation_stop_leaves_selector_for_manual_recovery(self):
+        result, selected, imported, stopped, cleared = (
+            self.run_mocked_feed_generation_transition(
+                import_statuses=("fail",),
+                stop_statuses=("pass", "fail"),
+            )
+        )
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("compensation could not start safely", result["summary"])
+        self.assertEqual(selected.call_count, 1)
+        self.assertEqual(imported.call_count, 1)
+        self.assertEqual(stopped.call_count, 2)
+        cleared.assert_not_called()
 
     def test_full_test_scan_constants_are_fixed_to_authorized_lan(self):
         self.assertEqual(runtime_full_test_scan.AUTHORIZED_TARGET_CIDR, "192.168.178.0/24")

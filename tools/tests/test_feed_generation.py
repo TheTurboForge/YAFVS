@@ -116,6 +116,175 @@ class FeedGenerationTests(unittest.TestCase):
         self.assertEqual(state["generation_count"], 1)
         self.assertEqual(state["invalid_entries"], [])
 
+    def test_selection_is_atomic_verified_and_reports_previous_generation(self):
+        first = self._stage()
+        selected_first = feed_generation.select_generation(
+            self.runtime,
+            first["generation_id"],
+            "22.04",
+            self.specs,
+        )
+        self.assertIsNone(selected_first["previous_generation_id"])
+        self.assertEqual(selected_first["current_generation_id"], first["generation_id"])
+        self.assertEqual(
+            os.readlink(self.runtime / "feed-store/current"),
+            f"generations/{first['generation_id']}",
+        )
+
+        self._write("gvm/scap-data/data.xml", b"<second/>\n")
+        second = self._stage()
+        selected_second = feed_generation.select_generation(
+            self.runtime,
+            second["generation_id"],
+            "22.04",
+            self.specs,
+        )
+        self.assertEqual(selected_second["previous_generation_id"], first["generation_id"])
+        self.assertEqual(selected_second["current_generation_id"], second["generation_id"])
+        current = feed_generation.read_current_generation(self.runtime, "22.04", self.specs)
+        self.assertEqual(current["generation_id"], second["generation_id"])
+        state = feed_generation.generation_state(self.runtime, "22.04", self.specs)
+        self.assertEqual(state["current_generation_id"], second["generation_id"])
+        self.assertIsNone(state["current_error"])
+
+    def test_selection_rejects_invalid_or_tampered_generation(self):
+        with self.assertRaisesRegex(feed_generation.FeedGenerationError, "identifier"):
+            feed_generation.select_generation(self.runtime, "../escape", "22.04", self.specs)
+
+        staged = self._stage()
+        generation = self._generation_path(staged)
+        self._make_generation_writable(generation)
+        (generation / "gvm/cert-data/feed.xml").write_bytes(b"tampered\n")
+        self._reseal_generation(generation)
+        with self.assertRaises(feed_generation.FeedGenerationError):
+            feed_generation.select_generation(
+                self.runtime,
+                staged["generation_id"],
+                "22.04",
+                self.specs,
+            )
+        self.assertFalse((self.runtime / "feed-store/current").exists())
+
+    def test_current_selector_rejects_unsafe_target_and_clear_is_identity_gated(self):
+        staged = self._stage()
+        store = self.runtime / "feed-store"
+        (store / "current").symlink_to("../outside")
+        with self.assertRaisesRegex(feed_generation.FeedGenerationError, "target is invalid"):
+            feed_generation.read_current_generation(self.runtime, "22.04", self.specs)
+        (store / "current").unlink()
+
+        feed_generation.select_generation(
+            self.runtime,
+            staged["generation_id"],
+            "22.04",
+            self.specs,
+        )
+        with self.assertRaisesRegex(feed_generation.FeedGenerationError, "differs"):
+            feed_generation.clear_current_generation(self.runtime, "f" * 64)
+        feed_generation.clear_current_generation(self.runtime, staged["generation_id"])
+        self.assertIsNone(feed_generation.read_current_generation(self.runtime, "22.04", self.specs))
+        self.assertFalse((store / "current").exists())
+
+    def test_failed_post_selection_verification_restores_prior_selector(self):
+        first = self._stage()
+        feed_generation.select_generation(
+            self.runtime,
+            first["generation_id"],
+            "22.04",
+            self.specs,
+        )
+        self._write("gvm/scap-data/data.xml", b"<second/>\n")
+        second = self._stage()
+
+        with unittest.mock.patch.object(
+            feed_generation,
+            "read_current_generation",
+            side_effect=feed_generation.FeedGenerationError("forced post-select failure"),
+        ):
+            with self.assertRaisesRegex(feed_generation.FeedGenerationError, "prior selector was restored"):
+                feed_generation.select_generation(
+                    self.runtime,
+                    second["generation_id"],
+                    "22.04",
+                    self.specs,
+                )
+
+        current = feed_generation.read_current_generation(self.runtime, "22.04", self.specs)
+        self.assertEqual(current["generation_id"], first["generation_id"])
+
+    def test_selector_fsync_failure_restores_prior_selector(self):
+        first = self._stage()
+        feed_generation.select_generation(
+            self.runtime,
+            first["generation_id"],
+            "22.04",
+            self.specs,
+        )
+        self._write("gvm/scap-data/data.xml", b"<second/>\n")
+        second = self._stage()
+        original_fsync = os.fsync
+        failed = False
+
+        def fail_once(descriptor):
+            nonlocal failed
+            target = os.readlink(f"/proc/self/fd/{descriptor}")
+            if not failed and target.endswith("/feed-store"):
+                failed = True
+                raise OSError(errno.EIO, "forced selector fsync failure")
+            original_fsync(descriptor)
+
+        with unittest.mock.patch.object(
+            feed_generation.os, "fsync", side_effect=fail_once
+        ):
+            with self.assertRaisesRegex(
+                feed_generation.FeedGenerationError, "prior selector was restored"
+            ):
+                feed_generation.select_generation(
+                    self.runtime,
+                    second["generation_id"],
+                    "22.04",
+                    self.specs,
+                )
+
+        self.assertTrue(failed)
+        current = feed_generation.read_current_generation(
+            self.runtime, "22.04", self.specs
+        )
+        self.assertEqual(current["generation_id"], first["generation_id"])
+
+    def test_first_selector_fsync_failure_clears_selector(self):
+        staged = self._stage()
+        original_fsync = os.fsync
+        failed = False
+
+        def fail_once(descriptor):
+            nonlocal failed
+            target = os.readlink(f"/proc/self/fd/{descriptor}")
+            if not failed and target.endswith("/feed-store"):
+                failed = True
+                raise OSError(errno.EIO, "forced selector fsync failure")
+            original_fsync(descriptor)
+
+        with unittest.mock.patch.object(
+            feed_generation.os, "fsync", side_effect=fail_once
+        ):
+            with self.assertRaisesRegex(
+                feed_generation.FeedGenerationError, "prior selector was restored"
+            ):
+                feed_generation.select_generation(
+                    self.runtime,
+                    staged["generation_id"],
+                    "22.04",
+                    self.specs,
+                )
+
+        self.assertTrue(failed)
+        self.assertIsNone(
+            feed_generation.read_current_generation(
+                self.runtime, "22.04", self.specs
+            )
+        )
+
     def test_payload_change_produces_a_different_generation_identifier(self):
         first = self._stage()
         path = self.cache / "gvm/scap-data/data.xml"

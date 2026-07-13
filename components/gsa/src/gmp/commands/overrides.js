@@ -23,6 +23,7 @@ import Override, {
   SEVERITY_FALSE_POSITIVE,
 } from 'gmp/models/override';
 import {
+  deleteNativeOverride,
   exportNativeOverrideMetadata,
   exportNativeOverridesMetadata,
   fetchNativeOverride,
@@ -64,6 +65,14 @@ class OverrideCommand extends EntityCommand {
 
   async export({id}) {
     return await exportNativeOverrideMetadata(this.http, id);
+  }
+
+  async delete({id}) {
+    if (canUseNativeApi(this.http)) {
+      await deleteNativeOverride(this.http, id);
+      return;
+    }
+    return super.delete({id});
   }
 
   _save(args) {
@@ -157,6 +166,25 @@ class OverridesCommand extends EntitiesCommand {
       this.http,
       overrides.map(override => override.id),
     );
+  }
+
+  async delete(entities) {
+    await this.deleteByIds(entities.map(entity => entity.id));
+    return new Response(entities);
+  }
+
+  async deleteByIds(ids) {
+    for (const id of ids) {
+      await deleteNativeOverride(this.http, id);
+    }
+    return new Response(ids);
+  }
+
+  async deleteByFilter(filter) {
+    const response = await this.get({filter});
+    const deleted = response.data;
+    await this.delete(deleted);
+    return new Response(deleted);
   }
 
   async get(params = {}) {

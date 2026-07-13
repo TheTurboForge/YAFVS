@@ -137,6 +137,42 @@ describe('OverridesCommand tests', () => {
     });
   });
 
+  test('should move override to trash through native API without GMP fallback', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({ok: true, status: 204});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new OverrideCommand(fakeHttp);
+    await cmd.delete({id: 'override-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/overrides/override-id',
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+  });
+
+  test('should not fall back to GMP when native override deletion fails', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({ok: false, status: 500});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+
+    const cmd = new OverrideCommand(fakeHttp);
+
+    await expect(cmd.delete({id: 'override-id'})).rejects.toThrow(
+      'Native API request failed with status 500',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should fetch overrides through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -285,6 +321,32 @@ describe('OverridesCommand tests', () => {
       {id: 'override-1', text: 'One'},
       {id: 'override-2', text: 'Two'},
     ]);
+  });
+
+  test('should move selected overrides to trash through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({ok: true, status: 204});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new OverridesCommand(fakeHttp);
+    const overrides = [
+      new Override({id: 'override-1'}),
+      new Override({id: 'override-2'}),
+    ];
+
+    const result = await cmd.delete(overrides);
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(result.data).toEqual(overrides);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://turbovas.example/api/v1/overrides/override-1',
+      expect.objectContaining({method: 'DELETE'}),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://turbovas.example/api/v1/overrides/override-2',
+      expect.objectContaining({method: 'DELETE'}),
+    );
   });
 
   test('should bulk export current page overrides through native API', async () => {

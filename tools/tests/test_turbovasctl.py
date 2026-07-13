@@ -10648,6 +10648,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(turbovasctl.native_tooling_category("tools/runtime_browser_smoke.py")[0], "compatibility_bridge")
         self.assertEqual(turbovasctl.native_tooling_category("tools/tests/test_turbovasctl.py")[0], "compatibility_bridge")
         self.assertEqual(turbovasctl.native_tooling_category("components/gsa/src/gmp/commands/scopes.ts")[0], "product_workflow")
+        self.assertEqual(turbovasctl.native_tooling_category("components/gsa/src/gmp/commands/entity.ts")[0], "compatibility_bridge")
         self.assertEqual(turbovasctl.native_tooling_category("components/gsa/src/gmp/locale/date.ts")[0], "compatibility_bridge")
         self.assertEqual(turbovasctl.native_tooling_category("components/gsa/src/gmp/http/transform/xml.ts")[0], "compatibility_bridge")
         self.assertEqual(turbovasctl.native_tooling_category("components/gsa/src/gmp/commands/__tests__/scanner.test.ts")[0], "compatibility_bridge")

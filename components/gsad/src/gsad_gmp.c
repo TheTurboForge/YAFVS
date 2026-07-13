@@ -4528,119 +4528,83 @@ append_alert_method_data (GString *xml, params_t *data, const char *method,
         break;
       }
 
-  if (strcmp (method, "Sourcefire Connector"))
-    {
-      params_iterator_init (&iter, data);
-
-      while (params_iterator_next (&iter, &name, &param))
-        if ((strcmp (method, "HTTP Get") == 0 && strcmp (name, "URL") == 0)
-            || (strcmp (method, "Send") == 0
-                && (strcmp (name, "send_host") == 0
-                    || strcmp (name, "send_port") == 0
-                    || strcmp (name, "send_report_config") == 0
-                    || strcmp (name, "send_report_format") == 0))
-            || (strcmp (method, "SCP") == 0
-                && (strcmp (name, "scp_credential") == 0
-                    || strcmp (name, "scp_host") == 0
-                    || strcmp (name, "scp_known_hosts") == 0
-                    || strcmp (name, "scp_path") == 0
-                    || strcmp (name, "scp_port") == 0
-                    || strcmp (name, "scp_report_config") == 0
-                    || strcmp (name, "scp_report_format") == 0))
-            || (strcmp (method, "SMB") == 0
-                && (strcmp (name, "smb_credential") == 0
-                    || strcmp (name, "smb_file_path") == 0
-                    || strcmp (name, "smb_max_protocol") == 0
-                    || strcmp (name, "smb_report_config") == 0
-                    || strcmp (name, "smb_report_format") == 0
-                    || strcmp (name, "smb_share_path") == 0))
-            || (strcmp (method, "SNMP") == 0
-                && (strcmp (name, "snmp_community") == 0
-                    || strcmp (name, "snmp_agent") == 0
-                    || strcmp (name, "snmp_message") == 0))
-            || (strcmp (method, "TippingPoint SMS") == 0
-                && (strcmp (name, "tp_sms_credential") == 0
-                    || strcmp (name, "tp_sms_hostname") == 0
-                    || strcmp (name, "tp_sms_tls_certificate") == 0
-                    || strcmp (name, "tp_sms_tls_workaround") == 0))
-            || (strcmp (method, "verinice Connector") == 0
-                && (strcmp (name, "verinice_server_credential") == 0
-                    || strcmp (name, "verinice_server_url") == 0
-                    || strcmp (name, "verinice_server_report_config") == 0
-                    || strcmp (name, "verinice_server_report_format") == 0))
-            || (strcmp (method, "Alemba vFire") == 0
-                && (strcmp (name, "vfire_base_url") == 0
-                    || strcmp (name, "vfire_call_description") == 0
-                    || strcmp (name, "vfire_call_impact_name") == 0
-                    || strcmp (name, "vfire_call_partition_name") == 0
-                    || strcmp (name, "vfire_call_template_name") == 0
-                    || strcmp (name, "vfire_call_type_name") == 0
-                    || strcmp (name, "vfire_call_urgency_name") == 0
-                    || strcmp (name, "vfire_client_id") == 0
-                    || strcmp (name, "vfire_credential") == 0
-                    || strcmp (name, "vfire_session_type") == 0))
-            || (strcmp (method, "Email") == 0
-                && (strcmp (name, "to_address") == 0
-                    || strcmp (name, "from_address") == 0
-                    || strcmp (name, "subject") == 0
-                    || strcmp (name, "notice") == 0
-                    || (strcmp (name, "notice_report_format") == 0
-                        && notice == 0)
-                    || (strcmp (name, "notice_report_config") == 0
-                        && notice == 0)
-                    || (strcmp (name, "notice_attach_format") == 0
-                        && notice == 2)
-                    || (strcmp (name, "notice_attach_config") == 0
-                        && notice == 2)
-                    || (str_equal (name, "recipient_credential")
-                        && !str_equal (param->value, "0"))))
-            || (strcmp (method, "Syslog") == 0
-                && strcmp (name, "submethod") == 0)
-            || (strcmp (method, "Start Task") == 0
-                && strcmp (name, "start_task_task") == 0)
-            || strcmp (name, "details_url") == 0
-            || strcmp (name, "composer_include_overrides") == 0
-            || strcmp (name, "composer_ignore_pagination") == 0)
-          {
-            xml_string_append (xml, "<data><name>%s</name>%s</data>", name,
-                               param->value ? param->value : "");
-          }
-        else if (strcmp (method, "Email") == 0 && notice == 0
-                 && strcmp (name, "message") == 0)
-          xml_string_append (xml, "<data><name>message</name>%s</data>",
-                             param->value ? param->value : "");
-        else if (strcmp (method, "Email") == 0 && notice == 2
-                 && strcmp (name, "message_attach") == 0)
-          xml_string_append (xml, "<data><name>message</name>%s</data>",
-                             param->value ? param->value : "");
-
-      return;
-    }
-
   params_iterator_init (&iter, data);
+
   while (params_iterator_next (&iter, &name, &param))
-    if (strcmp (name, "pkcs12"))
+    if ((strcmp (method, "HTTP Get") == 0 && strcmp (name, "URL") == 0)
+        || (strcmp (method, "Send") == 0
+            && (strcmp (name, "send_host") == 0
+                || strcmp (name, "send_port") == 0
+                || strcmp (name, "send_report_config") == 0
+                || strcmp (name, "send_report_format") == 0))
+        || (strcmp (method, "SCP") == 0
+            && (strcmp (name, "scp_credential") == 0
+                || strcmp (name, "scp_host") == 0
+                || strcmp (name, "scp_known_hosts") == 0
+                || strcmp (name, "scp_path") == 0
+                || strcmp (name, "scp_port") == 0
+                || strcmp (name, "scp_report_config") == 0
+                || strcmp (name, "scp_report_format") == 0))
+        || (strcmp (method, "SMB") == 0
+            && (strcmp (name, "smb_credential") == 0
+                || strcmp (name, "smb_file_path") == 0
+                || strcmp (name, "smb_max_protocol") == 0
+                || strcmp (name, "smb_report_config") == 0
+                || strcmp (name, "smb_report_format") == 0
+                || strcmp (name, "smb_share_path") == 0))
+        || (strcmp (method, "SNMP") == 0
+            && (strcmp (name, "snmp_community") == 0
+                || strcmp (name, "snmp_agent") == 0
+                || strcmp (name, "snmp_message") == 0))
+        || (strcmp (method, "TippingPoint SMS") == 0
+            && (strcmp (name, "tp_sms_credential") == 0
+                || strcmp (name, "tp_sms_hostname") == 0
+                || strcmp (name, "tp_sms_tls_certificate") == 0
+                || strcmp (name, "tp_sms_tls_workaround") == 0))
+        || (strcmp (method, "verinice Connector") == 0
+            && (strcmp (name, "verinice_server_credential") == 0
+                || strcmp (name, "verinice_server_url") == 0
+                || strcmp (name, "verinice_server_report_config") == 0
+                || strcmp (name, "verinice_server_report_format") == 0))
+        || (strcmp (method, "Alemba vFire") == 0
+            && (strcmp (name, "vfire_base_url") == 0
+                || strcmp (name, "vfire_call_description") == 0
+                || strcmp (name, "vfire_call_impact_name") == 0
+                || strcmp (name, "vfire_call_partition_name") == 0
+                || strcmp (name, "vfire_call_template_name") == 0
+                || strcmp (name, "vfire_call_type_name") == 0
+                || strcmp (name, "vfire_call_urgency_name") == 0
+                || strcmp (name, "vfire_client_id") == 0
+                || strcmp (name, "vfire_credential") == 0
+                || strcmp (name, "vfire_session_type") == 0))
+        || (strcmp (method, "Email") == 0
+            && (strcmp (name, "to_address") == 0
+                || strcmp (name, "from_address") == 0
+                || strcmp (name, "subject") == 0 || strcmp (name, "notice") == 0
+                || (strcmp (name, "notice_report_format") == 0 && notice == 0)
+                || (strcmp (name, "notice_report_config") == 0 && notice == 0)
+                || (strcmp (name, "notice_attach_format") == 0 && notice == 2)
+                || (strcmp (name, "notice_attach_config") == 0 && notice == 2)
+                || (str_equal (name, "recipient_credential")
+                    && !str_equal (param->value, "0"))))
+        || (strcmp (method, "Syslog") == 0 && strcmp (name, "submethod") == 0)
+        || (strcmp (method, "Start Task") == 0
+            && strcmp (name, "start_task_task") == 0)
+        || strcmp (name, "details_url") == 0
+        || strcmp (name, "composer_include_overrides") == 0
+        || strcmp (name, "composer_ignore_pagination") == 0)
       {
-        if (strcmp (name, "defense_center_ip") == 0
-            || strcmp (name, "defense_center_port") == 0
-            || (strcmp (name, "pkcs12_credential") == 0
-                && !str_equal (param->value, "0")))
-          xml_string_append (xml, "<data><name>%s</name>%s</data>", name,
-                             param->value ? param->value : "");
+        xml_string_append (xml, "<data><name>%s</name>%s</data>", name,
+                           param->value ? param->value : "");
       }
-    else
-      {
-        gchar *base64;
-
-        /* Special case the pkcs12 file, which is binary. */
-
-        base64 =
-          (param->value && param->value_size)
-            ? g_base64_encode ((guchar *) param->value, param->value_size)
-            : g_strdup ("");
-        xml_string_append (xml, "<data><name>%s</name>%s</data>", name, base64);
-        g_free (base64);
-      }
+    else if (strcmp (method, "Email") == 0 && notice == 0
+             && strcmp (name, "message") == 0)
+      xml_string_append (xml, "<data><name>message</name>%s</data>",
+                         param->value ? param->value : "");
+    else if (strcmp (method, "Email") == 0 && notice == 2
+             && strcmp (name, "message_attach") == 0)
+      xml_string_append (xml, "<data><name>message</name>%s</data>",
+                         param->value ? param->value : "");
 }
 
 /**

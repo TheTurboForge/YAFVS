@@ -1897,8 +1897,6 @@ turbovas_control_alert_create_response (
       case 61: status = "61 invalid_recipient_credential\n"; break;
       case 70: status = "70 vfire_credential_not_found\n"; break;
       case 71: status = "71 invalid_vfire_credential\n"; break;
-      case 80: status = "80 sourcefire_credential_not_found\n"; break;
-      case 81: status = "81 invalid_sourcefire_credential\n"; break;
       case 90: status = "90 report_format_not_found\n"; break;
       case 91: status = "91 report_config_not_found\n"; break;
       case 92: status = "92 report_config_mismatch\n"; break;

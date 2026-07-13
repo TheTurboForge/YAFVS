@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2023-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -31,18 +32,6 @@ class GetAlertEventFromStringTestCase(unittest.TestCase):
     def test_updated_secinfo_arrived(self):
         ct = AlertEvent.from_string("Updated SecInfo arrived")
         self.assertEqual(ct, AlertEvent.UPDATED_SECINFO_ARRIVED)
-
-    def test_ticket_received(self):
-        ct = AlertEvent.from_string("ticket received")
-        self.assertEqual(ct, AlertEvent.TICKET_RECEIVED)
-
-    def test_assigned_ticket_changed(self):
-        ct = AlertEvent.from_string("assigned ticket changed")
-        self.assertEqual(ct, AlertEvent.ASSIGNED_TICKET_CHANGED)
-
-    def test_owned_ticket_changed(self):
-        ct = AlertEvent.from_string("owned ticket changed")
-        self.assertEqual(ct, AlertEvent.OWNED_TICKET_CHANGED)
 
 
 if __name__ == "__main__":

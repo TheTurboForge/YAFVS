@@ -44,7 +44,6 @@ class AlertMethod(Enum):
     EMAIL = "Email"
     START_TASK = "Start Task"
     HTTP_GET = "HTTP Get"
-    SOURCEFIRE_CONNECTOR = "Sourcefire Connector"
     VERINICE_CONNECTOR = "verinice Connector"
     TIPPINGPOINT_SMS = "TippingPoint SMS"
     ALEMBA_VFIRE = "Alemba vFire"
@@ -102,6 +101,7 @@ def _check_event(
                 f"Invalid method {method.name} for event {event.name}"
             )
 
+
 class Alerts:
     @classmethod
     def create_alert(
@@ -132,8 +132,8 @@ class Alerts:
             method: The method by which the user is alerted, one of 'SCP',
                 'Send', 'SMB', 'SNMP', 'Syslog' or 'Email'; if the event is
                 neither 'Updated SecInfo arrived' nor 'New SecInfo arrived',
-                method can also be one of 'Start Task', 'HTTP Get', 'Sourcefire
-                Connector' or 'verinice Connector'.
+                method can also be one of 'Start Task', 'HTTP Get' or
+                'verinice Connector'.
             condition_data: Data that defines the condition
             event_data: Data that defines the event
             method_data: Data that defines the method
@@ -235,7 +235,7 @@ class Alerts:
                 'Send', 'SMB', 'SNMP', 'Syslog' or 'Email';
                 if the event is neither 'Updated SecInfo arrived' nor
                 'New SecInfo arrived', method can also be one of 'Start Task',
-                'HTTP Get', 'Sourcefire Connector' or 'verinice Connector'.
+                'HTTP Get' or 'verinice Connector'.
             method_data: Data that defines the method
             filter_id: Filter to apply when executing alert
             comment: Comment for the alert

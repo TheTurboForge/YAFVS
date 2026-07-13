@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2023-2025 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -51,10 +52,6 @@ class GetAlertMethodFromStringTestCase(unittest.TestCase):
     def test_start_task(self):
         ct = AlertMethod.from_string("Start Task")
         self.assertEqual(ct, AlertMethod.START_TASK)
-
-    def test_sourcefire_connector(self):
-        ct = AlertMethod.from_string("sourcefire Connector")
-        self.assertEqual(ct, AlertMethod.SOURCEFIRE_CONNECTOR)
 
     def test_verinice_connector(self):
         ct = AlertMethod.from_string("verinice Connector")

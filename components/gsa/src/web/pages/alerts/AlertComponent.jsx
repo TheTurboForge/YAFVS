@@ -8,7 +8,6 @@ import React, {useState, useRef, useCallback} from 'react';
 import {useDispatch} from 'react-redux';
 import {
   email_credential_filter,
-  password_only_credential_filter,
   smb_credential_filter,
   vFire_credential_filter,
 } from 'gmp/models/credential';
@@ -32,7 +31,6 @@ import ContentComposerDialog from 'web/pages/alerts/ContentComposerDialog';
 import AlertDialog, {
   ATTACH_MESSAGE_DEFAULT,
   ATTACH_MESSAGE_SECINFO,
-  DEFAULT_DEFENSE_CENTER_PORT,
   DEFAULT_DETAILS_URL,
   DEFAULT_DIRECTION,
   DEFAULT_EVENT_STATUS,
@@ -260,10 +258,6 @@ const AlertComponent = ({
     methodDataComposerIncludeOverrides,
     setMethodDataComposerIncludeOverrides,
   ] = useState(undefined);
-  const [methodDataDefenseCenterIp, setMethodDataDefenseCenterIp] =
-    useState(undefined);
-  const [methodDataDefenseCenterPort, setMethodDataDefenseCenterPort] =
-    useState(undefined);
   const [methodDataDetailsUrl, setMethodDataDetailsUrl] = useState(undefined);
   const [methodDataToAddress, setMethodDataToAddress] = useState(undefined);
   const [methodDataFromAddress, setMethodDataFromAddress] = useState(undefined);
@@ -338,8 +332,6 @@ const AlertComponent = ({
     methodDataVeriniceServerCredential,
     setMethodDataVeriniceServerCredential,
   ] = useState(undefined);
-  const [methodDataPkcs12Credential, setMethodDataPkcs12Credential] =
-    useState(UNSET_VALUE);
   const [methodDataVfireCredential, setMethodDataVfireCredential] =
     useState(undefined);
   const [methodDataVfireBaseUrl, setMethodDataVfireBaseUrl] =
@@ -389,8 +381,6 @@ const AlertComponent = ({
           setMethodDataTpSmsCredential(credentialId);
         } else if (String(credentialTypeRef.current) === 'email') {
           setMethodDataRecipientCredential(credentialId);
-        } else if (String(credentialTypeRef.current) === 'pw') {
-          setMethodDataPkcs12Credential(credentialId);
         }
       });
   };
@@ -461,10 +451,6 @@ const AlertComponent = ({
     openCredentialDialog({type: 'verinice', types});
   };
 
-  const openPasswordOnlyCredentialDialog = types => {
-    openCredentialDialog({type: 'pw', types});
-  };
-
   const openVfireCredentialDialog = types => {
     openCredentialDialog({type: 'vfire', types});
   };
@@ -494,10 +480,6 @@ const AlertComponent = ({
 
       const emailCredentials = credentials.filter(email_credential_filter);
       const vFireCredentials = credentials.filter(vFire_credential_filter);
-      const passwordOnlyCredentials = credentials.filter(
-        password_only_credential_filter,
-      );
-
       const resultFilters = filters.filter(filterResultsFilter);
       const secinfoFilters = filters.filter(filterSecinfoFilter);
 
@@ -573,10 +555,6 @@ const AlertComponent = ({
         ? getValue(method.data.recipient_credential)
         : undefined;
 
-      const pkcs12CredentialId = isDefined(method.data.pkcs12_credential)
-        ? getValue(method.data.pkcs12_credential)
-        : undefined;
-
       const vfireCredentialId = isDefined(method.data.vfire_credential)
         ? getValue(method.data.vfire_credential)
         : undefined;
@@ -636,15 +614,6 @@ const AlertComponent = ({
       );
       setMethodDataComposerIncludeOverrides(
         getValue(method.data.composer_include_overrides),
-      );
-      setMethodDataDefenseCenterIp(getValue(method.data.defense_center_ip, ''));
-      setMethodDataDefenseCenterPort(
-        parseInt(
-          getValue(
-            method.data.defense_center_port,
-            DEFAULT_DEFENSE_CENTER_PORT,
-          ),
-        ),
       );
       setMethodDataDetailsUrl(
         getValue(method.data.details_url, DEFAULT_DETAILS_URL),
@@ -764,9 +733,6 @@ const AlertComponent = ({
       setMethodDataVeriniceServerCredential(
         selectSaveId(credentials, veriniceCredentialId),
       );
-      setMethodDataPkcs12Credential(
-        selectSaveId(passwordOnlyCredentials, pkcs12CredentialId, '0'),
-      );
       setMethodDataVfireCredential(
         selectSaveId(vFireCredentials, vfireCredentialId),
       );
@@ -839,8 +805,6 @@ const AlertComponent = ({
       setMethod(undefined);
       setMethodDataComposerIgnorePagination(undefined);
       setMethodDataComposerIncludeOverrides(undefined);
-      setMethodDataDefenseCenterIp(undefined);
-      setMethodDataDefenseCenterPort(undefined);
       setMethodDataDetailsUrl(undefined);
       setMethodDataToAddress(undefined);
       setMethodDataFromAddress(undefined);
@@ -886,7 +850,6 @@ const AlertComponent = ({
       setMethodDataSmbReportFormat(reportFormatId);
       setMethodDataVeriniceServerReportConfig(reportConfigId);
       setMethodDataVeriniceServerReportFormat(reportFormatId);
-      setMethodDataPkcs12Credential(UNSET_VALUE);
       setMethodDataVfireCredential(undefined);
       setMethodDataVfireBaseUrl(undefined);
       setMethodDataVfireCallDescription(undefined);
@@ -967,10 +930,6 @@ const AlertComponent = ({
           }
         },
       );
-  };
-
-  const handlePasswordOnlyCredentialChange = credential => {
-    setMethodDataPkcs12Credential(credential);
   };
 
   const handleScpCredentialChange = credential => {
@@ -1072,8 +1031,6 @@ const AlertComponent = ({
               method_data_composer_include_overrides={
                 methodDataComposerIncludeOverrides
               }
-              method_data_defense_center_ip={methodDataDefenseCenterIp}
-              method_data_defense_center_port={methodDataDefenseCenterPort}
               method_data_details_url={methodDataDetailsUrl}
               method_data_from_address={methodDataFromAddress}
               method_data_message={methodDataMessage}
@@ -1083,7 +1040,6 @@ const AlertComponent = ({
               method_data_notice_attach_format={methodDataNoticeAttachFormat}
               method_data_notice_report_config={methodDataNoticeReportConfig}
               method_data_notice_report_format={methodDataNoticeReportFormat}
-              method_data_pkcs12_credential={methodDataPkcs12Credential}
               method_data_recipient_credential={methodDataRecipientCredential}
               method_data_scp_credential={methodDataScpCredential}
               method_data_scp_host={methodDataScpHost}
@@ -1152,9 +1108,6 @@ const AlertComponent = ({
               onClose={handleCloseAlertDialog}
               onEmailCredentialChange={handleEmailCredentialChange}
               onNewEmailCredentialClick={openEmailCredentialDialog}
-              onNewPasswordOnlyCredentialClick={
-                openPasswordOnlyCredentialDialog
-              }
               onNewScpCredentialClick={openScpCredentialDialog}
               onNewSmbCredentialClick={openSmbCredentialDialog}
               onNewTippingPointCredentialClick={
@@ -1163,9 +1116,6 @@ const AlertComponent = ({
               onNewVeriniceCredentialClick={openVeriniceCredentialDialog}
               onNewVfireCredentialClick={openVfireCredentialDialog}
               onOpenContentComposerDialogClick={handleOpenContentComposerDialog}
-              onPasswordOnlyCredentialChange={
-                handlePasswordOnlyCredentialChange
-              }
               onReportConfigsChange={handleReportConfigsChange}
               onReportFormatsChange={handleReportFormatsChange}
               onSave={d => {

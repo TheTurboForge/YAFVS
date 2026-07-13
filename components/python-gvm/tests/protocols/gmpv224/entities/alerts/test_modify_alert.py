@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2018-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -193,21 +194,3 @@ class GmpModifyAlertTestMixin:
             b"<event>Task run status changed</event>"
             b"</modify_alert>"
         )
-
-    def test_modify_missing_method_for_ticket_received(self):
-        with self.assertRaises(RequiredArgument):
-            self.gmp.modify_alert(
-                alert_id="a1",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.TICKET_RECEIVED,
-                method=None,
-            )
-
-    def test_modify_missing_condition_for_ticket_received(self):
-        with self.assertRaises(RequiredArgument):
-            self.gmp.modify_alert(
-                alert_id="a1",
-                condition=None,
-                event=AlertEvent.TICKET_RECEIVED,
-                method=AlertMethod.EMAIL,
-            )

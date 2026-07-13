@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2023-2025 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -32,6 +33,6 @@ class GetHelpFormatFromStringTestCase(unittest.TestCase):
         ct = HelpFormat.from_string("tExT")
         self.assertEqual(ct, HelpFormat.TEXT)
 
-    def test_ticket_received(self):
+    def test_xml(self):
         ct = HelpFormat.from_string("XmL")
         self.assertEqual(ct, HelpFormat.XML)

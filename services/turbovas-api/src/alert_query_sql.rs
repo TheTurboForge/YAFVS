@@ -28,7 +28,6 @@ pub(crate) fn alert_assets_sql(sort_sql: &str) -> String {
                     CASE coalesce(a.method, 0)::integer
                       WHEN 1 THEN 'Email'
                       WHEN 2 THEN 'HTTP Get'
-                      WHEN 3 THEN 'Sourcefire Connector'
                       WHEN 4 THEN 'Start Task'
                       WHEN 5 THEN 'Syslog'
                       WHEN 6 THEN 'verinice Connector'
@@ -96,7 +95,6 @@ pub(crate) fn alert_asset_detail_sql() -> &'static str {
               CASE coalesce(a.method, 0)::integer
                 WHEN 1 THEN 'Email'
                 WHEN 2 THEN 'HTTP Get'
-                WHEN 3 THEN 'Sourcefire Connector'
                 WHEN 4 THEN 'Start Task'
                 WHEN 5 THEN 'Syslog'
                 WHEN 6 THEN 'verinice Connector'

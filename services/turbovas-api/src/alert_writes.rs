@@ -232,8 +232,7 @@ pub(crate) fn parse_alert_create_response(response: &[u8]) -> Result<String, Api
         | b"52 invalid_tp_certificate"
         | b"53 invalid_tp_tls"
         | b"61 invalid_recipient_credential"
-        | b"71 invalid_vfire_credential"
-        | b"81 invalid_sourcefire_credential" => Err(ApiError::BadRequest(
+        | b"71 invalid_vfire_credential" => Err(ApiError::BadRequest(
             "The alert delivery request was rejected.".to_string(),
         )),
         b"3 filter_not_found"
@@ -241,8 +240,7 @@ pub(crate) fn parse_alert_create_response(response: &[u8]) -> Result<String, Api
         | b"14 send_format_not_found"
         | b"17 scp_format_not_found"
         | b"60 recipient_credential_not_found"
-        | b"70 vfire_credential_not_found"
-        | b"80 sourcefire_credential_not_found" => Err(ApiError::NotFound),
+        | b"70 vfire_credential_not_found" => Err(ApiError::NotFound),
         b"90 report_format_not_found" | b"91 report_config_not_found" => Err(ApiError::NotFound),
         b"92 report_config_mismatch" => Err(ApiError::BadRequest(
             "The report config does not belong to the selected report format.".to_string(),

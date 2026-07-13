@@ -19,13 +19,12 @@ import {
   METHOD_TYPE_EMAIL,
   METHOD_TYPE_START_TASK,
   METHOD_TYPE_HTTP_GET,
-  METHOD_TYPE_SOURCEFIRE,
   METHOD_TYPE_VERINICE,
   METHOD_TYPE_TIPPING_POINT,
   isTaskEvent,
   isSecinfoEvent,
 } from 'gmp/models/alert';
-import {parseInt, NO_VALUE, YES_VALUE} from 'gmp/parser';
+import {NO_VALUE, YES_VALUE} from 'gmp/parser';
 import {selectSaveId} from 'gmp/utils/id';
 import {isDefined} from 'gmp/utils/identity';
 import SaveDialog from 'web/components/dialog/SaveDialog';
@@ -36,7 +35,6 @@ import TextField from 'web/components/form/TextField';
 import YesNoRadio from 'web/components/form/YesNoRadio';
 import {ReportIcon} from 'web/components/icon';
 import Divider from 'web/components/layout/Divider';
-import Row from 'web/components/layout/Row';
 import AlembaVfireMethodPart from 'web/pages/alerts/dialog/AlembavFireMethodPart';
 import EmailMethodPart from 'web/pages/alerts/dialog/EmailMethodPart';
 import HttpMethodPart from 'web/pages/alerts/dialog/HttpMethodPart';
@@ -44,7 +42,6 @@ import ScpMethodPart from 'web/pages/alerts/dialog/ScpMethodPart';
 import SendMethodPart from 'web/pages/alerts/dialog/SendMethodPart';
 import SmbMethodPart from 'web/pages/alerts/dialog/SmbMethodPart';
 import SnmpMethodPart from 'web/pages/alerts/dialog/SnmpMethodPart';
-import SourceFireMethodPart from 'web/pages/alerts/dialog/SourceFireMethodPart';
 import StartTaskMethodPart from 'web/pages/alerts/dialog/StartTaskMethodPart';
 import TippingPontMethodPart from 'web/pages/alerts/dialog/TippingPointMethodPart';
 import VeriniceMethodPart from 'web/pages/alerts/dialog/VeriniceMethodPart';
@@ -58,7 +55,6 @@ import PropTypes from 'web/utils/PropTypes';
 import {UNSET_VALUE} from 'web/utils/Render';
 import withCapabilities from 'web/utils/withCapabilities';
 
-export const DEFAULT_DEFENSE_CENTER_PORT = '8307';
 export const DEFAULT_DIRECTION = 'changed';
 export const DEFAULT_EVENT_STATUS = 'Done';
 export const DEFAULT_METHOD = METHOD_TYPE_EMAIL;
@@ -171,8 +167,6 @@ const DEFAULTS = {
   filters: [],
   method: DEFAULT_METHOD,
   method_data_details_url: DEFAULT_DETAILS_URL,
-  method_data_defense_center_ip: '',
-  method_data_defense_center_port: DEFAULT_DEFENSE_CENTER_PORT,
   method_data_from_address: '',
   method_data_message_attach: ATTACH_MESSAGE_DEFAULT,
   method_data_message: INCLUDE_MESSAGE_DEFAULT,
@@ -275,7 +269,6 @@ class AlertDialog extends React.Component {
       method_data_smb_credential,
       method_data_tp_sms_credential,
       method_data_verinice_server_credential,
-      method_data_pkcs12_credential,
       method_data_vfire_base_url,
       method_data_vfire_credential,
       method_data_vfire_session_type,
@@ -289,7 +282,6 @@ class AlertDialog extends React.Component {
       onClose,
       onEmailCredentialChange,
       onNewEmailCredentialClick,
-      onNewPasswordOnlyCredentialClick,
       onNewScpCredentialClick,
       onNewSmbCredentialClick,
       onNewVeriniceCredentialClick,
@@ -299,7 +291,6 @@ class AlertDialog extends React.Component {
       onReportConfigsChange,
       onReportFormatsChange,
       onSave,
-      onPasswordOnlyCredentialChange,
       onScpCredentialChange,
       onSmbCredentialChange,
       onTippingPointCredentialChange,
@@ -340,10 +331,6 @@ class AlertDialog extends React.Component {
         {
           value: METHOD_TYPE_SNMP,
           label: _('SNMP'),
-        },
-        {
-          value: METHOD_TYPE_SOURCEFIRE,
-          label: _('Sourcefire Connector'),
         },
         {
           value: METHOD_TYPE_START_TASK,
@@ -434,7 +421,6 @@ class AlertDialog extends React.Component {
     const controlledValues = {
       event,
       filter_id,
-      method_data_pkcs12_credential,
       method_data_composer_ignore_pagination,
       method_data_composer_include_overrides,
       method_data_recipient_credential,
@@ -680,22 +666,6 @@ class AlertDialog extends React.Component {
                 />
               )}
 
-              {values.method === METHOD_TYPE_SOURCEFIRE && (
-                <SourceFireMethodPart
-                  credentials={credentials}
-                  defenseCenterIp={values.method_data_defense_center_ip}
-                  defenseCenterPort={parseInt(
-                    values.method_data_defense_center_port,
-                  )}
-                  pkcs12Credential={values.method_data_pkcs12_credential}
-                  pkcs12File={values.method_data_pkcs12}
-                  prefix="method_data"
-                  onChange={onValueChange}
-                  onCredentialChange={onPasswordOnlyCredentialChange}
-                  onNewCredentialClick={onNewPasswordOnlyCredentialClick}
-                />
-              )}
-
               {values.method === METHOD_TYPE_VERINICE && (
                 <VeriniceMethodPart
                   credentials={credentials}
@@ -805,8 +775,6 @@ AlertDialog.propTypes = {
   method_data_URL: PropTypes.string,
   method_data_composer_ignore_pagination: PropTypes.number,
   method_data_composer_include_overrides: PropTypes.number,
-  method_data_defense_center_ip: PropTypes.string,
-  method_data_defense_center_port: PropTypes.numberOrNumberString,
   method_data_details_url: PropTypes.string,
   method_data_from_address: PropTypes.string,
   method_data_message: PropTypes.string,
@@ -816,7 +784,6 @@ AlertDialog.propTypes = {
   method_data_notice_attach_format: PropTypes.id,
   method_data_notice_report_config: PropTypes.id,
   method_data_notice_report_format: PropTypes.id,
-  method_data_pkcs12_credential: PropTypes.id,
   method_data_recipient_credential: PropTypes.id,
   method_data_scp_credential: PropTypes.id,
   method_data_scp_host: PropTypes.string,
@@ -869,14 +836,12 @@ AlertDialog.propTypes = {
   onClose: PropTypes.func.isRequired,
   onEmailCredentialChange: PropTypes.func.isRequired,
   onNewEmailCredentialClick: PropTypes.func.isRequired,
-  onNewPasswordOnlyCredentialClick: PropTypes.func.isRequired,
   onNewScpCredentialClick: PropTypes.func.isRequired,
   onNewSmbCredentialClick: PropTypes.func.isRequired,
   onNewTippingPointCredentialClick: PropTypes.func.isRequired,
   onNewVeriniceCredentialClick: PropTypes.func.isRequired,
   onNewVfireCredentialClick: PropTypes.func.isRequired,
   onOpenContentComposerDialogClick: PropTypes.func.isRequired,
-  onPasswordOnlyCredentialChange: PropTypes.func.isRequired,
   onReportConfigsChange: PropTypes.func.isRequired,
   onReportFormatsChange: PropTypes.func.isRequired,
   onSave: PropTypes.func.isRequired,

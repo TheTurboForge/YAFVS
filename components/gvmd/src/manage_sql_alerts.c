@@ -795,47 +795,6 @@ validate_vfire_data (alert_method_t method, const gchar *name,
 }
 
 /**
- * @brief Validate method data for the Sourcefire method.
- *
- * @param[in]  method          Method that data corresponds to.
- * @param[in]  name            Name of data.
- * @param[in]  data            The data.
- *
- * @return 0 valid, 80 credential not found, 81 invalid credential type
- */
-static int
-validate_sourcefire_data (alert_method_t method, const gchar *name,
-                          gchar **data)
-{
-  if (method == ALERT_METHOD_SOURCEFIRE)
-    {
-      if (strcmp (name, "pkcs12_credential") == 0)
-        {
-          credential_t credential;
-          if (find_credential_with_permission (*data, &credential,
-                                               "get_credentials"))
-            return -1;
-          else if (credential == 0)
-            return 80;
-          else
-            {
-              char *sourcefire_credential_type;
-              sourcefire_credential_type = credential_type (credential);
-              if (strcmp (sourcefire_credential_type, "up")
-                  && strcmp (sourcefire_credential_type, "pw"))
-                {
-                  free (sourcefire_credential_type);
-                  return 81;
-                }
-              free (sourcefire_credential_type);
-            }
-        }
-    }
-
-  return 0;
-}
-
-/**
  * @brief Check alert params.
  *
  * @param[in]  event           Type of event.
@@ -851,9 +810,7 @@ check_alert_params (event_t event, alert_condition_t condition,
 {
   if (event == EVENT_NEW_SECINFO || event == EVENT_UPDATED_SECINFO)
     {
-      if (method == ALERT_METHOD_HTTP_GET
-          || method == ALERT_METHOD_SOURCEFIRE
-          || method == ALERT_METHOD_VERINICE)
+      if (method == ALERT_METHOD_HTTP_GET || method == ALERT_METHOD_VERINICE)
         return 20;
 
       if (condition == ALERT_CONDITION_SEVERITY_AT_LEAST
@@ -1071,14 +1028,6 @@ create_alert_body (const char* name, const char* comment,
         }
 
       ret = validate_smb_data (method, data_name, &data);
-      if (ret)
-        {
-          g_free (data_name);
-          secure_gfree (data, sensitive);
-          return ret;
-        }
-
-      ret = validate_sourcefire_data (method, data_name, &data);
       if (ret)
         {
           g_free (data_name);
@@ -1769,15 +1718,6 @@ modify_alert (const char *alert_id, const char *name, const char *comment,
             }
 
           ret = validate_smb_data (method, data_name, &data);
-          if (ret)
-            {
-              g_free (data_name);
-              g_free (data);
-              sql_rollback ();
-              return ret;
-            }
-
-          ret = validate_sourcefire_data (method, data_name, &data);
           if (ret)
             {
               g_free (data_name);

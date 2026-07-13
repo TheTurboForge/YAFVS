@@ -16,6 +16,9 @@ from gvm.protocols.gmp.requests.v224 import (
 
 
 class AlertsTestCase(unittest.TestCase):
+    def test_ticket_event_is_not_retained(self):
+        self.assertFalse(hasattr(AlertEvent, "TICKET_RECEIVED"))
+
     def test_create_alerts(self):
         request = Alerts.create_alert(
             name="foo",
@@ -259,14 +262,6 @@ class AlertsTestCase(unittest.TestCase):
                 name="foo",
                 condition=AlertCondition.ALWAYS,
                 event=AlertEvent.UPDATED_SECINFO_ARRIVED,
-                method=AlertMethod.SOURCEFIRE_CONNECTOR,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.UPDATED_SECINFO_ARRIVED,
                 method=AlertMethod.START_TASK,
             )
 
@@ -307,14 +302,6 @@ class AlertsTestCase(unittest.TestCase):
                 name="foo",
                 condition=AlertCondition.ALWAYS,
                 event=AlertEvent.NEW_SECINFO_ARRIVED,
-                method=AlertMethod.SOURCEFIRE_CONNECTOR,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.NEW_SECINFO_ARRIVED,
                 method=AlertMethod.START_TASK,
             )
 
@@ -332,97 +319,6 @@ class AlertsTestCase(unittest.TestCase):
                 condition=AlertCondition.ALWAYS,
                 event=AlertEvent.NEW_SECINFO_ARRIVED,
                 method=AlertMethod.VERINICE_CONNECTOR,
-            )
-
-    def test_create_alert_missing_method_for_ticket_received(self):
-        with self.assertRaises(RequiredArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.TICKET_RECEIVED,
-                method=None,
-            )
-
-    def test_create_alert_missing_condition_for_ticket_received(self):
-        with self.assertRaises(RequiredArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=None,
-                event=AlertEvent.TICKET_RECEIVED,
-                method=AlertMethod.EMAIL,
-            )
-
-    def test_create_alert_invalid_method_for_ticket_received(self):
-        with self.assertRaises(InvalidArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.TICKET_RECEIVED,
-                method=AlertMethod.HTTP_GET,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.TICKET_RECEIVED,
-                method=AlertMethod.SCP,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.TICKET_RECEIVED,
-                method=AlertMethod.SEND,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.TICKET_RECEIVED,
-                method=AlertMethod.SMB,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.TICKET_RECEIVED,
-                method=AlertMethod.SNMP,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.TICKET_RECEIVED,
-                method=AlertMethod.ALEMBA_VFIRE,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.TICKET_RECEIVED,
-                method=AlertMethod.VERINICE_CONNECTOR,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.TICKET_RECEIVED,
-                method=AlertMethod.TIPPINGPOINT_SMS,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.TICKET_RECEIVED,
-                method=AlertMethod.SOURCEFIRE_CONNECTOR,
             )
 
     def test_create_alert_invalid_condition_for_task_run_status_changed(self):
@@ -431,15 +327,6 @@ class AlertsTestCase(unittest.TestCase):
                 name="foo",
                 condition=AlertCondition.ERROR,
                 event=AlertEvent.TASK_RUN_STATUS_CHANGED,
-                method=AlertMethod.EMAIL,
-            )
-
-    def test_create_alert_invalid_condition_for_ticket_received(self):
-        with self.assertRaises(InvalidArgument):
-            Alerts.create_alert(
-                name="foo",
-                condition=AlertCondition.FILTER_COUNT_AT_LEAST,
-                event=AlertEvent.TICKET_RECEIVED,
                 method=AlertMethod.EMAIL,
             )
 
@@ -635,24 +522,6 @@ class AlertsTestCase(unittest.TestCase):
                 method="HTTP Get",
             )
 
-    def test_modify_missing_method_for_ticket_received(self):
-        with self.assertRaises(RequiredArgument):
-            Alerts.modify_alert(
-                alert_id="a1",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.TICKET_RECEIVED,
-                method=None,
-            )
-
-    def test_modify_missing_condition_for_ticket_received(self):
-        with self.assertRaises(RequiredArgument):
-            Alerts.modify_alert(
-                alert_id="a1",
-                condition=None,
-                event=AlertEvent.TICKET_RECEIVED,
-                method=AlertMethod.EMAIL,
-            )
-
     def test_clone_alert(self):
         request = Alerts.clone_alert(alert_id="a1")
 
@@ -755,7 +624,6 @@ class AlertsTestCase(unittest.TestCase):
             '<get_reports report_id="r1" alert_id="a1" '
             f'format_id="{ReportFormatType.SVG}"/>'.encode(),
         )
-
 
     def test_trigger_alert_missing_alert_id(self):
         with self.assertRaises(RequiredArgument):

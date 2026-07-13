@@ -18,7 +18,6 @@ import {
   METHOD_TYPE_EMAIL,
   METHOD_TYPE_START_TASK,
   METHOD_TYPE_HTTP_GET,
-  METHOD_TYPE_SOURCEFIRE,
   METHOD_TYPE_TIPPING_POINT,
   METHOD_TYPE_VERINICE,
 } from 'gmp/models/alert';
@@ -585,38 +584,6 @@ const Method = ({
     }
 
     return _('HTTP GET request');
-  }
-
-  if (method.type === METHOD_TYPE_SOURCEFIRE) {
-    const {data = {}} = method;
-    if (details) {
-      return (
-        <div>
-          <div>{_('Sourcefire Connector')}</div>
-          <Table>
-            <colgroup>
-              <TableCol width="12%" />
-              <TableCol width="88%" />
-            </colgroup>
-            <TableBody>
-              {isDefined(data.defense_center_ip?.value) && (
-                <TableRow>
-                  <TableData>{_('Defense Center IP')}</TableData>
-                  <TableData>{data.defense_center_ip.value}</TableData>
-                </TableRow>
-              )}
-              {isDefined(data.defense_center_port?.value) && (
-                <TableRow>
-                  <TableData>{_('Defense Center Port')}</TableData>
-                  <TableData>{data.defense_center_port.value}</TableData>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-    return _('Sourcefire Connector');
   }
 
   if (method.type === METHOD_TYPE_VERINICE) {

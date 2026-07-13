@@ -2317,8 +2317,6 @@ Ensure (turbovas_control, maps_every_alert_create_response)
     {61, "61 invalid_recipient_credential\n"},
     {70, "70 vfire_credential_not_found\n"},
     {71, "71 invalid_vfire_credential\n"},
-    {80, "80 sourcefire_credential_not_found\n"},
-    {81, "81 invalid_sourcefire_credential\n"},
     {90, "90 report_format_not_found\n"},
     {91, "91 report_config_not_found\n"},
     {92, "92 report_config_mismatch\n"}, {99, "99 forbidden\n"},

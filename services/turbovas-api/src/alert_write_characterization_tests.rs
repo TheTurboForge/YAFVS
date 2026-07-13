@@ -3,18 +3,32 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use axum::http::Method;
+use std::path::Path;
 
 use crate::direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed};
 
 const GSA_ALERT_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/alert.ts");
+const GSA_ALERT_MODEL: &str = include_str!("../../../components/gsa/src/gmp/models/alert.ts");
+const GSA_ALERT_COMPONENT: &str =
+    include_str!("../../../components/gsa/src/web/pages/alerts/AlertComponent.jsx");
+const GSA_ALERT_DIALOG: &str =
+    include_str!("../../../components/gsa/src/web/pages/alerts/Dialog.jsx");
+const GSA_ALERT_METHOD: &str =
+    include_str!("../../../components/gsa/src/web/pages/alerts/Method.jsx");
 const GSA_ENTITY_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/entity.ts");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GVMD_CMAKE: &str = include_str!("../../../components/gvmd/CMakeLists.txt");
+const GVMD_GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
+const GVMD_INSTALL: &str = include_str!("../../../components/gvmd/INSTALL.md");
 const MANAGE_ALERTS_C: &str = include_str!("../../../components/gvmd/src/manage_alerts.c");
+const MANAGE_ALERTS_H: &str = include_str!("../../../components/gvmd/src/manage_alerts.h");
 const MANAGE_EVENTS_C: &str = include_str!("../../../components/gvmd/src/manage_events.c");
 const MANAGE_SQL_C: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
 const MANAGE_SQL_ALERTS_C: &str = include_str!("../../../components/gvmd/src/manage_sql_alerts.c");
 const PYTHON_GVM_ALERTS: &str =
     include_str!("../../../components/python-gvm/gvm/protocols/gmp/requests/v224/_alerts.py");
+const ALERT_QUERY_SQL: &str = include_str!("alert_query_sql.rs");
+const ALERT_WRITES: &str = include_str!("alert_writes.rs");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -25,6 +39,67 @@ fn inherited_function(source: &str, name: &str) -> String {
     let tail = &source[start..];
     let end = tail.find("\n/**").unwrap_or(tail.len());
     tail[..end].to_string()
+}
+
+#[test]
+fn retired_connector_is_removed_full_stack_without_renumbering_alert_methods() {
+    let retired_name = ["source", "fire"].concat();
+    for (path, source) in [
+        ("GSA alert command", GSA_ALERT_COMMAND),
+        ("GSA alert model", GSA_ALERT_MODEL),
+        ("GSA alert component", GSA_ALERT_COMPONENT),
+        ("GSA alert dialog", GSA_ALERT_DIALOG),
+        ("GSA alert method view", GSA_ALERT_METHOD),
+        ("gsad GMP bridge", GSAD_GMP_C),
+        ("gvmd CMake", GVMD_CMAKE),
+        ("gvmd GMP", GVMD_GMP_C),
+        ("gvmd install guide", GVMD_INSTALL),
+        ("gvmd alert execution", MANAGE_ALERTS_C),
+        ("gvmd alert declarations", MANAGE_ALERTS_H),
+        ("gvmd alert SQL", MANAGE_SQL_ALERTS_C),
+        ("python-gvm alert requests", PYTHON_GVM_ALERTS),
+        ("native alert query SQL", ALERT_QUERY_SQL),
+        ("native alert writes", ALERT_WRITES),
+    ] {
+        assert!(
+            !source.to_ascii_lowercase().contains(&retired_name),
+            "{path} still contains the retired connector"
+        );
+    }
+
+    for required in [
+        "ALERT_METHOD_HTTP_GET = 2",
+        "ALERT_METHOD_START_TASK = 4",
+        "ALERT_METHOD_SYSLOG = 5",
+        "ALERT_METHOD_VERINICE = 6",
+        "ALERT_METHOD_SEND = 7",
+        "ALERT_METHOD_SCP = 8",
+        "ALERT_METHOD_SNMP = 9",
+        "ALERT_METHOD_SMB = 10",
+        "ALERT_METHOD_TIPPINGPOINT = 11",
+        "ALERT_METHOD_VFIRE = 12",
+    ] {
+        assert!(
+            MANAGE_ALERTS_H.contains(required),
+            "persisted alert method mapping missing {required}"
+        );
+    }
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let retired_directory = ["Source", "fire"].concat();
+    assert!(
+        !root
+            .join("components/gvmd/src/alert_methods")
+            .join(retired_directory)
+            .join("alert")
+            .exists()
+    );
+    assert!(
+        !root
+            .join("components/gsa/src/web/pages/alerts/dialog")
+            .join(["Source", "FireMethodPart.tsx"].concat())
+            .exists()
+    );
 }
 
 fn openapi_path_block(path: &str) -> String {
@@ -94,7 +169,6 @@ fn inherited_alert_create_and_modify_are_acl_filter_and_payload_guarded() {
         "validate_scp_data (method, data_name, &data)",
         "validate_send_data (method, data_name, &data)",
         "validate_smb_data (method, data_name, &data)",
-        "validate_sourcefire_data (method, data_name, &data)",
         "validate_tippingpoint_data (method, data_name, &data)",
         "validate_vfire_data (method, data_name, &data)",
         "INSERT INTO alert_method_data (alert, name, data)",
@@ -222,8 +296,6 @@ fn gsad_and_gsa_alert_commands_proxy_delivery_payloads_and_control_verbs() {
         "send_report_format",
         "notice_report_config",
         "notice_report_format",
-        "pkcs12_credential",
-        "g_base64_encode ((guchar *) param->value, param->value_size)",
         "composer_include_overrides",
         "composer_ignore_pagination",
     ] {

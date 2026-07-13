@@ -1,5 +1,6 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
  * SPDX-FileCopyrightText: 2002-2004 Tenable Network Security
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-only
  */
@@ -17,6 +18,7 @@
 #include "nasl_init.h"
 #include "nasl_krb5.h" /* for nasl_okrb5_clean */
 #include "nasl_lex_ctxt.h"
+#include "nasl_socket.h"
 #include "nasl_tree.h"
 #include "nasl_var.h"
 
@@ -1741,8 +1743,9 @@ exec_nasl_script (struct script_infos *script_infos, int mode)
 
       if ((pf = get_func_ref_by_name (lexic, "on_exit")) != NULL)
         nasl_func_call (lexic, pf, NULL);
-
     }
+
+  nasl_socket_cleanup (script_infos);
 
   if (g_chdir (old_dir) != 0)
     {

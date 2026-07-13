@@ -126,7 +126,8 @@ set (FILES arc4.c capture_packet.c charcnv.c exec.c genrand.c hmacmd5.c
      nasl_cert.c nasl_crypto.c nasl_debug.c nasl_func.c nasl_grammar.tab.c nasl_host.c
      nasl_http.c nasl_http2.c nasl_init.c nasl_lex_ctxt.c nasl_misc_funcs.c nasl_scanner_glue.c
      nasl_packet_forgery.c nasl_packet_forgery_v6.c nasl_signature.c nasl_smb.c
-     nasl_socket.c nasl_text_utils.c nasl_tree.c nasl_var.c nasl_wmi.c
+     nasl_socket.c nasl_socket_resources.c nasl_text_utils.c nasl_tree.c
+     nasl_var.c nasl_wmi.c
      nasl_isotime.c ntlmssp.c smb_crypt.c smb_crypt2.c smb_signing.c time.c
      nasl_krb5.c)
 
@@ -234,6 +235,19 @@ if (ENABLE_NASL_SECURITY_TESTS)
   target_link_libraries (nasl-telnet-test ${GLIB_LDFLAGS})
   set_tests_properties (nasl-telnet-test PROPERTIES
     ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1")
+
+  add_executable (nasl-socket-resources-test
+                  nasl_socket_resources_tests.c nasl_socket_resources.c)
+  add_test (nasl-socket-resources-test nasl-socket-resources-test)
+  target_compile_options (nasl-socket-resources-test PRIVATE
+                          -Wall -Wextra -Werror
+                          -fsanitize=address,undefined
+                          -fno-omit-frame-pointer)
+  target_link_options (nasl-socket-resources-test PRIVATE
+                       -fsanitize=address,undefined)
+  target_link_libraries (nasl-socket-resources-test ${GLIB_LDFLAGS})
+  set_tests_properties (nasl-socket-resources-test PROPERTIES
+    ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1;UBSAN_OPTIONS=halt_on_error=1:abort_on_error=1:print_stacktrace=1")
 endif (ENABLE_NASL_SECURITY_TESTS)
 
 ## End

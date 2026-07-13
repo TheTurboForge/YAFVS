@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -34,6 +35,7 @@ struct script_infos
   char *oid;
   char *name;
   GHashTable *udp_data;
+  GArray *udp_multicast_groups;
   struct in6_addr *ip;
   GSList *vhosts;
   int standalone;

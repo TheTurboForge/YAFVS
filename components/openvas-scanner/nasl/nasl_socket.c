@@ -1,5 +1,6 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
  * SPDX-FileCopyrightText: 2002-2004 Tenable Network Security
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-only
  */
@@ -27,6 +28,7 @@
 #include "nasl_global_ctxt.h"
 #include "nasl_lex_ctxt.h"
 #include "nasl_packet_forgery.h"
+#include "nasl_socket_resources.h"
 #include "nasl_tree.h"
 #include "nasl_var.h"
 
@@ -145,71 +147,38 @@ wait_before_next_probe ()
  *
  */
 
-struct udp_record
-{
-  int len;
-  char *data;
-};
-
 /* add udp data in our cache */
 static int
 add_udp_data (struct script_infos *script_infos, int soc, char *data, int len)
 {
-  GHashTable *udp_data = script_infos->udp_data;
-  struct udp_record *data_record = g_malloc0 (sizeof (struct udp_record));
-  int *key = g_memdup2 (&soc, sizeof (int));
-
-  data_record->len = len;
-  data_record->data = g_memdup2 ((gconstpointer) data, (guint) len);
-
-  if (udp_data == NULL)
-    {
-      udp_data =
-        g_hash_table_new_full (g_int_hash, g_int_equal, g_free, g_free);
-      script_infos->udp_data = udp_data;
-    }
-
-  g_hash_table_replace (udp_data, (gpointer) key, (gpointer) data_record);
-
-  return 0;
+  return nasl_udp_socket_store (script_infos->udp_data, soc, data, len) ? 0
+                                                                        : -1;
 }
 
 /* get the udp data for socket <soc> */
 static char *
 get_udp_data (struct script_infos *script_infos, int soc, int *len)
 {
-  GHashTable *udp_data;
-  struct udp_record *data_record;
-
-  if ((udp_data = script_infos->udp_data) == NULL)
-    {
-      udp_data =
-        g_hash_table_new_full (g_int_hash, g_int_equal, g_free, g_free);
-      script_infos->udp_data = udp_data;
-      return NULL;
-    }
-  data_record = g_hash_table_lookup (udp_data, (gconstpointer) &soc);
-
-  if (!data_record)
-    return NULL;
-
-  *len = data_record->len;
-  return data_record->data;
+  return (char *) nasl_udp_socket_data (script_infos->udp_data, soc, len);
 }
 
 /* remove the udp data for socket <soc> */
-static void
+static gboolean
 rm_udp_data (struct script_infos *script_infos, int soc)
 {
-  GHashTable *udp_data = script_infos->udp_data;
-
-  if (udp_data)
-    g_hash_table_remove (udp_data, (gconstpointer) &soc);
+  return nasl_udp_socket_close (script_infos->udp_data, soc);
 }
 
 /*-------------------------------------------------------------------*/
 
 int lowest_socket = 0;
+
+void
+nasl_socket_track_descriptor (int socket_fd)
+{
+  if (socket_fd > 0 && (lowest_socket == 0 || socket_fd < lowest_socket))
+    lowest_socket = socket_fd;
+}
 
 static tree_cell *
 nasl_open_privileged_socket (lex_ctxt *lexic, int proto)
@@ -272,6 +241,12 @@ restart:
 
   if (sock < 0)
     return NULL;
+  if (!nasl_socket_fd_is_selectable (sock))
+    {
+      nasl_perror (lexic, "open_priv_sock: descriptor exceeds select limit\n");
+      close (sock);
+      return NULL;
+    }
 
 tryagain:
   if (current_sport < 128 && sport < 0)
@@ -381,10 +356,19 @@ tryagain:
       break;
     }
 
-  if (lowest_socket == 0)
-    lowest_socket = sock;
   if (proto == IPPROTO_TCP)
-    sock = openvas_register_connection (sock, NULL, NULL, OPENVAS_ENCAPS_IP);
+    {
+      nasl_socket_track_descriptor (sock);
+      sock = openvas_register_connection (sock, NULL, NULL, OPENVAS_ENCAPS_IP);
+    }
+  else if (!nasl_udp_socket_register (&script_infos->udp_data, sock))
+    {
+      nasl_perror (lexic, "open_priv_sock_udp: socket limit reached\n");
+      close (sock);
+      return NULL;
+    }
+  else
+    nasl_socket_track_descriptor (sock);
 
   retc = alloc_typed_cell (CONST_INT);
   retc->x.i_val = sock < 0 ? 0 : sock;
@@ -570,8 +554,13 @@ nasl_open_sock_udp (lex_ctxt *lexic)
         }
     }
 
-  if (soc > 0 && lowest_socket == 0)
-    lowest_socket = soc;
+  if (!nasl_udp_socket_register (&script_infos->udp_data, soc))
+    {
+      nasl_perror (lexic, "open_sock_udp: socket limit reached\n");
+      close (soc);
+      return NULL;
+    }
+  nasl_socket_track_descriptor (soc);
 
   retc = alloc_typed_cell (CONST_INT);
   retc->x.i_val = soc;
@@ -766,8 +755,14 @@ nasl_recv (lex_ctxt *lexic)
   unsigned int opt_len = sizeof (type);
   int e;
 
-  if (len <= 0 || soc <= 0)
+  if (soc <= 0)
     return NULL;
+  if (!nasl_receive_length_is_valid (len))
+    {
+      nasl_perror (lexic, "recv: length must be between 1 and %ld bytes\n",
+                   NASL_MAX_RECEIVE_SIZE);
+      return NULL;
+    }
 
   tv.tv_sec = to;
   tv.tv_usec = 0;
@@ -783,6 +778,19 @@ nasl_recv (lex_ctxt *lexic)
       /* As UDP packets may be lost, we retry up to 5 times */
       int retries = 5;
       int i;
+
+      if (!nasl_udp_socket_is_owned (lexic->script_infos->udp_data, soc))
+        {
+          nasl_perror (lexic, "recv: UDP socket is not owned by this script\n");
+          g_free (data);
+          return NULL;
+        }
+      if (!nasl_socket_fd_is_selectable (soc))
+        {
+          nasl_perror (lexic, "recv: descriptor exceeds select limit\n");
+          g_free (data);
+          return NULL;
+        }
 
       tv.tv_sec = to / retries;
       tv.tv_usec = (to % retries) * 100000;
@@ -855,10 +863,12 @@ nasl_recv_line (lex_ctxt *lexic)
   tree_cell *retc;
   time_t t1 = 0;
 
-  if (len == -1 || soc <= 0)
+  if (soc <= 0 || !nasl_receive_line_length_is_valid (len))
     {
-      nasl_perror (lexic, "recv_line: missing or undefined parameter"
-                          " length or socket\n");
+      nasl_perror (lexic,
+                   "recv_line: socket is required and length must be between 1 "
+                   "and %ld bytes\n",
+                   NASL_MAX_RECEIVE_SIZE - 1);
       return NULL;
     }
 
@@ -985,6 +995,11 @@ nasl_send (lex_ctxt *lexic)
       && getsockopt (soc, SOL_SOCKET, SO_TYPE, &type, &type_len) == 0
       && type == SOCK_DGRAM)
     {
+      if (!nasl_udp_socket_is_owned (lexic->script_infos->udp_data, soc))
+        {
+          nasl_perror (lexic, "send: UDP socket is not owned by this script\n");
+          return NULL;
+        }
       if ((mtu = get_udp_payload_size (plug_get_host_ip (lexic->script_infos)))
             > 0
           && mtu < length)
@@ -993,7 +1008,8 @@ nasl_send (lex_ctxt *lexic)
                      length, mtu);
 
       n = send (soc, data, length, option);
-      add_udp_data (lexic->script_infos, soc, data, length);
+      if (add_udp_data (lexic->script_infos, soc, data, length))
+        nasl_perror (lexic, "send: failed to retain UDP retry data\n");
     }
   else
     {
@@ -1033,7 +1049,12 @@ nasl_close_socket (lex_ctxt *lexic)
     {
       if (type == SOCK_DGRAM)
         {
-          rm_udp_data (lexic->script_infos, soc);
+          if (!rm_udp_data (lexic->script_infos, soc))
+            {
+              nasl_perror (lexic,
+                           "close: UDP socket is not owned by this script\n");
+              return NULL;
+            }
           return FAKE_CELL;
         }
       close (soc);
@@ -1045,20 +1066,22 @@ nasl_close_socket (lex_ctxt *lexic)
   return NULL;
 }
 
-static struct jmg
+struct nasl_multicast_group
 {
   struct in_addr in;
   int count;
-  int s;
-} *jmg_desc = NULL;
-static int jmg_max = 0;
+  int socket_fd;
+};
 
 tree_cell *
 nasl_join_multicast_group (lex_ctxt *lexic)
 {
   char *a;
-  int i, j;
+  guint i;
+  gint reusable = -1;
   struct ip_mreq m;
+  struct script_infos *script_infos = lexic->script_infos;
+  GArray *groups = script_infos->udp_multicast_groups;
   tree_cell *retc = NULL;
 
   a = get_str_var_by_num (lexic, 0);
@@ -1074,19 +1097,29 @@ nasl_join_multicast_group (lex_ctxt *lexic)
     }
   m.imr_interface.s_addr = INADDR_ANY;
 
-  j = -1;
-  for (i = 0; i < jmg_max; i++)
-    if (jmg_desc[i].in.s_addr == m.imr_multiaddr.s_addr
-        && jmg_desc[i].count > 0)
-      {
-        jmg_desc[i].count++;
-        break;
-      }
-    else if (jmg_desc[i].count <= 0)
-      j = i;
-
-  if (i >= jmg_max)
+  if (groups == NULL)
     {
+      groups = g_array_new (FALSE, TRUE, sizeof (struct nasl_multicast_group));
+      script_infos->udp_multicast_groups = groups;
+    }
+
+  for (i = 0; i < groups->len; i++)
+    {
+      struct nasl_multicast_group *group =
+        &g_array_index (groups, struct nasl_multicast_group, i);
+
+      if (group->in.s_addr == m.imr_multiaddr.s_addr && group->count > 0)
+        {
+          group->count++;
+          break;
+        }
+      if (group->count <= 0)
+        reusable = (gint) i;
+    }
+
+  if (i >= groups->len)
+    {
+      struct nasl_multicast_group *group;
       int s = socket (AF_INET, SOCK_DGRAM, 0);
       if (s < 0)
         {
@@ -1103,15 +1136,24 @@ nasl_join_multicast_group (lex_ctxt *lexic)
           close (s);
           return NULL;
         }
-
-      if (j < 0)
+      if (!nasl_udp_socket_register (&script_infos->udp_data, s))
         {
-          jmg_desc = g_realloc (jmg_desc, sizeof (*jmg_desc) * (jmg_max + 1));
-          j = jmg_max++;
+          nasl_perror (lexic,
+                       "join_multicast_group: UDP socket limit reached\n");
+          close (s);
+          return NULL;
         }
-      jmg_desc[j].s = s;
-      jmg_desc[j].in = m.imr_multiaddr;
-      jmg_desc[j].count = 1;
+
+      if (reusable < 0)
+        {
+          struct nasl_multicast_group empty = {0};
+          g_array_append_val (groups, empty);
+          reusable = (gint) groups->len - 1;
+        }
+      group = &g_array_index (groups, struct nasl_multicast_group, reusable);
+      group->socket_fd = s;
+      group->in = m.imr_multiaddr;
+      group->count = 1;
     }
 
   retc = alloc_typed_cell (CONST_INT);
@@ -1124,7 +1166,8 @@ nasl_leave_multicast_group (lex_ctxt *lexic)
 {
   char *a;
   struct in_addr ia;
-  int i;
+  guint i;
+  GArray *groups = lexic->script_infos->udp_multicast_groups;
 
   a = get_str_var_by_num (lexic, 0);
   if (a == NULL)
@@ -1138,16 +1181,53 @@ nasl_leave_multicast_group (lex_ctxt *lexic)
       return NULL;
     }
 
-  for (i = 0; i < jmg_max; i++)
-    if (jmg_desc[i].count > 0 && jmg_desc[i].in.s_addr == ia.s_addr)
-      {
-        if (--jmg_desc[i].count <= 0)
-          close (jmg_desc[i].s);
-        return FAKE_CELL;
-      }
+  for (i = 0; groups && i < groups->len; i++)
+    {
+      struct nasl_multicast_group *group =
+        &g_array_index (groups, struct nasl_multicast_group, i);
+
+      if (group->count > 0 && group->in.s_addr == ia.s_addr)
+        {
+          if (--group->count <= 0
+              && !nasl_udp_socket_close (lexic->script_infos->udp_data,
+                                         group->socket_fd))
+            {
+              nasl_perror (
+                lexic,
+                "leave_multicast_group: socket is not owned by this script\n");
+              return NULL;
+            }
+          return FAKE_CELL;
+        }
+    }
 
   nasl_perror (lexic, "leave_multicast_group: never joined group %s\n", a);
   return NULL;
+}
+
+void
+nasl_socket_cleanup (struct script_infos *script_infos)
+{
+  guint i;
+  GArray *groups = script_infos->udp_multicast_groups;
+
+  for (i = 0; groups && i < groups->len; i++)
+    {
+      struct nasl_multicast_group *group =
+        &g_array_index (groups, struct nasl_multicast_group, i);
+
+      if (group->count > 0
+          && !nasl_udp_socket_close (script_infos->udp_data, group->socket_fd))
+        {
+          g_warning ("%s: multicast socket was not owned by this script",
+                     __func__);
+        }
+    }
+  if (groups)
+    g_array_free (groups, TRUE);
+  script_infos->udp_multicast_groups = NULL;
+  nasl_udp_socket_cache_destroy (&script_infos->udp_data);
+  lowest_socket = 0;
 }
 
 /* Fixme: Merge this into nasl_get_sock_info.  */

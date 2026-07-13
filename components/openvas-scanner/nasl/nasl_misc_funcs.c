@@ -24,6 +24,8 @@
 #include "nasl_global_ctxt.h"
 #include "nasl_lex_ctxt.h"
 #include "nasl_packet_forgery.h"
+#include "nasl_socket.h"
+#include "nasl_socket_resources.h"
 #include "nasl_telnet_copy.h"
 #include "nasl_tree.h"
 #include "nasl_var.h"
@@ -808,6 +810,13 @@ nasl_open_sock_kdc (lex_ctxt *lexic)
 
   if (ret < 0)
     return NULL;
+  if (tcp == 0 && !nasl_udp_socket_register (&script_infos->udp_data, ret))
+    {
+      nasl_perror (lexic, "open_sock_kdc: UDP socket limit reached\n");
+      close (ret);
+      return NULL;
+    }
+  nasl_socket_track_descriptor (ret);
 
   retc = alloc_typed_cell (CONST_INT);
   retc->x.i_val = ret;

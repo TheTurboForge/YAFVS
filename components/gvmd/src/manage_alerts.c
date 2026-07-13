@@ -385,7 +385,6 @@ alert_method_name (alert_method_t method)
       case ALERT_METHOD_EMAIL:       return "Email";
       case ALERT_METHOD_HTTP_GET:    return "HTTP Get";
       case ALERT_METHOD_SCP:         return "SCP";
-      case ALERT_METHOD_SEND:        return "Send";
       case ALERT_METHOD_SMB:         return "SMB";
       case ALERT_METHOD_SNMP:        return "SNMP";
       case ALERT_METHOD_START_TASK:  return "Start Task";
@@ -413,8 +412,6 @@ alert_method_from_name (const char* name)
     return ALERT_METHOD_HTTP_GET;
   if (strcasecmp (name, "SCP") == 0)
     return ALERT_METHOD_SCP;
-  if (strcasecmp (name, "Send") == 0)
-    return ALERT_METHOD_SEND;
   if (strcasecmp (name, "SMB") == 0)
     return ALERT_METHOD_SMB;
   if (strcasecmp (name, "SNMP") == 0)
@@ -1860,44 +1857,6 @@ snmp_to_host (const char *community, const char *agent, const char *message,
 
   ret = run_alert_script ("9d435134-15d3-11e6-bf5c-28d24461215b", command_args,
                           "report", "", 0, NULL, 0, script_message);
-
-  g_free (command_args);
-  return ret;
-}
-
-/**
- * @brief Send a report to a host via TCP.
- *
- * @param[in]  host         Address of host.
- * @param[in]  port         Port of host.
- * @param[in]  report      Report that should be sent.
- * @param[in]  report_size Size of the report.
- * @param[out] script_message  Custom error message of the script.
- *
- * @return 0 success, -1 error, -5 alert script failed.
- */
-static int
-send_to_host (const char *host, const char *port,
-              const char *report, int report_size,
-              gchar **script_message)
-{
-  gchar *clean_host, *clean_port, *command_args;
-  int ret;
-
-  g_debug ("send to host: %s:%s", host, port);
-
-  if (host == NULL)
-    return -1;
-
-  clean_host = g_shell_quote (host);
-  clean_port = g_shell_quote (port);
-  command_args = g_strdup_printf ("%s %s", clean_host, clean_port);
-  g_free (clean_host);
-  g_free (clean_port);
-
-  ret = run_alert_script ("4a398d42-87c0-11e5-a1c0-28d24461215b", command_args,
-                          "report", report, report_size, NULL, 0,
-                          script_message);
 
   g_free (command_args);
   return ret;
@@ -4586,67 +4545,6 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
               g_free (alert_path);
               free (known_hosts);
             }
-          g_free (report_content);
-
-          return ret;
-        }
-      case ALERT_METHOD_SEND:
-        {
-          char *host, *port;
-          gchar *report_content;
-          gsize content_length;
-          report_format_t report_format;
-          int ret;
-
-          if (event == EVENT_NEW_SECINFO || event == EVENT_UPDATED_SECINFO)
-            {
-              gchar *message;
-
-              message = new_secinfo_message (event, event_data, alert);
-              host = alert_data (alert, "method", "send_host");
-              port = alert_data (alert, "method", "send_port");
-
-              g_debug ("send host: %s", host);
-              g_debug ("send port: %s", port);
-
-              ret = send_to_host (host, port, message, strlen (message),
-                                  script_message);
-
-              g_free (message);
-              free (host);
-              free (port);
-
-              return ret;
-            }
-
-          ret = report_content_for_alert
-                  (alert, 0, task, get,
-                   "send_report_format",
-                   NULL,
-                   /* XML fallback. */
-                   REPORT_FORMAT_UUID_XML,
-                   "send_report_config",
-                   overrides_details,
-                   &report_content, &content_length, NULL,
-                   NULL, NULL, NULL, NULL,
-                   &report_format, NULL);
-          if (ret || report_content == NULL)
-            {
-              g_warning ("%s: Empty Report", __func__);
-              return -1;
-            }
-
-          host = alert_data (alert, "method", "send_host");
-          port = alert_data (alert, "method", "send_port");
-
-          g_debug ("send host: %s", host);
-          g_debug ("send port: %s", port);
-
-          ret = send_to_host (host, port, report_content, content_length,
-                              script_message);
-
-          free (host);
-          free (port);
           g_free (report_content);
 
           return ret;

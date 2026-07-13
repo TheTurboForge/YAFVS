@@ -1779,8 +1779,6 @@
   "Select and edit NVT details": "选择并编辑NVT详情",
   "Select Resource": "选择资源",
   "Selected": "选择",
-  "Send to {{- url}}": "发送至 {{- url}}",
-  "Send to host": "发送至主机",
   "Serial": "序号",
   "Server CA Certificate": "服务器CA证书",
   "Session Type": "Session类型",

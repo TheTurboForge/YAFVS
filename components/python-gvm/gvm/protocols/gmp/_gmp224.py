@@ -1235,7 +1235,7 @@ class GMPv224(GvmProtocol[T]):
                 of 'Task run status changed', 'Updated SecInfo arrived' or 'New
                 SecInfo arrived'
             method: The method by which the user is alerted, one of 'SCP',
-                'Send', 'SMB', 'SNMP', 'Syslog' or 'Email'; if the event is
+                'SMB', 'SNMP', 'Syslog' or 'Email'; if the event is
                 neither 'Updated SecInfo arrived' nor 'New SecInfo arrived',
                 method can also be one of 'Start Task', 'HTTP Get' or
                 'verinice Connector'.
@@ -1289,7 +1289,7 @@ class GMPv224(GvmProtocol[T]):
                 'New SecInfo arrived'
             event_data: Data that defines the event
             method: The method by which the user is alerted, one of 'SCP',
-                'Send', 'SMB', 'SNMP', 'Syslog' or 'Email';
+                'SMB', 'SNMP', 'Syslog' or 'Email';
                 if the event is neither 'Updated SecInfo arrived' nor
                 'New SecInfo arrived', method can also be one of 'Start Task',
                 'HTTP Get' or 'verinice Connector'.

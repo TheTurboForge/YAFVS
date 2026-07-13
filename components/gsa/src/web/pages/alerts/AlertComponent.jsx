@@ -287,12 +287,6 @@ const AlertComponent = ({
   const [methodDataScpPort, setMethodDataScpPort] = useState(22);
   const [methodDataScpKnownHosts, setMethodDataScpKnownHosts] =
     useState(undefined);
-  const [methodDataSendPort, setMethodDataSendPort] = useState(undefined);
-  const [methodDataSendHost, setMethodDataSendHost] = useState(undefined);
-  const [methodDataSendReportConfig, setMethodDataSendReportConfig] =
-    useState(undefined);
-  const [methodDataSendReportFormat, setMethodDataSendReportFormat] =
-    useState(undefined);
   const [methodDataSmbCredential, setMethodDataSmbCredential] =
     useState(undefined);
   const [methodDataSmbFilePath, setMethodDataSmbFilePath] = useState(undefined);
@@ -674,18 +668,6 @@ const AlertComponent = ({
       setMethodDataScpHost(getValue(method.data.scp_host, ''));
       setMethodDataScpPort(getValue(method.data.scp_port, 22));
       setMethodDataScpKnownHosts(getValue(method.data.scp_known_hosts, ''));
-      setMethodDataSendPort(getValue(method.data.send_port, ''));
-      setMethodDataSendHost(getValue(method.data.send_host, ''));
-      setMethodDataSendReportConfig(
-        selectSaveId(
-          reportConfigs,
-          getValue(method.data.send_report_config, UNSET_VALUE),
-          UNSET_VALUE,
-        ),
-      );
-      setMethodDataSendReportFormat(
-        selectSaveId(reportFormats, getValue(method.data.send_report_format)),
-      );
       setMethodDataSmbCredential(getValue(method.data.smb_credential, ''));
       setMethodDataSmbFilePath(getValue(method.data.smb_file_path, ''));
       setMethodDataSmbFilePathType(
@@ -827,8 +809,6 @@ const AlertComponent = ({
       setMethodDataScpHost(undefined);
       setMethodDataScpPort(22);
       setMethodDataScpKnownHosts(undefined);
-      setMethodDataSendPort(undefined);
-      setMethodDataSendHost(undefined);
       setMethodDataSnmpAgent(undefined);
       setMethodDataSnmpCommunity(undefined);
       setMethodDataSnmpMessage(undefined);
@@ -839,8 +819,6 @@ const AlertComponent = ({
       setMethodDataVeriniceServerCredential(undefined);
       setMethodDataURL(undefined);
       setMethodDataRecipientCredential(UNSET_VALUE);
-      setMethodDataSendReportConfig(reportConfigId);
-      setMethodDataSendReportFormat(reportFormatId);
       setMethodDataStartTaskTask(selectSaveId(tasks));
       setMethodDataSmbCredential(selectSaveId(smbCredentials));
       setMethodDataSmbSharePath(undefined);
@@ -1048,10 +1026,6 @@ const AlertComponent = ({
               method_data_scp_port={methodDataScpPort}
               method_data_scp_report_config={methodDataScpReportConfig}
               method_data_scp_report_format={methodDataScpReportFormat}
-              method_data_send_host={methodDataSendHost}
-              method_data_send_port={methodDataSendPort}
-              method_data_send_report_config={methodDataSendReportConfig}
-              method_data_send_report_format={methodDataSendReportFormat}
               method_data_smb_credential={methodDataSmbCredential}
               method_data_smb_file_path={methodDataSmbFilePath}
               method_data_smb_file_path_type={methodDataSmbFilePathType}

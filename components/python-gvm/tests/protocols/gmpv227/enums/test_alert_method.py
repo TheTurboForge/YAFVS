@@ -29,10 +29,6 @@ class GetAlertMethodFromStringTestCase(unittest.TestCase):
         ct = AlertMethod.from_string("scp")
         self.assertEqual(ct, AlertMethod.SCP)
 
-    def test_send(self):
-        ct = AlertMethod.from_string("send")
-        self.assertEqual(ct, AlertMethod.SEND)
-
     def test_smb(self):
         ct = AlertMethod.from_string("smb")
         self.assertEqual(ct, AlertMethod.SMB)

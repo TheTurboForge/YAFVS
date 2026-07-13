@@ -1778,8 +1778,6 @@
   "Select and edit NVT details": "Select and edit NVT details",
   "Select Resource": "Select Resource",
   "Selected": "Selected",
-  "Send to {{- url}}": "Send to {{- url}}",
-  "Send to host": "Send to host",
   "Serial": "Serial",
   "Server CA Certificate": "Server CA Certificate",
   "Session Type": "Session Type",

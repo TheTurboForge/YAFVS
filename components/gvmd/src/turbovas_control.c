@@ -1873,9 +1873,6 @@ turbovas_control_alert_create_response (
       case 7: status = "7 subject_too_long\n"; break;
       case 8: status = "8 message_too_long\n"; break;
       case 9: status = "9 condition_filter_not_found\n"; break;
-      case 12: status = "12 invalid_send_host\n"; break;
-      case 13: status = "13 invalid_send_port\n"; break;
-      case 14: status = "14 send_format_not_found\n"; break;
       case 15: status = "15 invalid_scp_host\n"; break;
       case 16: status = "16 invalid_scp_port\n"; break;
       case 17: status = "17 scp_format_not_found\n"; break;

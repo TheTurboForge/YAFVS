@@ -1778,8 +1778,6 @@
   "Select and edit NVT details": "NVT-Details auswählen und bearbeiten",
   "Select Resource": "Resource auswählen",
   "Selected": "Ausgewählt",
-  "Send to {{- url}}": "Sende an {{- url}}",
-  "Send to host": "Sende an Host",
   "Serial": "Seriennummer",
   "Server CA Certificate": "Server-CA-Zertifikat",
   "Session Type": "Sitzungstyp",

@@ -12,7 +12,6 @@ import {
   EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
   METHOD_TYPE_ALEMBA_VFIRE,
   METHOD_TYPE_SCP,
-  METHOD_TYPE_SEND,
   METHOD_TYPE_SMB,
   METHOD_TYPE_SNMP,
   METHOD_TYPE_SYSLOG,
@@ -39,7 +38,6 @@ import AlembaVfireMethodPart from 'web/pages/alerts/dialog/AlembavFireMethodPart
 import EmailMethodPart from 'web/pages/alerts/dialog/EmailMethodPart';
 import HttpMethodPart from 'web/pages/alerts/dialog/HttpMethodPart';
 import ScpMethodPart from 'web/pages/alerts/dialog/ScpMethodPart';
-import SendMethodPart from 'web/pages/alerts/dialog/SendMethodPart';
 import SmbMethodPart from 'web/pages/alerts/dialog/SmbMethodPart';
 import SnmpMethodPart from 'web/pages/alerts/dialog/SnmpMethodPart';
 import StartTaskMethodPart from 'web/pages/alerts/dialog/StartTaskMethodPart';
@@ -179,8 +177,6 @@ const DEFAULTS = {
   method_data_scp_host: '',
   method_data_scp_port: 22,
   method_data_scp_known_hosts: '',
-  method_data_send_host: '',
-  method_data_send_port: '',
   method_data_smb_file_path: 'report.xml',
   method_data_smb_share_path: '\\\\localhost\\gvm-reports',
   method_data_snmp_agent: 'localhost',
@@ -321,10 +317,6 @@ class AlertDialog extends React.Component {
           label: _('SCP'),
         },
         {
-          value: METHOD_TYPE_SEND,
-          label: _('Send to host'),
-        },
-        {
           value: METHOD_TYPE_SMB,
           label: _('SMB'),
         },
@@ -362,10 +354,6 @@ class AlertDialog extends React.Component {
         {
           value: METHOD_TYPE_SCP,
           label: _('SCP'),
-        },
-        {
-          value: METHOD_TYPE_SEND,
-          label: _('Send to host'),
         },
         {
           value: METHOD_TYPE_SMB,
@@ -616,19 +604,6 @@ class AlertDialog extends React.Component {
                 />
               )}
 
-              {values.method === METHOD_TYPE_SEND && (
-                <SendMethodPart
-                  prefix="method_data"
-                  reportConfigs={report_configs}
-                  reportFormats={report_formats}
-                  sendHost={values.method_data_send_host}
-                  sendPort={values.method_data_send_port}
-                  sendReportConfig={values.method_data_send_report_config}
-                  sendReportFormat={values.method_data_send_report_format}
-                  onChange={onValueChange}
-                />
-              )}
-
               {values.method === METHOD_TYPE_START_TASK && (
                 <StartTaskMethodPart
                   prefix="method_data"
@@ -792,10 +767,6 @@ AlertDialog.propTypes = {
   method_data_scp_port: PropTypes.number,
   method_data_scp_report_config: PropTypes.id,
   method_data_scp_report_format: PropTypes.id,
-  method_data_send_host: PropTypes.string,
-  method_data_send_port: PropTypes.string,
-  method_data_send_report_config: PropTypes.id,
-  method_data_send_report_format: PropTypes.id,
   method_data_smb_credential: PropTypes.id,
   method_data_smb_file_path: PropTypes.string,
   method_data_smb_report_config: PropTypes.id,

@@ -213,8 +213,6 @@ pub(crate) fn parse_alert_create_response(response: &[u8]) -> Result<String, Api
         | b"6 invalid_condition_data"
         | b"7 subject_too_long"
         | b"8 message_too_long"
-        | b"12 invalid_send_host"
-        | b"13 invalid_send_port"
         | b"15 invalid_scp_host"
         | b"16 invalid_scp_port"
         | b"18 invalid_scp_credential"
@@ -237,7 +235,6 @@ pub(crate) fn parse_alert_create_response(response: &[u8]) -> Result<String, Api
         )),
         b"3 filter_not_found"
         | b"9 condition_filter_not_found"
-        | b"14 send_format_not_found"
         | b"17 scp_format_not_found"
         | b"60 recipient_credential_not_found"
         | b"70 vfire_credential_not_found" => Err(ApiError::NotFound),

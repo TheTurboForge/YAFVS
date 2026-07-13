@@ -497,71 +497,7 @@ validate_scp_data (alert_method_t method, const gchar *name, gchar **data)
 }
 
 /**
- * @brief Validate method data for the Send method.
- *
- * @param[in]  method          Method that data corresponds to.
- * @param[in]  name            Name of data.
- * @param[in]  data            The data.
- *
- * @return 0 valid, 12 error in Send host, 13 error in Send port, 14 failed
- *         to find report format for Send method, -1 error.
- */
-static int
-validate_send_data (alert_method_t method, const gchar *name, gchar **data)
-{
-  if (method == ALERT_METHOD_SEND
-      && strcmp (name, "send_host") == 0)
-    {
-      int type;
-      gchar *stripped;
-
-      stripped = g_strstrip (g_strdup (*data));
-      type = gvm_get_host_type (stripped);
-      g_free (stripped);
-      if ((type != HOST_TYPE_IPV4)
-          && (type != HOST_TYPE_IPV6)
-          && (type != HOST_TYPE_NAME))
-        return 12;
-    }
-
-  if (method == ALERT_METHOD_SEND
-      && strcmp (name, "send_port") == 0)
-    {
-      int port;
-      gchar *stripped, *end;
-
-      stripped = g_strstrip (g_strdup (*data));
-      port = strtol (stripped, &end, 10);
-      if (*end != '\0')
-        {
-          g_free (stripped);
-          return 13;
-        }
-
-      g_free (stripped);
-      g_free (*data);
-      *data = g_strdup_printf ("%i", port);
-    }
-
-  if (method == ALERT_METHOD_SEND
-      && strcmp (name, "send_report_format") == 0)
-    {
-      report_format_t report_format;
-
-      report_format = 0;
-      if (find_report_format_with_permission (*data,
-                                              &report_format,
-                                              "get_report_formats"))
-        return -1;
-      if (report_format == 0)
-        return 14;
-    }
-
-  return 0;
-}
-
-/**
- * @brief Validate method data for the Send method.
+ * @brief Validate path data for the SMB method.
  *
  * @param[in]  method          Method that data corresponds to.
  * @param[in]  name            Name of data.
@@ -840,9 +776,7 @@ check_alert_params (event_t event, alert_condition_t condition,
  *         3 failed to find filter, 4 type must be "result" if specified,
  *         5 unexpected condition data name, 6 syntax error in condition data,
  *         7 email subject too long, 8 email message too long, 9 failed to find
- *         filter for condition, 12 error in Send host, 13 error in Send port,
- *         14 failed to find report format for Send method,
- *         15 error in SCP host, 16 error in SCP port,
+ *         filter for condition, 15 error in SCP host, 16 error in SCP port,
  *         17 failed to find report format for SCP method, 18 error
  *         in SCP credential, 19 error in SCP path, 20 method does not match
  *         event, 21 condition does not match event, 31 unexpected event data
@@ -1012,14 +946,6 @@ create_alert_body (const char* name, const char* comment,
         }
 
       ret = validate_scp_data (method, data_name, &data);
-      if (ret)
-        {
-          g_free (data_name);
-          secure_gfree (data, sensitive);
-          return ret;
-        }
-
-      ret = validate_send_data (method, data_name, &data);
       if (ret)
         {
           g_free (data_name);
@@ -1454,9 +1380,8 @@ create_alert_smb_with_report_refs (const char *name, const char *comment,
  *         result if specified, 6 Provided email address not valid,
  *         7 unexpected condition data name, 8 syntax error in condition data,
  *         9 email subject too long, 10 email message too long, 11 failed to
- *         find filter for condition, 12 error in Send host, 13 error in Send
- *         port, 14 failed to find report format for Send method,
- *         15 error in SCP host, 16 error in SCP port,
+ *         find filter for condition, 15 error in SCP host, 16 error in SCP
+ *         port,
  *         17 failed to find report format for SCP method, 18 error
  *         in SCP credential, 19 error in SCP path, 20 method does not match
  *         event, 21 condition does not match event, 31 unexpected event data
@@ -1700,15 +1625,6 @@ modify_alert (const char *alert_id, const char *name, const char *comment,
             }
 
           ret = validate_scp_data (method, data_name, &data);
-          if (ret)
-            {
-              g_free (data_name);
-              g_free (data);
-              sql_rollback ();
-              return ret;
-            }
-
-          ret = validate_send_data (method, data_name, &data);
           if (ret)
             {
               g_free (data_name);

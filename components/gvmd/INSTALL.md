@@ -643,10 +643,6 @@ Prerequisites for SCP alert:
 * sshpass
 * scp
 
-Prerequisites for Send alert:
-
-* socat
-
 Prerequisites for SNMP alert:
 
 * snmp

@@ -8,6 +8,8 @@ use std::path::Path;
 use crate::direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed};
 
 const GSA_ALERT_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/alert.ts");
+const GSA_ALLOWED_SNAKE_CASE: &str =
+    include_str!("../../../components/gsa/eslint-script/allowedSnakeCase.js");
 const GSA_ALERT_MODEL: &str = include_str!("../../../components/gsa/src/gmp/models/alert.ts");
 const GSA_ALERT_COMPONENT: &str =
     include_str!("../../../components/gsa/src/web/pages/alerts/AlertComponent.jsx");
@@ -15,6 +17,12 @@ const GSA_ALERT_DIALOG: &str =
     include_str!("../../../components/gsa/src/web/pages/alerts/Dialog.jsx");
 const GSA_ALERT_METHOD: &str =
     include_str!("../../../components/gsa/src/web/pages/alerts/Method.jsx");
+const GSA_DE_LOCALE: &str = include_str!("../../../components/gsa/public/locales/gsa-de.json");
+const GSA_EN_LOCALE: &str = include_str!("../../../components/gsa/public/locales/gsa-en.json");
+const GSA_ZH_CN_LOCALE: &str =
+    include_str!("../../../components/gsa/public/locales/gsa-zh_CN.json");
+const GSA_ZH_TW_LOCALE: &str =
+    include_str!("../../../components/gsa/public/locales/gsa-zh_TW.json");
 const GSA_ENTITY_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/entity.ts");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GVMD_CMAKE: &str = include_str!("../../../components/gvmd/CMakeLists.txt");
@@ -25,10 +33,13 @@ const MANAGE_ALERTS_H: &str = include_str!("../../../components/gvmd/src/manage_
 const MANAGE_EVENTS_C: &str = include_str!("../../../components/gvmd/src/manage_events.c");
 const MANAGE_SQL_C: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
 const MANAGE_SQL_ALERTS_C: &str = include_str!("../../../components/gvmd/src/manage_sql_alerts.c");
+const MANAGE_SQL_REPORT_FORMATS_C: &str =
+    include_str!("../../../components/gvmd/src/manage_sql_report_formats.c");
 const PYTHON_GVM_ALERTS: &str =
     include_str!("../../../components/python-gvm/gvm/protocols/gmp/requests/v224/_alerts.py");
 const ALERT_QUERY_SQL: &str = include_str!("alert_query_sql.rs");
 const ALERT_WRITES: &str = include_str!("alert_writes.rs");
+const TURBOVAS_CONTROL_C: &str = include_str!("../../../components/gvmd/src/turbovas_control.c");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -42,14 +53,19 @@ fn inherited_function(source: &str, name: &str) -> String {
 }
 
 #[test]
-fn retired_connector_is_removed_full_stack_without_renumbering_alert_methods() {
-    let retired_name = ["source", "fire"].concat();
+fn retired_alert_method_hole_is_removed_full_stack_without_renumbering() {
+    let retired_connector_name = ["source", "fire"].concat();
     for (path, source) in [
+        ("GSA snake-case allowlist", GSA_ALLOWED_SNAKE_CASE),
         ("GSA alert command", GSA_ALERT_COMMAND),
         ("GSA alert model", GSA_ALERT_MODEL),
         ("GSA alert component", GSA_ALERT_COMPONENT),
         ("GSA alert dialog", GSA_ALERT_DIALOG),
         ("GSA alert method view", GSA_ALERT_METHOD),
+        ("GSA German locale", GSA_DE_LOCALE),
+        ("GSA English locale", GSA_EN_LOCALE),
+        ("GSA Simplified Chinese locale", GSA_ZH_CN_LOCALE),
+        ("GSA Traditional Chinese locale", GSA_ZH_TW_LOCALE),
         ("gsad GMP bridge", GSAD_GMP_C),
         ("gvmd CMake", GVMD_CMAKE),
         ("gvmd GMP", GVMD_GMP_C),
@@ -57,12 +73,27 @@ fn retired_connector_is_removed_full_stack_without_renumbering_alert_methods() {
         ("gvmd alert execution", MANAGE_ALERTS_C),
         ("gvmd alert declarations", MANAGE_ALERTS_H),
         ("gvmd alert SQL", MANAGE_SQL_ALERTS_C),
+        ("gvmd report-format SQL", MANAGE_SQL_REPORT_FORMATS_C),
+        ("gvmd database cleanup", MANAGE_SQL_C),
         ("python-gvm alert requests", PYTHON_GVM_ALERTS),
         ("native alert query SQL", ALERT_QUERY_SQL),
         ("native alert writes", ALERT_WRITES),
     ] {
+        for key in [
+            "send_host",
+            "send_port",
+            "send_report_config",
+            "send_report_format",
+        ] {
+            assert!(
+                !source.contains(key),
+                "{path} still contains retired alert field {key}"
+            );
+        }
         assert!(
-            !source.to_ascii_lowercase().contains(&retired_name),
+            !source
+                .to_ascii_lowercase()
+                .contains(&retired_connector_name),
             "{path} still contains the retired connector"
         );
     }
@@ -72,7 +103,7 @@ fn retired_connector_is_removed_full_stack_without_renumbering_alert_methods() {
         "ALERT_METHOD_START_TASK = 4",
         "ALERT_METHOD_SYSLOG = 5",
         "ALERT_METHOD_VERINICE = 6",
-        "ALERT_METHOD_SEND = 7",
+        "Value 7 is retired; alert method IDs are persisted and must not shift.",
         "ALERT_METHOD_SCP = 8",
         "ALERT_METHOD_SNMP = 9",
         "ALERT_METHOD_SMB = 10",
@@ -84,13 +115,39 @@ fn retired_connector_is_removed_full_stack_without_renumbering_alert_methods() {
             "persisted alert method mapping missing {required}"
         );
     }
+    assert!(
+        !MANAGE_ALERTS_H.contains("ALERT_METHOD_SEND"),
+        "retired alert method must not remain in the enum"
+    );
+    assert!(
+        !MANAGE_ALERTS_C.contains("case ALERT_METHOD_SEND"),
+        "retired alert method must not remain executable"
+    );
+    assert!(
+        !MANAGE_ALERTS_C.contains("(name, \"Send\")"),
+        "retired alert method must not remain parseable"
+    );
+    assert!(
+        !ALERT_QUERY_SQL.contains("WHEN 7 THEN 'Send'"),
+        "native SQL must not label the retired alert method"
+    );
+    for status in [
+        "invalid_send_host",
+        "invalid_send_port",
+        "send_format_not_found",
+    ] {
+        assert!(
+            !TURBOVAS_CONTROL_C.contains(status),
+            "control-plane status mapping still contains {status}"
+        );
+    }
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let retired_directory = ["Source", "fire"].concat();
+    let retired_connector_directory = ["Source", "fire"].concat();
     assert!(
         !root
             .join("components/gvmd/src/alert_methods")
-            .join(retired_directory)
+            .join(retired_connector_directory)
             .join("alert")
             .exists()
     );
@@ -98,6 +155,19 @@ fn retired_connector_is_removed_full_stack_without_renumbering_alert_methods() {
         !root
             .join("components/gsa/src/web/pages/alerts/dialog")
             .join(["Source", "FireMethodPart.tsx"].concat())
+            .exists()
+    );
+    assert!(
+        !root
+            .join("components/gvmd/src/alert_methods")
+            .join("Send")
+            .join("alert")
+            .exists()
+    );
+    assert!(
+        !root
+            .join("components/gsa/src/web/pages/alerts/dialog")
+            .join("SendMethodPart.tsx")
             .exists()
     );
 }
@@ -292,8 +362,6 @@ fn gsad_and_gsa_alert_commands_proxy_delivery_payloads_and_control_verbs() {
         "verinice_server_credential",
         "vfire_credential",
         "recipient_credential",
-        "send_report_config",
-        "send_report_format",
         "notice_report_config",
         "notice_report_format",
         "composer_include_overrides",

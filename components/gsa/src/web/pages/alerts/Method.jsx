@@ -11,7 +11,6 @@ import {
   EMAIL_NOTICE_INCLUDE,
   METHOD_TYPE_ALEMBA_VFIRE,
   METHOD_TYPE_SCP,
-  METHOD_TYPE_SEND,
   METHOD_TYPE_SMB,
   METHOD_TYPE_SNMP,
   METHOD_TYPE_SYSLOG,
@@ -360,45 +359,6 @@ const Method = ({
         </div>
       );
     }
-  }
-
-  if (method.type === METHOD_TYPE_SEND) {
-    // need to make this prettier
-    const {data = {}} = method;
-    url += data.send_host?.value + ':' + data.send_port?.value;
-    return (
-      <div>
-        <div>{_('Send to {{- url}}', {url})}</div>
-        <Table>
-          <colgroup>
-            <TableCol width="12%" />
-            <TableCol width="88%" />
-          </colgroup>
-          <TableBody>
-            {details &&
-              isDefined(data.send_report_format?.value) &&
-              reportFormats.length > 0 && (
-                <TableRow>
-                  <TableData>{_('Report Format')}</TableData>
-                  <TableData>
-                    {getReportFormatName(data.send_report_format.value)}
-                  </TableData>
-                </TableRow>
-              )}
-            {details &&
-              isDefined(data.send_report_config?.value) &&
-              reportConfigs.length > 0 && (
-                <TableRow>
-                  <TableData>{_('Report Config')}</TableData>
-                  <TableData>
-                    {getReportConfigName(data.send_report_config.value)}
-                  </TableData>
-                </TableRow>
-              )}
-          </TableBody>
-        </Table>
-      </div>
-    );
   }
 
   if (

@@ -517,20 +517,6 @@ install(
 )
 
 install(
-  FILES src/alert_methods/vFire/alert
-  DESTINATION
-    ${GVMD_DATA_DIR}/global_alert_methods/159f79a5-fce8-4ec5-aa49-7d17a77739a3/
-  PERMISSIONS
-    OWNER_WRITE
-    OWNER_READ
-    OWNER_EXECUTE
-    GROUP_READ
-    GROUP_EXECUTE
-    WORLD_READ
-    WORLD_EXECUTE
-)
-
-install(
   FILES tools/cpe_getbyname.xsl tools/cve_getbyname.xsl
   DESTINATION ${GVM_SCAP_RES_DIR}
   PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ

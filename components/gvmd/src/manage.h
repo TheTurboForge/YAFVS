@@ -486,28 +486,6 @@ delete_resource (const char *, const char *, int);
  "Please contact your local system administrator if you think you\n"          \
  "should not have received it.\n"
 
-/**
- * @brief Default description format string for vFire alert.
- */
-#define ALERT_VFIRE_CALL_DESCRIPTION                                          \
- "GVM Task '$n': $e\n"                                                        \
- "\n"                                                                         \
- "After the event $e,\n"                                                      \
- "the following condition was met: $c\n"                                      \
- "\n"                                                                         \
- "This alert includes reports in the following format(s):\n"                  \
- "$r.\n"                                                                      \
- "Full details and other report formats are available on the scan engine.\n"  \
- "\n"                                                                         \
- "$t"                                                                         \
- "\n"                                                                         \
- "Note:\n"                                                                    \
- "This alert was created automatically as a security scan escalation.\n"      \
- "Please contact your local system administrator if you think it\n"           \
- "was created or assigned erroneously.\n"
-
-
-
 /* Task global variables and preprocessor variables. */
 
 /**

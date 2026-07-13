@@ -116,14 +116,6 @@ class GmpCreateAlertTestMixin:
                 name="foo",
                 condition=AlertCondition.ALWAYS,
                 event=AlertEvent.UPDATED_SECINFO_ARRIVED,
-                method=AlertMethod.ALEMBA_VFIRE,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            self.gmp.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.UPDATED_SECINFO_ARRIVED,
                 method=AlertMethod.START_TASK,
             )
 
@@ -133,14 +125,6 @@ class GmpCreateAlertTestMixin:
                 condition=AlertCondition.ALWAYS,
                 event=AlertEvent.NEW_SECINFO_ARRIVED,
                 method=AlertMethod.HTTP_GET,
-            )
-
-        with self.assertRaises(InvalidArgument):
-            self.gmp.create_alert(
-                name="foo",
-                condition=AlertCondition.ALWAYS,
-                event=AlertEvent.NEW_SECINFO_ARRIVED,
-                method=AlertMethod.ALEMBA_VFIRE,
             )
 
         with self.assertRaises(InvalidArgument):

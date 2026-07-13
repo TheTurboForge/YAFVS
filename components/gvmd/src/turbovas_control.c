@@ -1886,14 +1886,8 @@ turbovas_control_alert_create_response (
       case 41: status = "41 invalid_smb_share\n"; break;
       case 42: status = "42 invalid_smb_path\n"; break;
       case 43: status = "43 dotted_smb_path\n"; break;
-      case 50: status = "50 invalid_tp_credential\n"; break;
-      case 51: status = "51 invalid_tp_host\n"; break;
-      case 52: status = "52 invalid_tp_certificate\n"; break;
-      case 53: status = "53 invalid_tp_tls\n"; break;
       case 60: status = "60 recipient_credential_not_found\n"; break;
       case 61: status = "61 invalid_recipient_credential\n"; break;
-      case 70: status = "70 vfire_credential_not_found\n"; break;
-      case 71: status = "71 invalid_vfire_credential\n"; break;
       case 90: status = "90 report_format_not_found\n"; break;
       case 91: status = "91 report_config_not_found\n"; break;
       case 92: status = "92 report_config_mismatch\n"; break;

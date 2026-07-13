@@ -50,8 +50,6 @@ interface AlertCreateParams {
   condition: AlertConditionType;
   filter_id?: string | number;
   method: AlertMethodType;
-  report_format_ids?: string[];
-  report_config_ids?: string[];
   [key: string]: unknown;
 }
 
@@ -173,18 +171,6 @@ const method_data_fields = [
   'smb_report_config',
   'smb_report_format',
   'smb_share_path',
-  'report_formats',
-  'report_configs',
-  'vfire_base_url',
-  'vfire_credential',
-  'vfire_session_type',
-  'vfire_client_id',
-  'vfire_call_partition_name',
-  'vfire_call_description',
-  'vfire_call_template_name',
-  'vfire_call_type_name',
-  'vfire_call_impact_name',
-  'vfire_call_urgency_name',
 ];
 
 const nativeAlertSettingsQuery = {
@@ -376,8 +362,6 @@ class AlertCommand extends EntityCommand<Alert> {
     condition,
     filter_id: filterId,
     method,
-    report_format_ids: reportFormatIds,
-    report_config_ids: reportConfigIds,
     ...other
   }: AlertCreateParams) {
     const nativeRequest = nativeAlertCreateRequestFromParams({
@@ -388,8 +372,6 @@ class AlertCommand extends EntityCommand<Alert> {
       condition,
       filter_id: filterId,
       method,
-      report_format_ids: reportFormatIds,
-      report_config_ids: reportConfigIds,
       ...other,
     });
     if (canUseNativeApi(this.http) && nativeRequest !== undefined) {
@@ -408,8 +390,6 @@ class AlertCommand extends EntityCommand<Alert> {
       condition,
       method,
       filter_id: filterId as string | undefined,
-      'report_format_ids:': reportFormatIds,
-      'report_config_ids:': reportConfigIds,
     };
     log.debug('Creating new alert', data);
     return this.action(data);
@@ -433,8 +413,6 @@ class AlertCommand extends EntityCommand<Alert> {
       condition,
       filter_id,
       method,
-      report_format_ids = [],
-      report_config_ids = [],
       ...other
     } = args as AlertSaveParams;
     const data = {
@@ -450,10 +428,6 @@ class AlertCommand extends EntityCommand<Alert> {
       condition,
       method,
       filter_id: filter_id as string | undefined,
-      'report_format_ids:':
-        report_format_ids.length > 0 ? report_format_ids : undefined,
-      'report_config_ids:':
-        report_config_ids.length > 0 ? report_config_ids : undefined,
     };
     log.debug('Saving alert', data);
     return this.action(data);

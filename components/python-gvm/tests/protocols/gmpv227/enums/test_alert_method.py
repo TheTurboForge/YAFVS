@@ -48,7 +48,3 @@ class GetAlertMethodFromStringTestCase(unittest.TestCase):
     def test_start_task(self):
         ct = AlertMethod.from_string("Start Task")
         self.assertEqual(ct, AlertMethod.START_TASK)
-
-    def test_alemba_vfire(self):
-        ct = AlertMethod.from_string("Alemba vFire")
-        self.assertEqual(ct, AlertMethod.ALEMBA_VFIRE)

@@ -159,7 +159,7 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
         "ALERT_METHOD_SNMP = 9",
         "ALERT_METHOD_SMB = 10",
         "Value 11 is retired; alert method IDs are persisted and must not shift.",
-        "ALERT_METHOD_VFIRE = 12",
+        "Value 12 is retired; alert method IDs are persisted and must not shift.",
     ] {
         assert!(
             MANAGE_ALERTS_H.contains(required),
@@ -172,6 +172,11 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
     );
     assert!(
         !MANAGE_ALERTS_H.contains("ALERT_METHOD_VERINICE"),
+        "retired alert method must not remain in the enum"
+    );
+    let retired_method_name = format!("ALERT_METHOD_{}{}", "VF", "IRE");
+    assert!(
+        !MANAGE_ALERTS_H.contains(&retired_method_name),
         "retired alert method must not remain in the enum"
     );
     assert!(
@@ -214,6 +219,10 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
         "invalid_send_host",
         "invalid_send_port",
         "send_format_not_found",
+        "invalid_tp_credential",
+        "invalid_tp_host",
+        "invalid_tp_certificate",
+        "invalid_tp_tls",
     ] {
         assert!(
             !TURBOVAS_CONTROL_C.contains(status),
@@ -344,7 +353,6 @@ fn inherited_alert_create_and_modify_are_acl_filter_and_payload_guarded() {
         "validate_email_data (method, data_name, &data, 0)",
         "validate_scp_data (method, data_name, &data)",
         "validate_smb_data (method, data_name, &data)",
-        "validate_vfire_data (method, data_name, &data)",
         "INSERT INTO alert_method_data (alert, name, data)",
         "sql_commit ();",
     ] {
@@ -462,7 +470,6 @@ fn gsad_and_gsa_alert_commands_proxy_delivery_payloads_and_control_verbs() {
     for required in [
         "scp_credential",
         "smb_credential",
-        "vfire_credential",
         "recipient_credential",
         "notice_report_config",
         "notice_report_format",
@@ -483,10 +490,9 @@ fn gsad_and_gsa_alert_commands_proxy_delivery_payloads_and_control_verbs() {
                 "params_values (params, \"method_data:\")",
                 "params_values (params, \"event_data:\")",
                 "params_values (params, \"condition_data:\")",
-                "params_values (params, \"report_format_ids:\")",
                 "<create_alert>",
                 "append_alert_event_data (xml, event_data, event)",
-                "append_alert_method_data (xml, method_data, method, report_formats)",
+                "append_alert_method_data (xml, method_data, method)",
                 "append_alert_condition_data (xml, condition_data, condition)",
             ][..],
         ),
@@ -497,7 +503,7 @@ fn gsad_and_gsa_alert_commands_proxy_delivery_payloads_and_control_verbs() {
                 "params_values (params, \"method_data:\")",
                 "<modify_alert alert_id=\\\"%s\\\">",
                 "append_alert_event_data (xml, event_data, event)",
-                "append_alert_method_data (xml, method_data, method, report_formats)",
+                "append_alert_method_data (xml, method_data, method)",
                 "append_alert_condition_data (xml, condition_data, condition)",
             ][..],
         ),
@@ -533,8 +539,6 @@ fn gsad_and_gsa_alert_commands_proxy_delivery_payloads_and_control_verbs() {
         "convertData('method_data'",
         "convertData('condition_data'",
         "convertData('event_data'",
-        "'report_format_ids:'",
-        "'report_config_ids:'",
         "credentials: map(",
         "filters: map(",
         "tasks: map(",

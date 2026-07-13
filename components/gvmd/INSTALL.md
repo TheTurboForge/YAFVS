@@ -628,11 +628,6 @@ Prerequisites for HTTP alerts:
 
 * wget
 
-Prerequisites for Alemba vFire alert:
-
-* A program in the `PATH` called `greenbone_vfire_connector` that takes the
-  path to an XML file as described by doc/vfire-data-xml.rnc as an argument.
-
 Prerequisites for SCP alert:
 
 * sshpass

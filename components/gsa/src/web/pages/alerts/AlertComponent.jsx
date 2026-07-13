@@ -9,7 +9,6 @@ import {useDispatch} from 'react-redux';
 import {
   email_credential_filter,
   smb_credential_filter,
-  vFire_credential_filter,
 } from 'gmp/models/credential';
 import {fetchNativeCredentials} from 'gmp/native-api/credentials';
 import {parseInt, parseSeverity, parseYesNo, NO_VALUE} from 'gmp/parser';
@@ -207,8 +206,6 @@ const AlertComponent = ({
   const [secinfoFilters, setSecinfoFilters] = useState([]);
   const [reportFormats, setReportFormats] = useState([]);
   const [reportConfigs, setReportConfigs] = useState([]);
-  const [reportFormatIds, setReportFormatIds] = useState([]);
-  const [reportConfigIds, setReportConfigIds] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState('');
 
@@ -288,28 +285,6 @@ const AlertComponent = ({
   const [methodDataSnmpMessage, setMethodDataSnmpMessage] = useState(undefined);
   const [methodDataStartTaskTask, setMethodDataStartTaskTask] =
     useState(undefined);
-  const [methodDataVfireCredential, setMethodDataVfireCredential] =
-    useState(undefined);
-  const [methodDataVfireBaseUrl, setMethodDataVfireBaseUrl] =
-    useState(undefined);
-  const [methodDataVfireCallDescription, setMethodDataVfireCallDescription] =
-    useState(undefined);
-  const [methodDataVfireCallImpactName, setMethodDataVfireCallImpactName] =
-    useState(undefined);
-  const [
-    methodDataVfireCallPartitionName,
-    setMethodDataVfireCallPartitionName,
-  ] = useState(undefined);
-  const [methodDataVfireCallTemplateName, setMethodDataVfireCallTemplateName] =
-    useState(undefined);
-  const [methodDataVfireCallTypeName, setMethodDataVfireCallTypeName] =
-    useState(undefined);
-  const [methodDataVfireCallUrgencyName, setMethodDataVfireCallUrgencyName] =
-    useState(undefined);
-  const [methodDataVfireClientId, setMethodDataVfireClientId] =
-    useState(undefined);
-  const [methodDataVfireSessionType, setMethodDataVfireSessionType] =
-    useState(undefined);
   const [methodDataURL, setMethodDataURL] = useState(undefined);
 
   const credentialTypeRef = useRef(null);
@@ -329,8 +304,6 @@ const AlertComponent = ({
           setMethodDataScpCredential(credentialId);
         } else if (String(credentialTypeRef.current) === 'smb') {
           setMethodDataSmbCredential(credentialId);
-        } else if (String(credentialTypeRef.current) === 'vfire') {
-          setMethodDataVfireCredential(credentialId);
         } else if (String(credentialTypeRef.current) === 'email') {
           setMethodDataRecipientCredential(credentialId);
         }
@@ -399,10 +372,6 @@ const AlertComponent = ({
     openCredentialDialog({type: 'smb', types});
   };
 
-  const openVfireCredentialDialog = types => {
-    openCredentialDialog({type: 'vfire', types});
-  };
-
   const openEmailCredentialDialog = types => {
     openCredentialDialog({type: 'email', types});
   };
@@ -423,7 +392,6 @@ const AlertComponent = ({
       const {method, condition, event} = lalert;
 
       const emailCredentials = credentials.filter(email_credential_filter);
-      const vFireCredentials = credentials.filter(vFire_credential_filter);
       const resultFilters = filters.filter(filterResultsFilter);
       const secinfoFilters = filters.filter(filterSecinfoFilter);
 
@@ -489,10 +457,6 @@ const AlertComponent = ({
         ? getValue(method.data.recipient_credential)
         : undefined;
 
-      const vfireCredentialId = isDefined(method.data.vfire_credential)
-        ? getValue(method.data.vfire_credential)
-        : undefined;
-
       setAlertDialogVisible(true);
       setId(alertObj.id);
       setAlert(alertObj);
@@ -515,9 +479,7 @@ const AlertComponent = ({
       setResultFilters(resultFilters);
       setSecinfoFilters(secinfoFilters);
       setReportFormats(reportFormats);
-      setReportFormatIds(method.data.report_formats);
       setReportConfigs(reportConfigs);
-      setReportConfigIds(method.data.report_configs);
 
       setCondition(condition.type);
       setConditionDataCount(parseInt(getValue(condition.data.count, 1)));
@@ -631,30 +593,6 @@ const AlertComponent = ({
       setMethodDataStartTaskTask(
         selectSaveId(tasks, getValue(method.data.start_task_task)),
       );
-      setMethodDataVfireCredential(
-        selectSaveId(vFireCredentials, vfireCredentialId),
-      );
-      setMethodDataVfireBaseUrl(getValue(method.data.vfire_base_url));
-      setMethodDataVfireCallDescription(
-        getValue(method.data.vfire_call_description),
-      );
-      setMethodDataVfireCallImpactName(
-        getValue(method.data.vfire_call_impact_name),
-      );
-      setMethodDataVfireCallPartitionName(
-        getValue(method.data.vfire_call_partition_name),
-      );
-      setMethodDataVfireCallTemplateName(
-        getValue(method.data.vfire_call_template_name),
-      );
-      setMethodDataVfireCallTypeName(
-        getValue(method.data.vfire_call_type_name),
-      );
-      setMethodDataVfireCallUrgencyName(
-        getValue(method.data.vfire_call_urgency_name),
-      );
-      setMethodDataVfireClientId(getValue(method.data.vfire_client_id));
-      setMethodDataVfireSessionType(getValue(method.data.vfire_session_type));
       setMethodDataURL(getValue(method.data.URL, ''));
       setTasks(tasks);
       setTitle(_('Edit Alert {{- name}}', {name: shorten(alertObj.name)}));
@@ -737,22 +675,10 @@ const AlertComponent = ({
       setMethodDataSmbFilePathType(undefined);
       setMethodDataSmbReportConfig(reportConfigId);
       setMethodDataSmbReportFormat(reportFormatId);
-      setMethodDataVfireCredential(undefined);
-      setMethodDataVfireBaseUrl(undefined);
-      setMethodDataVfireCallDescription(undefined);
-      setMethodDataVfireCallImpactName(undefined);
-      setMethodDataVfireCallPartitionName(undefined);
-      setMethodDataVfireCallTemplateName(undefined);
-      setMethodDataVfireCallTypeName(undefined);
-      setMethodDataVfireCallUrgencyName(undefined);
-      setMethodDataVfireClientId(undefined);
-      setMethodDataVfireSessionType(undefined);
       setResultFilters(resultFilters);
       setSecinfoFilters(secinfoFilters);
       setReportFormats(reportFormats);
-      setReportFormatIds([]);
       setReportConfigs(reportConfigs);
-      setReportConfigIds([]);
       setTasks(tasks);
       setTitle(_('New Alert'));
     }
@@ -829,18 +755,6 @@ const AlertComponent = ({
 
   const handleEmailCredentialChange = credential => {
     setMethodDataRecipientCredential(credential);
-  };
-
-  const handleVfireCredentialChange = credential => {
-    setMethodDataVfireCredential(credential);
-  };
-
-  const handleReportFormatsChange = newReportFormatIds => {
-    setReportFormatIds(newReportFormatIds);
-  };
-
-  const handleReportConfigsChange = newReportConfigIds => {
-    setReportConfigIds(newReportConfigIds);
   };
 
   const handleValueChange = (value, name) => {
@@ -940,28 +854,8 @@ const AlertComponent = ({
               method_data_start_task_task={methodDataStartTaskTask}
               method_data_subject={methodDataSubject}
               method_data_to_address={methodDataToAddress}
-              method_data_vfire_base_url={methodDataVfireBaseUrl}
-              method_data_vfire_call_description={
-                methodDataVfireCallDescription
-              }
-              method_data_vfire_call_impact_name={methodDataVfireCallImpactName}
-              method_data_vfire_call_partition_name={
-                methodDataVfireCallPartitionName
-              }
-              method_data_vfire_call_template_name={
-                methodDataVfireCallTemplateName
-              }
-              method_data_vfire_call_type_name={methodDataVfireCallTypeName}
-              method_data_vfire_call_urgency_name={
-                methodDataVfireCallUrgencyName
-              }
-              method_data_vfire_client_id={methodDataVfireClientId}
-              method_data_vfire_credential={methodDataVfireCredential}
-              method_data_vfire_session_type={methodDataVfireSessionType}
               name={name}
-              report_config_ids={reportConfigIds}
               report_configs={reportConfigs}
-              report_format_ids={reportFormatIds}
               report_formats={reportFormats}
               result_filters={resultFilters}
               secinfo_filters={secinfoFilters}
@@ -972,17 +866,13 @@ const AlertComponent = ({
               onNewEmailCredentialClick={openEmailCredentialDialog}
               onNewScpCredentialClick={openScpCredentialDialog}
               onNewSmbCredentialClick={openSmbCredentialDialog}
-              onNewVfireCredentialClick={openVfireCredentialDialog}
               onOpenContentComposerDialogClick={handleOpenContentComposerDialog}
-              onReportConfigsChange={handleReportConfigsChange}
-              onReportFormatsChange={handleReportFormatsChange}
               onSave={d => {
                 const promise = isDefined(d.id) ? save(d) : create(d);
                 return promise.then(() => closeAlertDialog());
               }}
               onScpCredentialChange={handleScpCredentialChange}
               onSmbCredentialChange={handleSmbCredentialChange}
-              onVfireCredentialChange={handleVfireCredentialChange}
             />
           )}
           {credentialDialogVisible && (

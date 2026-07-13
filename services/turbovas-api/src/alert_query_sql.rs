@@ -33,7 +33,6 @@ pub(crate) fn alert_assets_sql(sort_sql: &str) -> String {
                       WHEN 8 THEN 'SCP'
                       WHEN 9 THEN 'SNMP'
                       WHEN 10 THEN 'SMB'
-                      WHEN 12 THEN 'Alemba vFire'
                       ELSE 'Internal Error'
                     END AS method_type,
                     f.uuid AS filter_id,
@@ -97,7 +96,6 @@ pub(crate) fn alert_asset_detail_sql() -> &'static str {
                 WHEN 8 THEN 'SCP'
                 WHEN 9 THEN 'SNMP'
                 WHEN 10 THEN 'SMB'
-                WHEN 12 THEN 'Alemba vFire'
                 ELSE 'Internal Error'
               END AS method_type,
               f.uuid AS filter_id,

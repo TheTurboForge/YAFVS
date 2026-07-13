@@ -9,7 +9,6 @@ import styled from 'styled-components';
 import {
   EMAIL_NOTICE_ATTACH,
   EMAIL_NOTICE_INCLUDE,
-  METHOD_TYPE_ALEMBA_VFIRE,
   METHOD_TYPE_SCP,
   METHOD_TYPE_SMB,
   METHOD_TYPE_SNMP,
@@ -19,7 +18,6 @@ import {
   METHOD_TYPE_HTTP_GET,
 } from 'gmp/models/alert';
 import {isDefined} from 'gmp/utils/identity';
-import HorizontalSep from 'web/components/layout/HorizontalSep';
 import DetailsLink from 'web/components/link/DetailsLink';
 import SimpleTable from 'web/components/table/SimpleTable';
 import TableBody from 'web/components/table/TableBody';
@@ -76,113 +74,6 @@ const Method = ({
     return null;
   };
   let url = '';
-  if (method.type === METHOD_TYPE_ALEMBA_VFIRE) {
-    const {data = {}} = method;
-
-    if (details) {
-      return (
-        <div>
-          <div>{_('Alemba vFire')}</div>
-          <Table>
-            <colgroup>
-              <TableCol width="12%" />
-              <TableCol width="88%" />
-            </colgroup>
-            <TableBody>
-              {isDefined(data.vfire_base_url?.value) && (
-                <TableRow>
-                  <TableData>{_('Base URL')}</TableData>
-                  <TableData>{data.vfire_base_url.value}</TableData>
-                </TableRow>
-              )}
-              {isDefined(data.vfire_call_impact_name?.value) && (
-                <TableRow>
-                  <TableData>{_('Impact')}</TableData>
-                  <TableData>{data.vfire_call_impact_name.value}</TableData>
-                </TableRow>
-              )}
-
-              {isDefined(data.vfire_call_partition_name?.value) && (
-                <TableRow>
-                  <TableData>{_('Partition')}</TableData>
-                  <TableData>{data.vfire_call_partition_name.value}</TableData>
-                </TableRow>
-              )}
-
-              {isDefined(data.vfire_call_template_name?.value) && (
-                <TableRow>
-                  <TableData>{_('Call Template')}</TableData>
-                  <TableData>{data.vfire_call_template_name.value}</TableData>
-                </TableRow>
-              )}
-
-              {isDefined(data.vfire_call_type_name?.value) && (
-                <TableRow>
-                  <TableData>{_('Call Type')}</TableData>
-                  <TableData>{data.vfire_call_type_name.value}</TableData>
-                </TableRow>
-              )}
-
-              {isDefined(data.vfire_call_urgency_name?.value) && (
-                <TableRow>
-                  <TableData>{_('Urgency')}</TableData>
-                  <TableData>{data.vfire_call_urgency_name.value}</TableData>
-                </TableRow>
-              )}
-
-              {isDefined(data.vfire_client_id?.value) && (
-                <TableRow>
-                  <TableData>{_('Alemba Client ID')}</TableData>
-                  <TableData>{data.vfire_client_id.value}</TableData>
-                </TableRow>
-              )}
-
-              {isDefined(data.vfire_session_type?.value) && (
-                <TableRow>
-                  <TableData>{_('Session Type')}</TableData>
-                  <TableData>{data.vfire_session_type.value}</TableData>
-                </TableRow>
-              )}
-
-              {isDefined(data.report_formats) && (
-                <TableRow>
-                  <TableData>{_('Report Formats')}</TableData>
-                  <TableData>
-                    <HorizontalSep $wrap $separator="," $spacing="0">
-                      {data.report_formats.map(id => (
-                        <span key={id}>{getReportFormatName(id)}</span>
-                      ))}
-                    </HorizontalSep>
-                  </TableData>
-                </TableRow>
-              )}
-              {isDefined(data.report_configs) && (
-                <TableRow>
-                  <TableData>{_('Report Configs')}</TableData>
-                  <TableData>
-                    <HorizontalSep $wrap $separator="," $spacing="0">
-                      {data.report_configs.map(id => (
-                        <span key={id}>{getReportConfigName(id)}</span>
-                      ))}
-                    </HorizontalSep>
-                  </TableData>
-                </TableRow>
-              )}
-              {isDefined(data.vfire_call_description?.value) && (
-                <TableRow>
-                  <TableData>{_('Call Description')}</TableData>
-                  <TableData>
-                    <Pre>{data.vfire_call_description.value}</Pre>
-                  </TableData>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-    return _('Alemba vFire');
-  }
 
   if (method.type === METHOD_TYPE_SCP) {
     const {data = {}} = method;

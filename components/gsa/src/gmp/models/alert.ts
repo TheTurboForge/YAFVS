@@ -82,7 +82,6 @@ export type AlertConditionDirection =
   | typeof CONDITION_DIRECTION_CHANGED;
 
 export type AlertMethodType =
-  | typeof METHOD_TYPE_ALEMBA_VFIRE
   | typeof METHOD_TYPE_SCP
   | typeof METHOD_TYPE_SMB
   | typeof METHOD_TYPE_SNMP
@@ -109,7 +108,6 @@ export const CONDITION_DIRECTION_DECREASED = 'decreased';
 export const CONDITION_DIRECTION_INCREASED = 'increased';
 export const CONDITION_DIRECTION_CHANGED = 'changed';
 
-export const METHOD_TYPE_ALEMBA_VFIRE = 'Alemba vFire';
 export const METHOD_TYPE_SCP = 'SCP';
 export const METHOD_TYPE_SMB = 'SMB';
 export const METHOD_TYPE_SNMP = 'SNMP';

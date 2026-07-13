@@ -56,22 +56,6 @@ alert_condition_t
 alert_condition_from_name (const char*);
 
 /**
- * @brief Data about a report sent by an alert.
- */
-typedef struct {
-  gchar *local_filename;          ///< Path to the local report file.
-  gchar *remote_filename;         ///< Path or filename to send to / as.
-  gchar *content_type;            ///< The MIME content type of the report.
-  gchar *report_format_name;      ///< Name of the report format used.
-} alert_report_data_t;
-
-void
-alert_report_data_free (alert_report_data_t *);
-
-void
-alert_report_data_reset (alert_report_data_t *);
-
-/**
  * @brief Types of alerts.
  */
 typedef enum
@@ -88,7 +72,7 @@ typedef enum
   ALERT_METHOD_SNMP = 9,
   ALERT_METHOD_SMB = 10,
   /* Value 11 is retired; alert method IDs are persisted and must not shift. */
-  ALERT_METHOD_VFIRE = 12,
+  /* Value 12 is retired; alert method IDs are persisted and must not shift. */
 } alert_method_t;
 
 const char*

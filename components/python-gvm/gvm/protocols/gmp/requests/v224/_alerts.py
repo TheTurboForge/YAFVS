@@ -43,7 +43,6 @@ class AlertMethod(Enum):
     EMAIL = "Email"
     START_TASK = "Start Task"
     HTTP_GET = "HTTP Get"
-    ALEMBA_VFIRE = "Alemba vFire"
 
 
 def _check_event(

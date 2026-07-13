@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -174,10 +175,6 @@ export const EMAIL_CREDENTIAL_TYPES: readonly CredentialType[] = [
   PGP_CREDENTIAL_TYPE,
 ];
 
-export const VFIRE_CREDENTIAL_TYPES: readonly CredentialType[] = [
-  USERNAME_PASSWORD_CREDENTIAL_TYPE,
-];
-
 export const CREDENTIAL_STORE_CREDENTIAL_TYPES: readonly CredentialType[] = [
   CREDENTIAL_STORE_USERNAME_PASSWORD_CREDENTIAL_TYPE,
   CREDENTIAL_STORE_USERNAME_SSH_KEY_CREDENTIAL_TYPE,
@@ -230,9 +227,6 @@ export const email_credential_filter = (credential: Credential) =>
 
 export const password_only_credential_filter = (credential: Credential) =>
   credential.credentialType === PASSWORD_ONLY_CREDENTIAL_TYPE;
-
-export const vFire_credential_filter = (credential: Credential) =>
-  credential.credentialType === USERNAME_PASSWORD_CREDENTIAL_TYPE;
 
 export const SNMP_AUTH_ALGORITHM_MD5 = 'md5';
 export const SNMP_AUTH_ALGORITHM_SHA1 = 'sha1';

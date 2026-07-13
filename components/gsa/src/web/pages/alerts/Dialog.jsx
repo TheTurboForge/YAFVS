@@ -10,7 +10,6 @@ import _ from 'gmp/locale';
 import {
   CONDITION_TYPE_ALWAYS,
   EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
-  METHOD_TYPE_ALEMBA_VFIRE,
   METHOD_TYPE_SCP,
   METHOD_TYPE_SMB,
   METHOD_TYPE_SNMP,
@@ -32,7 +31,6 @@ import TextField from 'web/components/form/TextField';
 import YesNoRadio from 'web/components/form/YesNoRadio';
 import {ReportIcon} from 'web/components/icon';
 import Divider from 'web/components/layout/Divider';
-import AlembaVfireMethodPart from 'web/pages/alerts/dialog/AlembavFireMethodPart';
 import EmailMethodPart from 'web/pages/alerts/dialog/EmailMethodPart';
 import HttpMethodPart from 'web/pages/alerts/dialog/HttpMethodPart';
 import ScpMethodPart from 'web/pages/alerts/dialog/ScpMethodPart';
@@ -129,21 +127,6 @@ Please contact your local system administrator if you think you
 should not have received it.
 `;
 
-export const VFIRE_CALL_DESCRIPTION = `After the event $e,
-the following condition was met: $c
-
-This alert includes reports in the following format(s):
-$r.
-
-Full details and other report formats are available on the scan engine.
-$t
-
-Note:
-This alert was created automatically as a security scan escalation.
-Please contact your local system administrator if you think it
-was created erroneously.
-`;
-
 const DEFAULTS = {
   active: YES_VALUE,
   comment: '',
@@ -185,9 +168,7 @@ const DEFAULTS = {
   method_data_URL: '',
   name: _('Unnamed'),
   report_configs: [],
-  report_config_ids: [],
   report_formats: [],
-  report_format_ids: [],
   result_filters: [],
   secinfo_filters: [],
 };
@@ -248,38 +229,22 @@ class AlertDialog extends React.Component {
       credentials,
       filter_id,
       title = _('New Alert'),
-      report_config_ids,
       report_configs,
-      report_format_ids,
       report_formats,
       method_data_composer_ignore_pagination,
       method_data_composer_include_overrides,
       method_data_recipient_credential,
       method_data_scp_credential,
       method_data_smb_credential,
-      method_data_vfire_base_url,
-      method_data_vfire_credential,
-      method_data_vfire_session_type,
-      method_data_vfire_client_id,
-      method_data_vfire_call_partition_name,
-      method_data_vfire_call_description,
-      method_data_vfire_call_template_name,
-      method_data_vfire_call_type_name,
-      method_data_vfire_call_impact_name,
-      method_data_vfire_call_urgency_name,
       onClose,
       onEmailCredentialChange,
       onNewEmailCredentialClick,
       onNewScpCredentialClick,
       onNewSmbCredentialClick,
-      onNewVfireCredentialClick,
       onOpenContentComposerDialogClick,
-      onReportConfigsChange,
-      onReportFormatsChange,
       onSave,
       onScpCredentialChange,
       onSmbCredentialChange,
-      onVfireCredentialChange,
       ...props
     } = this.props;
 
@@ -320,10 +285,6 @@ class AlertDialog extends React.Component {
           value: METHOD_TYPE_SYSLOG,
           label: _('System Logger'),
         },
-        {
-          value: METHOD_TYPE_ALEMBA_VFIRE,
-          label: _('Alemba vFire'),
-        },
       );
     } else {
       methodTypes.push(
@@ -351,25 +312,12 @@ class AlertDialog extends React.Component {
           value: METHOD_TYPE_SYSLOG,
           label: _('System Logger'),
         },
-        {
-          value: METHOD_TYPE_ALEMBA_VFIRE,
-          label: _('Alemba vFire'),
-        },
       );
     }
 
     const data = {
       ...DEFAULTS,
       ...alert,
-      method_data_vfire_base_url,
-      method_data_vfire_client_id,
-      method_data_vfire_call_partition_name,
-      method_data_vfire_call_description,
-      method_data_vfire_call_template_name,
-      method_data_vfire_call_type_name,
-      method_data_vfire_call_impact_name,
-      method_data_vfire_call_urgency_name,
-      method_data_vfire_session_type,
     };
 
     for (const [key, value] of Object.entries(props)) {
@@ -386,9 +334,6 @@ class AlertDialog extends React.Component {
       method_data_recipient_credential,
       method_data_scp_credential,
       method_data_smb_credential,
-      method_data_vfire_credential,
-      report_config_ids,
-      report_format_ids,
     };
 
     return (
@@ -611,40 +556,6 @@ class AlertDialog extends React.Component {
                 />
               )}
 
-              {values.method === METHOD_TYPE_ALEMBA_VFIRE && (
-                <AlembaVfireMethodPart
-                  credentials={credentials}
-                  prefix="method_data"
-                  reportFormatIds={values.report_format_ids}
-                  reportFormats={report_formats}
-                  vFireBaseUrl={values.method_data_vfire_base_url}
-                  vFireCallDescription={
-                    values.method_data_vfire_call_description
-                  }
-                  vFireCallImpactName={
-                    values.method_data_vfire_call_impact_name
-                  }
-                  vFireCallPartitionName={
-                    values.method_data_vfire_call_partition_name
-                  }
-                  vFireCallTemplateName={
-                    values.method_data_vfire_call_template_name
-                  }
-                  vFireCallTypeName={values.method_data_vfire_call_type_name}
-                  vFireCallUrgencyName={
-                    values.method_data_vfire_call_urgency_name
-                  }
-                  vFireClientId={values.method_data_vfire_client_id}
-                  vFireCredential={values.method_data_vfire_credential}
-                  vFireSessionType={values.method_data_vfire_session_type}
-                  onChange={onValueChange}
-                  onCredentialChange={onVfireCredentialChange}
-                  onNewVfireCredentialClick={onNewVfireCredentialClick}
-                  onReportConfigsChange={onReportConfigsChange}
-                  onReportFormatsChange={onReportFormatsChange}
-                />
-              )}
-
               <FormGroup title={_('Active')}>
                 <YesNoRadio
                   name="active"
@@ -710,20 +621,8 @@ AlertDialog.propTypes = {
   method_data_start_task_task: PropTypes.id,
   method_data_subject: PropTypes.string,
   method_data_to_address: PropTypes.string,
-  method_data_vfire_base_url: PropTypes.string,
-  method_data_vfire_call_description: PropTypes.string,
-  method_data_vfire_call_impact_name: PropTypes.string,
-  method_data_vfire_call_partition_name: PropTypes.string,
-  method_data_vfire_call_template_name: PropTypes.string,
-  method_data_vfire_call_type_name: PropTypes.string,
-  method_data_vfire_call_urgency_name: PropTypes.string,
-  method_data_vfire_client_id: PropTypes.string,
-  method_data_vfire_credential: PropTypes.id,
-  method_data_vfire_session_type: PropTypes.string,
   name: PropTypes.string,
-  report_config_ids: PropTypes.array,
   report_configs: PropTypes.array,
-  report_format_ids: PropTypes.array,
   report_formats: PropTypes.array,
   result_filters: PropTypes.array,
   secinfo_filters: PropTypes.array,
@@ -734,14 +633,10 @@ AlertDialog.propTypes = {
   onNewEmailCredentialClick: PropTypes.func.isRequired,
   onNewScpCredentialClick: PropTypes.func.isRequired,
   onNewSmbCredentialClick: PropTypes.func.isRequired,
-  onNewVfireCredentialClick: PropTypes.func.isRequired,
   onOpenContentComposerDialogClick: PropTypes.func.isRequired,
-  onReportConfigsChange: PropTypes.func.isRequired,
-  onReportFormatsChange: PropTypes.func.isRequired,
   onSave: PropTypes.func.isRequired,
   onScpCredentialChange: PropTypes.func.isRequired,
   onSmbCredentialChange: PropTypes.func.isRequired,
-  onVfireCredentialChange: PropTypes.func.isRequired,
 };
 
 export default withCapabilities(AlertDialog);

@@ -871,6 +871,10 @@ class TurboVASCtlTests(unittest.TestCase):
             turbovasctl,
             "current_gsad_published_hosts",
             return_value=("192.0.2.10", "198.51.100.20"),
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "current_native_api_direct_published_bindings",
+            return_value=(),
         ):
             env = turbovasctl.deployed_app_env(Path("/tmp"))
 
@@ -888,11 +892,135 @@ class TurboVASCtlTests(unittest.TestCase):
             return_value={turbovasctl.GSAD_HOSTS_ENV: explicit},
         ), unittest.mock.patch.object(
             turbovasctl, "current_gsad_published_hosts"
-        ) as current_hosts:
+        ) as current_hosts, unittest.mock.patch.object(
+            turbovasctl,
+            "current_native_api_direct_published_bindings",
+            return_value=(),
+        ):
             env = turbovasctl.deployed_app_env(Path("/tmp"))
 
         self.assertEqual(env[turbovasctl.GSAD_HOSTS_ENV], explicit)
         current_hosts.assert_not_called()
+
+    def test_deployed_app_env_reuses_running_direct_binding_by_default(self):
+        binding = {
+            "host": "127.0.0.1",
+            "host_port": "19080",
+            "container_port": turbovasctl.TURBOVAS_API_DIRECT_CONTAINER_PORT,
+        }
+        with unittest.mock.patch.dict(os.environ, {}, clear=True), unittest.mock.patch.object(
+            turbovasctl,
+            "runtime_app_env",
+            return_value={},
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "current_gsad_published_hosts",
+            return_value=(),
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "current_native_api_direct_published_bindings",
+            return_value=(binding,),
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "ensure_native_api_direct_runtime_env_defaults",
+            side_effect=lambda _root, env: env.update(
+                {
+                    turbovasctl.TURBOVAS_API_DIRECT_ENV: "1",
+                    turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV: "0.0.0.0:9081",
+                }
+            )
+            or env,
+        ):
+            env = turbovasctl.deployed_app_env(Path("/tmp"))
+
+        self.assertEqual(env[turbovasctl.TURBOVAS_API_DIRECT_ENV], "1")
+        self.assertEqual(env[turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV], "127.0.0.1")
+        self.assertEqual(env[turbovasctl.TURBOVAS_API_DIRECT_PORT_ENV], "19080")
+
+    def test_deployed_app_env_preserves_explicit_direct_disable(self):
+        with unittest.mock.patch.dict(
+            os.environ, {turbovasctl.TURBOVAS_API_DIRECT_ENV: "0"}, clear=True
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "runtime_app_env",
+            return_value={turbovasctl.TURBOVAS_API_DIRECT_ENV: "0"},
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "current_gsad_published_hosts",
+            return_value=(),
+        ), unittest.mock.patch.object(
+            turbovasctl, "current_native_api_direct_published_bindings"
+        ) as current_bindings:
+            env = turbovasctl.deployed_app_env(Path("/tmp"))
+
+        self.assertEqual(env[turbovasctl.TURBOVAS_API_DIRECT_ENV], "0")
+        current_bindings.assert_not_called()
+
+    def test_deployed_app_env_brackets_running_direct_ipv6_binding(self):
+        binding = {
+            "host": "::1",
+            "host_port": "19080",
+            "container_port": turbovasctl.TURBOVAS_API_DIRECT_CONTAINER_PORT,
+        }
+        with unittest.mock.patch.dict(os.environ, {}, clear=True), unittest.mock.patch.object(
+            turbovasctl,
+            "runtime_app_env",
+            return_value={},
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "current_gsad_published_hosts",
+            return_value=(),
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "current_native_api_direct_published_bindings",
+            return_value=(binding,),
+        ), unittest.mock.patch.object(
+            turbovasctl,
+            "ensure_native_api_direct_runtime_env_defaults",
+            side_effect=lambda _root, env: env.update(
+                {
+                    turbovasctl.TURBOVAS_API_DIRECT_ENV: "1",
+                    turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV: "0.0.0.0:9081",
+                }
+            )
+            or env,
+        ):
+            env = turbovasctl.deployed_app_env(Path("/tmp"))
+
+        self.assertEqual(env[turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV], "[::1]")
+        self.assertEqual(
+            turbovasctl.native_api_direct_port_binding(env),
+            "[::1]:19080:9081",
+        )
+        self.assertEqual(turbovasctl.native_api_direct_config_errors(env), ())
+
+    def test_native_api_direct_runtime_env_preserves_deployed_hosts(self):
+        deployed = {turbovasctl.GSAD_HOSTS_ENV: "192.0.2.10,198.51.100.20"}
+        with unittest.mock.patch.object(
+            turbovasctl, "deployed_app_env", return_value=deployed
+        ) as deployed_env, unittest.mock.patch.object(
+            turbovasctl,
+            "ensure_native_api_direct_runtime_env_defaults",
+            side_effect=lambda _root, env: env,
+        ):
+            env = turbovasctl.native_api_direct_runtime_env(Path("/tmp"))
+
+        self.assertEqual(
+            env[turbovasctl.GSAD_HOSTS_ENV], deployed[turbovasctl.GSAD_HOSTS_ENV]
+        )
+        deployed_env.assert_called_once_with(Path("/tmp"))
+
+    def test_gsad_ports_override_uses_passed_deployment_environment(self):
+        env = {
+            turbovasctl.GSAD_HOSTS_ENV: "192.0.2.10,198.51.100.20",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = turbovasctl.ensure_gsad_ports_override(Path(tmp), env)
+            content = path.read_text(encoding="utf-8")
+
+        self.assertIn("192.0.2.10:19392:9392", content)
+        self.assertIn("198.51.100.20:19392:9392", content)
+        self.assertNotIn("127.0.0.1:19392:9392", content)
 
     def test_license_status_only_omits_pass_manifest_details(self):
         result = {
@@ -3072,7 +3200,7 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(alert_create["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(alert_create["direct_access"], "direct_write_control")
-        self.assertIn("direct native EMAIL/SMB alert creation", alert_create["replacement_candidates"])
+        self.assertIn("direct native EMAIL/SMB/Syslog/SNMP alert creation", alert_create["replacement_candidates"])
         api_source = (root / "services" / "turbovas-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
         proxy_source = (root / "components" / "gsad" / "src" / "gsad_native_api.c").read_text(encoding="utf-8")
         alerts_api_declared = '.route("/api/v1/alerts"' in api_source
@@ -4092,7 +4220,7 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertTrue(set(actual_maturity_values).issubset(set(contract["allowed_maturity_values"])))
         expected_replaces_values = ['alert-clone',
-         'alert-email-smb-create',
+         'alert-email-smb-syslog-snmp-create',
          'alert-metadata-detail-read',
          'alert-metadata-export-read',
          'alert-metadata-list-read',
@@ -4268,7 +4396,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'vulnerability-detail-read',
          'vulnerability-list-read',
          'vulnerability-metadata-export-read']
-        expected_inherited_still_owns_values = ['alert-other-methods-test-actions-and-delivery-payload-mutations',
+        expected_inherited_still_owns_values = ['alert-scp-start-task-create-test-actions-and-delivery-payload-mutations',
          'credential-secret-updates-non-up-usk-types-and-deletes',
          'credential-secrets-writes-and-deletes',
          'feed-sync-import-control',
@@ -12780,7 +12908,7 @@ db2:keys=5,expires=0,avg_ttl=0
             try:
                 turbovasctl.os.environ[turbovasctl.TURBOVAS_API_DIRECT_BIND_ENV] = "0.0.0.0:9999"
                 turbovasctl.os.environ[turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV] = token
-                with unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(turbovasctl, "active_feed_generation_finding", return_value=turbovasctl.finding("pass", "feed-generation.current", "Mock attested generation.")), unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                with unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(turbovasctl, "current_gsad_published_hosts", return_value=()), unittest.mock.patch.object(turbovasctl, "active_feed_generation_finding", return_value=turbovasctl.finding("pass", "feed-generation.current", "Mock attested generation.")), unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
                     result = turbovasctl.command_runtime_native_api_direct_smoke(root)
             finally:
                 if original_bind is None:
@@ -12817,7 +12945,7 @@ db2:keys=5,expires=0,avg_ttl=0
             try:
                 turbovasctl.os.environ[turbovasctl.TURBOVAS_API_DIRECT_HOST_ENV] = "192.0.2.10"
                 turbovasctl.os.environ[turbovasctl.TURBOVAS_API_BEARER_TOKEN_ENV] = token
-                with unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(turbovasctl, "active_feed_generation_finding", return_value=turbovasctl.finding("pass", "feed-generation.current", "Mock attested generation.")), unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
+                with unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(turbovasctl, "current_gsad_published_hosts", return_value=()), unittest.mock.patch.object(turbovasctl, "active_feed_generation_finding", return_value=turbovasctl.finding("pass", "feed-generation.current", "Mock attested generation.")), unittest.mock.patch.object(turbovasctl, "direct_native_api_curl") as curl:
                     result = turbovasctl.command_runtime_native_api_direct_smoke(root)
             finally:
                 if original_host is None:

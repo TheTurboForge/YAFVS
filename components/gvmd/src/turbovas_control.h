@@ -32,6 +32,13 @@
  *                  <share_path_b64> <file_path_b64>
  *                  <report_format_uuid_b64> <max_protocol_b64>\n
  *
+ * alert-syslog-create <secret> <operator_uuid> <active:0|1> <name_b64>
+ *                     <comment_b64> <status_b64>\n
+ *
+ * alert-snmp-create <secret> <operator_uuid> <active:0|1> <name_b64>
+ *                   <comment_b64> <status_b64> <agent_b64> <community_b64>
+ *                   <message_b64>\n
+ *
  * scan-config-nvt-diagnostic <secret> <operator_uuid> <config_uuid>
  *                            <nvt_oid>\n
  *

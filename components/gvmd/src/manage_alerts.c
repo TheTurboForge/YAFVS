@@ -1015,16 +1015,15 @@ email (const char *to_address, const char *from_address, const char *subject,
                              args_file_name,
                              content_file_name);
 
-  g_debug ("   command: %s", command);
+  g_debug ("Executing sendmail alert command with redacted arguments");
 
   ret = system (command);
   if ((ret == -1) || WEXITSTATUS (ret))
     {
-      g_warning ("%s: system failed with ret %i, %i, %s",
+      g_warning ("%s: system failed with ret %i, %i",
                  __func__,
                  ret,
-                 WEXITSTATUS (ret),
-                 command);
+                 WEXITSTATUS (ret));
       g_free (command);
       fclose (content_file);
       close (args_fd);
@@ -1252,7 +1251,7 @@ alert_script_exec (const char *alert_id, const char *command_args,
                                  error_path);
     g_free (script);
 
-    g_debug ("   command: %s", command);
+    g_debug ("Executing alert script command with redacted arguments");
 
     if (geteuid () == 0)
       {
@@ -1276,7 +1275,7 @@ alert_script_exec (const char *alert_id, const char *command_args,
             close_alert_fd (&error_fd);
             close_alert_fd (&extra_fd);
             g_free (previous_dir);
-            g_free (command);
+            alert_secure_gfree (command);
             return -1;
           }
 
@@ -1326,11 +1325,10 @@ alert_script_exec (const char *alert_id, const char *command_args,
                 if (ret == -1)
                   {
                     g_warning ("%s (child):"
-                               " system failed with ret %i, %i, %s",
+                               " system failed with ret %i, %i",
                                __func__,
                                ret,
-                               WEXITSTATUS (ret),
-                               command);
+                               WEXITSTATUS (ret));
                     gvm_close_sentry ();
                     exit (EXIT_FAILURE);
                   }
@@ -1391,7 +1389,7 @@ alert_script_exec (const char *alert_id, const char *command_args,
                 g_warning ("%s: and chdir failed",
                            __func__);
               g_free (previous_dir);
-              g_free (command);
+              alert_secure_gfree (command);
               return -1;
               break;
 
@@ -1411,6 +1409,7 @@ alert_script_exec (const char *alert_id, const char *command_args,
                           g_warning ("%s: and chdir failed",
                                      __func__);
                         g_free (previous_dir);
+                        alert_secure_gfree (command);
                         return -1;
                       }
                     if (errno == EINTR)
@@ -1422,6 +1421,7 @@ alert_script_exec (const char *alert_id, const char *command_args,
                       g_warning ("%s: and chdir failed",
                                  __func__);
                     g_free (previous_dir);
+                    alert_secure_gfree (command);
                     return -1;
                   }
                 if (WIFEXITED (status))
@@ -1450,27 +1450,27 @@ alert_script_exec (const char *alert_id, const char *command_args,
                       if (chdir (previous_dir))
                         g_warning ("%s: chdir failed",
                                    __func__);
+                      g_free (previous_dir);
+                      alert_secure_gfree (command);
                       return -5;
                     case EXIT_FAILURE:
                     default:
-                      g_warning ("%s: child failed, %s",
-                                 __func__,
-                                 command);
+                      g_warning ("%s: alert script child failed", __func__);
                       if (chdir (previous_dir))
                         g_warning ("%s: and chdir failed",
                                    __func__);
                       g_free (previous_dir);
+                      alert_secure_gfree (command);
                       return -1;
                     }
                 else
                   {
-                    g_warning ("%s: child failed, %s",
-                               __func__,
-                               command);
+                    g_warning ("%s: alert script child failed", __func__);
                     if (chdir (previous_dir))
                       g_warning ("%s: and chdir failed",
                                  __func__);
                     g_free (previous_dir);
+                    alert_secure_gfree (command);
                     return -1;
                   }
 
@@ -1493,16 +1493,15 @@ alert_script_exec (const char *alert_id, const char *command_args,
          * specified what it must be in the past. */
         if (ret == -1)
           {
-            g_warning ("%s: system failed with ret %i, %i, %s",
+            g_warning ("%s: system failed with ret %i, %i",
                        __func__,
                        ret,
-                       WEXITSTATUS (ret),
-                       command);
+                       WEXITSTATUS (ret));
             if (chdir (previous_dir))
               g_warning ("%s: and chdir failed",
                          __func__);
             g_free (previous_dir);
-            g_free (command);
+            alert_secure_gfree (command);
             return -1;
           }
         else if (ret)
@@ -1532,12 +1531,12 @@ alert_script_exec (const char *alert_id, const char *command_args,
                   }
               }
             g_free (previous_dir);
-            g_free (command);
+            alert_secure_gfree (command);
             return -5;
           }
       }
 
-    g_free (command);
+    alert_secure_gfree (command);
 
     /* Change back to the previous directory. */
 
@@ -1711,8 +1710,6 @@ snmp_to_host (const char *community, const char *agent, const char *message,
   gchar *clean_community, *clean_agent, *clean_message, *command_args;
   int ret;
 
-  g_debug ("SNMP to host: %s", agent);
-
   if (community == NULL || agent == NULL || message == NULL)
     {
       g_warning ("%s: parameter was NULL", __func__);
@@ -1724,14 +1721,14 @@ snmp_to_host (const char *community, const char *agent, const char *message,
   clean_message = g_shell_quote (message);
   command_args = g_strdup_printf ("%s %s %s", clean_community, clean_agent,
                                   clean_message);
-  g_free (clean_community);
-  g_free (clean_agent);
-  g_free (clean_message);
+  alert_secure_gfree (clean_community);
+  alert_secure_gfree (clean_agent);
+  alert_secure_gfree (clean_message);
 
   ret = run_alert_script ("9d435134-15d3-11e6-bf5c-28d24461215b", command_args,
                           "report", "", 0, NULL, 0, script_message);
 
-  g_free (command_args);
+  alert_secure_gfree (command_args);
   return ret;
 }
 
@@ -3522,10 +3519,6 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
           agent = alert_data (alert, "method", "snmp_agent");
           snmp_message = alert_data (alert, "method", "snmp_message");
 
-          g_debug ("snmp_message: %s", snmp_message);
-          g_debug ("snmp_community: %s", community);
-          g_debug ("snmp_agent: %s", agent);
-
           if (snmp_message)
             {
               if (event == EVENT_NEW_SECINFO || event == EVENT_UPDATED_SECINFO)
@@ -3560,10 +3553,10 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
 
           ret = snmp_to_host (community, agent, message, script_message);
 
-          free (agent);
-          free (community);
-          free (snmp_message);
-          g_free (message);
+          alert_secure_free (agent);
+          alert_secure_free (community);
+          alert_secure_free (snmp_message);
+          alert_secure_gfree (message);
           return ret;
         }
       case ALERT_METHOD_SYSLOG:

@@ -660,7 +660,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "alert-metadata-export-read",
         "alert-metadata-modify",
         "alert-clone",
-        "alert-email-smb-create",
+        "alert-email-smb-syslog-snmp-create",
         "alert-trash-move",
         "cert-bund-advisory-catalog-detail-read",
         "cert-bund-advisory-list-read",
@@ -836,7 +836,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
 )
 OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
     {
-        "alert-other-methods-test-actions-and-delivery-payload-mutations",
+        "alert-scp-start-task-create-test-actions-and-delivery-payload-mutations",
         "credential-secrets-writes-and-deletes",
         "credential-secret-updates-non-up-usk-types-and-deletes",
         "feed-sync-import-control",
@@ -1029,11 +1029,11 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "alert-metadata-list-read",
     },
     ("post", "/alerts"): {
-        "x-turbovas-inherited-still-owns": "alert-other-methods-test-actions-and-delivery-payload-mutations",
+        "x-turbovas-inherited-still-owns": "alert-scp-start-task-create-test-actions-and-delivery-payload-mutations",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
-        "x-turbovas-replaces": "alert-email-smb-create",
+        "x-turbovas-replaces": "alert-email-smb-syslog-snmp-create",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "alert-delivery-control",
     },
@@ -4084,7 +4084,7 @@ def ensure_native_api_direct_runtime_env_defaults(repo_root: Path, env: dict[str
 
 
 def native_api_direct_runtime_env(repo_root: Path) -> dict[str, str]:
-    return ensure_native_api_direct_runtime_env_defaults(repo_root, runtime_app_env(repo_root))
+    return ensure_native_api_direct_runtime_env_defaults(repo_root, deployed_app_env(repo_root))
 
 
 def native_api_direct_bearer_token(repo_root: Path, env: dict[str, str]) -> str:
@@ -4179,6 +4179,12 @@ def current_native_api_direct_published_bindings(repo_root: Path) -> tuple[dict[
         published.append({"host": host, "host_port": host_port, "container_port": TURBOVAS_API_DIRECT_CONTAINER_PORT})
         seen.add((host, host_port))
     return tuple(published)
+
+
+def native_api_direct_env_host_from_published_binding(host: str) -> str:
+    if ":" in host and not host.startswith("["):
+        return f"[{host}]"
+    return host
 
 
 def running_service_env_has_key(repo_root: Path, service: str, key: str) -> bool:
@@ -4844,7 +4850,10 @@ def ensure_gsad_ports_override(repo_root: Path, env: dict[str, str] | None = Non
         return None
     path = gsad_ports_override_file(repo_root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    bindings = "\n".join(f"      - {json.dumps(binding)}" for binding in gsad_port_bindings(repo_root))
+    bindings = "\n".join(
+        f"      - {json.dumps(f'{host}:{GSAD_PORT}:{GSAD_CONTAINER_PORT}')}"
+        for host in hosts
+    )
     path.write_text(
         "services:\n"
         "  gsad:\n"
@@ -5872,6 +5881,23 @@ def deployed_app_env(repo_root: Path) -> dict[str, str]:
         hosts = current_gsad_published_hosts(repo_root)
         if hosts:
             env[GSAD_HOSTS_ENV] = ",".join(hosts)
+    direct_setting_names = (
+        TURBOVAS_API_DIRECT_ENV,
+        TURBOVAS_API_DIRECT_HOST_ENV,
+        TURBOVAS_API_DIRECT_PORT_ENV,
+        TURBOVAS_API_DIRECT_BIND_ENV,
+    )
+    if not any(name in os.environ for name in direct_setting_names):
+        bindings = current_native_api_direct_published_bindings(repo_root)
+        if len(bindings) == 1:
+            binding = bindings[0]
+            ensure_native_api_direct_runtime_env_defaults(repo_root, env)
+            env[TURBOVAS_API_DIRECT_HOST_ENV] = (
+                native_api_direct_env_host_from_published_binding(
+                    binding["host"]
+                )
+            )
+            env[TURBOVAS_API_DIRECT_PORT_ENV] = binding["host_port"]
     return env
 
 
@@ -11100,10 +11126,10 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/alerts",
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
-                "replacement_candidates": ["GSA EMAIL/SMB alert authoring (migrated through gsad same-origin proxy)", "direct native EMAIL/SMB alert creation"],
+                "replacement_candidates": ["GSA EMAIL/SMB/Syslog/SNMP alert authoring (migrated through gsad same-origin proxy)", "direct native EMAIL/SMB/Syslog/SNMP alert creation"],
                 "residual_inherited": [
-                    "Other alert methods, inherited test actions, and delivery-payload mutations remain inherited.",
-                    "Recipient addresses, sender address, subject, credential and report references, and message content are write-only and are never returned by the native API.",
+                    "SCP and Start Task creation, inherited test actions, and delivery-payload mutations remain inherited.",
+                    "Recipient addresses, sender address, subject, SNMP fields, credential and report references, and message content are write-only and are never returned by the native API.",
                 ],
             },
             {

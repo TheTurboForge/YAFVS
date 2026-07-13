@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -50,7 +51,7 @@ const AlertsTable = createEntitiesTable({
   row: Row,
   rowDetails: withRowDetails('alert')(AlertDetails),
   footer: createEntitiesFooter({
-    download: 'alerts.xml',
+    download: 'alerts.json',
     span: 7,
     trash: true,
   }),

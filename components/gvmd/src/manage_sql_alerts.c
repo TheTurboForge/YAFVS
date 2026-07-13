@@ -812,7 +812,8 @@ create_alert_body (const char* name, const char* comment,
       gchar *data_name, *data;
       gboolean sensitive;
 
-      sensitive = method == ALERT_METHOD_EMAIL || method == ALERT_METHOD_SMB;
+      sensitive = method == ALERT_METHOD_EMAIL || method == ALERT_METHOD_SMB
+                  || method == ALERT_METHOD_SNMP;
       data_name = sql_quote (item);
       data = sensitive ? g_strdup (item + strlen (item) + 1)
                        : sql_quote (item + strlen (item) + 1);
@@ -914,6 +915,50 @@ lock_alert_smb_credential (const char *credential_id)
  * @return See create_alert_body().
  */
 static int lock_alert_create_owner ();
+
+/**
+ * @brief Atomically create a task-status alert with an always condition.
+ *
+ * The current owner is locked before name validation and insertion so native
+ * control creates serialize identically to the specialized EMAIL and SMB
+ * paths.
+ *
+ * @return See create_alert_body().
+ */
+int
+create_alert_task_status_changed (const char *name, const char *comment,
+                                  const char *active, GPtrArray *event_data,
+                                  GPtrArray *condition_data,
+                                  alert_method_t method,
+                                  GPtrArray *method_data, alert_t *alert)
+{
+  int ret;
+
+  assert (current_credentials.uuid);
+
+  sql_begin_immediate ();
+
+  if (acl_user_may ("create_alert") == 0)
+    {
+      sql_rollback ();
+      return 99;
+    }
+
+  ret = lock_alert_create_owner ();
+  if (ret == 0)
+    ret = create_alert_body (name, comment, NULL, active,
+                             EVENT_TASK_RUN_STATUS_CHANGED, event_data,
+                             ALERT_CONDITION_ALWAYS, condition_data, method,
+                             method_data, alert);
+  if (ret)
+    {
+      sql_rollback ();
+      return ret;
+    }
+
+  sql_commit ();
+  return 0;
+}
 
 int
 create_alert (const char* name, const char* comment, const char* filter_id,

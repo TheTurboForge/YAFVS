@@ -216,7 +216,7 @@ describe('Alert DetailsPage tests', () => {
     expect(gmp.alert.delete).toHaveBeenCalledWith({id: alert.id});
 
     const exportIcon = screen.getByTestId('export-icon');
-    expect(exportIcon).toHaveAttribute('title', 'Export Alert as XML');
+    expect(exportIcon).toHaveAttribute('title', 'Export Alert as JSON');
     fireEvent.click(exportIcon);
     await wait();
     expect(gmp.alert.export).toHaveBeenCalledWith(alert);
@@ -309,7 +309,7 @@ describe('Alert ToolBarIcons tests', () => {
     expect(handleAlertDeleteClick).toHaveBeenCalledWith(alert);
 
     const exportIcon = screen.getByTestId('export-icon');
-    expect(exportIcon).toHaveAttribute('title', 'Export Alert as XML');
+    expect(exportIcon).toHaveAttribute('title', 'Export Alert as JSON');
     fireEvent.click(exportIcon);
     expect(handleAlertDownloadClick).toHaveBeenCalledWith(alert);
   });
@@ -362,7 +362,7 @@ describe('Alert ToolBarIcons tests', () => {
     expect(handleAlertDeleteClick).not.toHaveBeenCalled();
 
     const exportIcon = screen.getByTestId('export-icon');
-    expect(exportIcon).toHaveAttribute('title', 'Export Alert as XML');
+    expect(exportIcon).toHaveAttribute('title', 'Export Alert as JSON');
     fireEvent.click(exportIcon);
     expect(handleAlertDownloadClick).toHaveBeenCalledWith(observedAlert);
   });
@@ -409,7 +409,7 @@ describe('Alert ToolBarIcons tests', () => {
     expect(handleAlertDeleteClick).not.toHaveBeenCalled();
 
     const exportIcon = screen.getByTestId('export-icon');
-    expect(exportIcon).toHaveAttribute('title', 'Export Alert as XML');
+    expect(exportIcon).toHaveAttribute('title', 'Export Alert as JSON');
     fireEvent.click(exportIcon);
     expect(handleAlertDownloadClick).toHaveBeenCalledWith(alertInUse);
   });

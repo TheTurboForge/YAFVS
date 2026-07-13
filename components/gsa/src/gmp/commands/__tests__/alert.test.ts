@@ -20,6 +20,8 @@ import {
   METHOD_TYPE_EMAIL,
   METHOD_TYPE_SCP,
   METHOD_TYPE_SMB,
+  METHOD_TYPE_SNMP,
+  METHOD_TYPE_SYSLOG,
 } from 'gmp/models/alert';
 import {YES_VALUE} from 'gmp/parser';
 import {createSession} from 'gmp/testing';
@@ -47,6 +49,91 @@ describe('AlertCommand tests', () => {
       },
     });
     expect(result.data.id).toEqual('foo');
+  });
+
+  test('should create a Syslog alert through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValue(nativeJsonResponse({id: 'native-alert-id'}, 201));
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new AlertCommand(fakeHttp);
+
+    await cmd.create({
+      active: true,
+      name: 'Syslog alert',
+      event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+      condition: CONDITION_TYPE_ALWAYS,
+      method: METHOD_TYPE_SYSLOG,
+      event_data_status: 'Done',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/alerts',
+      expect.objectContaining({
+        body: JSON.stringify({
+          method: 'SYSLOG',
+          name: 'Syslog alert',
+          comment: '',
+          active: true,
+          status: 'Done',
+        }),
+      }),
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should create an SNMP alert through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValue(nativeJsonResponse({id: 'native-alert-id'}, 201));
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new AlertCommand(fakeHttp);
+
+    await cmd.create({
+      active: false,
+      name: 'SNMP alert',
+      comment: 'write-only community',
+      event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+      condition: CONDITION_TYPE_ALWAYS,
+      method: METHOD_TYPE_SNMP,
+      event_data_status: 'Interrupted',
+      method_data_snmp_agent: 'localhost',
+      method_data_snmp_community: '[REDACTED COMMUNITY]',
+      method_data_snmp_message: '$e',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/alerts',
+      expect.objectContaining({
+        body: JSON.stringify({
+          method: 'SNMP',
+          name: 'SNMP alert',
+          comment: 'write-only community',
+          active: false,
+          status: 'Interrupted',
+          snmp_agent: 'localhost',
+          snmp_community: '[REDACTED COMMUNITY]',
+          snmp_message: '$e',
+        }),
+      }),
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should get an alert through native API when available', async () => {

@@ -162,12 +162,39 @@ pub(crate) struct AlertSmbCreateRequest {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AlertSyslogCreateRequest {
+    pub(crate) name: String,
+    #[serde(default)]
+    pub(crate) comment: Option<String>,
+    pub(crate) active: bool,
+    pub(crate) status: AlertCreateStatus,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AlertSnmpCreateRequest {
+    pub(crate) name: String,
+    #[serde(default)]
+    pub(crate) comment: Option<String>,
+    pub(crate) active: bool,
+    pub(crate) status: AlertCreateStatus,
+    pub(crate) snmp_agent: SensitiveAlertField,
+    pub(crate) snmp_community: SensitiveAlertField,
+    pub(crate) snmp_message: SensitiveAlertField,
+}
+
+#[derive(Deserialize)]
 #[serde(tag = "method")]
 pub(crate) enum AlertCreateRequest {
     #[serde(rename = "EMAIL")]
     Email(AlertEmailCreateRequest),
     #[serde(rename = "SMB")]
     Smb(AlertSmbCreateRequest),
+    #[serde(rename = "SYSLOG")]
+    Syslog(AlertSyslogCreateRequest),
+    #[serde(rename = "SNMP")]
+    Snmp(AlertSnmpCreateRequest),
 }
 
 pub(crate) struct ValidatedAlertEmailCreate {
@@ -196,9 +223,28 @@ pub(crate) struct ValidatedAlertSmbCreate {
     pub(crate) smb_max_protocol: AlertSmbMaxProtocol,
 }
 
+pub(crate) struct ValidatedAlertSyslogCreate {
+    pub(crate) name: String,
+    pub(crate) comment: String,
+    pub(crate) active: bool,
+    pub(crate) status: AlertCreateStatus,
+}
+
+pub(crate) struct ValidatedAlertSnmpCreate {
+    pub(crate) name: String,
+    pub(crate) comment: String,
+    pub(crate) active: bool,
+    pub(crate) status: AlertCreateStatus,
+    pub(crate) snmp_agent: SensitiveAlertField,
+    pub(crate) snmp_community: SensitiveAlertField,
+    pub(crate) snmp_message: SensitiveAlertField,
+}
+
 pub(crate) enum ValidatedAlertCreate {
     Email(ValidatedAlertEmailCreate),
     Smb(ValidatedAlertSmbCreate),
+    Syslog(ValidatedAlertSyslogCreate),
+    Snmp(ValidatedAlertSnmpCreate),
 }
 
 pub(crate) fn validate_alert_create_request(
@@ -211,7 +257,74 @@ pub(crate) fn validate_alert_create_request(
         AlertCreateRequest::Smb(request) => {
             validate_alert_smb_create_request(request).map(ValidatedAlertCreate::Smb)
         }
+        AlertCreateRequest::Syslog(request) => {
+            validate_alert_syslog_create_request(request).map(ValidatedAlertCreate::Syslog)
+        }
+        AlertCreateRequest::Snmp(request) => {
+            validate_alert_snmp_create_request(request).map(ValidatedAlertCreate::Snmp)
+        }
     }
+}
+
+pub(crate) fn validate_alert_syslog_create_request(
+    request: AlertSyslogCreateRequest,
+) -> Result<ValidatedAlertSyslogCreate, ApiError> {
+    let name = normalize_alert_create_text(request.name, "name", true)?;
+    let comment = request
+        .comment
+        .map(|value| normalize_alert_create_text(value, "comment", false))
+        .transpose()?
+        .unwrap_or_default();
+    debug_assert!(request.status.as_str().len() <= MAX_ALERT_STATUS_BYTES);
+
+    Ok(ValidatedAlertSyslogCreate {
+        name,
+        comment,
+        active: request.active,
+        status: request.status,
+    })
+}
+
+pub(crate) fn validate_alert_snmp_create_request(
+    request: AlertSnmpCreateRequest,
+) -> Result<ValidatedAlertSnmpCreate, ApiError> {
+    let name = normalize_alert_create_text(request.name, "name", true)?;
+    let comment = request
+        .comment
+        .map(|value| normalize_alert_create_text(value, "comment", false))
+        .transpose()?
+        .unwrap_or_default();
+    debug_assert!(request.status.as_str().len() <= MAX_ALERT_STATUS_BYTES);
+    let snmp_agent = validate_sensitive_alert_text(
+        request.snmp_agent,
+        "snmp_agent",
+        true,
+        MAX_ALERT_TEXT_BYTES,
+    )?;
+    let snmp_community = validate_sensitive_alert_text(
+        request.snmp_community,
+        "snmp_community",
+        true,
+        MAX_ALERT_TEXT_BYTES,
+    )?;
+    let snmp_message = validate_sensitive_alert_message(
+        request.snmp_message,
+        "snmp_message",
+        MAX_ALERT_MESSAGE_BYTES,
+    )?;
+    if snmp_message.as_bytes().is_empty() {
+        return Err(ApiError::BadRequest("snmp_message is required".to_string()));
+    }
+
+    Ok(ValidatedAlertSnmpCreate {
+        name,
+        comment,
+        active: request.active,
+        status: request.status,
+        snmp_agent,
+        snmp_community,
+        snmp_message,
+    })
 }
 
 pub(crate) fn validate_alert_email_create_request(

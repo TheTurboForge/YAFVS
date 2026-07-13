@@ -833,7 +833,7 @@
   "Exploit Maturity": "Exploit-Reife",
   "Exploitability Metrics": "Exploitability-Metriken",
   "Export Alert": "Benachrichtigung exportieren",
-  "Export Alert as XML": "Benachrichtigung als XML exportieren",
+  "Export Alert as JSON": "Benachrichtigung als JSON exportieren",
   "Export all filtered": "Gesamte Filterauswahl exportieren",
   "Export Audit": "Audit exportieren",
   "Export Audit as XML": "Audit als XML exportieren",

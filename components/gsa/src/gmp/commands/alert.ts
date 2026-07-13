@@ -17,6 +17,8 @@ import Alert, {
   EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
   METHOD_TYPE_EMAIL,
   METHOD_TYPE_SMB,
+  METHOD_TYPE_SNMP,
+  METHOD_TYPE_SYSLOG,
 } from 'gmp/models/alert';
 import Credential from 'gmp/models/credential';
 import Filter from 'gmp/models/filter';
@@ -218,6 +220,13 @@ const isNativeAlertOptionalId = (value: unknown): boolean =>
 const isNativeAlertNoFilter = (value: unknown): boolean =>
   value === 0 || value === '0' || value === '' || value === undefined;
 
+const NATIVE_ALERT_CREATE_METHODS: AlertMethodType[] = [
+  METHOD_TYPE_EMAIL,
+  METHOD_TYPE_SMB,
+  METHOD_TYPE_SNMP,
+  METHOD_TYPE_SYSLOG,
+];
+
 const nativeAlertOptionalId = (key: string, value: unknown) =>
   isNativeAlertOptionalId(value) ? {} : {[key]: value};
 
@@ -235,7 +244,7 @@ const nativeAlertCreateRequestFromParams = ({
     event !== EVENT_TYPE_TASK_RUN_STATUS_CHANGED ||
     condition !== CONDITION_TYPE_ALWAYS ||
     !isNativeAlertNoFilter(filterId) ||
-    (method !== METHOD_TYPE_EMAIL && method !== METHOD_TYPE_SMB)
+    !NATIVE_ALERT_CREATE_METHODS.includes(method)
   ) {
     return undefined;
   }
@@ -246,6 +255,20 @@ const nativeAlertCreateRequestFromParams = ({
     active: parseYesNo(active) === YES_VALUE,
     status: other.event_data_status,
   };
+
+  if (method === METHOD_TYPE_SYSLOG) {
+    return {method: 'SYSLOG', ...shared};
+  }
+
+  if (method === METHOD_TYPE_SNMP) {
+    return {
+      method: 'SNMP',
+      ...shared,
+      snmp_agent: other.method_data_snmp_agent,
+      snmp_community: other.method_data_snmp_community,
+      snmp_message: other.method_data_snmp_message,
+    };
+  }
 
   if (method === METHOD_TYPE_SMB) {
     const smbMaxProtocol = other.method_data_smb_max_protocol;

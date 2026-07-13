@@ -2085,14 +2085,14 @@ paths:
       x-turbovas-direct: true
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
-      x-turbovas-replaces: alert-email-smb-create
-      x-turbovas-inherited-still-owns: alert-other-methods-test-actions-and-delivery-payload-mutations
+      x-turbovas-replaces: alert-email-smb-syslog-snmp-create
+      x-turbovas-inherited-still-owns: alert-scp-start-task-create-test-actions-and-delivery-payload-mutations
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: alert-delivery-control
-      summary: Create a task-status EMAIL or SMB alert
-      description: Creates one operator-owned EMAIL or SMB alert through gvmd's authoritative ACL, transactionally locked reference validation, transaction, and audit path with fixed TASK_RUN_STATUS_CHANGED event and ALWAYS condition semantics. The explicit method discriminator selects a strict write-only delivery shape. The operation is available through direct bearer-token access and the authenticated same-origin browser proxy; both resolve the authoritative operator UUID before mutation. Addresses, SMB paths, subjects, credential/report references, and message content are write-only; the response is reloaded from authoritative database metadata and contains no delivery payload. A 502 committed_response_unavailable response means the mutation committed but its identifier or authoritative response failed. A 502 mutation_outcome_indeterminate response means the complete control request may have committed but no authoritative response arrived. Callers must inspect current state before retrying either outcome. Other alert methods, inherited test actions, and later delivery-payload mutation remain inherited residual paths.
+      summary: Create a task-status EMAIL, SMB, Syslog, or SNMP alert
+      description: Creates one operator-owned EMAIL, SMB, Syslog, or SNMP alert through gvmd's authoritative ACL and transaction path with fixed TASK_RUN_STATUS_CHANGED event and ALWAYS condition semantics. Reference-bearing methods lock and validate their dependencies transactionally. The explicit method discriminator selects a strict write-only delivery shape. The operation is available through direct bearer-token access and the authenticated same-origin browser proxy; both resolve the authoritative operator UUID before mutation. Addresses, SMB paths, subjects, SNMP fields, credential/report references, and message content are write-only; the response is reloaded from authoritative database metadata and contains no delivery payload. A 502 committed_response_unavailable response means the mutation committed but its identifier or authoritative response failed. A 502 mutation_outcome_indeterminate response means the complete control request may have committed but no authoritative response arrived. Callers must inspect current state before retrying either outcome. SCP and Start Task creation, inherited test actions, and later delivery-payload mutation remain inherited residual paths.
       requestBody:
         required: true
         content:
@@ -2101,7 +2101,7 @@ paths:
               $ref: '#/components/schemas/AlertCreateRequest'
       responses:
         '201':
-          description: EMAIL or SMB alert created; response contains redacted metadata only
+          description: Alert created; response contains redacted metadata only
           content:
             application/json:
               schema:
@@ -10130,11 +10130,15 @@ components:
       oneOf:
         - $ref: '#/components/schemas/AlertEmailCreateRequest'
         - $ref: '#/components/schemas/AlertSmbCreateRequest'
+        - $ref: '#/components/schemas/AlertSyslogCreateRequest'
+        - $ref: '#/components/schemas/AlertSnmpCreateRequest'
       discriminator:
         propertyName: method
         mapping:
           EMAIL: '#/components/schemas/AlertEmailCreateRequest'
           SMB: '#/components/schemas/AlertSmbCreateRequest'
+          SYSLOG: '#/components/schemas/AlertSyslogCreateRequest'
+          SNMP: '#/components/schemas/AlertSnmpCreateRequest'
     AlertEmailCreateRequest:
       type: object
       additionalProperties: false
@@ -10262,6 +10266,74 @@ components:
           type: string
           enum: [default, NT1, SMB2, SMB3]
           default: default
+          writeOnly: true
+    AlertSyslogCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [method, name, active, status]
+      description: Strict delivery contract for fixed TASK_RUN_STATUS_CHANGED + ALWAYS + Syslog alert creation.
+      properties:
+        method:
+          type: string
+          const: SYSLOG
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        comment:
+          type: string
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        active:
+          type: boolean
+        status:
+          type: string
+          maxLength: 32
+          x-turbovas-max-bytes: 32
+          enum: [Delete Requested, Ultimate Delete Requested, Ultimate Delete Waiting, Delete Waiting, Done, New, Requested, Running, Queued, Stop Requested, Stop Waiting, Stopped, Processing, Interrupted]
+    AlertSnmpCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [method, name, active, status, snmp_agent, snmp_community, snmp_message]
+      description: Strict write-only delivery contract for fixed TASK_RUN_STATUS_CHANGED + ALWAYS + SNMP alert creation. Agent, community, and message values are accepted for delivery configuration but are never returned by the native API.
+      properties:
+        method:
+          type: string
+          const: SNMP
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        comment:
+          type: string
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        active:
+          type: boolean
+        status:
+          type: string
+          maxLength: 32
+          x-turbovas-max-bytes: 32
+          enum: [Delete Requested, Ultimate Delete Requested, Ultimate Delete Waiting, Delete Waiting, Done, New, Requested, Running, Queued, Stop Requested, Stop Waiting, Stopped, Processing, Interrupted]
+        snmp_agent:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+          writeOnly: true
+        snmp_community:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+          writeOnly: true
+        snmp_message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          x-turbovas-max-bytes: 2000
           writeOnly: true
     AlertPatchRequest:
       type: object

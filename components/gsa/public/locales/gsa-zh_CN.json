@@ -833,7 +833,7 @@
   "Exploit Maturity": "漏洞利用成熟度",
   "Exploitability Metrics": "可利用性指标",
   "Export Alert": "导出告警",
-  "Export Alert as XML": "导出告警至XML",
+  "Export Alert as JSON": "导出告警至JSON",
   "Export all filtered": "导出筛选结果",
   "Export Audit": "导出审计",
   "Export Audit as XML": "导出审计至XML",

@@ -63,7 +63,7 @@ export const ToolBarIcons = ({
         <EditIcon entity={entity} onClick={onAlertEditClick} />
         <TrashIcon entity={entity} onClick={onAlertDeleteClick} />
         <ExportIcon
-          title={_('Export Alert as XML')}
+          title={_('Export Alert as JSON')}
           value={entity}
           onClick={onAlertDownloadClick}
         />

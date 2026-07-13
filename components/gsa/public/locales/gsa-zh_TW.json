@@ -833,7 +833,7 @@
   "Exploit Maturity": "",
   "Exploitability Metrics": "",
   "Export Alert": "匯出警報",
-  "Export Alert as XML": "",
+  "Export Alert as JSON": "",
   "Export all filtered": "",
   "Export Audit": "匯出警報",
   "Export Audit as XML": "匯出代理程式為 XML",

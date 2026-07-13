@@ -77,8 +77,16 @@
 #define TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND "alert-smb-create "
 #define TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH \
   (sizeof (TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND "alert-syslog-create "
+#define TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND "alert-snmp-create "
+#define TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND) - 1)
 #define TURBOVAS_CONTROL_ALERT_SMB_PATH_MAX_BYTES 4096
 #define TURBOVAS_CONTROL_ALERT_SMB_PROTOCOL_MAX_BYTES 4
+#define TURBOVAS_CONTROL_ALERT_SNMP_AGENT_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_ALERT_SNMP_COMMUNITY_MAX_BYTES 4096
 #define TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND \
   "scan-config-nvt-diagnostic "
 #define TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH \
@@ -154,6 +162,25 @@ typedef struct
   gchar *max_protocol;
   gboolean active;
 } turbovas_control_alert_smb_create_request_t;
+
+typedef struct
+{
+  gchar *name;
+  gchar *comment;
+  gchar *status;
+  gboolean active;
+} turbovas_control_alert_syslog_create_request_t;
+
+typedef struct
+{
+  gchar *name;
+  gchar *comment;
+  gchar *status;
+  gchar *agent;
+  gchar *community;
+  gchar *message;
+  gboolean active;
+} turbovas_control_alert_snmp_create_request_t;
 
 typedef struct
 {
@@ -393,6 +420,29 @@ turbovas_control_tag_create_request_clear (
   g_free (request->resource_type);
   array_free (request->resource_ids);
   g_free (request->resource_filter);
+  memset (request, 0, sizeof (*request));
+}
+
+static void
+turbovas_control_alert_syslog_create_request_clear (
+  turbovas_control_alert_syslog_create_request_t *request)
+{
+  g_free (request->name);
+  g_free (request->comment);
+  g_free (request->status);
+  memset (request, 0, sizeof (*request));
+}
+
+static void
+turbovas_control_alert_snmp_create_request_clear (
+  turbovas_control_alert_snmp_create_request_t *request)
+{
+  turbovas_control_secure_free (request->name);
+  turbovas_control_secure_free (request->comment);
+  turbovas_control_secure_free (request->status);
+  turbovas_control_secure_free (request->agent);
+  turbovas_control_secure_free (request->community);
+  turbovas_control_secure_free (request->message);
   memset (request, 0, sizeof (*request));
 }
 
@@ -1133,6 +1183,122 @@ turbovas_control_alert_status_is_valid (const char *status)
       return TRUE;
 
   return FALSE;
+}
+
+static gboolean
+turbovas_control_parse_alert_syslog_create_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37],
+  turbovas_control_alert_syslog_create_request_t *alert)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  size_t field_len;
+  gboolean valid;
+
+  memset (alert, 0, sizeof (*alert));
+  if (!turbovas_control_parse_authenticated_prefix (
+        request, request_len, TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND,
+        TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH, expected_secret,
+        expected_secret_len, operator_uuid, &cursor, &end))
+    return FALSE;
+
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && field_len == 1 && (field[0] == '0' || field[0] == '1');
+  if (!valid)
+    return FALSE;
+  alert->active = field[0] == '1';
+
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
+            &alert->name)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_COMMENT_MAX_BYTES, FALSE,
+            &alert->comment)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
+            &alert->status)
+          && cursor == end
+          && turbovas_control_alert_status_is_valid (alert->status)
+          && turbovas_control_text_has_allowed_controls (
+            alert->name, strlen (alert->name), FALSE)
+          && turbovas_control_text_has_allowed_controls (
+            alert->comment, strlen (alert->comment), FALSE);
+  if (!valid)
+    turbovas_control_alert_syslog_create_request_clear (alert);
+
+  return valid;
+}
+
+static gboolean
+turbovas_control_parse_alert_snmp_create_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37],
+  turbovas_control_alert_snmp_create_request_t *alert)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  size_t field_len;
+  gboolean valid;
+
+  memset (alert, 0, sizeof (*alert));
+  if (!turbovas_control_parse_authenticated_prefix (
+        request, request_len, TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND,
+        TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH, expected_secret,
+        expected_secret_len, operator_uuid, &cursor, &end))
+    return FALSE;
+
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && field_len == 1 && (field[0] == '0' || field[0] == '1');
+  if (!valid)
+    return FALSE;
+  alert->active = field[0] == '1';
+
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
+            &alert->name)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_COMMENT_MAX_BYTES, FALSE,
+            &alert->comment)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
+            &alert->status)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_SNMP_AGENT_MAX_BYTES,
+            TRUE, &alert->agent)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_SNMP_COMMUNITY_MAX_BYTES,
+            TRUE, &alert->community)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_base64_field (
+            field, field_len, TURBOVAS_CONTROL_ALERT_MESSAGE_MAX_BYTES, TRUE,
+            &alert->message)
+          && cursor == end
+          && turbovas_control_alert_status_is_valid (alert->status)
+          && turbovas_control_text_has_allowed_controls (
+            alert->name, strlen (alert->name), FALSE)
+          && turbovas_control_text_has_allowed_controls (
+            alert->comment, strlen (alert->comment), FALSE)
+          && turbovas_control_text_has_allowed_controls (
+            alert->agent, strlen (alert->agent), FALSE)
+          && turbovas_control_text_has_allowed_controls (
+            alert->community, strlen (alert->community), FALSE)
+          && turbovas_control_text_has_allowed_controls (
+            alert->message, strlen (alert->message), TRUE);
+  if (!valid)
+    turbovas_control_alert_snmp_create_request_clear (alert);
+
+  return valid;
 }
 
 static gboolean
@@ -2265,6 +2431,108 @@ turbovas_control_create_alert_smb (
 }
 
 static int
+turbovas_control_create_alert_fixed (
+  const char *operator_uuid, const char *name, const char *comment,
+  gboolean active, const char *status, alert_method_t method,
+  const char *const method_names[], const char *const method_values[],
+  size_t method_value_count, char created_uuid[37])
+{
+  array_t *condition_data = NULL;
+  array_t *event_data = NULL;
+  array_t *method_data = NULL;
+  alert_t alert = 0;
+  char active_value[2] = { active ? '1' : '0', '\0' };
+  char *uuid = NULL;
+  gboolean committed = FALSE;
+  size_t index;
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  condition_data = make_array ();
+  event_data = make_array ();
+  method_data = make_array ();
+  turbovas_control_array_add_data (event_data, "status", status);
+  for (index = 0; index < method_value_count; index++)
+    turbovas_control_array_add_data (method_data, method_names[index],
+                                     method_values[index]);
+  array_terminate (condition_data);
+  array_terminate (event_data);
+  array_terminate (method_data);
+
+  result = create_alert_task_status_changed (
+    name, comment, active_value, event_data, condition_data, method,
+    method_data, &alert);
+  if (result == 0)
+    {
+      committed = TRUE;
+      uuid = alert_uuid (alert);
+      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+        {
+          g_warning ("%s: alert creation committed but UUID lookup failed",
+                     __func__);
+          log_event ("alert", "Alert", NULL, "created");
+          result = -3;
+        }
+      else
+        {
+          memcpy (created_uuid, uuid, 36);
+          created_uuid[36] = '\0';
+          log_event ("alert", "Alert", created_uuid, "created");
+        }
+    }
+
+  if (result != 0 && !committed)
+    log_event_fail ("alert", "Alert", NULL, "created");
+
+  free (uuid);
+  turbovas_control_secure_array_free (condition_data);
+  turbovas_control_secure_array_free (event_data);
+  turbovas_control_secure_array_free (method_data);
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
+static int
+turbovas_control_create_alert_syslog (
+  const char *operator_uuid,
+  const turbovas_control_alert_syslog_create_request_t *request,
+  char created_uuid[37])
+{
+  static const char *method_names[] = { "submethod" };
+  static const char *method_values[] = { "syslog" };
+
+  return turbovas_control_create_alert_fixed (
+    operator_uuid, request->name, request->comment, request->active,
+    request->status, ALERT_METHOD_SYSLOG, method_names, method_values,
+    G_N_ELEMENTS (method_names), created_uuid);
+}
+
+static int
+turbovas_control_create_alert_snmp (
+  const char *operator_uuid,
+  const turbovas_control_alert_snmp_create_request_t *request,
+  char created_uuid[37])
+{
+  static const char *method_names[] = {
+    "snmp_agent",
+    "snmp_community",
+    "snmp_message",
+  };
+  const char *method_values[] = {
+    request->agent,
+    request->community,
+    request->message,
+  };
+
+  return turbovas_control_create_alert_fixed (
+    operator_uuid, request->name, request->comment, request->active,
+    request->status, ALERT_METHOD_SNMP, method_names, method_values,
+    G_N_ELEMENTS (method_names), created_uuid);
+}
+
+static int
 turbovas_control_empty_trash (const char *operator_uuid, gint64 expected_total,
                               const char *expected_snapshot_digest,
                               gint64 *actual_total)
@@ -2614,6 +2882,8 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_credential_create_request_t credential_request = {0};
   turbovas_control_alert_email_create_request_t alert_request = {0};
   turbovas_control_alert_smb_create_request_t smb_alert_request = {0};
+  turbovas_control_alert_syslog_create_request_t syslog_alert_request = {0};
+  turbovas_control_alert_snmp_create_request_t snmp_alert_request = {0};
   turbovas_control_tag_create_request_t tag_create_request = {0};
   turbovas_control_tag_modify_request_t tag_modify_request = {0};
   memset (request, 0, sizeof (request));
@@ -2755,6 +3025,37 @@ turbovas_control_serve_client (int client_socket)
                     == 0)
         result_response =
           turbovas_control_alert_create_response (-2, NULL, response);
+      else if (turbovas_control_parse_alert_syslog_create_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, &syslog_alert_request))
+        {
+          result = turbovas_control_create_alert_syslog (
+            operator_uuid, &syslog_alert_request, created_uuid);
+          result_response = turbovas_control_alert_create_response (
+            result, created_uuid, response);
+        }
+      else if (request_len
+                 >= TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH
+               && memcmp (request, TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND,
+                          TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH)
+                    == 0)
+        result_response =
+          turbovas_control_alert_create_response (-2, NULL, response);
+      else if (turbovas_control_parse_alert_snmp_create_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, &snmp_alert_request))
+        {
+          result = turbovas_control_create_alert_snmp (
+            operator_uuid, &snmp_alert_request, created_uuid);
+          result_response = turbovas_control_alert_create_response (
+            result, created_uuid, response);
+        }
+      else if (request_len >= TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH
+               && memcmp (request, TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND,
+                          TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH)
+                    == 0)
+        result_response =
+          turbovas_control_alert_create_response (-2, NULL, response);
       else if (turbovas_control_parse_alert_smb_create_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, &smb_alert_request))
@@ -2817,6 +3118,18 @@ turbovas_control_serve_client (int client_socket)
                 == 0)
     result_response =
       turbovas_control_alert_create_response (-2, NULL, response);
+  else if (request_len >= TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH
+           && memcmp (request, TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND,
+                      TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH)
+                == 0)
+    result_response =
+      turbovas_control_alert_create_response (-2, NULL, response);
+  else if (request_len >= TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH
+           && memcmp (request, TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND,
+                      TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH)
+                == 0)
+    result_response =
+      turbovas_control_alert_create_response (-2, NULL, response);
   else if (request_len >= TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH
            && memcmp (request, TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND,
                       TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH)
@@ -2833,6 +3146,8 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_credential_create_request_clear (&credential_request);
   turbovas_control_alert_email_create_request_clear (&alert_request);
   turbovas_control_alert_smb_create_request_clear (&smb_alert_request);
+  turbovas_control_alert_syslog_create_request_clear (&syslog_alert_request);
+  turbovas_control_alert_snmp_create_request_clear (&snmp_alert_request);
   turbovas_control_tag_create_request_clear (&tag_create_request);
   turbovas_control_tag_modify_request_clear (&tag_modify_request);
   if (request_len <= TURBOVAS_CONTROL_MAX_REQUEST_BYTES)

@@ -80,6 +80,10 @@ static gchar *received_smb_credential;
 static gchar *received_smb_file_path;
 static gchar *received_smb_max_protocol;
 static gchar *received_smb_share_path;
+static gchar *received_snmp_agent;
+static gchar *received_snmp_community;
+static gchar *received_snmp_message;
+static gchar *received_syslog_submethod;
 static gchar *received_audit_uuid;
 static gchar *received_credential_type;
 static gchar *received_comment;
@@ -261,6 +265,41 @@ __wrap_create_alert_email_with_report_refs
     recipient_credential_id,
     is_equal_to_string (received_recipient_credential
                           ? received_recipient_credential : ""));
+  assert_that (condition_data->len, is_equal_to (1));
+  assert_that (g_ptr_array_index (condition_data, 0), is_null);
+  *alert = 9;
+  return create_alert_result;
+}
+
+int
+__wrap_create_alert_task_status_changed (
+  const char *name, const char *comment, const char *active,
+  GPtrArray *event_data, GPtrArray *condition_data, alert_method_t method,
+  GPtrArray *method_data, alert_t *alert)
+{
+  (void) name;
+  (void) comment;
+  create_alert_calls++;
+  received_alert_event = EVENT_TASK_RUN_STATUS_CHANGED;
+  received_alert_condition = ALERT_CONDITION_ALWAYS;
+  received_alert_method = method;
+  g_free (received_active);
+  g_free (received_event_status);
+  g_free (received_syslog_submethod);
+  g_free (received_snmp_agent);
+  g_free (received_snmp_community);
+  g_free (received_snmp_message);
+  received_active = g_strdup (active);
+  received_event_status =
+    g_strdup (test_alert_data_value (event_data, "status"));
+  received_syslog_submethod =
+    g_strdup (test_alert_data_value (method_data, "submethod"));
+  received_snmp_agent =
+    g_strdup (test_alert_data_value (method_data, "snmp_agent"));
+  received_snmp_community =
+    g_strdup (test_alert_data_value (method_data, "snmp_community"));
+  received_snmp_message =
+    g_strdup (test_alert_data_value (method_data, "snmp_message"));
   assert_that (condition_data->len, is_equal_to (1));
   assert_that (g_ptr_array_index (condition_data, 0), is_null);
   *alert = 9;
@@ -1101,8 +1140,7 @@ int
 __real_create_alert_smb_with_report_refs (const char *, const char *,
                                           const char *, GPtrArray *,
                                           GPtrArray *, GPtrArray *,
-                                          const char *, const char *,
-                                          const char *, alert_t *);
+                                          const char *, const char *, alert_t *);
 
 static ssize_t
 dispatch_trash_empty_request (const char *request,
@@ -1640,6 +1678,50 @@ test_alert_email_create_request (const char *active, const char *name,
 }
 
 static gchar *
+test_alert_syslog_create_request (const char *active, const char *name,
+                                  const char *comment, const char *status)
+{
+  const char *values[] = { name, comment, status };
+  gchar *fields[G_N_ELEMENTS (values)];
+  gchar *request;
+  size_t index;
+
+  for (index = 0; index < G_N_ELEMENTS (values); index++)
+    fields[index] =
+      g_base64_encode ((const guchar *) values[index], strlen (values[index]));
+  request = g_strdup_printf (
+    "alert-syslog-create " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 %s %s %s %s\n",
+    active, fields[0], fields[1], fields[2]);
+  for (index = 0; index < G_N_ELEMENTS (fields); index++)
+    g_free (fields[index]);
+  return request;
+}
+
+static gchar *
+test_alert_snmp_create_request (const char *active, const char *name,
+                                const char *comment, const char *status,
+                                const char *agent, const char *community,
+                                const char *message)
+{
+  const char *values[] = { name, comment, status, agent, community, message };
+  gchar *fields[G_N_ELEMENTS (values)];
+  gchar *request;
+  size_t index;
+
+  for (index = 0; index < G_N_ELEMENTS (values); index++)
+    fields[index] =
+      g_base64_encode ((const guchar *) values[index], strlen (values[index]));
+  request = g_strdup_printf (
+    "alert-snmp-create " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 %s %s %s %s %s %s %s\n",
+    active, fields[0], fields[1], fields[2], fields[3], fields[4], fields[5]);
+  for (index = 0; index < G_N_ELEMENTS (fields); index++)
+    g_free (fields[index]);
+  return request;
+}
+
+static gchar *
 test_alert_smb_create_request (const char *active, const char *name,
                                const char *comment, const char *status,
                                const char *credential_uuid,
@@ -1695,7 +1777,7 @@ Ensure (turbovas_control, parses_canonical_bounded_alert_email_request)
       gchar *request = test_alert_email_create_request (
         "1", "Email alert", "comment", statuses[index], "ops@example.com",
         "sender@example.com", "subject", "0", recipient, format,
-        "Line one\nLine two");
+        "", "Line one\nLine two");
       turbovas_control_alert_email_create_request_t alert = {0};
 
       assert_that (turbovas_control_parse_alert_email_create_request (
@@ -2199,6 +2281,162 @@ Ensure (turbovas_control, maps_every_alert_create_response)
                                                            NULL, response),
                    is_equal_to_string (cases[index].response));
     }
+}
+
+Ensure (turbovas_control, parses_syslog_and_required_snmp_alert_requests)
+{
+  gchar *syslog_request = test_alert_syslog_create_request (
+    "1", "Syslog alert", "retained", "Done");
+  gchar *snmp_request = test_alert_snmp_create_request (
+    "0", "SNMP alert", "retained", "Running", "snmp.example.test",
+    "private-community", "Task {{status}}");
+  char operator_uuid[37];
+  turbovas_control_alert_syslog_create_request_t syslog_alert = {0};
+  turbovas_control_alert_snmp_create_request_t snmp_alert = {0};
+
+  assert_that (turbovas_control_parse_alert_syslog_create_request (
+                 syslog_request, strlen (syslog_request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &syslog_alert),
+               is_true);
+  assert_that (syslog_alert.active, is_true);
+  assert_that (syslog_alert.name, is_equal_to_string ("Syslog alert"));
+  assert_that (syslog_alert.status, is_equal_to_string ("Done"));
+  turbovas_control_alert_syslog_create_request_clear (&syslog_alert);
+
+  assert_that (turbovas_control_parse_alert_snmp_create_request (
+                 snmp_request, strlen (snmp_request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &snmp_alert),
+               is_true);
+  assert_that (snmp_alert.active, is_false);
+  assert_that (snmp_alert.agent, is_equal_to_string ("snmp.example.test"));
+  assert_that (snmp_alert.community,
+               is_equal_to_string ("private-community"));
+  assert_that (snmp_alert.message,
+               is_equal_to_string ("Task {{status}}"));
+  turbovas_control_alert_snmp_create_request_clear (&snmp_alert);
+  g_free (syslog_request);
+  g_free (snmp_request);
+}
+
+Ensure (turbovas_control, rejects_malformed_or_empty_snmp_alert_payloads)
+{
+  gchar *invalid[] = {
+    test_alert_snmp_create_request (
+      "2", "SNMP alert", "", "Done", "snmp.example.test",
+      "private-community", "Task {{status}}"),
+    test_alert_snmp_create_request (
+      "1", "SNMP alert", "", "Done", "", "private-community",
+      "Task {{status}}"),
+    test_alert_snmp_create_request (
+      "1", "SNMP alert", "", "Done", "snmp.example.test", "",
+      "Task {{status}}"),
+    test_alert_snmp_create_request (
+      "1", "SNMP alert", "", "Done", "snmp.example.test",
+      "private-community", ""),
+    test_alert_snmp_create_request (
+      "1", "SNMP alert", "", "Done", "snmp.example.test",
+      "private-community", "unsupported\x01" "control"),
+    g_strdup ("alert-snmp-create " TEST_CONTROL_SECRET " "
+              "123e4567-e89b-12d3-a456-426614174000 1 QQ==\n"),
+  };
+  char operator_uuid[37];
+  size_t index;
+  turbovas_control_alert_snmp_create_request_t alert = {0};
+
+  for (index = 0; index < G_N_ELEMENTS (invalid); index++)
+    {
+      assert_that (turbovas_control_parse_alert_snmp_create_request (
+                     invalid[index], strlen (invalid[index]),
+                     TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                     operator_uuid, &alert),
+                   is_false);
+      g_free (invalid[index]);
+    }
+}
+
+Ensure (turbovas_control, maps_fixed_syslog_and_snmp_alert_creation)
+{
+  const turbovas_control_alert_syslog_create_request_t syslog_request = {
+    .name = "Syslog alert", .comment = "retained", .status = "Done",
+    .active = TRUE,
+  };
+  const turbovas_control_alert_snmp_create_request_t snmp_request = {
+    .name = "SNMP alert", .comment = "retained", .status = "Running",
+    .agent = "snmp.example.test", .community = "private-community",
+    .message = "Task {{status}}", .active = FALSE,
+  };
+  char created_uuid[37];
+
+  cleanup_calls = 0;
+  create_alert_calls = 0;
+  create_alert_result = 0;
+  audit_fail_calls = 0;
+  audit_success_calls = 0;
+  mock_operator_name = "operator";
+
+  assert_that (turbovas_control_create_alert_syslog (
+                 "123e4567-e89b-12d3-a456-426614174000", &syslog_request,
+                 created_uuid),
+               is_equal_to (0));
+  assert_that (created_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174004"));
+  assert_that (received_alert_event,
+               is_equal_to (EVENT_TASK_RUN_STATUS_CHANGED));
+  assert_that (received_alert_condition, is_equal_to (ALERT_CONDITION_ALWAYS));
+  assert_that (received_alert_method, is_equal_to (ALERT_METHOD_SYSLOG));
+  assert_that (received_active, is_equal_to_string ("1"));
+  assert_that (received_event_status, is_equal_to_string ("Done"));
+  assert_that (received_syslog_submethod, is_equal_to_string ("syslog"));
+  assert_that (audit_success_calls, is_equal_to (1));
+
+  assert_that (turbovas_control_create_alert_snmp (
+                 "123e4567-e89b-12d3-a456-426614174000", &snmp_request,
+                 created_uuid),
+               is_equal_to (0));
+  assert_that (received_alert_method, is_equal_to (ALERT_METHOD_SNMP));
+  assert_that (received_active, is_equal_to_string ("0"));
+  assert_that (received_event_status, is_equal_to_string ("Running"));
+  assert_that (received_snmp_agent,
+               is_equal_to_string ("snmp.example.test"));
+  assert_that (received_snmp_community,
+               is_equal_to_string ("private-community"));
+  assert_that (received_snmp_message,
+               is_equal_to_string ("Task {{status}}"));
+  assert_that (create_alert_calls, is_equal_to (2));
+  assert_that (audit_success_calls, is_equal_to (2));
+  assert_that (audit_fail_calls, is_equal_to (0));
+}
+
+Ensure (turbovas_control, rejects_missing_snmp_owner_and_maps_alert_errors)
+{
+  const turbovas_control_alert_snmp_create_request_t request = {
+    .name = "SNMP alert", .comment = "", .status = "Done",
+    .agent = "snmp.example.test", .community = "private-community",
+    .message = "Task {{status}}", .active = TRUE,
+  };
+  char created_uuid[37];
+
+  cleanup_calls = 0;
+  create_alert_calls = 0;
+  audit_fail_calls = 0;
+  mock_operator_name = NULL;
+  assert_that (turbovas_control_create_alert_snmp (
+                 "123e4567-e89b-12d3-a456-426614174000", &request,
+                 created_uuid),
+               is_equal_to (99));
+  assert_that (create_alert_calls, is_equal_to (0));
+  assert_that (audit_fail_calls, is_equal_to (0));
+  assert_that (cleanup_calls, is_equal_to (1));
+
+  create_alert_result = 99;
+  audit_fail_calls = 0;
+  mock_operator_name = "operator";
+  assert_that (turbovas_control_create_alert_snmp (
+                 "123e4567-e89b-12d3-a456-426614174000", &request,
+                 created_uuid),
+               is_equal_to (99));
+  assert_that (audit_fail_calls, is_equal_to (1));
+  create_alert_result = 0;
 }
 
 Ensure (turbovas_control, maps_schedule_create_responses)
@@ -3238,7 +3476,7 @@ Ensure (turbovas_control, locks_alert_smb_references_and_commits_atomically)
   assert_that (alert_smb_db_events[8], is_equal_to (ALERT_SMB_DB_BODY_INSERT));
   assert_that (alert_smb_db_events[alert_smb_db_event_count - 1],
                is_equal_to (ALERT_SMB_DB_COMMIT));
-  assert_that (alert_smb_db_method_inserts, is_equal_to (6));
+  assert_that (alert_smb_db_method_inserts, is_equal_to (5));
 }
 
 Ensure (turbovas_control, rejects_alert_smb_reference_failures_atomically)
@@ -4120,6 +4358,14 @@ main (int argc, char **argv)
     reports_postcommit_alert_uuid_failure_without_failed_audit);
   add_test_with_context (suite, turbovas_control,
                          maps_every_alert_create_response);
+  add_test_with_context (suite, turbovas_control,
+                         parses_syslog_and_required_snmp_alert_requests);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_malformed_or_empty_snmp_alert_payloads);
+  add_test_with_context (suite, turbovas_control,
+                         maps_fixed_syslog_and_snmp_alert_creation);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_missing_snmp_owner_and_maps_alert_errors);
   add_test_with_context (suite, turbovas_control,
                          returns_malformed_for_truncated_alert_frame);
   add_test_with_context (suite, turbovas_control,

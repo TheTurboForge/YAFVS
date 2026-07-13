@@ -9,12 +9,13 @@ use crate::{
     alert_write_validation::{
         AlertCloneRequest, AlertCreateRequest, AlertEmailCreateRequest, AlertPatchRequest,
         MAX_ALERT_MESSAGE_BYTES, MAX_ALERT_SUBJECT_BYTES, MAX_ALERT_TEXT_BYTES,
-        ValidatedAlertCreate, ValidatedAlertSmbCreate, validate_alert_clone_request,
-        validate_alert_create_request, validate_alert_email_create_request,
-        validate_alert_patch_request,
+        ValidatedAlertCreate, ValidatedAlertSmbCreate, ValidatedAlertSnmpCreate,
+        ValidatedAlertSyslogCreate, validate_alert_clone_request, validate_alert_create_request,
+        validate_alert_email_create_request, validate_alert_patch_request,
     },
     alert_writes::{
-        alert_email_create_command, alert_smb_create_command, parse_alert_create_response,
+        alert_email_create_command, alert_smb_create_command, alert_snmp_create_command,
+        alert_syslog_create_command, parse_alert_create_response,
     },
     errors::ApiError,
     gvmd_control::{
@@ -34,6 +35,29 @@ fn email_create_json(notice: &str) -> serde_json::Value {
         "from_address": "scanner@example.invalid",
         "subject": "Scan report",
         "notice": notice
+    })
+}
+
+fn syslog_create_json() -> serde_json::Value {
+    serde_json::json!({
+        "method": "SYSLOG",
+        "name": "Security event log",
+        "comment": "Operator delivery",
+        "active": true,
+        "status": "Done"
+    })
+}
+
+fn snmp_create_json() -> serde_json::Value {
+    serde_json::json!({
+        "method": "SNMP",
+        "name": "SNMP security event",
+        "comment": "Operator delivery",
+        "active": true,
+        "status": "Done",
+        "snmp_agent": "localhost",
+        "snmp_community": "private-community",
+        "snmp_message": "$e"
     })
 }
 
@@ -66,7 +90,25 @@ fn validated_smb_create(protocol: Option<&str>) -> ValidatedAlertSmbCreate {
         serde_json::from_value::<AlertCreateRequest>(value).expect("valid SMB alert request shape");
     match validate_alert_create_request(request).expect("valid SMB alert request") {
         ValidatedAlertCreate::Smb(request) => request,
-        ValidatedAlertCreate::Email(_) => panic!("SMB method must select SMB request"),
+        _ => panic!("SMB method must select SMB request"),
+    }
+}
+
+fn validated_syslog_create() -> ValidatedAlertSyslogCreate {
+    let request = serde_json::from_value::<AlertCreateRequest>(syslog_create_json())
+        .expect("valid Syslog alert request shape");
+    match validate_alert_create_request(request).expect("valid Syslog alert request") {
+        ValidatedAlertCreate::Syslog(request) => request,
+        _ => panic!("SYSLOG method must select Syslog request"),
+    }
+}
+
+fn validated_snmp_create() -> ValidatedAlertSnmpCreate {
+    let request = serde_json::from_value::<AlertCreateRequest>(snmp_create_json())
+        .expect("valid SNMP alert request shape");
+    match validate_alert_create_request(request).expect("valid SNMP alert request") {
+        ValidatedAlertCreate::Snmp(request) => request,
+        _ => panic!("SNMP method must select SNMP request"),
     }
 }
 
@@ -100,10 +142,7 @@ fn email_and_smb_alert_references_are_locked_inside_create_transactions() {
     }
     assert!(manager.matches("FOR SHARE").count() >= 3);
     assert!(manager.contains("SELECT id FROM users WHERE uuid = '%s' FOR UPDATE;"));
-    assert_eq!(
-        manager.matches("ret = lock_alert_create_owner ();").count(),
-        3
-    );
+    assert!(manager.matches("ret = lock_alert_create_owner ();").count() >= 4);
     assert!(
         function.find("acl_user_may").unwrap() < function.find("lock_alert_report_format").unwrap()
     );
@@ -194,7 +233,7 @@ fn alert_create_openapi_metadata_is_direct_guarded_and_redacted() {
         "operationId: postAlerts",
         "x-turbovas-direct: true",
         "x-turbovas-exposure: direct-write",
-        "x-turbovas-replaces: alert-email-smb-create",
+        "x-turbovas-replaces: alert-email-smb-syslog-snmp-create",
         "x-turbovas-operator-identity: direct-token-operator",
         "x-turbovas-owner-semantics: request-operator-owner",
         "x-turbovas-safety-contract: write-control-v1",
@@ -226,6 +265,8 @@ fn alert_create_openapi_metadata_is_direct_guarded_and_redacted() {
     assert!(schema.contains("propertyName: method"));
     assert!(schema.contains("EMAIL: '#/components/schemas/AlertEmailCreateRequest'"));
     assert!(schema.contains("SMB: '#/components/schemas/AlertSmbCreateRequest'"));
+    assert!(schema.contains("SYSLOG: '#/components/schemas/AlertSyslogCreateRequest'"));
+    assert!(schema.contains("SNMP: '#/components/schemas/AlertSnmpCreateRequest'"));
     assert!(schema.contains("enum: [simple, include, attach]"));
     assert!(schema.contains("enum: [default, NT1, SMB2, SMB3]"));
     assert!(schema.contains("writeOnly: true"));
@@ -407,11 +448,78 @@ fn alert_smb_create_frame_is_exact_bounded_and_scrubbable() {
     let maximum = serde_json::from_value::<AlertCreateRequest>(maximum).unwrap();
     let maximum = match validate_alert_create_request(maximum).unwrap() {
         ValidatedAlertCreate::Smb(request) => request,
-        ValidatedAlertCreate::Email(_) => unreachable!(),
+        _ => unreachable!(),
     };
     let maximum_frame =
         alert_smb_create_command("0123456789abcdef0123456789abcdef", TEST_UUID, &maximum);
     assert!(maximum_frame.as_bytes().len() < MAX_CONTROL_REQUEST_BYTES);
+}
+
+#[test]
+fn alert_syslog_and_snmp_create_frames_are_exact_bounded_and_scrubbable() {
+    let syslog = validated_syslog_create();
+    let mut syslog_frame =
+        alert_syslog_create_command("0123456789abcdef0123456789abcdef", TEST_UUID, &syslog);
+    assert_eq!(
+        syslog_frame.as_bytes(),
+        concat!(
+            "alert-syslog-create 0123456789abcdef0123456789abcdef ",
+            "12345678-1234-4234-8234-123456789abc 1 ",
+            "U2VjdXJpdHkgZXZlbnQgbG9n T3BlcmF0b3IgZGVsaXZlcnk= RG9uZQ==\n"
+        )
+        .as_bytes()
+    );
+    assert!(syslog_frame.as_bytes().len() < MAX_CONTROL_REQUEST_BYTES);
+    syslog_frame.scrub();
+    assert!(syslog_frame.as_bytes().iter().all(|byte| *byte == 0));
+
+    let snmp = validated_snmp_create();
+    let mut snmp_frame =
+        alert_snmp_create_command("0123456789abcdef0123456789abcdef", TEST_UUID, &snmp);
+    assert_eq!(
+        snmp_frame.as_bytes(),
+        concat!(
+            "alert-snmp-create 0123456789abcdef0123456789abcdef ",
+            "12345678-1234-4234-8234-123456789abc 1 ",
+            "U05NUCBzZWN1cml0eSBldmVudA== T3BlcmF0b3IgZGVsaXZlcnk= RG9uZQ== ",
+            "bG9jYWxob3N0 cHJpdmF0ZS1jb21tdW5pdHk= JGU=\n"
+        )
+        .as_bytes()
+    );
+    assert!(snmp_frame.as_bytes().len() < MAX_CONTROL_REQUEST_BYTES);
+    snmp_frame.scrub();
+    assert!(snmp_frame.as_bytes().iter().all(|byte| *byte == 0));
+}
+
+#[test]
+fn alert_syslog_and_snmp_create_shapes_are_strict_and_sensitive() {
+    let syslog = serde_json::from_value::<AlertCreateRequest>(syslog_create_json()).unwrap();
+    assert!(matches!(
+        validate_alert_create_request(syslog),
+        Ok(ValidatedAlertCreate::Syslog(_))
+    ));
+
+    for field in ["snmp_agent", "snmp_community", "snmp_message"] {
+        let mut value = snmp_create_json();
+        value.as_object_mut().unwrap().remove(field);
+        assert!(serde_json::from_value::<AlertCreateRequest>(value).is_err());
+    }
+    let mut control = snmp_create_json();
+    control["snmp_community"] = serde_json::json!("secret\nvalue");
+    let request = serde_json::from_value::<AlertCreateRequest>(control).unwrap();
+    assert!(validate_alert_create_request(request).is_err());
+
+    let validation = include_str!("alert_write_validation.rs");
+    for field in [
+        "snmp_agent: SensitiveAlertField",
+        "snmp_community: SensitiveAlertField",
+        "snmp_message: SensitiveAlertField",
+    ] {
+        assert!(
+            validation.contains(field),
+            "missing sensitive field {field}"
+        );
+    }
 }
 
 #[test]
@@ -760,8 +868,12 @@ fn alert_create_handler_dispatches_methods_and_returns_only_redacted_asset_shape
     assert!(handler.contains("parse_alert_create_payload(payload)?"));
     assert!(handler.contains("ValidatedAlertCreate::Email(request)"));
     assert!(handler.contains("ValidatedAlertCreate::Smb(request)"));
+    assert!(handler.contains("ValidatedAlertCreate::Syslog(request)"));
+    assert!(handler.contains("ValidatedAlertCreate::Snmp(request)"));
     assert!(handler.contains("request_alert_email_create"));
     assert!(handler.contains("request_alert_smb_create"));
+    assert!(handler.contains("request_alert_syslog_create"));
+    assert!(handler.contains("request_alert_snmp_create"));
     assert!(handler.contains("load_alert_asset_detail"));
     assert!(handler.contains("JOIN users u ON u.id = a.owner"));
     assert!(handler.contains("u.uuid = $2"));
@@ -818,6 +930,56 @@ fn alert_smb_sensitive_fields_are_byte_backed_and_drop_scrubbed() {
     }
     assert!(validation.contains("impl Drop for SensitiveAlertField"));
     assert!(validation.contains("self.0.fill(0)"));
+}
+
+#[test]
+fn alert_snmp_secrets_are_byte_backed_parameterized_unlogged_and_scrubbed() {
+    let validation = include_str!("alert_write_validation.rs");
+    for field in [
+        "snmp_agent: SensitiveAlertField",
+        "snmp_community: SensitiveAlertField",
+        "snmp_message: SensitiveAlertField",
+    ] {
+        assert!(
+            validation.contains(field),
+            "missing sensitive SNMP field {field}"
+        );
+    }
+    assert!(validation.contains("impl Drop for SensitiveAlertField"));
+    assert!(validation.contains("self.0.fill(0)"));
+
+    let manager = include_str!("../../../components/gvmd/src/manage_sql_alerts.c");
+    assert!(manager.contains("|| method == ALERT_METHOD_SNMP"));
+    assert!(manager.contains("sql_ps_sensitive"));
+    assert!(manager.contains("VALUES ($1, $2, $3)"));
+
+    let delivery = include_str!("../../../components/gvmd/src/manage_alerts.c");
+    for forbidden in [
+        "g_debug (\"SNMP to host: %s\"",
+        "g_debug (\"snmp_agent: %s\"",
+        "g_debug (\"snmp_message: %s\"",
+        "g_debug (\"snmp_community: %s\"",
+        "g_debug (\"   command: %s\"",
+        "system failed with ret %i, %i, %s",
+        "child failed, %s",
+    ] {
+        assert!(!delivery.contains(forbidden), "SNMP log leaks {forbidden}");
+    }
+    for required in [
+        "alert_secure_gfree (clean_community)",
+        "alert_secure_gfree (clean_agent)",
+        "alert_secure_gfree (clean_message)",
+        "alert_secure_gfree (command_args)",
+        "alert_secure_free (agent)",
+        "alert_secure_free (community)",
+        "alert_secure_free (snmp_message)",
+        "alert_secure_gfree (message)",
+    ] {
+        assert!(
+            delivery.contains(required),
+            "SNMP secret cleanup missing {required}"
+        );
+    }
 }
 
 #[test]

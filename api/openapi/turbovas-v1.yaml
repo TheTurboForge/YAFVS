@@ -2085,14 +2085,14 @@ paths:
       x-turbovas-direct: true
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
-      x-turbovas-replaces: alert-email-smb-syslog-snmp-scp-create
-      x-turbovas-inherited-still-owns: alert-start-task-create-test-actions-and-delivery-payload-mutations
+      x-turbovas-replaces: alert-email-smb-syslog-snmp-scp-start-task-create
+      x-turbovas-inherited-still-owns: alert-test-actions-and-delivery-payload-mutations
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: alert-delivery-control
-      summary: Create a task-status EMAIL, SMB, Syslog, SNMP, or SCP alert
-      description: Creates one operator-owned EMAIL, SMB, Syslog, SNMP, or SCP alert through gvmd's authoritative ACL and transaction path with fixed TASK_RUN_STATUS_CHANGED event and ALWAYS condition semantics. Reference-bearing methods lock and validate their dependencies transactionally. The explicit method discriminator selects a strict write-only delivery shape. The operation is available through direct bearer-token access and the authenticated same-origin browser proxy; both resolve the authoritative operator UUID before mutation. Addresses, paths, subjects, SNMP fields, known-host pins, credential/report references, and message content are write-only; the response is reloaded from authoritative database metadata and contains no delivery payload. A 502 committed_response_unavailable response means the mutation committed but its identifier or authoritative response failed. A 502 mutation_outcome_indeterminate response means the complete control request may have committed but no authoritative response arrived. Callers must inspect current state before retrying either outcome. Start Task creation, inherited test actions, and later delivery-payload mutation remain inherited residual paths.
+      summary: Create a task-status EMAIL, SMB, Syslog, SNMP, SCP, or Start Task alert
+      description: Creates one operator-owned EMAIL, SMB, Syslog, SNMP, SCP, or Start Task alert through gvmd's authoritative ACL and transaction path with fixed TASK_RUN_STATUS_CHANGED event and ALWAYS condition semantics. Reference-bearing methods lock and validate their dependencies transactionally. The explicit method discriminator selects a strict write-only delivery shape. The operation is available through direct bearer-token access and the authenticated same-origin browser proxy; both resolve the authoritative operator UUID before mutation. Addresses, paths, subjects, SNMP fields, known-host pins, credential/report/task references, and message content are write-only; the response is reloaded from authoritative database metadata and contains no delivery payload. A 502 committed_response_unavailable response means the mutation committed but its identifier or authoritative response failed. A 502 mutation_outcome_indeterminate response means the complete control request may have committed but no authoritative response arrived. Callers must inspect current state before retrying either outcome. Inherited test actions and later delivery-payload mutation remain residual paths.
       requestBody:
         required: true
         content:
@@ -10133,6 +10133,7 @@ components:
         - $ref: '#/components/schemas/AlertSyslogCreateRequest'
         - $ref: '#/components/schemas/AlertSnmpCreateRequest'
         - $ref: '#/components/schemas/AlertScpCreateRequest'
+        - $ref: '#/components/schemas/AlertStartTaskCreateRequest'
       discriminator:
         propertyName: method
         mapping:
@@ -10141,6 +10142,7 @@ components:
           SYSLOG: '#/components/schemas/AlertSyslogCreateRequest'
           SNMP: '#/components/schemas/AlertSnmpCreateRequest'
           SCP: '#/components/schemas/AlertScpCreateRequest'
+          START_TASK: '#/components/schemas/AlertStartTaskCreateRequest'
     AlertEmailCreateRequest:
       type: object
       additionalProperties: false
@@ -10272,6 +10274,37 @@ components:
           x-turbovas-max-bytes: 4096
           writeOnly: true
         report_format_id:
+          type: string
+          format: uuid
+          maxLength: 36
+          x-turbovas-max-bytes: 36
+          writeOnly: true
+    AlertStartTaskCreateRequest:
+      type: object
+      additionalProperties: false
+      required: [method, name, active, status, task_id]
+      description: Strict write-only task reference contract for fixed TASK_RUN_STATUS_CHANGED + ALWAYS + Start Task alert creation. The referenced task is resolved and authorized under the request operator before the alert is inserted; task reference data is not returned in native alert metadata.
+      properties:
+        method:
+          type: string
+          const: START_TASK
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        comment:
+          type: string
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        active:
+          type: boolean
+        status:
+          type: string
+          maxLength: 32
+          x-turbovas-max-bytes: 32
+          enum: [Delete Requested, Ultimate Delete Requested, Ultimate Delete Waiting, Delete Waiting, Done, New, Requested, Running, Queued, Stop Requested, Stop Waiting, Stopped, Processing, Interrupted]
+        task_id:
           type: string
           format: uuid
           maxLength: 36

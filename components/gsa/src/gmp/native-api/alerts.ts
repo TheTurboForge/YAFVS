@@ -86,7 +86,7 @@ export interface NativeAlertCloneArgs {
 }
 
 export interface NativeAlertCreateArgs {
-  method: 'EMAIL' | 'SMB' | 'SYSLOG' | 'SNMP' | 'SCP';
+  method: 'EMAIL' | 'SMB' | 'SYSLOG' | 'SNMP' | 'SCP' | 'START_TASK';
   [key: string]: unknown;
 }
 

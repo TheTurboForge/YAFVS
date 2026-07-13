@@ -203,6 +203,17 @@ pub(crate) struct AlertScpCreateRequest {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AlertStartTaskCreateRequest {
+    pub(crate) name: String,
+    #[serde(default)]
+    pub(crate) comment: Option<String>,
+    pub(crate) active: bool,
+    pub(crate) status: AlertCreateStatus,
+    pub(crate) task_id: SensitiveAlertField,
+}
+
+#[derive(Deserialize)]
 #[serde(tag = "method")]
 pub(crate) enum AlertCreateRequest {
     #[serde(rename = "EMAIL")]
@@ -215,6 +226,8 @@ pub(crate) enum AlertCreateRequest {
     Snmp(AlertSnmpCreateRequest),
     #[serde(rename = "SCP")]
     Scp(AlertScpCreateRequest),
+    #[serde(rename = "START_TASK")]
+    StartTask(AlertStartTaskCreateRequest),
 }
 
 pub(crate) struct ValidatedAlertEmailCreate {
@@ -273,12 +286,21 @@ pub(crate) struct ValidatedAlertScpCreate {
     pub(crate) report_format_id: SensitiveAlertField,
 }
 
+pub(crate) struct ValidatedAlertStartTaskCreate {
+    pub(crate) name: String,
+    pub(crate) comment: String,
+    pub(crate) active: bool,
+    pub(crate) status: AlertCreateStatus,
+    pub(crate) task_id: SensitiveAlertField,
+}
+
 pub(crate) enum ValidatedAlertCreate {
     Email(ValidatedAlertEmailCreate),
     Smb(ValidatedAlertSmbCreate),
     Syslog(ValidatedAlertSyslogCreate),
     Snmp(ValidatedAlertSnmpCreate),
     Scp(ValidatedAlertScpCreate),
+    StartTask(ValidatedAlertStartTaskCreate),
 }
 
 pub(crate) fn validate_alert_create_request(
@@ -300,7 +322,31 @@ pub(crate) fn validate_alert_create_request(
         AlertCreateRequest::Scp(request) => {
             validate_alert_scp_create_request(request).map(ValidatedAlertCreate::Scp)
         }
+        AlertCreateRequest::StartTask(request) => {
+            validate_alert_start_task_create_request(request).map(ValidatedAlertCreate::StartTask)
+        }
     }
+}
+
+pub(crate) fn validate_alert_start_task_create_request(
+    request: AlertStartTaskCreateRequest,
+) -> Result<ValidatedAlertStartTaskCreate, ApiError> {
+    let name = normalize_alert_create_text(request.name, "name", true)?;
+    let comment = request
+        .comment
+        .map(|value| normalize_alert_create_text(value, "comment", false))
+        .transpose()?
+        .unwrap_or_default();
+    debug_assert!(request.status.as_str().len() <= MAX_ALERT_STATUS_BYTES);
+    let task_id = validate_required_alert_uuid(request.task_id, "task_id")?;
+
+    Ok(ValidatedAlertStartTaskCreate {
+        name,
+        comment,
+        active: request.active,
+        status: request.status,
+        task_id,
+    })
 }
 
 pub(crate) fn validate_alert_scp_create_request(

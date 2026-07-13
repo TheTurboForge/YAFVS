@@ -20,8 +20,8 @@ use crate::{
     alert_write_validation::{
         AlertCloneRequest, AlertCreateRequest, AlertPatchRequest, ValidatedAlertCreate,
         ValidatedAlertEmailCreate, ValidatedAlertScpCreate, ValidatedAlertSmbCreate,
-        ValidatedAlertSnmpCreate, ValidatedAlertSyslogCreate, validate_alert_clone_request,
-        validate_alert_create_request, validate_alert_patch_request,
+        ValidatedAlertSnmpCreate, ValidatedAlertStartTaskCreate, ValidatedAlertSyslogCreate,
+        validate_alert_clone_request, validate_alert_create_request, validate_alert_patch_request,
     },
     alerts::load_alert_asset_detail,
     app_state::AppState,
@@ -54,6 +54,15 @@ pub(crate) async fn create_alert(
         }
         ValidatedAlertCreate::Scp(request) => {
             request_alert_scp_create(
+                &gvmd_control_socket_path(),
+                &control_secret,
+                operator.user_uuid(),
+                request,
+            )
+            .await?
+        }
+        ValidatedAlertCreate::StartTask(request) => {
+            request_alert_start_task_create(
                 &gvmd_control_socket_path(),
                 &control_secret,
                 operator.user_uuid(),
@@ -172,6 +181,45 @@ pub(crate) fn alert_email_create_command(
         command.push(b' ');
         append_alert_create_base64(&mut command, field);
     }
+    command.push(b'\n');
+    ScrubbedControlFrame::new(command)
+}
+
+pub(crate) async fn request_alert_start_task_create(
+    socket_path: &str,
+    control_secret: &str,
+    operator_uuid: &str,
+    request: &ValidatedAlertStartTaskCreate,
+) -> Result<String, ApiError> {
+    let command = alert_start_task_create_command(control_secret, operator_uuid, request);
+    let response =
+        request_gvmd_control_response_bytes(socket_path, control_secret, command.as_bytes()).await;
+    let response = response.map_err(map_control_socket_error)?;
+    parse_alert_create_response(&response)
+}
+
+pub(crate) fn alert_start_task_create_command(
+    control_secret: &str,
+    operator_uuid: &str,
+    request: &ValidatedAlertStartTaskCreate,
+) -> ScrubbedControlFrame {
+    let mut command = Vec::with_capacity(16_384);
+    command.extend_from_slice(b"alert-start-task-create ");
+    command.extend_from_slice(control_secret.as_bytes());
+    command.push(b' ');
+    command.extend_from_slice(operator_uuid.as_bytes());
+    command.push(b' ');
+    command.push(if request.active { b'1' } else { b'0' });
+    for field in [
+        request.name.as_bytes(),
+        request.comment.as_bytes(),
+        request.status.as_str().as_bytes(),
+    ] {
+        command.push(b' ');
+        append_alert_create_base64(&mut command, field);
+    }
+    command.push(b' ');
+    command.extend_from_slice(request.task_id.as_bytes());
     command.push(b'\n');
     ScrubbedControlFrame::new(command)
 }
@@ -376,6 +424,7 @@ pub(crate) fn parse_alert_create_response(response: &[u8]) -> Result<String, Api
             "The alert delivery request was rejected.".to_string(),
         )),
         b"3 filter_not_found"
+        | b"3 task_not_found"
         | b"9 condition_filter_not_found"
         | b"17 scp_format_not_found"
         | b"60 recipient_credential_not_found" => Err(ApiError::NotFound),

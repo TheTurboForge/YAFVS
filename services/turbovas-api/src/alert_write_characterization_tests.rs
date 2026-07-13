@@ -857,16 +857,17 @@ fn native_scp_alert_create_contract_is_explicitly_parsed_scrubbed_and_direct_wri
     let create_path = openapi_path_block("/alerts");
     let create = openapi_operation_block(&create_path, "post");
     for required in [
-        "x-turbovas-replaces: alert-email-smb-syslog-snmp-scp-create",
-        "summary: Create a task-status EMAIL, SMB, Syslog, SNMP, or SCP alert",
-        "Creates one operator-owned EMAIL, SMB, Syslog, SNMP, or SCP alert",
+        "x-turbovas-replaces: alert-email-smb-syslog-snmp-scp-start-task-create",
+        "summary: Create a task-status EMAIL, SMB, Syslog, SNMP, SCP, or Start Task alert",
+        "Creates one operator-owned EMAIL, SMB, Syslog, SNMP, SCP, or Start Task alert",
     ] {
         assert!(
             create.contains(required),
             "SCP create metadata missing {required}"
         );
     }
-    assert!(!create.contains("alert-scp-start-task-create-test-actions"));
+    assert!(create.contains("alert-test-actions-and-delivery-payload-mutations"));
+    assert!(!create.contains("alert-start-task-create-test-actions"));
 
     let schema = OPENAPI
         .split_once("    AlertScpCreateRequest:\n")

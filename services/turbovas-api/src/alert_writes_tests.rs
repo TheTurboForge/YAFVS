@@ -10,13 +10,14 @@ use crate::{
         AlertCloneRequest, AlertCreateRequest, AlertEmailCreateRequest, AlertPatchRequest,
         MAX_ALERT_MESSAGE_BYTES, MAX_ALERT_SUBJECT_BYTES, MAX_ALERT_TEXT_BYTES,
         ValidatedAlertCreate, ValidatedAlertScpCreate, ValidatedAlertSmbCreate,
-        ValidatedAlertSnmpCreate, ValidatedAlertSyslogCreate, validate_alert_clone_request,
-        validate_alert_create_request, validate_alert_email_create_request,
-        validate_alert_patch_request,
+        ValidatedAlertSnmpCreate, ValidatedAlertStartTaskCreate, ValidatedAlertSyslogCreate,
+        validate_alert_clone_request, validate_alert_create_request,
+        validate_alert_email_create_request, validate_alert_patch_request,
     },
     alert_writes::{
         alert_email_create_command, alert_scp_create_command, alert_smb_create_command,
-        alert_snmp_create_command, alert_syslog_create_command, parse_alert_create_response,
+        alert_snmp_create_command, alert_start_task_create_command, alert_syslog_create_command,
+        parse_alert_create_response,
     },
     errors::ApiError,
     gvmd_control::{
@@ -36,6 +37,17 @@ fn email_create_json(notice: &str) -> serde_json::Value {
         "from_address": "scanner@example.invalid",
         "subject": "Scan report",
         "notice": notice
+    })
+}
+
+fn start_task_create_json() -> serde_json::Value {
+    serde_json::json!({
+        "method": "START_TASK",
+        "name": "Start follow-up scan",
+        "comment": "Operator automation",
+        "active": true,
+        "status": "Done",
+        "task_id": TEST_UUID
     })
 }
 
@@ -74,6 +86,15 @@ fn alert_scp_create_frame_is_exact_bounded_and_scrubbed_without_value_leaks() {
     let maximum_frame =
         alert_scp_create_command("0123456789abcdef0123456789abcdef", TEST_UUID, &maximum);
     assert!(maximum_frame.as_bytes().len() < MAX_CONTROL_REQUEST_BYTES);
+}
+
+fn validated_start_task_create() -> ValidatedAlertStartTaskCreate {
+    let request = serde_json::from_value::<AlertCreateRequest>(start_task_create_json())
+        .expect("valid Start Task alert request shape");
+    match validate_alert_create_request(request).expect("valid Start Task alert request") {
+        ValidatedAlertCreate::StartTask(request) => request,
+        _ => panic!("START_TASK method must select Start Task request"),
+    }
 }
 
 #[test]
@@ -116,6 +137,69 @@ fn alert_scp_create_shape_is_strict_and_cross_method_fields_are_rejected() {
         let mut request = scp_create_json();
         request[field] = value;
         assert!(serde_json::from_value::<AlertCreateRequest>(request).is_err());
+    }
+}
+
+#[test]
+fn alert_start_task_create_frame_is_exact_bounded_and_scrubbable() {
+    let request = validated_start_task_create();
+    let mut frame =
+        alert_start_task_create_command("0123456789abcdef0123456789abcdef", TEST_UUID, &request);
+    assert_eq!(
+        frame.as_bytes(),
+        concat!(
+            "alert-start-task-create 0123456789abcdef0123456789abcdef ",
+            "12345678-1234-4234-8234-123456789abc 1 ",
+            "U3RhcnQgZm9sbG93LXVwIHNjYW4= T3BlcmF0b3IgYXV0b21hdGlvbg== RG9uZQ== ",
+            "12345678-1234-4234-8234-123456789abc\n"
+        )
+        .as_bytes()
+    );
+    assert!(frame.as_bytes().len() < MAX_CONTROL_REQUEST_BYTES);
+    frame.scrub();
+    assert!(frame.as_bytes().iter().all(|byte| *byte == 0));
+}
+
+#[test]
+fn alert_start_task_create_shape_is_strict_and_task_id_is_validated() {
+    assert!(matches!(
+        validate_alert_create_request(
+            serde_json::from_value::<AlertCreateRequest>(start_task_create_json()).unwrap()
+        ),
+        Ok(ValidatedAlertCreate::StartTask(_))
+    ));
+
+    for field in ["method", "name", "active", "status", "task_id"] {
+        let mut value = start_task_create_json();
+        value.as_object_mut().unwrap().remove(field);
+        assert!(
+            serde_json::from_value::<AlertCreateRequest>(value).is_err(),
+            "{field} must be required"
+        );
+    }
+
+    for (field, value) in [
+        ("to_address", serde_json::json!("security@example.invalid")),
+        ("scp_path", serde_json::json!("/var/reports/daily.pdf")),
+        ("unexpected", serde_json::json!(true)),
+    ] {
+        let mut request = start_task_create_json();
+        request[field] = value;
+        assert!(serde_json::from_value::<AlertCreateRequest>(request).is_err());
+    }
+
+    for invalid in [
+        "not-a-uuid".to_string(),
+        format!(" {TEST_UUID} "),
+        TEST_UUID.replace('-', ""),
+    ] {
+        let mut request = start_task_create_json();
+        request["task_id"] = serde_json::json!(invalid);
+        let request = serde_json::from_value::<AlertCreateRequest>(request).unwrap();
+        assert!(matches!(
+            validate_alert_create_request(request),
+            Err(ApiError::BadRequest(_))
+        ));
     }
 }
 
@@ -399,7 +483,7 @@ fn alert_create_openapi_metadata_is_direct_guarded_and_redacted() {
         "operationId: postAlerts",
         "x-turbovas-direct: true",
         "x-turbovas-exposure: direct-write",
-        "x-turbovas-replaces: alert-email-smb-syslog-snmp-scp-create",
+        "x-turbovas-replaces: alert-email-smb-syslog-snmp-scp-start-task-create",
         "x-turbovas-operator-identity: direct-token-operator",
         "x-turbovas-owner-semantics: request-operator-owner",
         "x-turbovas-safety-contract: write-control-v1",
@@ -433,10 +517,14 @@ fn alert_create_openapi_metadata_is_direct_guarded_and_redacted() {
     assert!(schema.contains("SMB: '#/components/schemas/AlertSmbCreateRequest'"));
     assert!(schema.contains("SYSLOG: '#/components/schemas/AlertSyslogCreateRequest'"));
     assert!(schema.contains("SNMP: '#/components/schemas/AlertSnmpCreateRequest'"));
+    assert!(schema.contains("START_TASK: '#/components/schemas/AlertStartTaskCreateRequest'"));
     assert!(schema.contains("enum: [simple, include, attach]"));
     assert!(schema.contains("enum: [default, NT1, SMB2, SMB3]"));
     assert!(schema.contains("writeOnly: true"));
     assert!(schema.contains("AlertScpCreateRequest"));
+    assert!(schema.contains("AlertStartTaskCreateRequest"));
+    assert!(schema.contains("required: [method, name, active, status, task_id]"));
+    assert!(schema.contains("const: START_TASK"));
     for field in [
         "to_address",
         "from_address",
@@ -471,6 +559,7 @@ fn alert_create_requires_exact_method_and_rejects_cross_method_fields() {
         serde_json::from_value::<AlertCreateRequest>(tagged_email_create_json("simple")).is_ok()
     );
     assert!(serde_json::from_value::<AlertCreateRequest>(smb_create_json()).is_ok());
+    assert!(serde_json::from_value::<AlertCreateRequest>(start_task_create_json()).is_ok());
 
     for method in [None, Some("email"), Some("smb"), Some("SCP"), Some("")] {
         let mut value = tagged_email_create_json("simple");
@@ -985,6 +1074,7 @@ fn alert_create_maps_explicit_control_responses() {
     ));
     for response in [
         b"3 filter_not_found".as_slice(),
+        b"3 task_not_found",
         b"9 condition_filter_not_found",
         b"17 scp_format_not_found",
         b"60 recipient_credential_not_found",
@@ -1043,11 +1133,13 @@ fn alert_create_handler_dispatches_methods_and_returns_only_redacted_asset_shape
     assert!(handler.contains("ValidatedAlertCreate::Syslog(request)"));
     assert!(handler.contains("ValidatedAlertCreate::Snmp(request)"));
     assert!(handler.contains("ValidatedAlertCreate::Scp(request)"));
+    assert!(handler.contains("ValidatedAlertCreate::StartTask(request)"));
     assert!(handler.contains("request_alert_email_create"));
     assert!(handler.contains("request_alert_smb_create"));
     assert!(handler.contains("request_alert_syslog_create"));
     assert!(handler.contains("request_alert_snmp_create"));
     assert!(handler.contains("request_alert_scp_create"));
+    assert!(handler.contains("request_alert_start_task_create"));
     assert!(handler.contains("load_alert_asset_detail"));
     assert!(handler.contains("JOIN users u ON u.id = a.owner"));
     assert!(handler.contains("u.uuid = $2"));
@@ -1068,6 +1160,7 @@ fn alert_create_handler_dispatches_methods_and_returns_only_redacted_asset_shape
         "scp_port",
         "scp_known_hosts",
         "scp_path",
+        "task_id",
     ] {
         assert!(
             !handler.contains(forbidden),

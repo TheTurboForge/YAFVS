@@ -3200,7 +3200,9 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(alert_create["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(alert_create["direct_access"], "direct_write_control")
-        self.assertIn("direct native EMAIL/SMB/Syslog/SNMP/SCP alert creation", alert_create["replacement_candidates"])
+        self.assertIn("direct native EMAIL/SMB/Syslog/SNMP/SCP/Start Task alert creation", alert_create["replacement_candidates"])
+        self.assertIn("Inherited test actions and delivery-payload mutations remain inherited.", alert_create["residual_inherited"])
+        self.assertNotIn("Start Task creation, inherited test actions, and delivery-payload mutations remain inherited.", alert_create["residual_inherited"])
         api_source = (root / "services" / "turbovas-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
         proxy_source = (root / "components" / "gsad" / "src" / "gsad_native_api.c").read_text(encoding="utf-8")
         alerts_api_declared = '.route("/api/v1/alerts"' in api_source
@@ -4220,7 +4222,7 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertTrue(set(actual_maturity_values).issubset(set(contract["allowed_maturity_values"])))
         expected_replaces_values = ['alert-clone',
-         'alert-email-smb-syslog-snmp-scp-create',
+         'alert-email-smb-syslog-snmp-scp-start-task-create',
          'alert-metadata-detail-read',
          'alert-metadata-export-read',
          'alert-metadata-list-read',
@@ -4396,7 +4398,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'vulnerability-detail-read',
          'vulnerability-list-read',
          'vulnerability-metadata-export-read']
-        expected_inherited_still_owns_values = ['alert-start-task-create-test-actions-and-delivery-payload-mutations',
+        expected_inherited_still_owns_values = ['alert-test-actions-and-delivery-payload-mutations',
          'credential-secret-updates-non-up-usk-types-and-deletes',
          'credential-secrets-writes-and-deletes',
          'feed-sync-import-control',
@@ -6714,6 +6716,45 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("response", compact["details"])
         self.assertNotIn("large-payload-marker", rendered)
         self.assertNotIn("private-target-marker", rendered)
+
+    def test_native_api_request_direct_accepts_no_content_delete(self):
+        response = subprocess.CompletedProcess(["curl"], 0, "\n204", "")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with (
+                unittest.mock.patch.object(
+                    turbovasctl, "native_api_direct_runtime_env", return_value={}
+                ),
+                unittest.mock.patch.object(
+                    turbovasctl,
+                    "native_api_direct_config_shape_finding",
+                    return_value={
+                        "status": "pass",
+                        "check": "native-api-request.direct-config-shape",
+                        "message": "valid",
+                    },
+                ),
+                unittest.mock.patch.object(
+                    turbovasctl,
+                    "native_api_direct_bearer_token",
+                    return_value="x" * 32,
+                ),
+                unittest.mock.patch.object(
+                    turbovasctl, "direct_native_api_curl", return_value=response
+                ),
+            ):
+                result = turbovasctl.command_native_api_request(
+                    root,
+                    "/api/v1/alerts/11111111-1111-4111-8111-111111111111",
+                    direct=True,
+                    method="DELETE",
+                    allow_write_control=True,
+                )
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["details"]["http_status"], 204)
+        self.assertIsNone(result["details"]["response"])
+        self.assertEqual(result["findings"][-1]["status"], "pass")
 
     def test_native_start_task_requires_write_control_before_runtime(self):
         task_id = "11111111-1111-4111-8111-111111111111"

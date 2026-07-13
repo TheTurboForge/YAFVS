@@ -19,6 +19,7 @@ import Alert, {
   METHOD_TYPE_SCP,
   METHOD_TYPE_SMB,
   METHOD_TYPE_SNMP,
+  METHOD_TYPE_START_TASK,
   METHOD_TYPE_SYSLOG,
 } from 'gmp/models/alert';
 import Credential from 'gmp/models/credential';
@@ -174,13 +175,12 @@ const nativeAlertSettingsQuery = {
 const fetchNativeAlertSettings = async (
   http: Http,
 ): Promise<NewAlertSettings> => {
-  const [reportFormats, credentials, tasks, filters] =
-    await Promise.all([
-      fetchNativeReportFormats(http, nativeAlertSettingsQuery),
-      fetchNativeCredentials(http, nativeAlertSettingsQuery),
-      fetchNativeTasks(http, nativeAlertSettingsQuery),
-      fetchNativeFilters(http, nativeAlertSettingsQuery),
-    ]);
+  const [reportFormats, credentials, tasks, filters] = await Promise.all([
+    fetchNativeReportFormats(http, nativeAlertSettingsQuery),
+    fetchNativeCredentials(http, nativeAlertSettingsQuery),
+    fetchNativeTasks(http, nativeAlertSettingsQuery),
+    fetchNativeFilters(http, nativeAlertSettingsQuery),
+  ]);
 
   return {
     report_formats: reportFormats.reportFormats,
@@ -226,6 +226,7 @@ const NATIVE_ALERT_CREATE_METHODS: AlertMethodType[] = [
   METHOD_TYPE_SCP,
   METHOD_TYPE_SMB,
   METHOD_TYPE_SNMP,
+  METHOD_TYPE_START_TASK,
   METHOD_TYPE_SYSLOG,
 ];
 
@@ -269,6 +270,14 @@ const nativeAlertCreateRequestFromParams = ({
       snmp_agent: other.method_data_snmp_agent,
       snmp_community: other.method_data_snmp_community,
       snmp_message: other.method_data_snmp_message,
+    };
+  }
+
+  if (method === METHOD_TYPE_START_TASK) {
+    return {
+      method: 'START_TASK',
+      ...shared,
+      task_id: other.method_data_start_task_task,
     };
   }
 

@@ -91,6 +91,55 @@ describe('AlertCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
+  test('should create a Start Task alert through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValue(nativeJsonResponse({id: 'native-alert-id'}, 201));
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new AlertCommand(fakeHttp);
+
+    await cmd.create({
+      active: '1',
+      name: 'Start Task alert',
+      comment: 'restart the follow-up task',
+      event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+      condition: CONDITION_TYPE_ALWAYS,
+      filter_id: 0,
+      method: METHOD_TYPE_START_TASK,
+      event_data_status: 'Done',
+      method_data_start_task_task: 'task-id-123',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/alerts',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          method: 'START_TASK',
+          name: 'Start Task alert',
+          comment: 'restart the follow-up task',
+          active: true,
+          status: 'Done',
+          task_id: 'task-id-123',
+        }),
+      },
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should create an SNMP alert through native API', async () => {
     const fetchMock = testing
       .fn()
@@ -338,6 +387,39 @@ describe('AlertCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
+  test('should not fall back to GMP after native Start Task create errors', async () => {
+    const response = createActionResultResponse();
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValue(
+        nativeJsonResponse({error: {message: 'rejected'}}, 422),
+      );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new AlertCommand(fakeHttp);
+
+    await expect(
+      cmd.create({
+        active: true,
+        name: 'Rejected Start Task alert',
+        event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
+        condition: CONDITION_TYPE_ALWAYS,
+        filter_id: 0,
+        method: METHOD_TYPE_START_TASK,
+        event_data_status: 'Done',
+        method_data_start_task_task: 'task-id-789',
+      }),
+    ).rejects.toThrow('Native API request failed with status 422');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should allow to delete an alert', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);
@@ -438,8 +520,7 @@ describe('AlertCommand tests', () => {
           scp_credential_id: '11111111-1111-4111-8111-111111111111',
           scp_host: 'scp.example',
           scp_port: 2222,
-          scp_known_hosts:
-            '[scp.example]:2222 ssh-ed25519 [REDACTED HOST KEY]',
+          scp_known_hosts: '[scp.example]:2222 ssh-ed25519 [REDACTED HOST KEY]',
           scp_path: '/var/reports',
           report_format_id: '22222222-2222-4222-8222-222222222222',
         }),
@@ -769,21 +850,28 @@ describe('AlertCommand tests', () => {
       name: 'Unsupported event',
       event: EVENT_TYPE_NEW_SECINFO,
       condition: CONDITION_TYPE_ALWAYS,
-      method: METHOD_TYPE_EMAIL,
+      method: METHOD_TYPE_START_TASK,
+      event_data_status: 'Done',
+      method_data_start_task_task: 'task-id-event',
     });
     await cmd.create({
       active: true,
       name: 'Unsupported condition',
       event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
       condition: CONDITION_TYPE_SEVERITY_AT_LEAST,
-      method: METHOD_TYPE_EMAIL,
+      method: METHOD_TYPE_START_TASK,
+      event_data_status: 'Done',
+      method_data_start_task_task: 'task-id-condition',
     });
     await cmd.create({
       active: true,
-      name: 'Unsupported method',
+      name: 'Unsupported filter',
       event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
       condition: CONDITION_TYPE_ALWAYS,
+      filter_id: 'filter-id',
       method: METHOD_TYPE_START_TASK,
+      event_data_status: 'Done',
+      method_data_start_task_task: 'task-id-unsupported',
     });
 
     expect(fetchMock).not.toHaveBeenCalled();

@@ -75,6 +75,7 @@ static gchar *received_recipient_credential;
 static gchar *received_report_format;
 static gchar *received_atomic_report_format;
 static gchar *received_subject;
+static gchar *received_start_task_uuid;
 static gchar *received_to_address;
 static gchar *received_smb_credential;
 static gchar *received_smb_file_path;
@@ -305,6 +306,32 @@ __wrap_create_alert_task_status_changed (
     g_strdup (test_alert_data_value (method_data, "snmp_community"));
   received_snmp_message =
     g_strdup (test_alert_data_value (method_data, "snmp_message"));
+  assert_that (condition_data->len, is_equal_to (1));
+  assert_that (g_ptr_array_index (condition_data, 0), is_null);
+  *alert = 9;
+  return create_alert_result;
+}
+
+int
+__wrap_create_alert_start_task_with_task_ref (
+  const char *name, const char *comment, const char *active,
+  GPtrArray *event_data, GPtrArray *condition_data, const char *task_id,
+  alert_t *alert)
+{
+  (void) name;
+  (void) comment;
+  create_alert_calls++;
+  received_alert_event = EVENT_TASK_RUN_STATUS_CHANGED;
+  received_alert_condition = ALERT_CONDITION_ALWAYS;
+  received_alert_method = ALERT_METHOD_START_TASK;
+  g_free (received_active);
+  g_free (received_event_status);
+  g_free (received_start_task_uuid);
+  received_active = g_strdup (active);
+  received_event_status =
+    g_strdup (test_alert_data_value (event_data, "status"));
+  received_start_task_uuid = g_strdup (task_id);
+  assert_that (task_id, is_equal_to_string (received_start_task_uuid));
   assert_that (condition_data->len, is_equal_to (1));
   assert_that (g_ptr_array_index (condition_data, 0), is_null);
   *alert = 9;
@@ -738,6 +765,29 @@ enum alert_smb_db_event
   ALERT_SMB_DB_COMMIT,
 };
 
+enum alert_start_task_db_event
+{
+  ALERT_START_TASK_DB_BEGIN,
+  ALERT_START_TASK_DB_ACL,
+  ALERT_START_TASK_DB_OWNER_LOCK,
+  ALERT_START_TASK_DB_TASK_RESOLVE,
+  ALERT_START_TASK_DB_TASK_LOCK,
+  ALERT_START_TASK_DB_BODY_INSERT,
+  ALERT_START_TASK_DB_METHOD_INSERT,
+  ALERT_START_TASK_DB_ROLLBACK,
+  ALERT_START_TASK_DB_COMMIT,
+};
+
+static enum alert_start_task_db_event alert_start_task_db_events[24];
+static size_t alert_start_task_db_event_count;
+static gboolean alert_start_task_db_active;
+static gboolean alert_start_task_db_acl;
+static gboolean alert_start_task_db_owner_exists;
+static gboolean alert_start_task_db_task_readable;
+static gboolean alert_start_task_db_task_owned;
+static gboolean alert_start_task_db_duplicate_name;
+static unsigned int alert_start_task_db_method_inserts;
+
 static enum alert_smb_db_event alert_smb_db_events[32];
 static size_t alert_smb_db_event_count;
 static gboolean alert_smb_db_active;
@@ -800,6 +850,7 @@ reset_diagnostic_db (const char *requested_oid)
 {
   diagnostic_db_event_count = 0;
   diagnostic_db_active = TRUE;
+  alert_start_task_db_active = FALSE;
   alert_smb_db_active = FALSE;
   diagnostic_db_acl = TRUE;
   diagnostic_db_owner_exists = TRUE;
@@ -821,6 +872,30 @@ reset_diagnostic_db (const char *requested_oid)
 }
 
 static void
+alert_start_task_record_db_event (enum alert_start_task_db_event event)
+{
+  assert_that (alert_start_task_db_event_count
+                 < G_N_ELEMENTS (alert_start_task_db_events),
+               is_true);
+  alert_start_task_db_events[alert_start_task_db_event_count++] = event;
+}
+
+static void
+reset_alert_start_task_db (void)
+{
+  diagnostic_db_active = FALSE;
+  alert_smb_db_active = FALSE;
+  alert_start_task_db_active = TRUE;
+  alert_start_task_db_event_count = 0;
+  alert_start_task_db_acl = TRUE;
+  alert_start_task_db_owner_exists = TRUE;
+  alert_start_task_db_task_readable = TRUE;
+  alert_start_task_db_task_owned = TRUE;
+  alert_start_task_db_duplicate_name = FALSE;
+  alert_start_task_db_method_inserts = 0;
+}
+
+static void
 alert_smb_record_db_event (enum alert_smb_db_event event)
 {
   assert_that (alert_smb_db_event_count < G_N_ELEMENTS (alert_smb_db_events),
@@ -832,6 +907,7 @@ static void
 reset_alert_smb_db (void)
 {
   diagnostic_db_active = FALSE;
+  alert_start_task_db_active = FALSE;
   alert_smb_db_event_count = 0;
   alert_smb_db_active = TRUE;
   alert_smb_db_acl = TRUE;
@@ -861,6 +937,8 @@ __wrap_sql_begin_immediate (void)
 {
   if (diagnostic_db_active)
     diagnostic_record_db_event (DIAGNOSTIC_DB_BEGIN);
+  else if (alert_start_task_db_active)
+    alert_start_task_record_db_event (ALERT_START_TASK_DB_BEGIN);
   else if (alert_smb_db_active)
     alert_smb_record_db_event (ALERT_SMB_DB_BEGIN);
   else
@@ -956,6 +1034,27 @@ __wrap_sql_int64 (long long int *value, const char *statement, ...)
       return -1;
     }
 
+  if (alert_start_task_db_active)
+    {
+      if (strstr (statement, "SELECT id FROM users") != NULL)
+        {
+          alert_start_task_record_db_event (ALERT_START_TASK_DB_OWNER_LOCK);
+          if (!alert_start_task_db_owner_exists)
+            return 1;
+          *value = 42;
+          return 0;
+        }
+      if (strstr (statement, "SELECT tasks.id FROM tasks") != NULL)
+        {
+          alert_start_task_record_db_event (ALERT_START_TASK_DB_TASK_LOCK);
+          if (!alert_start_task_db_task_owned)
+            return 1;
+          *value = 71;
+          return 0;
+        }
+      return -1;
+    }
+
   if (alert_smb_db_active)
     {
       if (strstr (statement, "SELECT id FROM users") != NULL)
@@ -1040,6 +1139,30 @@ __wrap_sql (const char *statement, ...)
       return;
     }
 
+  if (alert_start_task_db_active)
+    {
+      if (strstr (statement, "INSERT INTO alerts") != NULL)
+        alert_start_task_record_db_event (ALERT_START_TASK_DB_BODY_INSERT);
+      else if (strstr (statement, "INSERT INTO alert_method_data") != NULL)
+        {
+          va_list args;
+          const char *name;
+          const char *data;
+
+          va_start (args, statement);
+          (void) va_arg (args, unsigned long long);
+          name = va_arg (args, const char *);
+          data = va_arg (args, const char *);
+          va_end (args);
+          assert_that (name, is_equal_to_string ("start_task_task"));
+          assert_that (
+            data, is_equal_to_string ("123e4567-e89b-12d3-a456-426614174020"));
+          alert_start_task_db_method_inserts++;
+          alert_start_task_record_db_event (ALERT_START_TASK_DB_METHOD_INSERT);
+        }
+      return;
+    }
+
   if (alert_smb_db_active)
     {
       if (strstr (statement, "INSERT INTO alerts") != NULL)
@@ -1069,7 +1192,7 @@ __wrap_sql_ps_sensitive (const char *statement, ...)
 resource_t
 __wrap_sql_last_insert_id (void)
 {
-  assert_that (alert_smb_db_active, is_true);
+  assert_that (alert_smb_db_active || alert_start_task_db_active, is_true);
   return 9;
 }
 
@@ -1078,6 +1201,8 @@ __wrap_sql_rollback (void)
 {
   if (diagnostic_db_active)
     diagnostic_record_db_event (DIAGNOSTIC_DB_ROLLBACK);
+  else if (alert_start_task_db_active)
+    alert_start_task_record_db_event (ALERT_START_TASK_DB_ROLLBACK);
   else if (alert_smb_db_active)
     alert_smb_record_db_event (ALERT_SMB_DB_ROLLBACK);
   else
@@ -1094,6 +1219,8 @@ __wrap_sql_commit (void)
       if (diagnostic_db_inserts)
         diagnostic_db_state_matches = diagnostic_db_postcommit_matches;
     }
+  else if (alert_start_task_db_active)
+    alert_start_task_record_db_event (ALERT_START_TASK_DB_COMMIT);
   else if (alert_smb_db_active)
     alert_smb_record_db_event (ALERT_SMB_DB_COMMIT);
   else
@@ -1109,6 +1236,13 @@ __wrap_acl_user_may (const char *operation)
       return diagnostic_db_acl;
     }
 
+  if (alert_start_task_db_active)
+    {
+      assert_that (operation, is_equal_to_string ("create_alert"));
+      alert_start_task_record_db_event (ALERT_START_TASK_DB_ACL);
+      return alert_start_task_db_acl;
+    }
+
   if (alert_smb_db_active)
     {
       assert_that (operation, is_equal_to_string ("create_alert"));
@@ -1119,6 +1253,19 @@ __wrap_acl_user_may (const char *operation)
   assert_that (operation, is_equal_to_string ("empty_trashcan"));
   trash_empty_record_db_event (TRASH_EMPTY_DB_ACL);
   return trash_empty_db_acl;
+}
+
+gboolean
+__wrap_find_task_with_permission (const char *uuid, task_t *task,
+                                  const char *permission)
+{
+  assert_that (alert_start_task_db_active, is_true);
+  assert_that (uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174020"));
+  assert_that (permission, is_equal_to_string ("start_task"));
+  alert_start_task_record_db_event (ALERT_START_TASK_DB_TASK_RESOLVE);
+  *task = alert_start_task_db_task_readable ? 71 : 0;
+  return FALSE;
 }
 
 gboolean
@@ -1171,11 +1318,14 @@ int
 __wrap_resource_with_name_exists (const char *name, const char *type,
                                   resource_t exclude)
 {
-  assert_that (alert_smb_db_active, is_true);
-  assert_that (name, is_equal_to_string ("SMB alert"));
+  assert_that (alert_smb_db_active || alert_start_task_db_active, is_true);
+  if (alert_start_task_db_active)
+    assert_that (name, is_equal_to_string ("Start follow-up"));
+  else
+    assert_that (name, is_equal_to_string ("SMB alert"));
   assert_that (type, is_equal_to_string ("alert"));
   assert_that (exclude, is_equal_to (0));
-  return 0;
+  return alert_start_task_db_active && alert_start_task_db_duplicate_name;
 }
 
 int
@@ -1187,6 +1337,12 @@ __real_create_alert_smb_with_report_refs (const char *, const char *,
                                           const char *, GPtrArray *,
                                           GPtrArray *, GPtrArray *,
                                           const char *, const char *, alert_t *);
+
+int
+__real_create_alert_start_task_with_task_ref (const char *, const char *,
+                                              const char *, GPtrArray *,
+                                              GPtrArray *, const char *,
+                                              alert_t *);
 
 static ssize_t
 dispatch_trash_empty_request (const char *request,
@@ -1718,6 +1874,28 @@ test_alert_email_create_request (const char *active, const char *name,
     "%s\n",
     active, fields[0], fields[1], fields[2], fields[3], fields[4], fields[5],
     notice, fields[6], fields[7], fields[8]);
+  for (index = 0; index < G_N_ELEMENTS (fields); index++)
+    g_free (fields[index]);
+  return request;
+}
+
+static gchar *
+test_alert_start_task_create_request (const char *active, const char *name,
+                                      const char *comment, const char *status,
+                                      const char *task_uuid)
+{
+  const char *values[] = {name, comment, status};
+  gchar *fields[G_N_ELEMENTS (values)];
+  gchar *request;
+  size_t index;
+
+  for (index = 0; index < G_N_ELEMENTS (values); index++)
+    fields[index] =
+      g_base64_encode ((const guchar *) values[index], strlen (values[index]));
+  request =
+    g_strdup_printf ("alert-start-task-create " TEST_CONTROL_SECRET " "
+                     "123e4567-e89b-12d3-a456-426614174000 %s %s %s %s %s\n",
+                     active, fields[0], fields[1], fields[2], task_uuid);
   for (index = 0; index < G_N_ELEMENTS (fields); index++)
     g_free (fields[index]);
   return request;
@@ -2512,6 +2690,245 @@ Ensure (turbovas_control, rejects_missing_snmp_owner_and_maps_alert_errors)
                is_equal_to (99));
   assert_that (audit_fail_calls, is_equal_to (1));
   create_alert_result = 0;
+}
+
+Ensure (turbovas_control, parses_strict_start_task_alert_frame)
+{
+  gchar *request = test_alert_start_task_create_request (
+    "1", "Start follow-up", "operator-only", "Done",
+    "123e4567-e89b-12d3-a456-426614174020");
+  char operator_uuid[37];
+  turbovas_control_alert_start_task_create_request_t alert = {0};
+
+  assert_that (ALERT_METHOD_START_TASK, is_equal_to (4));
+  assert_that (turbovas_control_parse_alert_start_task_create_request (
+                 request, strlen (request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
+               is_true);
+  assert_that (operator_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (alert.active, is_true);
+  assert_that (alert.name, is_equal_to_string ("Start follow-up"));
+  assert_that (alert.comment, is_equal_to_string ("operator-only"));
+  assert_that (alert.status, is_equal_to_string ("Done"));
+  assert_that (alert.task_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174020"));
+  turbovas_control_alert_start_task_create_request_clear (&alert);
+  g_free (request);
+}
+
+Ensure (turbovas_control, rejects_bad_uuid_and_malformed_start_task_alerts)
+{
+  gchar *oversized =
+    g_strnfill (TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES + 1, 'x');
+  gchar *requests[] = {
+    test_alert_start_task_create_request ("1", "Start follow-up", "", "Done",
+                                          "not-a-task-uuid"),
+    test_alert_start_task_create_request (
+      "2", "Start follow-up", "", "Done",
+      "123e4567-e89b-12d3-a456-426614174020"),
+    test_alert_start_task_create_request (
+      "1", "Start follow-up", "", "Invalid",
+      "123e4567-e89b-12d3-a456-426614174020"),
+    test_alert_start_task_create_request (
+      "1", oversized, "", "Done", "123e4567-e89b-12d3-a456-426614174020"),
+    g_strdup ("alert-start-task-create " TEST_CONTROL_SECRET " "
+              "123e4567-e89b-12d3-a456-426614174000 1 QQ==  RG9uZQ== "
+              "123e4567-e89b-12d3-a456-426614174020 extra\n"),
+  };
+  char operator_uuid[37];
+  turbovas_control_alert_start_task_create_request_t alert = {0};
+
+  for (size_t index = 0; index < G_N_ELEMENTS (requests); index++)
+    {
+      assert_that (turbovas_control_parse_alert_start_task_create_request (
+                     requests[index], strlen (requests[index]),
+                     TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                     operator_uuid, &alert),
+                   is_false);
+      g_free (requests[index]);
+    }
+  g_free (oversized);
+}
+
+Ensure (turbovas_control, maps_start_task_alert_creation_and_commit_status)
+{
+  const turbovas_control_alert_start_task_create_request_t request = {
+    .name = "Start follow-up",
+    .comment = "operator-only",
+    .status = "Done",
+    .task_uuid = "123e4567-e89b-12d3-a456-426614174020",
+    .active = TRUE,
+  };
+  char created_uuid[37];
+
+  alert_uuid_lookup_fails = FALSE;
+  cleanup_calls = 0;
+  create_alert_calls = 0;
+  create_alert_result = 0;
+  audit_fail_calls = 0;
+  audit_success_calls = 0;
+  mock_operator_name = "operator";
+
+  assert_that (
+    turbovas_control_create_alert_start_task (
+      "123e4567-e89b-12d3-a456-426614174000", &request, created_uuid),
+    is_equal_to (0));
+  assert_that (created_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174004"));
+  assert_that (received_alert_event,
+               is_equal_to (EVENT_TASK_RUN_STATUS_CHANGED));
+  assert_that (received_alert_condition, is_equal_to (ALERT_CONDITION_ALWAYS));
+  assert_that (received_alert_method, is_equal_to (ALERT_METHOD_START_TASK));
+  assert_that (received_active, is_equal_to_string ("1"));
+  assert_that (received_event_status, is_equal_to_string ("Done"));
+  assert_that (received_start_task_uuid,
+               is_equal_to_string (request.task_uuid));
+  assert_that (audit_success_calls, is_equal_to (1));
+  assert_that (audit_fail_calls, is_equal_to (0));
+  assert_that (cleanup_calls, is_equal_to (1));
+
+  alert_uuid_lookup_fails = TRUE;
+  assert_that (
+    turbovas_control_create_alert_start_task (
+      "123e4567-e89b-12d3-a456-426614174000", &request, created_uuid),
+    is_equal_to (-3));
+  assert_that (audit_success_calls, is_equal_to (2));
+  assert_that (audit_fail_calls, is_equal_to (0));
+  alert_uuid_lookup_fails = FALSE;
+}
+
+static void
+capture_control_log (const gchar *domain, GLogLevelFlags level,
+                     const gchar *message, gpointer user_data)
+{
+  unsigned int *calls = user_data;
+  (void) domain;
+  (void) level;
+  (*calls)++;
+  assert_that (strstr (message, TEST_CONTROL_SECRET), is_null);
+  assert_that (strstr (message, "alert-start-task-create"), is_null);
+}
+
+Ensure (turbovas_control, classifies_start_task_frames_without_logging_them)
+{
+  const char *request =
+    "alert-start-task-create " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 private-control-frame\n";
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  unsigned int log_calls = 0;
+  guint handler;
+  ssize_t response_len;
+
+  handler = g_log_set_handler (G_LOG_DOMAIN, G_LOG_LEVEL_MASK,
+                               capture_control_log, &log_calls);
+  assert_that (
+    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+  response_len = dispatch_trash_empty_request (request, response);
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_log_remove_handler (G_LOG_DOMAIN, handler);
+
+  assert_that (response_len, is_equal_to (strlen ("-2 malformed\n")));
+  assert_that (response, is_equal_to_string ("-2 malformed\n"));
+  assert_that (log_calls, is_equal_to (0));
+  assert_that (strstr (response, TEST_CONTROL_SECRET), is_null);
+  assert_that (strstr (response, "private-control-frame"), is_null);
+}
+
+static int
+call_real_alert_start_task_create (void)
+{
+  array_t *condition_data = make_array ();
+  array_t *event_data = make_array ();
+  alert_t alert = 0;
+  int result;
+
+  current_credentials.uuid = g_strdup ("123e4567-e89b-12d3-a456-426614174000");
+  current_credentials.username = g_strdup ("operator");
+  turbovas_control_array_add_data (event_data, "status", "Done");
+  array_terminate (condition_data);
+  array_terminate (event_data);
+
+  result = __real_create_alert_start_task_with_task_ref (
+    "Start follow-up", "operator-only", "1", event_data, condition_data,
+    "123e4567-e89b-12d3-a456-426614174020", &alert);
+  turbovas_control_secure_array_free (condition_data);
+  turbovas_control_secure_array_free (event_data);
+  g_clear_pointer (&current_credentials.uuid, g_free);
+  g_clear_pointer (&current_credentials.username, g_free);
+  alert_start_task_db_active = FALSE;
+  return result;
+}
+
+Ensure (turbovas_control, locks_start_task_reference_and_commits_atomically)
+{
+  static const enum alert_start_task_db_event expected[] = {
+    ALERT_START_TASK_DB_BEGIN,         ALERT_START_TASK_DB_ACL,
+    ALERT_START_TASK_DB_OWNER_LOCK,    ALERT_START_TASK_DB_TASK_RESOLVE,
+    ALERT_START_TASK_DB_TASK_LOCK,     ALERT_START_TASK_DB_BODY_INSERT,
+    ALERT_START_TASK_DB_METHOD_INSERT, ALERT_START_TASK_DB_COMMIT,
+  };
+
+  reset_alert_start_task_db ();
+  assert_that (call_real_alert_start_task_create (), is_equal_to (0));
+  assert_that (alert_start_task_db_method_inserts, is_equal_to (1));
+  assert_that (alert_start_task_db_event_count,
+               is_equal_to (G_N_ELEMENTS (expected)));
+  assert_that (memcmp (alert_start_task_db_events, expected, sizeof (expected)),
+               is_equal_to (0));
+}
+
+Ensure (turbovas_control, rejects_unauthorized_missing_and_duplicate_start_task)
+{
+  reset_alert_start_task_db ();
+  alert_start_task_db_acl = FALSE;
+  assert_that (call_real_alert_start_task_create (), is_equal_to (99));
+  assert_that (alert_start_task_db_events[alert_start_task_db_event_count - 1],
+               is_equal_to (ALERT_START_TASK_DB_ROLLBACK));
+
+  reset_alert_start_task_db ();
+  alert_start_task_db_task_readable = FALSE;
+  assert_that (call_real_alert_start_task_create (), is_equal_to (3));
+  assert_that (alert_start_task_db_events[alert_start_task_db_event_count - 1],
+               is_equal_to (ALERT_START_TASK_DB_ROLLBACK));
+
+  reset_alert_start_task_db ();
+  alert_start_task_db_task_owned = FALSE;
+  assert_that (call_real_alert_start_task_create (), is_equal_to (3));
+  assert_that (alert_start_task_db_events[alert_start_task_db_event_count - 1],
+               is_equal_to (ALERT_START_TASK_DB_ROLLBACK));
+
+  reset_alert_start_task_db ();
+  alert_start_task_db_duplicate_name = TRUE;
+  assert_that (call_real_alert_start_task_create (), is_equal_to (1));
+  assert_that (alert_start_task_db_events[alert_start_task_db_event_count - 1],
+               is_equal_to (ALERT_START_TASK_DB_ROLLBACK));
+  assert_that (alert_start_task_db_method_inserts, is_equal_to (0));
+}
+
+Ensure (turbovas_control, maps_start_task_alert_responses)
+{
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+
+  assert_that (
+    turbovas_control_alert_start_task_create_response (
+      0, "123e4567-e89b-12d3-a456-426614174004", response),
+    is_equal_to_string ("0 created 123e4567-e89b-12d3-a456-426614174004\n"));
+  assert_that (
+    turbovas_control_alert_start_task_create_response (1, NULL, response),
+    is_equal_to_string ("1 exists\n"));
+  assert_that (
+    turbovas_control_alert_start_task_create_response (3, NULL, response),
+    is_equal_to_string ("3 task_not_found\n"));
+  assert_that (
+    turbovas_control_alert_start_task_create_response (99, NULL, response),
+    is_equal_to_string ("99 forbidden\n"));
+  assert_that (
+    turbovas_control_alert_start_task_create_response (-3, NULL, response),
+    is_equal_to_string ("-3 committed_indeterminate\n"));
+  assert_that (
+    turbovas_control_alert_start_task_create_response (-2, NULL, response),
+    is_equal_to_string ("-2 malformed\n"));
 }
 
 Ensure (turbovas_control, maps_schedule_create_responses)
@@ -4647,6 +5064,20 @@ main (int argc, char **argv)
                          maps_alert_scp_arrays_session_and_success_audit);
   add_test_with_context (suite, turbovas_control,
                          dispatches_alert_scp_errors_without_secrets);
+  add_test_with_context (suite, turbovas_control,
+                         parses_strict_start_task_alert_frame);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_bad_uuid_and_malformed_start_task_alerts);
+  add_test_with_context (suite, turbovas_control,
+                         maps_start_task_alert_creation_and_commit_status);
+  add_test_with_context (suite, turbovas_control,
+                         classifies_start_task_frames_without_logging_them);
+  add_test_with_context (suite, turbovas_control,
+                         locks_start_task_reference_and_commits_atomically);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_unauthorized_missing_and_duplicate_start_task);
+  add_test_with_context (suite, turbovas_control,
+                         maps_start_task_alert_responses);
   add_test_with_context (suite, turbovas_control,
                          dispatches_malformed_alert_scp_without_payload);
   add_test_with_context (suite, turbovas_control,

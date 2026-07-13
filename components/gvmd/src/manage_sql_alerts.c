@@ -954,6 +954,50 @@ lock_alert_scp_credential (const char *credential_id)
 }
 
 /**
+ * @brief Resolve and lock an operator-owned task with start permission.
+ *
+ * Unreadable, missing and non-owned tasks share one unavailable result so this
+ * private write path does not disclose task existence.
+ *
+ * @return 0 success, 3 task unavailable, -1 database error.
+ */
+static int
+lock_alert_start_task (const char *task_id, task_t *task)
+{
+  task_t locked_task;
+  gchar *quoted_owner_uuid;
+  int ret;
+
+  *task = 0;
+  if (task_id == NULL || task_id[0] == '\0')
+    return 3;
+  if (find_task_with_permission (task_id, task, "start_task"))
+    return -1;
+  if (*task == 0)
+    return 3;
+
+  quoted_owner_uuid = sql_quote (current_credentials.uuid);
+  ret = sql_int64 (&locked_task,
+                   "SELECT tasks.id FROM tasks"
+                   " JOIN users ON users.id = tasks.owner"
+                   " WHERE tasks.id = %llu AND users.uuid = '%s' FOR SHARE;",
+                   *task, quoted_owner_uuid);
+  g_free (quoted_owner_uuid);
+
+  if (ret == 1)
+    {
+      *task = 0;
+      return 3;
+    }
+  if (ret || locked_task != *task)
+    {
+      *task = 0;
+      return -1;
+    }
+  return 0;
+}
+
+/**
  * @brief Create an alert.
  *
  * This public entry point retains the transaction and permission behavior of
@@ -1000,6 +1044,77 @@ create_alert_task_status_changed (const char *name, const char *comment,
                              EVENT_TASK_RUN_STATUS_CHANGED, event_data,
                              ALERT_CONDITION_ALWAYS, condition_data, method,
                              method_data, alert);
+  if (ret)
+    {
+      sql_rollback ();
+      return ret;
+    }
+
+  sql_commit ();
+  return 0;
+}
+
+/**
+ * @brief Atomically create an always-condition Start Task alert.
+ *
+ * The current owner and referenced operator-owned task remain locked through
+ * name validation and insertion.  The task is resolved with the authoritative
+ * start_task permission while both the owner and task locks are held.
+ *
+ * @return See create_alert_body(), plus 3 unavailable task.
+ */
+int
+create_alert_start_task_with_task_ref (const char *name, const char *comment,
+                                       const char *active,
+                                       GPtrArray *event_data,
+                                       GPtrArray *condition_data,
+                                       const char *task_id, alert_t *alert)
+{
+  static const char method_name[] = "start_task_task";
+  GPtrArray *method_data = NULL;
+  gchar *method_item;
+  task_t task = 0;
+  int ret;
+
+  assert (current_credentials.uuid);
+
+  sql_begin_immediate ();
+
+  if (acl_user_may ("create_alert") == 0)
+    {
+      sql_rollback ();
+      return 99;
+    }
+
+  ret = lock_alert_create_owner ();
+  if (ret < 0)
+    g_warning ("%s: failed to lock the alert owner", __func__);
+  if (ret == 0)
+    {
+      ret = lock_alert_start_task (task_id, &task);
+      if (ret < 0)
+        g_warning ("%s: failed to resolve or lock the referenced task",
+                   __func__);
+    }
+  if (ret == 0)
+    {
+      size_t method_name_len = sizeof (method_name) - 1;
+      size_t task_id_len = strlen (task_id);
+
+      method_item = g_malloc (method_name_len + task_id_len + 2);
+      memcpy (method_item, method_name, method_name_len + 1);
+      memcpy (method_item + method_name_len + 1, task_id, task_id_len + 1);
+      method_data = make_array ();
+      array_add (method_data, method_item);
+      array_terminate (method_data);
+      ret = create_alert_body (name, comment, NULL, active,
+                               EVENT_TASK_RUN_STATUS_CHANGED, event_data,
+                               ALERT_CONDITION_ALWAYS, condition_data,
+                               ALERT_METHOD_START_TASK, method_data, alert);
+      if (ret < 0)
+        g_warning ("%s: failed to persist the alert", __func__);
+      array_free (method_data);
+    }
   if (ret)
     {
       sql_rollback ();

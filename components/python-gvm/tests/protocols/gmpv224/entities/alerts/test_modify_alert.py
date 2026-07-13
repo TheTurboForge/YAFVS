@@ -139,7 +139,7 @@ class GmpModifyAlertTestMixin:
                 alert_id="a1",
                 condition="Always",
                 event="Updated SecInfo arrived",
-                method="HTTP Get",
+                method="Start Task",
             )
 
     def test_modify_alert_with_event_data(self):

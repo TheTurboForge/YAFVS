@@ -346,7 +346,6 @@ const allowedSnakeCase = [
   'method_data_subject',
   'method_data_submethod',
   'method_data_to_address',
-  'method_data_URL',
   'min_high',
   'min_low',
   'min_medium',

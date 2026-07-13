@@ -345,7 +345,6 @@ alert_method_name (alert_method_t method)
   switch (method)
     {
       case ALERT_METHOD_EMAIL:       return "Email";
-      case ALERT_METHOD_HTTP_GET:    return "HTTP Get";
       case ALERT_METHOD_SCP:         return "SCP";
       case ALERT_METHOD_SMB:         return "SMB";
       case ALERT_METHOD_SNMP:        return "SNMP";
@@ -367,8 +366,6 @@ alert_method_from_name (const char* name)
 {
   if (strcasecmp (name, "Email") == 0)
     return ALERT_METHOD_EMAIL;
-  if (strcasecmp (name, "HTTP Get") == 0)
-    return ALERT_METHOD_HTTP_GET;
   if (strcasecmp (name, "SCP") == 0)
     return ALERT_METHOD_SCP;
   if (strcasecmp (name, "SMB") == 0)
@@ -1041,83 +1038,6 @@ email (const char *to_address, const char *from_address, const char *subject,
   unlink (content_file_name);
   unlink (args_file_name);
   return 0;
-}
-
-/**
- * @brief GET an HTTP resource.
- *
- * @param[in]  url  URL.
- *
- * @return 0 success, -1 error.
- */
-static int
-http_get (const char *url)
-{
-  int ret;
-  gchar *standard_out = NULL;
-  gchar *standard_err = NULL;
-  gint exit_status;
-  gchar **cmd;
-
-  g_debug ("   HTTP_GET %s", url);
-
-  if (g_str_has_prefix (url, "https://") == FALSE
-      && g_str_has_prefix (url, "http://") == FALSE)
-    {
-      g_warning ("%s: %s is not a valid HTTP(S) URL", __func__, url);
-      return -1;
-    }
-
-  cmd = (gchar **) g_malloc (6 * sizeof (gchar *));
-  cmd[0] = g_strdup ("/usr/bin/wget");
-  cmd[1] = g_strdup ("-O");
-  cmd[2] = g_strdup ("-");
-  cmd[3] = g_strdup ("--");
-  cmd[4] = g_strdup (url);
-  cmd[5] = NULL;
-  g_debug ("%s: Spawning in /tmp/: %s %s %s %s %s",
-           __func__, cmd[0], cmd[1], cmd[2], cmd[3], cmd[4]);
-  if ((g_spawn_sync ("/tmp/",
-                     cmd,
-                     NULL,                  /* Environment. */
-                     G_SPAWN_SEARCH_PATH,
-                     NULL,                  /* Setup function. */
-                     NULL,
-                     &standard_out,
-                     &standard_err,
-                     &exit_status,
-                     NULL)
-       == FALSE)
-      || (WIFEXITED (exit_status) == 0)
-      || WEXITSTATUS (exit_status))
-    {
-      g_debug ("%s: wget failed: %d (WIF %i, WEX %i)",
-               __func__,
-               exit_status,
-               WIFEXITED (exit_status),
-               WEXITSTATUS (exit_status));
-      g_debug ("%s: stdout: %s", __func__, standard_out);
-      g_debug ("%s: stderr: %s", __func__, standard_err);
-      ret = -1;
-    }
-  else
-    {
-      if (strlen (standard_out) > 80)
-        standard_out[80] = '\0';
-      g_debug ("   HTTP_GET %s: %s", url, standard_out);
-      ret = 0;
-    }
-
-  g_free (cmd[0]);
-  g_free (cmd[1]);
-  g_free (cmd[2]);
-  g_free (cmd[3]);
-  g_free (cmd[4]);
-  g_free (cmd[5]);
-  g_free (cmd);
-  g_free (standard_out);
-  g_free (standard_err);
-  return ret;
 }
 
 /**
@@ -3393,82 +3313,6 @@ trigger (alert_t alert, task_t task, report_t report, event_t event,
               g_free (creation_time);
               g_free (modification_time);
               free (recipient_credential_id);
-              return ret;
-            }
-          return -1;
-        }
-      case ALERT_METHOD_HTTP_GET:
-        {
-          char *url;
-
-          if (event == EVENT_NEW_SECINFO || event == EVENT_UPDATED_SECINFO)
-            {
-              g_warning ("%s: Event \"%s NVTs arrived\" with method"
-                         " \"HTTP Get\" not support",
-                         __func__,
-                         event == EVENT_NEW_SECINFO ? "New" : "Updated");
-              return -1;
-            }
-
-          url = alert_data (alert, "method", "URL");
-
-          if (url)
-            {
-              int ret, formatting;
-              gchar *point, *end;
-              GString *new_url;
-
-              new_url = g_string_new ("");
-              for (formatting = 0, point = url, end = (url + strlen (url));
-                   point < end;
-                   point++)
-                if (formatting)
-                  {
-                    switch (*point)
-                      {
-                        case '$':
-                          g_string_append_c (new_url, '$');
-                          break;
-                        case 'c':
-                          {
-                            gchar *condition_desc;
-                            condition_desc = alert_condition_description
-                                              (condition, alert);
-                            g_string_append (new_url, condition_desc);
-                            g_free (condition_desc);
-                            break;
-                          }
-                        case 'e':
-                          {
-                            gchar *event_desc;
-                            event_desc = event_description (event, event_data,
-                                                            NULL);
-                            g_string_append (new_url, event_desc);
-                            g_free (event_desc);
-                            break;
-                          }
-                        case 'n':
-                          {
-                            char *name = task_name (task);
-                            g_string_append (new_url, name);
-                            free (name);
-                            break;
-                          }
-                        default:
-                          g_string_append_c (new_url, '$');
-                          g_string_append_c (new_url, *point);
-                          break;
-                      }
-                    formatting = 0;
-                  }
-                else if (*point == '$')
-                  formatting = 1;
-                else
-                  g_string_append_c (new_url, *point);
-
-              ret = http_get (new_url->str);
-              g_string_free (new_url, TRUE);
-              g_free (url);
               return ret;
             }
           return -1;

@@ -62,7 +62,7 @@ typedef enum
 {
   ALERT_METHOD_ERROR = 0,
   ALERT_METHOD_EMAIL = 1,
-  ALERT_METHOD_HTTP_GET = 2,
+  /* Value 2 is retired; alert method IDs are persisted and must not shift. */
   /* Value 3 is retired; alert method IDs are persisted and must not shift. */
   ALERT_METHOD_START_TASK = 4,
   ALERT_METHOD_SYSLOG = 5,

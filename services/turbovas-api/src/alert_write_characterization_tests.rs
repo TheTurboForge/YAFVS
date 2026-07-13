@@ -150,7 +150,7 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
     }
 
     for required in [
-        "ALERT_METHOD_HTTP_GET = 2",
+        "Value 2 is retired; alert method IDs are persisted and must not shift.",
         "ALERT_METHOD_START_TASK = 4",
         "ALERT_METHOD_SYSLOG = 5",
         "Value 6 is retired; alert method IDs are persisted and must not shift.",
@@ -168,6 +168,11 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
     }
     assert!(
         !MANAGE_ALERTS_H.contains("ALERT_METHOD_SEND"),
+        "retired alert method must not remain in the enum"
+    );
+    let retired_http_method = ["ALERT_METHOD_", "HTTP", "_GET"].concat();
+    assert!(
+        !MANAGE_ALERTS_H.contains(&retired_http_method),
         "retired alert method must not remain in the enum"
     );
     assert!(
@@ -188,6 +193,18 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
         "retired alert method must not remain executable"
     );
     assert!(
+        !MANAGE_ALERTS_C.contains(&format!("case {retired_http_method}")),
+        "retired alert method must not remain executable"
+    );
+    assert!(
+        !MANAGE_ALERTS_C.contains(&["(name, \"HTTP", " Get\")"].concat()),
+        "retired alert method must not remain parseable"
+    );
+    assert!(
+        !GVMD_GMP_C.contains(&["Method does not match", " event type"].concat()),
+        "retired alert method validation error must not remain exposed"
+    );
+    assert!(
         !MANAGE_ALERTS_C.contains("case ALERT_METHOD_VERINICE"),
         "retired alert method must not remain executable"
     );
@@ -201,6 +218,10 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
     );
     assert!(
         !ALERT_QUERY_SQL.contains("WHEN 7 THEN 'Send'"),
+        "native SQL must not label the retired alert method"
+    );
+    assert!(
+        !ALERT_QUERY_SQL.contains(&["WHEN 2 THEN 'HTTP", " Get'"].concat()),
         "native SQL must not label the retired alert method"
     );
     assert!(
@@ -257,6 +278,12 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
         !root
             .join("components/gsa/src/web/pages/alerts/dialog")
             .join("SendMethodPart.tsx")
+            .exists()
+    );
+    assert!(
+        !root
+            .join("components/gsa/src/web/pages/alerts/dialog")
+            .join(["Http", "MethodPart.tsx"].concat())
             .exists()
     );
     assert!(
@@ -341,7 +368,7 @@ fn inherited_alert_create_and_modify_are_acl_filter_and_payload_guarded() {
     );
     for required in [
         "acl_user_may (\"create_alert\") == 0",
-        "check_alert_params (event, condition, method)",
+        "check_alert_params (event, condition)",
         "find_filter_with_permission (filter_id, &filter, \"get_filters\")",
         "SELECT type FROM filters WHERE id = %llu;",
         "resource_with_name_exists (name, \"alert\", 0)",
@@ -362,7 +389,7 @@ fn inherited_alert_create_and_modify_are_acl_filter_and_payload_guarded() {
     let modify = inherited_function(MANAGE_SQL_ALERTS_C, "modify_alert");
     for required in [
         "acl_user_may (\"modify_alert\") == 0",
-        "check_alert_params (event, condition, method)",
+        "check_alert_params (event, condition)",
         "find_alert_with_permission (alert_id, &alert, \"modify_alert\")",
         "resource_with_name_exists (name, \"alert\", alert)",
         "find_filter_with_permission (filter_id, &filter, \"get_filters\")",

@@ -285,7 +285,6 @@ const AlertComponent = ({
   const [methodDataSnmpMessage, setMethodDataSnmpMessage] = useState(undefined);
   const [methodDataStartTaskTask, setMethodDataStartTaskTask] =
     useState(undefined);
-  const [methodDataURL, setMethodDataURL] = useState(undefined);
 
   const credentialTypeRef = useRef(null);
 
@@ -593,7 +592,6 @@ const AlertComponent = ({
       setMethodDataStartTaskTask(
         selectSaveId(tasks, getValue(method.data.start_task_task)),
       );
-      setMethodDataURL(getValue(method.data.URL, ''));
       setTasks(tasks);
       setTitle(_('Edit Alert {{- name}}', {name: shorten(alertObj.name)}));
     } else {
@@ -666,7 +664,6 @@ const AlertComponent = ({
       setMethodDataSnmpAgent(undefined);
       setMethodDataSnmpCommunity(undefined);
       setMethodDataSnmpMessage(undefined);
-      setMethodDataURL(undefined);
       setMethodDataRecipientCredential(UNSET_VALUE);
       setMethodDataStartTaskTask(selectSaveId(tasks));
       setMethodDataSmbCredential(selectSaveId(smbCredentials));
@@ -817,7 +814,6 @@ const AlertComponent = ({
               filters={filters}
               id={id}
               method={method}
-              method_data_URL={methodDataURL}
               method_data_composer_ignore_pagination={
                 methodDataComposerIgnorePagination
               }

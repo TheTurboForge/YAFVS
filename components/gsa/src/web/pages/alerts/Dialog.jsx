@@ -16,7 +16,6 @@ import {
   METHOD_TYPE_SYSLOG,
   METHOD_TYPE_EMAIL,
   METHOD_TYPE_START_TASK,
-  METHOD_TYPE_HTTP_GET,
   isTaskEvent,
   isSecinfoEvent,
 } from 'gmp/models/alert';
@@ -32,7 +31,6 @@ import YesNoRadio from 'web/components/form/YesNoRadio';
 import {ReportIcon} from 'web/components/icon';
 import Divider from 'web/components/layout/Divider';
 import EmailMethodPart from 'web/pages/alerts/dialog/EmailMethodPart';
-import HttpMethodPart from 'web/pages/alerts/dialog/HttpMethodPart';
 import ScpMethodPart from 'web/pages/alerts/dialog/ScpMethodPart';
 import SmbMethodPart from 'web/pages/alerts/dialog/SmbMethodPart';
 import SnmpMethodPart from 'web/pages/alerts/dialog/SnmpMethodPart';
@@ -165,7 +163,6 @@ const DEFAULTS = {
   method_data_subject: TASK_SUBJECT,
   method_data_submethod: 'syslog',
   method_data_to_address: '',
-  method_data_URL: '',
   name: _('Unnamed'),
   report_configs: [],
   report_formats: [],
@@ -260,10 +257,6 @@ class AlertDialog extends React.Component {
         {
           value: METHOD_TYPE_EMAIL,
           label: _('Email'),
-        },
-        {
-          value: METHOD_TYPE_HTTP_GET,
-          label: _('HTTP Get'),
         },
         {
           value: METHOD_TYPE_SCP,
@@ -492,14 +485,6 @@ class AlertDialog extends React.Component {
                 />
               )}
 
-              {values.method === METHOD_TYPE_HTTP_GET && (
-                <HttpMethodPart
-                  URL={values.method_data_URL}
-                  prefix="method_data"
-                  onChange={onValueChange}
-                />
-              )}
-
               {values.method === METHOD_TYPE_SCP && (
                 <ScpMethodPart
                   credentials={credentials}
@@ -590,7 +575,6 @@ AlertDialog.propTypes = {
   event_data_status: PropTypes.string,
   filter_id: PropTypes.idOrZero,
   method: PropTypes.string,
-  method_data_URL: PropTypes.string,
   method_data_composer_ignore_pagination: PropTypes.number,
   method_data_composer_include_overrides: PropTypes.number,
   method_data_details_url: PropTypes.string,

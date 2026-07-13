@@ -627,20 +627,13 @@ validate_smb_data (alert_method_t method, const gchar *name, gchar **data)
  *
  * @param[in]  event           Type of event.
  * @param[in]  condition       Event condition.
- * @param[in]  method          Escalation method.
- *
- * @return 0 success, 20 method does not match event, 21 condition does not
- *         match event.
+ * @return 0 success, 21 condition does not match event.
  */
 static int
-check_alert_params (event_t event, alert_condition_t condition,
-                    alert_method_t method)
+check_alert_params (event_t event, alert_condition_t condition)
 {
   if (event == EVENT_NEW_SECINFO || event == EVENT_UPDATED_SECINFO)
     {
-      if (method == ALERT_METHOD_HTTP_GET)
-        return 20;
-
       if (condition == ALERT_CONDITION_SEVERITY_AT_LEAST
           || condition == ALERT_CONDITION_SEVERITY_CHANGED
           || condition == ALERT_CONDITION_FILTER_COUNT_CHANGED)
@@ -670,8 +663,8 @@ check_alert_params (event_t event, alert_condition_t condition,
  *         7 email subject too long, 8 email message too long, 9 failed to find
  *         filter for condition, 15 error in SCP host, 16 error in SCP port,
  *         17 failed to find report format for SCP method, 18 error
- *         in SCP credential, 19 error in SCP path, 20 method does not match
- *         event, 21 condition does not match event, 31 unexpected event data
+ *         in SCP credential, 19 error in SCP path,
+ *         21 condition does not match event, 31 unexpected event data
  *         name, 32 syntax error in event data, 40 invalid SMB credential
  *       , 41 invalid SMB share path, 42 invalid SMB file path,
  *         43 SMB file path contains dot,
@@ -692,7 +685,7 @@ create_alert_body (const char* name, const char* comment,
 
   assert (current_credentials.uuid);
 
-  ret = check_alert_params (event, condition, method);
+  ret = check_alert_params (event, condition);
   if (ret)
     return ret;
 
@@ -1255,8 +1248,8 @@ create_alert_smb_with_report_refs (const char *name, const char *comment,
  *         find filter for condition, 15 error in SCP host, 16 error in SCP
  *         port,
  *         17 failed to find report format for SCP method, 18 error
- *         in SCP credential, 19 error in SCP path, 20 method does not match
- *         event, 21 condition does not match event, 31 unexpected event data
+ *         in SCP credential, 19 error in SCP path,
+ *         21 condition does not match event, 31 unexpected event data
  *         name, 32 syntax error in event data, 40 invalid SMB credential
  *       , 41 invalid SMB share path, 42 invalid SMB file path,
  *         43 SMB file path contains dot,
@@ -1288,7 +1281,7 @@ modify_alert (const char *alert_id, const char *name, const char *comment,
       return 99;
     }
 
-  ret = check_alert_params (event, condition, method);
+  ret = check_alert_params (event, condition);
   if (ret)
     {
       sql_rollback ();

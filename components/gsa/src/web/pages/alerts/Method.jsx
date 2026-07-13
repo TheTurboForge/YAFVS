@@ -15,7 +15,6 @@ import {
   METHOD_TYPE_SYSLOG,
   METHOD_TYPE_EMAIL,
   METHOD_TYPE_START_TASK,
-  METHOD_TYPE_HTTP_GET,
 } from 'gmp/models/alert';
 import {isDefined} from 'gmp/utils/identity';
 import DetailsLink from 'web/components/link/DetailsLink';
@@ -422,16 +421,6 @@ const Method = ({
     // in xslt the tasks have been added to the response
     // we should improve the backend to return the name for the task id here too
     return _('Start Task');
-  }
-
-  if (method.type === METHOD_TYPE_HTTP_GET) {
-    const {data = {}} = method;
-
-    if (isDefined(data.URL?.value)) {
-      return _('HTTP GET request to URL {{- url}}', {url: data.URL.value});
-    }
-
-    return _('HTTP GET request');
   }
 
   return method.type;

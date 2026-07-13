@@ -4501,8 +4501,7 @@ append_alert_method_data (GString *xml, params_t *data, const char *method)
   params_iterator_init (&iter, data);
 
   while (params_iterator_next (&iter, &name, &param))
-    if ((strcmp (method, "HTTP Get") == 0 && strcmp (name, "URL") == 0)
-        || (strcmp (method, "SCP") == 0
+    if ((strcmp (method, "SCP") == 0
             && (strcmp (name, "scp_credential") == 0
                 || strcmp (name, "scp_host") == 0
                 || strcmp (name, "scp_known_hosts") == 0

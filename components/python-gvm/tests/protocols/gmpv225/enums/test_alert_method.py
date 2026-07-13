@@ -41,10 +41,6 @@ class GetAlertMethodFromStringTestCase(unittest.TestCase):
         ct = AlertMethod.from_string("syslog")
         self.assertEqual(ct, AlertMethod.SYSLOG)
 
-    def test_http_get(self):
-        ct = AlertMethod.from_string("HTTP Get")
-        self.assertEqual(ct, AlertMethod.HTTP_GET)
-
     def test_start_task(self):
         ct = AlertMethod.from_string("Start Task")
         self.assertEqual(ct, AlertMethod.START_TASK)

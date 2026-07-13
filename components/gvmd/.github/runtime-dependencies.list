@@ -1,4 +1,5 @@
 # Runtime dependencies
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 
 # PDF Report
 # texlive-fonts-recommended
@@ -25,9 +26,6 @@
 
 # signature verification
 # gnupg
-
-# HTTP alerts
-# wget
 
 # SCP alert
 # sshpass
@@ -79,7 +77,6 @@ snmp
 sshpass
 texlive-fonts-recommended
 texlive-latex-extra
-wget
 xmlstarlet
 xsltproc
 zip

@@ -624,10 +624,6 @@ Prerequisites for signature verification:
 
 * gnupg
 
-Prerequisites for HTTP alerts:
-
-* wget
-
 Prerequisites for SCP alert:
 
 * sshpass

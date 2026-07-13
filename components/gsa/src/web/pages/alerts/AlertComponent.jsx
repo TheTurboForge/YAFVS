@@ -13,7 +13,6 @@ import {
 } from 'gmp/models/credential';
 import {fetchNativeCredentials} from 'gmp/native-api/credentials';
 import {parseInt, parseSeverity, parseYesNo, NO_VALUE} from 'gmp/parser';
-import {first} from 'gmp/utils/array';
 import {selectSaveId} from 'gmp/utils/id';
 import {isDefined} from 'gmp/utils/identity';
 import {capitalizeFirstLetter, shorten} from 'gmp/utils/string';
@@ -54,23 +53,6 @@ import {
 import {getReportComposerDefaults} from 'web/store/usersettings/selectors';
 import PropTypes from 'web/utils/PropTypes';
 import {UNSET_VALUE} from 'web/utils/Render';
-
-const selectVeriniceReportId = (reportFormats, reportId) => {
-  if (isDefined(reportId)) {
-    for (const format of reportFormats) {
-      if (format.id === reportId) {
-        return format.id;
-      }
-    }
-  } else {
-    for (const format of reportFormats) {
-      if (format.name === 'Verinice ISM') {
-        return format.id;
-      }
-    }
-  }
-  return first(reportFormats).id;
-};
 
 const getValue = (data = {}, def = undefined) => {
   const {value: val = def} = data;
@@ -312,20 +294,6 @@ const AlertComponent = ({
     useState(undefined);
   const [methodDataTpSmsTlsWorkaround, setMethodDataTpSmsTlsWorkaround] =
     useState(undefined);
-  const [
-    methodDataVeriniceServerReportConfig,
-    setMethodDataVeriniceServerReportConfig,
-  ] = useState(undefined);
-  const [
-    methodDataVeriniceServerReportFormat,
-    setMethodDataVeriniceServerReportFormat,
-  ] = useState(undefined);
-  const [methodDataVeriniceServerUrl, setMethodDataVeriniceServerUrl] =
-    useState(undefined);
-  const [
-    methodDataVeriniceServerCredential,
-    setMethodDataVeriniceServerCredential,
-  ] = useState(undefined);
   const [methodDataVfireCredential, setMethodDataVfireCredential] =
     useState(undefined);
   const [methodDataVfireBaseUrl, setMethodDataVfireBaseUrl] =
@@ -367,8 +335,6 @@ const AlertComponent = ({
           setMethodDataScpCredential(credentialId);
         } else if (String(credentialTypeRef.current) === 'smb') {
           setMethodDataSmbCredential(credentialId);
-        } else if (String(credentialTypeRef.current) === 'verinice') {
-          setMethodDataVeriniceServerCredential(credentialId);
         } else if (String(credentialTypeRef.current) === 'vfire') {
           setMethodDataVfireCredential(credentialId);
         } else if (String(credentialTypeRef.current) === 'tippingpoint') {
@@ -439,10 +405,6 @@ const AlertComponent = ({
 
   const openSmbCredentialDialog = types => {
     openCredentialDialog({type: 'smb', types});
-  };
-
-  const openVeriniceCredentialDialog = types => {
-    openCredentialDialog({type: 'verinice', types});
   };
 
   const openVfireCredentialDialog = types => {
@@ -533,12 +495,6 @@ const AlertComponent = ({
 
       const scpCredentialId = isDefined(method.data.scp_credential)
         ? method.data.scp_credential.credential.id
-        : undefined;
-
-      const veriniceCredentialId = isDefined(
-        method.data.verinice_server_credential,
-      )
-        ? method.data.verinice_server_credential.credential.id
         : undefined;
 
       const tpSmsCredentialId = isDefined(method.data.tp_sms_credential)
@@ -698,23 +654,6 @@ const AlertComponent = ({
       setMethodDataTpSmsTlsWorkaround(
         parseYesNo(getValue(method.data.tp_sms_tls_workaround, NO_VALUE)),
       );
-      setMethodDataVeriniceServerReportConfig(
-        selectSaveId(
-          reportConfigs,
-          getValue(method.data.verinice_server_report_config, UNSET_VALUE),
-          UNSET_VALUE,
-        ),
-      );
-      setMethodDataVeriniceServerReportFormat(
-        selectVeriniceReportId(
-          reportFormats,
-          getValue(method.data.verinice_server_report_format),
-        ),
-      );
-      setMethodDataVeriniceServerUrl(getValue(method.data.verinice_server_url));
-      setMethodDataVeriniceServerCredential(
-        selectSaveId(credentials, veriniceCredentialId),
-      );
       setMethodDataVfireCredential(
         selectSaveId(vFireCredentials, vfireCredentialId),
       );
@@ -815,8 +754,6 @@ const AlertComponent = ({
       setMethodDataTpSmsCredential(undefined);
       setMethodDataTpSmsHostname(undefined);
       setMethodDataTpSmsTlsWorkaround(undefined);
-      setMethodDataVeriniceServerUrl(undefined);
-      setMethodDataVeriniceServerCredential(undefined);
       setMethodDataURL(undefined);
       setMethodDataRecipientCredential(UNSET_VALUE);
       setMethodDataStartTaskTask(selectSaveId(tasks));
@@ -826,8 +763,6 @@ const AlertComponent = ({
       setMethodDataSmbFilePathType(undefined);
       setMethodDataSmbReportConfig(reportConfigId);
       setMethodDataSmbReportFormat(reportFormatId);
-      setMethodDataVeriniceServerReportConfig(reportConfigId);
-      setMethodDataVeriniceServerReportFormat(reportFormatId);
       setMethodDataVfireCredential(undefined);
       setMethodDataVfireBaseUrl(undefined);
       setMethodDataVfireCallDescription(undefined);
@@ -920,10 +855,6 @@ const AlertComponent = ({
 
   const handleTippingPointCredentialChange = credential => {
     setMethodDataTpSmsCredential(credential);
-  };
-
-  const handleVeriniceCredentialChange = credential => {
-    setMethodDataVeriniceServerCredential(credential);
   };
 
   const handleEmailCredentialChange = credential => {
@@ -1042,16 +973,6 @@ const AlertComponent = ({
               method_data_tp_sms_credential={methodDataTpSmsCredential}
               method_data_tp_sms_hostname={methodDataTpSmsHostname}
               method_data_tp_sms_tls_workaround={methodDataTpSmsTlsWorkaround}
-              method_data_verinice_server_credential={
-                methodDataVeriniceServerCredential
-              }
-              method_data_verinice_server_report_config={
-                methodDataVeriniceServerReportConfig
-              }
-              method_data_verinice_server_report_format={
-                methodDataVeriniceServerReportFormat
-              }
-              method_data_verinice_server_url={methodDataVeriniceServerUrl}
               method_data_vfire_base_url={methodDataVfireBaseUrl}
               method_data_vfire_call_description={
                 methodDataVfireCallDescription
@@ -1087,7 +1008,6 @@ const AlertComponent = ({
               onNewTippingPointCredentialClick={
                 openTippingPointCredentialDialog
               }
-              onNewVeriniceCredentialClick={openVeriniceCredentialDialog}
               onNewVfireCredentialClick={openVfireCredentialDialog}
               onOpenContentComposerDialogClick={handleOpenContentComposerDialog}
               onReportConfigsChange={handleReportConfigsChange}
@@ -1101,7 +1021,6 @@ const AlertComponent = ({
               onTippingPointCredentialChange={
                 handleTippingPointCredentialChange
               }
-              onVerinceCredentialChange={handleVeriniceCredentialChange}
               onVfireCredentialChange={handleVfireCredentialChange}
             />
           )}

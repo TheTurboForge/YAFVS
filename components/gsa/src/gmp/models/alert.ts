@@ -90,7 +90,6 @@ export type AlertMethodType =
   | typeof METHOD_TYPE_EMAIL
   | typeof METHOD_TYPE_START_TASK
   | typeof METHOD_TYPE_HTTP_GET
-  | typeof METHOD_TYPE_VERINICE
   | typeof METHOD_TYPE_TIPPING_POINT;
 
 export type AlertMethodNoticeType =
@@ -119,7 +118,6 @@ export const METHOD_TYPE_SYSLOG = 'Syslog';
 export const METHOD_TYPE_EMAIL = 'Email';
 export const METHOD_TYPE_START_TASK = 'Start Task';
 export const METHOD_TYPE_HTTP_GET = 'HTTP Get';
-export const METHOD_TYPE_VERINICE = 'verinice Connector';
 export const METHOD_TYPE_TIPPING_POINT = 'TippingPoint SMS';
 
 export const EMAIL_NOTICE_INCLUDE = '0';

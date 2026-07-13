@@ -82,7 +82,7 @@ typedef enum
   /* Value 3 is retired; alert method IDs are persisted and must not shift. */
   ALERT_METHOD_START_TASK = 4,
   ALERT_METHOD_SYSLOG = 5,
-  ALERT_METHOD_VERINICE = 6,
+  /* Value 6 is retired; alert method IDs are persisted and must not shift. */
   /* Value 7 is retired; alert method IDs are persisted and must not shift. */
   ALERT_METHOD_SCP = 8,
   ALERT_METHOD_SNMP = 9,

@@ -53,8 +53,11 @@ fn inherited_function(source: &str, name: &str) -> String {
 }
 
 #[test]
-fn retired_alert_method_hole_is_removed_full_stack_without_renumbering() {
-    let retired_connector_name = ["source", "fire"].concat();
+fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
+    let retired_connector_names = [
+        ["source", "fire"].concat(),
+        ["verinice", " connector"].concat(),
+    ];
     for (path, source) in [
         ("GSA snake-case allowlist", GSA_ALLOWED_SNAKE_CASE),
         ("GSA alert command", GSA_ALERT_COMMAND),
@@ -90,19 +93,52 @@ fn retired_alert_method_hole_is_removed_full_stack_without_renumbering() {
                 "{path} still contains retired alert field {key}"
             );
         }
-        assert!(
-            !source
-                .to_ascii_lowercase()
-                .contains(&retired_connector_name),
-            "{path} still contains the retired connector"
-        );
+        for retired_connector_name in &retired_connector_names {
+            assert!(
+                !source
+                    .to_ascii_lowercase()
+                    .contains(retired_connector_name),
+                "{path} still contains the retired connector"
+            );
+        }
+    }
+
+    for (path, source) in [
+        ("GSA snake-case allowlist", GSA_ALLOWED_SNAKE_CASE),
+        ("GSA alert command", GSA_ALERT_COMMAND),
+        ("GSA alert model", GSA_ALERT_MODEL),
+        ("GSA alert component", GSA_ALERT_COMPONENT),
+        ("GSA alert dialog", GSA_ALERT_DIALOG),
+        ("GSA alert method view", GSA_ALERT_METHOD),
+        ("gsad GMP bridge", GSAD_GMP_C),
+        ("gvmd GMP", GVMD_GMP_C),
+        ("gvmd alert execution", MANAGE_ALERTS_C),
+        ("gvmd alert declarations", MANAGE_ALERTS_H),
+        ("gvmd alert SQL", MANAGE_SQL_ALERTS_C),
+        ("gvmd report-format SQL", MANAGE_SQL_REPORT_FORMATS_C),
+        ("gvmd database cleanup", MANAGE_SQL_C),
+        ("python-gvm alert requests", PYTHON_GVM_ALERTS),
+        ("native alert query SQL", ALERT_QUERY_SQL),
+        ("native alert writes", ALERT_WRITES),
+    ] {
+        for key in [
+            "verinice_server_credential",
+            "verinice_server_url",
+            "verinice_server_report_config",
+            "verinice_server_report_format",
+        ] {
+            assert!(
+                !source.contains(key),
+                "{path} still contains retired alert field {key}"
+            );
+        }
     }
 
     for required in [
         "ALERT_METHOD_HTTP_GET = 2",
         "ALERT_METHOD_START_TASK = 4",
         "ALERT_METHOD_SYSLOG = 5",
-        "ALERT_METHOD_VERINICE = 6",
+        "Value 6 is retired; alert method IDs are persisted and must not shift.",
         "Value 7 is retired; alert method IDs are persisted and must not shift.",
         "ALERT_METHOD_SCP = 8",
         "ALERT_METHOD_SNMP = 9",
@@ -120,7 +156,15 @@ fn retired_alert_method_hole_is_removed_full_stack_without_renumbering() {
         "retired alert method must not remain in the enum"
     );
     assert!(
+        !MANAGE_ALERTS_H.contains("ALERT_METHOD_VERINICE"),
+        "retired alert method must not remain in the enum"
+    );
+    assert!(
         !MANAGE_ALERTS_C.contains("case ALERT_METHOD_SEND"),
+        "retired alert method must not remain executable"
+    );
+    assert!(
+        !MANAGE_ALERTS_C.contains("case ALERT_METHOD_VERINICE"),
         "retired alert method must not remain executable"
     );
     assert!(
@@ -130,6 +174,14 @@ fn retired_alert_method_hole_is_removed_full_stack_without_renumbering() {
     assert!(
         !ALERT_QUERY_SQL.contains("WHEN 7 THEN 'Send'"),
         "native SQL must not label the retired alert method"
+    );
+    assert!(
+        !ALERT_QUERY_SQL.contains("WHEN 6 THEN 'verinice Connector'"),
+        "native SQL must not label the retired alert method"
+    );
+    assert!(
+        GVMD_INSTALL.contains("Prerequisites for generating verinice reports:"),
+        "verinice report-generation prerequisites must remain supported"
     );
     for status in [
         "invalid_send_host",
@@ -168,6 +220,19 @@ fn retired_alert_method_hole_is_removed_full_stack_without_renumbering() {
         !root
             .join("components/gsa/src/web/pages/alerts/dialog")
             .join("SendMethodPart.tsx")
+            .exists()
+    );
+    assert!(
+        !root
+            .join("components/gvmd/src/alert_methods")
+            .join("verinice")
+            .join("alert")
+            .exists()
+    );
+    assert!(
+        !root
+            .join("components/gsa/src/web/pages/alerts/dialog")
+            .join("VeriniceMethodPart.tsx")
             .exists()
     );
 }
@@ -359,7 +424,6 @@ fn gsad_and_gsa_alert_commands_proxy_delivery_payloads_and_control_verbs() {
         "scp_credential",
         "smb_credential",
         "tp_sms_credential",
-        "verinice_server_credential",
         "vfire_credential",
         "recipient_credential",
         "notice_report_config",

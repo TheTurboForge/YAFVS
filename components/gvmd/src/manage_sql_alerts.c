@@ -746,7 +746,7 @@ check_alert_params (event_t event, alert_condition_t condition,
 {
   if (event == EVENT_NEW_SECINFO || event == EVENT_UPDATED_SECINFO)
     {
-      if (method == ALERT_METHOD_HTTP_GET || method == ALERT_METHOD_VERINICE)
+      if (method == ALERT_METHOD_HTTP_GET)
         return 20;
 
       if (condition == ALERT_CONDITION_SEVERITY_AT_LEAST

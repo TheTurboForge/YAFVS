@@ -633,11 +633,6 @@ Prerequisites for Alemba vFire alert:
 * A program in the `PATH` called `greenbone_vfire_connector` that takes the
   path to an XML file as described by doc/vfire-data-xml.rnc as an argument.
 
-Prerequisites for verinice .PRO Connector alert:
-
-* A program in the `PATH` called `greenbone_verinice_connector` that takes args
-  IP, port, username, password and report file in verinice .PRO format.
-
 Prerequisites for SCP alert:
 
 * sshpass

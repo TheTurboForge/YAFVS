@@ -18,7 +18,6 @@ import {
   METHOD_TYPE_START_TASK,
   METHOD_TYPE_HTTP_GET,
   METHOD_TYPE_TIPPING_POINT,
-  METHOD_TYPE_VERINICE,
 } from 'gmp/models/alert';
 import {isDefined} from 'gmp/utils/identity';
 import CertInfo from 'web/components/certinfo/CertInfo';
@@ -544,79 +543,6 @@ const Method = ({
     }
 
     return _('HTTP GET request');
-  }
-
-  if (method.type === METHOD_TYPE_VERINICE) {
-    const {data = {}} = method;
-    const {verinice_server_credential = {}} = data;
-    const {credential} = verinice_server_credential;
-
-    if (details) {
-      return (
-        <div>
-          <div>{_('verinice Connector')}</div>
-          <Table>
-            <colgroup>
-              <TableCol width="12%" />
-              <TableCol width="88%" />
-            </colgroup>
-            <TableBody>
-              {isDefined(data.verinice_server_url?.value) && (
-                <TableRow>
-                  <TableData>{_('URL')}</TableData>
-                  <TableData>{data.verinice_server_url.value}</TableData>
-                </TableRow>
-              )}
-
-              {isDefined(credential) && isDefined(credential.id) && (
-                <TableRow>
-                  <TableData>{_('Credential')}</TableData>
-                  <TableData>
-                    <span>
-                      <DetailsLink id={credential.id} type="credential">
-                        {credential.name}
-                      </DetailsLink>
-                    </span>
-                  </TableData>
-                </TableRow>
-              )}
-
-              {isDefined(credential) && isDefined(credential.login) && (
-                <TableRow>
-                  <TableData>{_('Username')}</TableData>
-                  <TableData>{credential.login}</TableData>
-                </TableRow>
-              )}
-
-              {isDefined(data.verinice_server_report_format?.value) &&
-                reportFormats.length > 0 && (
-                  <TableRow>
-                    <TableData>{_('verinice.PRO Report')}</TableData>
-                    <TableData>
-                      {getReportFormatName(
-                        data.verinice_server_report_format.value,
-                      )}
-                    </TableData>
-                  </TableRow>
-                )}
-
-              {isDefined(data.verinice_server_report_config?.value) &&
-                reportConfigs.length > 0 && (
-                  <TableRow>
-                    <TableData>{_('Report Config')}</TableData>
-                    <TableData>
-                      {getReportConfigName(
-                        data.verinice_server_report_config.value,
-                      )}
-                    </TableData>
-                  </TableRow>
-                )}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
-    return _('verinice Connector');
   }
 
   if (method.type === METHOD_TYPE_TIPPING_POINT) {

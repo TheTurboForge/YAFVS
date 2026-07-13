@@ -43,7 +43,6 @@ class AlertMethod(Enum):
     EMAIL = "Email"
     START_TASK = "Start Task"
     HTTP_GET = "HTTP Get"
-    VERINICE_CONNECTOR = "verinice Connector"
     TIPPINGPOINT_SMS = "TippingPoint SMS"
     ALEMBA_VFIRE = "Alemba vFire"
 
@@ -130,8 +129,7 @@ class Alerts:
             method: The method by which the user is alerted, one of 'SCP',
                 'SMB', 'SNMP', 'Syslog' or 'Email'; if the event is
                 neither 'Updated SecInfo arrived' nor 'New SecInfo arrived',
-                method can also be one of 'Start Task', 'HTTP Get' or
-                'verinice Connector'.
+                method can also be one of 'Start Task' or 'HTTP Get'.
             condition_data: Data that defines the condition
             event_data: Data that defines the event
             method_data: Data that defines the method
@@ -232,8 +230,8 @@ class Alerts:
             method: The method by which the user is alerted, one of 'SCP',
                 'SMB', 'SNMP', 'Syslog' or 'Email';
                 if the event is neither 'Updated SecInfo arrived' nor
-                'New SecInfo arrived', method can also be one of 'Start Task',
-                'HTTP Get' or 'verinice Connector'.
+                'New SecInfo arrived', method can also be one of 'Start Task'
+                or 'HTTP Get'.
             method_data: Data that defines the method
             filter_id: Filter to apply when executing alert
             comment: Comment for the alert

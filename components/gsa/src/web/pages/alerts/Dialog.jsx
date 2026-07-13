@@ -18,7 +18,6 @@ import {
   METHOD_TYPE_EMAIL,
   METHOD_TYPE_START_TASK,
   METHOD_TYPE_HTTP_GET,
-  METHOD_TYPE_VERINICE,
   METHOD_TYPE_TIPPING_POINT,
   isTaskEvent,
   isSecinfoEvent,
@@ -42,7 +41,6 @@ import SmbMethodPart from 'web/pages/alerts/dialog/SmbMethodPart';
 import SnmpMethodPart from 'web/pages/alerts/dialog/SnmpMethodPart';
 import StartTaskMethodPart from 'web/pages/alerts/dialog/StartTaskMethodPart';
 import TippingPontMethodPart from 'web/pages/alerts/dialog/TippingPointMethodPart';
-import VeriniceMethodPart from 'web/pages/alerts/dialog/VeriniceMethodPart';
 import FilterCountChangedConditionPart from 'web/pages/alerts/FilterCountChangedConditionPart';
 import FilterCountLeastConditionPart from 'web/pages/alerts/FilterCountLeastConditionPart';
 import SecInfoEventPart from 'web/pages/alerts/SecInfoEventPart';
@@ -264,7 +262,6 @@ class AlertDialog extends React.Component {
       method_data_scp_credential,
       method_data_smb_credential,
       method_data_tp_sms_credential,
-      method_data_verinice_server_credential,
       method_data_vfire_base_url,
       method_data_vfire_credential,
       method_data_vfire_session_type,
@@ -280,7 +277,6 @@ class AlertDialog extends React.Component {
       onNewEmailCredentialClick,
       onNewScpCredentialClick,
       onNewSmbCredentialClick,
-      onNewVeriniceCredentialClick,
       onNewVfireCredentialClick,
       onNewTippingPointCredentialClick,
       onOpenContentComposerDialogClick,
@@ -290,7 +286,6 @@ class AlertDialog extends React.Component {
       onScpCredentialChange,
       onSmbCredentialChange,
       onTippingPointCredentialChange,
-      onVerinceCredentialChange,
       onVfireCredentialChange,
       ...props
     } = this.props;
@@ -333,10 +328,6 @@ class AlertDialog extends React.Component {
           label: _('System Logger'),
         },
         {
-          value: METHOD_TYPE_VERINICE,
-          label: _('verinice.PRO Connector'),
-        },
-        {
           value: METHOD_TYPE_TIPPING_POINT,
           label: _('TippingPoint SMS'),
         },
@@ -370,10 +361,6 @@ class AlertDialog extends React.Component {
         {
           value: METHOD_TYPE_SYSLOG,
           label: _('System Logger'),
-        },
-        {
-          value: METHOD_TYPE_VERINICE,
-          label: _('verinice.PRO Connector'),
         },
         {
           value: METHOD_TYPE_TIPPING_POINT,
@@ -415,7 +402,6 @@ class AlertDialog extends React.Component {
       method_data_scp_credential,
       method_data_smb_credential,
       method_data_tp_sms_credential,
-      method_data_verinice_server_credential,
       method_data_vfire_credential,
       report_config_ids,
       report_format_ids,
@@ -641,28 +627,6 @@ class AlertDialog extends React.Component {
                 />
               )}
 
-              {values.method === METHOD_TYPE_VERINICE && (
-                <VeriniceMethodPart
-                  credentials={credentials}
-                  prefix="method_data"
-                  reportConfigs={report_configs}
-                  reportFormats={report_formats}
-                  veriniceServerCredential={
-                    values.method_data_verinice_server_credential
-                  }
-                  veriniceServerReportConfig={
-                    values.method_data_verinice_server_report_config
-                  }
-                  veriniceServerReportFormat={
-                    values.method_data_verinice_server_report_format
-                  }
-                  veriniceServerUrl={values.method_data_verinice_server_url}
-                  onChange={onValueChange}
-                  onCredentialChange={onVerinceCredentialChange}
-                  onNewCredentialClick={onNewVeriniceCredentialClick}
-                />
-              )}
-
               {values.method === METHOD_TYPE_TIPPING_POINT && (
                 <TippingPontMethodPart
                   credentials={credentials}
@@ -781,10 +745,6 @@ AlertDialog.propTypes = {
   method_data_tp_sms_credential: PropTypes.id,
   method_data_tp_sms_hostname: PropTypes.string,
   method_data_tp_sms_tls_workaround: PropTypes.yesno,
-  method_data_verinice_server_credential: PropTypes.id,
-  method_data_verinice_server_report_config: PropTypes.id,
-  method_data_verinice_server_report_format: PropTypes.id,
-  method_data_verinice_server_url: PropTypes.string,
   method_data_vfire_base_url: PropTypes.string,
   method_data_vfire_call_description: PropTypes.string,
   method_data_vfire_call_impact_name: PropTypes.string,
@@ -810,7 +770,6 @@ AlertDialog.propTypes = {
   onNewScpCredentialClick: PropTypes.func.isRequired,
   onNewSmbCredentialClick: PropTypes.func.isRequired,
   onNewTippingPointCredentialClick: PropTypes.func.isRequired,
-  onNewVeriniceCredentialClick: PropTypes.func.isRequired,
   onNewVfireCredentialClick: PropTypes.func.isRequired,
   onOpenContentComposerDialogClick: PropTypes.func.isRequired,
   onReportConfigsChange: PropTypes.func.isRequired,
@@ -819,7 +778,6 @@ AlertDialog.propTypes = {
   onScpCredentialChange: PropTypes.func.isRequired,
   onSmbCredentialChange: PropTypes.func.isRequired,
   onTippingPointCredentialChange: PropTypes.func.isRequired,
-  onVerinceCredentialChange: PropTypes.func.isRequired,
   onVfireCredentialChange: PropTypes.func.isRequired,
 };
 

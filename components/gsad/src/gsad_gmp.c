@@ -4556,11 +4556,6 @@ append_alert_method_data (GString *xml, params_t *data, const char *method,
                 || strcmp (name, "tp_sms_hostname") == 0
                 || strcmp (name, "tp_sms_tls_certificate") == 0
                 || strcmp (name, "tp_sms_tls_workaround") == 0))
-        || (strcmp (method, "verinice Connector") == 0
-            && (strcmp (name, "verinice_server_credential") == 0
-                || strcmp (name, "verinice_server_url") == 0
-                || strcmp (name, "verinice_server_report_config") == 0
-                || strcmp (name, "verinice_server_report_format") == 0))
         || (strcmp (method, "Alemba vFire") == 0
             && (strcmp (name, "vfire_base_url") == 0
                 || strcmp (name, "vfire_call_description") == 0

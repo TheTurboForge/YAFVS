@@ -8801,8 +8801,7 @@ handle_get_alerts (gmp_parser_t *gmp_parser, GError **error)
               message = 1;
             }
 
-          if (strcmp (name, "scp_credential") == 0
-              || strcmp (name, "verinice_server_credential") == 0)
+          if (strcmp (name, "scp_credential") == 0)
             {
               // Username + Password credentials
               const char *credential_id;

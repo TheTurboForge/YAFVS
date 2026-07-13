@@ -49,10 +49,6 @@ class GetAlertMethodFromStringTestCase(unittest.TestCase):
         ct = AlertMethod.from_string("Start Task")
         self.assertEqual(ct, AlertMethod.START_TASK)
 
-    def test_verinice_connector(self):
-        ct = AlertMethod.from_string("verinice Connector")
-        self.assertEqual(ct, AlertMethod.VERINICE_CONNECTOR)
-
     def test_tippingpoint_sms(self):
         ct = AlertMethod.from_string("Tippingpoint SMS")
         self.assertEqual(ct, AlertMethod.TIPPINGPOINT_SMS)

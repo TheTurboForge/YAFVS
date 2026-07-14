@@ -555,7 +555,6 @@ fn gsad_and_gsa_alert_commands_proxy_delivery_payloads_and_control_verbs() {
         "cmd: 'save_alert'",
         "cmd: 'new_alert'",
         "cmd: 'edit_alert'",
-        "cmd: 'test_alert'",
         "convertData('method_data'",
         "convertData('condition_data'",
         "convertData('event_data'",
@@ -568,6 +567,11 @@ fn gsad_and_gsa_alert_commands_proxy_delivery_payloads_and_control_verbs() {
             "GSA alert command missing {required}"
         );
     }
+
+    assert!(
+        !GSA_ALERT_COMMAND.contains("cmd: 'test_alert'"),
+        "GSA alert test action must not fall back to GMP after native replacement"
+    );
 
     for required in [
         "cmd: 'clone'",
@@ -725,7 +729,7 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
     for method in [Method::POST, Method::PATCH, Method::PUT, Method::DELETE] {
         assert!(
             !direct_api_v1_method_is_allowed(&method, export_path, true),
-            "{method} alert metadata export must stay closed; inherited XML/export/test/control semantics remain inherited"
+            "{method} alert metadata export must stay closed; inherited XML export and unrelated control semantics remain separate"
         );
     }
 
@@ -746,8 +750,7 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
             "x-turbovas-exposure: direct-read",
             replaces,
             "condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates",
-            "inherited XML export/test actions",
-            "create, restore, hard-delete, and delivery-payload mutations",
+            "inherited XML export, restore, hard-delete, and delivery-payload mutations",
         ] {
             assert!(block.contains(required), "{path} missing {required}");
         }
@@ -767,7 +770,7 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
         "x-turbovas-replaces: alert-metadata-modify",
         "x-turbovas-safety-contract: write-control-v1",
         "AlertPatchRequest",
-        "event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, test, create, restore, hard-delete, and delivery-payload mutation remain on inherited compatibility paths",
+        "event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, restore, hard-delete, and delivery-payload mutation remain on inherited compatibility paths",
     ] {
         assert!(
             patch.contains(required),
@@ -866,7 +869,8 @@ fn native_scp_alert_create_contract_is_explicitly_parsed_scrubbed_and_direct_wri
             "SCP create metadata missing {required}"
         );
     }
-    assert!(create.contains("alert-test-actions-and-delivery-payload-mutations"));
+    assert!(create.contains("delivery-payload-mutations"));
+    assert!(!create.contains("alert-test-actions-and-delivery-payload-mutations"));
     assert!(!create.contains("alert-start-task-create-test-actions"));
 
     let schema = OPENAPI

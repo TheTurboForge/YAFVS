@@ -4,6 +4,7 @@
 
 mod alert_payloads;
 mod alert_query_sql;
+mod alert_test;
 mod alert_write_db;
 mod alert_write_sql;
 mod alert_write_transactions;
@@ -263,6 +264,10 @@ async fn main() -> Result<(), ApiError> {
     startup::run().await
 }
 
+#[cfg(test)]
+mod alert_test_characterization_tests;
+#[cfg(test)]
+mod alert_test_tests;
 #[cfg(test)]
 mod alert_write_characterization_tests;
 #[cfg(test)]

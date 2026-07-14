@@ -29,7 +29,8 @@ use crate::{
         browser_proxy_patch_scanner, browser_proxy_patch_task,
         browser_proxy_replace_scanner_configuration, browser_proxy_replace_task,
         browser_proxy_replace_task_target, browser_proxy_restore_override,
-        browser_proxy_start_task, browser_proxy_stop_task, browser_proxy_verify_scanner,
+        browser_proxy_start_task, browser_proxy_stop_task, browser_proxy_test_alert,
+        browser_proxy_verify_scanner,
     },
     browser_proxy_port_list::{
         browser_proxy_clone_port_list, browser_proxy_create_port_list,
@@ -86,6 +87,10 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/alerts/:alert_id/clone",
             post(browser_proxy_clone_alert),
+        )
+        .route(
+            "/api/v1/alerts/:alert_id/test",
+            post(browser_proxy_test_alert),
         )
         .route(
             "/api/v1/overrides/:override_id",

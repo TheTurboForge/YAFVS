@@ -434,3 +434,27 @@ export const deleteNativeAlert = async (
   id: string,
 ): Promise<void> =>
   deleteNative(gmp, `api/v1/alerts/${encodeURIComponent(id)}`);
+
+export const testNativeAlert = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<void> => {
+  const response = await fetch(
+    gmp.buildUrl(`api/v1/alerts/${encodeURIComponent(id)}/test`),
+    {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+        ...(gmp.session.jwt
+          ? {Authorization: `Bearer ${gmp.session.jwt}`}
+          : {}),
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw await nativeAlertRequestError(response);
+  }
+};

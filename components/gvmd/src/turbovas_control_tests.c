@@ -23,6 +23,10 @@ BeforeEach (turbovas_control) {}
 AfterEach (turbovas_control) {}
 
 static int cleanup_calls;
+static int alert_test_calls;
+static int alert_test_result;
+static int alert_test_audit_fail_calls;
+static int alert_test_audit_success_calls;
 static int create_alert_calls;
 static int create_alert_result;
 static int create_schedule_calls;
@@ -61,6 +65,7 @@ static int trash_empty_audit_success_calls;
 static int trash_empty_structured_audit_calls;
 static int audit_fail_calls;
 static int audit_success_calls;
+static const char *alert_test_script_message;
 static const char *mock_operator_name;
 static gboolean alert_uuid_lookup_fails;
 static alert_condition_t received_alert_condition;
@@ -91,6 +96,7 @@ static gchar *received_snmp_community;
 static gchar *received_snmp_message;
 static gchar *received_syslog_submethod;
 static gchar *received_audit_uuid;
+static gchar *received_alert_test_uuid;
 static gchar *received_credential_type;
 static gchar *received_comment;
 static gchar *received_icalendar;
@@ -443,10 +449,18 @@ __wrap_log_event (const char *resource, const char *resource_name,
   else if (strcmp (resource, "alert") == 0)
     {
       assert_that (resource_name, is_equal_to_string ("Alert"));
-      assert_that (action, is_equal_to_string ("created"));
-      audit_success_calls++;
-      g_free (received_audit_uuid);
-      received_audit_uuid = g_strdup (uuid);
+      if (strcmp (action, "created") == 0)
+        {
+          audit_success_calls++;
+          g_free (received_audit_uuid);
+          received_audit_uuid = g_strdup (uuid);
+        }
+      else
+        {
+          assert_that (action, is_equal_to_string ("tested"));
+          assert_that (uuid, is_equal_to_string (received_alert_test_uuid));
+          alert_test_audit_success_calls++;
+        }
     }
   else if (strcmp (resource, "tag") == 0)
     {
@@ -493,9 +507,17 @@ __wrap_log_event_fail (const char *resource, const char *resource_name,
   else if (strcmp (resource, "alert") == 0)
     {
       assert_that (resource_name, is_equal_to_string ("Alert"));
-      assert_that (uuid, is_null);
-      assert_that (action, is_equal_to_string ("created"));
-      audit_fail_calls++;
+      if (strcmp (action, "created") == 0)
+        {
+          assert_that (uuid, is_null);
+          audit_fail_calls++;
+        }
+      else
+        {
+          assert_that (action, is_equal_to_string ("tested"));
+          assert_that (uuid, is_equal_to_string (received_alert_test_uuid));
+          alert_test_audit_fail_calls++;
+        }
     }
   else if (strcmp (resource, "tag") == 0)
     {
@@ -729,6 +751,17 @@ __wrap_manage_configure_diagnostic_nvt (const char *config_uuid,
   *changed = diagnostic_control_changed;
   *committed = diagnostic_control_committed;
   return diagnostic_control_result;
+}
+
+int
+__wrap_manage_test_alert (const char *alert_uuid, gchar **script_message)
+{
+  alert_test_calls++;
+  g_free (received_alert_test_uuid);
+  received_alert_test_uuid = g_strdup (alert_uuid);
+  *script_message = alert_test_script_message
+                      ? g_strdup (alert_test_script_message) : NULL;
+  return alert_test_result;
 }
 
 enum trash_empty_db_event
@@ -4913,6 +4946,159 @@ Ensure (turbovas_control, maps_tag_control_responses)
                is_equal_to_string ("-2 malformed\n"));
 }
 
+Ensure (turbovas_control, parses_strict_authenticated_alert_test_frames)
+{
+  const char *request =
+    "alert-test " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001\n";
+  const char *malformed[] = {
+    "alert-test wrong-secret "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001\n",
+    "alert-test " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-42661417400z "
+    "123e4567-e89b-12d3-a456-426614174001\n",
+    "alert-test " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-42661417400z\n",
+    "alert-test " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 extra\n",
+  };
+  char operator_uuid[37];
+  char alert_uuid[37];
+  size_t index;
+
+  assert_that (turbovas_control_parse_alert_test_request (
+                 request, strlen (request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, alert_uuid),
+               is_true);
+  assert_that (operator_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (alert_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
+
+  for (index = 0; index < G_N_ELEMENTS (malformed); index++)
+    assert_that (turbovas_control_parse_alert_test_request (
+                   malformed[index], strlen (malformed[index]),
+                   TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                   operator_uuid, alert_uuid),
+                 is_false);
+}
+
+Ensure (turbovas_control, maps_alert_test_responses_without_malformed_overlap)
+{
+  static const struct
+  {
+    int result;
+    const char *response;
+  } cases[] = {
+    {0, "0 tested\n"},
+    {1, "1 not_found\n"},
+    {99, "99 forbidden\n"},
+    {-2, "-2 report_format_not_found\n"},
+    {-3, "-3 filter_not_found\n"},
+    {-4, "-4 credential_not_found\n"},
+    {-5, "-5 delivery_failed\n"},
+    {2, "-1 internal\n"},
+    {-1, "-1 internal\n"},
+  };
+  size_t index;
+
+  for (index = 0; index < G_N_ELEMENTS (cases); index++)
+    assert_that (turbovas_control_alert_test_response (cases[index].result),
+                 is_equal_to_string (cases[index].response));
+}
+
+Ensure (turbovas_control, tests_alert_in_operator_session_audits_and_scrubs)
+{
+  const char *operator_uuid = "123e4567-e89b-12d3-a456-426614174000";
+  const char *alert_uuid = "123e4567-e89b-12d3-a456-426614174001";
+
+  cleanup_calls = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  alert_test_calls = 0;
+  alert_test_audit_success_calls = 0;
+  alert_test_audit_fail_calls = 0;
+  alert_test_result = 0;
+  alert_test_script_message = "private alert script message";
+  mock_operator_name = "operator";
+  g_clear_pointer (&received_alert_test_uuid, g_free);
+
+  assert_that (turbovas_control_test_alert (operator_uuid, alert_uuid),
+               is_equal_to (0));
+  assert_that (alert_test_calls, is_equal_to (1));
+  assert_that (alert_test_audit_success_calls, is_equal_to (1));
+  assert_that (alert_test_audit_fail_calls, is_equal_to (0));
+  assert_that (received_alert_test_uuid, is_equal_to_string (alert_uuid));
+  assert_that (reinit_calls, is_equal_to (1));
+  assert_that (session_init_calls, is_equal_to (1));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+
+  alert_test_result = -5;
+  assert_that (turbovas_control_test_alert (operator_uuid, alert_uuid),
+               is_equal_to (-5));
+  assert_that (alert_test_calls, is_equal_to (2));
+  assert_that (alert_test_audit_success_calls, is_equal_to (1));
+  assert_that (alert_test_audit_fail_calls, is_equal_to (1));
+
+  mock_operator_name = NULL;
+  assert_that (turbovas_control_test_alert (operator_uuid, alert_uuid),
+               is_equal_to (99));
+  assert_that (alert_test_calls, is_equal_to (2));
+  assert_that (alert_test_audit_fail_calls, is_equal_to (1));
+  assert_that (cleanup_calls, is_equal_to (3));
+  alert_test_script_message = NULL;
+}
+
+Ensure (turbovas_control, dispatches_alert_test_without_sensitive_response_data)
+{
+  const char *request =
+    "alert-test " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001\n";
+  const char *malformed =
+    "alert-test " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 extra\n";
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  ssize_t response_len;
+
+  alert_test_calls = 0;
+  alert_test_result = -5;
+  alert_test_script_message = "private alert script message";
+  alert_test_audit_fail_calls = 0;
+  mock_operator_name = "operator";
+  assert_that (
+    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+  response_len = dispatch_trash_empty_request (request, response);
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  assert_that (response_len, is_equal_to (strlen ("-5 delivery_failed\n")));
+  assert_that (response, is_equal_to_string ("-5 delivery_failed\n"));
+  assert_that (alert_test_calls, is_equal_to (1));
+  assert_that (alert_test_audit_fail_calls, is_equal_to (1));
+  assert_that (strstr (response, TEST_CONTROL_SECRET), is_null);
+  assert_that (strstr (response, "123e4567-e89b-12d3-a456-426614174000"),
+               is_null);
+  assert_that (strstr (response, "123e4567-e89b-12d3-a456-426614174001"),
+               is_null);
+  assert_that (strstr (response, alert_test_script_message), is_null);
+
+  assert_that (
+    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+  response_len = dispatch_trash_empty_request (malformed, response);
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  assert_that (response_len, is_equal_to (strlen ("-2 malformed\n")));
+  response[response_len] = '\0';
+  assert_that (response, is_equal_to_string ("-2 malformed\n"));
+  assert_that (alert_test_calls, is_equal_to (1));
+  alert_test_script_message = NULL;
+}
+
 int
 main (int argc, char **argv)
 {
@@ -5100,6 +5286,16 @@ main (int argc, char **argv)
                          preserves_authoritative_alert_smb_validation);
   add_test_with_context (suite, turbovas_control,
                          dispatches_malformed_alert_smb_without_payload);
+  add_test_with_context (suite, turbovas_control,
+                         parses_strict_authenticated_alert_test_frames);
+  add_test_with_context (
+    suite, turbovas_control,
+    maps_alert_test_responses_without_malformed_overlap);
+  add_test_with_context (suite, turbovas_control,
+                         tests_alert_in_operator_session_audits_and_scrubs);
+  add_test_with_context (
+    suite, turbovas_control,
+    dispatches_alert_test_without_sensitive_response_data);
 
   if (argc > 1)
     ret = run_single_test (suite, argv[1], create_text_reporter ());

@@ -2055,7 +2055,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: alert-metadata-list-read
       summary: List redacted alert metadata
-      description: Read-only alert metadata backed by gvmd/PostgreSQL. This list intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export/test actions, create, restore, hard-delete, and delivery-payload mutations.
+      description: Read-only alert metadata backed by gvmd/PostgreSQL. This list intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export, restore, hard-delete, and delivery-payload mutations.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -2086,13 +2086,13 @@ paths:
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
       x-turbovas-replaces: alert-email-smb-syslog-snmp-scp-start-task-create
-      x-turbovas-inherited-still-owns: alert-test-actions-and-delivery-payload-mutations
+      x-turbovas-inherited-still-owns: delivery-payload-mutations
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: request-operator-owner
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: alert-delivery-control
       summary: Create a task-status EMAIL, SMB, Syslog, SNMP, SCP, or Start Task alert
-      description: Creates one operator-owned EMAIL, SMB, Syslog, SNMP, SCP, or Start Task alert through gvmd's authoritative ACL and transaction path with fixed TASK_RUN_STATUS_CHANGED event and ALWAYS condition semantics. Reference-bearing methods lock and validate their dependencies transactionally. The explicit method discriminator selects a strict write-only delivery shape. The operation is available through direct bearer-token access and the authenticated same-origin browser proxy; both resolve the authoritative operator UUID before mutation. Addresses, paths, subjects, SNMP fields, known-host pins, credential/report/task references, and message content are write-only; the response is reloaded from authoritative database metadata and contains no delivery payload. A 502 committed_response_unavailable response means the mutation committed but its identifier or authoritative response failed. A 502 mutation_outcome_indeterminate response means the complete control request may have committed but no authoritative response arrived. Callers must inspect current state before retrying either outcome. Inherited test actions and later delivery-payload mutation remain residual paths.
+      description: Creates one operator-owned EMAIL, SMB, Syslog, SNMP, SCP, or Start Task alert through gvmd's authoritative ACL and transaction path with fixed TASK_RUN_STATUS_CHANGED event and ALWAYS condition semantics. Reference-bearing methods lock and validate their dependencies transactionally. The explicit method discriminator selects a strict write-only delivery shape. The operation is available through direct bearer-token access and the authenticated same-origin browser proxy; both resolve the authoritative operator UUID before mutation. Addresses, paths, subjects, SNMP fields, known-host pins, credential/report/task references, and message content are write-only; the response is reloaded from authoritative database metadata and contains no delivery payload. A 502 committed_response_unavailable response means the mutation committed but its identifier or authoritative response failed. A 502 mutation_outcome_indeterminate response means the complete control request may have committed but no authoritative response arrived. Callers must inspect current state before retrying either outcome. Later delivery-payload mutation remains a residual path.
       requestBody:
         required: true
         content:
@@ -2140,7 +2140,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: alert-metadata-detail-read
       summary: Read one redacted alert metadata row
-      description: Read-only alert detail metadata backed by gvmd/PostgreSQL. This detail response intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export/test actions, create, restore, hard-delete, and delivery-payload mutations; task references are id/name metadata only.
+      description: Read-only alert detail metadata backed by gvmd/PostgreSQL. This detail response intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export, restore, hard-delete, and delivery-payload mutations; task references are id/name metadata only.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       responses:
@@ -2175,7 +2175,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Update alert metadata
-      description: Direct write-control endpoint for updating alert name and comment only. Alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, test, create, restore, hard-delete, and delivery-payload mutation remain on inherited compatibility paths.
+      description: Direct write-control endpoint for updating alert name and comment only. Alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, restore, hard-delete, and delivery-payload mutation remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       requestBody:
@@ -2218,7 +2218,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-delete
       summary: Move alert to trash
-      description: Direct write-control endpoint for moving an operator-owned live alert to trash. Alerts referenced by visible live tasks are rejected; hidden/trash task references, alert condition/event/method data, and tag links are moved consistently. Alert create, delivery-payload mutation, inherited XML export, test/trigger, restore, and hard-delete remain on inherited compatibility paths.
+      description: Direct write-control endpoint for moving an operator-owned live alert to trash. Alerts referenced by visible live tasks are rejected; hidden/trash task references, alert condition/event/method data, and tag links are moved consistently. Delivery-payload mutation, inherited XML export, restore, and hard-delete remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       responses:
@@ -2252,7 +2252,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Clone an alert
-      description: Direct write-control endpoint for cloning an operator-owned live alert. The clone copies alert metadata, active state, filter reference, condition data, event data, method data, and active user-tag links with a fresh alert id and optional name/comment override. Alert create, delivery-payload mutation, inherited XML export, test/trigger, restore, and hard-delete remain on inherited compatibility paths.
+      description: Direct write-control endpoint for cloning an operator-owned live alert. The clone copies alert metadata, active state, filter reference, condition data, event data, method data, and active user-tag links with a fresh alert id and optional name/comment override. Delivery-payload mutation, inherited XML export, restore, and hard-delete remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       requestBody:
@@ -2282,6 +2282,46 @@ paths:
           $ref: '#/components/responses/RequestTooLarge'
         '429':
           $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /alerts/{alert_id}/test:
+    post:
+      operationId: postAlertsByAlertIdTest
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: alert-test-actions
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: alert-real-delivery-control
+      summary: Send a real test delivery for an alert
+      description: Sends a real test delivery using the alert's configured delivery settings. A Start Task alert can start its configured task. This action has no request body and is available through direct bearer-token access and the authenticated same-origin browser proxy.
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      responses:
+        '204':
+          description: Real test delivery completed
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
         '500':
           $ref: '#/components/responses/InternalError'
   /alerts/{alert_id}/export:

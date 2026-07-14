@@ -36,6 +36,7 @@ import {
   exportNativeAlertMetadata,
   fetchNativeAlert,
   patchNativeAlert,
+  testNativeAlert,
   type NativeAlertCreateArgs,
 } from 'gmp/native-api/alerts';
 import {fetchNativeCredentials} from 'gmp/native-api/credentials';
@@ -523,11 +524,8 @@ class AlertCommand extends EntityCommand<Alert> {
     return response.setData(editAlert);
   }
 
-  test({id}: {id: string}) {
-    return this.httpPostWithTransform({
-      cmd: 'test_alert',
-      id,
-    });
+  async test({id}: {id: string}) {
+    await testNativeAlert(this.http, id);
   }
 
   getElementFromRoot(root) {

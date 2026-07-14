@@ -617,6 +617,7 @@ OPENAPI_ALLOWED_OWNER_SEMANTICS_VALUES = frozenset(
 OPENAPI_ALLOWED_SIDE_EFFECT_VALUES = frozenset(
     {
         "alert-delivery-control",
+        "alert-real-delivery-control",
         "account-auth-control",
         "credential-secret-control",
         "destructive-mutation",
@@ -661,6 +662,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "alert-metadata-modify",
         "alert-clone",
         "alert-email-smb-syslog-snmp-scp-start-task-create",
+        "alert-test-actions",
         "alert-trash-move",
         "cert-bund-advisory-catalog-detail-read",
         "cert-bund-advisory-list-read",
@@ -836,7 +838,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
 )
 OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
     {
-        "alert-test-actions-and-delivery-payload-mutations",
+        "delivery-payload-mutations",
         "credential-secrets-writes-and-deletes",
         "credential-secret-updates-non-up-usk-types-and-deletes",
         "feed-sync-import-control",
@@ -878,6 +880,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("patch", "/alerts/{alert_id}"): "direct-write",
     ("delete", "/alerts/{alert_id}"): "direct-write",
     ("post", "/alerts/{alert_id}/clone"): "direct-write",
+    ("post", "/alerts/{alert_id}/test"): "direct-write",
     ("get", "/cert-bund-advisories"): "direct-read",
     ("get", "/cert-bund-advisories/{cert_bund_advisory_id}"): "direct-read",
     ("get", "/cert-bund-advisories/{cert_bund_advisory_id}/export"): "direct-read",
@@ -1029,7 +1032,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "alert-metadata-list-read",
     },
     ("post", "/alerts"): {
-        "x-turbovas-inherited-still-owns": "alert-test-actions-and-delivery-payload-mutations",
+        "x-turbovas-inherited-still-owns": "delivery-payload-mutations",
         "x-turbovas-maturity": "live-write",
         "x-turbovas-operator-identity": "direct-token-operator",
         "x-turbovas-owner-semantics": "request-operator-owner",
@@ -1052,6 +1055,14 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "alert-metadata-modify",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "metadata-write",
+    },
+    ("post", "/alerts/{alert_id}/test"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "request-operator-owner",
+        "x-turbovas-replaces": "alert-test-actions",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "alert-real-delivery-control",
     },
     ("delete", "/alerts/{alert_id}"): {
         "x-turbovas-maturity": "live-write",
@@ -10109,6 +10120,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
                 errors.append(f"unresolved_post_exact_path:{variable}")
 
         clone_suffix = post_constants.get("clone_suffix")
+        test_suffix = post_constants.get("test_suffix")
         restore_suffix = post_constants.get("restore_suffix")
         resources_suffix = post_constants.get("resources_suffix")
         ranges_suffix = post_constants.get("ranges_suffix")
@@ -10121,6 +10133,8 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{clone_suffix}")
+            if prefix_variable == "alert_prefix" and prefix and test_suffix and f"is_uuid_segment_with_suffix (id, test_suffix)" in post_function_body:
+                templates.add(f"{prefix.rstrip('/')}/{{}}{test_suffix}")
             if prefix_variable != "alert_prefix" and prefix and restore_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{restore_suffix}")
         tag_prefix = post_constants.get("tag_prefix")
@@ -10246,6 +10260,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
                 errors.append(f"unresolved_post_exact_path:{variable}")
 
         clone_suffix = post_constants.get("clone_suffix")
+        test_suffix = post_constants.get("test_suffix")
         restore_suffix = post_constants.get("restore_suffix")
         resources_suffix = post_constants.get("resources_suffix")
         ranges_suffix = post_constants.get("ranges_suffix")
@@ -10254,6 +10269,8 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{clone_suffix}")
+            if prefix_variable == "alert_prefix" and prefix and test_suffix and f"is_uuid_segment_with_suffix (id, test_suffix)" in post_function_body:
+                operations.add(f"POST {prefix.rstrip('/')}/{{}}{test_suffix}")
             if prefix_variable != "alert_prefix" and prefix and restore_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{restore_suffix}")
         tag_prefix = post_constants.get("tag_prefix")
@@ -11118,7 +11135,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "notes": [
                     "Metadata list only; alert delivery payload detail remains redacted.",
                     "Alert method delivery values and event/condition payload data remain redacted or absent.",
-                    "No delivery/test action, credentials, URLs, hosts, paths, email/message bodies, or certificate data.",
+                    "No delivery configuration, credentials, URLs, hosts, paths, email/message bodies, or certificate data.",
                 ],
             },
             {
@@ -11128,7 +11145,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["GSA EMAIL/SMB/Syslog/SNMP/SCP/Start Task alert authoring (migrated through gsad same-origin proxy)", "direct native EMAIL/SMB/Syslog/SNMP/SCP/Start Task alert creation"],
                 "residual_inherited": [
-                    "Inherited test actions and delivery-payload mutations remain inherited.",
+                    "Delivery-payload mutations remain inherited.",
                     "Recipient addresses, sender address, subject, SNMP fields, SCP destinations and host pins, credential, report, and task references, and message content are write-only and are never returned by the native API.",
                 ],
             },
@@ -11149,7 +11166,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser alert name/comment metadata PATCH", "direct native alert name/comment metadata modification"],
                 "notes": [
-                    "Metadata write only; alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, export, test, create, restore, hard-delete, and delivery-payload mutation remain inherited.",
+                    "Metadata write only; alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, export, restore, hard-delete, and delivery-payload mutation remain inherited.",
                 ],
             },
             {
@@ -11160,7 +11177,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["same-origin browser alert trash move", "direct native alert trash move"],
                 "notes": [
                     "Moves alert metadata, child condition/event/method data, task references, and tag links to trash; visible live task-linked alerts are rejected.",
-                    "Alert create, delivery-payload mutation, inherited XML export, test, restore, and hard-delete remain inherited.",
+                    "Delivery-payload mutation, inherited XML export, restore, and hard-delete remain inherited.",
                 ],
             },
             {
@@ -11171,7 +11188,18 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["same-origin browser alert clone", "direct native alert clone"],
                 "notes": [
                     "Clones existing alert metadata and delivery child rows without accepting client-supplied delivery payloads.",
-                    "Alert create, delivery-payload mutation, inherited XML export, test, restore, and hard-delete remain inherited.",
+                    "Delivery-payload mutation, inherited XML export, restore, and hard-delete remain inherited.",
+                ],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/alerts/{alert_id}/test",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser alert test action", "direct native alert test action"],
+                "notes": [
+                    "This is a real delivery action, not a validation preview.",
+                    "A Start Task alert can start its configured task; routine validation must not exercise the successful action.",
                 ],
             },
             {

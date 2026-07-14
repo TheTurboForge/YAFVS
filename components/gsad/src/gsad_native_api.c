@@ -709,6 +709,7 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *target_prefix = "/api/v1/targets/";
   const gchar *task_prefix = "/api/v1/tasks/";
   const gchar *clone_suffix = "/clone";
+  const gchar *test_suffix = "/test";
   const gchar *restore_suffix = "/restore";
   const gchar *resources_suffix = "/resources";
   const gchar *ranges_suffix = "/ranges";
@@ -770,7 +771,8 @@ native_api_post_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, alert_prefix))
     {
       const gchar *id = path + strlen (alert_prefix);
-      return is_uuid_segment_with_suffix (id, clone_suffix);
+      return is_uuid_segment_with_suffix (id, clone_suffix)
+             || is_uuid_segment_with_suffix (id, test_suffix);
     }
 
   if (g_str_has_prefix (path, scope_prefix))

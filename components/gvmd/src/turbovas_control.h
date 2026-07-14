@@ -30,6 +30,8 @@
  * alert-start-task-create <secret> <operator_uuid> <active:0|1> <name_b64>
  *                         <comment_b64> <status_b64> <task_uuid>\n
  *
+ * alert-test <secret> <operator_uuid> <alert_uuid>\n
+ *
  * alert-smb-create <secret> <operator_uuid> <active:0|1> <name_b64>
  *                  <comment_b64> <status_b64> <smb_credential_uuid_b64>
  *                  <share_path_b64> <file_path_b64>

@@ -71,6 +71,9 @@
   "alert-start-task-create "
 #define TURBOVAS_CONTROL_ALERT_START_TASK_CREATE_COMMAND_LENGTH \
   (sizeof (TURBOVAS_CONTROL_ALERT_START_TASK_CREATE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_ALERT_TEST_COMMAND "alert-test "
+#define TURBOVAS_CONTROL_ALERT_TEST_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_ALERT_TEST_COMMAND) - 1)
 #define TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES 4096
 #define TURBOVAS_CONTROL_ALERT_COMMENT_MAX_BYTES 4096
 #define TURBOVAS_CONTROL_ALERT_STATUS_MAX_BYTES 32
@@ -1277,6 +1280,29 @@ turbovas_control_parse_alert_start_task_create_request (
 }
 
 static gboolean
+turbovas_control_parse_alert_test_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37], char alert_uuid[37])
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  size_t field_len;
+
+  if (!turbovas_control_parse_authenticated_prefix (
+        request, request_len, TURBOVAS_CONTROL_ALERT_TEST_COMMAND,
+        TURBOVAS_CONTROL_ALERT_TEST_COMMAND_LENGTH, expected_secret,
+        expected_secret_len, operator_uuid, &cursor, &end)
+      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || field_len != 36 || cursor != end)
+    return FALSE;
+
+  memcpy (alert_uuid, field, 36);
+  alert_uuid[36] = '\0';
+  return turbovas_control_uuid_is_valid (alert_uuid);
+}
+
+static gboolean
 turbovas_control_alert_status_is_valid (const char *status)
 {
   static const char *allowed[] = {
@@ -2310,6 +2336,22 @@ turbovas_control_alert_start_task_create_response (
 }
 
 static const char *
+turbovas_control_alert_test_response (int result)
+{
+  switch (result)
+    {
+      case 0: return "0 tested\n";
+      case 1: return "1 not_found\n";
+      case 99: return "99 forbidden\n";
+      case -2: return "-2 report_format_not_found\n";
+      case -3: return "-3 filter_not_found\n";
+      case -4: return "-4 credential_not_found\n";
+      case -5: return "-5 delivery_failed\n";
+      default: return "-1 internal\n";
+    }
+}
+
+static const char *
 turbovas_control_credential_create_response
   (int result, const char *uuid,
    char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
@@ -2876,6 +2918,26 @@ turbovas_control_create_alert_start_task (
 }
 
 static int
+turbovas_control_test_alert (const char *operator_uuid, const char *alert_uuid)
+{
+  gchar *script_message = NULL;
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  result = manage_test_alert (alert_uuid, &script_message);
+  if (result == 0)
+    log_event ("alert", "Alert", alert_uuid, "tested");
+  else
+    log_event_fail ("alert", "Alert", alert_uuid, "tested");
+
+  turbovas_control_secure_free (script_message);
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
+static int
 turbovas_control_create_alert_syslog (
   const char *operator_uuid,
   const turbovas_control_alert_syslog_create_request_t *request,
@@ -3244,6 +3306,7 @@ turbovas_control_serve_client (int client_socket)
   char request[TURBOVAS_CONTROL_MAX_REQUEST_BYTES + 1];
   char operator_uuid[37];
   char expected_snapshot_digest[65];
+  char alert_uuid[37];
   char created_uuid[37];
   char config_uuid[37];
   char schedule_uuid[37];
@@ -3426,6 +3489,17 @@ turbovas_control_serve_client (int client_socket)
                     == 0)
         result_response = turbovas_control_alert_start_task_create_response (
           -2, NULL, response);
+      else if (turbovas_control_parse_alert_test_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, alert_uuid))
+        {
+          result = turbovas_control_test_alert (operator_uuid, alert_uuid);
+          result_response = turbovas_control_alert_test_response (result);
+        }
+      else if (request_len >= TURBOVAS_CONTROL_ALERT_TEST_COMMAND_LENGTH
+               && memcmp (request, TURBOVAS_CONTROL_ALERT_TEST_COMMAND,
+                          TURBOVAS_CONTROL_ALERT_TEST_COMMAND_LENGTH) == 0)
+        result_response = "-2 malformed\n";
       else if (turbovas_control_parse_alert_syslog_create_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, &syslog_alert_request))
@@ -3541,6 +3615,10 @@ turbovas_control_serve_client (int client_socket)
                 == 0)
     result_response =
       turbovas_control_alert_start_task_create_response (-2, NULL, response);
+  else if (request_len >= TURBOVAS_CONTROL_ALERT_TEST_COMMAND_LENGTH
+           && memcmp (request, TURBOVAS_CONTROL_ALERT_TEST_COMMAND,
+                      TURBOVAS_CONTROL_ALERT_TEST_COMMAND_LENGTH) == 0)
+    result_response = "-2 malformed\n";
   else if (request_len >= TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND_LENGTH
            && memcmp (request, TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND,
                       TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND_LENGTH)
@@ -3578,6 +3656,7 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_alert_start_task_create_request_clear (
     &start_task_alert_request);
   turbovas_control_alert_scp_create_request_clear (&scp_alert_request);
+  turbovas_control_secure_clear (alert_uuid, sizeof (alert_uuid));
   turbovas_control_alert_syslog_create_request_clear (&syslog_alert_request);
   turbovas_control_alert_snmp_create_request_clear (&snmp_alert_request);
   turbovas_control_tag_create_request_clear (&tag_create_request);

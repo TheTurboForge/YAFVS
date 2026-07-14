@@ -10,6 +10,7 @@ use axum::{
 
 use crate::{
     alert_payloads::AlertAssetItem,
+    alert_test::test_alert,
     alert_write_validation::{AlertCloneRequest, AlertCreateRequest, AlertPatchRequest},
     alert_writes::{
         clone_alert, create_alert, delete_alert, parse_alert_create_payload, patch_alert,
@@ -51,6 +52,16 @@ pub(crate) async fn browser_proxy_create_alert(
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     let request = parse_alert_create_payload(payload)?;
     create_alert(State(state), Some(Extension(operator)), Ok(Json(request))).await
+}
+
+pub(crate) async fn browser_proxy_test_alert(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(alert_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    test_alert(State(state), Path(alert_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_restore_override(

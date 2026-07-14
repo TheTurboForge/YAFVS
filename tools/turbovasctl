@@ -670,6 +670,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "alert-email-smb-syslog-snmp-scp-start-task-create",
         "alert-test-actions",
         "alert-trash-move",
+        "authentication-provider-settings-read",
         "cert-bund-advisory-catalog-detail-read",
         "cert-bund-advisory-list-read",
         "cert-bund-advisory-metadata-export-read",
@@ -696,6 +697,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "host-identifier-delete",
         "host-manual-create",
         "host-operating-system-delete",
+        "ldap-authentication-provider-settings-write",
         "none",
         "nvt-catalog-detail-read",
         "nvt-catalog-list-read",
@@ -736,6 +738,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "raw-report-port-evidence-read",
         "raw-report-result-evidence-read",
         "raw-report-tls-certificate-evidence-read",
+        "radius-authentication-provider-settings-write",
         "result-detail-metadata-tags-and-overrides-read",
         "result-metadata-export-read",
         "report-format-metadata-detail-read",
@@ -957,6 +960,9 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("put", "/users/current/settings/{setting_id}"): "direct-write",
     ("put", "/users/current/timezone"): "direct-write",
     ("post", "/users/current/password"): "browser-write",
+    ("get", "/authentication-settings"): "direct-read",
+    ("put", "/authentication-settings/ldap"): "direct-write",
+    ("put", "/authentication-settings/radius"): "direct-write",
     ("get", "/users/{user_id}"): "direct-read",
     ("get", "/user-management/users"): "direct-read",
     ("post", "/user-management/users"): "direct-write",
@@ -1178,6 +1184,28 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-operator-identity": "proxied-session-operator",
         "x-turbovas-owner-semantics": "gvmd-authoritative-operator-authorization",
         "x-turbovas-replaces": "user-current-password-change",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "account-auth-control",
+    },
+    ("get", "/authentication-settings"): {
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-operator-identity": "resolved-request-operator",
+        "x-turbovas-owner-semantics": "gvmd-authoritative-operator-authorization",
+        "x-turbovas-replaces": "authentication-provider-settings-read",
+    },
+    ("put", "/authentication-settings/ldap"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "gvmd-authoritative-operator-authorization",
+        "x-turbovas-replaces": "ldap-authentication-provider-settings-write",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "account-auth-control",
+    },
+    ("put", "/authentication-settings/radius"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "gvmd-authoritative-operator-authorization",
+        "x-turbovas-replaces": "radius-authentication-provider-settings-write",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "account-auth-control",
     },
@@ -2225,6 +2253,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/users",
         "/api/v1/users/current/settings",
         "/api/v1/users/current/settings/{}",
+        "/api/v1/authentication-settings",
         "/api/v1/users/{}",
         "/api/v1/filters",
         "/api/v1/filters/{}",
@@ -8395,6 +8424,8 @@ def native_tooling_category(relative_path: str) -> tuple[str, str] | None:
         return "compatibility_bridge", "Shared GSA command base remains compatibility plumbing until the last inherited command owner is removed; it is not an independent product workflow."
     if relative_path == "components/gsa/src/gmp/commands/overrides.js":
         return "compatibility_bridge", "GSA Override command adapter delegates retained create, read, modify, clone, export, and delete behavior to the native API; it has no inherited command execution."
+    if relative_path == "components/gsa/src/gmp/commands/user.ts":
+        return "compatibility_bridge", "The fully native User command adapter retains the inherited gmp namespace and logger name only; it executes no GMP command."
     if relative_path.startswith("components/gsa/src/gmp/commands/") and "/__tests__/" not in relative_path:
         return "product_workflow", "GSA product workflow still reads or writes through an inherited GMP command owner."
     if relative_path.startswith("components/gsa/src/gmp/"):
@@ -11316,6 +11347,26 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 ],
             },
             {
+                "endpoint": "/api/v1/authentication-settings",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["GSA LDAP/RADIUS settings reads", "direct native authentication settings automation"],
+            },
+            {
+                "method": "put",
+                "endpoint": "/api/v1/authentication-settings/ldap",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["GSA LDAP provider settings save", "direct native LDAP settings replacement"],
+            },
+            {
+                "method": "put",
+                "endpoint": "/api/v1/authentication-settings/radius",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["GSA RADIUS provider settings save", "direct native RADIUS settings replacement"],
+            },
+            {
                 "endpoint": "/api/v1/users/current/settings",
                 "status": "implemented_internal_browser_proxied_and_scriptable_read",
                 "direct_access": "scriptable_read",
@@ -14075,6 +14126,20 @@ def bounded_percent(value: float) -> float:
     return round(max(0.0, min(100.0, value)), 1)
 
 
+def legacy_component_source_teardown(repo_root: Path) -> dict[str, Any]:
+    component_states = {
+        name: "present" if (repo_root / "components" / name).exists() else "absent"
+        for name in ("python-gvm", "gvm-tools")
+    }
+    absent_count = sum(state == "absent" for state in component_states.values())
+    percent = bounded_percent(100.0 * absent_count / len(component_states))
+    return {
+        "percent": percent,
+        "status": "complete" if absent_count == len(component_states) else "in_progress",
+        "components": component_states,
+    }
+
+
 def native_api_replacement_dashboard_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     compact = dict(result)
     details = result.get("details") if isinstance(result.get("details"), dict) else {}
@@ -14156,17 +14221,31 @@ def command_native_api_replacement_dashboard(repo_root: Path, status_only: bool 
         + inherited_tail_burndown_percent * weights["inherited_tail_burndown_percent"] / 100.0
         + tooling_retirement_percent * weights["tooling_retirement_percent"] / 100.0
     )
-    legacy_helper_weights = {
-        "native_api_weighted_estimate": 35,
-        "inherited_tail_burndown_percent": 25,
-        "direct_legacy_dependency_burndown_percent": 25,
+    stage1_weights = {
+        "direct_legacy_dependency_burndown_percent": 85,
         "gvm_tools_script_removal_percent": 15,
     }
+    stage1_replacement_percent = bounded_percent(
+        direct_legacy_dependency_burndown_percent
+        * stage1_weights["direct_legacy_dependency_burndown_percent"]
+        / 100.0
+        + gvm_tools_script_removal_percent
+        * stage1_weights["gvm_tools_script_removal_percent"]
+        / 100.0
+    )
+    stage1_complete = direct_legacy_blocker_count == 0 and removal_total == 0
+    source_teardown = legacy_component_source_teardown(repo_root)
+    full_removal_weights = {
+        "stage1_replacement_percent": 90,
+        "stage2_component_source_teardown_percent": 10,
+    }
     legacy_helper_removal_readiness_percent = bounded_percent(
-        headline * legacy_helper_weights["native_api_weighted_estimate"] / 100.0
-        + inherited_tail_burndown_percent * legacy_helper_weights["inherited_tail_burndown_percent"] / 100.0
-        + direct_legacy_dependency_burndown_percent * legacy_helper_weights["direct_legacy_dependency_burndown_percent"] / 100.0
-        + gvm_tools_script_removal_percent * legacy_helper_weights["gvm_tools_script_removal_percent"] / 100.0
+        stage1_replacement_percent
+        * full_removal_weights["stage1_replacement_percent"]
+        / 100.0
+        + source_teardown["percent"]
+        * full_removal_weights["stage2_component_source_teardown_percent"]
+        / 100.0
     )
     remaining_tail_buckets = remaining_surface.get("bucket_counts") if isinstance(remaining_surface.get("bucket_counts"), dict) else {}
     top_residuals = remaining_surface.get("top_residuals") if isinstance(remaining_surface.get("top_residuals"), list) else []
@@ -14184,6 +14263,9 @@ def command_native_api_replacement_dashboard(repo_root: Path, status_only: bool 
         warnings.append(f"{inherited_tail_count} native API row(s) still declare inherited owner tails.")
     if direct_legacy_blocker_count:
         warnings.append(f"{direct_legacy_blocker_count} direct python-gvm/gvm-tools removal blocker(s) remain.")
+    if source_teardown["status"] != "complete":
+        present = [name for name, state in source_teardown["components"].items() if state == "present"]
+        warnings.append(f"Inherited component source still present: {', '.join(present)}.")
     if safe_removal_count:
         warnings.append(f"{safe_removal_count} native-covered inherited tooling path(s) look safe to remove.")
     if tooling_result.get("status") != "pass":
@@ -14208,11 +14290,15 @@ def command_native_api_replacement_dashboard(repo_root: Path, status_only: bool 
         "legacy_helper_removal_readiness": {
             "kind": "weighted_estimate",
             "legacy_helper_removal_readiness_percent": legacy_helper_removal_readiness_percent,
-            "definition": "Estimate only: progress toward deleting python-gvm and gvm-tools as required TurboVAS dependencies. This is intentionally separate from native API endpoint replacement progress.",
-            "weights": legacy_helper_weights,
+            "definition": "Estimate only: Stage 1 replaces required product/tooling dependencies; Stage 2 removes or quarantines inherited python-gvm and gvm-tools source. Unrelated native API owner tails do not reduce this metric.",
+            "weights": full_removal_weights,
             "components": {
-                "native_api_weighted_estimate": headline,
-                "inherited_tail_burndown_percent": inherited_tail_burndown_percent,
+                "stage1_replacement_percent": stage1_replacement_percent,
+                "stage1_complete": stage1_complete,
+                "stage1_weights": stage1_weights,
+                "stage2_component_source_teardown_percent": source_teardown["percent"],
+                "stage2_component_source_status": source_teardown["status"],
+                "component_sources": source_teardown["components"],
                 "direct_legacy_dependency_burndown_percent": direct_legacy_dependency_burndown_percent,
                 "gvm_tools_script_removal_percent": gvm_tools_script_removal_percent,
             },
@@ -14249,7 +14335,7 @@ def command_native_api_replacement_dashboard(repo_root: Path, status_only: bool 
     findings = [
         finding("pass", "native-api-replacement-dashboard.estimate", f"Native API replacement weighted estimate is {headline}%.", details={"headline_replacement_percent": headline}),
         finding("warn" if direct_legacy_blocker_count else "pass", "native-api-replacement-dashboard.legacy-helper-removal", f"Legacy helper removal readiness estimate is {legacy_helper_removal_readiness_percent}%.", details=details["legacy_helper_removal_readiness"]),
-        finding("warn" if warnings else "pass", "native-api-replacement-dashboard.remaining", "Inherited owner tails or removable tooling candidates remain." if warnings else "No dashboard warnings found.", details={"warnings": warnings, "remaining_tail_buckets": remaining_tail_buckets}),
+        finding("warn" if warnings else "pass", "native-api-replacement-dashboard.remaining", "API owner tails or helper source teardown work remains." if warnings else "No dashboard warnings found.", details={"warnings": warnings, "remaining_tail_buckets": remaining_tail_buckets}),
     ]
     result = make_result("native-api-replacement-dashboard", repo_root, f"Native API replacement weighted estimate is {headline}%; legacy helper removal readiness estimate is {legacy_helper_removal_readiness_percent}%.", findings)
     result["details"] = details

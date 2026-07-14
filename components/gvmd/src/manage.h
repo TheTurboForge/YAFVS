@@ -2416,11 +2416,60 @@ vuln_iterator_qod (iterator_t*);
 int
 vuln_count (const get_data_t*);
 
+#define MANAGE_AUTH_SETTINGS_HOST_MAX_BYTES 1024
+#define MANAGE_AUTH_SETTINGS_AUTH_DN_MAX_BYTES 4096
+#define MANAGE_AUTH_SETTINGS_CERT_MAX_BYTES 32768
+#define MANAGE_AUTH_SETTINGS_CERT_FINGERPRINT_MAX_BYTES 256
+#define MANAGE_AUTH_SETTINGS_CERT_ISSUER_MAX_BYTES 4096
+#define MANAGE_AUTH_SETTINGS_CERT_TIME_MAX_BYTES 128
+#define MANAGE_AUTH_SETTINGS_CERT_TIME_STATUS_MAX_BYTES 128
+#define MANAGE_AUTH_SETTINGS_RADIUS_SECRET_MAX_BYTES 4096
+
+typedef enum
+{
+  MANAGE_AUTH_SETTINGS_OK = 0,
+  MANAGE_AUTH_SETTINGS_INVALID_AUTH_DN = 1,
+  MANAGE_AUTH_SETTINGS_INVALID_CERTIFICATE = 2,
+  MANAGE_AUTH_SETTINGS_PROVIDER_UNAVAILABLE = 3,
+  MANAGE_AUTH_SETTINGS_ENCRYPTION_FAILED = 4,
+  MANAGE_AUTH_SETTINGS_INTERNAL_ERROR = -1
+} manage_auth_settings_result_t;
+
+typedef struct
+{
+  int ldap_available;
+  int ldap_enabled;
+  gchar *ldap_host;
+  gchar *ldap_authdn;
+  int ldap_allow_plaintext;
+  int ldap_ldaps_only;
+  int ldap_cert_present;
+  gchar *ldap_cert_sha256;
+  gchar *ldap_cert_issuer;
+  gchar *ldap_cert_activation;
+  gchar *ldap_cert_expiration;
+  gchar *ldap_cert_time_status;
+  int radius_available;
+  int radius_enabled;
+  gchar *radius_host;
+  int radius_secret_configured;
+} manage_auth_settings_t;
+
+void
+manage_auth_settings_clear (manage_auth_settings_t *);
+
+manage_auth_settings_result_t
+manage_auth_settings_read (manage_auth_settings_t *);
+
+manage_auth_settings_result_t
+manage_auth_settings_write_ldap (int, const gchar *, const gchar *, int, int,
+                                 const gchar *);
+
+manage_auth_settings_result_t
+manage_auth_settings_write_radius (int, const gchar *, const gchar *);
+
 void
 manage_get_ldap_info (int *, gchar **, gchar **, int *, gchar **, int *);
-
-int
-manage_set_ldap_info (int, gchar *, gchar *, int, gchar *, int);
 
 char *
 get_radius_key (gboolean *);
@@ -2430,9 +2479,6 @@ set_radius_key (const char*, gboolean);
 
 void
 manage_get_radius_info (int *, char **, char **);
-
-void
-manage_set_radius_info (int, gchar *, gchar *);
 
 
 

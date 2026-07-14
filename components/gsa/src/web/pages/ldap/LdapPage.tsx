@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -29,6 +30,7 @@ interface ToolBarIconsProps {
 }
 
 interface LdapSettings {
+  allowPlaintext?: boolean;
   authdn?: string;
   certificateInfo?: CertificateInfo;
   enabled?: boolean;
@@ -67,6 +69,7 @@ const LdapAuthentication = () => {
   >();
   const [ldapEnabled, setLdapEnabled] = useState(false);
   const [ldapHost, setLdapHost] = useState('');
+  const [allowPlaintext, setAllowPlaintext] = useState(false);
   const [ldapsOnly, setLdapsOnly] = useState(false);
 
   const loadLdapAuthSettings = useCallback(async () => {
@@ -81,6 +84,7 @@ const LdapAuthentication = () => {
       setHasLdapSupport(hasLdapSupport);
       setInitial(false);
       setAuthdn(ldapSettings.authdn || '');
+      setAllowPlaintext(ldapSettings.allowPlaintext || false);
       setCertificateInfo(ldapSettings.certificateInfo);
       setLdapEnabled(ldapSettings.enabled || false);
       setLdapHost(ldapSettings.ldaphost || '');
@@ -97,13 +101,23 @@ const LdapAuthentication = () => {
     ldapHost,
     ldapsOnly,
   }: LdapDialogState) => {
-    await gmp.auth.saveLdap({
-      authdn,
-      certificate,
-      ldapEnabled,
-      ldapHost,
-      ldapsOnly,
-    });
+    try {
+      await gmp.auth.saveLdap({
+        authdn,
+        allowPlaintext,
+        certificate,
+        ldapEnabled,
+        ldapHost,
+        ldapsOnly,
+      });
+    } catch (error) {
+      try {
+        await loadLdapAuthSettings();
+      } catch {
+        // Keep the original mutation error when a defensive reload also fails.
+      }
+      throw error;
+    }
     await loadLdapAuthSettings();
     closeDialog();
   };
@@ -171,8 +185,8 @@ const LdapAuthentication = () => {
                     </TableData>
                   </TableRow>
                   <TableRow>
-                    <TableData>{_('MD5 Fingerprint')}</TableData>
-                    <TableData>{certificateInfo.md5Fingerprint}</TableData>
+                    <TableData>{_('SHA-256 Fingerprint')}</TableData>
+                    <TableData>{certificateInfo.sha256Fingerprint}</TableData>
                   </TableRow>
                   <TableRow>
                     <TableData>{_('Issued by')}</TableData>

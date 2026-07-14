@@ -95,10 +95,29 @@ pub(crate) async fn request_gvmd_control_response_bytes(
     control_secret: &str,
     command: &[u8],
 ) -> Result<Vec<u8>, ControlSocketError> {
+    request_gvmd_control_response_bytes_with_limit(
+        socket_path,
+        control_secret,
+        command,
+        MAX_CONTROL_RESPONSE_BYTES,
+    )
+    .await
+}
+
+pub(crate) async fn request_gvmd_control_response_bytes_with_limit(
+    socket_path: &str,
+    control_secret: &str,
+    command: &[u8],
+    max_response_bytes: usize,
+) -> Result<Vec<u8>, ControlSocketError> {
     if !control_secret_is_acceptable(control_secret) {
         return Err(ControlSocketError::Configuration);
     }
-    if command.is_empty() || command.len() >= MAX_CONTROL_REQUEST_BYTES {
+    if command.is_empty()
+        || command.len() >= MAX_CONTROL_REQUEST_BYTES
+        || max_response_bytes == 0
+        || max_response_bytes >= MAX_CONTROL_REQUEST_BYTES
+    {
         return Err(ControlSocketError::Failure);
     }
     let mut stream = timeout(CONTROL_SOCKET_IO_TIMEOUT, UnixStream::connect(socket_path))
@@ -111,7 +130,7 @@ pub(crate) async fn request_gvmd_control_response_bytes(
         .map_err(|_| ControlSocketError::OutcomeIndeterminate)?;
     timeout(
         CONTROL_RESPONSE_TIMEOUT,
-        read_gvmd_control_response(&mut stream),
+        read_gvmd_control_response(&mut stream, max_response_bytes),
     )
     .await
     .map_err(|_| ControlSocketError::OutcomeIndeterminate)?
@@ -120,6 +139,7 @@ pub(crate) async fn request_gvmd_control_response_bytes(
 
 async fn read_gvmd_control_response(
     stream: &mut UnixStream,
+    max_response_bytes: usize,
 ) -> Result<Vec<u8>, ControlSocketError> {
     let mut response = Vec::with_capacity(32);
     let mut chunk = [0_u8; 64];
@@ -132,7 +152,7 @@ async fn read_gvmd_control_response(
         if count == 0 {
             break;
         }
-        if response.len() + count > MAX_CONTROL_RESPONSE_BYTES || newline_seen {
+        if response.len() + count > max_response_bytes || newline_seen {
             return Err(ControlSocketError::Failure);
         }
         response.extend_from_slice(&chunk[..count]);

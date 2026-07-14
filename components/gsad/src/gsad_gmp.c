@@ -9369,58 +9369,8 @@ get_user (gvm_connection_t *connection, gsad_credentials_t *credentials,
           params_t *params, const char *extra_xml,
           gsad_command_response_data_t *response_data)
 {
-  gchar *html;
-  GString *extra;
-
-  extra = g_string_new ("");
-  if (extra_xml)
-    g_string_append (extra, extra_xml);
-
-  gchar *response;
-  entity_t entity;
-
-  response = NULL;
-  entity = NULL;
-  switch (gmp (connection, credentials, &response, &entity, response_data,
-               "<describe_auth/>"))
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred getting the auth list. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred getting the auth list. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred getting the auth list. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  g_string_append (extra, response);
-
-  free_entity (entity);
-  g_free (response);
-
-  html = get_one (connection, "user", credentials, params, extra->str, NULL,
+  return get_one (connection, "user", credentials, params, extra_xml, NULL,
                   response_data);
-  g_string_free (extra, TRUE);
-  return html;
 }
 
 /**
@@ -9575,68 +9525,6 @@ get_vulns_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
 {
   return get_many (connection, "vulns", credentials, params, NULL,
                    response_data);
-}
-
-char *
-auth_settings_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  GString *xml;
-  gchar *buf;
-  const char *name;
-
-  name = params_value (params, "name");
-
-  CHECK_VARIABLE_INVALID (name, "Auth settings");
-
-  xml = g_string_new ("");
-  buf = g_markup_printf_escaped ("<auth_settings name=\"%s\">", name);
-  g_string_append (xml, buf);
-  g_free (buf);
-
-  gchar *response = NULL;
-  entity_t entity = NULL;
-
-  switch (gmp (connection, credentials, &response, &entity, response_data,
-               "<describe_auth/>"))
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred getting the auth list. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred getting the auth list. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred getting the auth list. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  g_string_append (xml, response);
-  free_entity (entity);
-  g_free (response);
-
-  g_string_append (xml, "</auth_settings>");
-
-  return envelope_gmp (connection, credentials, params,
-                       g_string_free (xml, FALSE), response_data);
 }
 
 /**
@@ -9824,147 +9712,6 @@ export_users_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
                   params_t *params, gsad_command_response_data_t *response_data)
 {
   return export_many (connection, "user", credentials, params, response_data);
-}
-
-/**
- * @brief Generate AUTH_CONF_SETTING element for save_auth_gmp.
- */
-#define AUTH_CONF_SETTING(key, value) \
-  "<auth_conf_setting>"               \
-  "<key>" key "</key>"                \
-  "<value>" value "</value>"          \
-  "</auth_conf_setting>"
-
-/**
- * @brief Save authentication settings.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return XML enveloped list of users and configuration.
- */
-char *
-save_auth_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-               params_t *params, gsad_command_response_data_t *response_data)
-{
-  int ret;
-  entity_t entity = NULL;
-  char *html, *truefalse;
-  const char *method;
-
-  if (params_value (params, "enable")
-      && (strcmp (params_value (params, "enable"), "1") == 0))
-    truefalse = "true";
-  else
-    truefalse = "false";
-
-  method = params_value (params, "group");
-  CHECK_VARIABLE_INVALID (method, "Save Authentication");
-  if (!strcmp (method, "method:ldap_connect"))
-    {
-      const char *ldaphost, *authdn, *certificate, *ldaps_only;
-      ldaphost = params_value (params, "ldaphost");
-      authdn = params_value (params, "authdn");
-      certificate = params_value (params, "certificate");
-
-      if (params_value (params, "ldaps_only")
-          && (strcmp (params_value (params, "ldaps_only"), "1") == 0))
-        ldaps_only = "true";
-      else
-        ldaps_only = "false";
-
-      CHECK_VARIABLE_INVALID (ldaphost, "Save Authentication");
-      CHECK_VARIABLE_INVALID (authdn, "Save Authentication");
-      if (params_given (params, "certificate") && strcmp (certificate, ""))
-        {
-          CHECK_VARIABLE_INVALID (certificate, "Save Authentication");
-          /** @warning authdn shall contain a single %s, handle with care. */
-          ret =
-            gmpf (connection, credentials, NULL, &entity, response_data,
-                  "<modify_auth>"
-                  "<group name=\"%s\">" AUTH_CONF_SETTING ("enable", "%s")
-                    AUTH_CONF_SETTING ("ldaphost", "%s")
-                      AUTH_CONF_SETTING ("authdn", "%s")
-                        AUTH_CONF_SETTING ("ldaps-only", "%s")
-                          AUTH_CONF_SETTING ("cacert", "%s") "</group>"
-                                                             "</modify_auth>",
-                  method, truefalse, ldaphost, authdn, ldaps_only, certificate);
-        }
-      else
-        /** @warning authdn shall contain a single %s, handle with care. */
-        ret =
-          gmpf (connection, credentials, NULL, &entity, response_data,
-                "<modify_auth>"
-                "<group name=\"%s\">" AUTH_CONF_SETTING ("enable", "%s")
-                  AUTH_CONF_SETTING ("ldaphost", "%s")
-                    AUTH_CONF_SETTING ("authdn", "%s")
-                      AUTH_CONF_SETTING ("ldaps-only", "%s") "</group>"
-                                                             "</modify_auth>",
-                method, truefalse, ldaphost, authdn, ldaps_only);
-    }
-  else if (!strcmp (method, "method:radius_connect"))
-    {
-      const char *radiushost, *radiuskey;
-      radiushost = params_value (params, "radiushost");
-      radiuskey = params_value (params, "radiuskey");
-
-      CHECK_VARIABLE_INVALID (radiushost, "Save Authentication");
-      CHECK_VARIABLE_INVALID (radiuskey, "Save Authentication");
-      /** @warning authdn shall contain a single %s, handle with care. */
-      ret = gmpf (connection, credentials, NULL, &entity, response_data,
-                  "<modify_auth>"
-                  "<group name=\"%s\">" AUTH_CONF_SETTING ("enable", "%s")
-                    AUTH_CONF_SETTING ("radiushost", "%s")
-                      AUTH_CONF_SETTING ("radiuskey", "%s") "</group>"
-                                                            "</modify_auth>",
-                  method, truefalse, radiushost, radiuskey);
-    }
-  else
-    {
-      return message_invalid (connection, credentials, params, response_data,
-                              "Given method was invalid", "Save auth");
-    }
-
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving the auth settings. "
-        "The settings were not saved. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving the auth settings. "
-        "It is unclear whether the settings have been saved or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving the auth settings. "
-        "It is unclear whether the settings have been saved or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  html =
-    response_from_entity (connection, credentials, params, entity,
-                          "Save Authentication Configuration", response_data);
-  free_entity (entity);
-  return html;
 }
 
 /**
@@ -11965,7 +11712,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   if (0)
     {
     }
-  ELSE (auth_settings)
   ELSE (edit_config_family)
   ELSE (edit_config_family_all)
   ELSE (export_alert)
@@ -12308,7 +12054,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (renew_session)
   ELSE (restore)
   ELSE (save_asset)
-  ELSE (save_auth)
   ELSE (save_setting)
   ELSE (save_config)
   ELSE (save_config_family)

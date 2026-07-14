@@ -32,6 +32,20 @@ pub(crate) enum ApiError {
     UnsupportedAuthenticationMethod,
     #[error("new password was rejected")]
     NewPasswordRejected,
+    #[error("LDAP authentication DN is invalid")]
+    InvalidAuthDn,
+    #[error("LDAP CA certificate is invalid")]
+    InvalidCertificate,
+    #[error("authentication provider is unavailable")]
+    AuthenticationProviderUnavailable,
+    #[error("authentication settings encryption failed")]
+    AuthenticationSettingsEncryptionFailed,
+    #[error("permission denied")]
+    AuthenticationSettingsPermissionDenied,
+    #[error("invalid request")]
+    AuthenticationSettingsInvalidRequest,
+    #[error("authentication settings control failed")]
+    AuthenticationSettingsInternalError,
     #[error("method not allowed")]
     MethodNotAllowed,
     #[error("request too large")]
@@ -72,6 +86,13 @@ impl ApiError {
             Self::OldPasswordInvalid => StatusCode::FORBIDDEN,
             Self::UnsupportedAuthenticationMethod => StatusCode::CONFLICT,
             Self::NewPasswordRejected => StatusCode::BAD_REQUEST,
+            Self::InvalidAuthDn => StatusCode::BAD_REQUEST,
+            Self::InvalidCertificate => StatusCode::BAD_REQUEST,
+            Self::AuthenticationProviderUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+            Self::AuthenticationSettingsEncryptionFailed => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::AuthenticationSettingsPermissionDenied => StatusCode::FORBIDDEN,
+            Self::AuthenticationSettingsInvalidRequest => StatusCode::BAD_REQUEST,
+            Self::AuthenticationSettingsInternalError => StatusCode::BAD_GATEWAY,
             Self::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
             Self::RequestTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::ReportPdfTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
@@ -96,6 +117,13 @@ impl ApiError {
             Self::OldPasswordInvalid => "old_password_invalid",
             Self::UnsupportedAuthenticationMethod => "unsupported_auth_method",
             Self::NewPasswordRejected => "new_password_rejected",
+            Self::InvalidAuthDn => "invalid_auth_dn",
+            Self::InvalidCertificate => "invalid_certificate",
+            Self::AuthenticationProviderUnavailable => "provider_unavailable",
+            Self::AuthenticationSettingsEncryptionFailed => "encryption_failed",
+            Self::AuthenticationSettingsPermissionDenied => "permission_denied",
+            Self::AuthenticationSettingsInvalidRequest => "invalid_request",
+            Self::AuthenticationSettingsInternalError => "internal_error",
             Self::MethodNotAllowed => "method_not_allowed",
             Self::RequestTooLarge => "request_too_large",
             Self::ReportPdfTooLarge => "report_pdf_too_large",
@@ -125,6 +153,24 @@ impl ApiError {
                 "This account authentication method does not support password changes.".to_string()
             }
             Self::NewPasswordRejected => "The new password was rejected.".to_string(),
+            Self::InvalidAuthDn => "The LDAP authentication DN is invalid.".to_string(),
+            Self::InvalidCertificate => "The LDAP CA certificate is invalid.".to_string(),
+            Self::AuthenticationProviderUnavailable => {
+                "The authentication provider is unavailable.".to_string()
+            }
+            Self::AuthenticationSettingsEncryptionFailed => {
+                "The authentication settings could not be encrypted.".to_string()
+            }
+            Self::AuthenticationSettingsPermissionDenied => {
+                "The authenticated operator is not allowed to change authentication settings."
+                    .to_string()
+            }
+            Self::AuthenticationSettingsInvalidRequest => {
+                "The authentication settings request is invalid.".to_string()
+            }
+            Self::AuthenticationSettingsInternalError => {
+                "The authentication settings control service failed.".to_string()
+            }
             Self::MethodNotAllowed => {
                 "Direct native API access does not currently allow this method/path.".to_string()
             }
@@ -218,6 +264,55 @@ mod tests {
                 "new_password_rejected",
                 "new password was rejected",
                 &["secret", "token", "credential", "authorization"][..],
+            ),
+            (
+                ApiError::InvalidAuthDn,
+                StatusCode::BAD_REQUEST,
+                "invalid_auth_dn",
+                "authentication DN is invalid",
+                &["secret", "token", "password", "credential"][..],
+            ),
+            (
+                ApiError::InvalidCertificate,
+                StatusCode::BAD_REQUEST,
+                "invalid_certificate",
+                "CA certificate is invalid",
+                &["secret", "token", "password", "credential"][..],
+            ),
+            (
+                ApiError::AuthenticationProviderUnavailable,
+                StatusCode::SERVICE_UNAVAILABLE,
+                "provider_unavailable",
+                "provider is unavailable",
+                &["secret", "token", "password", "credential"][..],
+            ),
+            (
+                ApiError::AuthenticationSettingsEncryptionFailed,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "encryption_failed",
+                "could not be encrypted",
+                &["secret", "token", "password", "credential"][..],
+            ),
+            (
+                ApiError::AuthenticationSettingsPermissionDenied,
+                StatusCode::FORBIDDEN,
+                "permission_denied",
+                "not allowed",
+                &["secret", "token", "password", "credential"][..],
+            ),
+            (
+                ApiError::AuthenticationSettingsInvalidRequest,
+                StatusCode::BAD_REQUEST,
+                "invalid_request",
+                "request is invalid",
+                &["secret", "token", "password", "credential"][..],
+            ),
+            (
+                ApiError::AuthenticationSettingsInternalError,
+                StatusCode::BAD_GATEWAY,
+                "internal_error",
+                "control service failed",
+                &["socket", "secret", "token", "password", "credential"][..],
             ),
             (
                 ApiError::MethodNotAllowed,

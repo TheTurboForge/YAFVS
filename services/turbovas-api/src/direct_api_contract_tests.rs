@@ -30,6 +30,7 @@ struct NativeWriteRouteContract {
 }
 
 const APPROVED_NATIVE_DIRECT_READ_ROUTES: &[(&str, &str)] = &[
+    ("get", "/api/v1/authentication-settings"),
     ("get", "/api/v1/alerts/:alert_id/definition"),
     ("get", "/api/v1/user-management/users"),
     ("get", "/api/v1/user-management/users/:user_id"),
@@ -38,6 +39,16 @@ const APPROVED_NATIVE_DIRECT_READ_ROUTES: &[(&str, &str)] = &[
 ];
 
 const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
+    NativeWriteRouteContract {
+        method: "put",
+        path: "/api/v1/authentication-settings/ldap",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
+        method: "put",
+        path: "/api/v1/authentication-settings/radius",
+        safety_contract: "write-control-v1",
+    },
     NativeWriteRouteContract {
         method: "post",
         path: "/api/v1/user-management/users",

@@ -14,6 +14,10 @@ use crate::{
     alert_test::test_alert,
     alert_writes::{clone_alert, create_alert, delete_alert, patch_alert},
     app_state::AppState,
+    authentication_settings::{
+        MAX_AUTHENTICATION_SETTINGS_BODY_BYTES, authentication_settings,
+        update_ldap_authentication_settings, update_radius_authentication_settings,
+    },
     credential_writes::{create_credential, patch_credential},
     filter_writes::{
         clone_filter, create_filter, delete_filter, hard_delete_filter, patch_filter,
@@ -76,6 +80,10 @@ pub(crate) fn direct_native_api_router(
 ) -> Router<AppState> {
     let router = router
         .route(
+            "/api/v1/authentication-settings",
+            get(authentication_settings),
+        )
+        .route(
             "/api/v1/alerts/:alert_id/definition",
             get(get_alert_definition),
         )
@@ -91,6 +99,18 @@ pub(crate) fn direct_native_api_router(
         );
     let router = if write_control_enabled {
         router
+            .route(
+                "/api/v1/authentication-settings/ldap",
+                put(update_ldap_authentication_settings).layer(DefaultBodyLimit::max(
+                    MAX_AUTHENTICATION_SETTINGS_BODY_BYTES,
+                )),
+            )
+            .route(
+                "/api/v1/authentication-settings/radius",
+                put(update_radius_authentication_settings).layer(DefaultBodyLimit::max(
+                    MAX_AUTHENTICATION_SETTINGS_BODY_BYTES,
+                )),
+            )
             .route("/api/v1/scopes", post(create_scope))
             .route("/api/v1/scopes/:scope_id", patch(patch_scope))
             .route("/api/v1/scopes/:scope_id", delete(delete_scope))

@@ -157,29 +157,6 @@ class GMPv224(GvmProtocol[T]):
 
         return self._transform(response)
 
-    def describe_auth(self) -> T:
-        """Describe authentication methods
-
-        Returns a list of all used authentication methods if such a list is
-        available.
-        """
-        return self._send_request_and_transform_response(
-            Authentication.describe_auth()
-        )
-
-    def modify_auth(
-        self, group_name: str, auth_conf_settings: dict[str, str]
-    ) -> T:
-        """Modifies an existing auth.
-
-        Args:
-            group_name: Name of the group to be modified.
-            auth_conf_settings: The new auth config.
-        """
-        return self._send_request_and_transform_response(
-            Authentication.modify_auth(group_name, auth_conf_settings)
-        )
-
     def get_version(self) -> T:
         """Get the Greenbone Vulnerability Management Protocol (GMP) version
         used by the remote gvmd.

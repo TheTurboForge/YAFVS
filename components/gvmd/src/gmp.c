@@ -151,15 +151,6 @@ buffer_results_xml (GString *, iterator_t *, task_t, int, int, int,
 /* Helper functions. */
 
 /**
- * @brief A simple key/value-pair.
- */
-typedef struct
-{
-  gchar *key;                   ///< The key.
-  gchar *value;                 ///< The value.
-} auth_conf_setting_t;
-
-/**
  * @brief Check that a string represents a valid x509 Certificate.
  *
  * @param[in]  cert_str     Certificate string.
@@ -1878,76 +1869,6 @@ modify_asset_data_reset (modify_asset_data_t *data)
 }
 
 /**
- * @brief Authentication method settings.
- */
-typedef struct
-{
-  gchar *group_name;            ///< Name of the current group
-  GSList *settings;             ///< List of auth_conf_setting_t.
-} auth_group_t;
-
-/**
- * @brief Command data for the modify_auth command.
- */
-typedef struct
-{
-  gchar *key;                   ///< Key for current auth_conf_setting.
-  gchar *value;                 ///< Value for current auth_conf_setting.
-  GSList *groups;               ///< List of auth_group_t
-  GSList *curr_group_settings;  ///< Settings of currently parsed group.
-} modify_auth_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-modify_auth_data_reset (modify_auth_data_t * data)
-{
-  GSList *item, *subitem;
-
-  g_free (data->key);
-  g_free (data->value);
-
-  item = data->groups;
-  subitem = NULL;
-  while (item)
-    {
-      auth_group_t *group = (auth_group_t *) item->data;
-      g_free (group->group_name);
-      /* Free settings. */
-      subitem = group->settings;
-      while (subitem)
-        {
-          auth_conf_setting_t *kvp = (auth_conf_setting_t *) subitem->data;
-          g_free (kvp->key);
-          g_free (kvp->value);
-          g_free (kvp);
-          subitem = g_slist_next (subitem);
-        }
-      item = g_slist_next (item);
-    }
-  g_slist_free (data->groups);
-
-  if (data->curr_group_settings)
-    {
-      item = data->curr_group_settings;
-      while (item)
-        {
-          /* Free settings. */
-          auth_conf_setting_t *kvp = (auth_conf_setting_t *) item->data;
-          g_free (kvp->key);
-          g_free (kvp->value);
-          g_free (kvp);
-          item = g_slist_next (item);
-        }
-      g_slist_free (data->curr_group_settings);
-    }
-  memset (data, 0, sizeof (modify_auth_data_t));
-}
-
-/**
  * @brief Command data for the modify_credential command.
  */
 typedef struct
@@ -2636,7 +2557,6 @@ typedef union
   get_vulns_data_t get_vulns;                         ///< get_vulns
   help_data_t help;                                   ///< help
   modify_asset_data_t modify_asset;                   ///< modify_asset
-  modify_auth_data_t modify_auth;                     ///< modify_auth
   modify_config_data_t modify_config;                 ///< modify_config
   modify_credential_data_t modify_credential;         ///< modify_credential
   modify_filter_data_t modify_filter;                 ///< modify_filter
@@ -3014,12 +2934,6 @@ static modify_asset_data_t *modify_asset_data
  = &(command_data.modify_asset);
 
 /**
- * @brief Parser callback data for MODIFY_AUTH.
- */
-static modify_auth_data_t *modify_auth_data
- = &(command_data.modify_auth);
-
-/**
  * @brief Parser callback data for MODIFY_CREDENTIAL.
  */
 static modify_credential_data_t *modify_credential_data
@@ -3307,7 +3221,6 @@ typedef enum
   CLIENT_DELETE_TASK,
   CLIENT_DELETE_TLS_CERTIFICATE,
   CLIENT_DELETE_USER,
-  CLIENT_DESCRIBE_AUTH,
   CLIENT_GET_AGGREGATES,
   CLIENT_GET_AGGREGATES_DATA_COLUMN,
   CLIENT_GET_AGGREGATES_SORT,
@@ -3349,11 +3262,6 @@ typedef enum
   CLIENT_LOGOUT,
   CLIENT_MODIFY_ASSET,
   CLIENT_MODIFY_ASSET_COMMENT,
-  CLIENT_MODIFY_AUTH,
-  CLIENT_MODIFY_AUTH_GROUP,
-  CLIENT_MODIFY_AUTH_GROUP_AUTH_CONF_SETTING,
-  CLIENT_MODIFY_AUTH_GROUP_AUTH_CONF_SETTING_KEY,
-  CLIENT_MODIFY_AUTH_GROUP_AUTH_CONF_SETTING_VALUE,
   CLIENT_MODIFY_CONFIG,
   CLIENT_MODIFY_CREDENTIAL,
   CLIENT_MODIFY_CREDENTIAL_ALLOW_INSECURE,
@@ -3888,9 +3796,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &delete_user_data->inheritor_name);
             set_client_state (CLIENT_DELETE_USER);
           }
-        else if (strcasecmp ("DESCRIBE_AUTH", element_name) == 0)
-          set_client_state (CLIENT_DESCRIBE_AUTH);
-
         else if (strcasecmp ("GET_AGGREGATES", element_name) == 0)
           {
             gchar *data_column = g_strdup ("");
@@ -4518,8 +4423,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &modify_asset_data->asset_id);
             set_client_state (CLIENT_MODIFY_ASSET);
           }
-        else if (strcasecmp ("MODIFY_AUTH", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_AUTH);
         else if (strcasecmp ("MODIFY_CONFIG", element_name) == 0)
           {
             modify_config_start (gmp_parser, attribute_names,
@@ -5070,34 +4973,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             gvm_append_string (&modify_asset_data->comment, "");
             set_client_state (CLIENT_MODIFY_ASSET_COMMENT);
           }
-        ELSE_READ_OVER;
-
-      case CLIENT_MODIFY_AUTH:
-        if (strcasecmp ("GROUP", element_name) == 0)
-          {
-            const gchar* attribute;
-            auth_group_t *new_group;
-
-            new_group = g_malloc0 (sizeof (auth_group_t));
-            if (find_attribute (attribute_names, attribute_values, "name",
-                                &attribute))
-              new_group->group_name = g_strdup (attribute);
-            modify_auth_data->groups =
-              g_slist_prepend (modify_auth_data->groups, new_group);
-            set_client_state (CLIENT_MODIFY_AUTH_GROUP);
-          }
-        ELSE_READ_OVER;
-
-      case CLIENT_MODIFY_AUTH_GROUP:
-        if (strcasecmp ("AUTH_CONF_SETTING", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_AUTH_GROUP_AUTH_CONF_SETTING);
-        ELSE_READ_OVER;
-
-      case CLIENT_MODIFY_AUTH_GROUP_AUTH_CONF_SETTING:
-        if (strcasecmp ("KEY", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_AUTH_GROUP_AUTH_CONF_SETTING_KEY);
-        else if (strcasecmp ("VALUE", element_name) == 0)
-          set_client_state (CLIENT_MODIFY_AUTH_GROUP_AUTH_CONF_SETTING_VALUE);
         ELSE_READ_OVER;
 
       case CLIENT_MODIFY_CONFIG:
@@ -16196,164 +16071,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         set_client_state (CLIENT_AUTHENTIC);
         break;
 
-      case CLIENT_DESCRIBE_AUTH:
-        {
-          if (acl_user_may ("describe_auth") == 0)
-            {
-              SEND_TO_CLIENT_OR_FAIL
-               (XML_ERROR_SYNTAX ("describe_auth",
-                                  "Permission denied"));
-              set_client_state (CLIENT_AUTHENTIC);
-              break;
-            }
-
-          SEND_TO_CLIENT_OR_FAIL ("<describe_auth_response"
-                                  " status=\"" STATUS_OK "\""
-                                  " status_text=\"" STATUS_OK_TEXT "\">"
-                                  "<group name=\"method:file\">"
-                                  "<auth_conf_setting>"
-                                  "<key>enable</key>"
-                                  "<value>true</value>"
-                                  "</auth_conf_setting>"
-                                  "<auth_conf_setting>"
-                                  "<key>order</key>"
-                                  "<value>1</value>"
-                                  "</auth_conf_setting>"
-                                  "</group>");
-
-          if (gvm_auth_ldap_enabled ())
-            {
-              gchar *ldap_host, *ldap_authdn, *ldap_cacert;
-              int ldap_enabled, ldap_allow_plaintext, ldap_ldaps_only;
-              manage_get_ldap_info (&ldap_enabled, &ldap_host, &ldap_authdn,
-                                    &ldap_allow_plaintext, &ldap_cacert,
-                                    &ldap_ldaps_only);
-              SENDF_TO_CLIENT_OR_FAIL
-               ("<group name=\"method:ldap_connect\">"
-                "<auth_conf_setting>"
-                "<key>enable</key>"
-                "<value>%s</value>"
-                "</auth_conf_setting>"
-                "<auth_conf_setting>"
-                "<key>order</key>"
-                "<value>0</value>"
-                "</auth_conf_setting>"
-                "<auth_conf_setting>"
-                "<key>ldaphost</key>"
-                "<value>%s</value>"
-                "</auth_conf_setting>"
-                "<auth_conf_setting>"
-                "<key>authdn</key>"
-                "<value>%s</value>"
-                "</auth_conf_setting>"
-                "<auth_conf_setting>"
-                "<key>allow-plaintext</key>"
-                "<value>%i</value>"
-                "</auth_conf_setting>"
-                "<auth_conf_setting>"
-                "<key>ldaps-only</key>"
-                "<value>%s</value>"
-                "</auth_conf_setting>",
-                ldap_enabled ? "true" : "false",
-                ldap_host,
-                ldap_authdn,
-                ldap_allow_plaintext,
-                ldap_ldaps_only ? "true" : "false");
-
-              g_free (ldap_host);
-              g_free (ldap_authdn);
-
-              if (ldap_cacert)
-                {
-                  time_t activation_time, expiration_time;
-                  gchar *activation_time_str, *expiration_time_str;
-                  gchar *md5_fingerprint, *issuer;
-
-                  SENDF_TO_CLIENT_OR_FAIL
-                   ("<auth_conf_setting>"
-                    "<key>cacert</key>"
-                    "<value>%s</value>",
-                    ldap_cacert);
-
-                  get_certificate_info (ldap_cacert,
-                                        -1,
-                                        TRUE,
-                                        &activation_time,
-                                        &expiration_time,
-                                        &md5_fingerprint,
-                                        NULL,   /* sha256_fingerprint */
-                                        NULL,   /* subject */
-                                        &issuer,
-                                        NULL,   /* serial */
-                                        NULL);  /* certificate_format */
-
-                  activation_time_str = certificate_iso_time (activation_time);
-                  expiration_time_str = certificate_iso_time (expiration_time);
-                  SENDF_TO_CLIENT_OR_FAIL
-                   ("<certificate_info>"
-                    "<time_status>%s</time_status>"
-                    "<activation_time>%s</activation_time>"
-                    "<expiration_time>%s</expiration_time>"
-                    "<md5_fingerprint>%s</md5_fingerprint>"
-                    "<issuer>%s</issuer>"
-                    "</certificate_info>",
-                    certificate_time_status (activation_time, expiration_time),
-                    activation_time_str,
-                    expiration_time_str,
-                    md5_fingerprint,
-                    issuer);
-                  g_free (activation_time_str);
-                  g_free (expiration_time_str);
-                  g_free (md5_fingerprint);
-                  g_free (issuer);
-
-                  SEND_TO_CLIENT_OR_FAIL ("</auth_conf_setting>");
-
-                  g_free (ldap_cacert);
-                }
-
-              SEND_TO_CLIENT_OR_FAIL ("</group>");
-            }
-
-          if (gvm_auth_radius_enabled ())
-            {
-              char *radius_host = NULL;
-              char *radius_key = NULL;
-              char *key = "";
-              int radius_enabled;
-              manage_get_radius_info (&radius_enabled, &radius_host,
-                                      &radius_key);
-              if (radius_key && strlen(radius_key))
-                key = "********";
-
-              SENDF_TO_CLIENT_OR_FAIL
-               ("<group name=\"method:radius_connect\">"
-                "<auth_conf_setting>"
-                "<key>enable</key>"
-                "<value>%s</value>"
-                "</auth_conf_setting>"
-                "<auth_conf_setting>"
-                "<key>radiushost</key>"
-                "<value>%s</value>"
-                "</auth_conf_setting>"
-                "<auth_conf_setting>"
-                "<key>radiuskey</key>"
-                "<value>%s</value>"
-                "</auth_conf_setting>"
-                "</group>",
-                radius_enabled ? "true" : "false", radius_host,
-                key);
-              g_free (radius_host);
-              g_free (radius_key);
-            }
-
-          SEND_TO_CLIENT_OR_FAIL ("</describe_auth_response>");
-
-          set_client_state (CLIENT_AUTHENTIC);
-          break;
-        }
-
-
       case CLIENT_GET_AGGREGATES:
         handle_get_aggregates (gmp_parser, error);
         break;
@@ -18569,155 +18286,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
           break;
         }
       CLOSE (CLIENT_MODIFY_ASSET, COMMENT);
-
-      case CLIENT_MODIFY_AUTH:
-        {
-          GSList *item;
-          int err = 0;
-
-          if (acl_user_may ("modify_auth") == 0)
-            {
-              SEND_TO_CLIENT_OR_FAIL
-               (XML_ERROR_SYNTAX ("modify_auth",
-                                  "Permission denied"));
-              modify_auth_data_reset (modify_auth_data);
-              set_client_state (CLIENT_AUTHENTIC);
-              break;
-            }
-
-          item = modify_auth_data->groups;
-          while (item)
-            {
-              auth_group_t *auth_group;
-              gchar *group;
-
-              auth_group = (auth_group_t *) item->data;
-              group = auth_group->group_name;
-              if (group == NULL)
-                {
-                  SEND_TO_CLIENT_OR_FAIL (XML_ERROR_SYNTAX
-                                           ("modify_auth",
-                                            "GROUP requires a name attribute"));
-                  err = 1;
-                  break;
-                }
-              if (strcmp (group, "method:ldap_connect") == 0)
-                {
-                  GSList *setting;
-                  gchar *ldap_host, *ldap_authdn, *ldap_cacert;
-                  int ldap_enabled, ldap_plaintext, ldap_ldaps_only;
-
-                  ldap_enabled = ldap_plaintext = ldap_ldaps_only = -1;
-                  ldap_host = ldap_authdn = ldap_cacert = NULL;
-                  setting = auth_group->settings;
-                  while (setting)
-                    {
-                      auth_conf_setting_t *kvp =
-                        (auth_conf_setting_t *) setting->data;
-
-                      if (kvp->key == NULL || kvp->value == NULL)
-                        /* Skip this one. */;
-                      else if (strcmp (kvp->key, "enable") == 0)
-                        ldap_enabled = (strcmp (kvp->value, "true") == 0);
-                      else if (strcmp (kvp->key, "ldaphost") == 0)
-                        ldap_host = g_strdup (kvp->value);
-                      else if (strcmp (kvp->key, "authdn") == 0)
-                        ldap_authdn = g_strdup (kvp->value);
-                      else if (strcmp (kvp->key, "allow-plaintext") == 0)
-                        ldap_plaintext = (strcmp (kvp->value, "true") == 0);
-                      else if (strcmp (kvp->key, "cacert") == 0)
-                        ldap_cacert = g_strdup (kvp->value);
-                      else if (strcmp (kvp->key, "ldaps-only") == 0)
-                        ldap_ldaps_only = (strcmp (kvp->value, "true") == 0);
-
-                      setting = g_slist_next (setting);
-                    }
-
-                  if (manage_set_ldap_info (ldap_enabled, ldap_host, ldap_authdn,
-                                            ldap_plaintext, ldap_cacert,
-                                            ldap_ldaps_only))
-                    {
-                      SEND_TO_CLIENT_OR_FAIL (XML_ERROR_SYNTAX
-                                               ("modify_auth",
-                                                "Invalid certificate"));
-                      err = 1;
-                      break;
-                    }
-                }
-              if (strcmp (group, "method:radius_connect") == 0)
-                {
-                  GSList *setting;
-                  char *radius_host, *radius_key;
-                  int radius_enabled;
-
-                  radius_enabled = -1;
-                  radius_host = radius_key = NULL;
-                  setting = auth_group->settings;
-                  while (setting)
-                    {
-                      auth_conf_setting_t *kvp =
-                        (auth_conf_setting_t *) setting->data;
-
-                      if (kvp->key == NULL || kvp->value == NULL)
-                        /* Skip this one. */;
-                      else if (strcmp (kvp->key, "enable") == 0)
-                        radius_enabled = (strcmp (kvp->value, "true") == 0);
-                      else if (strcmp (kvp->key, "radiushost") == 0)
-                        radius_host = g_strdup (kvp->value);
-                      else if (strcmp (kvp->key, "radiuskey") == 0)
-                        radius_key = g_strdup (kvp->value);
-
-                      setting = g_slist_next (setting);
-                    }
-
-                  manage_set_radius_info (radius_enabled, radius_host,
-                                          radius_key);
-                }
-              item = g_slist_next (item);
-            }
-          if (!err)
-            SEND_TO_CLIENT_OR_FAIL (XML_OK ("modify_auth"));
-          modify_auth_data_reset (modify_auth_data);
-          set_client_state (CLIENT_AUTHENTIC);
-
-          break;
-        }
-
-      case CLIENT_MODIFY_AUTH_GROUP:
-        {
-          /* Add settings to group. */
-          if (modify_auth_data->curr_group_settings)
-            {
-              auth_group_t *new_group;
-              assert (modify_auth_data->groups);
-              new_group = modify_auth_data->groups->data;
-              assert (new_group);
-              new_group->settings = modify_auth_data->curr_group_settings;
-            }
-
-          modify_auth_data->curr_group_settings = NULL;
-          set_client_state (CLIENT_MODIFY_AUTH);
-          break;
-        }
-      case CLIENT_MODIFY_AUTH_GROUP_AUTH_CONF_SETTING:
-        {
-          auth_conf_setting_t *setting;
-
-          setting = g_malloc0 (sizeof (auth_conf_setting_t));
-          setting->key = modify_auth_data->key;
-          modify_auth_data->key = NULL;
-          setting->value = modify_auth_data->value;
-          modify_auth_data->value = NULL;
-
-          /* Add setting to settings. */
-          modify_auth_data->curr_group_settings
-           = g_slist_prepend (modify_auth_data->curr_group_settings, setting);
-
-          set_client_state (CLIENT_MODIFY_AUTH_GROUP);
-          break;
-        }
-      CLOSE (CLIENT_MODIFY_AUTH_GROUP_AUTH_CONF_SETTING, KEY);
-      CLOSE (CLIENT_MODIFY_AUTH_GROUP_AUTH_CONF_SETTING, VALUE);
 
       case CLIENT_MODIFY_CONFIG:
         if (modify_config_element_end (gmp_parser, error, element_name))
@@ -21157,13 +20725,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
 
       APPEND (CLIENT_MODIFY_ASSET_COMMENT,
               &modify_asset_data->comment);
-
-
-      APPEND (CLIENT_MODIFY_AUTH_GROUP_AUTH_CONF_SETTING_KEY,
-              &modify_auth_data->key);
-
-      APPEND (CLIENT_MODIFY_AUTH_GROUP_AUTH_CONF_SETTING_VALUE,
-              &modify_auth_data->value);
 
 
       APPEND (CLIENT_MODIFY_FILTER_COMMENT,

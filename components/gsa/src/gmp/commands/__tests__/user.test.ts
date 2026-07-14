@@ -5,7 +5,7 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import {createResponse, createHttp} from 'gmp/commands/testing';
+import {createHttp} from 'gmp/commands/testing';
 import UserCommand, {
   DEFAULT_SETTINGS,
   type CertificateInfo,
@@ -37,42 +37,58 @@ const createNativeHttp = (response?: Parameters<typeof createHttp>[0]) => {
 
 describe('UserCommand tests', () => {
   test('should parse auth settings in currentAuthSettings', async () => {
-    const response = createResponse({
-      auth_settings: {
-        describe_auth_response: {
-          group: [
-            {
-              _name: 'foo',
-              auth_conf_setting: [{key: 'enable', value: true}],
-            },
-            {
-              _name: 'bar',
-              auth_conf_setting: [
-                {key: 'foo', value: 'true'},
-                {certificate_info: {issuer: 'ipsum'}},
-              ],
-            },
-          ],
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        ldap: {
+          available: true,
+          enabled: true,
+          host: 'ldap.example',
+          auth_dn: 'cn=admin',
+          allow_plaintext: true,
+          ldaps_only: true,
+          certificate: {
+            issuer: 'ipsum',
+            sha256_fingerprint: 'sha256-value',
+          },
         },
-      },
+        radius: {
+          available: true,
+          enabled: false,
+          host: 'radius.example',
+          secret_configured: true,
+        },
+      }),
+      ok: true,
+      status: 200,
     });
-    const fakeHttp = createHttp(response);
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
     const cmd = new UserCommand(fakeHttp);
     const resp = await cmd.currentAuthSettings();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {cmd: 'auth_settings', name: '--'},
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/authentication-settings',
+      expect.objectContaining({method: 'GET'}),
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/authentication-settings',
+      undefined,
+    );
     const {data: settings} = resp;
-    expect(settings.has('foo')).toBe(true);
-    expect(settings.has('bar')).toBe(true);
-    const fooSettings = settings.get('foo') as {enabled: boolean};
-    const barSettings = settings.get('bar') as {
-      foo: string;
+    expect(settings.has('method:ldap_connect')).toBe(true);
+    expect(settings.has('method:radius_connect')).toBe(true);
+    const ldapSettings = settings.get('method:ldap_connect') as {
+      allowPlaintext: boolean;
+      ldapsOnly: boolean;
       certificateInfo: CertificateInfo;
     };
-    expect(fooSettings.enabled).toBe(true);
-    expect(barSettings.foo).toBe('true');
-    expect(barSettings.certificateInfo.issuer).toBe('ipsum');
+    expect(ldapSettings.allowPlaintext).toBe(true);
+    expect(ldapSettings.ldapsOnly).toBe(true);
+    expect(ldapSettings.certificateInfo.issuer).toBe('ipsum');
+    expect(ldapSettings.certificateInfo.sha256Fingerprint).toBe('sha256-value');
+    expect(settings.get('method:radius_connect')).toMatchObject({
+      secretConfigured: true,
+      radiuskey: '********',
+    });
   });
 
   test('should clone users through the native management API', async () => {
@@ -110,7 +126,8 @@ describe('UserCommand tests', () => {
         json: testing.fn().mockResolvedValue({
           error: {
             code: 'committed_response_unavailable',
-            message: 'The clone committed but its response could not be loaded.',
+            message:
+              'The clone committed but its response could not be loaded.',
           },
         }),
         ok: false,

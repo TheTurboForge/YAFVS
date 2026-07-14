@@ -443,10 +443,6 @@ char *
 get_vulns_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                gsad_command_response_data_t *);
 char *
-save_auth_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-               gsad_command_response_data_t *);
-
-char *
 bulk_delete_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                  gsad_command_response_data_t *);
 char *
@@ -509,10 +505,6 @@ get_setting_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
 char *
 save_setting_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                   gsad_command_response_data_t *);
-char *
-auth_settings_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                   gsad_command_response_data_t *);
-
 char *
 get_info_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
               gsad_command_response_data_t *);

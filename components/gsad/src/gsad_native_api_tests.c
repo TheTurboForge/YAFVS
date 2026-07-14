@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -31,6 +32,8 @@ extern gboolean
 gsad_native_api_test_post_path_is_allowed (const gchar *path);
 extern gboolean
 gsad_native_api_test_get_path_is_allowed (const gchar *path);
+extern gboolean
+gsad_native_api_test_get_path_requires_operator (const gchar *path);
 extern gboolean
 gsad_native_api_test_patch_path_is_allowed (const gchar *path);
 extern gboolean
@@ -82,6 +85,38 @@ gsad_credentials_get_user (gsad_credentials_t *credentials)
       || credentials == (gsad_credentials_t *) GINT_TO_POINTER (4))
     return (gsad_user_t *) credentials;
   return NULL;
+}
+
+Ensure (gsad_native_api,
+        should_allow_authentication_settings_read_and_provider_writes)
+{
+  assert_that (gsad_native_api_test_get_path_is_allowed (
+                 "/api/v1/authentication-settings"),
+               is_true);
+  assert_that (gsad_native_api_test_get_path_requires_operator (
+                 "/api/v1/authentication-settings"),
+               is_true);
+  assert_that (gsad_native_api_test_put_path_is_allowed (
+                 "/api/v1/authentication-settings/ldap"),
+               is_true);
+  assert_that (gsad_native_api_test_put_path_is_allowed (
+                 "/api/v1/authentication-settings/radius"),
+               is_true);
+  assert_that (gsad_native_api_test_get_path_is_allowed (
+                 "/api/v1/authentication-settings/ldap"),
+               is_false);
+  assert_that (gsad_native_api_test_put_path_is_allowed (
+                 "/api/v1/authentication-settings"),
+               is_false);
+  assert_that (gsad_native_api_test_put_path_is_allowed (
+                 "/api/v1/authentication-settings/ldap/extra"),
+               is_false);
+  assert_that (gsad_native_api_test_put_path_is_allowed (
+                 "/api/v1/authentication-settings/radius?x=1"),
+               is_false);
+  assert_that (gsad_native_api_test_get_path_requires_operator (
+                 "/api/v1/cves"),
+               is_false);
 }
 
 Ensure (gsad_native_api,
@@ -945,6 +980,9 @@ main (int argc, char **argv)
   add_test_with_context (
     suite, gsad_native_api,
     should_only_allow_exact_current_user_setting_paths);
+  add_test_with_context (
+    suite, gsad_native_api,
+    should_allow_authentication_settings_read_and_provider_writes);
   add_test_with_context (
     suite, gsad_native_api,
     should_only_allow_canonical_alert_report_delivery_posts);

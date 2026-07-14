@@ -63,7 +63,6 @@ gsad_init_validator ()
                      "|(download_key_pub)"
                      "|(edit_config_family)"
                      "|(edit_config_family_all)"
-                     "|(auth_settings)"
                      "|(export_alert)"
                      "|(export_alerts)"
                      "|(export_asset)"
@@ -159,7 +158,6 @@ gsad_init_validator ()
                      "|(restore)"
                      "|(test_alert)"
                      "|(save_asset)"
-                     "|(save_auth)"
                      "|(save_setting)"
                      "|(save_config)"
                      "|(save_config_family)"
@@ -276,9 +274,6 @@ gsad_init_validator ()
   gvm_validator_add (validator, "first_group", "^[0-9]+$");
   gvm_validator_add (validator, "first_result", "^[0-9]+$");
   gvm_validator_add (validator, "filter", "^.*$");
-  /* Validator for  save_auth group, e.g. "method:ldap_connect". */
-  gvm_validator_add (validator, "group",
-                     "^method:(ldap_connect|radius_connect)$");
   gvm_validator_add (validator, "group_column", "^[_[:alnum:]]+$");
   gvm_validator_add (validator, "max", "^(-?[0-9]+|)$");
   gvm_validator_add (validator, "max_results", "^[0-9]+$");

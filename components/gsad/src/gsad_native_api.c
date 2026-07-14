@@ -53,6 +53,9 @@
 #define USER_TIMEZONE_PATH "/api/v1/users/current/timezone"
 #define USER_MANAGEMENT_USERS_PATH "/api/v1/user-management/users"
 #define USER_MANAGEMENT_USER_PREFIX "/api/v1/user-management/users/"
+#define AUTHENTICATION_SETTINGS_PATH "/api/v1/authentication-settings"
+#define AUTHENTICATION_SETTINGS_LDAP_PATH "/api/v1/authentication-settings/ldap"
+#define AUTHENTICATION_SETTINGS_RADIUS_PATH "/api/v1/authentication-settings/radius"
 
 static void
 secure_clear (void *value, gsize length)
@@ -114,6 +117,15 @@ is_user_management_user_path (const gchar *path)
 
   id = path + strlen (USER_MANAGEMENT_USER_PREFIX);
   return is_uuid_segment (id, strlen (id));
+}
+
+static gboolean
+native_api_get_path_requires_operator (const gchar *path)
+{
+  return g_strcmp0 (path, AUTHENTICATION_SETTINGS_PATH) == 0
+         || g_strcmp0 (path, USER_SETTINGS_PATH) == 0
+         || g_strcmp0 (path, USER_MANAGEMENT_USERS_PATH) == 0
+         || is_user_management_user_path (path);
 }
 
 static gboolean
@@ -351,6 +363,12 @@ native_api_put_path_is_allowed (const gchar *path)
     return FALSE;
 
   if (g_strcmp0 (path, USER_TIMEZONE_PATH) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, AUTHENTICATION_SETTINGS_LDAP_PATH) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, AUTHENTICATION_SETTINGS_RADIUS_PATH) == 0)
     return TRUE;
 
   if (g_str_has_prefix (path, USER_SETTING_PREFIX))
@@ -1491,6 +1509,9 @@ native_api_path_is_allowed (const gchar *path)
   if (g_strcmp0 (path, USER_SETTINGS_PATH) == 0)
     return TRUE;
 
+  if (g_strcmp0 (path, AUTHENTICATION_SETTINGS_PATH) == 0)
+    return TRUE;
+
   if (g_strcmp0 (path, USER_MANAGEMENT_USERS_PATH) == 0)
     return TRUE;
 
@@ -2607,9 +2628,7 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
 
   const gchar *secret = NULL;
   if (native_api_put_path_is_allowed (path)
-      || g_strcmp0 (path, USER_SETTINGS_PATH) == 0
-      || g_strcmp0 (path, USER_MANAGEMENT_USERS_PATH) == 0
-      || is_user_management_user_path (path))
+      || native_api_get_path_requires_operator (path))
     {
       secret = browser_proxy_secret ();
       if (secret == NULL)
@@ -2926,6 +2945,12 @@ gboolean
 gsad_native_api_test_get_path_is_allowed (const gchar *path)
 {
   return native_api_path_is_allowed (path);
+}
+
+gboolean
+gsad_native_api_test_get_path_requires_operator (const gchar *path)
+{
+  return native_api_get_path_requires_operator (path);
 }
 
 gboolean

@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2009-2023 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -52,6 +53,9 @@ digest_hex (int, const guchar *);
 
 int
 gvm_auth_ldap_enabled (void);
+
+gboolean
+gvm_auth_ldap_auth_dn_is_good (const gchar *);
 
 int
 gvm_auth_radius_enabled (void);

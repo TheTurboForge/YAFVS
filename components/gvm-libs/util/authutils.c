@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2009-2023 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -9,6 +10,7 @@
  */
 
 #include "authutils.h"
+#include "ldaputils.h"
 
 #include <gcrypt.h> /* for gcry_md_get_algo_dlen, gcry_control, gcry_md_alg... */
 #include <string.h> /* for strcmp */
@@ -45,6 +47,26 @@ gvm_auth_ldap_enabled (void)
 #else
   return 0;
 #endif /* ENABLE_LDAP_AUTH */
+}
+
+/**
+ * @brief Validate an LDAP authentication DN when LDAP support is available.
+ *
+ * This wrapper remains callable in builds without LDAP support.
+ *
+ * @param authdn Authentication DN template.
+ *
+ * @return TRUE if LDAP is available and the DN is valid, else FALSE.
+ */
+gboolean
+gvm_auth_ldap_auth_dn_is_good (const gchar *authdn)
+{
+#ifdef ENABLE_LDAP_AUTH
+  return ldap_auth_dn_is_good (authdn);
+#else
+  (void) authdn;
+  return FALSE;
+#endif
 }
 
 /**

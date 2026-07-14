@@ -4115,6 +4115,122 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /authentication-settings:
+    get:
+      operationId: getAuthenticationSettings
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: authentication-provider-settings-read
+      x-turbovas-operator-identity: resolved-request-operator
+      x-turbovas-owner-semantics: gvmd-authoritative-operator-authorization
+      summary: Read authentication provider settings
+      description: Returns LDAP and RADIUS availability plus their complete non-secret configuration snapshots for the authenticated operator. LDAP CA certificate content and the RADIUS shared secret are never returned; only bounded certificate metadata and a secret_configured flag are exposed. Direct access uses its configured token operator, while the same-origin browser proxy resolves and verifies the immutable session operator UUID before dispatch.
+      responses:
+        '200':
+          description: Redacted authentication provider settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /authentication-settings/ldap:
+    put:
+      operationId: putAuthenticationSettingsLdap
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: ldap-authentication-provider-settings-write
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: gvmd-authoritative-operator-authorization
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: account-auth-control
+      summary: Replace LDAP authentication settings
+      description: Replaces the complete non-secret LDAP settings snapshot through authoritative gvmd validation. Omit ca_certificate_pem to preserve the stored certificate; supplied certificate content is write-only and scrubbed from API-owned buffers. The browser proxy resolves the immutable session operator UUID before using this same control operation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LdapAuthenticationSettingsUpdateRequest'
+      responses:
+        '204':
+          description: LDAP authentication settings updated
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /authentication-settings/radius:
+    put:
+      operationId: putAuthenticationSettingsRadius
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: radius-authentication-provider-settings-write
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: gvmd-authoritative-operator-authorization
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: account-auth-control
+      summary: Replace RADIUS authentication settings
+      description: Replaces the complete non-secret RADIUS settings snapshot through authoritative gvmd validation. Omit secret to preserve the stored shared secret; supplied secret content is write-only and scrubbed from API-owned buffers. The browser proxy resolves the immutable session operator UUID before using this same control operation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RadiusAuthenticationSettingsUpdateRequest'
+      responses:
+        '204':
+          description: RADIUS authentication settings updated
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /user-management/users:
     get:
       operationId: getUserManagementUsers
@@ -8713,6 +8829,121 @@ components:
         modified_at:
           type: string
           format: date-time
+    AuthenticationSettings:
+      type: object
+      additionalProperties: false
+      required: [ldap, radius]
+      properties:
+        ldap:
+          $ref: '#/components/schemas/LdapAuthenticationSettings'
+        radius:
+          $ref: '#/components/schemas/RadiusAuthenticationSettings'
+    LdapAuthenticationSettings:
+      type: object
+      additionalProperties: false
+      required: [available, enabled, host, auth_dn, allow_plaintext, ldaps_only, certificate]
+      properties:
+        available:
+          type: boolean
+        enabled:
+          type: boolean
+        host:
+          type: string
+          maxLength: 1024
+          description: LDAP provider host, limited to 1024 UTF-8 bytes without control characters.
+        auth_dn:
+          type: string
+          maxLength: 4096
+          description: LDAP authentication DN, limited to 4096 UTF-8 bytes without control characters.
+        allow_plaintext:
+          type: boolean
+        ldaps_only:
+          type: boolean
+        certificate:
+          oneOf:
+            - $ref: '#/components/schemas/LdapCertificateMetadata'
+            - type: 'null'
+          description: Redacted stored CA certificate metadata, or null when no certificate is stored. Certificate content is never returned.
+    LdapCertificateMetadata:
+      type: object
+      additionalProperties: false
+      required: [sha256_fingerprint, issuer, activation_time, expiration_time, time_status]
+      properties:
+        sha256_fingerprint:
+          type: [string, 'null']
+          maxLength: 256
+        issuer:
+          type: [string, 'null']
+          maxLength: 4096
+        activation_time:
+          type: [string, 'null']
+          format: date-time
+          maxLength: 128
+        expiration_time:
+          type: [string, 'null']
+          format: date-time
+          maxLength: 128
+        time_status:
+          type: [string, 'null']
+          maxLength: 128
+    RadiusAuthenticationSettings:
+      type: object
+      additionalProperties: false
+      required: [available, enabled, host, secret_configured]
+      properties:
+        available:
+          type: boolean
+        enabled:
+          type: boolean
+        host:
+          type: string
+          maxLength: 1024
+          description: RADIUS provider host, limited to 1024 UTF-8 bytes without control characters.
+        secret_configured:
+          type: boolean
+          description: True when a RADIUS shared secret is stored. The secret is never returned.
+    LdapAuthenticationSettingsUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [enabled, host, auth_dn, allow_plaintext, ldaps_only]
+      properties:
+        enabled:
+          type: boolean
+        host:
+          type: string
+          maxLength: 1024
+          description: Complete LDAP host snapshot, limited to 1024 UTF-8 bytes without control characters.
+        auth_dn:
+          type: string
+          maxLength: 4096
+          description: Complete LDAP authentication DN snapshot, limited to 4096 UTF-8 bytes without control characters.
+        allow_plaintext:
+          type: boolean
+        ldaps_only:
+          type: boolean
+        ca_certificate_pem:
+          type: string
+          minLength: 1
+          maxLength: 32768
+          writeOnly: true
+          description: Optional replacement PEM certificate, limited to 32768 UTF-8 bytes. Omission preserves the stored certificate.
+    RadiusAuthenticationSettingsUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [enabled, host]
+      properties:
+        enabled:
+          type: boolean
+        host:
+          type: string
+          maxLength: 1024
+          description: Complete RADIUS host snapshot, limited to 1024 UTF-8 bytes without control characters.
+        secret:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          writeOnly: true
+          description: Optional replacement RADIUS shared secret, limited to 4096 UTF-8 bytes without control characters. Omission preserves the stored secret.
     UserManagementCollection:
       type: object
       required: [page, items]

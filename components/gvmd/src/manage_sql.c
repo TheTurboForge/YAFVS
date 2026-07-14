@@ -15765,6 +15765,66 @@ validate_credential_username_for_format (const gchar *username,
   return TRUE;
 }
 
+static gboolean manage_auth_settings_text_is_valid (
+  const gchar *, size_t, gboolean, gboolean);
+
+static gboolean
+manage_auth_settings_optional_text_is_valid (const gchar *value,
+                                             size_t max_length)
+{
+  return value == NULL
+         || manage_auth_settings_text_is_valid (value, max_length, TRUE,
+                                                FALSE);
+}
+
+static gboolean
+manage_auth_settings_certificate_metadata_is_valid (
+  const gchar *sha256, const gchar *issuer, const gchar *activation,
+  const gchar *expiration, const gchar *time_status)
+{
+  return manage_auth_settings_optional_text_is_valid (
+           sha256, MANAGE_AUTH_SETTINGS_CERT_FINGERPRINT_MAX_BYTES)
+         && manage_auth_settings_optional_text_is_valid (
+           issuer, MANAGE_AUTH_SETTINGS_CERT_ISSUER_MAX_BYTES)
+         && manage_auth_settings_optional_text_is_valid (
+           activation, MANAGE_AUTH_SETTINGS_CERT_TIME_MAX_BYTES)
+         && manage_auth_settings_optional_text_is_valid (
+           expiration, MANAGE_AUTH_SETTINGS_CERT_TIME_MAX_BYTES)
+         && manage_auth_settings_optional_text_is_valid (
+           time_status, MANAGE_AUTH_SETTINGS_CERT_TIME_STATUS_MAX_BYTES);
+}
+
+static gboolean
+manage_auth_settings_certificate_is_valid (const gchar *certificate)
+{
+  time_t activation_time;
+  time_t expiration_time;
+  gchar *activation = NULL;
+  gchar *expiration = NULL;
+  gchar *issuer = NULL;
+  gchar *sha256 = NULL;
+  const gchar *time_status = NULL;
+  gboolean valid = FALSE;
+
+  if (get_certificate_info (certificate, -1, TRUE, &activation_time,
+                            &expiration_time, NULL, &sha256, NULL, &issuer,
+                            NULL, NULL)
+      == 0)
+    {
+      activation = certificate_iso_time (activation_time);
+      expiration = certificate_iso_time (expiration_time);
+      time_status = certificate_time_status (activation_time, expiration_time);
+      valid = manage_auth_settings_certificate_metadata_is_valid (
+        sha256, issuer, activation, expiration, time_status);
+    }
+
+  g_free (sha256);
+  g_free (issuer);
+  g_free (activation);
+  g_free (expiration);
+  return valid;
+}
+
 /**
  * @brief Validate the format and resolvability of a Kerberos KDC input string.
  *
@@ -22525,6 +22585,252 @@ vulns_extra_where (int min_qod)
 }
 
 /**
+ * @brief Clear a buffer without allowing the compiler to optimize it away.
+ *
+ * @param[in,out] value   Buffer to clear.
+ * @param[in]     length  Buffer length.
+ */
+static void
+manage_auth_settings_secure_clear (void *value, size_t length)
+{
+  volatile unsigned char *cursor = value;
+
+  if (value == NULL)
+    return;
+
+  while (length--)
+    *cursor++ = 0;
+}
+
+/**
+ * @brief Securely free an authentication-settings value.
+ *
+ * @param[in,out] value Value to clear and free.
+ */
+static void
+manage_auth_settings_secure_free (gchar *value)
+{
+  if (value == NULL)
+    return;
+
+  manage_auth_settings_secure_clear (value, strlen (value));
+  g_free (value);
+}
+
+/**
+ * @brief Validate bounded UTF-8 authentication-settings text.
+ *
+ * @param[in] value               Value to validate.
+ * @param[in] max_length          Maximum length in bytes.
+ * @param[in] allow_empty         Whether an empty value is accepted.
+ * @param[in] allow_line_endings  Whether CR and LF are accepted.
+ *
+ * @return TRUE if valid, else FALSE.
+ */
+static gboolean
+manage_auth_settings_text_is_valid (const gchar *value, size_t max_length,
+                                    gboolean allow_empty,
+                                    gboolean allow_line_endings)
+{
+  const gchar *cursor;
+  const gchar *end;
+  size_t length;
+
+  if (value == NULL)
+    return FALSE;
+
+  length = strnlen (value, max_length + 1);
+  if ((!allow_empty && length == 0) || length > max_length
+      || !g_utf8_validate (value, length, NULL))
+    return FALSE;
+
+  cursor = value;
+  end = value + length;
+  while (cursor < end)
+    {
+      gunichar character = g_utf8_get_char_validated (cursor, end - cursor);
+
+      if (character == (gunichar) -1 || character == (gunichar) -2
+          || (g_unichar_iscntrl (character)
+              && (!allow_line_endings
+                  || (character != '\r' && character != '\n'))))
+        return FALSE;
+      cursor = g_utf8_next_char (cursor);
+    }
+
+  return TRUE;
+}
+
+/**
+ * @brief Clear authentication-settings read results.
+ *
+ * @param[in,out] settings Settings to clear.
+ */
+void
+manage_auth_settings_clear (manage_auth_settings_t *settings)
+{
+  if (settings == NULL)
+    return;
+
+  g_free (settings->ldap_host);
+  g_free (settings->ldap_authdn);
+  g_free (settings->ldap_cert_sha256);
+  g_free (settings->ldap_cert_issuer);
+  g_free (settings->ldap_cert_activation);
+  g_free (settings->ldap_cert_expiration);
+  g_free (settings->ldap_cert_time_status);
+  g_free (settings->radius_host);
+  memset (settings, 0, sizeof (*settings));
+}
+
+/**
+ * @brief Read the complete external authentication settings snapshot.
+ *
+ * Certificate content and the RADIUS key are deliberately not returned.
+ *
+ * @param[out] settings Settings snapshot.
+ *
+ * @return Authentication-settings result.
+ */
+manage_auth_settings_result_t
+manage_auth_settings_read (manage_auth_settings_t *settings)
+{
+  gchar *cacert = NULL;
+
+  if (settings == NULL)
+    return MANAGE_AUTH_SETTINGS_INTERNAL_ERROR;
+
+  memset (settings, 0, sizeof (*settings));
+  settings->ldap_available = gvm_auth_ldap_enabled ();
+  settings->radius_available = gvm_auth_radius_enabled ();
+  manage_get_ldap_info (&settings->ldap_enabled, &settings->ldap_host,
+                        &settings->ldap_authdn,
+                        &settings->ldap_allow_plaintext, &cacert,
+                        &settings->ldap_ldaps_only);
+  settings->radius_enabled = radius_auth_enabled ();
+  settings->radius_host =
+    sql_string ("SELECT value FROM meta WHERE name = 'radius_host';");
+  if (settings->radius_host == NULL)
+    settings->radius_host = g_strdup ("127.0.0.1");
+  settings->radius_secret_configured =
+    sql_int ("SELECT coalesce ((SELECT length (value) > 0 FROM meta"
+             "                  WHERE name = 'radius_key'), false);");
+
+  if (!manage_auth_settings_text_is_valid (
+        settings->ldap_host, MANAGE_AUTH_SETTINGS_HOST_MAX_BYTES, TRUE, FALSE)
+      || !manage_auth_settings_text_is_valid (
+           settings->ldap_authdn, MANAGE_AUTH_SETTINGS_AUTH_DN_MAX_BYTES,
+           TRUE, FALSE)
+      || !manage_auth_settings_text_is_valid (
+           settings->radius_host, MANAGE_AUTH_SETTINGS_HOST_MAX_BYTES, TRUE,
+           FALSE))
+    goto fail;
+
+  if (cacert && cacert[0])
+    {
+      time_t activation_time;
+      time_t expiration_time;
+
+      if (get_certificate_info (
+            cacert, -1, TRUE, &activation_time, &expiration_time,
+            NULL, &settings->ldap_cert_sha256, NULL,
+            &settings->ldap_cert_issuer, NULL, NULL))
+        goto fail;
+      settings->ldap_cert_activation =
+        certificate_iso_time (activation_time);
+      settings->ldap_cert_expiration =
+        certificate_iso_time (expiration_time);
+      settings->ldap_cert_time_status =
+        g_strdup (certificate_time_status (activation_time, expiration_time));
+      if (!manage_auth_settings_certificate_metadata_is_valid (
+            settings->ldap_cert_sha256, settings->ldap_cert_issuer,
+            settings->ldap_cert_activation, settings->ldap_cert_expiration,
+            settings->ldap_cert_time_status))
+        goto fail;
+      settings->ldap_cert_present = 1;
+    }
+
+  manage_auth_settings_secure_free (cacert);
+  return MANAGE_AUTH_SETTINGS_OK;
+
+fail:
+  manage_auth_settings_secure_free (cacert);
+  manage_auth_settings_clear (settings);
+  return MANAGE_AUTH_SETTINGS_INTERNAL_ERROR;
+}
+
+/**
+ * @brief Write a complete LDAP authentication settings snapshot.
+ *
+ * @param[in] enabled          Whether LDAP is enabled.
+ * @param[in] host             LDAP host.
+ * @param[in] authdn           Authentication DN template.
+ * @param[in] allow_plaintext  Whether plaintext authentication is allowed.
+ * @param[in] ldaps_only       Whether only LDAPS should be used.
+ * @param[in] cacert           CA certificate, or NULL to preserve it.
+ *
+ * @return Authentication-settings result.
+ */
+manage_auth_settings_result_t
+manage_auth_settings_write_ldap (int enabled, const gchar *host,
+                                 const gchar *authdn, int allow_plaintext,
+                                 int ldaps_only, const gchar *cacert)
+{
+  gchar *quoted;
+
+  if (!gvm_auth_ldap_enabled ())
+    return MANAGE_AUTH_SETTINGS_PROVIDER_UNAVAILABLE;
+  if ((enabled != 0 && enabled != 1)
+      || (allow_plaintext != 0 && allow_plaintext != 1)
+      || (ldaps_only != 0 && ldaps_only != 1)
+      || !manage_auth_settings_text_is_valid (
+           host, MANAGE_AUTH_SETTINGS_HOST_MAX_BYTES, TRUE, FALSE)
+      || !manage_auth_settings_text_is_valid (
+           authdn, MANAGE_AUTH_SETTINGS_AUTH_DN_MAX_BYTES, TRUE, FALSE))
+    return MANAGE_AUTH_SETTINGS_INTERNAL_ERROR;
+  if (!gvm_auth_ldap_auth_dn_is_good (authdn))
+    return MANAGE_AUTH_SETTINGS_INVALID_AUTH_DN;
+  if (cacert
+      && (!manage_auth_settings_text_is_valid (
+            cacert, MANAGE_AUTH_SETTINGS_CERT_MAX_BYTES, FALSE, TRUE)
+          || !manage_auth_settings_certificate_is_valid (cacert)))
+    return MANAGE_AUTH_SETTINGS_INVALID_CERTIFICATE;
+
+  sql_begin_immediate ();
+  sql ("INSERT INTO meta (name, value) VALUES ('ldap_enable', %i)"
+       " ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;",
+       enabled);
+  quoted = sql_quote (host);
+  sql ("INSERT INTO meta (name, value) VALUES ('ldap_host', '%s')"
+       " ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;",
+       quoted);
+  g_free (quoted);
+  quoted = sql_quote (authdn);
+  sql ("INSERT INTO meta (name, value) VALUES ('ldap_authdn', '%s')"
+       " ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;",
+       quoted);
+  g_free (quoted);
+  sql ("INSERT INTO meta (name, value)"
+       " VALUES ('ldap_allow_plaintext', %i)"
+       " ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;",
+       allow_plaintext);
+  sql ("INSERT INTO meta (name, value) VALUES ('ldap_ldaps_only', %i)"
+       " ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;",
+       ldaps_only);
+  if (cacert)
+    {
+      quoted = sql_quote (cacert);
+      sql ("INSERT INTO meta (name, value) VALUES ('ldap_cacert', '%s')"
+           " ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;",
+           quoted);
+      manage_auth_settings_secure_free (quoted);
+    }
+  sql ("DELETE FROM auth_cache;");
+  sql_commit ();
+  return MANAGE_AUTH_SETTINGS_OK;
+}
+
+/**
  * @brief Get LDAP info.
  *
  * @param[out]  enabled       Whether LDAP is enabled.
@@ -22565,96 +22871,6 @@ manage_get_ldap_info (int *enabled, gchar **host, gchar **authdn,
                              " WHERE name = 'ldap_ldaps_only';");
   else
     *ldaps_only = 0;
-}
-
-/**
- * @brief Set LDAP info.
- *
- * @param[in]  enabled    Whether LDAP is enabled.  -1 to keep current value.
- * @param[in]  host       LDAP host.  NULL to keep current value.
- * @param[in]  authdn           Auth DN.  NULL to keep current value.
- * @param[in]  allow_plaintext  Whether plaintext auth is allowed.  -1 to
- *                              keep current value.
- * @param[in]  cacert           CA certificate.  NULL to keep current value.
- * @param[in]  ldaps_only       Whether to try LDAPS auth only, -1 to
- *                              keep current value.
- *
- * @return 0 success, -1 error.
- */
-int
-manage_set_ldap_info (int enabled, gchar *host, gchar *authdn,
-                      int allow_plaintext, gchar *cacert, int ldaps_only)
-{
-  int err = 0;
-  gchar *quoted;
-
-  sql_begin_immediate ();
-
-  if (enabled >= 0)
-    {
-      sql ("DELETE FROM meta WHERE name LIKE 'ldap_enable';");
-      sql ("INSERT INTO meta (name, value) VALUES ('ldap_enable', %i);", enabled);
-    }
-
-  if (host)
-    {
-      sql ("DELETE FROM meta WHERE name LIKE 'ldap_host';");
-      quoted = sql_quote (host);
-      sql ("INSERT INTO meta (name, value) VALUES ('ldap_host', '%s');",
-           quoted);
-      g_free (quoted);
-    }
-
-  if (authdn)
-    {
-      sql ("DELETE FROM meta WHERE name LIKE 'ldap_authdn';");
-      quoted = sql_quote (authdn);
-      sql ("INSERT INTO meta (name, value) VALUES ('ldap_authdn', '%s');",
-           quoted);
-      g_free (quoted);
-    }
-
-  if (allow_plaintext >= 0)
-    {
-      sql ("DELETE FROM meta WHERE name LIKE 'ldap_allow_plaintext';");
-      sql ("INSERT INTO meta (name, value) VALUES ('ldap_allow_plaintext', %i);",
-           allow_plaintext);
-    }
-
-  if (cacert)
-    {
-      /* check if the certificate is valid */
-      err = get_certificate_info (cacert,
-                                  -1,
-                                  TRUE,
-                                  NULL,   /* activation_time */
-                                  NULL,   /* expiration_time */
-                                  NULL,   /* md5_fingerprint */
-                                  NULL,   /* sha256_fingerprint */
-                                  NULL,   /* subject */
-                                  NULL,   /* issuer */
-                                  NULL,   /* serial */
-                                  NULL);  /* certificate_format */
-
-      if (!err)
-        {
-          sql ("DELETE FROM meta WHERE name LIKE 'ldap_cacert';");
-          quoted = sql_quote (cacert);
-          sql ("INSERT INTO meta (name, value) VALUES ('ldap_cacert', '%s');",
-               quoted);
-          g_free (quoted);
-        }
-    }
-
-  if (ldaps_only >= 0)
-    {
-      sql ("DELETE FROM meta WHERE name LIKE 'ldap_ldaps_only';");
-      sql ("INSERT INTO meta (name, value) VALUES ('ldap_ldaps_only', %i);",
-           ldaps_only);
-    }
-
-  sql_commit ();
-  return err;
 }
 
 /**
@@ -22706,6 +22922,52 @@ get_radius_key (gboolean *is_encrypted)
 }
 
 /**
+ * @brief Encrypt a RADIUS key.
+ *
+ * @param[in] key Secret key.
+ *
+ * @return Freshly allocated ciphertext, or NULL on failure.
+ */
+static gchar *
+manage_encrypt_radius_key (const char *key)
+{
+  gchar *encrypted;
+  gchar *encryption_key_uid;
+  lsc_crypt_ctx_t crypt_ctx;
+
+  encryption_key_uid = current_encryption_key_uid (TRUE);
+  crypt_ctx = lsc_crypt_new (encryption_key_uid);
+  free (encryption_key_uid);
+  encrypted = lsc_crypt_encrypt (crypt_ctx, "secret_key", key, NULL);
+  lsc_crypt_release (crypt_ctx);
+  return encrypted;
+}
+
+/**
+ * @brief Store a staged RADIUS key.
+ *
+ * Up to the caller to create the transaction.
+ *
+ * @param[in] key             Staged key or ciphertext.
+ * @param[in] is_unencrypted  Whether key is plaintext.
+ */
+static void
+manage_store_radius_key (const char *key, gboolean is_unencrypted)
+{
+  gchar *quoted = sql_quote (key);
+
+  sql ("INSERT INTO meta (name, value)"
+       " VALUES ('radius_key', '%s')"
+       " ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;",
+       quoted);
+  sql ("INSERT INTO meta (name, value)"
+       " VALUES ('radius_key_is_unencrypted', '%i')"
+       " ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;",
+       is_unencrypted ? 1 : 0);
+  manage_auth_settings_secure_free (quoted);
+}
+
+/**
  * @brief Set RADIUS key.
  *
  * @param[in]  key        Secret key.
@@ -22714,43 +22976,70 @@ get_radius_key (gboolean *is_encrypted)
 void
 set_radius_key (const char *key, gboolean encrypt)
 {
-  char *quoted;
-  char *secret;
-  lsc_crypt_ctx_t crypt_ctx;
-  char *encryption_key_uid = current_encryption_key_uid (TRUE);
-  crypt_ctx = lsc_crypt_new (encryption_key_uid);
-  free (encryption_key_uid);
+  gchar *staged_key;
 
-  if (encrypt == FALSE)
+  if (key == NULL)
+    return;
+  staged_key = encrypt ? manage_encrypt_radius_key (key) : g_strdup (key);
+  if (staged_key == NULL)
     {
-      quoted = sql_quote (key);
-      sql ("INSERT INTO meta (name, value)"
-            " VALUES ('radius_key', '%s')"
-            " ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;",
-            quoted);
-      sql ("INSERT INTO meta (name, value)"
-            " VALUES ('radius_key_is_unencrypted', '1')"
-            " ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;");
+      g_warning ("%s: failed to encrypt RADIUS key", __func__);
+      return;
     }
-  else
+
+  manage_store_radius_key (staged_key, encrypt == FALSE);
+  manage_auth_settings_secure_free (staged_key);
+}
+
+/**
+ * @brief Write a complete RADIUS authentication settings snapshot.
+ *
+ * @param[in] enabled  Whether RADIUS is enabled.
+ * @param[in] host     RADIUS host.
+ * @param[in] key      Secret key, or NULL to preserve it.
+ *
+ * @return Authentication-settings result.
+ */
+manage_auth_settings_result_t
+manage_auth_settings_write_radius (int enabled, const gchar *host,
+                                   const gchar *key)
+{
+  gchar *encrypted_key = NULL;
+  gchar *quoted;
+
+  if (!gvm_auth_radius_enabled ())
+    return MANAGE_AUTH_SETTINGS_PROVIDER_UNAVAILABLE;
+  if ((enabled != 0 && enabled != 1)
+      || !manage_auth_settings_text_is_valid (
+           host, MANAGE_AUTH_SETTINGS_HOST_MAX_BYTES, TRUE, FALSE)
+      || (key
+          && !manage_auth_settings_text_is_valid (
+            key, MANAGE_AUTH_SETTINGS_RADIUS_SECRET_MAX_BYTES, FALSE, FALSE)))
+    return MANAGE_AUTH_SETTINGS_INTERNAL_ERROR;
+  if (key)
     {
-      secret = lsc_crypt_encrypt (crypt_ctx, "secret_key", key, NULL);
-      if (secret)
-        {
-          quoted = sql_quote (secret);
-          sql ("INSERT INTO meta (name, value)"
-                " VALUES ('radius_key', '%s')"
-                " ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;",
-                quoted);
-          g_free (secret);
-          secret = NULL;
-          g_free (quoted);
-        }
-      lsc_crypt_release(crypt_ctx);
-      sql ("INSERT INTO meta (name, value)"
-            " VALUES ('radius_key_is_unencrypted', '0')"
-            " ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;");
+      if (disable_encrypted_credentials)
+        return MANAGE_AUTH_SETTINGS_ENCRYPTION_FAILED;
+      encrypted_key = manage_encrypt_radius_key (key);
+      if (encrypted_key == NULL)
+        return MANAGE_AUTH_SETTINGS_ENCRYPTION_FAILED;
     }
+
+  sql_begin_immediate ();
+  sql ("INSERT INTO meta (name, value) VALUES ('radius_enable', %i)"
+       " ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;",
+       enabled);
+  quoted = sql_quote (host);
+  sql ("INSERT INTO meta (name, value) VALUES ('radius_host', '%s')"
+       " ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;",
+       quoted);
+  g_free (quoted);
+  if (encrypted_key)
+    manage_store_radius_key (encrypted_key, FALSE);
+  sql ("DELETE FROM auth_cache;");
+  sql_commit ();
+  manage_auth_settings_secure_free (encrypted_key);
+  return MANAGE_AUTH_SETTINGS_OK;
 }
 
 /**
@@ -22772,46 +23061,6 @@ manage_get_radius_info (int *enabled, char **host, char **key)
 
   *key = get_radius_key (NULL);
 }
-
-/**
- * @brief Set RADIUS info.
- *
- * @param[in]  enabled    Whether RADIUS is enabled. -1 to keep current value.
- * @param[in]  host       RADIUS host. NULL to keep current value.
- * @param[in]  key        Secret key.  NULL to keep current value.
- */
-void
-manage_set_radius_info (int enabled, gchar *host, gchar *key)
-{
-  char *quoted;
-
-  sql_begin_immediate ();
-
-  if (enabled >= 0)
-    {
-      sql ("DELETE FROM meta WHERE name LIKE 'radius_enable';");
-      sql ("INSERT INTO meta (name, value) VALUES ('radius_enable', %i);",
-           enabled);
-    }
-
-  if (host)
-    {
-      sql ("DELETE FROM meta WHERE name LIKE 'radius_host';");
-      quoted = sql_quote (host);
-      sql ("INSERT INTO meta (name, value) VALUES ('radius_host', '%s');",
-           quoted);
-      g_free (quoted);
-    }
-
-  if (key && strlen (key))
-    {
-      set_radius_key (key, disable_encrypted_credentials == FALSE);
-    }
-
-  sql_commit ();
-}
-
-
 
 /* SQL construction */
 

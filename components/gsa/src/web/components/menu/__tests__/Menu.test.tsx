@@ -126,4 +126,19 @@ describe('Menu rendering', () => {
     });
     expect(screen.queryByText('Asset')).not.toBeInTheDocument();
   });
+
+  test('should render auth settings pages without legacy auth capabilities', () => {
+    renderMenuWith({
+      capabilities: new Capabilities(),
+      gmpSettings: {
+        enableAssetManagement: false,
+        reloadInterval: 5000,
+        reloadIntervalActive: 5000,
+        reloadIntervalInactive: 5000,
+      },
+    });
+
+    expect(screen.getByText('LDAP')).toBeInTheDocument();
+    expect(screen.getByText('RADIUS')).toBeInTheDocument();
+  });
 });

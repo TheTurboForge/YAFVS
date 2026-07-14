@@ -7,7 +7,10 @@ use axum::{
     http::{Method, header},
 };
 
-use crate::scan_config_backup::MAX_SCAN_CONFIG_BACKUP_BODY_BYTES;
+use crate::{
+    authentication_settings::MAX_AUTHENTICATION_SETTINGS_BODY_BYTES,
+    scan_config_backup::MAX_SCAN_CONFIG_BACKUP_BODY_BYTES,
+};
 
 pub(crate) const MAX_DIRECT_API_QUERY_BYTES: usize = 8 * 1024;
 pub(crate) const MAX_DIRECT_API_WRITE_BODY_BYTES: u64 = 256 * 1024;
@@ -50,6 +53,11 @@ pub(crate) fn direct_api_request_shape_is_allowed_for_method(
 fn direct_api_write_body_limit(path: &str) -> u64 {
     if path == "/api/v1/scan-configs/import" {
         MAX_SCAN_CONFIG_BACKUP_BODY_BYTES as u64
+    } else if matches!(
+        path,
+        "/api/v1/authentication-settings/ldap" | "/api/v1/authentication-settings/radius"
+    ) {
+        MAX_AUTHENTICATION_SETTINGS_BODY_BYTES as u64
     } else {
         MAX_DIRECT_API_WRITE_BODY_BYTES
     }

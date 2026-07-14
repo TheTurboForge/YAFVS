@@ -12,6 +12,7 @@
 
 #include "gmp_base.h"
 #include "manage.h"
+#include "manage_acl.h"
 #include "manage_alerts.h"
 #include "manage_configs.h"
 #include "manage_filters.h"
@@ -156,6 +157,18 @@
 #define TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND_LENGTH \
   (sizeof (TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND) - 1)
 #define TURBOVAS_CONTROL_USER_SETTING_VALUE_MAX_BYTES 32768
+#define TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND "auth-settings-read "
+#define TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND) - 1)
+#define TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND \
+  "auth-settings-ldap-write "
+#define TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND \
+  "auth-settings-radius-write "
+#define TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES 32768
 
 typedef struct
 {
@@ -320,6 +333,23 @@ typedef struct
   gchar *value;
 } turbovas_control_user_setting_modify_request_t;
 
+typedef struct
+{
+  int enabled;
+  gchar *host;
+  gchar *authdn;
+  int allow_plaintext;
+  int ldaps_only;
+  gchar *cacert;
+} turbovas_control_auth_settings_ldap_request_t;
+
+typedef struct
+{
+  int enabled;
+  gchar *host;
+  gchar *secret;
+} turbovas_control_auth_settings_radius_request_t;
+
 static gboolean
 turbovas_control_decode_base64_field (const char *, size_t, size_t, gboolean,
                                       gchar **);
@@ -374,6 +404,10 @@ static gboolean
 turbovas_control_decode_user_comment_field (const char *, size_t, gchar **);
 
 static gboolean
+turbovas_control_decode_required_base64_text (const char *, size_t, size_t,
+                                               gchar **);
+
+static gboolean
 turbovas_control_secret_is_valid (const char *secret, size_t secret_len)
 {
   size_t i;
@@ -388,6 +422,25 @@ turbovas_control_secret_is_valid (const char *secret, size_t secret_len)
       return FALSE;
 
   return TRUE;
+}
+
+static void
+turbovas_control_auth_settings_ldap_request_clear (
+  turbovas_control_auth_settings_ldap_request_t *request)
+{
+  turbovas_control_secure_free (request->host);
+  turbovas_control_secure_free (request->authdn);
+  turbovas_control_secure_free (request->cacert);
+  memset (request, 0, sizeof (*request));
+}
+
+static void
+turbovas_control_auth_settings_radius_request_clear (
+  turbovas_control_auth_settings_radius_request_t *request)
+{
+  turbovas_control_secure_free (request->host);
+  turbovas_control_secure_free (request->secret);
+  memset (request, 0, sizeof (*request));
 }
 
 static void
@@ -491,6 +544,22 @@ turbovas_control_decode_user_password_field (const char *field,
            password)
          && turbovas_control_text_has_allowed_controls (
               *password, strlen (*password), FALSE);
+}
+
+static gboolean
+turbovas_control_decode_required_base64_text (const char *field,
+                                               size_t field_len,
+                                               size_t max_decoded_len,
+                                               gchar **decoded)
+{
+  if (field_len == 1 && field[0] == '-')
+    {
+      *decoded = g_strdup ("");
+      return TRUE;
+    }
+
+  return turbovas_control_decode_base64_field (
+    field, field_len, max_decoded_len, TRUE, decoded);
 }
 
 static gboolean
@@ -970,16 +1039,149 @@ turbovas_control_parse_authenticated_prefix (
     return FALSE;
 
   operator_start = secret_end + 1;
-  if ((size_t) (end - operator_start) < 37 || operator_start[36] != ' ')
+  if ((size_t) (end - operator_start) < 36)
     return FALSE;
   memcpy (operator_uuid, operator_start, 36);
   operator_uuid[36] = '\0';
   if (!turbovas_control_uuid_is_valid (operator_uuid))
     return FALSE;
 
-  *cursor_out = operator_start + 37;
+  if ((size_t) (end - operator_start) == 36)
+    *cursor_out = end;
+  else if (operator_start[36] == ' ')
+    *cursor_out = operator_start + 37;
+  else
+    return FALSE;
   *end_out = end;
   return TRUE;
+}
+
+static gboolean
+turbovas_control_boolean_field (const char *field, size_t field_len,
+                                int *value)
+{
+  if (field_len != 1 || (field[0] != '0' && field[0] != '1'))
+    return FALSE;
+
+  *value = field[0] - '0';
+  return TRUE;
+}
+
+static gboolean
+turbovas_control_parse_auth_settings_read_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37])
+{
+  const char *cursor;
+  const char *end;
+
+  return turbovas_control_parse_authenticated_prefix (
+           request, request_len, TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND,
+           TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH, expected_secret,
+           expected_secret_len, operator_uuid, &cursor, &end)
+         && cursor == end && request[request_len - 2] != ' ';
+}
+
+static gboolean
+turbovas_control_parse_auth_settings_ldap_write_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37],
+  turbovas_control_auth_settings_ldap_request_t *settings)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  size_t field_len;
+  gboolean valid;
+
+  memset (settings, 0, sizeof (*settings));
+  if (!turbovas_control_parse_authenticated_prefix (
+        request, request_len,
+        TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND,
+        TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH,
+        expected_secret, expected_secret_len, operator_uuid, &cursor, &end))
+    return FALSE;
+
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_boolean_field (field, field_len,
+                                             &settings->enabled)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_required_base64_text (
+               field, field_len, MANAGE_AUTH_SETTINGS_HOST_MAX_BYTES,
+               &settings->host)
+          && turbovas_control_text_has_allowed_controls (
+               settings->host, strlen (settings->host), FALSE)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_required_base64_text (
+               field, field_len, MANAGE_AUTH_SETTINGS_AUTH_DN_MAX_BYTES,
+               &settings->authdn)
+          && turbovas_control_text_has_allowed_controls (
+               settings->authdn, strlen (settings->authdn), FALSE)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_boolean_field (field, field_len,
+                                             &settings->allow_plaintext)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_boolean_field (field, field_len,
+                                             &settings->ldaps_only)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && cursor == end;
+  if (valid && field_len == 1 && field[0] == '-')
+    settings->cacert = NULL;
+  else if (valid)
+    valid = turbovas_control_decode_base64_field (
+              field, field_len, MANAGE_AUTH_SETTINGS_CERT_MAX_BYTES, TRUE,
+              &settings->cacert)
+            && turbovas_control_text_has_allowed_controls (
+                 settings->cacert, strlen (settings->cacert), TRUE);
+
+  if (!valid)
+    turbovas_control_auth_settings_ldap_request_clear (settings);
+  return valid;
+}
+
+static gboolean
+turbovas_control_parse_auth_settings_radius_write_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37],
+  turbovas_control_auth_settings_radius_request_t *settings)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  size_t field_len;
+  gboolean valid;
+
+  memset (settings, 0, sizeof (*settings));
+  if (!turbovas_control_parse_authenticated_prefix (
+        request, request_len,
+        TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND,
+        TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH,
+        expected_secret, expected_secret_len, operator_uuid, &cursor, &end))
+    return FALSE;
+
+  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_boolean_field (field, field_len,
+                                             &settings->enabled)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && turbovas_control_decode_required_base64_text (
+               field, field_len, MANAGE_AUTH_SETTINGS_HOST_MAX_BYTES,
+               &settings->host)
+          && turbovas_control_text_has_allowed_controls (
+               settings->host, strlen (settings->host), FALSE)
+          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && cursor == end;
+  if (valid && field_len == 1 && field[0] == '-')
+    settings->secret = NULL;
+  else if (valid)
+    valid = turbovas_control_decode_base64_field (
+              field, field_len, MANAGE_AUTH_SETTINGS_RADIUS_SECRET_MAX_BYTES,
+              TRUE, &settings->secret)
+            && turbovas_control_text_has_allowed_controls (
+                 settings->secret, strlen (settings->secret), FALSE);
+
+  if (!valid)
+    turbovas_control_auth_settings_radius_request_clear (settings);
+  return valid;
 }
 
 static gboolean
@@ -3182,6 +3384,106 @@ turbovas_control_task_clone_response (
   return response;
 }
 
+static gchar *
+turbovas_control_auth_settings_optional_base64 (const gchar *value)
+{
+  if (value == NULL || value[0] == '\0')
+    return g_strdup ("-");
+
+  return g_base64_encode ((const guchar *) value, strlen (value));
+}
+
+static gchar *
+turbovas_control_auth_settings_read_response (
+  const manage_auth_settings_t *settings)
+{
+  gchar *activation_64;
+  gchar *authdn_64;
+  gchar *expiration_64;
+  gchar *host_64;
+  gchar *issuer_64;
+  gchar *radius_host_64;
+  gchar *response;
+  gchar *sha256_64;
+  gchar *time_status_64;
+
+  if (settings == NULL || settings->ldap_host == NULL
+      || settings->ldap_authdn == NULL || settings->radius_host == NULL
+      || (settings->ldap_available != 0 && settings->ldap_available != 1)
+      || (settings->ldap_enabled != 0 && settings->ldap_enabled != 1)
+      || (settings->ldap_allow_plaintext != 0
+          && settings->ldap_allow_plaintext != 1)
+      || (settings->ldap_ldaps_only != 0 && settings->ldap_ldaps_only != 1)
+      || (settings->ldap_cert_present != 0
+          && settings->ldap_cert_present != 1)
+      || (settings->radius_available != 0 && settings->radius_available != 1)
+      || (settings->radius_enabled != 0 && settings->radius_enabled != 1)
+      || (settings->radius_secret_configured != 0
+          && settings->radius_secret_configured != 1))
+    return NULL;
+
+  host_64 =
+    turbovas_control_auth_settings_optional_base64 (settings->ldap_host);
+  authdn_64 =
+    turbovas_control_auth_settings_optional_base64 (settings->ldap_authdn);
+  radius_host_64 =
+    turbovas_control_auth_settings_optional_base64 (settings->radius_host);
+  sha256_64 = turbovas_control_auth_settings_optional_base64 (
+    settings->ldap_cert_present ? settings->ldap_cert_sha256 : NULL);
+  issuer_64 = turbovas_control_auth_settings_optional_base64 (
+    settings->ldap_cert_present ? settings->ldap_cert_issuer : NULL);
+  activation_64 = turbovas_control_auth_settings_optional_base64 (
+    settings->ldap_cert_present ? settings->ldap_cert_activation : NULL);
+  expiration_64 = turbovas_control_auth_settings_optional_base64 (
+    settings->ldap_cert_present ? settings->ldap_cert_expiration : NULL);
+  time_status_64 = turbovas_control_auth_settings_optional_base64 (
+    settings->ldap_cert_present ? settings->ldap_cert_time_status : NULL);
+
+  response = g_strdup_printf (
+    "0 settings %i %i %s %s %i %i %i %s %s %s %s %s %i %i %s %i\n",
+    settings->ldap_available, settings->ldap_enabled, host_64, authdn_64,
+    settings->ldap_allow_plaintext, settings->ldap_ldaps_only,
+    settings->ldap_cert_present, sha256_64, issuer_64, activation_64,
+    expiration_64, time_status_64, settings->radius_available,
+    settings->radius_enabled, radius_host_64,
+    settings->radius_secret_configured);
+  if (strlen (response) >= TURBOVAS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES)
+    {
+      turbovas_control_secure_free (response);
+      response = NULL;
+    }
+
+  turbovas_control_secure_free (host_64);
+  turbovas_control_secure_free (authdn_64);
+  turbovas_control_secure_free (radius_host_64);
+  turbovas_control_secure_free (sha256_64);
+  turbovas_control_secure_free (issuer_64);
+  turbovas_control_secure_free (activation_64);
+  turbovas_control_secure_free (expiration_64);
+  turbovas_control_secure_free (time_status_64);
+  return response;
+}
+
+static const char *
+turbovas_control_auth_settings_response (int result)
+{
+  switch (result)
+    {
+      case MANAGE_AUTH_SETTINGS_OK: return "0 updated\n";
+      case MANAGE_AUTH_SETTINGS_INVALID_AUTH_DN:
+        return "1 invalid-auth-dn\n";
+      case MANAGE_AUTH_SETTINGS_INVALID_CERTIFICATE:
+        return "2 invalid-certificate\n";
+      case MANAGE_AUTH_SETTINGS_PROVIDER_UNAVAILABLE:
+        return "3 provider-unavailable\n";
+      case MANAGE_AUTH_SETTINGS_ENCRYPTION_FAILED:
+        return "4 encryption-failed\n";
+      case 99: return "99 permission-denied\n";
+      case -2: return "-2 invalid-request\n";
+      default: return "-1 internal-error\n";
+    }
+}
+
 static gboolean
 turbovas_control_write_all (int socket, const char *response)
 {
@@ -3285,6 +3587,65 @@ turbovas_control_finish_operator_session (void)
   current_credentials.username = NULL;
   current_credentials.uuid = NULL;
   cleanup_manage_process (FALSE);
+}
+
+static int
+turbovas_control_read_auth_settings (const char *operator_uuid,
+                                     gchar **response)
+{
+  manage_auth_settings_t settings = {0};
+  int result;
+
+  *response = NULL;
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  result = manage_auth_settings_read (&settings);
+  if (result == MANAGE_AUTH_SETTINGS_OK)
+    {
+      *response = turbovas_control_auth_settings_read_response (&settings);
+      if (*response == NULL)
+        result = MANAGE_AUTH_SETTINGS_INTERNAL_ERROR;
+    }
+
+  manage_auth_settings_clear (&settings);
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
+static int
+turbovas_control_write_ldap_auth_settings (
+  const char *operator_uuid,
+  const turbovas_control_auth_settings_ldap_request_t *settings)
+{
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  result = manage_auth_settings_write_ldap (
+    settings->enabled, settings->host, settings->authdn,
+    settings->allow_plaintext, settings->ldaps_only, settings->cacert);
+
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
+static int
+turbovas_control_write_radius_auth_settings (
+  const char *operator_uuid,
+  const turbovas_control_auth_settings_radius_request_t *settings)
+{
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  result = manage_auth_settings_write_radius (
+    settings->enabled, settings->host, settings->secret);
+
+  turbovas_control_finish_operator_session ();
+  return result;
 }
 
 static int
@@ -4338,6 +4699,7 @@ turbovas_control_serve_client (int client_socket)
   char source_user_uuid[37];
   char nvt_oid[TURBOVAS_CONTROL_NVT_OID_MAX_BYTES + 1];
   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+  gchar *allocated_response = NULL;
   const char *expected_secret;
   const char *result_response;
   gint64 actual_total = 0;
@@ -4363,6 +4725,8 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_user_modify_request_t user_modify_request = {0};
   turbovas_control_user_delete_request_t user_delete_request = {0};
   turbovas_control_user_setting_modify_request_t setting_modify_request = {0};
+  turbovas_control_auth_settings_ldap_request_t ldap_settings_request = {0};
+  turbovas_control_auth_settings_radius_request_t radius_settings_request = {0};
   memset (request, 0, sizeof (request));
 
   turbovas_control_set_timeouts (client_socket);
@@ -4370,7 +4734,52 @@ turbovas_control_serve_client (int client_socket)
                                           &expected_secret_len)
       && turbovas_control_read_request (client_socket, request, &request_len))
     {
-      if (turbovas_control_parse_user_create_request (
+      if (turbovas_control_parse_auth_settings_read_request (
+            request, request_len, expected_secret, expected_secret_len,
+            operator_uuid))
+        {
+          result = turbovas_control_read_auth_settings (
+            operator_uuid, &allocated_response);
+          result_response =
+            result == MANAGE_AUTH_SETTINGS_OK
+              ? allocated_response
+              : turbovas_control_auth_settings_response (result);
+        }
+      else if (
+        request_len >= TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH
+        && memcmp (request, TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND,
+                   TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH) == 0)
+        result_response = turbovas_control_auth_settings_response (-2);
+      else if (turbovas_control_parse_auth_settings_ldap_write_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, &ldap_settings_request))
+        {
+          result = turbovas_control_write_ldap_auth_settings (
+            operator_uuid, &ldap_settings_request);
+          result_response = turbovas_control_auth_settings_response (result);
+        }
+      else if (
+        request_len >= TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH
+        && memcmp (
+             request, TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND,
+             TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH) == 0)
+        result_response = turbovas_control_auth_settings_response (-2);
+      else if (turbovas_control_parse_auth_settings_radius_write_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, &radius_settings_request))
+        {
+          result = turbovas_control_write_radius_auth_settings (
+            operator_uuid, &radius_settings_request);
+          result_response = turbovas_control_auth_settings_response (result);
+        }
+      else if (
+        request_len
+          >= TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH
+        && memcmp (
+             request, TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND,
+             TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH) == 0)
+        result_response = turbovas_control_auth_settings_response (-2);
+      else if (turbovas_control_parse_user_create_request (
             request, request_len, expected_secret, expected_secret_len,
             operator_uuid, &user_create_request))
         {
@@ -4705,6 +5114,22 @@ turbovas_control_serve_client (int client_socket)
         result_response = turbovas_control_response (result);
     }
   else if (
+    request_len >= TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH
+    && memcmp (request, TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND,
+               TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH) == 0)
+    result_response = turbovas_control_auth_settings_response (-2);
+  else if (
+    request_len >= TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH
+    && memcmp (request, TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND,
+               TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH) == 0)
+    result_response = turbovas_control_auth_settings_response (-2);
+  else if (
+    request_len >= TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH
+    && memcmp (request, TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND,
+               TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH)
+         == 0)
+    result_response = turbovas_control_auth_settings_response (-2);
+  else if (
     request_len >= TURBOVAS_CONTROL_USER_CREATE_COMMAND_LENGTH
     && memcmp (request, TURBOVAS_CONTROL_USER_CREATE_COMMAND,
                TURBOVAS_CONTROL_USER_CREATE_COMMAND_LENGTH) == 0)
@@ -4822,6 +5247,10 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_secure_clear (&user_delete_request,
                                  sizeof (user_delete_request));
   turbovas_control_user_setting_modify_request_clear (&setting_modify_request);
+  turbovas_control_auth_settings_ldap_request_clear (&ldap_settings_request);
+  turbovas_control_auth_settings_radius_request_clear (
+    &radius_settings_request);
+  turbovas_control_secure_free (allocated_response);
   if (request_len <= TURBOVAS_CONTROL_MAX_REQUEST_BYTES)
     {
       turbovas_control_secure_clear (request, request_len);

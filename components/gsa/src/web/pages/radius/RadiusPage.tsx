@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -25,6 +26,7 @@ interface RadiusSettings {
   enabled?: boolean;
   radiushost?: string;
   radiuskey?: string;
+  secretConfigured?: boolean;
 }
 
 interface ToolBarIconsProps {
@@ -58,7 +60,7 @@ const RadiusAuthentication = () => {
   const [hasRadiusSupport, setHasRadiusSupport] = useState(true);
   const [radiusEnabled, setRadiusEnabled] = useState(false);
   const [radiusHost, setRadiusHost] = useState('');
-  const [radiusKey, setRadiusKey] = useState('');
+  const [radiusSecretConfigured, setRadiusSecretConfigured] = useState(false);
 
   const loadRadiusAuthSettings = useCallback(async () => {
     const response = await gmp.user.currentAuthSettings();
@@ -72,15 +74,27 @@ const RadiusAuthentication = () => {
     setRadiusEnabled(radiusSettings.enabled || false);
     setLoading(false);
     setRadiusHost(radiusSettings.radiushost || '');
-    setRadiusKey(radiusSettings.radiuskey || '');
+    setRadiusSecretConfigured(
+      radiusSettings.secretConfigured ??
+        radiusSettings.radiuskey === '********',
+    );
   }, [gmp.user]);
 
   const handleSaveSettings = async ({radiusEnabled, radiusHost, radiusKey}) => {
-    await gmp.auth.saveRadius({
-      radiusEnabled,
-      radiusHost,
-      radiusKey,
-    });
+    try {
+      await gmp.auth.saveRadius({
+        radiusEnabled,
+        radiusHost,
+        radiusKey,
+      });
+    } catch (error) {
+      try {
+        await loadRadiusAuthSettings();
+      } catch {
+        // Keep the original mutation error when a defensive reload also fails.
+      }
+      throw error;
+    }
     await loadRadiusAuthSettings();
     setDialogVisible(false);
   };
@@ -126,7 +140,9 @@ const RadiusAuthentication = () => {
               </TableRow>
               <TableRow>
                 <TableData>{_('Secret Key')}</TableData>
-                <TableData>{radiusKey}</TableData>
+                <TableData>
+                  {radiusSecretConfigured ? '********' : ''}
+                </TableData>
               </TableRow>
             </TableBody>
           </Table>

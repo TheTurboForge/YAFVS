@@ -1,9 +1,16 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
+#ifdef ENABLE_LDAP_AUTH
+#define ldap_auth_dn_is_good authutils_test_ldap_auth_dn_is_good
+#endif
 #include "authutils.c"
+#ifdef ENABLE_LDAP_AUTH
+#undef ldap_auth_dn_is_good
+#endif
 
 #include <cgreen/cgreen.h>
 #include <cgreen/mocks.h>
@@ -14,6 +21,38 @@ BeforeEach (authutils)
 {
   // Initialize auth for tests that need gcrypt functionality
   gvm_auth_init ();
+}
+
+/* gvm_auth_ldap_auth_dn_is_good */
+
+#ifdef ENABLE_LDAP_AUTH
+static gboolean ldap_auth_dn_validation_result;
+static const gchar *received_ldap_auth_dn;
+
+gboolean
+authutils_test_ldap_auth_dn_is_good (const gchar *authdn)
+{
+  received_ldap_auth_dn = authdn;
+  return ldap_auth_dn_validation_result;
+}
+#endif
+
+Ensure (authutils, ldap_auth_dn_validation_is_always_callable)
+{
+#ifdef ENABLE_LDAP_AUTH
+  ldap_auth_dn_validation_result = TRUE;
+  assert_that (gvm_auth_ldap_auth_dn_is_good ("uid=%s,dc=example,dc=org"),
+               is_true);
+  assert_that (received_ldap_auth_dn,
+               is_equal_to_string ("uid=%s,dc=example,dc=org"));
+  ldap_auth_dn_validation_result = FALSE;
+  assert_that (gvm_auth_ldap_auth_dn_is_good ("invalid"), is_false);
+  assert_that (received_ldap_auth_dn, is_equal_to_string ("invalid"));
+#else
+  assert_that (gvm_auth_ldap_auth_dn_is_good ("uid=%s,dc=example,dc=org"),
+               is_false);
+  assert_that (gvm_auth_ldap_auth_dn_is_good (NULL), is_false);
+#endif
 }
 
 AfterEach (authutils)
@@ -216,6 +255,8 @@ main (int argc, char **argv)
                          gvm_auth_ldap_enabled_returns_one_when_enabled);
   add_test_with_context (suite, authutils,
                          gvm_auth_radius_enabled_returns_one_when_enabled);
+  add_test_with_context (suite, authutils,
+                         ldap_auth_dn_validation_is_always_callable);
   add_test_with_context (suite, authutils,
                          digest_hex_returns_correct_hex_string);
   add_test_with_context (suite, authutils,

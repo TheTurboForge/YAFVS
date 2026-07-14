@@ -10,6 +10,11 @@ use axum::{
 
 use crate::{
     app_state::AppState,
+    authentication_settings::{
+        MAX_AUTHENTICATION_SETTINGS_BODY_BYTES, browser_proxy_authentication_settings,
+        browser_proxy_update_ldap_authentication_settings,
+        browser_proxy_update_radius_authentication_settings,
+    },
     browser_proxy_alert_definition::{
         browser_proxy_get_alert_definition, browser_proxy_put_alert_definition,
     },
@@ -96,6 +101,22 @@ pub(crate) fn browser_proxy_native_api_router(
         return router;
     };
     let router = router
+        .route(
+            "/api/v1/authentication-settings",
+            get(browser_proxy_authentication_settings),
+        )
+        .route(
+            "/api/v1/authentication-settings/ldap",
+            put(browser_proxy_update_ldap_authentication_settings).layer(DefaultBodyLimit::max(
+                MAX_AUTHENTICATION_SETTINGS_BODY_BYTES,
+            )),
+        )
+        .route(
+            "/api/v1/authentication-settings/radius",
+            put(browser_proxy_update_radius_authentication_settings).layer(DefaultBodyLimit::max(
+                MAX_AUTHENTICATION_SETTINGS_BODY_BYTES,
+            )),
+        )
         .route(
             "/api/v1/alerts/:alert_id/definition",
             get(browser_proxy_get_alert_definition).put(browser_proxy_put_alert_definition),

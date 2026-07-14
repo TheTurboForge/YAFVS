@@ -9,7 +9,6 @@ import Features from 'gmp/capabilities/features';
 import HttpCommand, {type HttpCommandOptions} from 'gmp/commands/http';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
-import {type XmlMeta, type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
 import date, {type Date} from 'gmp/models/date';
 import Setting from 'gmp/models/setting';
@@ -37,34 +36,42 @@ export interface CertificateInfo {
   issuer: string;
   activationTime?: Date;
   expirationTime?: Date;
-  md5Fingerprint: string;
+  sha256Fingerprint: string;
 }
 
-interface AuthSettingsResponseData extends XmlResponseData {
-  auth_settings: {
-    describe_auth_response: {
-      group: {
-        _name: string;
-        auth_conf_setting: {
-          key: string;
-          value: string | boolean;
-          certificate_info?: {
-            activation_time: string;
-            expiration_time: string;
-            md5_fingerprint: string;
-            issuer: string;
-          };
-        }[];
-      }[];
-    };
-  };
+interface NativeAuthCertificate {
+  activation_time?: string;
+  expiration_time?: string;
+  issuer?: string;
+  sha256?: string;
+  sha256_fingerprint?: string;
+  configured?: boolean;
 }
 
 interface AuthSettingsValues {
   enabled?: boolean;
+  allowPlaintext?: boolean;
   ldapsOnly?: boolean;
   certificateInfo?: CertificateInfo;
+  secretConfigured?: boolean;
   [key: string]: string | boolean | CertificateInfo | undefined;
+}
+
+interface NativeAuthProvider {
+  available: boolean;
+  enabled: boolean;
+  host: string;
+  auth_dn?: string;
+  allow_plaintext?: boolean;
+  ldaps_only?: boolean;
+  ca_certificate?: NativeAuthCertificate;
+  certificate?: NativeAuthCertificate;
+  secret_configured?: boolean;
+}
+
+interface NativeAuthSettingsResponse {
+  ldap?: NativeAuthProvider;
+  radius?: NativeAuthProvider;
 }
 
 interface CreateArguments {
@@ -119,9 +126,16 @@ const nativeSettingToModel = (setting: NativeSettingPayload) =>
     value: setting.value,
   });
 
-const fetchNativeJson = async <T>(http: Http, path: string): Promise<T> => {
+const fetchNativeJson = async <T>(
+  http: Http,
+  path: string,
+  includeTokenQuery = true,
+): Promise<T> => {
   const response = await fetch(
-    http.buildUrl(path, {token: http.session.token}),
+    http.buildUrl(
+      path,
+      includeTokenQuery ? {token: http.session.token} : undefined,
+    ),
     {
       method: 'GET',
       credentials: 'include',
@@ -236,46 +250,48 @@ class UserCommand extends HttpCommand {
     return cloneNativeUser(this.http, id);
   }
 
-  async currentAuthSettings(options: HttpCommandOptions = {}) {
-    const response = await this.httpGetWithTransform(
-      {
-        cmd: 'auth_settings',
-        name: '--',
-      },
-      options,
+  async currentAuthSettings(_options: HttpCommandOptions = {}) {
+    const data = await fetchNativeJson<NativeAuthSettingsResponse>(
+      this.http,
+      'api/v1/authentication-settings',
+      false,
     );
-    const {data} = response as Response<AuthSettingsResponseData, XmlMeta>;
     const settings = new Settings();
-    if (isDefined(data.auth_settings?.describe_auth_response)) {
-      forEach(data.auth_settings.describe_auth_response.group, group => {
-        const values: AuthSettingsValues = {};
-
-        forEach(group.auth_conf_setting, setting => {
-          if (setting.key === 'enable') {
-            values.enabled = setting.value === true;
-          } else if (setting.key === 'ldaps-only') {
-            values.ldapsOnly = setting.value === true;
-          } else {
-            values[setting.key] = setting.value;
-          }
-          if (isDefined(setting.certificate_info)) {
-            const {certificate_info} = setting;
-            values.certificateInfo = {
-              issuer: certificate_info.issuer,
-              md5Fingerprint: certificate_info.md5_fingerprint,
-              activationTime: certificate_info.activation_time
-                ? date(certificate_info.activation_time)
-                : undefined,
-              expirationTime: certificate_info.expiration_time
-                ? date(certificate_info.expiration_time)
-                : undefined,
-            };
-          }
-        });
-        settings.set(group._name, values);
+    const ldap = data.ldap;
+    if (ldap?.available) {
+      const certificate = ldap.ca_certificate ?? ldap.certificate;
+      const values: AuthSettingsValues = {
+        authdn: ldap.auth_dn,
+        allowPlaintext: ldap.allow_plaintext,
+        enabled: ldap.enabled,
+        ldaphost: ldap.host,
+        ldapsOnly: ldap.ldaps_only,
+      };
+      if (certificate && certificate.configured !== false) {
+        values.certificateInfo = {
+          issuer: certificate.issuer ?? '',
+          sha256Fingerprint:
+            certificate.sha256_fingerprint ?? certificate.sha256 ?? '',
+          activationTime: certificate.activation_time
+            ? date(certificate.activation_time)
+            : undefined,
+          expirationTime: certificate.expiration_time
+            ? date(certificate.expiration_time)
+            : undefined,
+        };
+      }
+      settings.set('method:ldap_connect', values);
+    }
+    const radius = data.radius;
+    if (radius?.available) {
+      settings.set('method:radius_connect', {
+        enabled: radius.enabled,
+        radiushost: radius.host,
+        secretConfigured: radius.secret_configured === true,
+        ...(radius.secret_configured ? {radiuskey: '********'} : {}),
       });
     }
-    return response.setData(settings);
+    return new Response(settings);
   }
 
   async getSetting(id: string) {

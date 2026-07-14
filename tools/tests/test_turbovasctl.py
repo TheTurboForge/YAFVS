@@ -3083,7 +3083,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["status"], "pass")
         self.assertEqual(details["by_category"]["required_runtime"]["count"], 0)
         self.assertEqual(details["by_category"]["required_test"]["count"], 0)
-        self.assertGreater(details["by_category"]["product_workflow"]["count"], 0)
+        self.assertEqual(details["by_category"]["product_workflow"]["count"], 0)
         self.assertGreater(details["by_category"]["compatibility_bridge"]["count"], 0)
         self.assertIn("tools/turbovasctl", details["by_category"]["compatibility_bridge"]["paths"])
         self.assertIn("tools/tests/test_turbovasctl.py", details["by_category"]["compatibility_bridge"]["paths"])
@@ -3174,8 +3174,8 @@ class TurboVASCtlTests(unittest.TestCase):
         residue_count = sum(item["count"] for item in product_residue.values())
         self.assertEqual(residue_count, details["by_category"]["product_workflow"]["count"])
         self.assertNotIn("scan-config-import-or-xml-export", product_residue)
-        self.assertIn("user-account-or-session", product_residue)
-        self.assertEqual(residue_count, 1)
+        self.assertNotIn("user-account-or-session", product_residue)
+        self.assertEqual(residue_count, 0)
         self.assertNotIn("compatibility-parser-model-or-test", product_residue)
         self.assertIn(
             "components/gsa/src/gmp/locale/date.ts",
@@ -3396,10 +3396,10 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 197)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 111)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 86)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 86)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 200)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 112)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 88)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 88)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["untracked_rust_route_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_direct_allowlist_count"], 0)
@@ -3433,8 +3433,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "method_parse_error_count",
             },
         )
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 88)
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 86)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 90)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 88)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["DELETE", "PATCH", "POST", "PUT"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
         self.assertFalse(status_only["details"]["browser_proxy_contract"]["write_proxy_requires_design"])
@@ -3488,7 +3488,7 @@ class TurboVASCtlTests(unittest.TestCase):
             },
         )
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_operation_id_count"], 0)
-        self.assertEqual(status_only["details"]["openapi_contract"]["operation_request_body_count"], 51)
+        self.assertEqual(status_only["details"]["openapi_contract"]["operation_request_body_count"], 53)
         self.assertEqual(status_only["details"]["openapi_contract"]["get_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["duplicate_operation_id_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["nondeterministic_operation_id_count"], 0)
@@ -3497,7 +3497,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["openapi_contract"]["operations_missing_error_response_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_error_schema_field_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_error_schema_field_count"], 0)
-        self.assertEqual(status_only["details"]["openapi_contract"]["request_body_schema_ref_count"], 48)
+        self.assertEqual(status_only["details"]["openapi_contract"]["request_body_schema_ref_count"], 50)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_request_body_schema_ref_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_request_body_schema_ref_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["auth_contract_alignment_status"], "pass")
@@ -3514,8 +3514,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_openapi_collection_parameter_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_rust_collection_contract_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["write_control_alignment_status"], "pass")
-        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_operation_count"], 89)
-        self.assertEqual(status_only["details"]["openapi_contract"]["direct_write_control_operation_count"], 86)
+        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_operation_count"], 91)
+        self.assertEqual(status_only["details"]["openapi_contract"]["direct_write_control_operation_count"], 88)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_write_control_metadata_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_write_control_metadata_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_write_control_path_parameter_count"], 0)
@@ -3552,8 +3552,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["missing_rust_direct_allowlist"], [])
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
-        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 111)
-        self.assertEqual(contract["openapi_marked_direct_write_control_count"], 86)
+        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 112)
+        self.assertEqual(contract["openapi_marked_direct_write_control_count"], 88)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
             [
@@ -3641,11 +3641,13 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /api/v1/user-management/users",
                 "POST /api/v1/user-management/users/{user_id}/clone",
                 "PUT /api/v1/alerts/{alert_id}/definition",
+                "PUT /api/v1/authentication-settings/ldap",
+                "PUT /api/v1/authentication-settings/radius",
                 "PUT /api/v1/users/current/settings/{setting_id}",
                 "PUT /api/v1/users/current/timezone",
             ],
         )
-        self.assertEqual(contract["non_get_openapi_marked_direct_count"], 86)
+        self.assertEqual(contract["non_get_openapi_marked_direct_count"], 88)
         self.assertEqual(
             contract["non_get_openapi_marked_direct_operations"],
             [
@@ -3733,6 +3735,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /api/v1/user-management/users",
                 "POST /api/v1/user-management/users/{user_id}/clone",
                 "PUT /api/v1/alerts/{alert_id}/definition",
+                "PUT /api/v1/authentication-settings/ldap",
+                "PUT /api/v1/authentication-settings/radius",
                 "PUT /api/v1/users/current/settings/{setting_id}",
                 "PUT /api/v1/users/current/timezone",
             ],
@@ -3896,8 +3900,8 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.browser-proxy-contract"]["status"], "pass")
-        self.assertEqual(contract["browser_write_proxy_count"], 88)
-        self.assertEqual(contract["direct_write_control_count"], 86)
+        self.assertEqual(contract["browser_write_proxy_count"], 90)
+        self.assertEqual(contract["direct_write_control_count"], 88)
         self.assertEqual(contract["gsad_proxy_methods"], ["DELETE", "PATCH", "POST", "PUT"])
         self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
         self.assertEqual(contract["write_proxy_boundary_status"], "pass")
@@ -4245,7 +4249,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 200)
+        self.assertEqual(contract["operation_count"], 203)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertIn(
@@ -4296,6 +4300,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /schedules",
                 "PATCH /schedules/{schedule_id}",
                 "POST /schedules/{schedule_id}/clone",
+                "PUT /authentication-settings/ldap",
+                "PUT /authentication-settings/radius",
                 "POST /user-management/users",
                 "PATCH /user-management/users/{user_id}",
                 "PUT /users/current/settings/{setting_id}",
@@ -4356,6 +4362,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'alert-retained-definition-read',
          'alert-test-actions',
          'alert-trash-move',
+         'authentication-provider-settings-read',
          'cert-bund-advisory-catalog-detail-read',
          'cert-bund-advisory-list-read',
          'cert-bund-advisory-metadata-export-read',
@@ -4385,6 +4392,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'host-identifier-delete',
          'host-manual-create',
          'host-operating-system-delete',
+         'ldap-authentication-provider-settings-write',
          'native-evidence-pdf-report-download',
          'none',
          'nvt-catalog-detail-read',
@@ -4414,6 +4422,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'port-list-range-delete',
          'port-list-restore',
          'port-list-trash-move',
+         'radius-authentication-provider-settings-write',
          'raw-report-application-evidence-read',
          'raw-report-cve-evidence-read',
          'raw-report-detail-summary-read',
@@ -4635,9 +4644,9 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass", json.dumps(result, sort_keys=True))
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 200)
-        self.assertEqual(details["direct_operation_count"], 197)
-        self.assertEqual(details["direct_read_operation_count"], 111)
+        self.assertEqual(details["operation_count"], 203)
+        self.assertEqual(details["direct_operation_count"], 200)
+        self.assertEqual(details["direct_read_operation_count"], 112)
         self.assertIn(
             "POST /tasks/{task_id}/replace-target",
             details["non_get_direct_operations"],
@@ -4713,6 +4722,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /schedules/{schedule_id}/clone",
                 "POST /schedules/{schedule_id}/restore",
                 "DELETE /schedules/{schedule_id}/trash",
+                "PUT /authentication-settings/ldap",
+                "PUT /authentication-settings/radius",
                 "POST /user-management/users",
                 "POST /user-management/users/{user_id}/clone",
                 "PUT /users/current/settings/{setting_id}",
@@ -4771,10 +4782,10 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["operation_count"], full["details"]["operation_count"])
         self.assertEqual(status_only["details"]["direct_operation_count"], full["details"]["direct_operation_count"])
         self.assertEqual(status_only["details"]["direct_read_operation_count"], full["details"]["direct_read_operation_count"])
-        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 86)
-        self.assertEqual(status_only["details"]["write_control_operation_count"], 89)
-        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 86)
-        self.assertEqual(status_only["details"]["operation_request_body_count"], 51)
+        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 88)
+        self.assertEqual(status_only["details"]["write_control_operation_count"], 91)
+        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 88)
+        self.assertEqual(status_only["details"]["operation_request_body_count"], 53)
         self.assertEqual(status_only["details"]["get_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_alignment_status"], "pass")
         self.assertEqual(status_only["details"]["auth_contract_alignment_status"], "pass")
@@ -4954,11 +4965,11 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 200)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 200)
-        self.assertEqual(details["summary"]["inventory_rows"], 200)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 200)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 200)
+        self.assertEqual(details["summary"]["total_rows"], 203)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 203)
+        self.assertEqual(details["summary"]["inventory_rows"], 203)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 203)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 203)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -5745,8 +5756,14 @@ class TurboVASCtlTests(unittest.TestCase):
             "findings": [],
         }
 
+        source_teardown = {
+            "percent": 0.0,
+            "status": "in_progress",
+            "components": {"python-gvm": "present", "gvm-tools": "present"},
+        }
         with unittest.mock.patch.object(turbovasctl, "command_native_tooling_state", return_value=tooling), \
-             unittest.mock.patch.object(turbovasctl, "command_native_api_migration_matrix", return_value=matrix):
+             unittest.mock.patch.object(turbovasctl, "command_native_api_migration_matrix", return_value=matrix), \
+             unittest.mock.patch.object(turbovasctl, "legacy_component_source_teardown", return_value=source_teardown):
             result = turbovasctl.command_native_api_replacement_dashboard(root, status_only=True)
 
         weighted = result["weighted_estimate"]
@@ -5757,8 +5774,11 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(weighted["components"]["inherited_tail_burndown_percent"], 60.0)
         self.assertEqual(result["tooling_retirement_status"]["safe_removal_count"], 1)
         legacy = result["legacy_helper_removal_readiness"]
-        self.assertEqual(result["legacy_helper_removal_readiness_percent"], 63.9)
+        self.assertEqual(result["legacy_helper_removal_readiness_percent"], 64.3)
         self.assertEqual(legacy["kind"], "weighted_estimate")
+        self.assertEqual(legacy["components"]["stage1_replacement_percent"], 71.5)
+        self.assertFalse(legacy["components"]["stage1_complete"])
+        self.assertEqual(legacy["components"]["stage2_component_source_teardown_percent"], 0.0)
         self.assertEqual(legacy["components"]["direct_legacy_dependency_burndown_percent"], 79.7)
         self.assertEqual(legacy["components"]["gvm_tools_script_removal_percent"], 25.0)
         self.assertEqual(legacy["blockers"]["direct_legacy_blocker_count"], 12)
@@ -5767,6 +5787,18 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(legacy["blockers"]["gvm_tools_tracked_baseline_count"], 4)
         self.assertEqual(legacy["blockers"]["gvm_tools_tracked_removed_count"], 1)
         self.assertEqual(result["next_best_slices"][0]["focus"], "target-writes")
+
+    def test_legacy_component_source_teardown_tracks_both_components(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "components" / "python-gvm").mkdir(parents=True)
+
+            result = turbovasctl.legacy_component_source_teardown(root)
+
+        self.assertEqual(result["percent"], 50.0)
+        self.assertEqual(result["status"], "in_progress")
+        self.assertEqual(result["components"]["python-gvm"], "present")
+        self.assertEqual(result["components"]["gvm-tools"], "absent")
 
     def test_closeout_readiness_downgrades_optional_production_posture_to_watch(self):
         root = Path(__file__).resolve().parents[2]
@@ -5795,7 +5827,7 @@ class TurboVASCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 200)
+        self.assertEqual(len(operation_ids), 203)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(turbovasctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(turbovasctl.openapi_contract_operation_id("patch", "/alerts/{alert_id}"), "patchAlertsByAlertId")
@@ -5879,6 +5911,9 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /alerts/{alert_id}/clone",
                 "POST /alerts/{alert_id}/deliver-report",
                 "POST /alerts/{alert_id}/test",
+                "GET /authentication-settings",
+                "PUT /authentication-settings/ldap",
+                "PUT /authentication-settings/radius",
                 "POST /credentials",
                 "GET /user-management/users",
                 "POST /user-management/users",

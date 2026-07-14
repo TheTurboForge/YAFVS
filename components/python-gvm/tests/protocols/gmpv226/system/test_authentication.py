@@ -1,23 +1,12 @@
 # SPDX-FileCopyrightText: 2023-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-from ...gmpv224.system.authentication import (
-    GmpAuthenticateTestMixin,
-    GmpDescribeAuthTestMixin,
-    GmpModifyAuthTestMixin,
-)
+from ...gmpv224.system.authentication import GmpAuthenticateTestMixin
 from ...gmpv226 import GMPTestCase
 
 
 class GMPAuthenticateTestCase(GmpAuthenticateTestMixin, GMPTestCase):
-    pass
-
-
-class GMPModifyAuthTestCase(GmpModifyAuthTestMixin, GMPTestCase):
-    pass
-
-
-class GMPDescribeAuthCommandTestCase(GmpDescribeAuthTestMixin, GMPTestCase):
     pass

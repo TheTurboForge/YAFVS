@@ -5,7 +5,18 @@
 
 #define copy_user turbovas_control_test_copy_user
 #define g_log_structured turbovas_control_test_log_structured
+#define manage_auth_settings_clear \
+  turbovas_control_test_manage_auth_settings_clear
+#define manage_auth_settings_read turbovas_control_test_manage_auth_settings_read
+#define manage_auth_settings_write_ldap \
+  turbovas_control_test_manage_auth_settings_write_ldap
+#define manage_auth_settings_write_radius \
+  turbovas_control_test_manage_auth_settings_write_radius
 #include "turbovas_control.c"
+#undef manage_auth_settings_write_radius
+#undef manage_auth_settings_write_ldap
+#undef manage_auth_settings_read
+#undef manage_auth_settings_clear
 #undef g_log_structured
 #undef copy_user
 
@@ -88,6 +99,19 @@ static int trash_empty_audit_success_calls;
 static int trash_empty_structured_audit_calls;
 static int audit_fail_calls;
 static int audit_success_calls;
+static int auth_settings_read_calls;
+static int auth_settings_read_result;
+static int auth_settings_ldap_write_calls;
+static int auth_settings_ldap_write_result;
+static int auth_settings_radius_write_calls;
+static int auth_settings_radius_write_result;
+static int received_auth_enabled;
+static int received_auth_allow_plaintext;
+static int received_auth_ldaps_only;
+static gchar *received_auth_host;
+static gchar *received_authdn;
+static gchar *received_auth_cacert;
+static gchar *received_radius_secret;
 static const char *alert_test_script_message;
 static const char *mock_operator_name;
 static const char *mock_target_auth_method;
@@ -155,6 +179,93 @@ static gchar *trash_empty_audit_expected_total;
 static gchar *trash_empty_audit_message;
 static gchar *trash_empty_audit_operator_uuid;
 static gchar *trash_empty_audit_outcome;
+static gboolean auth_settings_empty_required;
+
+manage_auth_settings_result_t
+turbovas_control_test_manage_auth_settings_read (
+  manage_auth_settings_t *settings)
+{
+  assert_that (current_credentials.uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (current_credentials.username, is_equal_to_string ("operator"));
+  auth_settings_read_calls++;
+  if (auth_settings_read_result != MANAGE_AUTH_SETTINGS_OK)
+    return auth_settings_read_result;
+
+  memset (settings, 0, sizeof (*settings));
+  settings->ldap_available = 1;
+  settings->ldap_enabled = 1;
+  settings->ldap_host =
+    g_strdup (auth_settings_empty_required ? "" : "ldap.example.test");
+  settings->ldap_authdn = g_strdup (
+    auth_settings_empty_required ? "" : "uid=%s,dc=example,dc=test");
+  settings->ldap_allow_plaintext = 0;
+  settings->ldap_ldaps_only = 1;
+  settings->ldap_cert_present = 1;
+  settings->ldap_cert_sha256 = g_strdup ("A1B2C3");
+  settings->ldap_cert_issuer = g_strdup ("CN=Example CA");
+  settings->ldap_cert_activation = g_strdup ("2026-01-01T00:00:00Z");
+  settings->ldap_cert_expiration = g_strdup ("2027-01-01T00:00:00Z");
+  settings->ldap_cert_time_status = g_strdup ("valid");
+  settings->radius_available = 1;
+  settings->radius_enabled = 0;
+  settings->radius_host =
+    g_strdup (auth_settings_empty_required ? "" : "radius.example.test");
+  settings->radius_secret_configured = 1;
+  return MANAGE_AUTH_SETTINGS_OK;
+}
+
+void
+turbovas_control_test_manage_auth_settings_clear (
+  manage_auth_settings_t *settings)
+{
+  g_clear_pointer (&settings->ldap_host, g_free);
+  g_clear_pointer (&settings->ldap_authdn, g_free);
+  g_clear_pointer (&settings->ldap_cert_sha256, g_free);
+  g_clear_pointer (&settings->ldap_cert_issuer, g_free);
+  g_clear_pointer (&settings->ldap_cert_activation, g_free);
+  g_clear_pointer (&settings->ldap_cert_expiration, g_free);
+  g_clear_pointer (&settings->ldap_cert_time_status, g_free);
+  g_clear_pointer (&settings->radius_host, g_free);
+  memset (settings, 0, sizeof (*settings));
+}
+
+manage_auth_settings_result_t
+turbovas_control_test_manage_auth_settings_write_ldap (
+  int enabled, const gchar *host, const gchar *authdn, int allow_plaintext,
+  int ldaps_only, const gchar *cacert)
+{
+  assert_that (current_credentials.uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (current_credentials.username, is_equal_to_string ("operator"));
+  auth_settings_ldap_write_calls++;
+  received_auth_enabled = enabled;
+  received_auth_allow_plaintext = allow_plaintext;
+  received_auth_ldaps_only = ldaps_only;
+  g_free (received_auth_host);
+  g_free (received_authdn);
+  g_free (received_auth_cacert);
+  received_auth_host = g_strdup (host);
+  received_authdn = g_strdup (authdn);
+  received_auth_cacert = g_strdup (cacert);
+  return auth_settings_ldap_write_result;
+}
+
+manage_auth_settings_result_t
+turbovas_control_test_manage_auth_settings_write_radius (
+  int enabled, const gchar *host, const gchar *secret)
+{
+  assert_that (current_credentials.uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (current_credentials.username, is_equal_to_string ("operator"));
+  auth_settings_radius_write_calls++;
+  received_auth_enabled = enabled;
+  g_free (received_auth_host);
+  g_free (received_radius_secret);
+  received_auth_host = g_strdup (host);
+  received_radius_secret = g_strdup (secret);
+  return auth_settings_radius_write_result;
+}
 
 static void
 assert_trash_empty_audit_operator_session (void)
@@ -1695,6 +1806,280 @@ dispatch_trash_empty_request (const char *request,
   close (sockets[1]);
 
   return response_len;
+}
+
+static ssize_t
+dispatch_auth_settings_request (
+  const char *request,
+  char response[TURBOVAS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES])
+{
+  int sockets[2];
+  ssize_t response_len;
+
+  assert_that (socketpair (AF_UNIX, SOCK_STREAM, 0, sockets), is_equal_to (0));
+  assert_that (write (sockets[0], request, strlen (request)),
+               is_equal_to ((ssize_t) strlen (request)));
+  assert_that (shutdown (sockets[0], SHUT_WR), is_equal_to (0));
+  turbovas_control_serve_client (sockets[1]);
+  response_len =
+    read (sockets[0], response,
+          TURBOVAS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES - 1);
+  close (sockets[0]);
+  close (sockets[1]);
+  return response_len;
+}
+
+static void
+reset_auth_settings_test (void)
+{
+  auth_settings_read_calls = 0;
+  auth_settings_read_result = MANAGE_AUTH_SETTINGS_OK;
+  auth_settings_ldap_write_calls = 0;
+  auth_settings_ldap_write_result = MANAGE_AUTH_SETTINGS_OK;
+  auth_settings_radius_write_calls = 0;
+  auth_settings_radius_write_result = MANAGE_AUTH_SETTINGS_OK;
+  auth_settings_empty_required = FALSE;
+  cleanup_calls = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  g_clear_pointer (&received_auth_host, g_free);
+  g_clear_pointer (&received_authdn, g_free);
+  g_clear_pointer (&received_auth_cacert, g_free);
+  g_clear_pointer (&received_radius_secret, g_free);
+  mock_operator_name = "operator";
+}
+
+Ensure (turbovas_control, parses_strict_auth_settings_frames)
+{
+  const char *read_request =
+    "auth-settings-read " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000\n";
+  const char *empty_ldap_request =
+    "auth-settings-ldap-write " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 0 - - 1 0 -\n";
+  const char *empty_radius_request =
+    "auth-settings-radius-write " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 1 - -\n";
+  const char *radius_request =
+    "auth-settings-radius-write " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 1 "
+    "cmFkaXVzLmV4YW1wbGU= c2VjcmV0\n";
+  turbovas_control_auth_settings_ldap_request_t ldap = {0};
+  turbovas_control_auth_settings_radius_request_t radius = {0};
+  char operator_uuid[37];
+
+  assert_that (turbovas_control_parse_auth_settings_read_request (
+                 read_request, strlen (read_request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid), is_true);
+  assert_that (operator_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+
+  assert_that (turbovas_control_parse_auth_settings_ldap_write_request (
+                 empty_ldap_request, strlen (empty_ldap_request),
+                 TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                 operator_uuid, &ldap), is_true);
+  assert_that (ldap.enabled, is_equal_to (0));
+  assert_that (ldap.host, is_equal_to_string (""));
+  assert_that (ldap.authdn, is_equal_to_string (""));
+  assert_that (ldap.allow_plaintext, is_equal_to (1));
+  assert_that (ldap.ldaps_only, is_equal_to (0));
+  assert_that (ldap.cacert, is_null);
+  turbovas_control_auth_settings_ldap_request_clear (&ldap);
+
+  assert_that (turbovas_control_parse_auth_settings_radius_write_request (
+                 empty_radius_request, strlen (empty_radius_request),
+                 TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                 operator_uuid, &radius), is_true);
+  assert_that (radius.host, is_equal_to_string (""));
+  assert_that (radius.secret, is_null);
+  turbovas_control_auth_settings_radius_request_clear (&radius);
+
+  assert_that (turbovas_control_parse_auth_settings_radius_write_request (
+                 radius_request, strlen (radius_request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &radius),
+               is_true);
+  assert_that (radius.host, is_equal_to_string ("radius.example"));
+  assert_that (radius.secret, is_equal_to_string ("secret"));
+  turbovas_control_auth_settings_radius_request_clear (&radius);
+}
+
+Ensure (turbovas_control, rejects_malformed_auth_settings_frames)
+{
+  static const char *requests[] = {
+    "auth-settings-read " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 \n",
+    "auth-settings-ldap-write " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 2 - - 0 0 -\n",
+    "auth-settings-ldap-write " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 1 aG9zdAo= "
+    "dWlkPSVzLGRjPWV4YW1wbGU= 0 0 -\n",
+    "auth-settings-radius-write " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 1 cmFkaXVz c2VjcmV0 extra\n",
+    "auth-settings-radius-write " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 1 cmFkaXVz= c2VjcmV0\n",
+  };
+  turbovas_control_auth_settings_ldap_request_t ldap = {0};
+  turbovas_control_auth_settings_radius_request_t radius = {0};
+  char operator_uuid[37];
+
+  assert_that (turbovas_control_parse_auth_settings_read_request (
+                 requests[0], strlen (requests[0]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid), is_false);
+  assert_that (turbovas_control_parse_auth_settings_ldap_write_request (
+                 requests[1], strlen (requests[1]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &ldap),
+               is_false);
+  assert_that (turbovas_control_parse_auth_settings_ldap_write_request (
+                 requests[2], strlen (requests[2]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &ldap),
+               is_false);
+  assert_that (turbovas_control_parse_auth_settings_radius_write_request (
+                 requests[3], strlen (requests[3]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &radius),
+               is_false);
+  assert_that (turbovas_control_parse_auth_settings_radius_write_request (
+                 requests[4], strlen (requests[4]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &radius),
+               is_false);
+}
+
+Ensure (turbovas_control, maps_auth_settings_responses)
+{
+  manage_auth_settings_t empty = {
+    .ldap_host = "",
+    .ldap_authdn = "",
+    .radius_host = "",
+  };
+  gchar *read_response;
+
+  read_response = turbovas_control_auth_settings_read_response (&empty);
+  assert_that (
+    read_response,
+    is_equal_to_string (
+      "0 settings 0 0 - - 0 0 0 - - - - - 0 0 - 0\n"));
+  turbovas_control_secure_free (read_response);
+
+  assert_that (turbovas_control_auth_settings_response (0),
+               is_equal_to_string ("0 updated\n"));
+  assert_that (turbovas_control_auth_settings_response (1),
+               is_equal_to_string ("1 invalid-auth-dn\n"));
+  assert_that (turbovas_control_auth_settings_response (2),
+               is_equal_to_string ("2 invalid-certificate\n"));
+  assert_that (turbovas_control_auth_settings_response (3),
+               is_equal_to_string ("3 provider-unavailable\n"));
+  assert_that (turbovas_control_auth_settings_response (4),
+               is_equal_to_string ("4 encryption-failed\n"));
+  assert_that (turbovas_control_auth_settings_response (99),
+               is_equal_to_string ("99 permission-denied\n"));
+  assert_that (turbovas_control_auth_settings_response (-2),
+               is_equal_to_string ("-2 invalid-request\n"));
+  assert_that (turbovas_control_auth_settings_response (-1),
+               is_equal_to_string ("-1 internal-error\n"));
+}
+
+Ensure (turbovas_control, runs_auth_settings_in_authorized_operator_session)
+{
+  turbovas_control_auth_settings_ldap_request_t ldap = {
+    .enabled = 1,
+    .host = "ldap.example",
+    .authdn = "uid=%s,dc=example",
+    .allow_plaintext = 0,
+    .ldaps_only = 1,
+    .cacert = "certificate",
+  };
+  turbovas_control_auth_settings_radius_request_t radius = {
+    .enabled = 0,
+    .host = "radius.example",
+    .secret = "secret",
+  };
+  gchar *response = NULL;
+
+  reset_auth_settings_test ();
+  assert_that (turbovas_control_read_auth_settings (
+                 "123e4567-e89b-12d3-a456-426614174000", &response),
+               is_equal_to (MANAGE_AUTH_SETTINGS_OK));
+  assert_that (auth_settings_read_calls, is_equal_to (1));
+  assert_that (response, contains_string ("0 settings 1 1 "));
+  assert_that (strstr (response, "certificate"), is_null);
+  assert_that (strstr (response, "secret"), is_null);
+  turbovas_control_secure_free (response);
+
+  assert_that (turbovas_control_write_ldap_auth_settings (
+                 "123e4567-e89b-12d3-a456-426614174000", &ldap),
+               is_equal_to (MANAGE_AUTH_SETTINGS_OK));
+  assert_that (auth_settings_ldap_write_calls, is_equal_to (1));
+  assert_that (received_auth_host, is_equal_to_string ("ldap.example"));
+  assert_that (received_authdn, is_equal_to_string ("uid=%s,dc=example"));
+  assert_that (received_auth_cacert, is_equal_to_string ("certificate"));
+
+  assert_that (turbovas_control_write_radius_auth_settings (
+                 "123e4567-e89b-12d3-a456-426614174000", &radius),
+               is_equal_to (MANAGE_AUTH_SETTINGS_OK));
+  assert_that (auth_settings_radius_write_calls, is_equal_to (1));
+  assert_that (received_radius_secret, is_equal_to_string ("secret"));
+  assert_that (cleanup_calls, is_equal_to (3));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+  reset_auth_settings_test ();
+}
+
+Ensure (turbovas_control, round_trips_empty_auth_settings_fields)
+{
+  const char *ldap_request =
+    "auth-settings-ldap-write " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 1 - - 0 1 -\n";
+  const char *read_request =
+    "auth-settings-read " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000\n";
+  char response[TURBOVAS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES] = {0};
+  ssize_t response_len;
+
+  reset_auth_settings_test ();
+  auth_settings_ldap_write_result = MANAGE_AUTH_SETTINGS_INVALID_AUTH_DN;
+  assert_that (
+    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+  response_len = dispatch_auth_settings_request (ldap_request, response);
+  response[response_len] = '\0';
+  assert_that (response, is_equal_to_string ("1 invalid-auth-dn\n"));
+  assert_that (received_auth_host, is_equal_to_string (""));
+  assert_that (received_authdn, is_equal_to_string (""));
+
+  auth_settings_empty_required = TRUE;
+  response_len = dispatch_auth_settings_request (read_request, response);
+  response[response_len] = '\0';
+  assert_that (g_str_has_prefix (response,
+                                 "0 settings 1 1 - - 0 1 1 "), is_true);
+  assert_that (g_str_has_suffix (response, " 1 0 - 1\n"), is_true);
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  reset_auth_settings_test ();
+}
+
+Ensure (turbovas_control, rejects_unknown_auth_settings_operator_and_malformed_frame)
+{
+  const char *read_request =
+    "auth-settings-read " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000\n";
+  const char *malformed =
+    "auth-settings-radius-write " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 1 bad= -\n";
+  char response[TURBOVAS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES] = {0};
+  ssize_t response_len;
+
+  reset_auth_settings_test ();
+  mock_operator_name = NULL;
+  assert_that (
+    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+  response_len = dispatch_auth_settings_request (read_request, response);
+  response[response_len] = '\0';
+  assert_that (response, is_equal_to_string ("99 permission-denied\n"));
+  assert_that (auth_settings_read_calls, is_equal_to (0));
+
+  mock_operator_name = "operator";
+  response_len = dispatch_auth_settings_request (malformed, response);
+  response[response_len] = '\0';
+  assert_that (response, is_equal_to_string ("-2 invalid-request\n"));
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  reset_auth_settings_test ();
 }
 
 static void
@@ -6320,6 +6705,20 @@ main (int argc, char **argv)
 
   suite = create_test_suite ();
 
+  add_test_with_context (suite, turbovas_control,
+                         parses_strict_auth_settings_frames);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_malformed_auth_settings_frames);
+  add_test_with_context (suite, turbovas_control,
+                         maps_auth_settings_responses);
+  add_test_with_context (
+    suite, turbovas_control,
+    runs_auth_settings_in_authorized_operator_session);
+  add_test_with_context (suite, turbovas_control,
+                         round_trips_empty_auth_settings_fields);
+  add_test_with_context (
+    suite, turbovas_control,
+    rejects_unknown_auth_settings_operator_and_malformed_frame);
   add_test_with_context (suite, turbovas_control,
                          parses_strict_user_setting_modify_frames);
   add_test_with_context (suite, turbovas_control,

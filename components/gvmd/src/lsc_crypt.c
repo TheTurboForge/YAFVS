@@ -1,4 +1,5 @@
 /* Copyright (C) 2013-2022 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -21,6 +22,26 @@
 #include <gvm/util/gpgmeutils.h>
 
 #include "lsc_crypt.h"
+
+static void
+clear_sensitive_buffer (void *value, size_t length)
+{
+  volatile unsigned char *cursor = value;
+
+  if (value == NULL)
+    return;
+  while (length--)
+    *cursor++ = 0;
+}
+
+static void
+clear_sensitive_gstring (GString *value)
+{
+  if (value == NULL)
+    return;
+  clear_sensitive_buffer (value->str, value->len);
+  g_string_free (value, TRUE);
+}
 
 #undef G_LOG_DOMAIN
 /**
@@ -75,7 +96,8 @@ struct lsc_crypt_ctx_s
   gchar *enckey_uid;           ///< Encryption key UID to use.
 };
 
-
+
+
 /* Key generation parameters  */
 
 /**
@@ -88,7 +110,8 @@ gchar *enckey_type = NULL;
  */
 int enckey_length = 0;
 
-
+
+
 /* Simple helper functions  */
 
 /**
@@ -155,7 +178,8 @@ get32 (const void *buffer)
   return value;
 }
 
-
+
+
 /* Local functions. */
 
 /**
@@ -507,7 +531,8 @@ do_decrypt (lsc_crypt_ctx_t ctx, const char *cipherstring,
 }
 
 
-
+
+
 /* API */
 
 /**
@@ -677,7 +702,7 @@ lsc_crypt_encrypt_hashtable (lsc_crypt_ctx_t ctx, GHashTable *data)
             {
               g_warning ("%s: value for '%s' larger than our limit (%d)",
                          G_STRFUNC, name, MAX_VALUE_LENGTH);
-              g_string_free (stringbuf, TRUE);
+              clear_sensitive_gstring (stringbuf);
               return NULL;
             }
           put32 (stringbuf, len);
@@ -690,6 +715,7 @@ lsc_crypt_encrypt_hashtable (lsc_crypt_ctx_t ctx, GHashTable *data)
   g_assert (plaintextlen);
 
   ciphertext = do_encrypt (ctx, plaintext, plaintextlen);
+  clear_sensitive_buffer (plaintext, plaintextlen);
   g_free (plaintext);
 
   return ciphertext;
@@ -745,7 +771,7 @@ lsc_crypt_encrypt (lsc_crypt_ctx_t ctx, const char *first_name, ...)
             {
               g_warning ("%s: value for '%s' larger than our limit (%d)",
                          G_STRFUNC, name, MAX_VALUE_LENGTH);
-              g_string_free (stringbuf, TRUE);
+              clear_sensitive_gstring (stringbuf);
               va_end (arg_ptr);
               return NULL;
             }
@@ -761,6 +787,7 @@ lsc_crypt_encrypt (lsc_crypt_ctx_t ctx, const char *first_name, ...)
   g_assert (plaintextlen);
 
   ciphertext = do_encrypt (ctx, plaintext, plaintextlen);
+  clear_sensitive_buffer (plaintext, plaintextlen);
   g_free (plaintext);
 
   return ciphertext;

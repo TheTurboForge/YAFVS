@@ -27,6 +27,7 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
             | ["", "api", "v1", "scanners"]
             | ["", "api", "v1", "credentials"]
             | ["", "api", "v1", "users"]
+            | ["", "api", "v1", "authentication-settings"]
             | ["", "api", "v1", "user-management", "users"]
             | ["", "api", "v1", "users", "current", "settings"]
             | ["", "api", "v1", "scan-configs"]
@@ -152,6 +153,8 @@ pub(crate) fn direct_api_v1_method_is_allowed(
 fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bool {
     let parts = path.split('/').collect::<Vec<_>>();
     match (method, parts.as_slice()) {
+        (&Method::PUT, ["", "api", "v1", "authentication-settings", "ldap"]) => true,
+        (&Method::PUT, ["", "api", "v1", "authentication-settings", "radius"]) => true,
         (&Method::POST, ["", "api", "v1", "user-management", "users"]) => true,
         (
             &Method::POST,

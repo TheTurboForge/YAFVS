@@ -424,20 +424,18 @@ const Menu = () => {
             isPathMatch: isFeedStatusActive,
             active: isFeedStatusActive,
           },
-          capabilities.mayOp('describe_auth') &&
-            capabilities.mayOp('modify_auth') && {
-              label: _('LDAP'),
-              to: '/ldap',
-              isPathMatch: isLdapActive,
-              active: isLdapActive,
-            },
-          capabilities.mayOp('describe_auth') &&
-            capabilities.mayOp('modify_auth') && {
-              label: _('RADIUS'),
-              to: '/radius',
-              isPathMatch: isRadiusActive,
-              active: isRadiusActive,
-            },
+          {
+            label: _('LDAP'),
+            to: '/ldap',
+            isPathMatch: isLdapActive,
+            active: isLdapActive,
+          },
+          {
+            label: _('RADIUS'),
+            to: '/radius',
+            isPathMatch: isRadiusActive,
+            active: isRadiusActive,
+          },
         ].filter(Boolean),
       },
     ].filter(Boolean),

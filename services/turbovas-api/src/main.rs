@@ -20,6 +20,7 @@ mod alerts;
 mod app_state;
 mod asset_user_tag_query_sql;
 mod auth;
+mod authentication_settings;
 mod browser_proxy_alert_definition;
 mod browser_proxy_api;
 mod browser_proxy_filter;
@@ -293,6 +294,8 @@ mod alert_write_characterization_tests;
 mod alert_writes_tests;
 #[cfg(test)]
 mod asset_detail_contract_tests;
+#[cfg(test)]
+mod authentication_settings_characterization_tests;
 #[cfg(test)]
 mod collection_contract_tests;
 #[cfg(test)]

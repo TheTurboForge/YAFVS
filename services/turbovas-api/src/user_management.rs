@@ -736,6 +736,23 @@ mod tests {
     const OPERATOR: &str = "123e4567-e89b-12d3-a456-426614174000";
     const USER: &str = "123e4567-e89b-12d3-a456-426614174001";
 
+    #[test]
+    fn delete_user_postgres_format_tokens_are_escaped_for_the_c_sql_builder() {
+        let source = include_str!("../../../components/gvmd/src/manage_sql_users.c");
+        let delete_user = source
+            .split_once("delete_user (const char *user_id_arg")
+            .unwrap()
+            .1
+            .split_once("\nint\ncopy_user")
+            .unwrap()
+            .0;
+
+        assert!(delete_user.contains("format('UPDATE %%I SET owner = %%s WHERE owner = %%s',"));
+        assert!(delete_user.contains("format('UPDATE %%I SET owner = NULL WHERE owner = %%s',"));
+        assert_eq!(delete_user.matches("%%I").count(), 2);
+        assert_eq!(delete_user.matches("%%s").count(), 3);
+    }
+
     fn operator() -> DirectApiOperator {
         DirectApiOperator::new(OPERATOR, Some("operator".to_string())).unwrap()
     }

@@ -807,7 +807,7 @@ delete_user (const char *user_id_arg, const char *name_arg,
     sql ("DO $$ DECLARE r record; BEGIN"
          " FOR r IN SELECT table_name FROM information_schema.columns"
          "          WHERE table_schema = 'public' AND column_name = 'owner' LOOP"
-         "   EXECUTE format('UPDATE %I SET owner = %s WHERE owner = %s',"
+         "   EXECUTE format('UPDATE %%I SET owner = %%s WHERE owner = %%s',"
          "                  r.table_name, %llu, %llu);"
          " END LOOP; END $$;",
          inheritor,
@@ -816,7 +816,7 @@ delete_user (const char *user_id_arg, const char *name_arg,
     sql ("DO $$ DECLARE r record; BEGIN"
          " FOR r IN SELECT table_name FROM information_schema.columns"
          "          WHERE table_schema = 'public' AND column_name = 'owner' LOOP"
-         "   EXECUTE format('UPDATE %I SET owner = NULL WHERE owner = %s',"
+         "   EXECUTE format('UPDATE %%I SET owner = NULL WHERE owner = %%s',"
          "                  r.table_name, %llu);"
          " END LOOP; END $$;",
          user);

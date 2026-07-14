@@ -35,6 +35,9 @@ extern gboolean
 gsad_native_api_test_put_path_is_allowed (const gchar *path);
 extern gboolean
 gsad_native_api_test_delete_path_is_allowed (const gchar *path);
+extern gboolean
+gsad_native_api_test_parse_user_password_change_request (
+  const gchar *body, gsize body_length, gchar **new_password);
 
 /* Handler dependencies are not part of this parser-focused unit target. */
 gsad_user_t *
@@ -45,10 +48,81 @@ gsad_credentials_get_user (gsad_credentials_t *credentials)
            : NULL;
 }
 
+const gchar *
+gsad_user_get_token (gsad_user_t *user)
+{
+  return user == (gsad_user_t *) GINT_TO_POINTER (1) ? "token" : NULL;
+}
+
+void
+gsad_user_set_password (gsad_user_t *user, const gchar *password)
+{
+  (void) user;
+  (void) password;
+}
+
+void
+gsad_session_remove_other_sessions (const gchar *keep_id,
+                                    const gchar *username)
+{
+  (void) keep_id;
+  (void) username;
+}
+
+void
+gsad_session_replace_user_if_exists (gsad_user_t *user)
+{
+  (void) user;
+}
+
 void
 gsad_credentials_free (gsad_credentials_t *credentials)
 {
   (void) credentials;
+}
+
+Describe (gsad_native_api);
+
+Ensure (gsad_native_api,
+        should_only_allow_strict_current_user_password_change_posts)
+{
+  const gchar *valid_path = "/api/v1/users/current/password";
+  const gchar *valid_body =
+    "{\"old_password\":\"old secret\",\"new_password\":\"new secret\"}";
+  const gchar *invalid_bodies[] = {
+    "{}",
+    "{\"old_password\":\"\",\"new_password\":\"new secret\"}",
+    "{\"old_password\":\"old secret\",\"new_password\":\"\"}",
+    "{\"old_password\":\"old secret\",\"new_password\":\"new secret\","
+    "\"extra\":true}",
+    "{\"old_password\":\"old\\nsecret\",\"new_password\":\"new secret\"}",
+  };
+  gchar *new_password = NULL;
+
+  assert_that (gsad_native_api_test_post_path_is_allowed (valid_path), is_true);
+  assert_that (gsad_native_api_test_delete_path_is_allowed (valid_path),
+               is_false);
+  assert_that (gsad_native_api_test_post_path_is_allowed (
+                 "/api/v1/users/current/password/"),
+               is_false);
+  assert_that (gsad_native_api_test_post_path_is_allowed (
+                 "/api/v1/users/current/password?unexpected=query"),
+               is_false);
+  assert_that (gsad_native_api_test_parse_user_password_change_request (
+                 valid_body, strlen (valid_body), &new_password),
+               is_true);
+  assert_that (new_password, is_equal_to_string ("new secret"));
+  memset (new_password, 0, strlen (new_password));
+  g_clear_pointer (&new_password, g_free);
+
+  for (gsize index = 0; index < G_N_ELEMENTS (invalid_bodies); index++)
+    {
+      assert_that (gsad_native_api_test_parse_user_password_change_request (
+                     invalid_bodies[index], strlen (invalid_bodies[index]),
+                     &new_password),
+                   is_false);
+      assert_that (new_password, is_null);
+    }
 }
 
 const gchar *
@@ -56,8 +130,6 @@ gsad_user_get_username (gsad_user_t *user)
 {
   return user == (gsad_user_t *) GINT_TO_POINTER (1) ? "operator" : NULL;
 }
-
-Describe (gsad_native_api);
 
 Ensure (gsad_native_api,
         should_only_allow_canonical_alert_definition_get_and_put)
@@ -402,6 +474,9 @@ main (int argc, char **argv)
                          should_only_allow_canonical_task_clone_posts);
   add_test_with_context (suite, gsad_native_api,
                          should_only_allow_canonical_alert_test_posts);
+  add_test_with_context (
+    suite, gsad_native_api,
+    should_only_allow_strict_current_user_password_change_posts);
   add_test_with_context (
     suite, gsad_native_api,
     should_only_allow_canonical_alert_report_delivery_posts);

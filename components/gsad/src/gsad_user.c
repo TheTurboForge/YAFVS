@@ -23,6 +23,22 @@
 #include <gvm/util/uuidutils.h> /* for gvm_uuid_make */
 #include <string.h>             /* for strcmp */
 
+static void
+gsad_user_secure_string_free (gchar *value)
+{
+  volatile unsigned char *cursor;
+  gsize length;
+
+  if (value == NULL)
+    return;
+
+  cursor = (volatile unsigned char *) value;
+  length = strlen (value);
+  while (length--)
+    *cursor++ = 0;
+  g_free (value);
+}
+
 /**
  * @brief Create a new user
  *
@@ -90,7 +106,7 @@ gsad_user_free (gsad_user_t *user)
   g_free (user->cookie);
   g_free (user->token);
   g_free (user->username);
-  g_free (user->password);
+  gsad_user_secure_string_free (user->password);
   g_free (user->timezone);
   g_free (user->capabilities);
   g_free (user->language);
@@ -284,7 +300,7 @@ gsad_user_set_timezone (gsad_user_t *user, const gchar *timezone)
 void
 gsad_user_set_password (gsad_user_t *user, const gchar *password)
 {
-  g_free (user->password);
+  gsad_user_secure_string_free (user->password);
 
   user->password = g_strdup (password);
 }

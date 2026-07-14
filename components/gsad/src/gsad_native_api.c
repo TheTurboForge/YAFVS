@@ -15,6 +15,7 @@
 #include "gsad_credentials.h"
 #include "gsad_http.h"
 #include "gsad_params.h"
+#include "gsad_session.h"
 #include "gsad_user.h"
 
 #include <errno.h>
@@ -40,6 +41,8 @@
 #define BROWSER_PROXY_SECRET_MIN_LENGTH 32
 #define BROWSER_PROXY_SECRET_MAX_LENGTH 4096
 #define BROWSER_PROXY_OPERATOR_MAX_LENGTH 256
+#define USER_PASSWORD_CHANGE_PATH "/api/v1/users/current/password"
+#define USER_PASSWORD_MAX_BYTES 4096
 
 static void
 secure_clear (void *value, gsize length)
@@ -59,6 +62,15 @@ secure_gstring_free (GString *value)
     return;
   secure_clear (value->str, value->len);
   g_string_free (value, TRUE);
+}
+
+static void
+secure_string_free (gchar *value)
+{
+  if (value == NULL)
+    return;
+  secure_clear (value, strlen (value));
+  g_free (value);
 }
 
 static gboolean
@@ -348,6 +360,67 @@ response_body_is_json_object (const gchar *body)
   valid = document != NULL && cJSON_IsObject (document) && parse_end != NULL
           && *parse_end == '\0';
   cJSON_Delete (document);
+  return valid;
+}
+
+static gboolean
+password_value_is_valid (const gchar *value)
+{
+  const gchar *cursor;
+
+  if (value == NULL || value[0] == '\0'
+      || strlen (value) > USER_PASSWORD_MAX_BYTES
+      || !g_utf8_validate (value, -1, NULL))
+    return FALSE;
+
+  for (cursor = value; *cursor; cursor = g_utf8_next_char (cursor))
+    if (g_unichar_iscntrl (g_utf8_get_char (cursor)))
+      return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
+parse_user_password_change_request (const gchar *body, gsize body_length,
+                                    gchar **new_password)
+{
+  const char *parse_end = NULL;
+  cJSON *document;
+  cJSON *old_item;
+  cJSON *new_item;
+  gboolean valid = FALSE;
+
+  *new_password = NULL;
+  if (body == NULL || body_length == 0)
+    return FALSE;
+
+  document =
+    cJSON_ParseWithLengthOpts (body, body_length + 1, &parse_end, TRUE);
+  if (document == NULL || !cJSON_IsObject (document)
+      || parse_end != body + body_length || cJSON_GetArraySize (document) != 2)
+    goto cleanup;
+
+  old_item = cJSON_GetObjectItemCaseSensitive (document, "old_password");
+  new_item = cJSON_GetObjectItemCaseSensitive (document, "new_password");
+  if (!cJSON_IsString (old_item) || !cJSON_IsString (new_item)
+      || !password_value_is_valid (old_item->valuestring)
+      || !password_value_is_valid (new_item->valuestring))
+    goto cleanup;
+
+  *new_password = g_strdup (new_item->valuestring);
+  valid = TRUE;
+
+cleanup:
+  if (document)
+    {
+      old_item = cJSON_GetObjectItemCaseSensitive (document, "old_password");
+      new_item = cJSON_GetObjectItemCaseSensitive (document, "new_password");
+      if (cJSON_IsString (old_item) && old_item->valuestring)
+        secure_clear (old_item->valuestring, strlen (old_item->valuestring));
+      if (cJSON_IsString (new_item) && new_item->valuestring)
+        secure_clear (new_item->valuestring, strlen (new_item->valuestring));
+      cJSON_Delete (document);
+    }
   return valid;
 }
 
@@ -699,6 +772,8 @@ native_api_delete_path_is_allowed (const gchar *path)
 static gboolean
 native_api_post_path_is_allowed (const gchar *path)
 {
+  const gchar *user_password_change_path =
+    "/api/v1/users/current/password";
   const gchar *alerts_path = "/api/v1/alerts";
   const gchar *alert_prefix = "/api/v1/alerts/";
   const gchar *credentials_path = "/api/v1/credentials";
@@ -740,6 +815,9 @@ native_api_post_path_is_allowed (const gchar *path)
 
   if (path == NULL || strchr (path, '?') != NULL)
     return FALSE;
+
+  if (g_strcmp0 (path, user_password_change_path) == 0)
+    return TRUE;
 
   if (g_strcmp0 (path, alerts_path) == 0)
     return TRUE;
@@ -2244,6 +2322,7 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
   guint status_code = MHD_HTTP_BAD_GATEWAY;
   gsad_http_result_t ret;
   gboolean mutation_outcome_indeterminate;
+  gchar *new_password = NULL;
 
   (void) handler_next;
   (void) handler_data;
@@ -2275,8 +2354,19 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
 
   request_body = gsad_connection_info_get_raw_body (con_info,
                                                     &request_body_length);
+  if (g_strcmp0 (method, "POST") == 0
+      && g_strcmp0 (path, USER_PASSWORD_CHANGE_PATH) == 0
+      && !parse_user_password_change_request (
+           request_body, request_body_length, &new_password))
+    {
+      gsad_credentials_free (credentials);
+      return send_json_error (connection, MHD_HTTP_BAD_REQUEST,
+                              "invalid_password_change",
+                              "The password change request is invalid.");
+    }
   if (g_strcmp0 (method, "DELETE") == 0 && request_body_length != 0)
     {
+      secure_string_free (new_password);
       gsad_credentials_free (credentials);
       return send_json_error (connection, MHD_HTTP_NOT_ACCEPTABLE,
                               "request_body_not_allowed",
@@ -2286,12 +2376,12 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
                                 secret, operator_name, &status_code,
                                 &error_message,
                                 &mutation_outcome_indeterminate);
-  gsad_credentials_free (credentials);
-
   if (body == NULL)
     {
       gsad_http_result_t error_ret;
 
+      secure_string_free (new_password);
+      gsad_credentials_free (credentials);
       g_warning ("%s: %s", __func__, error_message);
       if (mutation_outcome_indeterminate)
         error_ret = send_json_error (
@@ -2304,6 +2394,28 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
       g_free (error_message);
       return error_ret;
     }
+
+  if (new_password != NULL && status_code == MHD_HTTP_NO_CONTENT)
+    {
+      gsad_user_t *user = gsad_credentials_get_user (credentials);
+
+      if (user == NULL)
+        {
+          secure_string_free (new_password);
+          gsad_credentials_free (credentials);
+          g_free (body);
+          return send_json_error (
+            connection, MHD_HTTP_INTERNAL_SERVER_ERROR,
+            "session_update_failed",
+            "The password changed, but the browser session could not be updated.");
+        }
+      gsad_user_set_password (user, new_password);
+      gsad_session_remove_other_sessions (gsad_user_get_token (user),
+                                          gsad_user_get_username (user));
+      gsad_session_replace_user_if_exists (user);
+    }
+  secure_string_free (new_password);
+  gsad_credentials_free (credentials);
 
   ret = gsad_http_send_response_for_content (connection, body, (int) status_code,
                                              NULL, GSAD_CONTENT_TYPE_APP_JSON,
@@ -2412,6 +2524,13 @@ gboolean
 gsad_native_api_test_post_path_is_allowed (const gchar *path)
 {
   return native_api_post_path_is_allowed (path);
+}
+
+gboolean
+gsad_native_api_test_parse_user_password_change_request (
+  const gchar *body, gsize body_length, gchar **new_password)
+{
+  return parse_user_password_change_request (body, body_length, new_password);
 }
 
 gboolean

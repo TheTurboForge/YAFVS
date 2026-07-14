@@ -26,6 +26,12 @@ pub(crate) enum ApiError {
     Unauthorized,
     #[error("forbidden")]
     Forbidden,
+    #[error("old password is invalid")]
+    OldPasswordInvalid,
+    #[error("authentication method does not support password changes")]
+    UnsupportedAuthenticationMethod,
+    #[error("new password was rejected")]
+    NewPasswordRejected,
     #[error("method not allowed")]
     MethodNotAllowed,
     #[error("request too large")]
@@ -63,6 +69,9 @@ impl ApiError {
         match self {
             Self::Unauthorized => StatusCode::UNAUTHORIZED,
             Self::Forbidden => StatusCode::FORBIDDEN,
+            Self::OldPasswordInvalid => StatusCode::FORBIDDEN,
+            Self::UnsupportedAuthenticationMethod => StatusCode::CONFLICT,
+            Self::NewPasswordRejected => StatusCode::BAD_REQUEST,
             Self::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
             Self::RequestTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::ReportPdfTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
@@ -84,6 +93,9 @@ impl ApiError {
         match self {
             Self::Unauthorized => "unauthorized",
             Self::Forbidden => "forbidden",
+            Self::OldPasswordInvalid => "old_password_invalid",
+            Self::UnsupportedAuthenticationMethod => "unsupported_auth_method",
+            Self::NewPasswordRejected => "new_password_rejected",
             Self::MethodNotAllowed => "method_not_allowed",
             Self::RequestTooLarge => "request_too_large",
             Self::ReportPdfTooLarge => "report_pdf_too_large",
@@ -108,6 +120,11 @@ impl ApiError {
             Self::Forbidden => {
                 "The authenticated operator is not allowed to perform this action.".to_string()
             }
+            Self::OldPasswordInvalid => "The current password is invalid.".to_string(),
+            Self::UnsupportedAuthenticationMethod => {
+                "This account authentication method does not support password changes.".to_string()
+            }
+            Self::NewPasswordRejected => "The new password was rejected.".to_string(),
             Self::MethodNotAllowed => {
                 "Direct native API access does not currently allow this method/path.".to_string()
             }
@@ -180,6 +197,27 @@ mod tests {
                 "forbidden",
                 "operator",
                 &["secret", "token", "password", "credential"][..],
+            ),
+            (
+                ApiError::OldPasswordInvalid,
+                StatusCode::FORBIDDEN,
+                "old_password_invalid",
+                "current password is invalid",
+                &["secret", "token", "credential", "authorization"][..],
+            ),
+            (
+                ApiError::UnsupportedAuthenticationMethod,
+                StatusCode::CONFLICT,
+                "unsupported_auth_method",
+                "authentication method",
+                &["secret", "token", "credential", "authorization"][..],
+            ),
+            (
+                ApiError::NewPasswordRejected,
+                StatusCode::BAD_REQUEST,
+                "new_password_rejected",
+                "new password was rejected",
+                &["secret", "token", "credential", "authorization"][..],
             ),
             (
                 ApiError::MethodNotAllowed,

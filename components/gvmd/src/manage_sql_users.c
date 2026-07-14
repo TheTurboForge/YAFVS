@@ -402,6 +402,78 @@ add_users (const gchar *type, resource_t resource, const char *users)
 }
 
 /**
+ * @brief Change the current local user's password after verifying the old one.
+ *
+ * @param[in] old_password  Current password supplied by the operator.
+ * @param[in] new_password  Replacement password.
+ *
+ * @return 0 success, 1 old password invalid, 2 non-local authentication,
+ *         3 new password rejected, 99 missing current user, -1 internal error.
+ */
+int
+current_user_change_password (const gchar *old_password,
+                              const gchar *new_password)
+{
+  enum manage_authentication_rc verification;
+  gchar *hash = NULL;
+  gchar *method = NULL;
+  gchar *rejection_msg = NULL;
+  int result = -1;
+
+  if (current_credentials.username == NULL || current_credentials.uuid == NULL
+      || old_password == NULL || new_password == NULL)
+    return 99;
+
+  sql_begin_immediate ();
+  method = sql_string_ps ("SELECT method FROM users"
+                          " WHERE uuid = $1 FOR UPDATE;",
+                          SQL_STR_PARAM (current_credentials.uuid), NULL);
+  if (method == NULL)
+    goto rollback;
+  if (strcmp (method, auth_method_name (AUTHENTICATION_METHOD_FILE)) != 0)
+    {
+      result = 2;
+      goto rollback;
+    }
+
+  hash = sql_string_ps ("SELECT password FROM users WHERE uuid = $1;",
+                        SQL_STR_PARAM (current_credentials.uuid), NULL);
+  if (hash == NULL)
+    goto rollback;
+  verification = manage_authentication_verify (hash, old_password);
+  if (verification == GMA_HASH_INVALID)
+    {
+      result = 1;
+      goto rollback;
+    }
+  if (verification != GMA_SUCCESS
+      && verification != GMA_HASH_VALID_BUT_DATED)
+    goto rollback;
+
+  if (set_password (current_credentials.username, current_credentials.uuid,
+                    new_password, &rejection_msg))
+    {
+      result = 3;
+      goto rollback;
+    }
+
+  sql_ps ("DELETE FROM auth_cache WHERE username = $1;",
+          SQL_STR_PARAM (current_credentials.username), NULL);
+  sql_commit ();
+  result = 0;
+  goto cleanup;
+
+rollback:
+  sql_rollback ();
+
+cleanup:
+  g_free (hash);
+  g_free (method);
+  g_free (rejection_msg);
+  return result;
+}
+
+/**
  * @brief Adds a new user to the GVM installation.
  *
  * @todo Adding users authenticating with certificates is not yet implemented.

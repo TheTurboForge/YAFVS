@@ -4090,7 +4090,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: user-redacted-list-read
       summary: List redacted user account metadata
-      description: Read-only user account metadata backed by gvmd/PostgreSQL. This endpoint replaces the retired user-list gvm-tools script and returns only user UUID/name/comment/timestamps; passwords, auth cache hashes, authentication method, timezone, permissions, session state, account writes, and password changes remain inherited until separately designed.
+      description: Read-only user account metadata backed by gvmd/PostgreSQL. This endpoint replaces the retired user-list gvm-tools script and returns only user UUID/name/comment/timestamps; passwords, auth cache hashes, authentication method, timezone, permissions, session state, and account writes remain inherited. Current-password changes use the separate authenticated browser-session operation.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -4115,6 +4115,45 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /users/current/password:
+    post:
+      operationId: postUsersCurrentPassword
+      x-turbovas-exposure: browser-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: user-current-password-change
+      x-turbovas-operator-identity: proxied-session-operator
+      x-turbovas-owner-semantics: gvmd-authoritative-operator-authorization
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: account-auth-control
+      summary: Change the current operator password
+      description: Changes the authenticated browser operator's local gvmd password after verifying the current password. The authoritative gvmd transaction updates the password and invalidates cached authentication state; gsad then refreshes the current browser session and revokes the operator's other sessions. The operation is intentionally browser-session-only because direct bearer access cannot update gsad session state.
+      security:
+        - operatorSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurrentUserPasswordChangeRequest'
+      responses:
+        '204':
+          description: Password changed and current browser session refreshed
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /users/{user_id}:
     get:
       operationId: getUsersByUserId
@@ -4123,7 +4162,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: user-redacted-detail-read
       summary: Read one redacted user account metadata record
-      description: Read-only user account metadata backed by gvmd/PostgreSQL. This endpoint returns only user UUID/name/comment/timestamps; passwords, auth cache hashes, authentication method, timezone, permissions, session state, account writes, and password changes remain inherited until separately designed.
+      description: Read-only user account metadata backed by gvmd/PostgreSQL. This endpoint returns only user UUID/name/comment/timestamps; passwords, auth cache hashes, authentication method, timezone, permissions, session state, and account writes remain inherited. Current-password changes use the separate authenticated browser-session operation.
       parameters:
         - $ref: '#/components/parameters/UserId'
       responses:
@@ -8098,6 +8137,23 @@ components:
         modified_at:
           type: string
           format: date-time
+    CurrentUserPasswordChangeRequest:
+      type: object
+      additionalProperties: false
+      required: [old_password, new_password]
+      properties:
+        old_password:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          writeOnly: true
+          description: Current local password. Its UTF-8 encoding must not exceed 4096 bytes and must not contain control characters.
+        new_password:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          writeOnly: true
+          description: Replacement local password. Its UTF-8 encoding must not exceed 4096 bytes and must not contain control characters.
     ScanConfigAssetCollection:
       type: object
       required: [page, items]

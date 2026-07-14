@@ -61,6 +61,9 @@ add_users (const gchar *, resource_t, const char *);
 int
 set_password (const gchar *, const gchar *, const gchar *, gchar **);
 
+int
+current_user_change_password (const gchar *, const gchar *);
+
 GArray*
 all_users_array ();
 

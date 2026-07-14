@@ -591,7 +591,9 @@ OPENAPI_ALLOWED_TURBOVAS_OPERATION_FIELDS = frozenset(
         "x-turbovas-side-effect",
     }
 )
-OPENAPI_ALLOWED_EXPOSURE_VALUES = frozenset({"direct-read", "direct-write", "internal-only"})
+OPENAPI_ALLOWED_EXPOSURE_VALUES = frozenset(
+    {"browser-write", "direct-read", "direct-write", "internal-only"}
+)
 OPENAPI_DIRECT_EXPOSURE_VALUES = frozenset({"direct-read", "direct-write"})
 OPENAPI_ALLOWED_SAFETY_CONTRACT_VALUES = frozenset({"write-control-v1"})
 OPENAPI_ALLOWED_OPERATOR_IDENTITY_VALUES = frozenset(
@@ -833,6 +835,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "trashcan-empty",
         "trashcan-owner-empty-preview",
         "trashcan-redacted-row-metadata-read",
+        "user-current-password-change",
         "user-redacted-detail-read",
         "user-redacted-list-read",
         "vulnerability-detail-read",
@@ -936,6 +939,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/credentials/{credential_id}"): "direct-read",
     ("patch", "/credentials/{credential_id}"): "direct-write",
     ("get", "/users"): "direct-read",
+    ("post", "/users/current/password"): "browser-write",
     ("get", "/users/{user_id}"): "direct-read",
     ("get", "/filters/{filter_id}/export"): "direct-read",
     ("post", "/targets"): "direct-write",
@@ -1117,6 +1121,14 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("get", "/users"): {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "user-redacted-list-read",
+    },
+    ("post", "/users/current/password"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "proxied-session-operator",
+        "x-turbovas-owner-semantics": "gvmd-authoritative-operator-authorization",
+        "x-turbovas-replaces": "user-current-password-change",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "account-auth-control",
     },
     ("get", "/users/{user_id}"): {
         "x-turbovas-maturity": "live-read",
@@ -10630,6 +10642,20 @@ def native_api_effective_browser_proxy_status(repo_root: Path | None, item: dict
     method = str(item.get("method", "get")).lower()
     if method == "get" or not isinstance(endpoint, str):
         return status
+    if item.get("direct_access") == "browser_write":
+        if repo_root is None:
+            return "planned_internal_and_browser_proxied"
+        direct_declared = rust_native_api_route_operation_declared(
+            repo_root, method, endpoint, "direct_native_api_router"
+        )
+        proxy_declared = rust_native_api_route_operation_declared(
+            repo_root, method, endpoint, "browser_proxy_native_api_router"
+        )
+        if proxy_declared and not direct_declared:
+            return "implemented_internal_and_browser_proxied"
+        if proxy_declared or direct_declared:
+            return "partial_internal_browser_proxy_mismatch"
+        return "planned_internal_and_browser_proxied"
     operation_status = native_browser_proxy_operation_status(repo_root, method, endpoint)
     return status if operation_status == "planned_internal_and_browser_proxied" else operation_status
 
@@ -11043,7 +11069,17 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "scriptable_read",
                 "replacement_candidates": ["retired list-users.gmp.py", "direct native redacted user account list", "native-api-request helper"],
                 "residual_inherited": [
-                    "Password hashes, auth cache, authentication methods, timezone, permissions, session state, account writes, and password changes remain inherited."
+                    "Password hashes, authentication methods, timezone, permissions, session state, and account writes remain inherited; current-password change is native through the authenticated browser proxy."
+                ],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/users/current/password",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "browser_write",
+                "replacement_candidates": ["GSA current-user password change", "native browser-session password verification and mutation"],
+                "residual_inherited": [
+                    "The endpoint is intentionally not bearer-scriptable because direct API access cannot refresh or revoke gsad browser sessions."
                 ],
             },
             {
@@ -11052,7 +11088,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "scriptable_read",
                 "replacement_candidates": ["direct native redacted user account detail", "native-api-request helper"],
                 "residual_inherited": [
-                    "Password hashes, auth cache, authentication methods, timezone, permissions, session state, account writes, and password changes remain inherited."
+                    "Password hashes, authentication methods, timezone, permissions, session state, and account writes remain inherited; current-password change is native through the authenticated browser proxy."
                 ],
             },
             {
@@ -13305,7 +13341,11 @@ def native_api_migration_matrix_rows(repo_root: Path) -> list[dict[str, Any]]:
         if status == "unknown" and openapi_operation_is_pending_write_control(operation):
             status = "openapi_preview_write_control"
         if method != "get" and status != "openapi_preview_write_control":
-            operation_status = native_browser_proxy_operation_status(repo_root, method, endpoint)
+            operation_status = (
+                native_api_effective_browser_proxy_status(repo_root, inventory)
+                if isinstance(inventory, dict)
+                else native_browser_proxy_operation_status(repo_root, method, endpoint)
+            )
             if operation_status != "planned_internal_and_browser_proxied":
                 status = operation_status
         if isinstance(inventory, dict) and isinstance(inventory.get("direct_access"), str):
@@ -13416,6 +13456,9 @@ def native_api_migration_matrix_contract_summary(rows: list[dict[str, Any]]) -> 
         if direct_access == "scriptable_read":
             expected_exposure = "direct-read"
             expected_marker = True
+        elif direct_access == "browser_write":
+            expected_exposure = "browser-write"
+            expected_marker = False
         elif direct_access == "internal_only":
             expected_exposure = "internal-only"
             expected_marker = False

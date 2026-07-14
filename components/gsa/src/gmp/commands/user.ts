@@ -426,12 +426,34 @@ class UserCommand extends EntityCommand<User, PortListElement> {
     );
   }
 
-  changePassword(oldPassword: string, newPassword: string) {
-    return this.action({
-      cmd: 'change_password',
-      old_password: oldPassword,
-      password: newPassword,
-    });
+  async changePassword(oldPassword: string, newPassword: string) {
+    const response = await fetch(
+      this.http.buildUrl('api/v1/users/current/password'),
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          ...(this.http.session.token
+            ? {'X-TurboVAS-Token': this.http.session.token}
+            : {}),
+          ...(this.http.session.jwt
+            ? {Authorization: `Bearer ${this.http.session.jwt}`}
+            : {}),
+        },
+        body: JSON.stringify({
+          old_password: oldPassword,
+          new_password: newPassword,
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `Native API request failed with status ${response.status}`,
+      );
+    }
   }
 
   ping() {

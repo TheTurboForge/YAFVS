@@ -343,6 +343,31 @@ async function fetchNativeJsonWithBrowserToken(page, path, options = {}) {
   }, {requestPath: path, requestOptions: options});
 }
 
+async function assertCurrentUserPasswordGuard(page) {
+  const nonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const response = await fetchNativeJsonWithBrowserToken(
+    page,
+    '/api/v1/users/current/password',
+    {
+      method: 'POST',
+      body: {
+        old_password: `intentionally-wrong-${nonce}`,
+        new_password: `unused-replacement-${nonce}`,
+      },
+    },
+  );
+  const errorCode = response.body?.error?.code || null;
+  const guarded = response.status === 403 && errorCode === 'old_password_invalid';
+  add(
+    guarded ? 'pass' : 'fail',
+    'user.password-change-old-password-guard',
+    guarded
+      ? 'Current-user password change rejects an invalid current password through the same-origin native API.'
+      : 'Current-user password change did not enforce the typed invalid-current-password contract.',
+    {status: response.status, error_code: errorCode},
+  );
+}
+
 async function assertSavedFilterWriteProxy(page) {
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
   const create = await fetchNativeJsonWithBrowserToken(page, '/api/v1/filters', {
@@ -646,6 +671,8 @@ async function runForBaseUrl(baseUrl) {
     if (!loggedIn) {
       return;
     }
+
+    await assertCurrentUserPasswordGuard(page);
 
     const focusedRoutes = focusedRouteSpecs();
     if (focusedRoutes.length) {

@@ -102,7 +102,9 @@ fn user_account_openapi_declares_redacted_read_boundary() {
         .1;
     let schema = tail
         .lines()
-        .take_while(|line| !line.starts_with("    ScanConfigAssetCollection:"))
+        .take_while(|line| {
+            !(line.starts_with("    ") && !line.starts_with("      ") && line.ends_with(':'))
+        })
         .collect::<Vec<_>>()
         .join("\n");
     for forbidden in ["password", "hash", "method", "timezone", "auth"] {

@@ -5,11 +5,7 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import {
-  createResponse,
-  createHttp,
-  createActionResultResponse,
-} from 'gmp/commands/testing';
+import {createResponse, createHttp} from 'gmp/commands/testing';
 import UserCommand, {
   DEFAULT_SETTINGS,
   type CertificateInfo,
@@ -125,20 +121,38 @@ describe('UserCommand tests', () => {
     expect(data?.value).toEqual('42');
   });
 
-  test('should allow to change password', async () => {
-    const response = createActionResultResponse({
-      action: 'Change Password',
+  test('should change password through the native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
     });
-    const fakeHttp = createHttp(response);
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
     const cmd = new UserCommand(fakeHttp);
+
     await cmd.changePassword('oldPassword', 'newPassword');
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'change_password',
-        old_password: 'oldPassword',
-        password: 'newPassword',
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/users/current/password',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/users/current/password',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          old_password: 'oldPassword',
+          new_password: 'newPassword',
+        }),
       },
-    });
+    );
   });
 
   test('should fetch redacted user metadata through native API when available', async () => {

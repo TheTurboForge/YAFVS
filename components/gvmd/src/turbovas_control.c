@@ -19,6 +19,7 @@
 #include "manage_schedules.h"
 #include "manage_sql.h"
 #include "manage_sql_alerts.h"
+#include "manage_sql_users.h"
 #include "manage_tags.h"
 #include "manage_users.h"
 
@@ -128,6 +129,11 @@
 #define TURBOVAS_CONTROL_TASK_CLONE_COMMAND "task-clone "
 #define TURBOVAS_CONTROL_TASK_CLONE_COMMAND_LENGTH \
   (sizeof (TURBOVAS_CONTROL_TASK_CLONE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND \
+  "user-password-change "
+#define TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_USER_PASSWORD_MAX_BYTES 4096
 
 typedef struct
 {
@@ -256,6 +262,12 @@ typedef struct
   gchar *active;
 } turbovas_control_tag_modify_request_t;
 
+typedef struct
+{
+  gchar *old_password;
+  gchar *new_password;
+} turbovas_control_user_password_change_request_t;
+
 static gboolean
 turbovas_control_decode_base64_field (const char *, size_t, size_t, gboolean,
                                       gchar **);
@@ -263,6 +275,14 @@ turbovas_control_decode_base64_field (const char *, size_t, size_t, gboolean,
 static gboolean
 turbovas_control_next_field (const char **, const char *, const char **,
                              size_t *);
+
+static gboolean
+turbovas_control_parse_authenticated_prefix (
+  const char *, size_t, const char *, size_t, const char *, size_t, char[37],
+  const char **, const char **);
+
+static gboolean
+turbovas_control_text_has_allowed_controls (const gchar *, gsize, gboolean);
 
 static void
 turbovas_control_secure_free (gchar *);
@@ -305,6 +325,55 @@ turbovas_control_secret_is_valid (const char *secret, size_t secret_len)
   return TRUE;
 }
 
+static void
+turbovas_control_user_password_change_request_clear (
+  turbovas_control_user_password_change_request_t *request)
+{
+  turbovas_control_secure_free (request->old_password);
+  turbovas_control_secure_free (request->new_password);
+  memset (request, 0, sizeof (*request));
+}
+
+static gboolean
+turbovas_control_parse_user_password_change_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37],
+  turbovas_control_user_password_change_request_t *password_request)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  size_t field_len;
+
+  if (!turbovas_control_parse_authenticated_prefix (
+        request, request_len, TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND,
+        TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND_LENGTH, expected_secret,
+        expected_secret_len, operator_uuid, &cursor, &end))
+    return FALSE;
+
+  if (!turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !turbovas_control_decode_base64_field (
+           field, field_len, TURBOVAS_CONTROL_USER_PASSWORD_MAX_BYTES, TRUE,
+           &password_request->old_password)
+      || !turbovas_control_text_has_allowed_controls (
+           password_request->old_password,
+           strlen (password_request->old_password), FALSE)
+      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || cursor != end
+      || !turbovas_control_decode_base64_field (
+           field, field_len, TURBOVAS_CONTROL_USER_PASSWORD_MAX_BYTES, TRUE,
+           &password_request->new_password)
+      || !turbovas_control_text_has_allowed_controls (
+           password_request->new_password,
+           strlen (password_request->new_password), FALSE))
+    {
+      turbovas_control_user_password_change_request_clear (password_request);
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
 static gboolean
 turbovas_control_text_has_allowed_controls (const gchar *text, gsize text_len,
                                              gboolean icalendar)
@@ -326,6 +395,28 @@ turbovas_control_text_has_allowed_controls (const gchar *text, gsize text_len,
     }
 
   return TRUE;
+}
+
+static const char *
+turbovas_control_user_password_change_response (int result)
+{
+  switch (result)
+    {
+      case 0:
+        return "0 changed\n";
+      case 1:
+        return "1 old_password_invalid\n";
+      case 2:
+        return "2 unsupported_auth_method\n";
+      case 3:
+        return "3 new_password_rejected\n";
+      case 99:
+        return "99 forbidden\n";
+      case -2:
+        return "-2 malformed\n";
+      default:
+        return "-1 internal\n";
+    }
 }
 
 static gboolean
@@ -2724,6 +2815,27 @@ turbovas_control_stop_task (const char *operator_uuid, const char *task_uuid)
 }
 
 static int
+turbovas_control_change_user_password (
+  const char *operator_uuid,
+  const turbovas_control_user_password_change_request_t *request)
+{
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  result = current_user_change_password (request->old_password,
+                                         request->new_password);
+  if (result == 0)
+    log_event ("user", "User", operator_uuid, "password changed");
+  else
+    log_event_fail ("user", "User", operator_uuid, "password changed");
+
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
+static int
 turbovas_control_clone_task (const char *operator_uuid,
                              const char *source_task_uuid,
                              char created_uuid[37])
@@ -3529,6 +3641,7 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_alert_snmp_create_request_t snmp_alert_request = {0};
   turbovas_control_tag_create_request_t tag_create_request = {0};
   turbovas_control_tag_modify_request_t tag_modify_request = {0};
+  turbovas_control_user_password_change_request_t password_change_request = {0};
   memset (request, 0, sizeof (request));
 
   turbovas_control_set_timeouts (client_socket);
@@ -3536,7 +3649,21 @@ turbovas_control_serve_client (int client_socket)
                                           &expected_secret_len)
       && turbovas_control_read_request (client_socket, request, &request_len))
     {
-      if (turbovas_control_parse_scan_config_nvt_diagnostic_request (
+      if (turbovas_control_parse_user_password_change_request (
+            request, request_len, expected_secret, expected_secret_len,
+            operator_uuid, &password_change_request))
+        {
+          result = turbovas_control_change_user_password (
+            operator_uuid, &password_change_request);
+          result_response =
+            turbovas_control_user_password_change_response (result);
+        }
+      else if (
+        request_len >= TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND_LENGTH
+        && memcmp (request, TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND,
+                   TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND_LENGTH) == 0)
+        result_response = turbovas_control_user_password_change_response (-2);
+      else if (turbovas_control_parse_scan_config_nvt_diagnostic_request (
             request, request_len, expected_secret, expected_secret_len,
             operator_uuid, config_uuid, nvt_oid))
         {
@@ -3880,6 +4007,8 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_alert_snmp_create_request_clear (&snmp_alert_request);
   turbovas_control_tag_create_request_clear (&tag_create_request);
   turbovas_control_tag_modify_request_clear (&tag_modify_request);
+  turbovas_control_user_password_change_request_clear (
+    &password_change_request);
   if (request_len <= TURBOVAS_CONTROL_MAX_REQUEST_BYTES)
     {
       turbovas_control_secure_clear (request, request_len);

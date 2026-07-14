@@ -47,6 +47,7 @@ mod credential_write_transactions;
 mod credential_write_validation;
 mod credential_writes;
 mod credentials;
+mod current_user_password;
 mod cve_catalog;
 mod cve_catalog_payloads;
 mod direct_api;

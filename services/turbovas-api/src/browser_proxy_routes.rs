@@ -67,6 +67,9 @@ use crate::{
         browser_proxy_clone_target, browser_proxy_create_target, browser_proxy_delete_target,
         browser_proxy_hard_delete_target, browser_proxy_patch_target, browser_proxy_restore_target,
     },
+    current_user_password::{
+        MAX_CURRENT_USER_PASSWORD_CHANGE_BODY_BYTES, browser_proxy_change_current_user_password,
+    },
     request_shapes::MAX_DIRECT_API_WRITE_BODY_BYTES,
     trash_empty::{
         MAX_TRASH_EMPTY_BODY_BYTES, browser_proxy_empty_trashcan, browser_proxy_trash_empty_preview,
@@ -335,6 +338,12 @@ pub(crate) fn browser_proxy_native_api_router(
             "/api/v1/trashcan/empty",
             post(browser_proxy_empty_trashcan)
                 .layer(DefaultBodyLimit::max(MAX_TRASH_EMPTY_BODY_BYTES)),
+        )
+        .route(
+            "/api/v1/users/current/password",
+            post(browser_proxy_change_current_user_password).layer(DefaultBodyLimit::max(
+                MAX_CURRENT_USER_PASSWORD_CHANGE_BODY_BYTES,
+            )),
         )
         .layer(DefaultBodyLimit::max(
             MAX_DIRECT_API_WRITE_BODY_BYTES as usize,

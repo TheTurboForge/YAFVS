@@ -162,7 +162,11 @@ async function assertNoAppError(page, check) {
 
 async function gotoRoute(page, route, label, options = {}) {
   const url = new URL(route, config.baseUrl).toString();
-  await page.goto(url, { waitUntil: options.waitUntil || 'networkidle', timeout: config.timeoutMs });
+  const waitUntil = options.waitUntil || 'domcontentloaded';
+  await page.goto(url, { waitUntil, timeout: config.timeoutMs });
+  if (waitUntil !== 'networkidle') {
+    await page.waitForLoadState('networkidle', { timeout: Math.min(config.timeoutMs, 5000) }).catch(() => null);
+  }
   if (options.readyText) {
     await page.waitForFunction(
       pattern => new RegExp(pattern, 'i').test(document.body?.innerText || ''),

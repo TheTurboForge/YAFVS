@@ -11838,6 +11838,8 @@ db2:keys=5,expires=0,avg_ttl=0
 
     def test_runtime_browser_smoke_checks_metrics_tabs(self):
         source = (Path(__file__).resolve().parents[1] / "runtime_browser_smoke.py").read_text(encoding="utf-8")
+        self.assertIn("const waitUntil = options.waitUntil || 'domcontentloaded';", source)
+        self.assertIn("Math.min(config.timeoutMs, 5000)", source)
         self.assertIn("scope-report.metrics-tab", source)
         self.assertIn("scope-report.metrics-native-api", source)
         self.assertIn("scope-report.results-native-api", source)

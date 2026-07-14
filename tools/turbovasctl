@@ -752,6 +752,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "saved-filter-trash-move",
         "scan-config-clone",
         "scan-config-diagnostic-nvt-selection",
+        "scan-config-family-nvt-selection-mutation",
         "scan-config-create-from-base",
         "scan-config-detail-info-tags-task-backlinks-and-preferences-read",
         "scan-config-family-nvt-selection-read",
@@ -856,7 +857,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "report-format-file-import-export-verify-param-writes-and-deletes",
         "retention-mutations",
         "saved-filter-alert-linkage",
-        "scan-config-preference-selector-mutations-import-xml-export-and-blank-create",
+        "scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create",
         "schedule-calendar-edit-and-task-recalculation",
         "remote-scanner-tls-relay-verification",
         "target-file-input-task-control-and-credential-secret-workflows",
@@ -969,6 +970,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("delete", "/scan-configs/{scan_config_id}/trash"): "direct-write",
     ("get", "/scan-configs/{scan_config_id}/families"): "direct-read",
     ("get", "/scan-configs/{scan_config_id}/families/{family}/nvts"): "direct-read",
+    ("patch", "/scan-configs/{scan_config_id}/families/{family}/nvts"): "direct-write",
     ("get", "/tags/resource-names/{resource_type}"): "direct-read",
     ("get", "/tags"): "direct-read",
     ("get", "/tags/{tag_id}"): "direct-read",
@@ -1571,7 +1573,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scan-config-create-from-base",
     },
     ("get", "/scan-configs/{scan_config_id}"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preference-selector-mutations-import-xml-export-and-blank-create",
+        "x-turbovas-inherited-still-owns": "scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-detail-info-tags-task-backlinks-and-preferences-read",
     },
@@ -1600,14 +1602,22 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scan-config-hard-delete",
     },
     ("get", "/scan-configs/{scan_config_id}/families"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preference-selector-mutations-import-xml-export-and-blank-create",
+        "x-turbovas-inherited-still-owns": "scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-family-summary-read",
     },
     ("get", "/scan-configs/{scan_config_id}/families/{family}/nvts"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preference-selector-mutations-import-xml-export-and-blank-create",
+        "x-turbovas-inherited-still-owns": "scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-family-nvt-selection-read",
+    },
+    ("patch", "/scan-configs/{scan_config_id}/families/{family}/nvts"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "request-operator-owner",
+        "x-turbovas-replaces": "scan-config-family-nvt-selection-mutation",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "scan-config-nvt-selector-write",
     },
     ("get", "/tags/resource-names/{resource_type}"): {
         "x-turbovas-maturity": "live-read",
@@ -8724,6 +8734,8 @@ def openapi_path_placeholders(path: str) -> list[str]:
 
 
 def openapi_parameter_ref_for_placeholder(placeholder: str) -> str:
+    if placeholder == "family":
+        return "ScanConfigFamilyName"
     return "".join(part[:1].upper() + part[1:] for part in placeholder.split("_") if part)
 
 
@@ -8783,13 +8795,15 @@ def openapi_write_control_contract_summary(
                         }
                     )
                     continue
-                for field, expected in {
+                expected_fields = {
                     "name": placeholder,
                     "in": "path",
                     "required": "true",
                     "type": "string",
-                    "format": "uuid",
-                }.items():
+                }
+                if placeholder.endswith("_id"):
+                    expected_fields["format"] = "uuid"
+                for field, expected in expected_fields.items():
                     actual = component.get(field)
                     if actual != expected:
                         invalid_path_parameters.append(
@@ -10275,6 +10289,18 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             prefix = patch_constants.get(prefix_variable)
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in patch_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}")
+        scan_config_prefix = patch_constants.get("scan_config_prefix")
+        scan_config_family_separator = patch_constants.get("scan_config_family_nvts_separator")
+        if (
+            scan_config_prefix
+            and scan_config_family_separator
+            and "strstr (id, scan_config_family_nvts_separator)" in patch_function_body
+            and 'g_str_has_suffix (family, "/nvts")' in patch_function_body
+        ):
+            templates.add(
+                f"{scan_config_prefix.rstrip('/')}/{{}}"
+                f"{scan_config_family_separator}{{}}/nvts"
+            )
 
     delete_function_body = c_source_function_body(source, "native_api_delete_path_is_allowed")
     if delete_function_body:
@@ -10437,6 +10463,18 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             prefix = patch_constants.get(prefix_variable)
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in patch_function_body:
                 operations.add(f"PATCH {prefix.rstrip('/')}/{{}}")
+        scan_config_prefix = patch_constants.get("scan_config_prefix")
+        scan_config_family_separator = patch_constants.get("scan_config_family_nvts_separator")
+        if (
+            scan_config_prefix
+            and scan_config_family_separator
+            and "strstr (id, scan_config_family_nvts_separator)" in patch_function_body
+            and 'g_str_has_suffix (family, "/nvts")' in patch_function_body
+        ):
+            operations.add(
+                f"PATCH {scan_config_prefix.rstrip('/')}/{{}}"
+                f"{scan_config_family_separator}{{}}/nvts"
+            )
 
     put_function_body = c_source_function_body(source, "native_api_put_path_is_allowed")
     if put_function_body:
@@ -11197,7 +11235,17 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Scan Config family NVT selection editor read (migrated through gsad same-origin proxy)", "read-only scan-config selector automation", "native-api-request helper"],
                 "residual_inherited": [
-                    "Scan-config preference and family/NVT selector mutations, XML import/export, and blank create remain inherited."
+                    "Scan-config preference and family-mode mutations, XML import/export, and blank create remain inherited."
+                ],
+            },
+            {
+                "method": "patch",
+                "endpoint": "/api/v1/scan-configs/{scan_config_id}/families/{family}/nvts",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["GSA Scan Config family NVT selection editor mutation (migrated through gsad same-origin proxy)", "direct native scan-config selector automation"],
+                "residual_inherited": [
+                    "Scan-config preference and family-mode mutations, XML import/export, and blank create remain inherited."
                 ],
             },
             {
@@ -20453,6 +20501,12 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.scan-config-predefined-delete-denied",
             "native-api-direct.scan-config-write-create",
             "native-api-direct.scan-config-write-update",
+            "native-api-direct.scan-config-family-nvt-fixture",
+            "native-api-direct.scan-config-family-nvt-malformed-json-denied",
+            "native-api-direct.scan-config-family-nvt-toggle",
+            "native-api-direct.scan-config-family-nvt-toggle-readback",
+            "native-api-direct.scan-config-family-nvt-restore",
+            "native-api-direct.scan-config-family-nvt-restore-readback",
             "native-api-direct.scan-config-write-clone",
             "native-api-direct.scan-config-write-delete-clone",
             "native-api-direct.scan-config-write-hard-delete-clone",
@@ -21966,6 +22020,50 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
             scan_config_patch_json, scan_config_patch_status = parse_json_output_with_http_status(scan_config_patch)
             scan_config_patch_ok = scan_config_patch.returncode == 0 and scan_config_patch_status == 200 and isinstance(scan_config_patch_json, dict) and scan_config_patch_json.get("id") == scan_config_id and scan_config_patch_json.get("comment") == scan_config_patch_comment
             findings.append(native_api_probe_finding("pass" if scan_config_patch_ok else "fail", "native-api-direct.scan-config-write-update", "Direct write-control patched temporary scan-config comment metadata." if scan_config_patch_ok else "Direct write-control failed to patch temporary scan-config comment metadata.", scan_config_patch, direct_native_api_display_command(f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}", token=token, env=env, method="PATCH", body=scan_config_patch_body, extra_headers=content_type), scan_config_patch_json, {"http_status": scan_config_patch_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_patch_json)}))
+
+            scan_config_family = "Port scanners"
+            scan_config_family_path = f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}/families/{urllib.parse.quote(scan_config_family)}/nvts"
+            scan_config_family_before = direct_native_api_curl(repo_root, scan_config_family_path, token=token, env=env)
+            scan_config_family_before_json, scan_config_family_before_status = parse_json_output_with_http_status(scan_config_family_before)
+            scan_config_family_items = scan_config_family_before_json.get("items") if isinstance(scan_config_family_before_json, dict) else None
+            scan_config_family_nvt = scan_config_family_items[0] if isinstance(scan_config_family_items, list) and scan_config_family_items and isinstance(scan_config_family_items[0], dict) else None
+            scan_config_family_oid = scan_config_family_nvt.get("oid") if isinstance(scan_config_family_nvt, dict) and isinstance(scan_config_family_nvt.get("oid"), str) else None
+            scan_config_family_original_selected = scan_config_family_nvt.get("selected") if isinstance(scan_config_family_nvt, dict) and isinstance(scan_config_family_nvt.get("selected"), bool) else None
+            scan_config_family_fixture_ok = scan_config_family_before.returncode == 0 and scan_config_family_before_status == 200 and scan_config_family_before_json.get("scan_config_id") == scan_config_id and scan_config_family_before_json.get("family") == scan_config_family and bool(scan_config_family_oid) and isinstance(scan_config_family_original_selected, bool)
+            findings.append(native_api_probe_finding("pass" if scan_config_family_fixture_ok else "fail", "native-api-direct.scan-config-family-nvt-fixture", "Direct write-control found a reversible family-NVT selection fixture on the temporary scan config." if scan_config_family_fixture_ok else "Direct write-control could not find a reversible family-NVT selection fixture on the temporary scan config.", scan_config_family_before, direct_native_api_display_command(scan_config_family_path, token=token, env=env), scan_config_family_before_json, {"http_status": scan_config_family_before_status, "scan_config_id": scan_config_id, "family": scan_config_family, "nvt_oid": scan_config_family_oid, **summarize_native_api_response(scan_config_family_before_json)}))
+
+            if scan_config_family_fixture_ok and scan_config_family_oid is not None and scan_config_family_original_selected is not None:
+                scan_config_family_malformed = direct_native_api_curl(repo_root, scan_config_family_path, token=token, env=env, method="PATCH", body="{", extra_headers=content_type)
+                scan_config_family_malformed_json, scan_config_family_malformed_status = parse_json_output_with_http_status(scan_config_family_malformed)
+                scan_config_family_malformed_ok = scan_config_family_malformed.returncode == 0 and scan_config_family_malformed_status == 400 and isinstance(scan_config_family_malformed_json, dict) and scan_config_family_malformed_json.get("error", {}).get("code") == "bad_request"
+                findings.append(native_api_probe_finding("pass" if scan_config_family_malformed_ok else "fail", "native-api-direct.scan-config-family-nvt-malformed-json-denied", "Direct write-control rejects malformed family-NVT selection JSON before mutation." if scan_config_family_malformed_ok else "Direct write-control did not reject malformed family-NVT selection JSON with the shared bad-request contract.", scan_config_family_malformed, direct_native_api_display_command(scan_config_family_path, token=token, env=env, method="PATCH", body="{", extra_headers=content_type), scan_config_family_malformed_json, {"http_status": scan_config_family_malformed_status, "scan_config_id": scan_config_id, "family": scan_config_family, **summarize_native_api_response(scan_config_family_malformed_json)}))
+
+                scan_config_family_toggled_selected = not scan_config_family_original_selected
+                scan_config_family_toggle_body = json.dumps({"changes": [{"oid": scan_config_family_oid, "selected": scan_config_family_toggled_selected}]}, separators=(",", ":"))
+                scan_config_family_toggle = direct_native_api_curl(repo_root, scan_config_family_path, token=token, env=env, method="PATCH", body=scan_config_family_toggle_body, extra_headers=content_type)
+                scan_config_family_toggle_json, scan_config_family_toggle_status = parse_json_output_with_http_status(scan_config_family_toggle)
+                scan_config_family_toggle_ok = scan_config_family_toggle.returncode == 0 and scan_config_family_toggle_status == 204
+                findings.append(native_api_probe_finding("pass" if scan_config_family_toggle_ok else "fail", "native-api-direct.scan-config-family-nvt-toggle", "Direct write-control toggled one family-NVT selection on the temporary scan config." if scan_config_family_toggle_ok else "Direct write-control failed to toggle the family-NVT selection on the temporary scan config.", scan_config_family_toggle, direct_native_api_display_command(scan_config_family_path, token=token, env=env, method="PATCH", body=scan_config_family_toggle_body, extra_headers=content_type), scan_config_family_toggle_json, {"http_status": scan_config_family_toggle_status, "scan_config_id": scan_config_id, "family": scan_config_family, "nvt_oid": scan_config_family_oid, **summarize_native_api_response(scan_config_family_toggle_json)}))
+
+                scan_config_family_after_toggle = direct_native_api_curl(repo_root, scan_config_family_path, token=token, env=env)
+                scan_config_family_after_toggle_json, scan_config_family_after_toggle_status = parse_json_output_with_http_status(scan_config_family_after_toggle)
+                scan_config_family_after_toggle_items = scan_config_family_after_toggle_json.get("items") if isinstance(scan_config_family_after_toggle_json, dict) else None
+                scan_config_family_after_toggle_nvt = next((item for item in scan_config_family_after_toggle_items if isinstance(item, dict) and item.get("oid") == scan_config_family_oid), None) if isinstance(scan_config_family_after_toggle_items, list) else None
+                scan_config_family_after_toggle_ok = scan_config_family_after_toggle.returncode == 0 and scan_config_family_after_toggle_status == 200 and isinstance(scan_config_family_after_toggle_nvt, dict) and scan_config_family_after_toggle_nvt.get("selected") is scan_config_family_toggled_selected
+                findings.append(native_api_probe_finding("pass" if scan_config_family_after_toggle_ok else "fail", "native-api-direct.scan-config-family-nvt-toggle-readback", "Direct API readback confirms the family-NVT selection toggle." if scan_config_family_after_toggle_ok else "Direct API readback did not confirm the family-NVT selection toggle.", scan_config_family_after_toggle, direct_native_api_display_command(scan_config_family_path, token=token, env=env), scan_config_family_after_toggle_json, {"http_status": scan_config_family_after_toggle_status, "scan_config_id": scan_config_id, "family": scan_config_family, "nvt_oid": scan_config_family_oid, **summarize_native_api_response(scan_config_family_after_toggle_json)}))
+
+                scan_config_family_restore_body = json.dumps({"changes": [{"oid": scan_config_family_oid, "selected": scan_config_family_original_selected}]}, separators=(",", ":"))
+                scan_config_family_restore = direct_native_api_curl(repo_root, scan_config_family_path, token=token, env=env, method="PATCH", body=scan_config_family_restore_body, extra_headers=content_type)
+                scan_config_family_restore_json, scan_config_family_restore_status = parse_json_output_with_http_status(scan_config_family_restore)
+                scan_config_family_restore_ok = scan_config_family_restore.returncode == 0 and scan_config_family_restore_status == 204
+                findings.append(native_api_probe_finding("pass" if scan_config_family_restore_ok else "fail", "native-api-direct.scan-config-family-nvt-restore", "Direct write-control restored the original family-NVT selection." if scan_config_family_restore_ok else "Direct write-control failed to restore the original family-NVT selection.", scan_config_family_restore, direct_native_api_display_command(scan_config_family_path, token=token, env=env, method="PATCH", body=scan_config_family_restore_body, extra_headers=content_type), scan_config_family_restore_json, {"http_status": scan_config_family_restore_status, "scan_config_id": scan_config_id, "family": scan_config_family, "nvt_oid": scan_config_family_oid, **summarize_native_api_response(scan_config_family_restore_json)}))
+
+                scan_config_family_after_restore = direct_native_api_curl(repo_root, scan_config_family_path, token=token, env=env)
+                scan_config_family_after_restore_json, scan_config_family_after_restore_status = parse_json_output_with_http_status(scan_config_family_after_restore)
+                scan_config_family_after_restore_items = scan_config_family_after_restore_json.get("items") if isinstance(scan_config_family_after_restore_json, dict) else None
+                scan_config_family_after_restore_nvt = next((item for item in scan_config_family_after_restore_items if isinstance(item, dict) and item.get("oid") == scan_config_family_oid), None) if isinstance(scan_config_family_after_restore_items, list) else None
+                scan_config_family_after_restore_ok = scan_config_family_after_restore.returncode == 0 and scan_config_family_after_restore_status == 200 and isinstance(scan_config_family_after_restore_nvt, dict) and scan_config_family_after_restore_nvt.get("selected") is scan_config_family_original_selected
+                findings.append(native_api_probe_finding("pass" if scan_config_family_after_restore_ok else "fail", "native-api-direct.scan-config-family-nvt-restore-readback", "Direct API readback confirms the original family-NVT selection was restored." if scan_config_family_after_restore_ok else "Direct API readback did not confirm restoration of the original family-NVT selection.", scan_config_family_after_restore, direct_native_api_display_command(scan_config_family_path, token=token, env=env), scan_config_family_after_restore_json, {"http_status": scan_config_family_after_restore_status, "scan_config_id": scan_config_id, "family": scan_config_family, "nvt_oid": scan_config_family_oid, **summarize_native_api_response(scan_config_family_after_restore_json)}))
 
             scan_config_clone_body = json.dumps(
                 {"comment": scan_config_clone_comment, "name": scan_config_clone_name},

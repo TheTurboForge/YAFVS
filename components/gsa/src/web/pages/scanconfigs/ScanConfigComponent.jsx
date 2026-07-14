@@ -453,6 +453,7 @@ const ScanConfigComponent = ({
       .saveScanConfigFamily({
         id: configId,
         familyName: familyNameValue,
+        nvts: familyNvts,
         selected,
       })
       .then(() => loadEditScanConfigSettings(configId, true))

@@ -203,6 +203,24 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
                 "diagnostic-nvt-selection",
             ],
         ) => direct_api_write_id_segment_is_allowed(scan_config_id),
+        (
+            &Method::PATCH,
+            [
+                "",
+                "api",
+                "v1",
+                "scan-configs",
+                scan_config_id,
+                "families",
+                family,
+                "nvts",
+            ],
+        ) => {
+            direct_api_write_id_segment_is_allowed(scan_config_id)
+                && !family.is_empty()
+                && *family != "."
+                && *family != ".."
+        }
         (&Method::POST, ["", "api", "v1", "scan-configs", scan_config_id, "restore"]) => {
             direct_api_write_id_segment_is_allowed(scan_config_id)
         }

@@ -11,7 +11,8 @@ use crate::{
     },
     scan_config_write_sql::*,
     scan_config_write_validation::{
-        ValidatedScanConfigClone, ValidatedScanConfigCreate, ValidatedScanConfigPatch,
+        ValidatedScanConfigClone, ValidatedScanConfigCreate, ValidatedScanConfigFamilyNvtsPatch,
+        ValidatedScanConfigPatch,
     },
 };
 
@@ -59,6 +60,62 @@ pub(crate) async fn execute_scan_config_create_from_base_transaction(
     )
     .await?;
     Ok(record)
+}
+
+pub(crate) async fn execute_scan_config_family_nvts_patch_transaction(
+    tx: &Transaction<'_>,
+    nvt_selector: &str,
+    family: &str,
+    default_selected: bool,
+    request: &ValidatedScanConfigFamilyNvtsPatch,
+    scan_config_internal_id: i32,
+) -> Result<(), ApiError> {
+    let requested_oids = request
+        .changes
+        .iter()
+        .map(|change| change.oid.clone())
+        .collect::<Vec<_>>();
+    execute_scan_config_write_sql(
+        tx,
+        scan_config_delete_family_nvt_selector_rows_sql(),
+        &[&nvt_selector, &family, &requested_oids],
+        "delete scan-config family NVT selector rows",
+    )
+    .await?;
+
+    let override_oids = request
+        .changes
+        .iter()
+        .filter_map(|change| {
+            scan_config_family_nvt_selector_exclude(default_selected, change.selected)
+                .map(|_| change.oid.clone())
+        })
+        .collect::<Vec<_>>();
+    if !override_oids.is_empty() {
+        let exclude = i32::from(default_selected);
+        execute_scan_config_write_sql(
+            tx,
+            scan_config_insert_family_nvt_selector_rows_sql(),
+            &[&nvt_selector, &family, &exclude, &override_oids],
+            "insert normalized scan-config family NVT selector rows",
+        )
+        .await?;
+    }
+
+    execute_scan_config_write_sql(
+        tx,
+        scan_config_recalculate_family_nvt_caches_sql(),
+        &[&scan_config_internal_id],
+        "recalculate scan-config family NVT selection caches",
+    )
+    .await
+}
+
+pub(crate) fn scan_config_family_nvt_selector_exclude(
+    default_selected: bool,
+    selected: bool,
+) -> Option<i32> {
+    (selected != default_selected).then_some(i32::from(default_selected))
 }
 
 pub(crate) async fn execute_scan_config_clone_transaction(

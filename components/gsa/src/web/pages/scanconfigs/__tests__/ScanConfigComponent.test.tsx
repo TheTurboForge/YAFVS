@@ -713,6 +713,8 @@ describe('ScanConfigComponent', () => {
           expect.objectContaining({
             id: 'c1',
             familyName: 'family1',
+            nvts: familyNvts,
+            selected: {'nvt-1': YES_VALUE, 'nvt-2': YES_VALUE},
           }),
         );
       });

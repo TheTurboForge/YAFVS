@@ -812,7 +812,7 @@ fn native_scan_config_family_nvt_payload_and_not_found_contract_are_exact() {
 }
 
 #[test]
-fn native_scan_config_context_routes_and_openapi_are_strict_and_read_only() {
+fn native_scan_config_family_nvt_routes_and_openapi_are_read_and_guarded_write() {
     let direct_path =
         "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/families/Port%20scanners/nvts";
     assert!(
@@ -829,7 +829,17 @@ fn native_scan_config_context_routes_and_openapi_are_strict_and_read_only() {
         direct_path,
         true
     ));
-    for method in [Method::POST, Method::PUT, Method::PATCH, Method::DELETE] {
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::PATCH,
+        direct_path,
+        true
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &Method::PATCH,
+        direct_path,
+        false
+    ));
+    for method in [Method::POST, Method::PUT, Method::DELETE] {
         assert!(!direct_api_v1_method_is_allowed(&method, direct_path, true));
     }
 
@@ -838,7 +848,7 @@ fn native_scan_config_context_routes_and_openapi_are_strict_and_read_only() {
         "x-turbovas-replaces: scan-config-detail-info-tags-task-backlinks-and-preferences-read"
     ));
     assert!(detail.contains(
-        "x-turbovas-inherited-still-owns: scan-config-preference-selector-mutations-import-xml-export-and-blank-create"
+        "x-turbovas-inherited-still-owns: scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create"
     ));
 
     let path = openapi_path_block("/scan-configs/{scan_config_id}/families/{family}/nvts");
@@ -852,13 +862,20 @@ fn native_scan_config_context_routes_and_openapi_are_strict_and_read_only() {
         "#/components/parameters/ScanConfigFamilyName",
         "#/components/schemas/ScanConfigFamilyNvts",
         "'404':",
+        "patch:",
+        "operationId: patchScanConfigsByScanConfigIdFamiliesByFamilyNvts",
+        "x-turbovas-replaces: scan-config-family-nvt-selection-mutation",
+        "x-turbovas-safety-contract: write-control-v1",
+        "#/components/schemas/ScanConfigFamilyNvtsPatchRequest",
+        "'204':",
+        "'409':",
     ] {
         assert!(
             path.contains(required),
             "family NVT OpenAPI missing {required}"
         );
     }
-    for forbidden in ["\n    post:", "\n    patch:", "\n    put:", "\n    delete:"] {
+    for forbidden in ["\n    post:", "\n    put:", "\n    delete:"] {
         assert!(
             !path.contains(forbidden),
             "family NVT path contains {forbidden}"
@@ -881,6 +898,8 @@ fn native_scan_config_context_routes_and_openapi_are_strict_and_read_only() {
         "ScanConfigNvtPreference",
         "ScanConfigFamilyNvt",
         "ScanConfigFamilyNvts",
+        "ScanConfigFamilyNvtsPatchRequest",
+        "ScanConfigFamilyNvtSelectionChange",
     ] {
         let block = openapi_schema_block(schema);
         assert!(
@@ -891,6 +910,8 @@ fn native_scan_config_context_routes_and_openapi_are_strict_and_read_only() {
     let detail_schema = openapi_schema_block("ScanConfigAssetDetail");
     assert!(detail_schema.contains("required: [preferences]"));
     assert!(detail_schema.contains("#/components/schemas/ScanConfigPreferences"));
+    let patch_schema = openapi_schema_block("ScanConfigFamilyNvtsPatchRequest");
+    assert!(patch_schema.contains("maxItems: 1024"));
 
     for schema in ["ScanConfigScannerPreference", "ScanConfigNvtPreference"] {
         let block = openapi_schema_block(schema);

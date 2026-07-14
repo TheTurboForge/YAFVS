@@ -17,14 +17,15 @@ use crate::{
         ScrubbedControlFrame, gvmd_control_secret, gvmd_control_socket_path,
         map_control_socket_error, request_gvmd_control_response_bytes,
     },
-    path_ids::parse_uuid,
+    path_ids::{parse_uuid, validate_scan_config_family},
     scan_config_payloads::ScanConfigAssetDetail,
     scan_config_write_db::*,
     scan_config_write_transactions::*,
     scan_config_write_validation::{
         DiagnosticNvtSelectionRequest, ScanConfigCloneRequest, ScanConfigCreateRequest,
-        ScanConfigPatchRequest, validate_diagnostic_nvt_selection_request,
-        validate_scan_config_clone_request, validate_scan_config_create_request,
+        ScanConfigFamilyNvtsPatchRequest, ScanConfigPatchRequest,
+        validate_diagnostic_nvt_selection_request, validate_scan_config_clone_request,
+        validate_scan_config_create_request, validate_scan_config_family_nvts_patch_request,
         validate_scan_config_patch_request,
     },
     scan_configs::load_scan_config_asset_detail,
@@ -35,6 +36,70 @@ pub(crate) struct DiagnosticNvtSelectionAcknowledgement {
     config_id: String,
     nvt_id: String,
     status: &'static str,
+}
+
+pub(crate) async fn patch_scan_config_family_nvts(
+    State(state): State<AppState>,
+    Path((scan_config_id, family)): Path<(String, String)>,
+    operator: Option<Extension<DirectApiOperator>>,
+    payload: Result<Json<ScanConfigFamilyNvtsPatchRequest>, JsonRejection>,
+) -> Result<StatusCode, ApiError> {
+    let operator = require_scan_config_write_operator(operator)?;
+    let scan_config_id = parse_uuid(&scan_config_id)?.to_string();
+    validate_scan_config_family(&family)?;
+    let request = parse_scan_config_family_nvts_patch_payload(payload)?;
+    let request = validate_scan_config_family_nvts_patch_request(request)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_scan_config_write_db_error(error, "begin patch scan-config family NVT transaction")
+    })?;
+    let operator_owner_id = resolve_scan_config_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE configs, configs_trash, nvt_selectors, tasks, nvts IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| {
+        map_scan_config_write_db_error(error, "lock scan-config family NVT mutation tables")
+    })?;
+    let config_state = load_scan_config_write_state(&tx, &scan_config_id).await?;
+    ensure_scan_config_owner_matches_operator(config_state.owner_id, operator_owner_id)?;
+    ensure_scan_config_not_predefined(&config_state)?;
+    ensure_scan_config_not_referenced_by_any_task(&tx, config_state.internal_id).await?;
+    ensure_scan_config_selector_is_private(&tx, &config_state).await?;
+    let requested_oids = request
+        .changes
+        .iter()
+        .map(|change| change.oid.clone())
+        .collect::<Vec<_>>();
+    ensure_scan_config_family_nvt_change_oids_exist(&tx, &family, &requested_oids).await?;
+    ensure_scan_config_family_is_not_whole_only(&family)?;
+    let default_selected =
+        scan_config_family_nvt_default_selected(&tx, &config_state, &family).await?;
+    execute_scan_config_family_nvts_patch_transaction(
+        &tx,
+        &config_state.nvt_selector,
+        &family,
+        default_selected,
+        &request,
+        config_state.internal_id,
+    )
+    .await?;
+    tx.commit().await.map_err(|error| {
+        map_scan_config_write_db_error(error, "commit patch scan-config family NVT transaction")
+    })?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub(crate) fn parse_scan_config_family_nvts_patch_payload(
+    payload: Result<Json<ScanConfigFamilyNvtsPatchRequest>, JsonRejection>,
+) -> Result<ScanConfigFamilyNvtsPatchRequest, ApiError> {
+    payload.map(|Json(request)| request).map_err(|_| {
+        ApiError::BadRequest(
+            "request body must be application/json matching ScanConfigFamilyNvtsPatchRequest"
+                .to_string(),
+        )
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

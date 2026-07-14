@@ -2,11 +2,14 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::collections::HashSet;
+
 use serde::Deserialize;
 
 use crate::{errors::ApiError, path_ids::validate_nvt_oid};
 
 pub(crate) const MAX_SCAN_CONFIG_TEXT_BYTES: usize = 4096;
+pub(crate) const MAX_SCAN_CONFIG_FAMILY_NVT_SELECTION_CHANGES: usize = 1024;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -23,6 +26,19 @@ pub(crate) struct DiagnosticNvtSelectionRequest {
     pub(crate) nvt_id: String,
 }
 
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ScanConfigFamilyNvtSelectionChange {
+    pub(crate) oid: String,
+    pub(crate) selected: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ScanConfigFamilyNvtsPatchRequest {
+    pub(crate) changes: Vec<ScanConfigFamilyNvtSelectionChange>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ScanConfigPatchRequest {
@@ -37,6 +53,17 @@ pub(crate) struct ValidatedDiagnosticNvtSelection {
     pub(crate) nvt_id: String,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ValidatedScanConfigFamilyNvtSelectionChange {
+    pub(crate) oid: String,
+    pub(crate) selected: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ValidatedScanConfigFamilyNvtsPatch {
+    pub(crate) changes: Vec<ValidatedScanConfigFamilyNvtSelectionChange>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ScanConfigCloneRequest {
@@ -44,6 +71,42 @@ pub(crate) struct ScanConfigCloneRequest {
     pub(crate) name: Option<String>,
     #[serde(default)]
     pub(crate) comment: Option<String>,
+}
+
+pub(crate) fn validate_scan_config_family_nvts_patch_request(
+    request: ScanConfigFamilyNvtsPatchRequest,
+) -> Result<ValidatedScanConfigFamilyNvtsPatch, ApiError> {
+    if request.changes.is_empty() {
+        return Err(ApiError::BadRequest(
+            "changes must contain at least one NVT selection".to_string(),
+        ));
+    }
+    if request.changes.len() > MAX_SCAN_CONFIG_FAMILY_NVT_SELECTION_CHANGES {
+        return Err(ApiError::BadRequest(format!(
+            "changes must contain at most {MAX_SCAN_CONFIG_FAMILY_NVT_SELECTION_CHANGES} NVT selections"
+        )));
+    }
+
+    let mut seen_oids = HashSet::with_capacity(request.changes.len());
+    let mut changes = Vec::with_capacity(request.changes.len());
+    for change in request.changes {
+        validate_nvt_oid(&change.oid).map_err(|_| {
+            ApiError::BadRequest(
+                "changes[].oid must be a numeric dotted NVT OID up to 128 bytes".to_string(),
+            )
+        })?;
+        if !seen_oids.insert(change.oid.clone()) {
+            return Err(ApiError::BadRequest(
+                "changes must not contain duplicate NVT OIDs".to_string(),
+            ));
+        }
+        changes.push(ValidatedScanConfigFamilyNvtSelectionChange {
+            oid: change.oid,
+            selected: change.selected,
+        });
+    }
+
+    Ok(ValidatedScanConfigFamilyNvtsPatch { changes })
 }
 
 pub(crate) fn validate_diagnostic_nvt_selection_request(

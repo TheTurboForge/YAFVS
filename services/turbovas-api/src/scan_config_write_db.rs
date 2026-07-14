@@ -20,6 +20,8 @@ pub(crate) struct ScanConfigWriteState {
     pub(crate) internal_id: i32,
     pub(crate) owner_id: i32,
     pub(crate) predefined: bool,
+    pub(crate) nvt_selector: String,
+    pub(crate) families_growing: i32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,8 +77,137 @@ pub(crate) async fn load_scan_config_write_state(
             internal_id: row.get(0),
             owner_id: row.get(1),
             predefined: row.get::<_, i32>(2) != 0,
+            nvt_selector: row.get(3),
+            families_growing: row.get(4),
         })
         .ok_or(ApiError::NotFound)
+}
+
+pub(crate) async fn ensure_scan_config_not_referenced_by_any_task(
+    tx: &Transaction<'_>,
+    scan_config_internal_id: i32,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(
+            scan_config_any_task_count_sql(),
+            &[&scan_config_internal_id],
+        )
+        .await
+        .map_err(|error| map_scan_config_write_db_error(error, "check all scan-config task usage"))?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "scan config is still referenced by a task".to_string(),
+        ))
+    }
+}
+
+pub(crate) async fn ensure_scan_config_selector_is_private(
+    tx: &Transaction<'_>,
+    state: &ScanConfigWriteState,
+) -> Result<(), ApiError> {
+    const UNIVERSAL_NVT_SELECTOR: &str = "54b45713-d4f4-4435-b20d-304c175ed8c5";
+
+    if state.nvt_selector.is_empty() || state.nvt_selector == UNIVERSAL_NVT_SELECTOR {
+        return Err(ApiError::Conflict(
+            "scan config uses the universal NVT selector and cannot be modified".to_string(),
+        ));
+    }
+
+    let references: i64 = tx
+        .query_one(
+            scan_config_selector_reference_count_sql(),
+            &[&state.nvt_selector],
+        )
+        .await
+        .map_err(|error| map_scan_config_write_db_error(error, "check NVT selector sharing"))?
+        .get(0);
+    if references == 1 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "scan config shares its NVT selector and cannot be modified".to_string(),
+        ))
+    }
+}
+
+pub(crate) async fn ensure_scan_config_family_nvt_change_oids_exist(
+    tx: &Transaction<'_>,
+    family: &str,
+    oids: &Vec<String>,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(
+            scan_config_family_nvt_change_oid_count_sql(),
+            &[&family, oids],
+        )
+        .await
+        .map_err(|error| {
+            map_scan_config_write_db_error(error, "validate scan-config family NVT selections")
+        })?
+        .get(0);
+    if count == oids.len() as i64 {
+        Ok(())
+    } else {
+        Err(ApiError::NotFound)
+    }
+}
+
+pub(crate) fn ensure_scan_config_family_is_not_whole_only(family: &str) -> Result<(), ApiError> {
+    const WHOLE_ONLY_FAMILIES: &[&str] = &[
+        "AIX Local Security Checks",
+        "AlmaLinux Local Security Checks",
+        "Amazon Linux Local Security Checks",
+        "Arch Linux Local Security Checks",
+        "CentOS Local Security Checks",
+        "Debian Local Security Checks",
+        "Fedora Local Security Checks",
+        "FreeBSD Local Security Checks",
+        "Gentoo Local Security Checks",
+        "HCE Local Security Checks",
+        "HP-UX Local Security Checks",
+        "Huawei EulerOS Local Security Checks",
+        "Mageia Linux Local Security Checks",
+        "Mandrake Local Security Checks",
+        "openEuler Local Security Checks",
+        "openSUSE Local Security Checks",
+        "Oracle Linux Local Security Checks",
+        "Red Hat Local Security Checks",
+        "Rocky Linux Local Security Checks",
+        "Slackware Local Security Checks",
+        "Solaris Local Security Checks",
+        "SuSE Local Security Checks",
+        "Ubuntu Local Security Checks",
+        "VMware Local Security Checks",
+        "Windows : Microsoft Bulletins",
+        "Windows Local Security Checks",
+    ];
+
+    if WHOLE_ONLY_FAMILIES.contains(&family) {
+        Err(ApiError::Conflict(
+            "the selected NVT family only supports whole-family selection".to_string(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+pub(crate) async fn scan_config_family_nvt_default_selected(
+    tx: &Transaction<'_>,
+    state: &ScanConfigWriteState,
+    family: &str,
+) -> Result<bool, ApiError> {
+    tx.query_one(
+        scan_config_family_nvt_default_selected_sql(),
+        &[&state.nvt_selector, &family, &state.families_growing],
+    )
+    .await
+    .map_err(|error| {
+        map_scan_config_write_db_error(error, "load scan-config family selection mode")
+    })
+    .map(|row| row.get(0))
 }
 
 pub(crate) async fn load_scan_config_trash_state(

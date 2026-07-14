@@ -147,13 +147,26 @@ export interface NativeScanConfigFamiliesResponse {
 }
 
 export interface NativeScanConfigFamilyNvtsResponse {
-  nvts: Array<{
-    oid: string;
-    name: string;
-    severity?: number;
-    selected: YesNo;
-  }>;
+  nvts: NativeScanConfigFamilyNvt[];
 }
+
+export interface NativeScanConfigFamilyNvt {
+  oid: string;
+  name: string;
+  severity?: number;
+  selected: YesNo;
+}
+
+export interface NativeScanConfigFamilyNvtChange {
+  oid: string;
+  selected: boolean;
+}
+
+export interface NativeScanConfigFamilyNvtsPatchRequest {
+  changes: NativeScanConfigFamilyNvtChange[];
+}
+
+export const MAX_SCAN_CONFIG_FAMILY_NVT_SELECTION_CHANGES = 1024;
 
 export interface NativeScanConfigPatchRequest {
   name?: string;
@@ -361,6 +374,16 @@ const writeNativeJson = async <T>(
   body: unknown,
   method = 'POST',
 ): Promise<T> => {
+  const response = await writeNativeRequest(gmp, path, body, method);
+  return (await response.json()) as T;
+};
+
+const writeNativeRequest = async (
+  gmp: NativeApiGmp,
+  path: string,
+  body: unknown,
+  method = 'POST',
+): Promise<globalThis.Response> => {
   const response = await fetch(gmp.buildUrl(path), {
     method,
     credentials: 'include',
@@ -377,7 +400,16 @@ const writeNativeJson = async <T>(
     throw new Error(`Native API request failed with status ${response.status}`);
   }
 
-  return (await response.json()) as T;
+  return response;
+};
+
+const writeNativeNoContent = async (
+  gmp: NativeApiGmp,
+  path: string,
+  body: unknown,
+  method = 'POST',
+): Promise<void> => {
+  await writeNativeRequest(gmp, path, body, method);
 };
 
 const nativeScanConfigToModel = (
@@ -483,6 +515,19 @@ export const fetchNativeScanConfigs = async (
     page,
   };
 };
+
+export const getNativeScanConfigFamilyNvtChanges = (
+  nvts: Array<Pick<NativeScanConfigFamilyNvt, 'oid' | 'selected'>>,
+  selected: Record<string, YesNo | undefined>,
+): NativeScanConfigFamilyNvtChange[] =>
+  nvts.flatMap(({oid, selected: originalSelected}) => {
+    const nextSelected = selected[oid] === YES_VALUE;
+    const originalWasSelected = originalSelected === YES_VALUE;
+
+    return nextSelected === originalWasSelected
+      ? []
+      : [{oid, selected: nextSelected}];
+  });
 
 export const fetchNativeScanConfig = async (
   gmp: NativeApiGmp,
@@ -599,6 +644,19 @@ export const cloneNativeScanConfig = async (
   );
   return new Response({id: stringValue(payload.id)});
 };
+
+export const patchNativeScanConfigFamilyNvts = async (
+  gmp: NativeApiGmp,
+  id: string,
+  family: string,
+  request: NativeScanConfigFamilyNvtsPatchRequest,
+): Promise<void> =>
+  writeNativeNoContent(
+    gmp,
+    `api/v1/scan-configs/${encodeURIComponent(id)}/families/${encodeURIComponent(family)}/nvts`,
+    request,
+    'PATCH',
+  );
 
 export const createNativeScanConfig = async (
   gmp: NativeApiGmp,

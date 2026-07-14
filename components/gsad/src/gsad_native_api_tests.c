@@ -176,6 +176,27 @@ Ensure (gsad_native_api,
                  is_false);
 }
 
+Ensure (gsad_native_api,
+        should_only_allow_canonical_scan_config_family_nvt_patches)
+{
+  const gchar *valid =
+    "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/families/Port%20scanners/nvts";
+  const gchar *rejected[] = {
+    "/api/v1/scan-configs/not-a-uuid/families/Port%20scanners/nvts",
+    "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/families/Port/scanners/nvts",
+    "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/families/Port%2Fscanners/nvts",
+    "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/families/../nvts",
+    "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/families/%2E%2E/nvts",
+    "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/families/Port%20scanners/nvts?x=1",
+    "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/families/Port%20scanners/nvts/",
+  };
+
+  assert_that (gsad_native_api_test_patch_path_is_allowed (valid), is_true);
+  for (gsize index = 0; index < G_N_ELEMENTS (rejected); index++)
+    assert_that (gsad_native_api_test_patch_path_is_allowed (rejected[index]),
+                 is_false);
+}
+
 Ensure (gsad_native_api, should_only_allow_canonical_alert_test_posts)
 {
   const gchar *valid =
@@ -492,6 +513,9 @@ main (int argc, char **argv)
   add_test_with_context (
     suite, gsad_native_api,
     should_only_allow_canonical_scan_config_family_nvt_gets);
+  add_test_with_context (
+    suite, gsad_native_api,
+    should_only_allow_canonical_scan_config_family_nvt_patches);
   add_test_with_context (suite, gsad_native_api,
                          should_only_allow_canonical_task_clone_posts);
   add_test_with_context (suite, gsad_native_api,

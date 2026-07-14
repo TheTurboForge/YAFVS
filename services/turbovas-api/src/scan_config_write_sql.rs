@@ -7,10 +7,174 @@ pub(crate) fn scan_config_write_operator_owner_sql() -> &'static str {
 }
 
 pub(crate) fn scan_config_write_state_sql() -> &'static str {
-    "SELECT id::integer, owner::integer, coalesce(predefined, 0)::integer
+    "SELECT id::integer, owner::integer, coalesce(predefined, 0)::integer,
+            coalesce(nvt_selector, ''), coalesce(families_growing, 0)::integer
        FROM configs
       WHERE uuid = $1
         AND coalesce(usage_type, 'scan') = 'scan';"
+}
+
+pub(crate) fn scan_config_any_task_count_sql() -> &'static str {
+    "SELECT count(*)::bigint
+       FROM tasks
+      WHERE config = $1
+        AND coalesce(config_location, 0) = 0;"
+}
+
+pub(crate) fn scan_config_selector_reference_count_sql() -> &'static str {
+    "SELECT (
+        (SELECT count(*) FROM configs WHERE nvt_selector = $1)
+        + (SELECT count(*) FROM configs_trash WHERE nvt_selector = $1)
+      )::bigint;"
+}
+
+pub(crate) fn scan_config_family_nvt_change_oid_count_sql() -> &'static str {
+    "SELECT count(DISTINCT n.oid)::bigint
+       FROM nvts n
+      WHERE n.family = $1
+        AND n.oid = ANY($2::text[]);"
+}
+
+pub(crate) fn scan_config_family_nvt_default_selected_sql() -> &'static str {
+    "SELECT CASE
+        WHEN $3::integer <> 0 THEN NOT EXISTS (
+            SELECT 1
+              FROM nvt_selectors ns
+             WHERE ns.name = $1
+               AND ns.type = 1
+               AND ns.family_or_nvt = $2
+               AND ns.exclude = 1
+        )
+        ELSE EXISTS (
+            SELECT 1
+              FROM nvt_selectors ns
+             WHERE ns.name = $1
+               AND ns.type = 1
+               AND ns.family_or_nvt = $2
+               AND ns.exclude = 0
+        )
+    END;"
+}
+
+pub(crate) fn scan_config_delete_family_nvt_selector_rows_sql() -> &'static str {
+    "DELETE FROM nvt_selectors
+      WHERE name = $1
+        AND type = 2
+        AND family = $2
+        AND family_or_nvt = ANY($3::text[]);"
+}
+
+pub(crate) fn scan_config_insert_family_nvt_selector_rows_sql() -> &'static str {
+    "INSERT INTO nvt_selectors (name, exclude, type, family_or_nvt, family)
+     SELECT $1, $3, 2, oid, $2
+       FROM unnest($4::text[]) AS oid;"
+}
+
+pub(crate) fn scan_config_recalculate_family_nvt_caches_sql() -> &'static str {
+    r#"WITH config_row AS (
+            SELECT c.nvt_selector,
+                   coalesce(c.families_growing, 0)::integer AS families_growing
+              FROM configs c
+             WHERE c.id = $1
+        ),
+        known_families AS (
+            SELECT DISTINCT n.family
+              FROM nvts n
+             WHERE n.family IS NOT NULL
+               AND n.family != ''
+               AND n.family != 'Credentials'
+        ),
+        family_state AS (
+            SELECT f.family,
+                   CASE
+                     WHEN c.families_growing <> 0 THEN NOT EXISTS (
+                       SELECT 1
+                         FROM nvt_selectors ns
+                        WHERE ns.name = c.nvt_selector
+                          AND ns.type = 1
+                          AND ns.family_or_nvt = f.family
+                          AND ns.exclude = 1
+                     )
+                     ELSE EXISTS (
+                       SELECT 1
+                         FROM nvt_selectors ns
+                        WHERE ns.name = c.nvt_selector
+                          AND ns.type = 1
+                          AND ns.family_or_nvt = f.family
+                          AND ns.exclude = 0
+                     )
+                   END AS growing,
+                   CASE
+                     WHEN c.families_growing <> 0 AND NOT EXISTS (
+                       SELECT 1
+                         FROM nvt_selectors ns
+                        WHERE ns.name = c.nvt_selector
+                          AND ns.type = 1
+                          AND ns.family_or_nvt = f.family
+                          AND ns.exclude = 1
+                     ) THEN (
+                       SELECT count(*)::bigint
+                         FROM nvts n
+                        WHERE n.family = f.family
+                     ) - (
+                       SELECT count(DISTINCT ns.family_or_nvt)::bigint
+                         FROM nvt_selectors ns
+                         JOIN nvts n
+                           ON n.oid = ns.family_or_nvt
+                          AND n.family = f.family
+                        WHERE ns.name = c.nvt_selector
+                          AND ns.type = 2
+                          AND ns.exclude = 1
+                     )
+                     WHEN c.families_growing = 0 AND EXISTS (
+                       SELECT 1
+                         FROM nvt_selectors ns
+                        WHERE ns.name = c.nvt_selector
+                          AND ns.type = 1
+                          AND ns.family_or_nvt = f.family
+                          AND ns.exclude = 0
+                     ) THEN (
+                       SELECT count(*)::bigint
+                         FROM nvts n
+                        WHERE n.family = f.family
+                     ) - (
+                       SELECT count(DISTINCT ns.family_or_nvt)::bigint
+                         FROM nvt_selectors ns
+                         JOIN nvts n
+                           ON n.oid = ns.family_or_nvt
+                          AND n.family = f.family
+                        WHERE ns.name = c.nvt_selector
+                          AND ns.type = 2
+                          AND ns.exclude = 1
+                     )
+                     ELSE (
+                       SELECT count(DISTINCT ns.family_or_nvt)::bigint
+                         FROM nvt_selectors ns
+                         JOIN nvts n
+                           ON n.oid = ns.family_or_nvt
+                          AND n.family = f.family
+                        WHERE ns.name = c.nvt_selector
+                          AND ns.type = 2
+                          AND ns.exclude = 0
+                     )
+                   END AS selected_nvt_count
+              FROM config_row c
+              CROSS JOIN known_families f
+        ),
+        cache_values AS (
+            SELECT count(*) FILTER (WHERE growing OR selected_nvt_count > 0)::integer
+                     AS family_count,
+                   coalesce(sum(selected_nvt_count), 0)::integer AS nvt_count,
+                   CASE WHEN bool_or(growing) THEN 1 ELSE 0 END::integer AS nvts_growing
+              FROM family_state
+        )
+        UPDATE configs c
+           SET family_count = cache_values.family_count,
+               nvt_count = cache_values.nvt_count,
+               nvts_growing = cache_values.nvts_growing,
+               modification_time = m_now()
+          FROM cache_values
+         WHERE c.id = $1;"#
 }
 
 pub(crate) fn scan_config_trash_state_sql() -> &'static str {

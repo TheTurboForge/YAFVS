@@ -45,7 +45,8 @@ use crate::{
     browser_proxy_scan_config::{
         browser_proxy_clone_scan_config, browser_proxy_create_scan_config,
         browser_proxy_delete_scan_config, browser_proxy_hard_delete_scan_config,
-        browser_proxy_patch_scan_config, browser_proxy_restore_scan_config,
+        browser_proxy_patch_scan_config, browser_proxy_patch_scan_config_family_nvts,
+        browser_proxy_restore_scan_config,
     },
     browser_proxy_schedule::{
         browser_proxy_clone_schedule, browser_proxy_create_schedule, browser_proxy_delete_schedule,
@@ -236,6 +237,10 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/scan-configs/:scan_config_id",
             patch(browser_proxy_patch_scan_config),
+        )
+        .route(
+            "/api/v1/scan-configs/:scan_config_id/families/:family/nvts",
+            patch(browser_proxy_patch_scan_config_family_nvts),
         )
         .route(
             "/api/v1/scan-configs/:scan_config_id/restore",

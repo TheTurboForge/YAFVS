@@ -1065,6 +1065,7 @@ native_api_patch_path_is_allowed (const gchar *path)
   const gchar *override_prefix = "/api/v1/overrides/";
   const gchar *port_list_prefix = "/api/v1/port-lists/";
   const gchar *scan_config_prefix = "/api/v1/scan-configs/";
+  const gchar *scan_config_family_nvts_separator = "/families/";
   const gchar *scanner_prefix = "/api/v1/scanners/";
   const gchar *schedule_prefix = "/api/v1/schedules/";
   const gchar *scope_prefix = "/api/v1/scopes/";
@@ -1114,6 +1115,19 @@ native_api_patch_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, scan_config_prefix))
     {
       const gchar *id = path + strlen (scan_config_prefix);
+      const gchar *family_separator =
+        strstr (id, scan_config_family_nvts_separator);
+
+      if (family_separator != NULL)
+        {
+          const gchar *family = family_separator
+                                + strlen (scan_config_family_nvts_separator);
+          return is_uuid_segment (id, family_separator - id)
+                 && g_str_has_suffix (family, "/nvts")
+                 && is_scan_config_family_segment (
+                   family, strlen (family) - strlen ("/nvts"));
+        }
+
       return is_uuid_segment (id, strlen (id));
     }
 

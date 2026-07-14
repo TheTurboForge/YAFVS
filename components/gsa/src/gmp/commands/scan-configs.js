@@ -26,8 +26,11 @@ import {
   fetchNativeScanConfigFamilyNvts,
   fetchNativeScanConfigWithFamilies,
   fetchNativeScanConfigs,
+  getNativeScanConfigFamilyNvtChanges,
+  MAX_SCAN_CONFIG_FAMILY_NVT_SELECTION_CHANGES,
   nativeScanConfigsQueryFromFilter,
   patchNativeScanConfig,
+  patchNativeScanConfigFamilyNvts,
 } from 'gmp/native-api/scan-configs';
 import {YES_VALUE, NO_VALUE} from 'gmp/parser';
 import {forEach, map} from 'gmp/utils/array';
@@ -198,7 +201,24 @@ export class ScanConfigCommand extends EntityCommand {
     return this.action(data);
   }
 
-  saveScanConfigFamily({id, familyName, selected}) {
+  saveScanConfigFamily({id, familyName, selected, nvts}) {
+    if (canUseNativeApi(this.http)) {
+      const changes = getNativeScanConfigFamilyNvtChanges(nvts ?? [], selected);
+      if (changes.length === 0) {
+        return Promise.resolve();
+      }
+      if (changes.length > MAX_SCAN_CONFIG_FAMILY_NVT_SELECTION_CHANGES) {
+        return Promise.reject(
+          new Error(
+            `A single scan config family save may change at most ${MAX_SCAN_CONFIG_FAMILY_NVT_SELECTION_CHANGES} NVTs`,
+          ),
+        );
+      }
+      return patchNativeScanConfigFamilyNvts(this.http, id, familyName, {
+        changes,
+      });
+    }
+
     const data = {
       ...convertSelect(selected, 'nvt:'),
       cmd: 'save_config_family',

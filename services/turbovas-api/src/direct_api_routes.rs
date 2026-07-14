@@ -34,7 +34,8 @@ use crate::{
     request_shapes::MAX_DIRECT_API_WRITE_BODY_BYTES,
     scan_config_writes::{
         clone_scan_config, create_scan_config, delete_scan_config, hard_delete_scan_config,
-        patch_scan_config, restore_scan_config, select_diagnostic_nvt,
+        patch_scan_config, patch_scan_config_family_nvts, restore_scan_config,
+        select_diagnostic_nvt,
     },
     scanner_verify::verify_scanner,
     scanner_writes::{create_scanner, patch_scanner, replace_scanner_configuration},
@@ -105,6 +106,10 @@ pub(crate) fn direct_native_api_router(
             .route(
                 "/api/v1/scan-configs/:scan_config_id/diagnostic-nvt-selection",
                 post(select_diagnostic_nvt),
+            )
+            .route(
+                "/api/v1/scan-configs/:scan_config_id/families/:family/nvts",
+                patch(patch_scan_config_family_nvts),
             )
             .route("/api/v1/filters", post(create_filter))
             .route("/api/v1/hosts", post(create_host))

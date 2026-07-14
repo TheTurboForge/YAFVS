@@ -4194,7 +4194,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-metadata-list-read
       summary: List scan configs
-      description: Scan-config metadata backed by gvmd/PostgreSQL. Native direct write-control can create a scan config from an existing base, patch name/comment metadata for non-predefined scan configs, clone operator-owned or predefined scan configs, move live scan configs to trash when no live task references remain, restore trashed scan configs when their scanner is live, and permanently delete unreferenced trashed scan configs; preference edit payloads, NVT selector expansion/family mutation, import/export, scanner control, blank create, and selector/preference mutations remain inherited while native contracts are designed.
+      description: Scan-config metadata backed by gvmd/PostgreSQL. Native direct write-control can create a scan config from an existing base, patch name/comment metadata for non-predefined scan configs, clone operator-owned or predefined scan configs, change individual NVT selection in an eligible family, move live scan configs to trash when no live task references remain, restore trashed scan configs when their scanner is live, and permanently delete unreferenced trashed scan configs. Preference edits, family-mode mutation, import/export, scanner control, and blank create remain inherited.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -4237,7 +4237,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Create a scan config from a base config
-      description: Direct write-control endpoint for creating an operator-owned non-predefined scan config from an operator-visible or predefined base scan config. The create-from-base path copies metadata counters, preferences, NVT selector rows, and active user-tag links with a fresh config id and selector id while applying request-owned name/comment metadata. Import/XML create, blank scanner-id create, preference edits, selector/family mutation, and scanner control remain inherited.
+      description: Direct write-control endpoint for creating an operator-owned non-predefined scan config from an operator-visible or predefined base scan config. The create-from-base path copies metadata counters, preferences, NVT selector rows, and active user-tag links with a fresh config id and selector id while applying request-owned name/comment metadata. Import/XML create, blank scanner-id create, preference edits, family-mode mutation, and scanner control remain inherited.
       requestBody:
         required: true
         content:
@@ -4279,9 +4279,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-detail-info-tags-task-backlinks-and-preferences-read
-      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutations-import-xml-export-and-blank-create
+      x-turbovas-inherited-still-owns: scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create
       summary: Read one scan config with effective preferences
-      description: Read-only scan-config detail backed directly by gvmd/PostgreSQL, including active User Tags, shallow task backlinks, scanner preferences, and NVT preferences. Preference values use the config override when present and the current feed default otherwise; configured indicates whether an explicit override row exists. Password and file preference values/defaults are returned as empty strings with redacted set to true. Native direct write-control can create from base, patch name/comment metadata for non-predefined scan configs, clone operator-owned or predefined scan configs, move eligible live scan configs to trash, restore trash rows, and hard-delete unreferenced trash rows; preference/selector mutations, import, inherited XML export, scanner control, and blank create remain inherited.
+      description: Read-only scan-config detail backed directly by gvmd/PostgreSQL, including active User Tags, shallow task backlinks, scanner preferences, and NVT preferences. Preference values use the config override when present and the current feed default otherwise; configured indicates whether an explicit override row exists. Password and file preference values/defaults are returned as empty strings with redacted set to true. Native direct write-control can create from base, patch name/comment metadata for non-predefined scan configs, clone operator-owned or predefined scan configs, change individual NVT selection in an eligible family, move eligible live scan configs to trash, restore trash rows, and hard-delete unreferenced trash rows; preference edits, family-mode mutation, import, inherited XML export, scanner control, and blank create remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -4316,7 +4316,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Patch scan-config metadata
-      description: Direct write-control endpoint for changing a non-predefined scan config name or comment. Preference values, NVT selector/family selection, import/export, blank create, scanner control, and cache recalculation remain inherited.
+      description: Direct write-control endpoint for changing a non-predefined scan config name or comment. Preference values, family-mode selection, import/export, blank create, scanner control, and cache recalculation remain inherited; individual NVT selection has a separate family-scoped PATCH endpoint.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       requestBody:
@@ -4443,7 +4443,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Clone a scan config
-      description: Direct write-control endpoint for cloning an operator-owned or predefined live scan config into a new operator-owned non-predefined scan config. The clone copies metadata, preferences, NVT selector rows, and active user-tag links with a fresh config id and selector id. Preference edit payloads, import/export, scanner control, blank create, and selector/family mutations remain inherited.
+      description: Direct write-control endpoint for cloning an operator-owned or predefined live scan config into a new operator-owned non-predefined scan config. The clone copies metadata, preferences, NVT selector rows, and active user-tag links with a fresh config id and selector id. Preference edits, family-mode mutation, import/export, scanner control, and blank create remain inherited; individual NVT selection has a separate family-scoped PATCH endpoint.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       requestBody:
@@ -4559,9 +4559,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-family-summary-read
-      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutations-import-xml-export-and-blank-create
+      x-turbovas-inherited-still-owns: scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create
       summary: Read scan config NVT family selection summary
-      description: Read-only expansion of the NVT Families detail tab. Per-family NVT selection is exposed separately; selector/preference mutations, import, inherited XML export, and blank create remain on inherited compatibility paths.
+      description: Read-only expansion of the NVT Families detail tab. Individual NVT selection is exposed by the family NVT PATCH endpoint; preference edits, family-mode mutation, import, inherited XML export, and blank create remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -4592,9 +4592,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-family-nvt-selection-read
-      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutations-import-xml-export-and-blank-create
+      x-turbovas-inherited-still-owns: scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create
       summary: Read NVT selection for one scan config family
-      description: Returns every currently known NVT in the requested family with numeric severity and effective selected state. Selection follows inherited growing-family exclusion and static-family inclusion selector representations. The route is read-only; selector/preference mutations, import, inherited XML export, and blank create remain inherited.
+      description: Returns every currently known NVT in the requested family with numeric severity and effective selected state. Selection follows growing-family exclusion and static-family inclusion selector representations. PATCH changes individual NVT selection for an eligible operator-owned config while preserving the current family mode; preference edits, family-mode mutation, import, inherited XML export, and blank create remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
         - $ref: '#/components/parameters/ScanConfigFamilyName'
@@ -4619,6 +4619,48 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+    patch:
+      operationId: patchScanConfigsByScanConfigIdFamiliesByFamilyNvts
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: scan-config-family-nvt-selection-mutation
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: scan-config-nvt-selector-write
+      summary: Change NVT selection for one scan config family
+      description: Direct write-control endpoint for changing individual NVT selection in one family. It requires the exact config owner, a non-predefined live config with no task references including hidden tasks, and a private non-universal selector. Every OID must currently belong to the path family; whole-only families are rejected. The mutation preserves the family growing/static mode, writes only selector rows that differ from the family default, and atomically refreshes selection counters and modification time.
+      parameters:
+        - $ref: '#/components/parameters/ScanConfigId'
+        - $ref: '#/components/parameters/ScanConfigFamilyName'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScanConfigFamilyNvtsPatchRequest'
+      responses:
+        '204':
+          description: Family NVT selection updated
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scan-configs/{scan_config_id}/export:
     get:
       operationId: getScanConfigsByScanConfigIdExport
@@ -4627,7 +4669,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-metadata-export-read
       summary: Export scan-config metadata
-      description: Scriptable JSON metadata export for one scan config, including active User Tags and shallow task backlinks. Preference edit payloads, NVT selector/family mutation, import/export, scanner control, and blank create remain compatibility paths.
+      description: Scriptable JSON metadata export for one scan config, including active User Tags and shallow task backlinks. Preference edits, family-mode mutation, import/export, scanner control, and blank create remain compatibility paths; individual NVT selection has a separate family-scoped PATCH endpoint.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -8921,6 +8963,29 @@ components:
           maxLength: 128
           pattern: '^[0-9]+(?:\.[0-9]+)+$'
           description: Numeric dotted NVT OID to select for diagnostic scanning.
+    ScanConfigFamilyNvtsPatchRequest:
+      type: object
+      additionalProperties: false
+      required: [changes]
+      properties:
+        changes:
+          type: array
+          minItems: 1
+          maxItems: 1024
+          items:
+            $ref: '#/components/schemas/ScanConfigFamilyNvtSelectionChange'
+    ScanConfigFamilyNvtSelectionChange:
+      type: object
+      additionalProperties: false
+      required: [oid, selected]
+      properties:
+        oid:
+          type: string
+          minLength: 3
+          maxLength: 128
+          pattern: '^[0-9]+(?:\.[0-9]+)+$'
+        selected:
+          type: boolean
     DiagnosticNvtSelectionAcknowledgement:
       type: object
       required: [config_id, nvt_id, status]

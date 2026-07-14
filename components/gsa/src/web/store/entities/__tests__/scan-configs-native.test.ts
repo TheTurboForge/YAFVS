@@ -11,6 +11,8 @@ import {
   fetchNativeScanConfig,
   fetchNativeScanConfigFamilies,
   fetchNativeScanConfigs,
+  getNativeScanConfigFamilyNvtChanges,
+  patchNativeScanConfigFamilyNvts,
 } from 'gmp/native-api/scan-configs';
 import {loadEntities, loadEntity} from 'web/store/entities/scanconfigs';
 import {createState} from 'web/store/entities/utils/testing';
@@ -326,6 +328,52 @@ describe('native API scan configs', () => {
     expect(gmp.buildUrl).toHaveBeenCalledWith(
       `api/v1/scan-configs/${id}/families`,
       {token: 'test-token'},
+    );
+  });
+
+  test('computes only changed native scan config family NVT selections', () => {
+    expect(
+      getNativeScanConfigFamilyNvtChanges(
+        [
+          {oid: '1.2.3', selected: 1},
+          {oid: '1.2.4', selected: 0},
+          {oid: '1.2.5', selected: 1},
+        ],
+        {'1.2.3': 1, '1.2.4': 1, '1.2.5': 0},
+      ),
+    ).toEqual([
+      {oid: '1.2.4', selected: true},
+      {oid: '1.2.5', selected: false},
+    ]);
+  });
+
+  test('patches native scan config family NVT selections without a response body', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({ok: true, status: 204});
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createGmp({jwt: 'jwt-token'});
+
+    await patchNativeScanConfigFamilyNvts(gmp, 'config/id', 'Port scanners', {
+      changes: [{oid: '1.2.3', selected: false}],
+    });
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/scan-configs/config%2Fid/families/Port%20scanners/nvts',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scan-configs/config%2Fid/families/Port%20scanners/nvts',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          changes: [{oid: '1.2.3', selected: false}],
+        }),
+      },
     );
   });
 

@@ -6,9 +6,11 @@ use crate::errors::ApiError;
 use crate::gvmd_control::MAX_CONTROL_REQUEST_BYTES;
 use crate::scan_config_write_db::{
     ScanConfigWriteState, ensure_scan_config_clone_source_allowed,
-    ensure_scan_config_not_predefined, ensure_scan_config_owner_matches_operator,
+    ensure_scan_config_family_is_not_whole_only, ensure_scan_config_not_predefined,
+    ensure_scan_config_owner_matches_operator,
 };
 use crate::scan_config_write_sql::*;
+use crate::scan_config_write_transactions::scan_config_family_nvt_selector_exclude;
 use crate::scan_config_write_validation::*;
 use crate::scan_config_writes::{
     DiagnosticNvtSelectionOutcome, diagnostic_nvt_selection_command,
@@ -25,6 +27,73 @@ fn create_request(
         base_scan_config_id: base_scan_config_id.to_string(),
         comment: comment.map(str::to_string),
     }
+}
+
+#[test]
+fn scan_config_family_nvt_patch_request_is_strict_bounded_and_duplicate_free() {
+    let request = serde_json::json!({
+        "changes": [
+            {"oid": "1.3.6.1.4.1.25623.1.0.100001", "selected": true},
+            {"oid": "1.3.6.1.4.1.25623.1.0.100002", "selected": false}
+        ]
+    });
+    let request = serde_json::from_value::<ScanConfigFamilyNvtsPatchRequest>(request)
+        .expect("family NVT patch request shape");
+    let validated =
+        validate_scan_config_family_nvts_patch_request(request).expect("bounded unique changes");
+    assert_eq!(validated.changes.len(), 2);
+    assert_eq!(validated.changes[0].oid, "1.3.6.1.4.1.25623.1.0.100001");
+    assert!(validated.changes[0].selected);
+    assert!(!validated.changes[1].selected);
+
+    for request in [
+        serde_json::json!({"changes": []}),
+        serde_json::json!({"changes": [{"oid": "1.3.6.a", "selected": true}]}),
+        serde_json::json!({"changes": [
+            {"oid": "1.3.6.1", "selected": true},
+            {"oid": "1.3.6.1", "selected": false}
+        ]}),
+    ] {
+        let request = serde_json::from_value::<ScanConfigFamilyNvtsPatchRequest>(request)
+            .expect("JSON request shape must deserialize before validation");
+        assert!(matches!(
+            validate_scan_config_family_nvts_patch_request(request),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+    assert!(
+        serde_json::from_value::<ScanConfigFamilyNvtsPatchRequest>(
+            serde_json::json!({"changes": [{"oid": "1.3.6.1", "selected": true, "extra": 1}]})
+        )
+        .is_err()
+    );
+
+    let too_many = ScanConfigFamilyNvtsPatchRequest {
+        changes: (0..=MAX_SCAN_CONFIG_FAMILY_NVT_SELECTION_CHANGES)
+            .map(|index| ScanConfigFamilyNvtSelectionChange {
+                oid: format!("1.3.6.1.{index}"),
+                selected: true,
+            })
+            .collect(),
+    };
+    assert!(matches!(
+        validate_scan_config_family_nvts_patch_request(too_many),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+#[test]
+fn scan_config_family_nvt_patch_uses_static_include_and_growing_exclude_polarity() {
+    assert_eq!(scan_config_family_nvt_selector_exclude(false, false), None);
+    assert_eq!(
+        scan_config_family_nvt_selector_exclude(false, true),
+        Some(0)
+    );
+    assert_eq!(scan_config_family_nvt_selector_exclude(true, true), None);
+    assert_eq!(
+        scan_config_family_nvt_selector_exclude(true, false),
+        Some(1)
+    );
 }
 
 #[test]
@@ -339,7 +408,7 @@ fn scan_config_mutating_handlers_enforce_owner_and_protection_before_side_effect
         ),
         (
             "patch",
-            "pub(crate) async fn patch_scan_config",
+            "pub(crate) async fn patch_scan_config(\n",
             "tx.commit().await.map_err",
             "ensure_scan_config_owner_matches_operator(config_state.owner_id, operator_owner_id)?;",
             "ensure_scan_config_not_predefined(&config_state)?;",
@@ -383,6 +452,8 @@ fn scan_config_clone_source_allows_predefined_or_operator_owned_sources() {
         internal_id: 1,
         owner_id: 7,
         predefined: false,
+        nvt_selector: "selector-1".to_string(),
+        families_growing: 0,
     };
     assert!(ensure_scan_config_clone_source_allowed(&operator_owned, 7).is_ok());
     assert!(matches!(
@@ -426,6 +497,8 @@ fn scan_config_write_blocks_predefined_live_mutations() {
         internal_id: 1,
         owner_id: 7,
         predefined: false,
+        nvt_selector: "selector-1".to_string(),
+        families_growing: 0,
     };
     assert!(ensure_scan_config_not_predefined(&mutable).is_ok());
 
@@ -436,6 +509,106 @@ fn scan_config_write_blocks_predefined_live_mutations() {
     assert!(matches!(
         ensure_scan_config_not_predefined(&predefined),
         Err(ApiError::Conflict(_))
+    ));
+}
+
+#[test]
+fn scan_config_family_nvt_patch_sql_normalizes_rows_and_recomputes_caches() {
+    let delete = scan_config_delete_family_nvt_selector_rows_sql();
+    assert!(delete.contains("DELETE FROM nvt_selectors"));
+    assert!(delete.contains("name = $1"));
+    assert!(delete.contains("type = 2"));
+    assert!(delete.contains("family = $2"));
+    assert!(delete.contains("family_or_nvt = ANY($3::text[])"));
+
+    let insert = scan_config_insert_family_nvt_selector_rows_sql();
+    assert!(insert.contains("INSERT INTO nvt_selectors"));
+    assert!(insert.contains("SELECT $1, $3, 2, oid, $2"));
+    assert!(insert.contains("unnest($4::text[])"));
+
+    let cache = scan_config_recalculate_family_nvt_caches_sql();
+    for required in [
+        "FROM nvts n",
+        "FROM nvt_selectors ns",
+        "count(DISTINCT ns.family_or_nvt)",
+        "family_count = cache_values.family_count",
+        "nvt_count = cache_values.nvt_count",
+        "nvts_growing = cache_values.nvts_growing",
+        "modification_time = m_now()",
+    ] {
+        assert!(cache.contains(required), "cache refresh missing {required}");
+    }
+    assert!(!cache.contains("SET families_growing ="));
+
+    let tasks = scan_config_any_task_count_sql();
+    assert!(tasks.contains("coalesce(config_location, 0) = 0"));
+    assert!(!tasks.contains("hidden"));
+
+    let shared = scan_config_selector_reference_count_sql();
+    assert!(shared.contains("FROM configs WHERE nvt_selector = $1"));
+    assert!(shared.contains("FROM configs_trash WHERE nvt_selector = $1"));
+}
+
+#[test]
+fn scan_config_family_nvt_patch_rejects_canonical_whole_only_families() {
+    for family in [
+        "Ubuntu Local Security Checks",
+        "VMware Local Security Checks",
+        "Windows : Microsoft Bulletins",
+    ] {
+        assert!(matches!(
+            ensure_scan_config_family_is_not_whole_only(family),
+            Err(ApiError::Conflict(_))
+        ));
+    }
+    assert!(ensure_scan_config_family_is_not_whole_only("Port scanners").is_ok());
+}
+
+#[test]
+fn scan_config_family_nvt_patch_handler_guards_and_normalizes_before_commit() {
+    let source = include_str!("scan_config_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn patch_scan_config_family_nvts")
+        .expect("family NVT patch handler must exist")
+        .1
+        .split_once("#[derive(Debug, Clone, Copy, PartialEq, Eq)]")
+        .expect("family NVT patch handler must end before diagnostic type")
+        .0;
+    for required in [
+        "require_scan_config_write_operator(operator)?",
+        "validate_scan_config_family(&family)?",
+        "parse_scan_config_family_nvts_patch_payload(payload)?",
+        "validate_scan_config_family_nvts_patch_request(request)?",
+        "LOCK TABLE configs, configs_trash, nvt_selectors, tasks, nvts",
+        "ensure_scan_config_owner_matches_operator",
+        "ensure_scan_config_not_predefined",
+        "ensure_scan_config_not_referenced_by_any_task",
+        "ensure_scan_config_selector_is_private",
+        "ensure_scan_config_family_nvt_change_oids_exist",
+        "ensure_scan_config_family_is_not_whole_only",
+        "scan_config_family_nvt_default_selected",
+        "execute_scan_config_family_nvts_patch_transaction",
+        "commit patch scan-config family NVT transaction",
+    ] {
+        assert!(
+            handler.contains(required),
+            "family NVT patch handler missing {required}"
+        );
+    }
+    assert!(
+        handler
+            .find("ensure_scan_config_selector_is_private")
+            .unwrap()
+            < handler
+                .find("execute_scan_config_family_nvts_patch_transaction")
+                .unwrap()
+    );
+    let browser = include_str!("browser_proxy_scan_config.rs");
+    assert!(
+        browser.contains("payload: Result<Json<ScanConfigFamilyNvtsPatchRequest>, JsonRejection>")
+    );
+    assert!(source.contains(
+        "request body must be application/json matching ScanConfigFamilyNvtsPatchRequest"
     ));
 }
 

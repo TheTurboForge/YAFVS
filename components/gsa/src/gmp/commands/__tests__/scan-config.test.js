@@ -969,6 +969,82 @@ describe('ScanConfigCommand tests', () => {
     });
   });
 
+  test('should save only changed scan config family NVTs through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({ok: true, status: 204});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigCommand(fakeHttp);
+
+    await cmd.saveScanConfigFamily({
+      id: 'scan-config-id',
+      familyName: 'Port scanners',
+      nvts: [
+        {oid: '1.2.3', selected: YES_VALUE},
+        {oid: '1.2.4', selected: NO_VALUE},
+      ],
+      selected: {'1.2.3': YES_VALUE, '1.2.4': YES_VALUE},
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/scan-configs/scan-config-id/families/Port%20scanners/nvts',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scan-configs/scan-config-id/families/Port%20scanners/nvts',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          changes: [{oid: '1.2.4', selected: true}],
+        }),
+      }),
+    );
+  });
+
+  test('should skip an unchanged native scan config family save', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigCommand(fakeHttp);
+
+    await cmd.saveScanConfigFamily({
+      id: 'scan-config-id',
+      familyName: 'Port scanners',
+      nvts: [{oid: '1.2.3', selected: YES_VALUE}],
+      selected: {'1.2.3': YES_VALUE},
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test('should reject an oversized native scan config family save atomically', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigCommand(fakeHttp);
+    const nvts = Array.from({length: 1025}, (_, index) => ({
+      oid: `1.2.${index}`,
+      selected: NO_VALUE,
+    }));
+    const selected = Object.fromEntries(
+      nvts.map(({oid}) => [oid, YES_VALUE]),
+    );
+
+    await expect(
+      cmd.saveScanConfigFamily({
+        id: 'scan-config-id',
+        familyName: 'Port scanners',
+        nvts,
+        selected,
+      }),
+    ).rejects.toThrow(
+      'A single scan config family save may change at most 1024 NVTs',
+    );
+    expect(fakeHttp.buildUrl).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   test('should request scan config nvt data', async () => {
     const response = createResponse({
       get_config_nvt_response: {

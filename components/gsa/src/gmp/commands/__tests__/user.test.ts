@@ -11,6 +11,7 @@ import UserCommand, {
   type CertificateInfo,
   transformSettingName,
 } from 'gmp/commands/user';
+import date from 'gmp/models/date';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -85,6 +86,64 @@ describe('UserCommand tests', () => {
     };
     expect(barSettings.foo).toEqual('true');
     expect(barSettings.certificateInfo.issuer).toEqual('ipsum');
+  });
+
+  test('should ping and renew the GSAD session through native JSON routes', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({status: 'ok'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({expires_at: 1234567890}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new UserCommand(fakeHttp);
+
+    await cmd.ping();
+    const renewed = await cmd.renewSession();
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/session/ping',
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/session/renew',
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://turbovas.example/api/v1/session/ping',
+      {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://turbovas.example/api/v1/session/renew',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(renewed.data).toEqual(date.unix(1234567890));
   });
 
   test('should return the first single setting value if given an array', async () => {

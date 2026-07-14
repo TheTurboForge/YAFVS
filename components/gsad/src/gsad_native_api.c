@@ -16,7 +16,9 @@
 #include "gsad_http.h"
 #include "gsad_params.h"
 #include "gsad_session.h"
+#include "gsad_settings.h"
 #include "gsad_user.h"
+#include "gsad_user_session.h"
 
 #include <errno.h>
 #include <cjson/cJSON.h>
@@ -43,6 +45,8 @@
 #define BROWSER_PROXY_OPERATOR_MAX_LENGTH 256
 #define USER_PASSWORD_CHANGE_PATH "/api/v1/users/current/password"
 #define USER_PASSWORD_MAX_BYTES 4096
+#define SESSION_PING_PATH "/api/v1/session/ping"
+#define SESSION_RENEW_PATH "/api/v1/session/renew"
 
 static void
 secure_clear (void *value, gsize length)
@@ -862,6 +866,9 @@ native_api_post_path_is_allowed (const gchar *path)
   if (path == NULL || strchr (path, '?') != NULL)
     return FALSE;
 
+  if (g_strcmp0 (path, SESSION_RENEW_PATH) == 0)
+    return TRUE;
+
   if (g_strcmp0 (path, user_password_change_path) == 0)
     return TRUE;
 
@@ -1286,6 +1293,9 @@ native_api_path_is_allowed (const gchar *path)
 
   if (path == NULL || strchr (path, '?') != NULL)
     return FALSE;
+
+  if (g_strcmp0 (path, SESSION_PING_PATH) == 0)
+    return TRUE;
 
   if (g_strcmp0 (path, raw_reports_path) == 0)
     return TRUE;
@@ -2291,6 +2301,14 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
         "Native API browser reads require an authenticated session user.");
     }
 
+  if (g_strcmp0 (path, SESSION_PING_PATH) == 0)
+    {
+      gsad_credentials_free (credentials);
+      return gsad_http_send_response_for_content (
+        connection, "{\"status\":\"ok\"}", MHD_HTTP_OK, NULL,
+        GSAD_CONTENT_TYPE_APP_JSON, NULL, 0);
+    }
+
   if (native_api_pdf_download_path_is_allowed (path))
     {
       native_api_pdf_response_t pdf_response = {0};
@@ -2523,6 +2541,46 @@ gsad_http_handle_native_api_post (gsad_http_handler_t *handler_next,
                                   gsad_connection_info_t *con_info,
                                   void *data)
 {
+  gsad_credentials_t *credentials = (gsad_credentials_t *) data;
+  const gchar *path = gsad_connection_info_get_url (con_info);
+
+  if (g_strcmp0 (path, SESSION_RENEW_PATH) == 0)
+    {
+      gsad_user_t *user = gsad_credentials_get_user (credentials);
+      time_t expires_at;
+      gchar *body;
+      gsad_http_result_t ret;
+
+      if (browser_proxy_operator_name (credentials) == NULL)
+        {
+          gsad_credentials_free (credentials);
+          return send_json_error (
+            connection, MHD_HTTP_UNAUTHORIZED, "unauthorized",
+            "Session renewal requires an authenticated session user.");
+        }
+
+      if (user)
+        {
+          gsad_user_session_renew_timeout (user);
+          expires_at = gsad_user_session_get_timeout (user);
+        }
+      else
+        {
+          gsad_settings_t *settings = gsad_settings_get_global_settings ();
+          expires_at =
+            time (NULL) + gsad_settings_get_session_timeout (settings) * 60;
+        }
+
+      body = g_strdup_printf ("{\"expires_at\":%" G_GINT64_FORMAT "}",
+                              (gint64) expires_at);
+      gsad_credentials_free (credentials);
+      ret = gsad_http_send_response_for_content (
+        connection, body, MHD_HTTP_OK, NULL, GSAD_CONTENT_TYPE_APP_JSON, NULL,
+        0);
+      g_free (body);
+      return ret;
+    }
+
   return handle_native_api_write (handler_next, handler_data, connection,
                                   con_info, data, "POST",
                                   native_api_post_path_is_allowed);

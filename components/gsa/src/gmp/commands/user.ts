@@ -96,6 +96,17 @@ const log = logger.getLogger('gmp.commands.users');
 const REPORT_COMPOSER_DEFAULTS_SETTING_ID =
   'b6b449ee-5d90-4ff0-af20-7e838c389d39';
 
+const nativeApiHeaders = (http: Http, withJsonBody = false) => ({
+  Accept: 'application/json',
+  ...(withJsonBody ? {'Content-Type': 'application/json'} : {}),
+  ...(http.session.token
+    ? {'X-TurboVAS-Token': http.session.token}
+    : {}),
+  ...(http.session.jwt
+    ? {Authorization: `Bearer ${http.session.jwt}`}
+    : {}),
+});
+
 export const ROWS_PER_PAGE_SETTING_ID = '5f5a8712-8017-11e1-8556-406186ea4fc5';
 
 export const DEFAULT_SETTINGS = {
@@ -374,12 +385,22 @@ class UserCommand extends EntityCommand<User, PortListElement> {
   }
 
   async renewSession() {
-    const response = await this.action({
-      cmd: 'renew_session',
+    const response = await fetch(this.http.buildUrl('api/v1/session/renew'), {
+      method: 'POST',
+      credentials: 'include',
+      headers: nativeApiHeaders(this.http),
     });
-    const seconds = parseInt(response.data.message);
-    return response.setData(
-      isDefined(seconds) ? date.unix(seconds) : undefined,
+    if (!response.ok) {
+      throw new Error(
+        `Native API request failed with status ${response.status}`,
+      );
+    }
+    const payload = (await response.json()) as {
+      expires_at?: string | number;
+    };
+    const expiresAt = parseInt(payload.expires_at);
+    return new Response(
+      isDefined(expiresAt) ? date.unix(expiresAt) : undefined,
     );
   }
 
@@ -389,16 +410,7 @@ class UserCommand extends EntityCommand<User, PortListElement> {
       {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          ...(this.http.session.token
-            ? {'X-TurboVAS-Token': this.http.session.token}
-            : {}),
-          ...(this.http.session.jwt
-            ? {Authorization: `Bearer ${this.http.session.jwt}`}
-            : {}),
-        },
+        headers: nativeApiHeaders(this.http, true),
         body: JSON.stringify({
           old_password: oldPassword,
           new_password: newPassword,
@@ -413,10 +425,18 @@ class UserCommand extends EntityCommand<User, PortListElement> {
     }
   }
 
-  ping() {
-    return this.httpGetWithTransform({
-      cmd: 'ping',
+  async ping() {
+    const response = await fetch(this.http.buildUrl('api/v1/session/ping'), {
+      method: 'GET',
+      credentials: 'include',
+      headers: nativeApiHeaders(this.http),
     });
+    if (!response.ok) {
+      throw new Error(
+        `Native API request failed with status ${response.status}`,
+      );
+    }
+    return new Response(undefined);
   }
 
   getElementFromRoot(root): UserElement {

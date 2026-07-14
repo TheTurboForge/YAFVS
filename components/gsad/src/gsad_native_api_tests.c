@@ -7,7 +7,9 @@
 #include "gsad_credentials.h"
 #include "gsad_http.h"
 #include "gsad_params.h"
+#include "gsad_settings.h"
 #include "gsad_user.h"
+#include "gsad_user_session.h"
 
 #include <cgreen/cgreen.h>
 #include <glib.h>
@@ -39,6 +41,8 @@ extern gboolean
 gsad_native_api_test_parse_user_password_change_request (
   const gchar *body, gsize body_length, gchar **new_password);
 
+Describe (gsad_native_api);
+
 /* Handler dependencies are not part of this parser-focused unit target. */
 gsad_user_t *
 gsad_credentials_get_user (gsad_credentials_t *credentials)
@@ -46,6 +50,30 @@ gsad_credentials_get_user (gsad_credentials_t *credentials)
   return credentials == (gsad_credentials_t *) GINT_TO_POINTER (1)
            ? (gsad_user_t *) GINT_TO_POINTER (1)
            : NULL;
+}
+
+gsad_settings_t *
+gsad_settings_get_global_settings (void)
+{
+  return (gsad_settings_t *) GINT_TO_POINTER (1);
+}
+
+int
+gsad_settings_get_session_timeout (const gsad_settings_t *settings)
+{
+  return settings == (gsad_settings_t *) GINT_TO_POINTER (1) ? 15 : 0;
+}
+
+const time_t
+gsad_user_session_get_timeout (gsad_user_t *user)
+{
+  return user == (gsad_user_t *) GINT_TO_POINTER (1) ? 1234567890 : 0;
+}
+
+void
+gsad_user_session_renew_timeout (gsad_user_t *user)
+{
+  (void) user;
 }
 
 Ensure (gsad_native_api,
@@ -112,7 +140,28 @@ gsad_credentials_free (gsad_credentials_t *credentials)
   (void) credentials;
 }
 
-Describe (gsad_native_api);
+Ensure (gsad_native_api,
+        should_only_allow_exact_session_ping_and_renew_paths)
+{
+  assert_that (
+    gsad_native_api_test_get_path_is_allowed ("/api/v1/session/ping"),
+    is_true);
+  assert_that (
+    gsad_native_api_test_post_path_is_allowed ("/api/v1/session/renew"),
+    is_true);
+  assert_that (
+    gsad_native_api_test_post_path_is_allowed ("/api/v1/session/ping"),
+    is_false);
+  assert_that (
+    gsad_native_api_test_get_path_is_allowed ("/api/v1/session/renew"),
+    is_false);
+  assert_that (
+    gsad_native_api_test_get_path_is_allowed ("/api/v1/session/ping/"),
+    is_false);
+  assert_that (
+    gsad_native_api_test_post_path_is_allowed ("/api/v1/session/renew?x=1"),
+    is_false);
+}
 
 Ensure (gsad_native_api,
         should_only_allow_strict_current_user_password_change_posts)

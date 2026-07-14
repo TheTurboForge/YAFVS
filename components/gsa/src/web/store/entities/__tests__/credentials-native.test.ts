@@ -66,7 +66,6 @@ describe('native API credentials', () => {
     expect(credential.owner?.name).toEqual('admin');
     expect(credential.credentialType).toEqual('up');
     expect(credential.login).toBeUndefined();
-    expect(credential.credentialStore).toBeUndefined();
     expect(credential.privateKeyInfo).toBeUndefined();
     expect(credential.isInUse()).toEqual(true);
     expect(credential.userCapabilities.mayEdit('credential')).toEqual(true);
@@ -136,7 +135,6 @@ describe('native API credentials', () => {
     expect(credential.login).toBeUndefined();
     expect(credential.privateKeyInfo).toBeUndefined();
     expect(credential.publicKeyInfo).toBeUndefined();
-    expect(credential.credentialStore).toBeUndefined();
   });
 
   test('loads credential list store entries through same-origin native API', async () => {

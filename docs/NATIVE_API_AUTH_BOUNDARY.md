@@ -123,8 +123,8 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   is redacted id/name metadata only; credential secrets and control paths remain
   inherited.
 - Credential name/comment metadata PATCH is direct write-control, while
-  credential secret material, credential-store selectors, type/allow-insecure
-  settings, scanner/target links, export/download, create/clone/restore/delete,
+  credential secret material, type/allow-insecure settings, scanner/target
+  links, export/download, clone/restore/delete,
   and secret-bearing writes remain inherited.
 - Target name/comment metadata PATCH is direct write-control, while hosts,
   exclude hosts, port-list references, alive-test behavior, reverse-DNS flags,

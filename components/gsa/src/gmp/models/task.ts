@@ -21,7 +21,6 @@ import {
   parseToString,
   parseDate,
   parseSeverity,
-  parseBoolean,
 } from 'gmp/parser';
 import {map} from 'gmp/utils/array';
 import {isDefined, isArray, isString} from 'gmp/utils/identity';
@@ -195,7 +194,6 @@ export interface TaskProperties extends ModelProperties {
   min_qod?: number;
   acceptInvalidCerts?: boolean;
   registryAllowInsecure?: boolean;
-  csAllowFailedRetrieval?: boolean;
   usageType?: TaskUsageType;
 }
 
@@ -278,7 +276,6 @@ class Task extends Model {
   readonly min_qod?: number;
   readonly acceptInvalidCerts?: boolean;
   readonly registryAllowInsecure?: boolean;
-  readonly csAllowFailedRetrieval?: boolean;
   readonly preferences: TaskPreferences;
   readonly progress?: number;
   readonly report_count?: ReportCount;
@@ -320,7 +317,6 @@ class Task extends Model {
     min_qod,
     acceptInvalidCerts,
     registryAllowInsecure,
-    csAllowFailedRetrieval,
     preferences = {},
     progress,
     // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -356,7 +352,6 @@ class Task extends Model {
     this.min_qod = min_qod;
     this.acceptInvalidCerts = acceptInvalidCerts;
     this.registryAllowInsecure = registryAllowInsecure;
-    this.csAllowFailedRetrieval = csAllowFailedRetrieval;
     this.preferences = preferences;
     this.progress = progress;
     this.report_count = report_count;
@@ -496,9 +491,6 @@ class Task extends Model {
             break;
           case 'registry_allow_insecure':
             copy.registryAllowInsecure = parseYesNo(pref.value) === YES_VALUE;
-            break;
-          case 'cs_allow_failed_retrieval':
-            copy.csAllowFailedRetrieval = parseBoolean(pref.value);
             break;
           default:
             prefs[pref.scanner_name] = {value: pref.value, name: pref.name};

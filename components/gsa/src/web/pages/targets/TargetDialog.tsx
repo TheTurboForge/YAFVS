@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -8,10 +9,6 @@ import {type TargetExcludeSource, type TargetSource} from 'gmp/commands/target';
 import {
   type default as Credential,
   type ALL_CREDENTIAL_TYPES,
-  CREDENTIAL_STORE_KRB5_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_SNMP_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_USERNAME_PASSWORD_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_USERNAME_SSH_KEY_CREDENTIAL_TYPE,
   snmp_credential_filter,
   ssh_credential_filter,
   ESXI_CREDENTIAL_TYPES,
@@ -48,7 +45,6 @@ import YesNoRadio from 'web/components/form/YesNoRadio';
 import {InfoIcon, NewIcon} from 'web/components/icon';
 import Row from 'web/components/layout/Row';
 import useCapabilities from 'web/hooks/useCapabilities';
-import useFeatures from 'web/hooks/useFeatures';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
 import {
@@ -199,171 +195,71 @@ const TargetDialog = ({
 }: TargetDialogProps) => {
   const [_] = useTranslation();
   const capabilities = useCapabilities();
-  const features = useFeatures();
   const gmp = useGmp();
   const enableKrb5 = gmp.settings.enableKrb5;
   const hasPermissionToCreateCredential = capabilities.mayCreate('credential');
   const [aliveTests, setAliveTests] = useState<AliveTest[]>(initialAliveTests);
 
-  // Feature flag configuration
-  const isCredentialStoresEnabled = features.featureEnabled(
-    'ENABLE_CREDENTIAL_STORES',
-  );
-
-  /**
-   * Mapping of credential types to their corresponding credential store types.
-   * This centralized configuration makes it easier to manage which store types
-   * are available for each credential category.
-   */
-  const CREDENTIAL_STORE_TYPES = {
-    ssh: [
-      CREDENTIAL_STORE_USERNAME_PASSWORD_CREDENTIAL_TYPE,
-      CREDENTIAL_STORE_USERNAME_SSH_KEY_CREDENTIAL_TYPE,
-    ] as CredentialType[],
-    sshElevate: [
-      CREDENTIAL_STORE_USERNAME_PASSWORD_CREDENTIAL_TYPE,
-    ] as CredentialType[],
-    smb: [
-      CREDENTIAL_STORE_USERNAME_PASSWORD_CREDENTIAL_TYPE,
-    ] as CredentialType[],
-    esxi: [
-      CREDENTIAL_STORE_USERNAME_PASSWORD_CREDENTIAL_TYPE,
-    ] as CredentialType[],
-    snmp: [CREDENTIAL_STORE_SNMP_CREDENTIAL_TYPE] as CredentialType[],
-    krb5: [CREDENTIAL_STORE_KRB5_CREDENTIAL_TYPE] as CredentialType[],
-  };
-
   name = name || _('Unnamed');
   title = title || _('New Target');
 
-  /**
-   * Returns credential types for new credential dialogs, including store types
-   * when the credential stores feature is enabled.
-   *
-   * @param baseTypes - The base credential types (e.g., SSH_CREDENTIAL_TYPES)
-   * @param storeKey - The key to look up store types in CREDENTIAL_STORE_TYPES
-   * @returns Combined array of base and store credential types
-   */
-  const getCredentialTypesForNewCredential = (
-    baseTypes: CredentialType[],
-    storeKey: keyof typeof CREDENTIAL_STORE_TYPES,
-  ): CredentialType[] => {
-    if (!isCredentialStoresEnabled) {
-      return baseTypes;
-    }
-    return [...baseTypes, ...CREDENTIAL_STORE_TYPES[storeKey]];
-  };
-
-  /**
-   * Returns credentials with credential store support when the feature is enabled.
-   * Filters existing credentials to include those matching the store types.
-   *
-   * @param baseCredentials - Filtered credentials of the base type
-   * @param storeKey - The key to look up store types in CREDENTIAL_STORE_TYPES
-   * @returns Combined array of base and store credentials
-   */
-  const getCredentialsWithStoreSupport = (
-    baseCredentials: Credential[],
-    storeKey: keyof typeof CREDENTIAL_STORE_TYPES,
-  ): Credential[] => {
-    if (!isCredentialStoresEnabled) {
-      return baseCredentials;
-    }
-    const storeCredentials = credentials.filter(value =>
-      CREDENTIAL_STORE_TYPES[storeKey].includes(
-        value.credentialType as CredentialType,
-      ),
-    );
-    return [...baseCredentials, ...storeCredentials];
-  };
-
   const NEW_SSH: NewCredentialData = {
     idField: 'sshCredentialId',
-    types: getCredentialTypesForNewCredential(
-      SSH_CREDENTIAL_TYPES as CredentialType[],
-      'ssh',
-    ),
+    types: SSH_CREDENTIAL_TYPES as CredentialType[],
     title: _('Create new SSH credential'),
   };
 
   const NEW_SSH_ELEVATE: NewCredentialData = {
     idField: 'sshElevateCredentialId',
-    types: getCredentialTypesForNewCredential(
-      SSH_ELEVATE_CREDENTIAL_TYPES as CredentialType[],
-      'sshElevate',
-    ),
+    types: SSH_ELEVATE_CREDENTIAL_TYPES as CredentialType[],
     title: _('Create new SSH elevate credential'),
   };
 
   const NEW_SMB: NewCredentialData = {
     idField: 'smbCredentialId',
     title: _('Create new SMB credential'),
-    types: getCredentialTypesForNewCredential(
-      SMB_CREDENTIAL_TYPES as CredentialType[],
-      'smb',
-    ),
+    types: SMB_CREDENTIAL_TYPES as CredentialType[],
   };
 
   const NEW_ESXI: NewCredentialData = {
     idField: 'esxiCredentialId',
     title: _('Create new ESXi credential'),
-    types: getCredentialTypesForNewCredential(
-      ESXI_CREDENTIAL_TYPES as CredentialType[],
-      'esxi',
-    ),
+    types: ESXI_CREDENTIAL_TYPES as CredentialType[],
   };
 
   const NEW_SNMP: NewCredentialData = {
     idField: 'snmpCredentialId',
     title: _('Create new SNMP credential'),
-    types: getCredentialTypesForNewCredential(
-      SNMP_CREDENTIAL_TYPES as CredentialType[],
-      'snmp',
-    ),
+    types: SNMP_CREDENTIAL_TYPES as CredentialType[],
   };
 
   const NEW_KRB5: NewCredentialData = {
     idField: 'krb5CredentialId',
     title: _('Create new Kerberos credential'),
-    types: getCredentialTypesForNewCredential(
-      KRB5_CREDENTIAL_TYPES as CredentialType[],
-      'krb5',
-    ),
+    types: KRB5_CREDENTIAL_TYPES as CredentialType[],
   };
 
   const baseSshCredentials = credentials.filter(
     value =>
       ssh_credential_filter(value) && value.id !== sshElevateCredentialId,
   );
-  const sshCredentials = getCredentialsWithStoreSupport(
-    baseSshCredentials,
-    'ssh',
-  );
+  const sshCredentials = baseSshCredentials;
 
   // filter out ssh_elevate_credential_id. If ssh_elevate_credential_id is UNSET_VALUE, this is ok. Because the Select will add back the UNSET_VALUE
   const baseUpCredentials = credentials.filter(
     value => value.credentialType === USERNAME_PASSWORD_CREDENTIAL_TYPE,
   );
-  const upCredentials = getCredentialsWithStoreSupport(
-    baseUpCredentials,
-    'smb',
-  );
+  const upCredentials = baseUpCredentials;
 
   const elevateUpCredentials = upCredentials.filter(
     value => value.id !== sshCredentialId,
   );
 
   const baseSnmpCredentials = credentials.filter(snmp_credential_filter);
-  const snmpCredentials = getCredentialsWithStoreSupport(
-    baseSnmpCredentials,
-    'snmp',
-  );
+  const snmpCredentials = baseSnmpCredentials;
 
   const baseKrb5Credentials = credentials.filter(krb5CredentialFilter);
-  const krb5Credentials = getCredentialsWithStoreSupport(
-    baseKrb5Credentials,
-    'krb5',
-  );
+  const krb5Credentials = baseKrb5Credentials;
 
   const handleCustomAliveTestsChange = (values: string[]) => {
     setAliveTests(values as AliveTest[]);

@@ -62,7 +62,6 @@ pub(crate) fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &
                     max(value) FILTER (WHERE name = 'max_checks') AS max_checks,
                     max(value) FILTER (WHERE name = 'max_hosts') AS max_hosts,
                     max(value) FILTER (WHERE name = 'assets_min_qod') AS min_qod,
-                    max(value) FILTER (WHERE name = 'cs_allow_failed_retrieval') AS cs_allow_failed_retrieval,
                     max(value) FILTER (WHERE name = 'hosts_ordering') AS hosts_ordering
                FROM task_preferences
               GROUP BY task
@@ -141,7 +140,6 @@ pub(crate) fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &
                     coalesce(task_preference_rollup.max_checks, '4') AS max_checks,
                     coalesce(task_preference_rollup.max_hosts, '20') AS max_hosts,
                     coalesce(task_preference_rollup.min_qod, '70') AS min_qod,
-                    lower(coalesce(task_preference_rollup.cs_allow_failed_retrieval, 'no')) IN ('1', 'yes', 'true') AS cs_allow_failed_retrieval,
                     coalesce(task_preference_rollup.hosts_ordering, 'random') AS hosts_ordering,
                     CASE WHEN task.alterable IS NULL THEN NULL
                          ELSE coalesce(task.alterable, 0) <> 0 END AS alterable,

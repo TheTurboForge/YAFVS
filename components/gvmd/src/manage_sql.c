@@ -34,7 +34,6 @@
 #include "manage_report_formats.h"
 #include "manage_runtime_flags.h"
 #include "manage_scanner_relays.h"
-#include "manage_sql_credential_stores.h"
 #include "manage_sql_copy.h"
 #include "manage_sql_secinfo.h"
 #include "manage_sql_nvts.h"
@@ -3842,124 +3841,6 @@ check_db_roles ()
 {
 }
 
-#if ENABLE_CREDENTIAL_STORES
-/**
- * @brief Create or update the CyberArk credential store if needed.
- *
- * @param owner  The owner if the credential store is newly created.
- */
-static void
-check_db_cyberark_credential_store (user_t owner)
-{
-  const char *current_version = "0.1";
-  credential_store_preference_data_t *new_pref;
-  credential_store_selector_data_t *new_selector;
-  GList *preferences = NULL, *selectors = NULL;
-
-  if (sql_int ("SELECT count(*) FROM credential_stores"
-               " WHERE uuid = '%s' AND version = '%s'",
-               CREDENTIAL_STORE_UUID_CYBERARK,
-               current_version))
-    return;
-
-  new_pref = credential_store_preference_new
-               ("app_id",
-                FALSE, CREDENTIAL_STORE_PREFERENCE_TYPE_STRING,
-                "", "", "", NULL);
-  preferences = g_list_append (preferences, new_pref);
-
-  new_pref = credential_store_preference_new
-               ("client_key",
-                TRUE, CREDENTIAL_STORE_PREFERENCE_TYPE_X509_PRIVKEY,
-                "", "", "", "passphrase");
-  preferences = g_list_append (preferences, new_pref);
-
-  new_pref = credential_store_preference_new
-               ("client_cert",
-                FALSE, CREDENTIAL_STORE_PREFERENCE_TYPE_X509_CERTS,
-                "", "", "", NULL);
-  preferences = g_list_append (preferences, new_pref);
-
-  new_pref = credential_store_preference_new
-               ("server_ca_cert",
-                FALSE, CREDENTIAL_STORE_PREFERENCE_TYPE_X509_CERTS,
-                "", "", "", NULL);
-  preferences = g_list_append (preferences, new_pref);
-
-  new_pref = credential_store_preference_new
-               ("client_pkcs12_file",
-                TRUE, CREDENTIAL_STORE_PREFERENCE_TYPE_PKCS12_FILE,
-                "", "", "", "passphrase");
-  preferences = g_list_append (preferences, new_pref);
-
-  new_pref = credential_store_preference_new
-               ("passphrase",
-                TRUE, CREDENTIAL_STORE_PREFERENCE_TYPE_STRING,
-                "", "", "", NULL);
-  preferences = g_list_append (preferences, new_pref);
-
-  new_selector = credential_store_selector_new
-                  ("username_password_object", "", "", 0);
-  credential_store_selector_add_credential_type (new_selector, "cs-up");
-  selectors = g_list_append (selectors, new_selector);
-
-  create_or_update_credential_store (CREDENTIAL_STORE_UUID_CYBERARK,
-                                     "CyberArk",
-                                     "localhost",
-                                     "api",
-                                     current_version,
-                                     preferences,
-                                     selectors,
-                                     owner);
-
-  g_list_free_full (preferences,
-                    (GDestroyNotify) credential_store_preference_free);
-  g_list_free_full (selectors,
-                    (GDestroyNotify) credential_store_selector_free);
-}
-#endif
-
-/**
- * @brief Ensure the predefined credential stores exists.
- */
-static void
-check_db_credential_stores ()
-{
-#if ENABLE_CREDENTIAL_STORES
-  gchar *feed_owner_uuid;
-  user_t owner = 0;
-  char *old_user_uuid, *old_username;
-
-  setting_value (SETTING_UUID_FEED_IMPORT_OWNER, &feed_owner_uuid);
-
-  if (feed_owner_uuid != NULL && strlen (feed_owner_uuid) > 0)
-    {
-      gchar *quoted_user_id = sql_quote (feed_owner_uuid);
-      owner = sql_int64_0 ("SELECT id FROM users WHERE uuid = '%s'",
-                           quoted_user_id);
-      g_free (quoted_user_id);
-    }
-  if (owner == 0)
-    {
-      g_message ("%s: No feed owner set, skipping credential store creation",
-               __func__);
-      g_free (feed_owner_uuid);
-      return;
-    }
-
-  old_user_uuid = current_credentials.uuid;
-  old_username = current_credentials.username;
-  current_credentials.uuid = feed_owner_uuid;
-  current_credentials.username = user_name (feed_owner_uuid);
-
-  check_db_cyberark_credential_store (owner);
-
-  current_credentials.uuid = old_user_uuid;
-  current_credentials.username = old_username;
-  g_free (feed_owner_uuid);
-#endif /* ENABLE_CREDENTIAL_STORES */
-}
-
 /**
  * @brief Cleanup the auth_cache table.
  */
@@ -4008,7 +3889,6 @@ check_db (int check_encryption_key, int avoid_db_check_inserts)
     {
       check_db_permissions ();
       check_db_settings ();
-      check_db_credential_stores ();
       check_db_integration_configs ();
     }
   cleanup_schedule_times ();
@@ -16046,14 +15926,6 @@ validate_credential_realm_format (const char *realm)
  * @param[in]  kdc             Kerberos KDC (key distribution centers).
  * @param[in]  kdcs            List of Kerberos KDCs.
  * @param[in]  realm           Kerberos realm.
- * @param[in]  credential_store_id Credential store ID, or NULL
- *                                 (if ENABLE_CREDENTIAL_STORES).
- * @param[in]  vault_id         Vault ID, or NULL.
- *                              (if ENABLE_CREDENTIAL_STORES).
- * @param[in]  host_identifier  Host identifier, or NULL.
- *                              (if ENABLE_CREDENTIAL_STORES).
- * @param[in]  privacy_host_identifier  SNMP Privacy host identifier, or NULL.
- *                              (if ENABLE_CREDENTIAL_STORES).
  * @param[in]  given_type      Credential type or NULL.
  * @param[in]  allow_insecure  Whether to allow insecure uses.
  * @param[out] credential      Created Credential.
@@ -16070,11 +15942,6 @@ validate_credential_realm_format (const char *realm)
  *         19 key distribution center missing, 20 realm missing,
  *         21 invalid key distribution center,
  *         22 invalid kerberos realm,
- *         23 credential store ID missing and no default store available,
- *            (if ENABLE_CREDENTIAL_STORES),
- *         24 credential store cannot be found (if ENABLE_CREDENTIAL_STORES),
- *         25 vault ID missing (if ENABLE_CREDENTIAL_STORES),
- *         26 host identifier missing (if ENABLE_CREDENTIAL_STORES),
  *         99 permission denied, -1 error.
  */
 int
@@ -16085,9 +15952,6 @@ create_credential (const char* name, const char* comment, const char* login,
                    const char* auth_algorithm, const char* privacy_password,
                    const char* privacy_algorithm,
                    const char* kdc, array_t* kdcs, const char *realm,
-                   const char* credential_store_id, const char* vault_id,
-                   const char* host_identifier,
-                   const char* privacy_host_identifier,
                    const char* given_type, const char* allow_insecure,
                    credential_t *credential)
 {
@@ -16137,13 +16001,6 @@ create_credential (const char* name, const char* comment, const char* login,
           && strcmp (given_type, "up")
           && strcmp (given_type, "usk")
           && strcmp (given_type, "krb5")
-          && strcmp (given_type, "cs_pgp")
-          && strcmp (given_type, "cs_pw")
-          && strcmp (given_type, "cs_snmp")
-          && strcmp (given_type, "cs_smime")
-          && strcmp (given_type, "cs_up")
-          && strcmp (given_type, "cs_usk")
-          && strcmp (given_type, "cs_krb5")
       )
         {
           sql_rollback ();
@@ -16175,8 +16032,7 @@ create_credential (const char* name, const char* comment, const char* login,
   /* Validate credential data */
   auto_generate = ((given_password == NULL) && (key_private == NULL)
                    && (key_public == NULL) && (certificate == NULL)
-                   && (community == NULL)
-                   && !g_str_has_prefix (quoted_type, "cs_"));
+                   && (community == NULL));
   ret = 0;
 
   if (auto_generate
@@ -16195,7 +16051,6 @@ create_credential (const char* name, const char* comment, const char* login,
       && strcmp (quoted_type, "pw")
       && strcmp (quoted_type, "smime")
       && strcmp (quoted_type, "snmp")
-      && g_str_has_prefix (quoted_type, "cs_") == 0
     )
     ret = 5;
   else if (given_password == NULL && auto_generate == 0
@@ -16215,9 +16070,7 @@ create_credential (const char* name, const char* comment, const char* login,
   else if (key_public == NULL && auto_generate == 0
            && strcmp (quoted_type, "pgp") == 0)
     ret = 9;
-  else if ((strcmp (quoted_type, "krb5") == 0)
-           || (feature_enabled (FEATURE_ID_CREDENTIAL_STORES)
-               && strcmp (quoted_type, "cs_krb5") == 0))
+  else if (strcmp (quoted_type, "krb5") == 0)
     {
       if (kdcs && kdcs->len > 0)
         {
@@ -16278,49 +16131,6 @@ create_credential (const char* name, const char* comment, const char* login,
                && strcmp (privacy_algorithm, "des"))
         ret = 16;
     }
-  else if (strcmp (quoted_type, "cs_snmp") == 0
-           && feature_enabled (FEATURE_ID_CREDENTIAL_STORES))
-    {
-      if (auth_algorithm == NULL)
-        ret = 12;
-      else if ((privacy_algorithm == NULL
-                || strcmp (privacy_algorithm, "") == 0)
-               && privacy_host_identifier
-               && strcmp (privacy_host_identifier, ""))
-        ret = 14;
-      else if (auth_algorithm
-               && strcmp (auth_algorithm, "md5")
-               && strcmp (auth_algorithm, "sha1"))
-        ret = 15;
-      else if (privacy_algorithm
-               && strcmp (privacy_algorithm, "")
-               && strcmp (privacy_algorithm, "aes")
-               && strcmp (privacy_algorithm, "des"))
-        ret = 16;
-    }
-
-  if (g_str_has_prefix (quoted_type, "cs_") && ret == 0)
-    {
-#if ENABLE_CREDENTIAL_STORES
-      credential_store_t store;
-      if (!feature_enabled (FEATURE_ID_CREDENTIAL_STORES))
-        ret = 4;
-      else if (credential_store_id == NULL
-               && get_default_credential_store_id () == NULL)
-        ret = 23;
-      else if (credential_store_id
-               && (find_credential_store_no_acl (credential_store_id, &store)
-                   || store == 0))
-        ret = 24;
-      else if (vault_id == NULL)
-        ret = 25;
-      else if (host_identifier == NULL)
-        ret = 26;
-#else
-      ret = 4;
-#endif
-    }
-
   if (ret)
     {
       g_free (quoted_type);
@@ -16397,32 +16207,6 @@ create_credential (const char* name, const char* comment, const char* login,
   if (realm)
     set_credential_data (new_credential, "realm", realm);
 
-#if ENABLE_CREDENTIAL_STORES
-  if (g_str_has_prefix (quoted_type, "cs_"))
-    {
-      if (credential_store_id)
-        set_credential_data (new_credential,
-                             "credential_store_id", credential_store_id);
-      else
-        set_credential_data (new_credential,
-                             "credential_store_id", get_default_credential_store_id ());
-      if (vault_id)
-        set_credential_data (new_credential,
-                             "vault_id", vault_id);
-      if (host_identifier)
-        set_credential_data (new_credential,
-                             "host_identifier", host_identifier);
-      if (privacy_host_identifier)
-        set_credential_data (new_credential,
-                             "privacy_host_identifier", privacy_host_identifier);
-      if (credential)
-        *credential = new_credential;
-
-      g_free (quoted_type);
-      sql_commit ();
-      return 0;
-    }
-#endif
 
   g_free (quoted_type);
 
@@ -16708,14 +16492,6 @@ copy_credential (const char* name, const char* comment,
  * @param[in]   kdc                 Kerberos KDC (key distribution centers).
  * @param[in]   kdcs                List of Kerberos KDCs.
  * @param[in]   realm               Kerberos realm.
- * @param[in]   credential_store_id Credential store ID, or NULL
- *                                   (if ENABLE_CREDENTIAL_STORES).
- * @param[in]   vault_id            Vault ID, or NULL.
- *                                  (if ENABLE_CREDENTIAL_STORES).
- * @param[in]   host_identifier     Host identifier, or NULL.
- *                                  (if ENABLE_CREDENTIAL_STORES).
- * @param[in]   privacy_host_identifier  SNMP Privacy host identifier, or NULL.
- *                                  (if ENABLE_CREDENTIAL_STORES).
  * @param[in]   allow_insecure      Whether to allow insecure use.
  *
  * @return 0 success, 1 failed to find credential, 2 credential with new name
@@ -16726,11 +16502,6 @@ copy_credential (const char* name, const char* comment,
  *         10 privacy password must be empty if algorithm is empty
  *         11 invalid or empty key distribution center,
  *         12 invalid or empty kerberos realm,
- *         13 credential store cannot be found,
- *            (if ENABLE_CREDENTIAL_STORES),
- *         14 vault ID is required (if ENABLE_CREDENTIAL_STORES),
- *         15 host identifier is required (if ENABLE_CREDENTIAL_STORES),
-  *         17 value cannot be modified for credential store type,
  *         99 permission denied,
  *         -1 internal error.
  */
@@ -16744,9 +16515,6 @@ modify_credential (const char *credential_id,
                    const char* privacy_password, const char* privacy_algorithm,
                    const char* kdc, array_t* kdcs,
                    const char* realm,
-                   const char* credential_store_id, const char* vault_id,
-                   const char* host_identifier,
-                   const char* privacy_host_identifier,
                    const char* allow_insecure)
 {
   credential_t credential;
@@ -16809,15 +16577,6 @@ modify_credential (const char *credential_id,
     }
 
   ret = 0;
-
-  if ((credential_store_id || vault_id || host_identifier
-      || privacy_host_identifier)
-      && (login || password || privacy_password || key_private
-          || key_public ||certificate || community))
-    {
-      sql_rollback ();
-      return 17;
-    }
 
   if (login && ret == 0)
     {
@@ -16919,22 +16678,11 @@ modify_credential (const char *credential_id,
       if (strcmp (type, "cc") && strcmp (type, "up")
           && strcmp (type, "pw") && strcmp (type, "usk")
           && strcmp (type, "snmp") && strcmp (type, "pgp")
-          && strcmp (type, "smime") && strcmp (type, "krb5")
-          && !g_str_has_prefix (type, "cs_"))
+          && strcmp (type, "smime") && strcmp (type, "krb5"))
         {
           g_warning ("%s: Unknown credential type: %s", __func__, type);
           sql_rollback ();
           cleanup_iterator (&iterator);
-          return -1;
-        }
-
-      if (g_str_has_prefix (type, "cs_")
-          && !feature_enabled (FEATURE_ID_CREDENTIAL_STORES))
-        {
-          sql_rollback ();
-          cleanup_iterator (&iterator);
-          g_debug ("%s: Credential stores feature not enabled",
-                    __func__);
           return -1;
         }
 
@@ -17002,10 +16750,9 @@ modify_credential (const char *credential_id,
                 password ? password : credential_iterator_password (&iterator));
             }
         }
-      else if ((strcmp (type, "snmp") == 0)
-               || (strcmp (type, "cs_snmp") == 0))
+      else if (strcmp (type, "snmp") == 0)
         {
-          if (privacy_password || privacy_host_identifier)
+          if (privacy_password)
             {
               const char *used_algorithm;
 
@@ -17015,11 +16762,9 @@ modify_credential (const char *credential_id,
               if (used_algorithm == NULL)
                 used_algorithm = "";
 
-              /* privacy password and host identifier
-               * must be empty if algorithm is empty */
+              /* Privacy password must be empty if algorithm is empty. */
               if (strcmp (used_algorithm, "") == 0
-                  && (strcmp (privacy_password, "")
-                      || strcmp (privacy_host_identifier, "")))
+                  && strcmp (privacy_password, ""))
                 {
                   sql_rollback ();
                   cleanup_iterator (&iterator);
@@ -17048,10 +16793,9 @@ modify_credential (const char *credential_id,
         {
           set_credential_data (credential, "secret", "");
         }
-      else if ((strcmp (type, "krb5") == 0)
-               || (strcmp (type, "cs_krb5") == 0))
+      else if (strcmp (type, "krb5") == 0)
         {
-          if (password && strcmp (type, "krb5") == 0)
+          if (password)
             set_credential_password (credential, password);
           if (kdcs)
             {
@@ -17089,61 +16833,6 @@ modify_credential (const char *credential_id,
             }
         }
 
-      if (g_str_has_prefix (type, "cs_"))
-        {
-#if ENABLE_CREDENTIAL_STORES
-          if (credential_store_id)
-            {
-              credential_store_t store;
-              if (find_credential_store_no_acl (credential_store_id, &store)
-                  || store == 0)
-                {
-                  sql_rollback ();
-                  cleanup_iterator (&iterator);
-                  return 13;
-                }
-
-              set_credential_data (credential,
-                                   "credential_store_id",
-                                   credential_store_id);
-            }
-          if (vault_id)
-            {
-              if (!*vault_id)
-                {
-                  sql_rollback ();
-                  cleanup_iterator (&iterator);
-                  return 14;
-                }
-              set_credential_data (credential,
-                                   "vault_id",
-                                   vault_id);
-            }
-          if (host_identifier)
-            {
-              if (!*host_identifier)
-                {
-                  sql_rollback ();
-                  cleanup_iterator (&iterator);
-                  return 15;
-                }
-              set_credential_data (credential,
-                                   "host_identifier",
-                                   host_identifier);
-            }
-          if (privacy_host_identifier)
-            {
-              if (g_str_equal (privacy_host_identifier, ""))
-                set_credential_data (credential,
-                                    "privacy_host_identifier",
-                                    NULL);
-              else
-                set_credential_data (credential,
-                                    "privacy_host_identifier",
-                                    privacy_host_identifier);
-            }
-#endif
-        }
       g_free (key_private_truncated);
     }
   else
@@ -17313,84 +17002,6 @@ delete_credential (const char *credential_id, int ultimate)
 /**
  * @brief LSC Credential iterator columns.
  */
-#if ENABLE_CREDENTIAL_STORES
-#define CREDENTIAL_ITERATOR_COLUMNS                                           \
- {                                                                            \
-   GET_ITERATOR_COLUMNS (credentials),                                        \
-   /* public generic data */                                                  \
-   { "type", NULL, KEYWORD_TYPE_STRING },                                     \
-   { "allow_insecure", NULL, KEYWORD_TYPE_INTEGER },                          \
-   /* public type specific data */                                            \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id AND type = 'username')",             \
-     "login",                                                                 \
-     KEYWORD_TYPE_STRING                                                      \
-   },                                                                         \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id AND type = 'certificate')",          \
-     NULL,                                                                    \
-     KEYWORD_TYPE_STRING },                                                   \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id AND type = 'auth_algorithm')",       \
-     NULL,                                                                    \
-     KEYWORD_TYPE_STRING },                                                   \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id AND type = 'privacy_algorithm')",    \
-     NULL,                                                                    \
-     KEYWORD_TYPE_STRING },                                                   \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id AND type = 'public_key')",           \
-     NULL,                                                                    \
-     KEYWORD_TYPE_STRING },                                                   \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id AND type = 'kdc')"       ,           \
-     "kdc",                                                                   \
-     KEYWORD_TYPE_STRING },                                                   \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id AND type = 'realm')",                \
-     "realm",                                                                 \
-     KEYWORD_TYPE_STRING },                                                   \
-   /* private data */                                                         \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id AND type = 'secret')",               \
-     "secret",                                                                \
-     KEYWORD_TYPE_STRING },                                                   \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id AND type = 'password')",             \
-     "password",                                                              \
-     KEYWORD_TYPE_STRING },                                                   \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id AND type = 'private_key')",          \
-     "private_key",                                                           \
-     KEYWORD_TYPE_STRING },                                                   \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id AND type = 'community')",            \
-     "community",                                                             \
-     KEYWORD_TYPE_STRING },                                                   \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id AND type = 'privacy_password')",     \
-     "privacy_password",                                                      \
-     KEYWORD_TYPE_STRING },                                                   \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id AND type = 'credential_store_id')",  \
-     "credential_store_id",                                                   \
-     KEYWORD_TYPE_STRING },                                                   \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id AND type = 'vault_id')",             \
-     "vault_id",                                                              \
-     KEYWORD_TYPE_STRING },                                                   \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id AND type = 'host_identifier')",      \
-     "host_identifier",                                                       \
-     KEYWORD_TYPE_STRING },                                                   \
-   { "(SELECT value FROM credentials_data"                                    \
-     " WHERE credential = credentials.id"                                     \
-     " AND type = 'privacy_host_identifier')",                                \
-     "privacy_host_identifier",                                               \
-     KEYWORD_TYPE_STRING },                                                   \
-   { NULL, NULL, KEYWORD_TYPE_UNKNOWN }                                       \
- }
-#else
 #define CREDENTIAL_ITERATOR_COLUMNS                                           \
  {                                                                            \
    GET_ITERATOR_COLUMNS (credentials),                                        \
@@ -17450,7 +17061,6 @@ delete_credential (const char *credential_id, int ultimate)
      KEYWORD_TYPE_STRING },                                                   \
    { NULL, NULL, KEYWORD_TYPE_UNKNOWN }                                       \
  }
-#endif
 
 /**
  * @brief LSC Credential iterator columns for trash case.
@@ -18148,54 +17758,6 @@ DEF_ACCESS (credential_iterator_kdc,
 DEF_ACCESS (credential_iterator_realm,
             GET_ITERATOR_COLUMN_COUNT + 8);
 
-#if ENABLE_CREDENTIAL_STORES
-
-/**
- * @brief Get the credential store UUID from an LSC credential iterator.
- *
- * @param[in]  iterator  Iterator.
- *
- * @return Credential store UUID, or NULL if iteration is complete.
- *         Freed by cleanup_iterator.
- */
-DEF_ACCESS (credential_iterator_credential_store_uuid,
-            GET_ITERATOR_COLUMN_COUNT + 14);
-
-/**
- * @brief Get the credential store vault ID from an LSC credential iterator.
- *
- * @param[in]  iterator  Iterator.
- *
- * @return Vault ID, or NULL if iteration is complete.
- *         Freed by cleanup_iterator.
- */
-DEF_ACCESS (credential_iterator_vault_id,
-            GET_ITERATOR_COLUMN_COUNT + 15);
-
-/**
- * @brief Get the host identifier from an LSC credential iterator.
- *
- * @param[in]  iterator  Iterator.
- *
- * @return Host identifier, or NULL if iteration is complete.
- *         Freed by cleanup_iterator.
- */
-DEF_ACCESS (credential_iterator_host_identifier,
-            GET_ITERATOR_COLUMN_COUNT + 16);
-
-/**
- * @brief Get the SNMP privacy host identifier from an LSC credential iterator.
- *
- * @param[in]  iterator  Iterator.
- *
- * @return SNMP privacy host identifier, or NULL if iteration is complete.
- *         Freed by cleanup_iterator.
- */
-
-DEF_ACCESS (credential_iterator_privacy_host_identifier,
-            GET_ITERATOR_COLUMN_COUNT + 17);
-
-#endif
 
 /**
  * @brief Get the password from a Credential iterator.

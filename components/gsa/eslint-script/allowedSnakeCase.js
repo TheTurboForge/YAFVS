@@ -636,7 +636,6 @@ const allowedSnakeCase = [
   'value_func',
   'value_labels',
   'value_using_default',
-  'vault_id',
   'vendor_version',
   'which_cert',
   'xml_file',

@@ -18,11 +18,11 @@ use crate::{
     },
 };
 
-const SSH_CREDENTIAL_TYPES: &[&str] = &["up", "usk", "cs_up", "cs_usk"];
-const ELEVATE_CREDENTIAL_TYPES: &[&str] = &["up", "cs_up"];
-const SMB_CREDENTIAL_TYPES: &[&str] = &["up", "cs_up"];
-const ESXI_CREDENTIAL_TYPES: &[&str] = &["up", "cs_up"];
-const SNMP_CREDENTIAL_TYPES: &[&str] = &["snmp", "cs_snmp"];
+const SSH_CREDENTIAL_TYPES: &[&str] = &["up", "usk"];
+const ELEVATE_CREDENTIAL_TYPES: &[&str] = &["up"];
+const SMB_CREDENTIAL_TYPES: &[&str] = &["up"];
+const ESXI_CREDENTIAL_TYPES: &[&str] = &["up"];
+const SNMP_CREDENTIAL_TYPES: &[&str] = &["snmp"];
 const KRB5_CREDENTIAL_TYPES: &[&str] = &["krb5"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -558,4 +558,21 @@ async fn apply_target_credential_patch_action(
         .await?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        ELEVATE_CREDENTIAL_TYPES, ESXI_CREDENTIAL_TYPES, SMB_CREDENTIAL_TYPES,
+        SNMP_CREDENTIAL_TYPES, SSH_CREDENTIAL_TYPES,
+    };
+
+    #[test]
+    fn target_credential_links_accept_only_local_credential_types() {
+        assert_eq!(SSH_CREDENTIAL_TYPES, ["up", "usk"]);
+        assert_eq!(ELEVATE_CREDENTIAL_TYPES, ["up"]);
+        assert_eq!(SMB_CREDENTIAL_TYPES, ["up"]);
+        assert_eq!(ESXI_CREDENTIAL_TYPES, ["up"]);
+        assert_eq!(SNMP_CREDENTIAL_TYPES, ["snmp"]);
+    }
 }

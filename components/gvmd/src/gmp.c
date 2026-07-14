@@ -73,9 +73,6 @@
 
 #include "gmp.h"
 #include "gmp_base.h"
-#if ENABLE_CREDENTIAL_STORES
-#include "gmp_credential_stores.h"
-#endif
 #include "gmp_delete.h"
 #include "gmp_get.h"
 #include "gmp_configs.h"
@@ -487,10 +484,6 @@ typedef struct
   char *privacy_password;  ///< SNMP Privacy password.
   char *privacy_algorithm; ///< SNMP Privacy algorithm.
   char *realm;             ///< Kerberos realm.
-  char *credential_store_id;   ///< Credential store UUID.
-  char *vault_id;          ///< Credential store vault ID.
-  char *host_identifier;     ///< Credential store item ID.
-  char *privacy_host_identifier; ///< SNMP Privacy credential store item ID.
   char *type;              ///< Type of credential.
 } create_credential_data_t;
 
@@ -520,10 +513,6 @@ create_credential_data_reset (create_credential_data_t *data)
   free (data->privacy_password);
   free (data->privacy_algorithm);
   free (data->realm);
-  free (data->credential_store_id);
-  free (data->vault_id);
-  free (data->host_identifier);
-  free (data->privacy_host_identifier);
   free (data->type);
 
   memset (data, 0, sizeof (create_credential_data_t));
@@ -1982,10 +1971,6 @@ typedef struct
   char *privacy_algorithm;    ///< SNMP Privacy algorithm.
   char *privacy_password;     ///< SNMP Privacy password.
   char *realm;                ///< Kerberos realm.
-  char *credential_store_id;  ///< Credential store UUID.
-  char *vault_id;             ///< Credential store vault ID.
-  char *host_identifier;        ///< Credential store item ID.
-  char *privacy_host_identifier;  ///< SNMP Privacy credential store item ID.
 } modify_credential_data_t;
 
 /**
@@ -2013,10 +1998,6 @@ modify_credential_data_reset (modify_credential_data_t *data)
   free (data->privacy_password);
   free (data->realm);
   free (data->kdcs_kdc);
-  free (data->credential_store_id);
-  free (data->vault_id);
-  free (data->host_identifier);
-  free (data->privacy_host_identifier);
   array_free (data->kdcs);
 
   memset (data, 0, sizeof (modify_credential_data_t));
@@ -3212,12 +3193,6 @@ typedef enum
   CLIENT_CREATE_CREDENTIAL_PRIVACY_ALGORITHM,
   CLIENT_CREATE_CREDENTIAL_PRIVACY_PASSWORD,
   CLIENT_CREATE_CREDENTIAL_REALM,
-#if ENABLE_CREDENTIAL_STORES
-  CLIENT_CREATE_CREDENTIAL_CREDENTIAL_STORE_ID,
-  CLIENT_CREATE_CREDENTIAL_VAULT_ID,
-  CLIENT_CREATE_CREDENTIAL_HOST_IDENTIFIER,
-  CLIENT_CREATE_CREDENTIAL_PRIVACY_HOST_IDENTIFIER,
-#endif /* ENABLE_CREDENTIAL_STORES */
   CLIENT_CREATE_CREDENTIAL_TYPE,
   CLIENT_CREATE_FILTER,
   CLIENT_CREATE_FILTER_COMMENT,
@@ -3341,9 +3316,6 @@ typedef enum
   CLIENT_GET_ASSETS,
   CLIENT_GET_CONFIGS,
   CLIENT_GET_CREDENTIALS,
-#if ENABLE_CREDENTIAL_STORES
-  CLIENT_GET_CREDENTIAL_STORES,
-#endif
   CLIENT_GET_FEATURES,
   CLIENT_GET_FEEDS,
   CLIENT_GET_FILTERS,
@@ -3403,13 +3375,6 @@ typedef enum
   CLIENT_MODIFY_CREDENTIAL_PRIVACY_ALGORITHM,
   CLIENT_MODIFY_CREDENTIAL_PRIVACY_PASSWORD,
   CLIENT_MODIFY_CREDENTIAL_REALM,
-#if ENABLE_CREDENTIAL_STORES
-  CLIENT_MODIFY_CREDENTIAL_CREDENTIAL_STORE_ID,
-  CLIENT_MODIFY_CREDENTIAL_VAULT_ID,
-  CLIENT_MODIFY_CREDENTIAL_HOST_IDENTIFIER,
-  CLIENT_MODIFY_CREDENTIAL_PRIVACY_HOST_IDENTIFIER,
-  CLIENT_MODIFY_CREDENTIAL_STORE,
-#endif
   CLIENT_MODIFY_FILTER,
   CLIENT_MODIFY_FILTER_COMMENT,
   CLIENT_MODIFY_FILTER_NAME,
@@ -3504,9 +3469,6 @@ typedef enum
   CLIENT_START_TASK,
   CLIENT_STOP_TASK,
   CLIENT_TEST_ALERT,
-#if ENABLE_CREDENTIAL_STORES
-  CLIENT_VERIFY_CREDENTIAL_STORE,
-#endif
   CLIENT_VERIFY_SCANNER,
 } client_state_t;
 
@@ -4105,9 +4067,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &get_credentials_data->format);
             set_client_state (CLIENT_GET_CREDENTIALS);
           }
-#if ENABLE_CREDENTIAL_STORES
-        ELSE_GET_START (credential_stores, CREDENTIAL_STORES)
-#endif /* ENABLE_CREDENTIAL_STORES */
         else if (strcasecmp ("GET_FEATURES", element_name) == 0)
           {
             set_client_state (CLIENT_GET_FEATURES);
@@ -4574,14 +4533,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &modify_credential_data->credential_id);
             set_client_state (CLIENT_MODIFY_CREDENTIAL);
           }
-#if ENABLE_CREDENTIAL_STORES
-        else if (strcasecmp ("MODIFY_CREDENTIAL_STORE", element_name) == 0)
-          {
-            modify_credential_store_start (gmp_parser, attribute_names,
-                                           attribute_values);
-            set_client_state (CLIENT_MODIFY_CREDENTIAL_STORE);
-          }
-#endif
         else if (strcasecmp ("MODIFY_FILTER", element_name) == 0)
           {
             append_attribute (attribute_names, attribute_values, "filter_id",
@@ -4702,15 +4653,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &test_alert_data->alert_id);
             set_client_state (CLIENT_TEST_ALERT);
           }
-#if ENABLE_CREDENTIAL_STORES
-        else if (strcasecmp ("VERIFY_CREDENTIAL_STORE", element_name) == 0)
-          {
-            verify_credential_store_start (gmp_parser,
-                                           attribute_names,
-                                           attribute_values);
-            set_client_state (CLIENT_VERIFY_CREDENTIAL_STORE);
-          }
-#endif
         else if (strcasecmp ("VERIFY_SCANNER", element_name) == 0)
           {
             append_attribute (attribute_names, attribute_values, "scanner_id",
@@ -4818,30 +4760,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             gvm_append_string (&create_credential_data->realm, "");
             set_client_state (CLIENT_CREATE_CREDENTIAL_REALM);
           }
-#if ENABLE_CREDENTIAL_STORES
-        else if (strcasecmp ("CREDENTIAL_STORE_ID", element_name) == 0)
-          set_client_state (CLIENT_CREATE_CREDENTIAL_CREDENTIAL_STORE_ID);
-        else if (strcasecmp ("VAULT_ID", element_name) == 0)
-          {
-            gvm_free_string_var (&create_credential_data->vault_id);
-            gvm_append_string (&create_credential_data->vault_id, "");
-            set_client_state (CLIENT_CREATE_CREDENTIAL_VAULT_ID);
-          }
-        else if (strcasecmp ("HOST_IDENTIFIER", element_name) == 0)
-          {
-            gvm_free_string_var (&create_credential_data->host_identifier);
-            gvm_append_string (&create_credential_data->host_identifier, "");
-            set_client_state (CLIENT_CREATE_CREDENTIAL_HOST_IDENTIFIER);
-          }
-        else if (strcasecmp ("PRIVACY_HOST_IDENTIFIER", element_name) == 0)
-          {
-            gvm_free_string_var
-              (&create_credential_data->privacy_host_identifier);
-            gvm_append_string (&create_credential_data->privacy_host_identifier,
-                               "");
-            set_client_state (CLIENT_CREATE_CREDENTIAL_PRIVACY_HOST_IDENTIFIER);
-          }
-#endif
         else if (strcasecmp ("TYPE", element_name) == 0)
           set_client_state (CLIENT_CREATE_CREDENTIAL_TYPE);
         ELSE_READ_OVER;
@@ -5250,31 +5168,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             gvm_append_string (&modify_credential_data->realm, "");
             set_client_state (CLIENT_MODIFY_CREDENTIAL_REALM);
           }
-#if ENABLE_CREDENTIAL_STORES
-        else if (strcasecmp ("CREDENTIAL_STORE_ID", element_name) == 0)
-          {
-            set_client_state (CLIENT_MODIFY_CREDENTIAL_CREDENTIAL_STORE_ID);
-          }
-        else if (strcasecmp ("VAULT_ID", element_name) == 0)
-          {
-            gvm_free_string_var (&modify_credential_data->vault_id);
-            gvm_append_string (&modify_credential_data->vault_id, "");
-            set_client_state (CLIENT_MODIFY_CREDENTIAL_VAULT_ID);
-          }
-        else if (strcasecmp ("HOST_IDENTIFIER", element_name) == 0)
-          {
-            gvm_free_string_var (&modify_credential_data->host_identifier);
-            gvm_append_string (&modify_credential_data->host_identifier, "");
-            set_client_state (CLIENT_MODIFY_CREDENTIAL_HOST_IDENTIFIER);
-          }
-        else if (strcasecmp ("PRIVACY_HOST_IDENTIFIER", element_name) == 0)
-          {
-            gvm_free_string_var (&modify_credential_data->privacy_host_identifier);
-            gvm_append_string (&modify_credential_data->privacy_host_identifier,
-                               "");
-            set_client_state (CLIENT_MODIFY_CREDENTIAL_PRIVACY_HOST_IDENTIFIER);
-          }
-#endif
         ELSE_READ_OVER;
 
       case CLIENT_MODIFY_CREDENTIAL_KDCS:
@@ -5320,13 +5213,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           }
         ELSE_READ_OVER;
 
-#if ENABLE_CREDENTIAL_STORES
-      case CLIENT_MODIFY_CREDENTIAL_STORE:
-        modify_credential_store_element_start (gmp_parser, element_name,
-                                               attribute_names,
-                                               attribute_values);
-        break;
-#endif
 
       case CLIENT_CREATE_FILTER:
         if (strcasecmp ("COMMENT", element_name) == 0)
@@ -9306,40 +9192,8 @@ handle_get_credentials (gmp_parser_t *gmp_parser, GError **error)
       SEND_TO_CLIENT_OR_FAIL (formats_xml);
       g_free (formats_xml);
 
-#if ENABLE_CREDENTIAL_STORES
-      if (type && g_str_has_prefix (type, "cs_")
-          && feature_enabled (FEATURE_ID_CREDENTIAL_STORES))
-        {
-          const char *credential_store_id, *vault_id, *host_identifier;
-          credential_store_id
-            = credential_iterator_credential_store_uuid (&credentials);
-          vault_id = credential_iterator_vault_id (&credentials);
-          host_identifier = credential_iterator_host_identifier (&credentials);
 
-          SENDF_TO_CLIENT_OR_FAIL (
-            "<credential_store id=\"%s\">"
-            "<vault_id>%s</vault_id>"
-            "<host_identifier>%s</host_identifier>",
-            credential_store_id ? credential_store_id : "",
-            vault_id ? vault_id : "",
-            host_identifier ? host_identifier : "");
-
-          if (strcmp (type, "cs_snmp") == 0)
-            {
-              const char *privacy_host_identifier;
-              privacy_host_identifier
-                = credential_iterator_privacy_host_identifier (&credentials);
-              SENDF_TO_CLIENT_OR_FAIL (
-                "<privacy_host_identifier>%s</privacy_host_identifier>",
-                privacy_host_identifier ? privacy_host_identifier : "");
-            }
-
-          SENDF_TO_CLIENT_OR_FAIL ("</credential_store>");
-        }
-#endif /* ENABLE_CREDENTIAL_STORES */
-
-      if (type && ((strcmp (type, "krb5") == 0)
-                   || (strcmp (type, "cs_krb5") == 0)))
+      if (type && strcmp (type, "krb5") == 0)
         {
           const char *kdc, *realm;
           kdc = credential_iterator_kdc (&credentials);
@@ -9365,8 +9219,7 @@ handle_get_credentials (gmp_parser_t *gmp_parser, GError **error)
           SENDF_TO_CLIENT_OR_FAIL ("</kdcs>");
         }
 
-      if (type && ((strcmp (type, "snmp") == 0)
-                   || (strcmp (type, "cs_snmp") == 0)))
+      if (type && strcmp (type, "snmp") == 0)
         {
           const char *auth_algorithm, *privacy_algorithm;
           auth_algorithm
@@ -10025,16 +9878,6 @@ handle_get_features (gmp_parser_t *gmp_parser, GError **error)
   SENDF_TO_CLIENT_OR_FAIL (
     "<feature compiled_in=\"%d\" enabled=\"%d\"><name>%s</name></feature>",
     compiled_in, enabled, "ENABLE_OPENVASD");
-
-  /* CREDENTIAL_STORE */
-  compiled_in = feature_compiled_in (FEATURE_ID_CREDENTIAL_STORES) ? 1 : 0;
-  if (compiled_in)
-    enabled = feature_enabled (FEATURE_ID_CREDENTIAL_STORES) ? 1 : 0;
-  else
-    enabled = 0;
-  SENDF_TO_CLIENT_OR_FAIL (
-    "<feature compiled_in=\"%d\" enabled=\"%d\"><name>%s</name></feature>",
-    compiled_in, enabled, "ENABLE_CREDENTIAL_STORES");
 
   /* FEED_VT_METADATA */
   compiled_in = feature_compiled_in (FEATURE_ID_VT_METADATA) ? 1 : 0;
@@ -14486,7 +14329,6 @@ handle_get_tasks (gmp_parser_t *gmp_parser, GError **error)
       gchar *in_assets, *max_checks, *max_hosts;
       gchar *auto_delete, *auto_delete_data, *assets_apply_overrides;
       gchar *assets_min_qod, *accept_invalid_certs, *registry_allow_insecure;
-      gchar *cs_allow_failed_retrieval;
       ret = get_next (&tasks, &get_tasks_data->get, &first, &count,
                       init_task_iterator);
       if (ret == 1)
@@ -14952,7 +14794,6 @@ handle_get_tasks (gmp_parser_t *gmp_parser, GError **error)
           auto_delete_data = task_preference_value (index, "auto_delete_data");
           accept_invalid_certs = task_preference_value (index, "accept_invalid_certs");
           registry_allow_insecure = task_preference_value (index, "registry_allow_insecure");
-          cs_allow_failed_retrieval = task_preference_value (index, "cs_allow_failed_retrieval");
 
           SENDF_TO_CLIENT_OR_FAIL
            ("<preferences>"
@@ -14998,15 +14839,6 @@ handle_get_tasks (gmp_parser_t *gmp_parser, GError **error)
             "<scanner_name>auto_delete</scanner_name>"
             "<value>%s</value>"
             "</preference>"
-#if ENABLE_CREDENTIAL_STORES
-            "<preference>"
-            "<name>"
-            "Allow Failed Credential Store Retrieval"
-            "</name>"
-            "<scanner_name>cs_allow_failed_retrieval</scanner_name>"
-            "<value>%s</value>"
-            "</preference>"
-#endif /* ENABLE_CREDENTIAL_STORES */
             "<preference>"
             "<name>"
             "Auto Delete Reports Data"
@@ -15024,9 +14856,6 @@ handle_get_tasks (gmp_parser_t *gmp_parser, GError **error)
               ? assets_min_qod
               : G_STRINGIFY (MIN_QOD_DEFAULT),
             auto_delete ? auto_delete : "0",
-#if ENABLE_CREDENTIAL_STORES
-            cs_allow_failed_retrieval ? cs_allow_failed_retrieval : "0",
-#endif /* ENABLE_CREDENTIAL_STORES */
             auto_delete_data ? auto_delete_data : "0");
 
           g_free (assets_apply_overrides);
@@ -15038,7 +14867,6 @@ handle_get_tasks (gmp_parser_t *gmp_parser, GError **error)
           g_free (auto_delete_data);
           g_free (accept_invalid_certs);
           g_free (registry_allow_insecure);
-          g_free (cs_allow_failed_retrieval);
         }
 
       count++;
@@ -16551,9 +16379,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         handle_get_credentials (gmp_parser, error);
         break;
 
-#if ENABLE_CREDENTIAL_STORES
-      CASE_GET_END (CREDENTIAL_STORES, credential_stores);
-#endif
 
       case CLIENT_GET_FEATURES:
         handle_get_features (gmp_parser, error);
@@ -17054,10 +16879,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                          create_credential_data->kdc,
                          create_credential_data->kdcs,
                          create_credential_data->realm,
-                         create_credential_data->credential_store_id,
-                         create_credential_data->vault_id,
-                         create_credential_data->host_identifier,
-                         create_credential_data->privacy_host_identifier,
                          create_credential_data->type,
                          create_credential_data->allow_insecure,
                          &new_credential))
@@ -17185,29 +17006,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                  (XML_ERROR_SYNTAX ("create_credential",
                                   "Invalid kerberos realm value"));
                 break;
-#if ENABLE_CREDENTIAL_STORES
-              case 23:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_credential",
-                                    "Credential store ID missing"
-                                    " and no default store available"));
-                break;
-              case 24:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_credential",
-                                    "Credential store cannot be found"));
-                break;
-              case 25:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_credential",
-                                    "Vault ID missing"));
-                break;
-              case 26:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_credential",
-                                    "Host identifier missing"));
-                break;
-#endif
               case 99:
                 SEND_TO_CLIENT_OR_FAIL
                  (XML_ERROR_SYNTAX ("create_credential",
@@ -17251,12 +17049,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_CREATE_CREDENTIAL_PRIVACY, ALGORITHM);
       CLOSE (CLIENT_CREATE_CREDENTIAL_PRIVACY, PASSWORD);
       CLOSE (CLIENT_CREATE_CREDENTIAL, REALM);
-#if ENABLE_CREDENTIAL_STORES
-      CLOSE (CLIENT_CREATE_CREDENTIAL, CREDENTIAL_STORE_ID);
-      CLOSE (CLIENT_CREATE_CREDENTIAL, VAULT_ID);
-      CLOSE (CLIENT_CREATE_CREDENTIAL, HOST_IDENTIFIER);
-      CLOSE (CLIENT_CREATE_CREDENTIAL, PRIVACY_HOST_IDENTIFIER);
-#endif
       CLOSE (CLIENT_CREATE_CREDENTIAL, TYPE);
 
       case CLIENT_CREATE_FILTER:
@@ -18954,10 +18746,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                     modify_credential_data->kdc,
                     modify_credential_data->kdcs,
                     modify_credential_data->realm,
-                    modify_credential_data->credential_store_id,
-                    modify_credential_data->vault_id,
-                    modify_credential_data->host_identifier,
-                    modify_credential_data->privacy_host_identifier,
                     modify_credential_data->allow_insecure))
             {
               case 0:
@@ -19071,40 +18859,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                                 modify_credential_data->credential_id,
                                 "modified");
                 break;
-#if ENABLE_CREDENTIAL_STORES
-              case 13:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_credential",
-                                    "Credential store not found"));
-                log_event_fail ("credential", "Credential",
-                                modify_credential_data->credential_id,
-                                "modified");
-                break;
-              case 14:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_credential",
-                                    "Vault ID is required"));
-                log_event_fail ("credential", "Credential",
-                                modify_credential_data->credential_id,
-                                "modified");
-                break;
-              case 15:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_credential",
-                                    "Host identifier is required"));
-                log_event_fail ("credential", "Credential",
-                                modify_credential_data->credential_id,
-                                "modified");
-                break;
-              case 17:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_credential",
-                    "Value cannot be modified for credential store type"));
-                log_event_fail ("credential", "Credential",
-                                modify_credential_data->credential_id,
-                                "modified");
-                break;
-#endif
               case 99:
                 SEND_TO_CLIENT_OR_FAIL
                  (XML_ERROR_SYNTAX ("modify_credential",
@@ -19152,18 +18906,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_MODIFY_CREDENTIAL_PRIVACY, PASSWORD);
       CLOSE (CLIENT_MODIFY_CREDENTIAL, REALM);
 
-#if ENABLE_CREDENTIAL_STORES
-      CLOSE (CLIENT_MODIFY_CREDENTIAL, CREDENTIAL_STORE_ID);
-      CLOSE (CLIENT_MODIFY_CREDENTIAL, VAULT_ID);
-      CLOSE (CLIENT_MODIFY_CREDENTIAL, HOST_IDENTIFIER);
-      CLOSE (CLIENT_MODIFY_CREDENTIAL, PRIVACY_HOST_IDENTIFIER);
-
-      case CLIENT_MODIFY_CREDENTIAL_STORE:
-        if (modify_credential_store_element_end (gmp_parser, error,
-                                                 element_name))
-          set_client_state (CLIENT_AUTHENTIC);
-        break;
-#endif
 
       case CLIENT_MODIFY_FILTER:
         {
@@ -20895,14 +20637,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         stop_task_data_reset (stop_task_data);
         set_client_state (CLIENT_AUTHENTIC);
         break;
-#if ENABLE_CREDENTIAL_STORES
-      case CLIENT_VERIFY_CREDENTIAL_STORE:
-        {
-          verify_credential_store_run (gmp_parser, error);
-          set_client_state (CLIENT_AUTHENTIC);
-          break;
-        }
-#endif
 
       case CLIENT_VERIFY_SCANNER:
         if (verify_scanner_data->scanner_id)
@@ -21065,23 +20799,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
 
       APPEND (CLIENT_MODIFY_CREDENTIAL_REALM,
               &modify_credential_data->realm);
-#if ENABLE_CREDENTIAL_STORES
-      APPEND (CLIENT_MODIFY_CREDENTIAL_CREDENTIAL_STORE_ID,
-              &modify_credential_data->credential_store_id);
-
-      APPEND (CLIENT_MODIFY_CREDENTIAL_VAULT_ID,
-              &modify_credential_data->vault_id);
-
-      APPEND (CLIENT_MODIFY_CREDENTIAL_HOST_IDENTIFIER,
-              &modify_credential_data->host_identifier);
-
-      APPEND (CLIENT_MODIFY_CREDENTIAL_PRIVACY_HOST_IDENTIFIER,
-              &modify_credential_data->privacy_host_identifier);
-
-      case CLIENT_MODIFY_CREDENTIAL_STORE:
-        modify_credential_store_element_text (text, text_len);
-        break;
-#endif
 
 
 
@@ -21195,19 +20912,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
       APPEND (CLIENT_CREATE_CREDENTIAL_REALM,
               &create_credential_data->realm);
 
-#if ENABLE_CREDENTIAL_STORES
-      APPEND (CLIENT_CREATE_CREDENTIAL_CREDENTIAL_STORE_ID,
-              &create_credential_data->credential_store_id);
-
-      APPEND (CLIENT_CREATE_CREDENTIAL_VAULT_ID,
-              &create_credential_data->vault_id);
-
-      APPEND (CLIENT_CREATE_CREDENTIAL_HOST_IDENTIFIER,
-              &create_credential_data->host_identifier);
-
-      APPEND (CLIENT_CREATE_CREDENTIAL_PRIVACY_HOST_IDENTIFIER,
-              &create_credential_data->privacy_host_identifier);
-#endif
 
       APPEND (CLIENT_CREATE_CREDENTIAL_TYPE,
               &create_credential_data->type);

@@ -2910,9 +2910,6 @@ gvmd (int argc, char** argv, char *env[])
 #if ENABLE_OPENVASD == 1
       printf ("OpenVASD is enabled\n");
 #endif
-#if ENABLE_CREDENTIAL_STORES == 1
-      printf ("Credential stores are enabled\n");
-#endif
 #if ENABLE_JWT_AUTH == 1
       printf ("JWT authentication is enabled\n");
 #endif

@@ -1494,7 +1494,7 @@ paths:
       x-turbovas-replaces: credential-redacted-metadata-list-read
       x-turbovas-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
       summary: List redacted credential metadata
-      description: Read-only credential metadata backed by gvmd/PostgreSQL. Native write-control can create username/password and username/SSH-key credentials and patch name/comment metadata. Other credential types, secret updates, credential-store secret selectors, allow_insecure, target/scanner links, export/download behavior, clone, restore, and delete remain on inherited compatibility paths.
+      description: Read-only credential metadata backed by gvmd/PostgreSQL. Native write-control can create username/password and username/SSH-key credentials and patch name/comment metadata. Other credential types, secret updates, allow_insecure, target/scanner links, export/download behavior, clone, restore, and delete remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -1576,7 +1576,7 @@ paths:
       x-turbovas-replaces: credential-redacted-metadata-detail-read
       x-turbovas-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
       summary: Read one redacted credential metadata record
-      description: Read-only credential metadata backed by gvmd/PostgreSQL. Detail includes target and scanner backlinks by id/name/use type only. Native write-control can create username/password and username/SSH-key credentials and patch name/comment metadata. Other credential types, secret updates, credential-store secret selectors, allow_insecure, target/scanner links, export/download behavior, clone, restore, and delete remain inherited.
+      description: Read-only credential metadata backed by gvmd/PostgreSQL. Detail includes target and scanner backlinks by id/name/use type only. Native write-control can create username/password and username/SSH-key credentials and patch name/comment metadata. Other credential types, secret updates, allow_insecure, target/scanner links, export/download behavior, clone, restore, and delete remain inherited.
       parameters:
         - $ref: '#/components/parameters/CredentialId'
       responses:
@@ -1612,7 +1612,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-write
       summary: Update credential metadata
-      description: Direct write-control endpoint for updating credential name and comment only. Secret updates, credential-store selectors, allow_insecure, credential type changes, target/scanner links, export, download, clone, restore, and delete remain on inherited compatibility paths.
+      description: Direct write-control endpoint for updating credential name and comment only. Secret updates, allow_insecure, credential type changes, target/scanner links, export, download, clone, restore, and delete remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/CredentialId'
       requestBody:
@@ -1653,7 +1653,7 @@ paths:
       x-turbovas-replaces: credential-redacted-metadata-export-read
       x-turbovas-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
       summary: Export redacted credential metadata
-      description: Direct native JSON metadata export for one credential backed by the same redacted credential detail payload. This export includes credential identity, type label, owner, timestamps, allow-insecure flag, and target/scanner backlinks, but never credential secrets, credential secret values, credential-store secret selectors, private keys, passwords, certificates, downloads, clone/restore/delete behavior, or inherited secret export semantics.
+      description: Direct native JSON metadata export for one credential backed by the same redacted credential detail payload. This export includes credential identity, type label, owner, timestamps, allow-insecure flag, and target/scanner backlinks, but never credential secrets, credential secret values, private keys, passwords, certificates, downloads, clone/restore/delete behavior, or inherited secret export semantics.
       parameters:
         - $ref: '#/components/parameters/CredentialId'
       responses:
@@ -6228,7 +6228,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: scanner-control
       summary: Replace the retained configuration of a scan task
-      description: Guarded direct write-control endpoint that atomically replaces the name, comment, target, scan config, scanner, schedule, schedule periods, alerts, host ordering, asset override/QoD preferences, scanner concurrency, and credential-store failure policy of an operator-owned New or alterable task. Every referenced resource is validated before mutation, alert and managed-preference sets are replaced transactionally, and fixed TurboVAS report-retention defaults remain unchanged. The action never starts a scan, but its scanner settings and any attached schedule govern future execution.
+      description: Guarded direct write-control endpoint that atomically replaces the name, comment, target, scan config, scanner, schedule, schedule periods, alerts, host ordering, asset override/QoD preferences, and scanner concurrency of an operator-owned New or alterable task. Every referenced resource is validated before mutation, alert and managed-preference sets are replaced transactionally, and fixed TurboVAS report-retention defaults remain unchanged. The action never starts a scan, but its scanner settings and any attached schedule govern future execution.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       requestBody:
@@ -7623,10 +7623,6 @@ components:
           maximum: 100
           default: 70
           description: Minimum QoD used while processing scan results into asset state.
-        cs_allow_failed_retrieval:
-          type: boolean
-          default: false
-          description: Continue a scan when credential-store retrieval fails.
         tag_id:
           type: string
           format: uuid
@@ -7647,7 +7643,7 @@ components:
     TaskReplaceRequest:
       type: object
       additionalProperties: false
-      required: [name, target_id, config_id, scanner_id, alert_ids, hosts_ordering, schedule_periods, apply_overrides, max_checks, max_hosts, min_qod, cs_allow_failed_retrieval]
+      required: [name, target_id, config_id, scanner_id, alert_ids, hosts_ordering, schedule_periods, apply_overrides, max_checks, max_hosts, min_qod]
       properties:
         name:
           type: string
@@ -7694,8 +7690,6 @@ components:
           type: integer
           minimum: 0
           maximum: 100
-        cs_allow_failed_retrieval:
-          type: boolean
     TaskTargetReplaceRequest:
       type: object
       additionalProperties: false
@@ -9460,7 +9454,7 @@ components:
           format: date-time
     Task:
       type: object
-      required: [id, owner_id, name, status, progress, trend, usage_type, alerts, apply_overrides, auto_delete_data, max_checks, max_hosts, min_qod, cs_allow_failed_retrieval, hosts_ordering, report_count, max_severity]
+      required: [id, owner_id, name, status, progress, trend, usage_type, alerts, apply_overrides, auto_delete_data, max_checks, max_hosts, min_qod, hosts_ordering, report_count, max_severity]
       properties:
         id:
           type: string
@@ -9532,8 +9526,6 @@ components:
           type: integer
           minimum: 0
           maximum: 100
-        cs_allow_failed_retrieval:
-          type: boolean
         hosts_ordering:
           type: string
           enum: [random, sequential, reverse]

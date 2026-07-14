@@ -20,8 +20,6 @@ import CertBundAdvisoryCommand from 'gmp/commands/cert-bund-advisory';
 import CpeCommand from 'gmp/commands/cpe';
 import CpesCommand from 'gmp/commands/cpes';
 import CredentialCommand from 'gmp/commands/credential';
-import CredentialStoreCommand from 'gmp/commands/credential-store';
-import CredentialStoresCommand from 'gmp/commands/credential-stores';
 import CredentialsCommand from 'gmp/commands/credentials';
 import CveCommand from 'gmp/commands/cve';
 import CvesCommand from 'gmp/commands/cves';
@@ -86,8 +84,6 @@ class Gmp {
   public readonly credentials: CredentialsCommand;
   public readonly cpe: CpeCommand;
   public readonly cpes: CpesCommand;
-  public readonly credentialstore: CredentialStoreCommand;
-  public readonly credentialstores: CredentialStoresCommand;
   public readonly cve: CveCommand;
   public readonly cves: CvesCommand;
   public readonly dfncert: DfnCertAdvisoryCommand;
@@ -159,8 +155,6 @@ class Gmp {
     this.credentials = new CredentialsCommand(this.http);
     this.cpe = new CpeCommand(this.http);
     this.cpes = new CpesCommand(this.http);
-    this.credentialstore = new CredentialStoreCommand(this.http);
-    this.credentialstores = new CredentialStoresCommand(this.http);
     this.cve = new CveCommand(this.http);
     this.cves = new CvesCommand(this.http);
     this.dfncert = new DfnCertAdvisoryCommand(this.http);

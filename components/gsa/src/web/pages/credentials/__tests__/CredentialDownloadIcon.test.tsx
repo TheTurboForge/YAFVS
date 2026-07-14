@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -8,14 +9,6 @@ import {fireEvent, render, screen} from 'web/testing';
 import Credential, {
   type CredentialType,
   CERTIFICATE_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_CERTIFICATE_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_KRB5_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_PASSWORD_ONLY_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_PGP_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_SMIME_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_SNMP_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_USERNAME_PASSWORD_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_USERNAME_SSH_KEY_CREDENTIAL_TYPE,
   KRB5_CREDENTIAL_TYPE,
   PASSWORD_ONLY_CREDENTIAL_TYPE,
   PGP_CREDENTIAL_TYPE,
@@ -88,38 +81,6 @@ describe('CredentialDownloadIcon tests', () => {
     {name: 'Password Only', credentialType: PASSWORD_ONLY_CREDENTIAL_TYPE},
     {name: 'PGP Key', credentialType: PGP_CREDENTIAL_TYPE},
     {name: 'SMIME', credentialType: SMIME_CREDENTIAL_TYPE},
-    {
-      name: 'Credential Store Username+Password',
-      credentialType: CREDENTIAL_STORE_USERNAME_PASSWORD_CREDENTIAL_TYPE,
-    },
-    {
-      name: 'Credential Store Username+SSH Key',
-      credentialType: CREDENTIAL_STORE_USERNAME_SSH_KEY_CREDENTIAL_TYPE,
-    },
-    {
-      name: 'Credential Store Client Certificate',
-      credentialType: CREDENTIAL_STORE_CERTIFICATE_CREDENTIAL_TYPE,
-    },
-    {
-      name: 'Credential Store',
-      credentialType: CREDENTIAL_STORE_SNMP_CREDENTIAL_TYPE,
-    },
-    {
-      name: 'Credential Store PGP Key',
-      credentialType: CREDENTIAL_STORE_PGP_CREDENTIAL_TYPE,
-    },
-    {
-      name: 'Credential Store Password Only',
-      credentialType: CREDENTIAL_STORE_PASSWORD_ONLY_CREDENTIAL_TYPE,
-    },
-    {
-      name: 'Credential Store SMIME',
-      credentialType: CREDENTIAL_STORE_SMIME_CREDENTIAL_TYPE,
-    },
-    {
-      name: 'Credential Store Kerberos',
-      credentialType: CREDENTIAL_STORE_KRB5_CREDENTIAL_TYPE,
-    },
   ] as {name: string; credentialType: CredentialType}[])(
     'should render nothing for $name credential type',
     async ({name, credentialType}) => {

@@ -135,7 +135,6 @@ export const isTaskMetadataOnlyDialogSave = ({
   alert_ids: alertIds = [],
   apply_overrides: applyOverrides,
   config_id: configId,
-  csAllowFailedRetrieval,
   max_checks: maxChecks,
   max_hosts: maxHosts,
   min_qod: minQod,
@@ -164,8 +163,7 @@ export const isTaskMetadataOnlyDialogSave = ({
     scalarEquals(applyOverrides, task.apply_overrides) &&
     numericEquals(maxChecks, task.max_checks) &&
     numericEquals(maxHosts, task.max_hosts) &&
-    numericEquals(minQod, task.min_qod) &&
-    scalarEquals(csAllowFailedRetrieval, task.csAllowFailedRetrieval)
+    numericEquals(minQod, task.min_qod)
   );
 };
 
@@ -199,9 +197,6 @@ const TaskComponent = ({
   const [alertIds, setAlertIds] = useState<string[]>([]);
   const [applyOverrides, setApplyOverrides] = useState<YesNo | undefined>();
   const [comment, setComment] = useState<string | undefined>();
-  const [csAllowFailedRetrieval, setCsAllowFailedRetrieval] = useState<
-    boolean | undefined
-  >();
   const [scanConfigId, setScanConfigId] = useState<string | undefined>();
   const [maxChecks, setMaxChecks] = useState<number | undefined>();
   const [maxHosts, setMaxHosts] = useState<number | undefined>();
@@ -396,7 +391,6 @@ const TaskComponent = ({
       apply_overrides: applyOverrides,
       comment,
       config_id: configId,
-      csAllowFailedRetrieval,
       min_qod: minQod,
       max_checks: maxChecks,
       max_hosts: maxHosts,
@@ -426,7 +420,6 @@ const TaskComponent = ({
           apply_overrides: applyOverrides,
           comment,
           config_id: configId,
-          csAllowFailedRetrieval,
           id: task.id as string,
           hosts_ordering: task.hosts_ordering,
           max_checks: maxChecks,
@@ -449,7 +442,6 @@ const TaskComponent = ({
         apply_overrides: applyOverrides,
         comment,
         config_id: configId,
-        csAllowFailedRetrieval,
         max_checks: maxChecks,
         max_hosts: maxHosts,
         min_qod: minQod,
@@ -488,7 +480,6 @@ const TaskComponent = ({
       setMinQod(task.min_qod);
       setMaxChecks(task.max_checks);
       setMaxHosts(task.max_hosts);
-      setCsAllowFailedRetrieval(task.csAllowFailedRetrieval);
       setScanConfigId(task.config?.id);
       setScannerId(task.scanner?.id);
       setScheduleId(task.schedule?.id ?? UNSET_VALUE);
@@ -506,7 +497,6 @@ const TaskComponent = ({
       setMinQod(undefined);
       setMaxChecks(undefined);
       setMaxHosts(undefined);
-      setCsAllowFailedRetrieval(undefined);
       setScanConfigId(defaultScanConfigId || FULL_AND_FAST_SCAN_CONFIG_ID);
       setScannerId(defaultScannerId || OPENVAS_DEFAULT_SCANNER_ID);
       setScheduleId(defaultScheduleId);
@@ -587,7 +577,6 @@ const TaskComponent = ({
                       apply_overrides={applyOverrides}
                       comment={comment}
                       config_id={scanConfigId}
-                      csAllowFailedRetrieval={csAllowFailedRetrieval}
                       isLoadingAlerts={isLoadingAlerts}
                       isLoadingConfigs={isLoadingConfigs}
                       isLoadingScanners={isLoadingScanners}

@@ -17,14 +17,12 @@ import {type EntityType} from 'gmp/utils/entity-type';
 import {isDefined} from 'gmp/utils/identity';
 import Link from 'web/components/link/Link';
 import useCapabilities from 'web/hooks/useCapabilities';
-import useFeatures from 'web/hooks/useFeatures';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
 
 const Menu = () => {
   const [_] = useTranslation();
   const capabilities = useCapabilities();
-  const features = useFeatures();
   const gmp = useGmp();
 
   const tasksMatch = useMatch('/tasks');
@@ -149,7 +147,6 @@ const Menu = () => {
   const isTrashcanActive = Boolean(useMatch('/trashcan'));
   const isFeedStatusActive = Boolean(useMatch('/feed-status'));
   const isLdapActive = Boolean(useMatch('/ldap'));
-  const isCredentialStoreActive = Boolean(useMatch('/credential-store'));
   const isRadiusActive = Boolean(useMatch('/radius'));
   const mayAccessAny = (keys: EntityType[]) =>
     keys.some(key => isDefined(capabilities) && capabilities.mayAccess(key));
@@ -400,7 +397,6 @@ const Menu = () => {
           isTrashcanActive,
           isFeedStatusActive,
           isLdapActive,
-          isCredentialStoreActive,
           isRadiusActive,
         ].some(Boolean),
         subNav: [
@@ -434,14 +430,6 @@ const Menu = () => {
               to: '/ldap',
               isPathMatch: isLdapActive,
               active: isLdapActive,
-            },
-          capabilities.mayOp('describe_auth') &&
-            features.featureEnabled('ENABLE_CREDENTIAL_STORES') &&
-            capabilities.mayOp('modify_auth') && {
-              label: _('Credential Store'),
-              to: '/credential-store',
-              isPathMatch: isCredentialStoreActive,
-              active: isCredentialStoreActive,
             },
           capabilities.mayOp('describe_auth') &&
             capabilities.mayOp('modify_auth') && {

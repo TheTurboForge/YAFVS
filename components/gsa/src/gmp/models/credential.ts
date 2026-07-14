@@ -19,15 +19,7 @@ export type CredentialType =
   | typeof SMIME_CREDENTIAL_TYPE
   | typeof SNMP_CREDENTIAL_TYPE
   | typeof USERNAME_PASSWORD_CREDENTIAL_TYPE
-  | typeof USERNAME_SSH_KEY_CREDENTIAL_TYPE
-  | typeof CREDENTIAL_STORE_USERNAME_PASSWORD_CREDENTIAL_TYPE
-  | typeof CREDENTIAL_STORE_USERNAME_SSH_KEY_CREDENTIAL_TYPE
-  | typeof CREDENTIAL_STORE_CERTIFICATE_CREDENTIAL_TYPE
-  | typeof CREDENTIAL_STORE_SNMP_CREDENTIAL_TYPE
-  | typeof CREDENTIAL_STORE_PGP_CREDENTIAL_TYPE
-  | typeof CREDENTIAL_STORE_PASSWORD_ONLY_CREDENTIAL_TYPE
-  | typeof CREDENTIAL_STORE_SMIME_CREDENTIAL_TYPE
-  | typeof CREDENTIAL_STORE_KRB5_CREDENTIAL_TYPE;
+  | typeof USERNAME_SSH_KEY_CREDENTIAL_TYPE;
 
 export type CertificateStatus =
   | typeof CERTIFICATE_STATUS_EXPIRED
@@ -57,11 +49,6 @@ export interface CredentialElement extends ModelElement {
     time_status?: string;
   };
   credential_type?: CredentialType;
-  credential_store?: {
-    host_identifier?: string;
-    vault_id?: string;
-    privacy_host_identifier?: string;
-  };
   kdcs?: {
     kdc: string | string[];
   };
@@ -96,11 +83,6 @@ export interface CertificateInfo {
   sha256Fingerprint?: string;
 }
 
-export interface CredentialStore {
-  hostIdentifier?: string;
-  vaultId?: string;
-}
-
 interface PrivateKeyInfo {
   sha256Hash?: string;
   keyType?: string;
@@ -113,7 +95,6 @@ interface PublicKeyInfo {
 interface CredentialProperties extends ModelProperties {
   authAlgorithm?: SNMPAuthAlgorithmType;
   certificateInfo?: CertificateInfo;
-  credentialStore?: CredentialStore;
   credentialType?: CredentialType;
   kdcs?: string[];
   login?: string;
@@ -121,7 +102,6 @@ interface CredentialProperties extends ModelProperties {
   realm?: string;
   targets?: Model[];
   scanners?: Model[];
-  privacyHostIdentifier?: string;
   privateKeyInfo?: PrivateKeyInfo;
   publicKeyInfo?: PublicKeyInfo;
 }
@@ -134,16 +114,6 @@ export const PGP_CREDENTIAL_TYPE = 'pgp';
 export const PASSWORD_ONLY_CREDENTIAL_TYPE = 'pw';
 export const CERTIFICATE_CREDENTIAL_TYPE = 'cc';
 export const KRB5_CREDENTIAL_TYPE = 'krb5';
-
-// Credential Store credential types
-export const CREDENTIAL_STORE_USERNAME_PASSWORD_CREDENTIAL_TYPE = 'cs_up';
-export const CREDENTIAL_STORE_USERNAME_SSH_KEY_CREDENTIAL_TYPE = 'cs_usk';
-export const CREDENTIAL_STORE_CERTIFICATE_CREDENTIAL_TYPE = 'cs_cc';
-export const CREDENTIAL_STORE_SNMP_CREDENTIAL_TYPE = 'cs_snmp';
-export const CREDENTIAL_STORE_PGP_CREDENTIAL_TYPE = 'cs_pgp';
-export const CREDENTIAL_STORE_PASSWORD_ONLY_CREDENTIAL_TYPE = 'cs_pw';
-export const CREDENTIAL_STORE_SMIME_CREDENTIAL_TYPE = 'cs_smime';
-export const CREDENTIAL_STORE_KRB5_CREDENTIAL_TYPE = 'cs_krb5';
 
 export const SSH_CREDENTIAL_TYPES: readonly CredentialType[] = [
   USERNAME_PASSWORD_CREDENTIAL_TYPE,
@@ -175,17 +145,6 @@ export const EMAIL_CREDENTIAL_TYPES: readonly CredentialType[] = [
   PGP_CREDENTIAL_TYPE,
 ];
 
-export const CREDENTIAL_STORE_CREDENTIAL_TYPES: readonly CredentialType[] = [
-  CREDENTIAL_STORE_USERNAME_PASSWORD_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_USERNAME_SSH_KEY_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_CERTIFICATE_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_SNMP_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_PGP_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_PASSWORD_ONLY_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_SMIME_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_KRB5_CREDENTIAL_TYPE,
-];
-
 export const ALL_CREDENTIAL_TYPES: readonly CredentialType[] = [
   USERNAME_PASSWORD_CREDENTIAL_TYPE,
   USERNAME_SSH_KEY_CREDENTIAL_TYPE,
@@ -195,14 +154,6 @@ export const ALL_CREDENTIAL_TYPES: readonly CredentialType[] = [
   PASSWORD_ONLY_CREDENTIAL_TYPE,
   CERTIFICATE_CREDENTIAL_TYPE,
   KRB5_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_USERNAME_PASSWORD_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_USERNAME_SSH_KEY_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_CERTIFICATE_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_SNMP_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_PGP_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_PASSWORD_ONLY_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_SMIME_CREDENTIAL_TYPE,
-  CREDENTIAL_STORE_KRB5_CREDENTIAL_TYPE,
 ];
 
 export const ssh_credential_filter = (credential: Credential) =>
@@ -249,28 +200,6 @@ const TYPE_NAMES = {
   [PASSWORD_ONLY_CREDENTIAL_TYPE]: _l('Password only'),
   [SMIME_CREDENTIAL_TYPE]: _l('S/MIME Certificate'),
   [KRB5_CREDENTIAL_TYPE]: _l('SMB (Kerberos)'),
-  [CREDENTIAL_STORE_USERNAME_PASSWORD_CREDENTIAL_TYPE]: _l(
-    'Credential Store Username + Password',
-  ),
-  [CREDENTIAL_STORE_USERNAME_SSH_KEY_CREDENTIAL_TYPE]: _l(
-    'Credential Store Username + SSH Key',
-  ),
-  [CREDENTIAL_STORE_CERTIFICATE_CREDENTIAL_TYPE]: _l(
-    'Credential Store Client Certificate',
-  ),
-  [CREDENTIAL_STORE_SNMP_CREDENTIAL_TYPE]: _l('Credential Store SNMP'),
-  [CREDENTIAL_STORE_PGP_CREDENTIAL_TYPE]: _l(
-    'Credential Store PGP Encryption Key',
-  ),
-  [CREDENTIAL_STORE_PASSWORD_ONLY_CREDENTIAL_TYPE]: _l(
-    'Credential Store Password only',
-  ),
-  [CREDENTIAL_STORE_SMIME_CREDENTIAL_TYPE]: _l(
-    'Credential Store S/MIME Certificate',
-  ),
-  [CREDENTIAL_STORE_KRB5_CREDENTIAL_TYPE]: _l(
-    'Credential Store SMB (Kerberos)',
-  ),
 } as const;
 
 export const getCredentialTypeName = (type: CredentialType) =>
@@ -297,7 +226,6 @@ class Credential extends Model {
 
   readonly authAlgorithm?: SNMPAuthAlgorithmType;
   readonly certificateInfo?: CertificateInfo;
-  readonly credentialStore?: CredentialStore;
   readonly credentialType?: CredentialType;
   readonly kdcs: string[];
   readonly login?: string;
@@ -305,14 +233,12 @@ class Credential extends Model {
   readonly privacyAlgorithm?: SNMPPrivacyAlgorithmType;
   readonly targets: Model[];
   readonly scanners: Model[];
-  readonly privacyHostIdentifier?: string;
   readonly privateKeyInfo?: PrivateKeyInfo;
   readonly publicKeyInfo?: PublicKeyInfo;
 
   constructor({
     authAlgorithm,
     certificateInfo,
-    credentialStore,
     credentialType,
     kdcs = [],
     login,
@@ -320,7 +246,6 @@ class Credential extends Model {
     realm,
     targets = [],
     scanners = [],
-    privacyHostIdentifier,
     privateKeyInfo,
     publicKeyInfo,
     ...properties
@@ -329,7 +254,6 @@ class Credential extends Model {
 
     this.authAlgorithm = authAlgorithm;
     this.certificateInfo = certificateInfo;
-    this.credentialStore = credentialStore;
     this.credentialType = credentialType;
     this.kdcs = kdcs;
     this.login = login;
@@ -337,7 +261,6 @@ class Credential extends Model {
     this.realm = realm;
     this.targets = targets;
     this.scanners = scanners;
-    this.privacyHostIdentifier = privacyHostIdentifier;
     this.privateKeyInfo = privateKeyInfo;
     this.publicKeyInfo = publicKeyInfo;
   }
@@ -362,18 +285,6 @@ class Credential extends Model {
         sha256Fingerprint: element.certificate_info.sha256_fingerprint,
         timeStatus: parseTimeStatus(element.certificate_info.time_status),
       };
-    }
-
-    if (isDefined(element.credential_store)) {
-      ret.credentialStore = {
-        hostIdentifier: element.credential_store.host_identifier,
-        vaultId: element.credential_store.vault_id,
-      };
-    }
-
-    if (isDefined(element.credential_store?.privacy_host_identifier)) {
-      ret.privacyHostIdentifier =
-        element.credential_store.privacy_host_identifier;
     }
 
     ret.credentialType = element.type as CredentialType;

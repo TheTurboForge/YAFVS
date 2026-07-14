@@ -109,7 +109,6 @@ pub(crate) struct TaskItem {
     max_checks: i32,
     max_hosts: i32,
     min_qod: i32,
-    cs_allow_failed_retrieval: bool,
     hosts_ordering: String,
     alterable: Option<bool>,
     report_count: TaskReportCount,
@@ -306,7 +305,6 @@ pub(crate) fn task_from_row(row: &Row) -> TaskItem {
         max_checks: row.get::<_, String>("max_checks").parse().unwrap_or(4),
         max_hosts: row.get::<_, String>("max_hosts").parse().unwrap_or(20),
         min_qod: row.get::<_, String>("min_qod").parse().unwrap_or(70),
-        cs_allow_failed_retrieval: row.get("cs_allow_failed_retrieval"),
         hosts_ordering: row.get("hosts_ordering"),
         alterable: row.get("alterable"),
         report_count: TaskReportCount {

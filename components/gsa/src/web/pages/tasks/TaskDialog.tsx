@@ -20,7 +20,7 @@ import {
   DEFAULT_MAX_HOSTS,
   DEFAULT_MIN_QOD,
 } from 'gmp/models/task';
-import {NO_VALUE, parseBoolean, YES_VALUE, type YesNo} from 'gmp/parser';
+import {NO_VALUE, YES_VALUE, type YesNo} from 'gmp/parser';
 import {first} from 'gmp/utils/array';
 import {selectSaveId} from 'gmp/utils/id';
 import {isDefined} from 'gmp/utils/identity';
@@ -35,7 +35,6 @@ import YesNoRadio from 'web/components/form/YesNoRadio';
 import {NewIcon} from 'web/components/icon';
 import Divider from 'web/components/layout/Divider';
 import useCapabilities from 'web/hooks/useCapabilities';
-import useFeatures from 'web/hooks/useFeatures';
 import useTranslation from 'web/hooks/useTranslation';
 import {
   type RenderSelectItemProps,
@@ -65,7 +64,6 @@ interface TaskDialogDefaultValues {
   apply_overrides?: YesNo;
   comment?: string;
   config_id?: string;
-  csAllowFailedRetrieval?: boolean;
   max_checks?: number;
   max_hosts?: number;
   min_qod?: number;
@@ -85,7 +83,6 @@ interface TaskDialogProps {
   apply_overrides?: YesNo;
   comment?: string;
   config_id?: string;
-  csAllowFailedRetrieval?: boolean;
   isLoadingAlerts?: boolean;
   isLoadingConfigs?: boolean;
   isLoadingScanners?: boolean;
@@ -171,7 +168,6 @@ const TaskDialog = ({
   comment = '',
   // eslint-disable-next-line @typescript-eslint/naming-convention
   config_id,
-  csAllowFailedRetrieval = false,
   isLoadingAlerts = false,
   isLoadingConfigs = false,
   isLoadingScanners = false,
@@ -214,10 +210,6 @@ const TaskDialog = ({
 }: TaskDialogProps) => {
   const [_] = useTranslation();
   const capabilities = useCapabilities();
-  const features = useFeatures();
-
-  const isCredentialStore = features.featureEnabled('ENABLE_CREDENTIAL_STORES');
-
   name = name || _('Unnamed');
   title = title || _('New Task');
 
@@ -252,7 +244,6 @@ const TaskDialog = ({
     apply_overrides,
     comment,
     config_id,
-    csAllowFailedRetrieval,
     max_checks,
     max_hosts,
     min_qod,
@@ -375,21 +366,6 @@ const TaskDialog = ({
                 onChange={onValueChange}
               />
             </FormGroup>
-
-            {isCredentialStore && (
-              <FormGroup
-                title={_('Allow scan when credential store retrieval fails')}
-              >
-                <YesNoRadio<boolean>
-                  convert={parseBoolean}
-                  name="csAllowFailedRetrieval"
-                  noValue={false}
-                  value={state.csAllowFailedRetrieval}
-                  yesValue={true}
-                  onChange={onValueChange}
-                />
-              </FormGroup>
-            )}
 
             <FormGroup title={_('Min QoD')}>
               <Spinner

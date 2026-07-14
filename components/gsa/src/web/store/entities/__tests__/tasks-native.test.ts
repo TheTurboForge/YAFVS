@@ -128,7 +128,6 @@ describe('native API task list', () => {
         max_checks: 8,
         max_hosts: 12,
         min_qod: 65,
-        cs_allow_failed_retrieval: true,
         hosts_ordering: 'reverse',
         report_count: {total: 1, finished: 1},
         last_report: {id: 'report-1', severity: 7.5},
@@ -151,7 +150,6 @@ describe('native API task list', () => {
     expect(response.task.max_checks).toEqual(8);
     expect(response.task.max_hosts).toEqual(12);
     expect(response.task.min_qod).toEqual(65);
-    expect(response.task.csAllowFailedRetrieval).toEqual(true);
     expect(response.task.hosts_ordering).toEqual('reverse');
     expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/tasks/task-1', {
       token: 'test-token',

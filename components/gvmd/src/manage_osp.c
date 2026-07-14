@@ -564,18 +564,6 @@ launch_osp_openvas_task (task_t task, target_t target, const char *scan_id,
   g_free (clean_finished_hosts_str);
   osp_targets = g_slist_append (NULL, osp_target);
 
-#if ENABLE_CREDENTIAL_STORES
-
-  if (target_osp_add_credentials (osp_target, target, task, error))
-    {
-      if (error && *error)
-        g_warning ("%s: Error adding credentials to OSP target: %s",
-                   __func__, *error);
-      g_slist_free_full (osp_targets, (GDestroyNotify) osp_target_free);
-      return -1;
-    }
-
-#else
 
   scan_credential_t *ssh_credential, *smb_credential, *esxi_credential;
   scan_credential_t *snmp_credential, *krb5_credential;
@@ -597,7 +585,6 @@ launch_osp_openvas_task (task_t task, target_t target, const char *scan_id,
   if (krb5_credential)
     osp_target_add_credential (osp_target, krb5_credential);
 
-#endif
 
   /* Initialize vts table for vulnerability tests and their preferences */
   vts = NULL;

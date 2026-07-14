@@ -41,7 +41,6 @@ fn create_request(name: &str) -> TaskCreateRequest {
         max_checks: 4,
         max_hosts: 20,
         min_qod: 70,
-        cs_allow_failed_retrieval: false,
         tag_id: None,
     }
 }
@@ -68,7 +67,6 @@ fn replace_request(name: &str) -> TaskReplaceRequest {
         max_checks: 8,
         max_hosts: 12,
         min_qod: 65,
-        cs_allow_failed_retrieval: true,
     }
 }
 
@@ -162,7 +160,6 @@ fn task_create_request_defaults_optional_references_to_empty() {
     assert_eq!(request.max_checks, 4);
     assert_eq!(request.max_hosts, 20);
     assert_eq!(request.min_qod, 70);
-    assert!(!request.cs_allow_failed_retrieval);
     assert!(request.tag_id.is_none());
 }
 
@@ -174,7 +171,6 @@ fn task_create_request_accepts_retained_preferences_and_task_tag() {
         max_checks: 8,
         max_hosts: 12,
         min_qod: 65,
-        cs_allow_failed_retrieval: true,
         tag_id: Some(VALID_TAG_ID.to_string()),
         ..create_request("task")
     })
@@ -184,7 +180,6 @@ fn task_create_request_accepts_retained_preferences_and_task_tag() {
     assert_eq!(validated.max_checks, 8);
     assert_eq!(validated.max_hosts, 12);
     assert_eq!(validated.min_qod, 65);
-    assert!(validated.cs_allow_failed_retrieval);
     assert_eq!(validated.tag_id.as_deref(), Some(VALID_TAG_ID));
 }
 
@@ -227,7 +222,6 @@ fn task_replace_request_validates_complete_configuration() {
     assert_eq!(validated.max_checks, 8);
     assert_eq!(validated.max_hosts, 12);
     assert_eq!(validated.min_qod, 65);
-    assert!(validated.cs_allow_failed_retrieval);
 
     assert!(matches!(
         validate_task_replace_request(TaskReplaceRequest {
@@ -318,7 +312,6 @@ fn task_create_openapi_contract_covers_optional_schedule_alerts_and_ordering() {
         "max_checks:",
         "max_hosts:",
         "min_qod:",
-        "cs_allow_failed_retrieval:",
         "tag_id:",
     ] {
         assert!(
@@ -348,7 +341,6 @@ fn task_replace_openapi_contract_is_complete_and_scanner_control_classified() {
         "max_checks:",
         "max_hosts:",
         "min_qod:",
-        "cs_allow_failed_retrieval:",
     ] {
         assert!(
             schema.contains(required),

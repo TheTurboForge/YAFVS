@@ -41,7 +41,6 @@ interface TaskCommandCreateParams {
   apply_overrides?: YesNo;
   comment?: string;
   config_id?: string;
-  csAllowFailedRetrieval?: boolean;
   max_checks?: number;
   max_hosts?: number;
   min_qod?: number;
@@ -59,7 +58,6 @@ interface TaskCommandSaveParams {
   apply_overrides?: YesNo;
   comment?: string;
   config_id?: string;
-  csAllowFailedRetrieval?: boolean;
   id: string;
   hosts_ordering?: TaskHostsOrdering;
   max_checks?: number;
@@ -164,7 +162,6 @@ class TaskCommand {
     apply_overrides,
     comment = '',
     config_id,
-    csAllowFailedRetrieval,
     max_checks,
     max_hosts,
     min_qod,
@@ -188,7 +185,6 @@ class TaskCommand {
       maxChecks: max_checks ?? DEFAULT_MAX_CHECKS,
       maxHosts: max_hosts ?? DEFAULT_MAX_HOSTS,
       minQod: min_qod ?? DEFAULT_MIN_QOD,
-      csAllowFailedRetrieval: csAllowFailedRetrieval ?? false,
       hostsOrdering: HOSTS_ORDERING_RANDOM,
       tagId: add_tag === YES_VALUE ? optionalTaskReference(tag_id) : undefined,
     });
@@ -215,7 +211,6 @@ class TaskCommand {
       maxChecks: args.max_checks ?? DEFAULT_MAX_CHECKS,
       maxHosts: args.max_hosts ?? DEFAULT_MAX_HOSTS,
       minQod: args.min_qod ?? DEFAULT_MIN_QOD,
-      csAllowFailedRetrieval: args.csAllowFailedRetrieval ?? false,
       hostsOrdering: args.hosts_ordering ?? HOSTS_ORDERING_RANDOM,
     });
   }

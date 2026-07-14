@@ -46,35 +46,11 @@ interface CredentialCommandKrb5Fields {
   realm?: string;
 }
 
-interface CredentialCommandCredentialStoreFields {
-  hostIdentifier?: string;
-  vaultId?: string;
-}
-
-interface CredentialCommandSnmpFields {
-  privacyHostIdentifier?: string;
-}
-
 // Create operation interfaces
 type CredentialCommandCreateArgs = CredentialCommandBaseArgs;
 
 interface CredentialCommandKrb5Args
   extends CredentialCommandBaseArgs, CredentialCommandKrb5Fields {}
-
-interface CredentialCommandCredentialStoreArgs
-  extends CredentialCommandBaseArgs, CredentialCommandCredentialStoreFields {}
-
-interface CredentialCommandCredentialStoreKrb5Args
-  extends
-    CredentialCommandBaseArgs,
-    CredentialCommandCredentialStoreFields,
-    CredentialCommandKrb5Fields {}
-
-interface CredentialCommandCredentialStoreSnmpArgs
-  extends
-    CredentialCommandBaseArgs,
-    CredentialCommandCredentialStoreFields,
-    CredentialCommandSnmpFields {}
 
 // Save operation interfaces (using utility types)
 type CredentialCommandSaveArgs = Omit<
@@ -84,17 +60,6 @@ type CredentialCommandSaveArgs = Omit<
 
 type CredentialCommandSaveKrb5Args = CredentialCommandSaveArgs &
   CredentialCommandKrb5Fields;
-
-type CredentialCommandSaveCredentialStoreArgs = CredentialCommandSaveArgs &
-  CredentialCommandCredentialStoreFields;
-
-type CredentialCommandSaveCredentialStoreKrb5Args = CredentialCommandSaveArgs &
-  CredentialCommandCredentialStoreFields &
-  CredentialCommandKrb5Fields;
-
-type CredentialCommandSaveCredentialStoreSnmpArgs = CredentialCommandSaveArgs &
-  CredentialCommandCredentialStoreFields &
-  CredentialCommandSnmpFields;
 
 const saveFile = (file: File | undefined | null): File | undefined | string => {
   if (file === null) {
@@ -181,42 +146,6 @@ class CredentialCommand extends EntityCommand<
     });
   }
 
-  private createCredentialStoreBase(
-    args: CredentialCommandCredentialStoreArgs,
-  ) {
-    const baseData = this.createBase(args);
-
-    return {
-      ...baseData,
-      vault_id: args.vaultId,
-      host_identifier: args.hostIdentifier,
-    };
-  }
-
-  createCredentialStore(args: CredentialCommandCredentialStoreArgs) {
-    const baseData = this.createCredentialStoreBase(args);
-    return this.action(baseData);
-  }
-
-  createCredentialStoreKrb5(args: CredentialCommandCredentialStoreKrb5Args) {
-    const baseData = this.createCredentialStoreBase(args);
-
-    return this.action({
-      ...baseData,
-      realm: args.realm,
-      'kdcs:': args.kdcs?.length ? args.kdcs : '',
-    });
-  }
-
-  createCredentialStoreSnmp(args: CredentialCommandCredentialStoreSnmpArgs) {
-    const baseData = this.createCredentialStoreBase(args);
-
-    return this.action({
-      ...baseData,
-      privacy_host_identifier: args.privacyHostIdentifier,
-    });
-  }
-
   private saveBase({
     authAlgorithm,
     certificate,
@@ -272,42 +201,6 @@ class CredentialCommand extends EntityCommand<
       ...baseData,
       realm: args.realm,
       'kdcs:': args.kdcs?.length ? args.kdcs : '',
-    });
-  }
-
-  private saveCredentialStoreBase(
-    args: CredentialCommandSaveCredentialStoreArgs,
-  ) {
-    const baseData = this.saveBase(args);
-
-    return {
-      ...baseData,
-      vault_id: args.vaultId,
-      host_identifier: args.hostIdentifier,
-    };
-  }
-
-  saveCredentialStore(args: CredentialCommandSaveCredentialStoreArgs) {
-    const baseData = this.saveCredentialStoreBase(args);
-    return this.action(baseData);
-  }
-
-  saveCredentialStoreKrb5(args: CredentialCommandSaveCredentialStoreKrb5Args) {
-    const baseData = this.saveCredentialStoreBase(args);
-
-    return this.action({
-      ...baseData,
-      realm: args.realm,
-      'kdcs:': args.kdcs?.length ? args.kdcs : '',
-    });
-  }
-
-  saveCredentialStoreSnmp(args: CredentialCommandSaveCredentialStoreSnmpArgs) {
-    const baseData = this.saveCredentialStoreBase(args);
-
-    return this.action({
-      ...baseData,
-      privacy_host_identifier: args.privacyHostIdentifier,
     });
   }
 

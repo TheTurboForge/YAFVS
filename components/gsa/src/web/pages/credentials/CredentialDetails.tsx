@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -22,10 +23,8 @@ import InfoTable from 'web/components/table/InfoTable';
 import TableBody from 'web/components/table/TableBody';
 import TableData from 'web/components/table/TableData';
 import TableRow from 'web/components/table/TableRow';
-import useCredentialStore from 'web/hooks/useCredentialStore';
 import useTranslation from 'web/hooks/useTranslation';
 import CredentialDetailsColGroup from 'web/pages/credentials/CredentialDetailsColGroup';
-import CredentialStoreFields from 'web/pages/credentials/CredentialStoreFields';
 
 interface CredentialDetailsProps {
   entity: Credential;
@@ -33,12 +32,9 @@ interface CredentialDetailsProps {
 
 const CredentialDetails = ({entity}: CredentialDetailsProps) => {
   const [_] = useTranslation();
-  // useCredentialStore hook encapsulates feature flag and type logic
-
   const {
     authAlgorithm,
     comment,
-    credentialStore,
     kdcs = [],
     login,
     privacyAlgorithm,
@@ -48,8 +44,6 @@ const CredentialDetails = ({entity}: CredentialDetailsProps) => {
   } = entity;
 
   const credentialType = entity.credentialType as CredentialType;
-
-  const isCredentialStore = useCredentialStore(credentialType);
 
   return (
     <Layout grow flex="column">
@@ -71,22 +65,7 @@ const CredentialDetails = ({entity}: CredentialDetailsProps) => {
             </TableData>
           </TableRow>
 
-          {/* Credential Store specific fields */}
-          {isCredentialStore && (
-            <CredentialStoreFields
-              authAlgorithm={authAlgorithm}
-              credentialStore={credentialStore}
-              credentialType={credentialType}
-              kdcs={kdcs}
-              privacyAlgorithm={privacyAlgorithm}
-              privacyHostIdentifier={entity.privacyHostIdentifier}
-              realm={realm}
-            />
-          )}
-
-          {/* Traditional credential fields */}
-          {!isCredentialStore && (
-            <>
+          <>
               {isDefined(login) && (
                 <TableRow>
                   <TableData>{_('Login')}</TableData>
@@ -125,8 +104,7 @@ const CredentialDetails = ({entity}: CredentialDetailsProps) => {
                   </TableRow>
                 </>
               )}
-            </>
-          )}
+          </>
 
           {targets.length > 0 && (
             <TableRow>

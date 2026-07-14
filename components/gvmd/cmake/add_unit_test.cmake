@@ -53,7 +53,6 @@ macro(add_unit_test _baseName _objects _extraSource)
     ${LIBGVM_GMP_LDFLAGS}
     ${LIBGVM_HTTP_LDFLAGS}
     ${LIBGVM_HTTP_SCANNER_LDFLAGS}
-    ${LIBGVM_CYBERARK_LDFLAGS}
     ${LIBICAL_LDFLAGS}
     ${LINKER_HARDENING_FLAGS}
     ${OPT_THEIA_TGT}

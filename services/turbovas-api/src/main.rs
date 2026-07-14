@@ -297,8 +297,6 @@ mod collection_query_contract_tests;
 #[cfg(test)]
 mod credential_contract_tests;
 #[cfg(test)]
-mod credential_write_characterization_tests;
-#[cfg(test)]
 mod credential_writes_tests;
 #[cfg(test)]
 mod direct_api_contract_tests;

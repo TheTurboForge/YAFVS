@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -29,7 +30,6 @@ import useEntityDownload, {
 import useEntitySave, {
   type EntitySaveResponse,
 } from 'web/entity/hooks/useEntitySave';
-import {isCredentialStoreType} from 'web/hooks/useCredentialStore';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
 import CredentialDialog, {
@@ -101,13 +101,8 @@ const CredentialComponent = ({
   const [privacyAlgorithm, setPrivacyAlgorithm] = useState<
     SNMPPrivacyAlgorithmType | undefined
   >();
-  const [privacyHostIdentifier, setPrivacyHostIdentifier] = useState<
-    string | undefined
-  >();
   const [privateKey, setPrivateKey] = useState<File | undefined>();
   const [publicKey, setPublicKey] = useState<File | undefined>();
-  const [vaultId, setVaultId] = useState<string | undefined>();
-  const [hostIdentifier, setHostIdentifier] = useState<string | undefined>();
   const [types, setTypes] =
     useState<readonly CredentialType[]>(ALL_CREDENTIAL_TYPES);
   const [title, setTitle] = useState<string>('');
@@ -141,9 +136,6 @@ const CredentialComponent = ({
       setName(credential.name);
       setCredentialLogin(credential.login);
       setPrivacyAlgorithm(credential.privacyAlgorithm);
-      setPrivacyHostIdentifier(credential.privacyHostIdentifier);
-      setVaultId(credential.credentialStore?.vaultId);
-      setHostIdentifier(credential.credentialStore?.hostIdentifier);
       setTypes([credential.credentialType as CredentialType]);
       setTitle(dialogTitle);
     } else {
@@ -154,15 +146,12 @@ const CredentialComponent = ({
       setCredential(undefined);
       setCredentialLogin(undefined);
       setCredentialType(undefined);
-      setHostIdentifier(undefined);
       setName(undefined);
       setPrivacyAlgorithm(undefined);
-      setPrivacyHostIdentifier(undefined);
       setPrivateKey(undefined);
       setPublicKey(undefined);
       setTitle(_('New Credential'));
       setTypes(ALL_CREDENTIAL_TYPES);
-      setVaultId(undefined);
     }
 
     setDialogVisible(true);
@@ -194,12 +183,6 @@ const CredentialComponent = ({
 
   const handleEntitySave = useEntitySave(
     (data: CredentialDialogState) => {
-      if (isCredentialStoreType(data.credentialType)) {
-        return gmp.credential.saveCredentialStore({
-          id: data.id as string,
-          ...data,
-        });
-      }
       if (data.credentialType === KRB5_CREDENTIAL_TYPE) {
         return gmp.credential.saveKrb5({id: data.id as string, ...data});
       }
@@ -211,9 +194,6 @@ const CredentialComponent = ({
 
   const handleEntityCreate = useEntityCreate(
     (data: CredentialDialogState) => {
-      if (isCredentialStoreType(data.credentialType)) {
-        return gmp.credential.createCredentialStore(data);
-      }
       if (data.credentialType === KRB5_CREDENTIAL_TYPE) {
         return gmp.credential.createKrb5(data);
       }
@@ -266,15 +246,12 @@ const CredentialComponent = ({
           credential={credential}
           credentialLogin={credentialLogin}
           credentialType={credentialType}
-          hostIdentifier={hostIdentifier}
           name={name}
           privacyAlgorithm={privacyAlgorithm}
-          privacyHostIdentifier={privacyHostIdentifier}
           privateKey={privateKey}
           publicKey={publicKey}
           title={title}
           types={types}
-          vaultId={vaultId}
           onClose={closeCredentialDialog}
           onSave={handleSave}
         />

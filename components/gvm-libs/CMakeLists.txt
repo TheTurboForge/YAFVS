@@ -24,7 +24,6 @@ option(BUILD_STATIC "Build static versions of the libraries" OFF)
 option(ENABLE_COVERAGE "Enable support for coverage analysis" OFF)
 option(BUILD_TESTS "Build tests for the libraries" OFF)
 option(ENABLE_OPENVASD "Build openvasd library" ON)
-option(ENABLE_CREDENTIAL_STORES "Build credential store library" ON)
 option(ENABLE_SECURITY_INTELLIGENCE "Build security intelligence library" ON)
 
 if(NOT BUILD_STATIC)
@@ -317,26 +316,14 @@ if(NOT SKIP_SRC)
   add_subdirectory(osp)
   add_subdirectory(gmp)
 
-  if(
-    ENABLE_OPENVASD
-    OR ENABLE_CREDENTIAL_STORES
-    OR ENABLE_SECURITY_INTELLIGENCE
-  )
+  if(ENABLE_OPENVASD OR ENABLE_SECURITY_INTELLIGENCE)
     add_subdirectory(http)
-  endif(
-    ENABLE_OPENVASD
-    OR ENABLE_CREDENTIAL_STORES
-    OR ENABLE_SECURITY_INTELLIGENCE
-  )
+  endif(ENABLE_OPENVASD OR ENABLE_SECURITY_INTELLIGENCE)
 
   if(ENABLE_OPENVASD)
     add_subdirectory(http_scanner)
     add_subdirectory(openvasd)
   endif(ENABLE_OPENVASD)
-
-  if(ENABLE_CREDENTIAL_STORES)
-    add_subdirectory(cyberark)
-  endif(ENABLE_CREDENTIAL_STORES)
 
   if(ENABLE_SECURITY_INTELLIGENCE)
     add_subdirectory(security_intelligence)

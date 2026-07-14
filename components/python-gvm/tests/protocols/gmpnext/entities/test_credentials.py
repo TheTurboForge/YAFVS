@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2023-2025 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -12,10 +13,6 @@ from ...gmpv224.entities.credentials import (
     GmpGetCredentialTestMixin,
     GmpModifyCredentialTestMixin,
 )
-from ..entities.credentials import (
-    GmpCreateCredentialStoreCredentialTestMixin,
-    GmpModifyCredentialStoreCredentialTestMixin,
-)
 
 
 class GMPCloneCredentialTestCase(GmpCloneCredentialTestMixin, GMPTestCase):
@@ -24,7 +21,6 @@ class GMPCloneCredentialTestCase(GmpCloneCredentialTestMixin, GMPTestCase):
 
 class GMPCreateCredentialTestCase(
     GmpCreateCredentialTestMixin,
-    GmpCreateCredentialStoreCredentialTestMixin,
     GMPTestCase,
 ):
     pass
@@ -44,7 +40,6 @@ class GMPGetCredentialsTestCase(GmpGetCredentialsTestMixin, GMPTestCase):
 
 class GMPModifyCredentialTestCase(
     GmpModifyCredentialTestMixin,
-    GmpModifyCredentialStoreCredentialTestMixin,
     GMPTestCase,
 ):
     pass

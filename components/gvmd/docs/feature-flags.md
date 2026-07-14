@@ -20,7 +20,6 @@ Inside this file, feature flags appear under the `[features]` section.
 
 ```
 [features]
-enable_credential_store = false
 enable_openvasd = false
 enable_vt_metadata = false
 enable_security_intelligence_export = false
@@ -37,7 +36,6 @@ If a line is missing, gvmd does not apply a value from the config file.
 | Feature                             | **Build-Time Flag** (decides if feature exists in binary) | **Runtime Environment Variable**            | **Config File Key** (inside `[features]`) |
 |-------------------------------------|-----------------------------------------------------------|---------------------------------------------|-------------------------------------------|
 | OpenVASd Integration                | `ENABLE_OPENVASD`                                         | `GVMD_ENABLE_OPENVASD`                      | `enable_openvasd`                         |
-| Credential Stores                   | `ENABLE_CREDENTIAL_STORES`                                | `GVMD_ENABLE_CREDENTIAL_STORES`             | `enable_credential_store`                 |
 | VT Metadata Feed                    | Always exists in binary                                   | `GVMD_ENABLE_VT_METADATA`                   | `enable_vt_metadata`                      |
 | Security Intelligence Report Export | Always exists in binary                                   | `GVMD_ENABLE_SECURITY_INTELLIGENCE_EXPORT`  | `enable_security_intelligence_export`     |
 | JSON web token authentication       | `ENABLE_JWT_AUTH`                                         | `GVMD_ENABLE_JWT_AUTH`                      | `enable_jwt_auth`                         |
@@ -72,14 +70,6 @@ Order of priority:
 
 When a feature is disabled, gvmd automatically removes related commands from the protocol.
 
-### Credential store disabled - these commands are hidden
-
-```
-get_credential_stores
-modify_credential_store
-verify_credential_store
-```
-
 ### Security intelligence export disabled - these commands are hidden
 
 ```
@@ -102,9 +92,6 @@ Exact example response:
 <get_features_response status="200" status_text="OK">
   <feature compiled_in="1" enabled="0">
   <name>ENABLE_OPENVASD</name>
-  </feature>
-  <feature compiled_in="0" enabled="0">
-  <name>ENABLE_CREDENTIAL_STORES</name>
   </feature>
   <feature compiled_in="1" enabled="0">
   <name>FEED_VT_METADATA</name>

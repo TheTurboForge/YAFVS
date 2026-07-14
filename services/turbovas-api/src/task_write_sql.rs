@@ -140,7 +140,7 @@ pub(crate) fn task_delete_managed_preferences_sql() -> &'static str {
       WHERE task = $1
         AND name IN ('assets_apply_overrides', 'assets_min_qod',
                      'max_checks', 'max_hosts',
-                     'cs_allow_failed_retrieval', 'hosts_ordering');"
+                     'hosts_ordering');"
 }
 
 pub(crate) fn task_trash_result_tag_locations_sql() -> &'static str {

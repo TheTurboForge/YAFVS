@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -12,7 +13,6 @@ import DetailsLink from 'web/components/link/DetailsLink';
 import TableData from 'web/components/table/TableData';
 import TableRow from 'web/components/table/TableRow';
 import EntityNameTableData from 'web/entities/EntityNameTableData';
-import useFeatures from 'web/hooks/useFeatures';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
 import TargetTableActions, {
@@ -56,7 +56,6 @@ const TargetTableRow = ({
   ...props
 }: TargetTableRowProps) => {
   const [_] = useTranslation();
-  const features = useFeatures();
   const gmp = useGmp();
   const isKerberosEnabled = gmp.settings.enableKrb5;
   return (
@@ -104,14 +103,6 @@ const TargetTableRow = ({
         />
         <Cred credential={entity.esxiCredential} links={links} title={'ESXi'} />
         <Cred credential={entity.snmpCredential} links={links} title={'SNMP'} />
-        {features.featureEnabled('ENABLE_CREDENTIAL_STORES') && (
-          <Cred
-            // @ts-expect-error
-            credential={entity.credential_store}
-            links={links}
-            title={_('Credential Store')}
-          />
-        )}
       </TableData>
       <ActionsComponent {...props} entity={entity} />
     </TableRow>

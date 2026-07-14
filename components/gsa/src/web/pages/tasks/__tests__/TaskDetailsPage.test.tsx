@@ -6,7 +6,6 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {rendererWith, fireEvent, screen} from 'web/testing';
-import Features from 'gmp/capabilities/features';
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Filter from 'gmp/models/filter';
 import ScanConfig from 'gmp/models/scan-config';
@@ -80,11 +79,6 @@ const preferences = {
       name: 'Auto Delete Reports Data',
       scanner_name: 'auto_delete_data',
       value: '5',
-    },
-    {
-      name: 'Allow Failed Credential Store Retrieval',
-      scanner_name: 'cs_allow_failed_retrieval',
-      value: '1',
     },
   ],
 };
@@ -256,7 +250,6 @@ describe('TaskDetailsPage tests', () => {
       capabilities: true,
       router: true,
       store: true,
-      features: new Features(['ENABLE_CREDENTIAL_STORES']),
     });
 
     store.dispatch(entityLoadingActions.success('12345', task));
@@ -290,17 +283,6 @@ describe('TaskDetailsPage tests', () => {
 
     expect(baseElement).toHaveTextContent('foo');
     expect(baseElement).toHaveTextContent('bar');
-    // Use container for more reliable assertion
-    const detailsText = baseElement.textContent;
-    expect(detailsText).toContain(
-      'Allow scan when credential store retrieval fails',
-    );
-    expect(detailsText).toContain('Yes');
-    expect(baseElement).toHaveTextContent(
-      'Allow scan when credential store retrieval fails',
-    );
-    expect(baseElement).toHaveTextContent('Yes');
-
     const progressBars = screen.getAllByTestId('progressbar-box');
     expect(progressBars[0]).toHaveAttribute('title', 'Done');
     expect(progressBars[0]).toHaveTextContent('Done');
@@ -344,7 +326,6 @@ describe('TaskDetailsPage tests', () => {
       capabilities: true,
       router: true,
       store: true,
-      features: new Features(['ENABLE_CREDENTIAL_STORES']),
     });
 
     store.dispatch(entityLoadingActions.success('12345', task2));
@@ -370,7 +351,6 @@ describe('TaskDetailsPage tests', () => {
       capabilities: true,
       router: true,
       store: true,
-      features: new Features(['ENABLE_CREDENTIAL_STORES']),
     });
 
     store.dispatch(entityLoadingActions.success('12345', task5));
@@ -421,7 +401,6 @@ describe('TaskDetailsPage tests', () => {
       capabilities: true,
       router: true,
       store: true,
-      features: new Features(['ENABLE_CREDENTIAL_STORES']),
     });
 
     store.dispatch(entityLoadingActions.success('12345', task));

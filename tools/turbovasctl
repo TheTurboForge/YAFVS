@@ -186,7 +186,6 @@ C_HARDENING_ARTIFACT_SPECS = {
     "gvm-libs": (
         "build/gvm-libs/base/libgvm_base.so.*",
         "build/gvm-libs/boreas/libgvm_boreas.so.*",
-        "build/gvm-libs/cyberark/libgvm_cyberark.so.*",
         "build/gvm-libs/gmp/libgvm_gmp.so.*",
         "build/gvm-libs/http/libgvm_http.so.*",
         "build/gvm-libs/http_scanner/libgvm_http_scanner.so.*",
@@ -213,7 +212,7 @@ C_HARDENING_ARTIFACT_SPECS = {
     ),
     "gsad": ("build/gsad/src/gsad",),
 }
-C_HARDENING_EXPECTED_ARTIFACT_COUNT = 21
+C_HARDENING_EXPECTED_ARTIFACT_COUNT = 20
 C_HARDENING_RETIRED_PREFIX_ARTIFACTS = (
     "include/gvm/agent_controller",
     "include/gvm/container_image_scanner",
@@ -476,8 +475,8 @@ NATIVE_NVT_DIAGNOSTIC_PREREQUISITE_IDS = (
     "1.3.6.1.4.1.25623.1.0.14259",
     "1.3.6.1.4.1.25623.1.0.100315",
 )
-NATIVE_TARGET_CSV_SSH_CREDENTIAL_TYPES = frozenset({"up", "usk", "cs_up", "cs_usk"})
-NATIVE_TARGET_CSV_SMB_CREDENTIAL_TYPES = frozenset({"up", "cs_up"})
+NATIVE_TARGET_CSV_SSH_CREDENTIAL_TYPES = frozenset({"up", "usk"})
+NATIVE_TARGET_CSV_SMB_CREDENTIAL_TYPES = frozenset({"up"})
 NATIVE_TASK_BATCH_PAGE_SIZE = 500
 NATIVE_REPORT_CSV_DEFAULT_MAX_RESULTS = 100_000
 NATIVE_REPORT_CSV_MAX_RESULTS_LIMIT = 1_000_000
@@ -2573,7 +2572,7 @@ BUILD_META: dict[str, BuildMeta] = {
         pkg_config=("libcjson", "libgvm_base", "libgvm_util", "libgvm_osp", "libgvm_gmp", "gnutls", "glib-2.0", "libbsd", "libical", "gpgme"),
         programs=("cmake", "ninja", "pkg-config", "gcc", "pg_config", "xsltproc", "xmltoman", "xmlmantohtml"),
         package_hints=("postgresql-server-dev-all", "postgresql-server-dev-16", "libical-dev", "xsltproc", "xmltoman"),
-        cmake_args=("-DENABLE_AGENTS=0", "-DENABLE_CREDENTIAL_STORES=0", "-DENABLE_JWT_AUTH=0", "-DENABLE_OPENVASD=0", "-DWITH_LIBTHEIA=0"),
+        cmake_args=("-DENABLE_AGENTS=0", "-DENABLE_JWT_AUTH=0", "-DENABLE_OPENVASD=0", "-DWITH_LIBTHEIA=0"),
         install_for_dependents=True,
     ),
     "gsad": BuildMeta(
@@ -4562,7 +4561,7 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
         return "gsa-session-http-transport", "GSA still needs inherited session/transport plumbing for retained GMP workflows."
     if name == "alert.ts":
         return "alert-delivery-and-credentials", "Alert delivery payload mutation, credentials, and broad alert-definition editing remain inherited; native control covers retained creation, metadata, cloning, deletion, testing, and manual report delivery."
-    if name in {"credential-store.ts", "scanner.ts"}:
+    if name == "scanner.ts":
         return "scanner-control-or-credential", "Scanner and credential surfaces remain inherited until control/secret handling is designed."
     if name == "hosts.js":
         return "asset-action-or-rich-context", "Host actions and richer inherited context remain outside the current native read contract."
@@ -11041,7 +11040,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["guarded native username/password and username/SSH-key credential creation", "native-credentials-from-csv", "future GSA native credential create"],
                 "residual_inherited": [
-                    "Secret updates, other credential types, clone, restore, delete, and credential-store selectors remain inherited.",
+                    "Secret updates, other credential types, clone, restore, and delete remain inherited.",
                     "Passwords, passphrases, and private keys are write-only and are never returned by the native API."
                 ],
             },
@@ -23535,7 +23534,6 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                             "max_checks": 8,
                             "max_hosts": 12,
                             "min_qod": 65,
-                            "cs_allow_failed_retrieval": True,
                             "tag_id": task_tag_id,
                         },
                         separators=(",", ":"),
@@ -23584,7 +23582,6 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                         and task_create_json.get("max_checks") == 8
                         and task_create_json.get("max_hosts") == 12
                         and task_create_json.get("min_qod") == 65
-                        and task_create_json.get("cs_allow_failed_retrieval") is True
                         and task_create_json.get("hosts_ordering") == "reverse"
                     )
                     task_create_ok = task_create.returncode == 0 and task_create_status == 201 and bool(task_id) and isinstance(task_create_json, dict) and task_create_json.get("name") == task_name and task_create_json.get("comment") == "TurboVAS direct write smoke temporary task" and task_relation_ok and task_create_preferences_ok and task_tag_link_state == "1"
@@ -23663,7 +23660,6 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                             "max_checks": 6,
                             "max_hosts": 10,
                             "min_qod": 60,
-                            "cs_allow_failed_retrieval": False,
                         },
                         separators=(",", ":"),
                     )
@@ -23682,7 +23678,6 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                             "coalesce((SELECT value FROM task_preferences WHERE task = t.id AND name = 'max_checks'), '') || '|' || "
                             "coalesce((SELECT value FROM task_preferences WHERE task = t.id AND name = 'max_hosts'), '') || '|' || "
                             "coalesce((SELECT value FROM task_preferences WHERE task = t.id AND name = 'assets_min_qod'), '') || '|' || "
-                            "coalesce((SELECT value FROM task_preferences WHERE task = t.id AND name = 'cs_allow_failed_retrieval'), '') || '|' || "
                             "(SELECT count(*)::text FROM reports WHERE task = t.id) || '|' || "
                             "(SELECT count(*)::text FROM scan_queue q JOIN reports r ON r.id = q.report WHERE r.task = t.id) "
                             "FROM tasks t LEFT JOIN schedules s ON s.id = t.schedule "
@@ -23698,19 +23693,18 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                         and task_replace_json.get("max_checks") == 6
                         and task_replace_json.get("max_hosts") == 10
                         and task_replace_json.get("min_qod") == 60
-                        and task_replace_json.get("cs_allow_failed_retrieval") is False
                         and task_replace_json.get("hosts_ordering") == "sequential"
                         and any(isinstance(alert, dict) and alert.get("id") == task_alert_id for alert in task_replace_json.get("alerts", []))
                     )
                     task_replace_ok = (
                         task_replace.returncode == 0
                         and task_replace_status == 200
-                        and len(task_replace_fields) == 12
+                        and len(task_replace_fields) == 11
                         and task_replace_fields[0] == task_schedule_id
                         and task_replace_fields[1] == "2"
                         and task_replace_fields[2].isdigit()
                         and int(task_replace_fields[2]) > 0
-                        and task_replace_fields[3:] == ["sequential", "1", "yes", "6", "10", "60", "0", "0", "0"]
+                        and task_replace_fields[3:] == ["sequential", "1", "yes", "6", "10", "60", "0", "0"]
                         and task_replace_response_ok
                     )
                     if task_replace_ok:

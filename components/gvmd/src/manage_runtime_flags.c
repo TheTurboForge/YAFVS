@@ -32,24 +32,12 @@
 #define ENABLE_OPENVASD 0
 #endif
 
-#ifndef ENABLE_CREDENTIAL_STORES
-/**
- * @brief Whether to enable credential stores.
- */
-#define ENABLE_CREDENTIAL_STORES 0
-#endif
 
 /**
  * @brief State of a single feature.
  */
 static feature_state_t feature_openvasd =
   {ENABLE_OPENVASD, 0};
-
-/**
- * @brief State of a single feature.
- */
-static feature_state_t feature_credential_stores =
-  {ENABLE_CREDENTIAL_STORES, 0};
 
 /**
  * @brief State of a single feature.
@@ -76,9 +64,6 @@ struct conf_feature_flags
 {
   int has_openvasd;            ///< Whether flag is present.
   int openvasd;                ///< Value of flag.
-
-  int has_credential_store;    ///< Whether flag is present.
-  int credential_store;        ///< Value of flag.
 
   int has_vt_metadata;         ///< Whether flag is present.
   int vt_metadata;             ///< Value of flag.
@@ -123,10 +108,6 @@ load_conf_file_feature_flags (struct conf_feature_flags *out)
   kf = get_gvmd_config ();
   if (kf == NULL)
     return 0;
-
-  gvmd_config_get_boolean (kf, "features", "enable_credential_store",
-                           &out->has_credential_store,
-                           &out->credential_store);
 
   gvmd_config_get_boolean (kf, "features", "enable_openvasd",
                            &out->has_openvasd,
@@ -219,11 +200,6 @@ runtime_flags_init ()
                    conf_flags.has_openvasd,
                    conf_flags.openvasd);
 
-  resolve_feature (&feature_credential_stores,
-                   "GVMD_ENABLE_CREDENTIAL_STORES",
-                   conf_flags.has_credential_store,
-                   conf_flags.credential_store);
-
   resolve_feature (&feature_vt_metadata,
                    "GVMD_ENABLE_VT_METADATA",
                    conf_flags.has_vt_metadata,
@@ -260,8 +236,6 @@ feature_enabled (feature_id_t t)
     {
     case FEATURE_ID_OPENVASD_SCANNER:
       return feature_openvasd.enabled;
-    case FEATURE_ID_CREDENTIAL_STORES:
-      return feature_credential_stores.enabled;
     case FEATURE_ID_VT_METADATA:
       return feature_vt_metadata.enabled;
     case FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT:
@@ -287,8 +261,6 @@ feature_compiled_in (feature_id_t t)
     {
     case FEATURE_ID_OPENVASD_SCANNER:
       return feature_openvasd.compiled_in;
-    case FEATURE_ID_CREDENTIAL_STORES:
-      return feature_credential_stores.compiled_in;
     case FEATURE_ID_VT_METADATA:
       return feature_vt_metadata.compiled_in;
     case FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT:
@@ -308,16 +280,6 @@ feature_compiled_in (feature_id_t t)
 void
 runtime_append_disabled_commands (GString *buf)
 {
-  /* CREDENTIAL_STORES */
-  if (!feature_enabled (FEATURE_ID_CREDENTIAL_STORES))
-    {
-      append_commands (
-        buf,
-        "get_credential_stores,"
-        "modify_credential_store,"
-        "verify_credential_store");
-    }
-
   /* SECURITY_INTELLIGENCE_EXPORT */
   if (!feature_enabled (FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT))
     {

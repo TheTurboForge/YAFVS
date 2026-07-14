@@ -277,7 +277,6 @@ fn credential_patch_sql_is_metadata_only() {
         "scanners",
         "allow_insecure",
         "type =",
-        "credential_store",
         "vault_id",
         "host_identifier",
         "password",

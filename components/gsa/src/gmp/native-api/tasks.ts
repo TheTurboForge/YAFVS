@@ -62,7 +62,6 @@ interface NativeTaskItem {
   max_checks?: number;
   max_hosts?: number;
   min_qod?: number;
-  cs_allow_failed_retrieval?: boolean;
   hosts_ordering?: 'random' | 'sequential' | 'reverse';
   alterable?: boolean | null;
   report_count?: NativeTaskReportCount;
@@ -123,7 +122,6 @@ export interface NativeTaskWriteArgs {
   maxChecks: number;
   maxHosts: number;
   minQod: number;
-  csAllowFailedRetrieval: boolean;
   hostsOrdering?: 'random' | 'sequential' | 'reverse';
   tagId?: string;
 }
@@ -333,10 +331,6 @@ export const nativeTaskToModel = (item: NativeTaskItem): Task => {
           scanner_name: 'max_hosts',
           value: String(integerValue(item.max_hosts, 20)),
         },
-        {
-          scanner_name: 'cs_allow_failed_retrieval',
-          value: item.cs_allow_failed_retrieval ? '1' : '0',
-        },
       ],
     },
     alterable:
@@ -545,7 +539,6 @@ const nativeTaskWriteBody = (args: NativeTaskWriteArgs) => ({
   max_checks: args.maxChecks,
   max_hosts: args.maxHosts,
   min_qod: args.minQod,
-  cs_allow_failed_retrieval: args.csAllowFailedRetrieval,
 });
 
 export const createNativeTask = async (

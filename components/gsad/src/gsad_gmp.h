@@ -150,15 +150,6 @@ get_credentials_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                      gsad_command_response_data_t *);
 
 char *
-get_credential_stores_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                           gsad_command_response_data_t *);
-char *
-modify_credential_store_gmp (gvm_connection_t *, gsad_credentials_t *,
-                             params_t *, gsad_command_response_data_t *);
-char *
-verify_credential_store_gmp (gvm_connection_t *, gsad_credentials_t *,
-                             params_t *, gsad_command_response_data_t *);
-char *
 create_credential_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                        gsad_command_response_data_t *);
 char *

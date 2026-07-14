@@ -967,9 +967,6 @@ create_target (const char* name, const char* asset_hosts_filter,
     {
       gchar *type = credential_type (ssh_credential);
       if (strcmp (type, "usk") && strcmp (type, "up")
-#if ENABLE_CREDENTIAL_STORES
-          && strcmp (type, "cs_usk") && strcmp (type, "cs_up")
-#endif
           )
         {
           sql_rollback ();
@@ -989,9 +986,6 @@ create_target (const char* name, const char* asset_hosts_filter,
     {
       gchar *type = credential_type (ssh_elevate_credential);
       if (strcmp (type, "up")
-#if ENABLE_CREDENTIAL_STORES
-          && strcmp (type, "cs_up")
-#endif
          )
         {
           sql_rollback ();
@@ -1009,9 +1003,6 @@ create_target (const char* name, const char* asset_hosts_filter,
     {
       gchar *type = credential_type (smb_credential);
       if (strcmp (type, "up")
-#if ENABLE_CREDENTIAL_STORES
-          && strcmp (type, "cs_up")
-#endif
          )
         {
           sql_rollback ();
@@ -1029,9 +1020,6 @@ create_target (const char* name, const char* asset_hosts_filter,
     {
       gchar *type = credential_type (esxi_credential);
       if (strcmp (type, "up")
-#if ENABLE_CREDENTIAL_STORES
-          && strcmp (type, "cs_up")
-#endif
         )
         {
           sql_rollback ();
@@ -1049,9 +1037,6 @@ create_target (const char* name, const char* asset_hosts_filter,
     {
       gchar *type = credential_type (snmp_credential);
       if (strcmp (type, "snmp")
-#if ENABLE_CREDENTIAL_STORES
-          && strcmp (type, "cs_snmp")
-#endif
          )
         {
           sql_rollback ();
@@ -1069,9 +1054,6 @@ create_target (const char* name, const char* asset_hosts_filter,
     {
       gchar *type = credential_type (krb5_credential);
       if (strcmp (type, "krb5")
-#if ENABLE_CREDENTIAL_STORES
-          && strcmp (type, "cs_krb5")
-#endif
          )
         {
           sql_rollback ();
@@ -1350,9 +1332,6 @@ modify_target (const char *target_id, const char *name, const char *hosts,
 
           type = credential_type (ssh_credential);
           if (strcmp (type, "up") && strcmp (type, "usk")
-#if ENABLE_CREDENTIAL_STORES
-              && strcmp (type, "cs_up") && strcmp (type, "cs_usk")
-#endif
           )
             {
               sql_rollback ();
@@ -1394,9 +1373,6 @@ modify_target (const char *target_id, const char *name, const char *hosts,
 
           type = credential_type (ssh_elevate_credential);
           if (strcmp (type, "up")
-#if ENABLE_CREDENTIAL_STORES
-              && strcmp (type, "cs_up")
-#endif
             )
             {
               sql_rollback ();
@@ -1438,9 +1414,6 @@ modify_target (const char *target_id, const char *name, const char *hosts,
 
           type = credential_type (smb_credential);
           if (strcmp (type, "up")
-#if ENABLE_CREDENTIAL_STORES
-              && strcmp (type, "cs_up")
-#endif
              )
             {
               sql_rollback ();
@@ -1486,9 +1459,6 @@ modify_target (const char *target_id, const char *name, const char *hosts,
 
           type = credential_type (esxi_credential);
           if (strcmp (type, "up")
-#if ENABLE_CREDENTIAL_STORES
-              && strcmp (type, "cs_up")
-#endif
              )
             {
               sql_rollback ();
@@ -1532,9 +1502,6 @@ modify_target (const char *target_id, const char *name, const char *hosts,
 
           type = credential_type (snmp_credential);
           if (strcmp (type, "snmp")
-#if ENABLE_CREDENTIAL_STORES
-              && strcmp (type, "cs_snmp")
-#endif
              )
             {
               sql_rollback ();

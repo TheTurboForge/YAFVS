@@ -110,8 +110,6 @@ fn credential_native_reads_do_not_return_secret_data_or_values() {
         for forbidden in [
             "credentials_data",
             "credentials_trash_data",
-            "credential_store_preferences",
-            "credential_store_selectors",
             " value",
             ".value",
             "password",
@@ -211,7 +209,6 @@ fn credential_openapi_declares_redacted_read_boundary() {
             "x-turbovas-maturity: live-read",
             replaces,
             "credential-secret-updates-non-up-usk-types-and-deletes",
-            "credential-store secret selectors",
             "secret",
         ] {
             assert!(
@@ -276,7 +273,7 @@ fn credential_patch_route_is_direct_write_control_metadata_only() {
         "x-turbovas-safety-contract: write-control-v1",
         "x-turbovas-side-effect: metadata-write",
         "CredentialPatchRequest",
-        "Secret updates, credential-store selectors, allow_insecure, credential type changes, target/scanner links, export, download, clone, restore, and delete remain on inherited compatibility paths.",
+        "Secret updates, allow_insecure, credential type changes, target/scanner links, export, download, clone, restore, and delete remain on inherited compatibility paths.",
     ] {
         assert!(
             block.contains(required),

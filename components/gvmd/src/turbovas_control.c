@@ -3476,7 +3476,7 @@ turbovas_control_create_credential
   result = create_credential (request->name, request->comment,
                               request->login, request->secret, key_private,
                               NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-                              NULL, NULL, NULL, NULL, NULL,
+                              NULL,
                               request->credential_type, "0", &credential);
   if (result == 0)
     {

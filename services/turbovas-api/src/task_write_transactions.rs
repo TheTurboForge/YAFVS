@@ -61,7 +61,6 @@ pub(crate) async fn execute_task_create_transaction(
         request.max_checks,
         request.max_hosts,
         request.min_qod,
-        request.cs_allow_failed_retrieval,
         &request.hosts_ordering,
     ) {
         execute_task_write_sql(
@@ -150,7 +149,6 @@ pub(crate) async fn execute_task_replace_transaction(
         request.max_checks,
         request.max_hosts,
         request.min_qod,
-        request.cs_allow_failed_retrieval,
         &request.hosts_ordering,
     ) {
         execute_task_write_sql(
@@ -169,9 +167,8 @@ fn task_mutable_preference_values(
     max_checks: i32,
     max_hosts: i32,
     min_qod: i32,
-    cs_allow_failed_retrieval: bool,
     hosts_ordering: &str,
-) -> [(&'static str, String); 6] {
+) -> [(&'static str, String); 5] {
     [
         (
             "assets_apply_overrides",
@@ -180,10 +177,6 @@ fn task_mutable_preference_values(
         ("assets_min_qod", min_qod.to_string()),
         ("max_checks", max_checks.to_string()),
         ("max_hosts", max_hosts.to_string()),
-        (
-            "cs_allow_failed_retrieval",
-            if cs_allow_failed_retrieval { "1" } else { "0" }.to_string(),
-        ),
         ("hosts_ordering", hosts_ordering.to_string()),
     ]
 }

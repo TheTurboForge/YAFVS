@@ -29,12 +29,6 @@ if(ENABLE_OPENVASD)
 else(ENABLE_OPENVASD)
   message(STATUS "ENABLE_OPENVASD flag is not enabled")
 endif(ENABLE_OPENVASD)
-if(ENABLE_CREDENTIAL_STORES)
-  pkg_check_modules(LIBGVM_CYBERARK REQUIRED libgvm_cyberark>=22.30)
-else(ENABLE_CREDENTIAL_STORES)
-  message(STATUS "ENABLE_CREDENTIAL_STORES flag is not enabled")
-endif(ENABLE_CREDENTIAL_STORES)
-
 if(ENABLE_JWT_AUTH)
   pkg_check_modules(LIBGVM_AUTH REQUIRED libgvm_auth>=0.1.3)
 else(ENABLE_JWT_AUTH)
@@ -196,14 +190,6 @@ set(
   manage_report_export_scheduler.c
 )
 
-if(ENABLE_CREDENTIAL_STORES)
-  list(
-    APPEND ALL_MANAGE_SRC
-    manage_credential_store_cyberark.c
-    manage_credential_stores.c
-  )
-endif()
-
 set(
   ALL_MANAGE_SQL_SRC
   manage_sql.c
@@ -244,10 +230,6 @@ set(
   manage_sql_report_exports.c
 )
 
-if(ENABLE_CREDENTIAL_STORES)
-  list(APPEND ALL_MANAGE_SQL_SRC manage_sql_credential_stores.c)
-endif()
-
 set(
   ALL_GMP_SRC
   gmp.c
@@ -262,10 +244,6 @@ set(
   gmp_report_formats.c
   gmp_tls_certificates.c
 )
-
-if(ENABLE_CREDENTIAL_STORES)
-  list(APPEND ALL_GMP_SRC gmp_credential_stores.c)
-endif()
 
 set(ALL_SQL_SRC sql.c sql_pg.c)
 
@@ -369,7 +347,6 @@ target_link_libraries(
   ${LIBGVM_GMP_LDFLAGS}
   ${LIBGVM_HTTP_LDFLAGS}
   ${LIBGVM_HTTP_SCANNER_LDFLAGS}
-  ${LIBGVM_CYBERARK_LDFLAGS}
   ${LIBICAL_LDFLAGS}
   ${LINKER_HARDENING_FLAGS}
   ${OPT_THEIA_TGT}
@@ -389,25 +366,6 @@ target_link_libraries(
 set_target_properties(gvmd PROPERTIES LINKER_LANGUAGE C)
 
 include(${CMAKE_SOURCE_DIR}/cmake/add_unit_test.cmake)
-
-if(ENABLE_CREDENTIAL_STORES)
-  set(
-    ALL_OBJECTS
-    $<TARGET_OBJECTS:all-manage-obj>
-    $<TARGET_OBJECTS:all-manage-sql-obj>
-    $<TARGET_OBJECTS:all-misc-obj>
-  )
-  set(EXTRA_SRC ${ALL_GMP_SRC} ${ALL_SQL_SRC})
-  list(REMOVE_ITEM EXTRA_SRC gmp_credential_stores.c)
-  add_unit_test(gmp-credential-stores "${ALL_OBJECTS}" "${EXTRA_SRC}")
-  # Add linker wrap flag for acl_user_may to avoid multiple definition error
-  set_target_properties(
-    gmp-credential-stores-test
-    PROPERTIES
-      LINK_FLAGS
-        "-Wl,-wrap,acl_user_may,-wrap,find_resource_with_permission,-wrap,sql_begin_immediate,-wrap,sql_rollback,-wrap,find_resource_with_permission,-wrap,sql_string"
-  )
-endif()
 
 set(
   ALL_OBJECTS

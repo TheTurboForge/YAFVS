@@ -7,7 +7,6 @@
 import {describe, test, expect, testing} from '@gsa/testing';
 import {screen, rendererWith} from 'web/testing';
 import Capabilities from 'gmp/capabilities/capabilities';
-import Features from 'gmp/capabilities/features';
 import ScanConfig from 'gmp/models/scan-config';
 import Schedule from 'gmp/models/schedule';
 import Task, {TASK_STATUS} from 'gmp/models/task';
@@ -64,11 +63,6 @@ const preferences = {
       scanner_name: 'auto_delete_data',
       value: '5',
     },
-    {
-      name: 'Allow Failed Credential Store Retrieval',
-      scanner_name: 'cs_allow_failed_retrieval',
-      value: '1',
-    },
   ],
 };
 
@@ -114,14 +108,11 @@ describe('TaskDetails tests', () => {
       config: config,
     });
     const caps = new Capabilities(['everything']);
-    const features = new Features(['ENABLE_CREDENTIAL_STORES']);
-
     const {render, store} = rendererWith({
       capabilities: caps,
       router: true,
       store: true,
       gmp,
-      features,
     });
 
     store.dispatch(scanconfigActions.success('314', config));
@@ -146,11 +137,6 @@ describe('TaskDetails tests', () => {
     expect(element).toHaveTextContent('OpenVAS Scanner');
 
     expect(headings[3]).toHaveTextContent('Assets');
-    expect(element).toHaveTextContent(
-      'Allow scan when credential store retrieval fails',
-    );
-    expect(element).toHaveTextContent('Yes');
-
     expect(headings[4]).toHaveTextContent('Scan');
     expect(element).toHaveTextContent('2 minutes');
     expect(element).toHaveTextContent('Do not automatically delete reports');

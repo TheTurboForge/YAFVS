@@ -4833,6 +4833,67 @@ migrate_284_to_285 ()
   return 0;
 }
 
+static int
+migrate_285_to_286 ()
+{
+  sql_begin_immediate ();
+
+  if (manage_db_version () != 285)
+    {
+      sql_rollback ();
+      return -1;
+    }
+
+  if (sql_int ("SELECT"
+               " (SELECT count(*) FROM credential_stores)"
+               " + (SELECT count(*) FROM credential_store_preferences)"
+               " + (SELECT count(*) FROM credential_store_selectors)"
+               " + (SELECT count(*) FROM credential_store_selector_types)"
+               " + (SELECT count(*) FROM credentials"
+               "      WHERE left (type, 3) = 'cs_')"
+               " + (SELECT count(*) FROM credentials_trash"
+               "      WHERE left (type, 3) = 'cs_')"
+               " + (SELECT count(*) FROM credentials_data"
+               "      WHERE type IN ('credential_store_id', 'vault_id',"
+               "                     'host_identifier',"
+               "                     'privacy_host_identifier'))"
+               " + (SELECT count(*) FROM credentials_trash_data"
+               "      WHERE type IN ('credential_store_id', 'vault_id',"
+               "                     'host_identifier',"
+               "                     'privacy_host_identifier'))"
+               " + (SELECT count(*) FROM tags"
+               "      WHERE resource_type = 'credential_store')"
+               " + (SELECT count(*) FROM tags_trash"
+               "      WHERE resource_type = 'credential_store')"
+               " + (SELECT count(*) FROM tag_resources"
+               "      WHERE resource_type = 'credential_store')"
+               " + (SELECT count(*) FROM tag_resources_trash"
+               "      WHERE resource_type = 'credential_store')"
+               " + (SELECT count(*) FROM filters"
+               "      WHERE type = 'credential_store')"
+               " + (SELECT count(*) FROM filters_trash"
+               "      WHERE type = 'credential_store');"))
+    {
+      g_warning ("Refusing to remove credential-store support while credential-store data or references exist");
+      sql_rollback ();
+      return -1;
+    }
+
+  sql ("DELETE FROM task_preferences"
+       " WHERE name = 'cs_allow_failed_retrieval';");
+
+  sql ("DROP TABLE credential_store_selector_types;");
+  sql ("DROP TABLE credential_store_selectors;");
+  sql ("DROP TABLE credential_store_preferences;");
+  sql ("DROP TABLE credential_stores;");
+
+  set_db_version (286);
+
+  sql_commit ();
+
+  return 0;
+}
+
 
 #undef UPDATE_DASHBOARD_SETTINGS
 
@@ -4925,6 +4986,7 @@ static migrator_t database_migrators[] = {
   {283, migrate_282_to_283},
   {284, migrate_283_to_284},
   {285, migrate_284_to_285},
+  {286, migrate_285_to_286},
   /* End marker. */
   {-1, NULL}};
 

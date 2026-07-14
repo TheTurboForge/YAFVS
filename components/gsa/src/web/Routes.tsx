@@ -115,21 +115,6 @@ const loggedInRoutes = [
         }),
       },
 
-      {
-        path: 'credentialstore',
-        loader: () => {
-          throw redirect('/credential-store');
-        },
-      },
-      {
-        path: 'credential-store',
-        lazy: async () => ({
-          Component: (
-            await import('web/pages/credential-store/CredentialStorePage')
-          ).default,
-        }),
-      },
-
       // CVE routes
       {
         path: 'cves',

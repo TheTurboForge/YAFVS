@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -37,23 +38,15 @@ import Radio from 'web/components/form/Radio';
 import Select from 'web/components/form/Select';
 import TextField from 'web/components/form/TextField';
 import YesNoRadio from 'web/components/form/YesNoRadio';
-import useCredentialStore, {
-  isCredentialStoreType,
-} from 'web/hooks/useCredentialStore';
-import useFeatures from 'web/hooks/useFeatures';
 import useGmp from 'web/hooks/useGmp';
 import useTranslation from 'web/hooks/useTranslation';
-import CredentialStoreDialogFields from 'web/pages/credentials/CredentialStoreDialogFields';
 
 interface CredentialDialogValues {
   autogenerate: boolean;
   certificate?: File | null;
   credentialType: CredentialType;
-  hostIdentifier?: string;
   privateKey?: File | null;
-  privacyHostIdentifier?: string;
   publicKey?: File | null;
-  vaultId?: string;
 }
 
 interface CredentialDialogDefaultValues {
@@ -61,17 +54,14 @@ interface CredentialDialogDefaultValues {
   comment?: string;
   community?: string;
   credentialLogin?: string;
-  hostIdentifier?: string;
   id?: string;
   kdcs?: string[];
   name: string;
   passphrase?: string;
   password?: string;
   privacyAlgorithm?: SNMPPrivacyAlgorithmType;
-  privacyHostIdentifier?: string;
   privacyPassword?: string;
   realm?: string;
-  vaultId?: string;
 }
 
 export type CredentialDialogState = CredentialDialogValues &
@@ -91,13 +81,10 @@ interface CredentialDialogProps {
   password?: string;
   publicKey?: File;
   privacyAlgorithm?: SNMPPrivacyAlgorithmType;
-  privacyHostIdentifier?: string;
   privacyPassword?: string;
   privateKey?: File;
   title?: string;
   types?: readonly CredentialType[];
-  vaultId?: string;
-  hostIdentifier?: string;
   onClose?: () => void;
   onErrorClose?: () => void;
   onSave?: (state: CredentialDialogState) => Promise<void> | void;
@@ -134,18 +121,15 @@ const CredentialDialog = ({
   credential,
   credentialLogin,
   credentialType: initialCredentialType,
-  hostIdentifier,
   name,
   passphrase,
   password,
   publicKey: initialPublicKey,
   privacyAlgorithm = SNMP_PRIVACY_ALGORITHM_AES,
-  privacyHostIdentifier,
   privacyPassword,
   privateKey: initialPrivateKey,
   title,
   types = [],
-  vaultId,
   onClose,
   onErrorClose,
   onSave,
@@ -280,14 +264,9 @@ const CredentialDialog = ({
   };
 
   const gmp = useGmp();
-  const features = useFeatures();
 
   const enabledTypes = types.filter(type => {
-    return !(
-      (type === KRB5_CREDENTIAL_TYPE && !gmp.settings.enableKrb5) ||
-      (isCredentialStoreType(type) &&
-        !features.featureEnabled('ENABLE_CREDENTIAL_STORES'))
-    );
+    return !(type === KRB5_CREDENTIAL_TYPE && !gmp.settings.enableKrb5);
   });
 
   const typeOptions = map(enabledTypes, type => ({
@@ -305,8 +284,6 @@ const CredentialDialog = ({
     }
   }
 
-  const isCredentialStoreEnabled = useCredentialStore(cType as CredentialType);
-
   return (
     <SaveDialog<CredentialDialogValues, CredentialDialogDefaultValues>
       defaultValues={{
@@ -318,13 +295,10 @@ const CredentialDialog = ({
         passphrase,
         password,
         privacyAlgorithm,
-        privacyHostIdentifier,
         privacyPassword,
         id: credential?.id,
         kdcs: credential?.kdcs,
         realm: credential?.realm,
-        vaultId,
-        hostIdentifier,
       }}
       error={error}
       title={title}
@@ -369,26 +343,6 @@ const CredentialDialog = ({
                 )
               }
             />
-
-            {isCredentialStoreEnabled && (
-              <CredentialStoreDialogFields
-                authAlgorithm={state.authAlgorithm}
-                credentialType={state.credentialType}
-                hostIdentifier={state.hostIdentifier}
-                kdcs={state.kdcs}
-                privacyAlgorithm={state.privacyAlgorithm}
-                privacyHostIdentifier={state.privacyHostIdentifier}
-                realm={state.realm}
-                validateKdc={validateKdc}
-                vaultId={state.vaultId}
-                onValueChange={(value, name) =>
-                  onValueChange(
-                    value as string | boolean | string[] | File | undefined,
-                    name,
-                  )
-                }
-              />
-            )}
 
             {(state.credentialType === USERNAME_PASSWORD_CREDENTIAL_TYPE ||
               state.credentialType === USERNAME_SSH_KEY_CREDENTIAL_TYPE) &&

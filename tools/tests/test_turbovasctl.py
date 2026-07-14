@@ -619,7 +619,6 @@ class TurboVASCtlTests(unittest.TestCase):
         expected = (
             "build/gvm-libs/base/libgvm_base.so.*",
             "build/gvm-libs/boreas/libgvm_boreas.so.*",
-            "build/gvm-libs/cyberark/libgvm_cyberark.so.*",
             "build/gvm-libs/gmp/libgvm_gmp.so.*",
             "build/gvm-libs/http/libgvm_http.so.*",
             "build/gvm-libs/http_scanner/libgvm_http_scanner.so.*",
@@ -629,8 +628,8 @@ class TurboVASCtlTests(unittest.TestCase):
             "build/gvm-libs/util/libgvm_util.so.*",
         )
         self.assertEqual(turbovasctl.C_HARDENING_ARTIFACT_SPECS["gvm-libs"], expected)
-        self.assertEqual(sum(len(patterns) for patterns in turbovasctl.C_HARDENING_ARTIFACT_SPECS.values()), 21)
-        self.assertEqual(turbovasctl.C_HARDENING_EXPECTED_ARTIFACT_COUNT, 21)
+        self.assertEqual(sum(len(patterns) for patterns in turbovasctl.C_HARDENING_ARTIFACT_SPECS.values()), 20)
+        self.assertEqual(turbovasctl.C_HARDENING_EXPECTED_ARTIFACT_COUNT, 20)
 
     def test_every_retained_gvm_library_pattern_is_required_without_version_assumptions(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -664,7 +663,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(b"\x7fELFretired")
             artifacts = [path for component, path in turbovasctl.c_hardening_artifact_paths(root, "hardened") if component == "gvm-libs"]
-        self.assertEqual(len(artifacts), 10)
+        self.assertEqual(len(artifacts), 9)
         self.assertFalse(any("agent_controller" in str(path) or "container_image_scanner" in str(path) for path in artifacts))
 
     def test_retired_prefix_artifact_registry_is_version_robust_and_profile_aware(self):
@@ -13426,7 +13425,7 @@ db2:keys=5,expires=0,avg_ttl=0
                             return turbovasctl.subprocess.CompletedProcess(
                                 command,
                                 0,
-                                f"{task_schedule_uuid}|2|1893456000|sequential|1|yes|6|10|60|0|0|0\n",
+                                f"{task_schedule_uuid}|2|1893456000|sequential|1|yes|6|10|60|0|0\n",
                                 "",
                             )
                         relation_state = (
@@ -13701,7 +13700,6 @@ db2:keys=5,expires=0,avg_ttl=0
                                 "max_checks": payload["max_checks"],
                                 "max_hosts": payload["max_hosts"],
                                 "min_qod": payload["min_qod"],
-                                "cs_allow_failed_retrieval": payload["cs_allow_failed_retrieval"],
                                 "hosts_ordering": payload["hosts_ordering"],
                             }
                         )
@@ -13727,7 +13725,6 @@ db2:keys=5,expires=0,avg_ttl=0
                                 "max_checks": payload["max_checks"],
                                 "max_hosts": payload["max_hosts"],
                                 "min_qod": payload["min_qod"],
-                                "cs_allow_failed_retrieval": payload["cs_allow_failed_retrieval"],
                                 "hosts_ordering": payload["hosts_ordering"],
                                 "alerts": [{"id": task_alert_uuid}],
                             }

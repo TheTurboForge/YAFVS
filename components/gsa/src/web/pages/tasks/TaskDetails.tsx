@@ -22,7 +22,6 @@ import TableBody from 'web/components/table/TableBody';
 import TableData from 'web/components/table/TableData';
 import TableRow from 'web/components/table/TableRow';
 import DetailsBlock from 'web/entity/DetailsBlock';
-import useFeatures from 'web/hooks/useFeatures';
 import useGmp from 'web/hooks/useGmp';
 import useShallowEqualSelector from 'web/hooks/useShallowEqualSelector';
 import useTranslation from 'web/hooks/useTranslation';
@@ -61,9 +60,6 @@ const TaskDetails = ({entity, links = true}: TaskDetailsProps) => {
   const [_] = useTranslation();
   const gmp = useGmp();
   const dispatch = useDispatch();
-  const features = useFeatures();
-
-  const isCredentialStore = features.featureEnabled('ENABLE_CREDENTIAL_STORES');
   const scanConfig = useShallowEqualSelector<unknown, ScanConfig | undefined>(
     state => scanConfigSelector(state).getEntity(entity.config?.id),
   );
@@ -98,7 +94,6 @@ const TaskDetails = ({entity, links = true}: TaskDetailsProps) => {
     auto_delete_data: autoDeleteData,
     average_duration: averageDuration,
     config,
-    csAllowFailedRetrieval,
     last_report: lastReport,
     min_qod: minQod,
     scanner,
@@ -228,14 +223,6 @@ const TaskDetails = ({entity, links = true}: TaskDetailsProps) => {
               <TableData>{minQod + ' %'}</TableData>
             </TableRow>
 
-            {isCredentialStore && (
-              <TableRow>
-                <TableData>
-                  {_('Allow scan when credential store retrieval fails')}
-                </TableData>
-                <TableData>{renderYesNo(csAllowFailedRetrieval)}</TableData>
-              </TableRow>
-            )}
           </TableBody>
         </DetailsTable>
       </DetailsBlock>

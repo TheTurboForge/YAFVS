@@ -211,7 +211,6 @@ describe('TaskComponent tests', () => {
           {scanner_name: 'auto_delete_data', value: '5'},
           {scanner_name: 'max_checks', value: '4'},
           {scanner_name: 'max_hosts', value: '2'},
-          {scanner_name: 'cs_allow_failed_retrieval', value: '0'},
         ],
       },
     });
@@ -222,7 +221,6 @@ describe('TaskComponent tests', () => {
         apply_overrides: 0,
         comment: 'New comment',
         config_id: 'config-id',
-        csAllowFailedRetrieval: false,
         max_checks: 4,
         max_hosts: 2,
         min_qod: 70,
@@ -252,7 +250,6 @@ describe('TaskComponent tests', () => {
           {scanner_name: 'auto_delete_data', value: '5'},
           {scanner_name: 'max_checks', value: '4'},
           {scanner_name: 'max_hosts', value: '2'},
-          {scanner_name: 'cs_allow_failed_retrieval', value: '0'},
         ],
       },
     });
@@ -263,7 +260,6 @@ describe('TaskComponent tests', () => {
         apply_overrides: 0,
         comment: 'New comment',
         config_id: 'different-config-id',
-        csAllowFailedRetrieval: false,
         max_checks: 4,
         max_hosts: 2,
         min_qod: 70,

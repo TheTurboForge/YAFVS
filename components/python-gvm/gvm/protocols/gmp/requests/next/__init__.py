@@ -3,15 +3,11 @@
 #
 #  SPDX-License-Identifier: GPL-3.0-or-later
 
-from gvm.protocols.gmp.requests.next._credential_stores import CredentialStores
-from gvm.protocols.gmp.requests.next._credentials import (
-    Credentials,
-    CredentialStoreCredentialType,
-)
 from gvm.protocols.gmp.requests.next._integration_configs import (
     IntegrationConfigs,
 )
 from gvm.protocols.gmp.requests.next._tasks import Tasks
+from gvm.protocols.gmp.requests.v227 import Credentials
 
 from .._entity_id import EntityID
 from .._version import Version
@@ -73,8 +69,6 @@ __all__ = (
     "CertBundAdvisories",
     "Cpes",
     "CredentialFormat",
-    "CredentialStoreCredentialType",
-    "CredentialStores",
     "CredentialType",
     "Credentials",
     "Cves",

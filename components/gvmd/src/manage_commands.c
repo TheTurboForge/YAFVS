@@ -73,9 +73,6 @@ command_t gmp_commands[]
     {"GET_ASSETS", "Get all assets."},
     {"GET_CONFIGS", "Get all configs."},
     {"GET_CREDENTIALS", "Get all credentials."},
-#if ENABLE_CREDENTIAL_STORES
-    {"GET_CREDENTIAL_STORES", "Get all credential stores."},
-#endif
     {"GET_FEEDS", "Get details of one or all feeds this Manager uses."},
     {"GET_FILTERS", "Get all filters."},
     {"GET_INFO", "Get raw information for a given item."},
@@ -106,9 +103,6 @@ command_t gmp_commands[]
     {"MODIFY_AUTH", "Modify the authentication methods."},
     {"MODIFY_CONFIG", "Update an existing config."},
     {"MODIFY_CREDENTIAL", "Modify an existing credential."},
-#if ENABLE_CREDENTIAL_STORES
-    {"MODIFY_CREDENTIAL_STORE", "Modify an existing credential."},
-#endif /* ENABLE_CREDENTIAL_STORES */
     {"MODIFY_FILTER", "Modify an existing filter."},
     {"MODIFY_INTEGRATION_CONFIG", "Modify integration configuration."},
     {"MODIFY_LICENSE", "Modify the existing license."},

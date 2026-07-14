@@ -700,8 +700,6 @@ __wrap_create_credential
    const char *certificate, const char *community, const char *auth_algorithm,
    const char *privacy_password, const char *privacy_algorithm,
    const char *kdc, array_t *kdcs, const char *realm,
-   const char *credential_store_id, const char *vault_id,
-   const char *host_identifier, const char *privacy_host_identifier,
    const char *given_type, const char *allow_insecure,
    credential_t *credential)
 {
@@ -714,10 +712,6 @@ __wrap_create_credential
   (void) kdc;
   (void) kdcs;
   (void) realm;
-  (void) credential_store_id;
-  (void) vault_id;
-  (void) host_identifier;
-  (void) privacy_host_identifier;
   (void) allow_insecure;
   create_credential_calls++;
   g_free (received_name);

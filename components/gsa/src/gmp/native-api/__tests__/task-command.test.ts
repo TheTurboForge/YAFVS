@@ -560,7 +560,6 @@ describe('TaskCommand tests', () => {
       apply_overrides: 0,
       comment: 'comment',
       config_id: 'config1',
-      csAllowFailedRetrieval: true,
       max_checks: 10,
       max_hosts: 11,
       min_qod: 65,
@@ -597,7 +596,6 @@ describe('TaskCommand tests', () => {
           max_checks: 10,
           max_hosts: 11,
           min_qod: 65,
-          cs_allow_failed_retrieval: true,
           tag_id: 'tag1',
         }),
       },
@@ -712,7 +710,6 @@ describe('TaskCommand tests', () => {
       schedule_id: 'schedule1',
       schedule_periods: 3,
       target_id: 'target1',
-      csAllowFailedRetrieval: true,
     });
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
@@ -743,7 +740,6 @@ describe('TaskCommand tests', () => {
           max_checks: 10,
           max_hosts: 10,
           min_qod: 70,
-          cs_allow_failed_retrieval: true,
         }),
       },
     );

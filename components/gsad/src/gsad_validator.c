@@ -103,7 +103,6 @@ gsad_init_validator ()
                      "|(get_configs)"
                      "|(get_credential)"
                      "|(get_credentials)"
-                     "|(get_credential_stores)"
                      "|(get_features)"
                      "|(get_feeds)"
                      "|(get_filter)"
@@ -158,7 +157,6 @@ gsad_init_validator ()
                      "|(import_port_list)"
                      "|(login)"
                      "|(modify_scope)"
-                     "|(modify_credential_store)"
                      "|(move_task)"
                      "|(ping)"
                      "|(renew_session)"
@@ -189,7 +187,6 @@ gsad_init_validator ()
                      "|(sync_cert)"
                      "|(sync_config)"
                      "|(toggle_tag)"
-                     "|(verify_credential_store)"
                      "|(verify_scanner)"
                      "|(wizard_get))$");
 
@@ -234,13 +231,7 @@ gsad_init_validator ()
   gvm_validator_add (validator, "condition", "^[[:alnum:] ]*$");
   gvm_validator_add (validator, "create_credentials_type", "^(gen|pass|key)$");
   gvm_validator_add (validator, "credential_type",
-                     "^(cc|up|usk|smime|pgp|snmp|krb5|pw|cs_cc|cs_up|cs_usk"
-                     "|cs_smime|cs_pgp|cs_snmp|cs_krb5|cs_pw)$");
-  gvm_validator_add (validator, "vault_id", "^.*$");
-  gvm_validator_add (validator, "host_identifier", "^.*$");
-  gvm_validator_add (validator, "privacy_host_identifier", "^.*$");
-  gvm_validator_add (validator, "preferences:app_id", "^.*$");
-  gvm_validator_add (validator, "preferences:passphrase", "^.*$");
+                     "^(cc|up|usk|smime|pgp|snmp|krb5|pw)$");
   gvm_validator_add (validator, "credential_login", "^[-_[:alnum:]\\.@\\\\]*$");
   gvm_validator_add (validator, "condition_data:name", "^.*$");
   gvm_validator_add (validator, "condition_data:value", "(?s)^.*$");
@@ -447,10 +438,6 @@ gsad_init_validator ()
   gvm_validator_add_binary (validator, "certificate_bin");
   gvm_validator_add_binary (validator, "installer");
   gvm_validator_add_binary (validator, "method_data:pkcs12:");
-  gvm_validator_add_binary (validator, "preferences:client_certificate");
-  gvm_validator_add_binary (validator, "preferences:client_key");
-  gvm_validator_add_binary (validator, "preferences:pkcs12_file");
-  gvm_validator_add_binary (validator, "preferences:server_ca_certificate");
 
   /* Beware, the rule must be defined before the alias. */
 
@@ -502,7 +489,6 @@ gsad_init_validator ()
 
   /* Define Optional IDs "^[a-z0-9\\-]*$" */
   gvm_validator_alias (validator, "credential_id", "optional_id");
-  gvm_validator_alias (validator, "credential_store_id", "optional_id");
   gvm_validator_alias (validator, "optional_task_id", "optional_id");
   gvm_validator_alias (validator, "result_task_id", "optional_id");
   gvm_validator_alias (validator, "result_uuid", "optional_id");
@@ -548,7 +534,6 @@ gsad_init_validator ()
   gvm_validator_alias (validator, "chart_type", "name");
   gvm_validator_alias (validator, "chart_template", "name");
   gvm_validator_alias (validator, "community", "lsc_password");
-  gvm_validator_alias (validator, "cs_allow_failed_retrieval", "boolean");
   gvm_validator_alias (validator, "custom_severity", "boolean");
   gvm_validator_alias (validator, "current_user", "boolean");
   gvm_validator_alias (validator, "dashboard_name", "name");
@@ -611,7 +596,6 @@ gsad_init_validator ()
   gvm_validator_alias (validator, "port_range_end", "number");
   gvm_validator_alias (validator, "port_range_start", "number");
   gvm_validator_alias (validator, "pos", "number");
-  gvm_validator_alias (validator, "preferences:port", "port");
   gvm_validator_alias (validator, "privacy_password", "lsc_password");
   gvm_validator_alias (validator, "radiushost", "hostport");
   gvm_validator_alias (validator, "restrict_type", "resource_type");

@@ -1728,7 +1728,6 @@ create_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   const char *max_checks, *max_hosts;
   const char *add_tag, *tag_id, *auto_delete, *auto_delete_data;
   const char *apply_overrides, *min_qod, *usage_type;
-  const char *cs_allow_failed_retrieval;
   params_t *alerts;
 
   add_tag = params_value (params, "add_tag");
@@ -1750,12 +1749,6 @@ create_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   tag_id = params_value (params, "tag_id");
   target_id = params_value (params, "target_id");
   usage_type = params_value (params, "usage_type");
-  cs_allow_failed_retrieval =
-    params_value (params, "cs_allow_failed_retrieval");
-
-  if (params_given (params, "cs_allow_failed_retrieval"))
-    CHECK_VARIABLE_INVALID (cs_allow_failed_retrieval, "Create Task");
-
   CHECK_VARIABLE_INVALID (scanner_type, "Create Task");
   if (!strcmp (scanner_type, "1"))
     {
@@ -1865,10 +1858,6 @@ create_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
     "<scanner_name>auto_delete_data</scanner_name>"
     "<value>%s</value>"
     "</preference>"
-    "<preference>"
-    "<scanner_name>cs_allow_failed_retrieval</scanner_name>"
-    "<value>%d</value>"
-    "</preference>"
     "</preferences>"
     "<alterable>1</alterable>"
     "<usage_type>%s</usage_type>"
@@ -1876,9 +1865,7 @@ create_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
     config_id, schedule_periods, target_id, scanner_id, name, comment,
     max_checks, max_hosts, "yes",
     strcmp (apply_overrides, "0") ? "yes" : "no", min_qod, auto_delete,
-    auto_delete_data,
-    cs_allow_failed_retrieval ? strcmp (cs_allow_failed_retrieval, "0") : 0,
-    usage_type);
+    auto_delete_data, usage_type);
 
   ret =
     gmp (connection, credentials, NULL, &entity, response_data, command->str);
@@ -2035,7 +2022,6 @@ save_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   const char *config_id, *target_id;
   const char *scanner_type, *schedule_periods, *auto_delete, *auto_delete_data;
   const char *apply_overrides, *min_qod;
-  const char *cs_allow_failed_retrieval;
   int ret;
   params_t *alerts;
   GString *alert_element;
@@ -2058,9 +2044,6 @@ save_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   schedule_periods = params_value (params, "schedule_periods");
   target_id = params_value (params, "target_id");
   task_id = params_value (params, "task_id");
-  cs_allow_failed_retrieval =
-    params_value (params, "cs_allow_failed_retrieval");
-
   if (scanner_type != NULL)
     {
       CHECK_VARIABLE_INVALID (scanner_type, "Save Task");
@@ -2095,9 +2078,6 @@ save_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   CHECK_VARIABLE_INVALID (max_checks, "Save Task");
   CHECK_VARIABLE_INVALID (auto_delete_data, "Save Task");
   CHECK_VARIABLE_INVALID (max_hosts, "Save Task");
-
-  if (params_given (params, "cs_allow_failed_retrieval"))
-    CHECK_VARIABLE_INVALID (cs_allow_failed_retrieval, "Save Task");
 
   CHECK_VARIABLE_INVALID (apply_overrides, "Save Task");
   CHECK_VARIABLE_INVALID (min_qod, "Save Task");
@@ -2163,10 +2143,6 @@ save_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
     "<value>%%s</value>"
     "</preference>"
     "<preference>"
-    "<scanner_name>cs_allow_failed_retrieval</scanner_name>"
-    "<value>%%d</value>"
-    "</preference>"
-    "<preference>"
     "<scanner_name>auto_delete_data</scanner_name>"
     "<value>%%s</value>"
     "</preference>"
@@ -2180,7 +2156,6 @@ save_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
     name, comment, target_id, config_id, schedule_id, schedule_periods,
     scanner_id, max_checks, max_hosts, "yes",
     strcmp (apply_overrides, "0") ? "yes" : "no", min_qod, auto_delete,
-    cs_allow_failed_retrieval ? strcmp (cs_allow_failed_retrieval, "0") : 0,
     auto_delete_data);
   g_free (format);
 
@@ -2499,8 +2474,6 @@ create_credential_gmp (gvm_connection_t *connection,
   int ret;
   gchar *html;
   const char *name, *comment, *credential_login, *type, *password, *passphrase;
-  const char *credential_store_id, *vault_id, *host_identifier;
-  const char *privacy_host_identifier;
   const char *private_key, *public_key, *certificate, *community;
   const char *privacy_password, *auth_algorithm, *privacy_algorithm;
   const char *autogenerate;
@@ -2514,10 +2487,6 @@ create_credential_gmp (gvm_connection_t *connection,
   type = params_value (params, "credential_type");
   password = params_value (params, "lsc_password");
   passphrase = params_value (params, "passphrase");
-  credential_store_id = params_value (params, "credential_store_id");
-  vault_id = params_value (params, "vault_id");
-  host_identifier = params_value (params, "host_identifier");
-  privacy_host_identifier = params_value (params, "privacy_host_identifier");
   private_key = params_value (params, "private_key");
   public_key = params_value (params, "public_key");
   certificate = params_value (params, "certificate");
@@ -2585,50 +2554,25 @@ create_credential_gmp (gvm_connection_t *connection,
                       credential_login ? credential_login : "",
                       password ? password : "");
         }
-      else if (str_equal (type, "krb5") || str_equal (type, "cs_krb5"))
+      else if (str_equal (type, "krb5"))
         {
           GString *login_password_xml = g_string_new ("");
-          if (str_equal (type, "krb5"))
-            {
-              CHECK_LOGIN_NAME_INVALID_CREATE (credential_login,
-                                               "Create Credential");
+          CHECK_LOGIN_NAME_INVALID_CREATE (credential_login,
+                                           "Create Credential");
 
-              CHECK_VARIABLE_INVALID (password, "Create Credential");
+          CHECK_VARIABLE_INVALID (password, "Create Credential");
 
-              gchar *login_esc = g_markup_escape_text (
-                credential_login ? credential_login : "", -1);
-              gchar *password_esc =
-                g_markup_escape_text (password ? password : "", -1);
+          gchar *login_esc = g_markup_escape_text (
+            credential_login ? credential_login : "", -1);
+          gchar *password_esc =
+            g_markup_escape_text (password ? password : "", -1);
 
-              g_string_append_printf (login_password_xml,
-                                      "<login>%s</login>"
-                                      "<password>%s</password>",
-                                      login_esc, password_esc);
-              g_free (login_esc);
-              g_free (password_esc);
-            }
-          else
-            {
-              if (params_given (params, "credential_store_id"))
-                CHECK_VARIABLE_INVALID (credential_store_id,
-                                        "Create Credential");
-
-              CHECK_VARIABLE_INVALID (vault_id, "Create Credential");
-              CHECK_VARIABLE_INVALID (host_identifier, "Create Credential");
-
-              gchar *credential_store_id_esc =
-                g_markup_escape_text (credential_store_id ?: "", -1);
-              gchar *vault_id_esc = g_markup_escape_text (vault_id ?: "", -1);
-              gchar *host_identifier_esc =
-                g_markup_escape_text (host_identifier ?: "", -1);
-
-              g_string_append_printf (
-                login_password_xml,
-                "<credential_store_id>%s</credential_store_id>"
-                "<vault_id>%s</vault_id>"
-                "<host_identifier>%s</host_identifier>",
-                credential_store_id_esc, vault_id_esc, host_identifier_esc);
-            }
+          g_string_append_printf (login_password_xml,
+                                  "<login>%s</login>"
+                                  "<password>%s</password>",
+                                  login_esc, password_esc);
+          g_free (login_esc);
+          g_free (password_esc);
           // escape provided values
           gchar *name_esc = g_markup_escape_text (name ? name : "", -1);
           gchar *comment_esc =
@@ -2785,61 +2729,6 @@ create_credential_gmp (gvm_connection_t *connection,
               credential_login ? credential_login : "",
               password ? password : "", auth_algorithm ? auth_algorithm : "");
         }
-      else if (str_equal (type, "cs_snmp"))
-        {
-          if (params_given (params, "credential_store_id"))
-            CHECK_VARIABLE_INVALID (credential_store_id, "Create Credential");
-
-          CHECK_VARIABLE_INVALID (vault_id, "Create Credential");
-          CHECK_VARIABLE_INVALID (host_identifier, "Create Credential");
-          CHECK_VARIABLE_INVALID (auth_algorithm, "Create Credential");
-
-          if (params_given (params, "privacy_algorithm"))
-            CHECK_VARIABLE_INVALID (privacy_algorithm, "Create Credential");
-
-          if (params_given (params, "privacy_host_identifier"))
-            CHECK_VARIABLE_INVALID (privacy_host_identifier,
-                                    "Create Credential");
-
-          if (privacy_host_identifier
-              && !str_equal (privacy_host_identifier, ""))
-            ret = gmpf (connection, credentials, NULL, &entity, response_data,
-                        "<create_credential>"
-                        "<name>%s</name>"
-                        "<comment>%s</comment>"
-                        "<type>%s</type>"
-                        "<credential_store_id>%s</credential_store_id>"
-                        "<vault_id>%s</vault_id>"
-                        "<host_identifier>%s</host_identifier>"
-                        "<privacy_host_identifier>%s</privacy_host_identifier>"
-                        "<privacy>"
-                        "<password></password>"
-                        "<algorithm>%s</algorithm>"
-                        "</privacy>"
-                        "<auth_algorithm>%s</auth_algorithm>"
-                        "<allow_insecure>1</allow_insecure>"
-                        "</create_credential>",
-                        name, comment ? comment : "", type,
-                        credential_store_id ?: "", vault_id, host_identifier,
-                        privacy_host_identifier ?: "",
-                        privacy_algorithm ? privacy_algorithm : "",
-                        auth_algorithm ? auth_algorithm : "");
-          else
-            ret = gmpf (connection, credentials, NULL, &entity, response_data,
-                        "<create_credential>"
-                        "<name>%s</name>"
-                        "<comment>%s</comment>"
-                        "<type>%s</type>"
-                        "<credential_store_id>%s</credential_store_id>"
-                        "<vault_id>%s</vault_id>"
-                        "<host_identifier>%s</host_identifier>"
-                        "<auth_algorithm>%s</auth_algorithm>"
-                        "<allow_insecure>1</allow_insecure>"
-                        "</create_credential>",
-                        name, comment ? comment : "", type,
-                        credential_store_id ?: "", vault_id, host_identifier,
-                        auth_algorithm ? auth_algorithm : "");
-        }
       else if (str_equal (type, "pgp"))
         {
           CHECK_VARIABLE_INVALID (public_key, "Create Credential");
@@ -2884,29 +2773,6 @@ create_credential_gmp (gvm_connection_t *connection,
                   "<allow_insecure>1</allow_insecure>"
                   "</create_credential>",
                   name, comment ? comment : "", type, password ? password : "");
-        }
-      else if (str_equal (type, "cs_up") || str_equal (type, "cs_usk")
-               || str_equal (type, "cs_cc") || str_equal (type, "cs_pgp")
-               || str_equal (type, "cs_pw") || str_equal (type, "cs_smime"))
-        {
-          if (params_given (params, "credential_store_id"))
-            CHECK_VARIABLE_INVALID (credential_store_id, "Create Credential");
-
-          CHECK_VARIABLE_INVALID (vault_id, "Create Credential");
-          CHECK_VARIABLE_INVALID (host_identifier, "Create Credential");
-
-          ret = gmpf (connection, credentials, NULL, &entity, response_data,
-                      "<create_credential>"
-                      "<name>%s</name>"
-                      "<comment>%s</comment>"
-                      "<type>%s</type>"
-                      "<credential_store_id>%s</credential_store_id>"
-                      "<vault_id>%s</vault_id>"
-                      "<host_identifier>%s</host_identifier>"
-                      "<allow_insecure>1</allow_insecure>"
-                      "</create_credential>",
-                      name, comment ? comment : "", type,
-                      credential_store_id ?: "", vault_id, host_identifier);
         }
       else
         {
@@ -3243,306 +3109,6 @@ get_credentials_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Get credential stores, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_credential_stores_gmp (gvm_connection_t *connection,
-                           gsad_credentials_t *credentials, params_t *params,
-                           gsad_command_response_data_t *response_data)
-{
-  const char *credential_store_uuid =
-    params_value (params, "credential_store_id");
-  gmp_arguments_t *arguments = gmp_arguments_new ();
-
-  if (credential_store_uuid)
-    {
-      gmp_arguments_add (arguments, "credential_store_id",
-                         credential_store_uuid);
-    }
-
-  return get_many (connection, "credential_stores", credentials, params,
-                   arguments, response_data);
-}
-
-void
-add_preference_to_xml (GString *xml, const char *name, const char *value)
-{
-  if (!xml || !name || !value)
-    return;
-
-  if (*name && *value)
-    {
-      g_string_append_printf (xml,
-                              "<preference>"
-                              "<name>%s</name>"
-                              "<value>%s</value>"
-                              "</preference>",
-                              name, value);
-    }
-}
-
-void
-add_preference_to_xml_base64 (GString *xml, const char *name,
-                              const param_t *value)
-{
-  if (!xml || !name)
-    return;
-
-  if (value)
-    {
-      gchar *base64 =
-        (value->value && value->value_size)
-          ? g_base64_encode ((guchar *) value->value, value->value_size)
-          : g_strdup ("");
-
-      g_string_append_printf (xml,
-                              "<preference>"
-                              "<name>%s</name>"
-                              "<value>%s</value>"
-                              "</preference>",
-                              name, base64);
-      g_free (base64);
-    }
-}
-
-/**
- * @brief Modify a credential store, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-modify_credential_store_gmp (gvm_connection_t *connection,
-                             gsad_credentials_t *credentials, params_t *params,
-                             gsad_command_response_data_t *response_data)
-{
-  gchar *xml, *format;
-  int ret;
-  entity_t entity;
-  const char *credential_store_id, *active, *host, *port, *path, *comment,
-    *app_id, *passphrase;
-  param_t *client_certificate, *client_key, *pkcs12_file,
-    *server_ca_certificate;
-  GString *preferences_element;
-
-  credential_store_id = params_value (params, "credential_store_id");
-  active = params_value (params, "active");
-  host = params_value (params, "host");
-  port = params_value (params, "port");
-  path = params_value (params, "path");
-  app_id = params_value (params, "preferences:app_id");
-  client_certificate = params_get (params, "preferences:client_certificate");
-  client_key = params_get (params, "preferences:client_key");
-  pkcs12_file = params_get (params, "preferences:pkcs12_file");
-  passphrase = params_value (params, "preferences:passphrase");
-  server_ca_certificate =
-    params_get (params, "preferences:server_ca_certificate");
-  comment = params_value (params, "comment");
-
-  CHECK_VARIABLE_INVALID (credential_store_id, "Save Credential Store");
-  if (str_equal (credential_store_id, ""))
-    {
-      return message_invalid (connection, credentials, params, response_data,
-                              "Missing credential_store_id",
-                              "Save Credential Store");
-    }
-
-  if (params_given (params, "active"))
-    {
-      CHECK_VARIABLE_INVALID (active, "Save Credential Store");
-    }
-  if (params_given (params, "host"))
-    {
-      CHECK_VARIABLE_INVALID (host, "Save Credential Store");
-    }
-  if (params_given (params, "port"))
-    {
-      CHECK_VARIABLE_INVALID (port, "Save Credential Store");
-    }
-  if (params_given (params, "path"))
-    {
-      CHECK_VARIABLE_INVALID (path, "Save Credential Store");
-    }
-  if (params_given (params, "preferences:app_id"))
-    {
-      CHECK_VARIABLE_INVALID (app_id, "Save Credential Store");
-    }
-  if (params_given (params, "preferences:client_certificate"))
-    {
-      CHECK_VARIABLE_INVALID (client_certificate, "Save Credential Store");
-    }
-  if (params_given (params, "preferences:client_key"))
-    {
-      CHECK_VARIABLE_INVALID (client_key, "Save Credential Store");
-    }
-  if (params_given (params, "preferences:pkcs12_file"))
-    {
-      CHECK_VARIABLE_INVALID (pkcs12_file, "Save Credential Store");
-    }
-  if (params_given (params, "preferences:passphrase"))
-    {
-      CHECK_VARIABLE_INVALID (passphrase, "Save Credential Store");
-    }
-  if (params_given (params, "preferences:server_ca_certificate"))
-    {
-      CHECK_VARIABLE_INVALID (server_ca_certificate, "Save Credential Store");
-    }
-  if (params_given (params, "comment"))
-    {
-      CHECK_VARIABLE_INVALID (comment, "Save Credential Store");
-    }
-  else
-    comment = "";
-
-  preferences_element = g_string_new ("<preferences>");
-
-  add_preference_to_xml (preferences_element, "app_id", app_id);
-  add_preference_to_xml (preferences_element, "passphrase", passphrase);
-  add_preference_to_xml_base64 (preferences_element, "client_cert",
-                                client_certificate);
-  add_preference_to_xml_base64 (preferences_element, "client_key", client_key);
-  add_preference_to_xml_base64 (preferences_element, "client_pkcs12_file",
-                                pkcs12_file);
-  add_preference_to_xml_base64 (preferences_element, "server_ca_cert",
-                                server_ca_certificate);
-
-  xml_string_append (preferences_element, "</preferences>");
-
-  format =
-    g_strdup_printf ("<modify_credential_store credential_store_id=\"%%s\">"
-                     "<active>%%s</active>"
-                     "<host>%%s</host>"
-                     "<port>%%s</port>"
-                     "<path>%%s</path>"
-                     "%s" /* preferences */
-                     "<comment>%%s</comment>"
-                     "</modify_credential_store>",
-                     preferences_element->str);
-
-  entity = NULL;
-  ret = gmpf (connection, credentials, NULL, &entity, response_data, format,
-              credential_store_id, active, host, port, path, comment);
-
-  g_free (format);
-  g_string_free (preferences_element, TRUE);
-
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a credential store. "
-        "The credential store was not saved. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a credential store. "
-        "It is unclear whether the credential store has been saved or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a credential store. "
-        "It is unclear whether the credential store has been saved or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  xml = response_from_entity (connection, credentials, params, entity,
-                              "Save Credential Store", response_data);
-  free_entity (entity);
-  return xml;
-}
-
-/**
- * @brief Verify/Test a credential store, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-verify_credential_store_gmp (gvm_connection_t *connection,
-                             gsad_credentials_t *credentials, params_t *params,
-                             gsad_command_response_data_t *response_data)
-{
-  gchar *html;
-  const char *credential_store_id;
-  int ret;
-  entity_t entity;
-
-  credential_store_id = params_value (params, "credential_store_id");
-  CHECK_VARIABLE_INVALID (credential_store_id, "Verify Credential Store");
-
-  ret = gmpf (connection, credentials, NULL, &entity, response_data,
-              "<verify_credential_store credential_store_id=\"%s\"/>",
-              credential_store_id);
-
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while verifying a credential store. "
-        "The credential store was not verified. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while verifying a credential store. "
-        "It is unclear whether the credential store was verified or not. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while verifying a credential store. "
-        "It is unclear whether the credential store was verified or not. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    }
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Verify Credential Store", response_data);
-  free_entity (entity);
-  return html;
-}
-
-/**
  * @brief Delete credential, get all credentials, envelope result.
  *
  * @param[in]  connection     Connection to manager.
@@ -3580,8 +3146,6 @@ save_credential_gmp (gvm_connection_t *connection,
   gchar *html = NULL;
   const char *credential_id, *public_key;
   const char *name, *comment, *credential_login, *password, *passphrase, *type;
-  const char *credential_store_id, *vault_id, *host_identifier;
-  const char *privacy_host_identifier;
   const char *private_key, *certificate, *community, *privacy_password;
   const char *kdc, *realm;
   const char *auth_algorithm, *privacy_algorithm;
@@ -3596,10 +3160,6 @@ save_credential_gmp (gvm_connection_t *connection,
   credential_login = params_value (params, "credential_login");
   password = params_value (params, "password");
   passphrase = params_value (params, "passphrase");
-  credential_store_id = params_value (params, "credential_store_id");
-  vault_id = params_value (params, "vault_id");
-  host_identifier = params_value (params, "host_identifier");
-  privacy_host_identifier = params_value (params, "privacy_host_identifier");
   private_key = params_value (params, "private_key");
   certificate = params_value (params, "certificate");
   community = params_value (params, "community");
@@ -3650,26 +3210,6 @@ save_credential_gmp (gvm_connection_t *connection,
       if (params_given (params, "community"))
         CHECK_VARIABLE_INVALID (community, "Save Credential");
     }
-  else if (str_equal (type, "cs_snmp"))
-    {
-      if (params_given (params, "auth_algorithm"))
-        CHECK_VARIABLE_INVALID (auth_algorithm, "Save Credential");
-
-      if (params_given (params, "privacy_algorithm"))
-        CHECK_VARIABLE_INVALID (privacy_algorithm, "Save Credential");
-
-      if (params_given (params, "credential_store_id"))
-        CHECK_VARIABLE_INVALID (credential_store_id, "Save Credential")
-
-      if (params_given (params, "vault_id"))
-        CHECK_VARIABLE_INVALID (vault_id, "Save Credential");
-
-      if (params_given (params, "host_identifier"))
-        CHECK_VARIABLE_INVALID (host_identifier, "Save Credential");
-
-      if (params_given (params, "privacy_host_identifier"))
-        CHECK_VARIABLE_INVALID (privacy_host_identifier, "Save Credential");
-    }
   else if (str_equal (type, "up") || str_equal (type, "pw"))
     {
       if (params_given (params, "password"))
@@ -3684,15 +3224,6 @@ save_credential_gmp (gvm_connection_t *connection,
     {
       if (params_given (params, "public_key"))
         CHECK_VARIABLE_INVALID (public_key, "Save Credential");
-    }
-  else if (g_str_has_prefix (type, "cs_"))
-    {
-      if (params_given (params, "credential_store_id"))
-        CHECK_VARIABLE_INVALID (credential_store_id, "Save Credential")
-      if (params_given (params, "vault_id"))
-        CHECK_VARIABLE_INVALID (vault_id, "Save Credential");
-      if (params_given (params, "host_identifier"))
-        CHECK_VARIABLE_INVALID (host_identifier, "Save Credential");
     }
   else if (str_equal (type, "usk"))
     {
@@ -3742,20 +3273,7 @@ save_credential_gmp (gvm_connection_t *connection,
           xml_string_append (command, "</privacy>");
         }
     }
-  else if (str_equal (type, "cs_snmp"))
-    {
-      if (auth_algorithm)
-        xml_string_append (command, "<auth_algorithm>%s</auth_algorithm>",
-                           auth_algorithm);
-
-      if (privacy_algorithm)
-        xml_string_append (command,
-                           "<privacy>"
-                           "<algorithm>%s</algorithm>"
-                           "</privacy>",
-                           privacy_algorithm);
-    }
-  else if (str_equal (type, "krb5") || str_equal (type, "cs_krb5"))
+  else if (str_equal (type, "krb5"))
     {
       if (kdcs_param)
         {
@@ -3834,31 +3352,6 @@ save_credential_gmp (gvm_connection_t *connection,
           xml_string_append (command, "<key>");
           xml_string_append (command, "<public>%s</public>", public_key);
           xml_string_append (command, "</key>");
-        }
-    }
-
-  if (g_str_has_prefix (type, "cs_"))
-    {
-      if (credential_store_id)
-        {
-          xml_string_append (command,
-                             "<credential_store_id>%s</credential_store_id>",
-                             credential_store_id);
-        }
-      if (vault_id)
-        {
-          xml_string_append (command, "<vault_id>%s</vault_id>", vault_id);
-        }
-      if (host_identifier)
-        {
-          xml_string_append (command, "<host_identifier>%s</host_identifier>",
-                             host_identifier);
-        }
-      if (str_equal (type, "cs_snmp") && privacy_host_identifier)
-        {
-          xml_string_append (
-            command, "<privacy_host_identifier>%s</privacy_host_identifier>",
-            privacy_host_identifier);
         }
     }
 
@@ -12528,7 +12021,7 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
               gsad_credentials_t *credentials)
 {
   const gchar *cmd = NULL;
-  const int CMD_MAX_SIZE = 22; /* get_credential_stores_gmp */
+  const int CMD_MAX_SIZE = 22;
   params_t *params = gsad_connection_info_get_params (con_info);
   gsad_settings_t *gsad_global_settings = gsad_settings_get_global_settings ();
   gvm_connection_t connection;
@@ -12674,7 +12167,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_config_nvt)
   ELSE (get_credential)
   ELSE (get_credentials)
-  ELSE (get_credential_stores)
   ELSE (get_features)
   ELSE (get_feeds)
   ELSE (get_filter)
@@ -12976,7 +12468,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_user)
   ELSE (import_config)
   ELSE (import_port_list)
-  ELSE (modify_credential_store)
   ELSE (modify_scope)
   ELSE (move_task)
   ELSE (renew_session)
@@ -13005,7 +12496,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (sync_cert)
   ELSE (test_alert)
   ELSE (toggle_tag)
-  ELSE (verify_credential_store)
   ELSE (verify_scanner)
   else
   {

@@ -24,7 +24,6 @@ Describe (manage_runtime_flags);
 BeforeEach (manage_runtime_flags)
 {
   unsetenv ("GVMD_ENABLE_OPENVASD");
-  unsetenv ("GVMD_ENABLE_CREDENTIAL_STORES");
   unsetenv ("GVMD_ENABLE_VT_METADATA");
 }
 
@@ -54,16 +53,6 @@ Ensure (manage_runtime_flags, default_flags_no_config_no_env)
   assert_that (feature_compiled_in (FEATURE_ID_OPENVASD_SCANNER),
                is_equal_to (0));
   assert_that (feature_enabled (FEATURE_ID_OPENVASD_SCANNER), is_equal_to (0));
-#endif
-
-#if ENABLE_CREDENTIAL_STORES
-  assert_that (feature_compiled_in (FEATURE_ID_CREDENTIAL_STORES),
-               is_equal_to (1));
-  assert_that (feature_enabled (FEATURE_ID_CREDENTIAL_STORES), is_equal_to (0));
-#else
-  assert_that (feature_compiled_in (FEATURE_ID_CREDENTIAL_STORES),
-               is_equal_to (0));
-  assert_that (feature_enabled (FEATURE_ID_CREDENTIAL_STORES), is_equal_to (0));
 #endif
 
   assert_that (feature_compiled_in (FEATURE_ID_VT_METADATA), is_equal_to (1));

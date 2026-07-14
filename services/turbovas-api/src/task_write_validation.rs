@@ -64,8 +64,6 @@ pub(crate) struct TaskCreateRequest {
     #[serde(default = "default_min_qod")]
     pub(crate) min_qod: i32,
     #[serde(default)]
-    pub(crate) cs_allow_failed_retrieval: bool,
-    #[serde(default)]
     pub(crate) tag_id: Option<String>,
 }
 
@@ -86,7 +84,6 @@ pub(crate) struct TaskReplaceRequest {
     pub(crate) max_checks: i32,
     pub(crate) max_hosts: i32,
     pub(crate) min_qod: i32,
-    pub(crate) cs_allow_failed_retrieval: bool,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -110,7 +107,6 @@ pub(crate) struct ValidatedTaskCreate {
     pub(crate) max_checks: i32,
     pub(crate) max_hosts: i32,
     pub(crate) min_qod: i32,
-    pub(crate) cs_allow_failed_retrieval: bool,
     pub(crate) tag_id: Option<String>,
 }
 
@@ -129,7 +125,6 @@ pub(crate) struct ValidatedTaskReplace {
     pub(crate) max_checks: i32,
     pub(crate) max_hosts: i32,
     pub(crate) min_qod: i32,
-    pub(crate) cs_allow_failed_retrieval: bool,
 }
 
 pub(crate) fn validate_task_create_request(
@@ -181,7 +176,6 @@ pub(crate) fn validate_task_create_request(
         max_checks: request.max_checks,
         max_hosts: request.max_hosts,
         min_qod: request.min_qod,
-        cs_allow_failed_retrieval: request.cs_allow_failed_retrieval,
         tag_id: request
             .tag_id
             .map(|value| normalize_task_uuid(value, "tag_id"))
@@ -232,7 +226,6 @@ pub(crate) fn validate_task_replace_request(
         max_checks: request.max_checks,
         max_hosts: request.max_hosts,
         min_qod: request.min_qod,
-        cs_allow_failed_retrieval: request.cs_allow_failed_retrieval,
     })
 }
 

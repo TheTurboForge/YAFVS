@@ -153,6 +153,18 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
     let parts = path.split('/').collect::<Vec<_>>();
     match (method, parts.as_slice()) {
         (&Method::POST, ["", "api", "v1", "user-management", "users"]) => true,
+        (
+            &Method::POST,
+            [
+                "",
+                "api",
+                "v1",
+                "user-management",
+                "users",
+                user_id,
+                "clone",
+            ],
+        ) => direct_api_write_id_segment_is_allowed(user_id),
         (&Method::PUT, ["", "api", "v1", "users", "current", "timezone"]) => true,
         (&Method::PUT, ["", "api", "v1", "users", "current", "settings", setting_id]) => {
             direct_api_write_id_segment_is_allowed(setting_id)

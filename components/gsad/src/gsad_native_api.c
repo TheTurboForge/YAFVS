@@ -116,6 +116,20 @@ is_user_management_user_path (const gchar *path)
   return is_uuid_segment (id, strlen (id));
 }
 
+static gboolean
+is_user_management_user_clone_path (const gchar *path)
+{
+  const gchar *id;
+  const gchar *suffix;
+
+  if (path == NULL || !g_str_has_prefix (path, USER_MANAGEMENT_USER_PREFIX))
+    return FALSE;
+  id = path + strlen (USER_MANAGEMENT_USER_PREFIX);
+  suffix = strstr (id, "/clone");
+  return suffix != NULL && suffix[6] == '\0'
+         && is_uuid_segment (id, (gsize) (suffix - id));
+}
+
 typedef struct
 {
   guint status_code;
@@ -1011,6 +1025,9 @@ native_api_post_path_is_allowed (const gchar *path)
     return TRUE;
 
   if (g_strcmp0 (path, USER_MANAGEMENT_USERS_PATH) == 0)
+    return TRUE;
+
+  if (is_user_management_user_clone_path (path))
     return TRUE;
 
   if (g_strcmp0 (path, alerts_path) == 0)

@@ -145,6 +145,9 @@
 #define TURBOVAS_CONTROL_USER_DELETE_COMMAND "user-delete "
 #define TURBOVAS_CONTROL_USER_DELETE_COMMAND_LENGTH \
   (sizeof (TURBOVAS_CONTROL_USER_DELETE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_USER_CLONE_COMMAND "user-clone "
+#define TURBOVAS_CONTROL_USER_CLONE_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_USER_CLONE_COMMAND) - 1)
 #define TURBOVAS_CONTROL_USER_NAME_MAX_BYTES 256
 #define TURBOVAS_CONTROL_USER_COMMENT_MAX_BYTES 4096
 #define TURBOVAS_CONTROL_USER_METHOD_MAX_BYTES 16
@@ -625,6 +628,26 @@ turbovas_control_parse_user_delete_request (
 }
 
 static gboolean
+turbovas_control_parse_user_clone_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37], char source_uuid[37])
+{
+  const char *cursor;
+  const char *end;
+
+  if (!turbovas_control_parse_authenticated_prefix (
+        request, request_len, TURBOVAS_CONTROL_USER_CLONE_COMMAND,
+        TURBOVAS_CONTROL_USER_CLONE_COMMAND_LENGTH, expected_secret,
+        expected_secret_len, operator_uuid, &cursor, &end)
+      || (size_t) (end - cursor) != 36)
+    return FALSE;
+
+  memcpy (source_uuid, cursor, 36);
+  source_uuid[36] = '\0';
+  return turbovas_control_uuid_is_valid (source_uuid);
+}
+
+static gboolean
 turbovas_control_parse_user_password_change_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
@@ -721,6 +744,29 @@ turbovas_control_user_delete_response (int result)
       case 4: return "4 same_inheritor\n";
       case 5: return "5 last_user\n";
       case 99: return "99 forbidden\n";
+      case -2: return "-2 malformed\n";
+      default: return "-1 internal\n";
+    }
+}
+
+static const char *
+turbovas_control_user_clone_response (
+  int result, const char *uuid,
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+{
+  if (result == 0 && uuid && turbovas_control_uuid_is_valid (uuid))
+    {
+      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+                  "0 created %s\n", uuid);
+      return response;
+    }
+
+  switch (result)
+    {
+      case 1: return "1 duplicate\n";
+      case 2: return "2 not_found\n";
+      case 99: return "99 forbidden\n";
+      case -3: return "-3 committed_indeterminate\n";
       case -2: return "-2 malformed\n";
       default: return "-1 internal\n";
     }
@@ -3464,6 +3510,48 @@ turbovas_control_delete_user (
 }
 
 static int
+turbovas_control_clone_user (const char *operator_uuid,
+                             const char *source_user_uuid,
+                             char created_uuid[37])
+{
+  user_t new_user = 0;
+  char *uuid = NULL;
+  gboolean committed = FALSE;
+  int result;
+
+  created_uuid[0] = '\0';
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  result = copy_user (NULL, NULL, source_user_uuid, &new_user);
+  if (result == 0)
+    {
+      committed = TRUE;
+      uuid = user_uuid (new_user);
+      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+        {
+          g_warning ("%s: user clone committed but UUID lookup failed",
+                     __func__);
+          log_event ("user", "User", NULL, "created");
+          result = -3;
+        }
+      else
+        {
+          memcpy (created_uuid, uuid, 36);
+          created_uuid[36] = '\0';
+          log_event ("user", "User", created_uuid, "created");
+        }
+    }
+
+  if (result != 0 && !committed)
+    log_event_fail ("user", "User", source_user_uuid, "created");
+
+  free (uuid);
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
+static int
 turbovas_control_clone_task (const char *operator_uuid,
                              const char *source_task_uuid,
                              char created_uuid[37])
@@ -4247,6 +4335,7 @@ turbovas_control_serve_client (int client_socket)
   char schedule_uuid[37];
   char tag_uuid[37];
   char task_uuid[37];
+  char source_user_uuid[37];
   char nvt_oid[TURBOVAS_CONTROL_NVT_OID_MAX_BYTES + 1];
   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
   const char *expected_secret;
@@ -4320,6 +4409,21 @@ turbovas_control_serve_client (int client_socket)
                && memcmp (request, TURBOVAS_CONTROL_USER_DELETE_COMMAND,
                           TURBOVAS_CONTROL_USER_DELETE_COMMAND_LENGTH) == 0)
         result_response = turbovas_control_user_delete_response (-2);
+      else if (turbovas_control_parse_user_clone_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, source_user_uuid))
+        {
+          result = turbovas_control_clone_user (operator_uuid,
+                                                source_user_uuid,
+                                                created_uuid);
+          result_response = turbovas_control_user_clone_response (
+            result, created_uuid, response);
+        }
+      else if (request_len >= TURBOVAS_CONTROL_USER_CLONE_COMMAND_LENGTH
+               && memcmp (request, TURBOVAS_CONTROL_USER_CLONE_COMMAND,
+                          TURBOVAS_CONTROL_USER_CLONE_COMMAND_LENGTH) == 0)
+        result_response = turbovas_control_user_clone_response (-2, NULL,
+                                                                 response);
       else if (turbovas_control_parse_user_password_change_request (
             request, request_len, expected_secret, expected_secret_len,
             operator_uuid, &password_change_request))
@@ -4614,6 +4718,11 @@ turbovas_control_serve_client (int client_socket)
            && memcmp (request, TURBOVAS_CONTROL_USER_DELETE_COMMAND,
                       TURBOVAS_CONTROL_USER_DELETE_COMMAND_LENGTH) == 0)
     result_response = turbovas_control_user_delete_response (-2);
+  else if (request_len >= TURBOVAS_CONTROL_USER_CLONE_COMMAND_LENGTH
+           && memcmp (request, TURBOVAS_CONTROL_USER_CLONE_COMMAND,
+                      TURBOVAS_CONTROL_USER_CLONE_COMMAND_LENGTH) == 0)
+    result_response = turbovas_control_user_clone_response (-2, NULL,
+                                                             response);
   else if (
     request_len >= TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH
     && memcmp (request, TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND,

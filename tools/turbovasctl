@@ -845,6 +845,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "current-user-timezone-write",
         "user-current-password-change",
         "user-account-create",
+        "user-account-clone",
         "user-account-modify",
         "user-account-delete",
         "user-management-list-read",
@@ -962,6 +963,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/user-management/users/{user_id}"): "direct-read",
     ("patch", "/user-management/users/{user_id}"): "browser-write",
     ("delete", "/user-management/users/{user_id}"): "browser-write",
+    ("post", "/user-management/users/{user_id}/clone"): "direct-write",
     ("get", "/filters/{filter_id}/export"): "direct-read",
     ("post", "/targets"): "direct-write",
     ("patch", "/targets/{target_id}"): "direct-write",
@@ -1176,6 +1178,14 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-operator-identity": "proxied-session-operator",
         "x-turbovas-owner-semantics": "gvmd-authoritative-operator-authorization",
         "x-turbovas-replaces": "user-current-password-change",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "account-auth-control",
+    },
+    ("post", "/user-management/users/{user_id}/clone"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "gvmd-authoritative-operator-authorization",
+        "x-turbovas-replaces": "user-account-clone",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "account-auth-control",
     },
@@ -10572,6 +10582,14 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             ):
                 if suffix and f"is_uuid_segment_with_suffix (id, {suffix_variable})" in post_function_body:
                     operations.add(f"POST {task_prefix.rstrip('/')}/{{}}{suffix}")
+        user_management_prefix = post_constants.get("USER_MANAGEMENT_USER_PREFIX")
+        if (
+            user_management_prefix
+            and "is_user_management_user_clone_path (path)" in post_function_body
+        ):
+            operations.add(
+                f"POST {user_management_prefix.rstrip('/')}/{{}}/clone"
+            )
         scope_prefix = post_constants.get("scope_prefix")
         reports_suffix = post_constants.get("reports_suffix")
         if (
@@ -11339,7 +11357,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "scriptable_read",
                 "replacement_candidates": ["direct native redacted user account detail", "native-api-request helper"],
                 "residual_inherited": [
-                    "Password hashes are never exposed; authentication-provider configuration and account writes remain inherited. Current settings, timezone, and password changes are native."
+                    "Password hashes are never exposed; authentication-provider configuration remains inherited. Account administration, current settings, timezone, and password changes are native."
                 ],
             },
             {
@@ -11380,6 +11398,13 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "residual_inherited": [
                     "The endpoint is intentionally not bearer-scriptable because direct API access cannot invalidate gsad browser sessions."
                 ],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/user-management/users/{user_id}/clone",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["GSA operator account clone", "direct native user-account clone control"],
             },
             {
                 "endpoint": "/api/v1/scan-configs",

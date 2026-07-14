@@ -15,6 +15,27 @@ interface NativeApiSession {
   readonly token?: string;
 }
 
+interface NativeApiErrorPayload {
+  error?: {
+    code?: unknown;
+    message?: unknown;
+  };
+}
+
+export class NativeUserRequestError extends Error {
+  readonly code?: string;
+
+  constructor(status: number, code?: string, message?: string) {
+    super(
+      [`Native API request failed with status ${status}`, code, message]
+        .filter(value => value !== undefined && value !== '')
+        .join(': '),
+    );
+    this.name = 'NativeUserRequestError';
+    this.code = code;
+  }
+}
+
 interface NativeApiGmp {
   readonly session: NativeApiSession;
   buildUrl(path: string, params?: UrlParams): string;
@@ -71,6 +92,20 @@ export interface NativeUserPatchArgs extends NativeUserCreateArgs {
 
 const stringValue = (value: unknown): string =>
   typeof value === 'string' ? value : '';
+
+const nativeUserRequestError = async (
+  response: globalThis.Response,
+): Promise<NativeUserRequestError> => {
+  let payload: NativeApiErrorPayload = {};
+  try {
+    payload = (await response.json()) as NativeApiErrorPayload;
+  } catch {
+    // Preserve the HTTP status even when an intermediary returned a non-JSON body.
+  }
+  const code = stringValue(payload.error?.code) || undefined;
+  const message = stringValue(payload.error?.message) || undefined;
+  return new NativeUserRequestError(response.status, code, message);
+};
 
 const integerValue = (value: unknown, fallback = 0): number => {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
@@ -163,7 +198,7 @@ const fetchUserManagementJson = async <T>(
     },
   );
   if (!response.ok) {
-    throw new Error(`Native API request failed with status ${response.status}`);
+    throw await nativeUserRequestError(response);
   }
   return (await response.json()) as T;
 };
@@ -181,7 +216,7 @@ const writeUserManagementJson = async <T>(
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error(`Native API request failed with status ${response.status}`);
+    throw await nativeUserRequestError(response);
   }
   return (await response.json()) as T;
 };
@@ -255,6 +290,27 @@ export const createNativeUser = async (
   return new Response({id: stringValue(payload.id)});
 };
 
+export const cloneNativeUser = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<{id: string}>> => {
+  const response = await fetch(
+    gmp.buildUrl(
+      `api/v1/user-management/users/${encodeURIComponent(id)}/clone`,
+    ),
+    {
+      method: 'POST',
+      credentials: 'include',
+      headers: userManagementHeaders(gmp),
+    },
+  );
+  if (!response.ok) {
+    throw await nativeUserRequestError(response);
+  }
+  const payload = (await response.json()) as NativeUserManagementPayload;
+  return new Response({id: stringValue(payload.id)});
+};
+
 export const patchNativeUser = async (
   gmp: NativeApiGmp,
   {id, authMethod, comment, name, password}: NativeUserPatchArgs,
@@ -290,7 +346,7 @@ export const deleteNativeUser = async (
     },
   );
   if (!response.ok) {
-    throw new Error(`Native API request failed with status ${response.status}`);
+    throw await nativeUserRequestError(response);
   }
 };
 

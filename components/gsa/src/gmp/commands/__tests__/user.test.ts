@@ -75,20 +75,79 @@ describe('UserCommand tests', () => {
     expect(barSettings.certificateInfo.issuer).toBe('ipsum');
   });
 
-  test('should retain GMP user cloning', async () => {
-    const fakeHttp = createHttp(
-      createResponse({
-        action_result: {id: 'cloned-user'},
-      }),
-    );
+  test('should clone users through the native management API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'cloned-user'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
     const cmd = new UserCommand(fakeHttp);
 
     const response = await cmd.clone({id: 'source-user'});
 
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {cmd: 'clone', id: 'source-user', resource_type: 'user'},
-    });
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/user-management/users/source-user/clone',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
     expect(response.data).toEqual({id: 'cloned-user'});
+  });
+
+  test('should preserve uncertain native clone outcomes', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          error: {
+            code: 'committed_response_unavailable',
+            message: 'The clone committed but its response could not be loaded.',
+          },
+        }),
+        ok: false,
+        status: 502,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          error: {
+            code: 'mutation_outcome_indeterminate',
+            message: 'The clone outcome could not be determined.',
+          },
+        }),
+        ok: false,
+        status: 502,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const cmd = new UserCommand(createNativeHttp());
+
+    const errors: unknown[] = [];
+    for (const id of ['source-user-a', 'source-user-b']) {
+      try {
+        await cmd.clone({id});
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+
+    expect(errors).toEqual([
+      expect.objectContaining({
+        code: 'committed_response_unavailable',
+        message: expect.stringContaining('clone committed'),
+      }),
+      expect.objectContaining({
+        code: 'mutation_outcome_indeterminate',
+        message: expect.stringContaining('could not be determined'),
+      }),
+    ]);
   });
 
   test('should create, update, and delete users through the management API', async () => {

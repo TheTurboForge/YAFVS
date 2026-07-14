@@ -684,6 +684,7 @@ Ensure (gsad_native_api, should_only_allow_exact_user_management_paths)
 {
   const gchar *id = "12345678-1234-1234-1234-123456789abc";
   gchar *detail = g_strdup_printf ("/api/v1/user-management/users/%s", id);
+  gchar *clone = g_strdup_printf ("%s/clone", detail);
   gchar *target = NULL;
   const gchar *rejected[] = {
     "/api/v1/user-management/users/",
@@ -699,6 +700,7 @@ Ensure (gsad_native_api, should_only_allow_exact_user_management_paths)
   assert_that (gsad_native_api_test_post_path_is_allowed (
                  "/api/v1/user-management/users"),
                is_true);
+  assert_that (gsad_native_api_test_post_path_is_allowed (clone), is_true);
   assert_that (gsad_native_api_test_patch_path_is_allowed (detail), is_true);
   assert_that (gsad_native_api_test_delete_path_is_allowed (detail), is_true);
   assert_that (gsad_native_api_test_post_path_is_allowed (detail), is_false);
@@ -740,6 +742,7 @@ Ensure (gsad_native_api, should_only_allow_exact_user_management_paths)
                is_true);
   assert_that (target, is_equal_to_string (detail));
   g_free (target);
+  g_free (clone);
   g_free (detail);
 }
 

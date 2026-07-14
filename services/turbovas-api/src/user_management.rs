@@ -291,6 +291,20 @@ pub(crate) async fn create_user(
     Ok((StatusCode::CREATED, Json(item)))
 }
 
+pub(crate) async fn clone_user(
+    State(state): State<AppState>,
+    Path(user_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<(StatusCode, Json<UserManagementItem>), ApiError> {
+    let operator = require_operator(operator)?;
+    let user_id = parse_uuid(&user_id)?.to_string();
+    let cloned_user_id = request_user_clone(&operator, &user_id).await?;
+    let item = load_user_management_item(&state, &operator, &cloned_user_id)
+        .await
+        .map_err(|_| ApiError::MutationCommittedResponseUnavailable)?;
+    Ok((StatusCode::CREATED, Json(item)))
+}
+
 pub(crate) async fn modify_user(
     State(state): State<AppState>,
     Path(user_id): Path<String>,
@@ -359,6 +373,16 @@ pub(crate) async fn browser_proxy_create_user(
 ) -> Result<(StatusCode, Json<UserManagementItem>), ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     create_user(State(state), Some(Extension(operator)), payload).await
+}
+
+pub(crate) async fn browser_proxy_clone_user(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(user_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<(StatusCode, Json<UserManagementItem>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    clone_user(State(state), Path(user_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_modify_user(
@@ -503,6 +527,21 @@ async fn request_user_create(
     parse_user_create_response(&response)
 }
 
+async fn request_user_clone(
+    operator: &DirectApiOperator,
+    user_id: &str,
+) -> Result<String, ApiError> {
+    let secret = gvmd_control_secret()?;
+    let frame = ScrubbedControlFrame::new(
+        format!("user-clone {secret} {} {user_id}\n", operator.user_uuid()).into_bytes(),
+    );
+    let response =
+        request_gvmd_control_response_bytes(&gvmd_control_socket_path(), &secret, frame.as_bytes())
+            .await
+            .map_err(map_control_socket_error)?;
+    parse_user_clone_response(&response)
+}
+
 async fn request_user_modify(
     operator: &DirectApiOperator,
     user_id: &str,
@@ -515,6 +554,28 @@ async fn request_user_modify(
             .await
             .map_err(map_control_socket_error)?;
     parse_user_modify_response(&response)
+}
+
+fn parse_user_clone_response(response: &[u8]) -> Result<String, ApiError> {
+    if let Some(value) = response.strip_prefix(b"0 created ") {
+        let user_id = std::str::from_utf8(value)
+            .map_err(|_| ApiError::MutationCommittedResponseUnavailable)?;
+        return parse_uuid(user_id)
+            .map(|value| value.to_string())
+            .map_err(|_| ApiError::MutationCommittedResponseUnavailable);
+    }
+    match response {
+        b"1 duplicate" => Err(ApiError::Conflict(
+            "A user with the generated clone name already exists.".to_string(),
+        )),
+        b"2 not_found" => Err(ApiError::NotFound),
+        b"99 forbidden" => Err(ApiError::Forbidden),
+        b"-3 committed_indeterminate" => Err(ApiError::MutationCommittedResponseUnavailable),
+        b"-2 malformed" => Err(ApiError::BadRequest(
+            "The user clone control request was rejected.".to_string(),
+        )),
+        _ => Err(ApiError::ControlFailure),
+    }
 }
 
 async fn request_user_delete(
@@ -746,6 +807,22 @@ mod tests {
         ));
         assert!(matches!(
             parse_user_create_response(b"0 created invalid"),
+            Err(ApiError::MutationCommittedResponseUnavailable)
+        ));
+        assert_eq!(
+            parse_user_clone_response(format!("0 created {USER}").as_bytes()).unwrap(),
+            USER
+        );
+        assert!(matches!(
+            parse_user_clone_response(b"1 duplicate"),
+            Err(ApiError::Conflict(_))
+        ));
+        assert!(matches!(
+            parse_user_clone_response(b"2 not_found"),
+            Err(ApiError::NotFound)
+        ));
+        assert!(matches!(
+            parse_user_clone_response(b"0 created invalid"),
             Err(ApiError::MutationCommittedResponseUnavailable)
         ));
         assert!(matches!(

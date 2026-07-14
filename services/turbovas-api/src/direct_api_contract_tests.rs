@@ -44,6 +44,11 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
         safety_contract: "write-control-v1",
     },
     NativeWriteRouteContract {
+        method: "post",
+        path: "/api/v1/user-management/users/:user_id/clone",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
         method: "put",
         path: "/api/v1/users/current/settings/:setting_id",
         safety_contract: "write-control-v1",
@@ -718,6 +723,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("/api/v1/alerts/:alert_id"));
     assert!(browser_routes.contains("/api/v1/alerts"));
     assert!(browser_routes.contains("/api/v1/alerts/:alert_id/clone"));
+    assert!(browser_routes.contains("/api/v1/user-management/users/:user_id/clone"));
     assert!(browser_routes.contains("/api/v1/overrides/:override_id"));
     assert!(browser_routes.contains("/api/v1/filters"));
     assert!(browser_routes.contains("/api/v1/filters/:filter_id"));

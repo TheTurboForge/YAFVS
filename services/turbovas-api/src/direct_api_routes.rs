@@ -61,7 +61,8 @@ use crate::{
     tls_certificate_writes::delete_tls_certificate,
     trash_empty::{MAX_TRASH_EMPTY_BODY_BYTES, empty_trashcan, trash_empty_preview},
     user_management::{
-        MAX_USER_MANAGEMENT_BODY_BYTES, create_user, user_management_detail, user_management_users,
+        MAX_USER_MANAGEMENT_BODY_BYTES, clone_user, create_user, user_management_detail,
+        user_management_users,
     },
     user_settings::{
         MAX_USER_SETTING_BODY_BYTES, current_user_setting, current_user_settings,
@@ -275,6 +276,10 @@ pub(crate) fn direct_native_api_router(
             .route(
                 "/api/v1/user-management/users",
                 post(create_user).layer(DefaultBodyLimit::max(MAX_USER_MANAGEMENT_BODY_BYTES)),
+            )
+            .route(
+                "/api/v1/user-management/users/:user_id/clone",
+                post(clone_user),
             )
             .route("/api/v1/trashcan/empty-preview", get(trash_empty_preview))
             .route(

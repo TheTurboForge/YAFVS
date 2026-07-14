@@ -11,7 +11,6 @@ import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import {type XmlMeta, type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
-import ActionResult from 'gmp/models/action-result';
 import date, {type Date} from 'gmp/models/date';
 import Setting from 'gmp/models/setting';
 import Settings from 'gmp/models/settings';
@@ -22,6 +21,7 @@ import {
   AUTH_METHOD_RADIUS,
 } from 'gmp/models/user';
 import {
+  cloneNativeUser,
   createNativeUser,
   deleteNativeUser,
   exportNativeUserMetadata,
@@ -233,11 +233,7 @@ class UserCommand extends HttpCommand {
   }
 
   async clone({id}: {id: string}) {
-    const response = await this.httpPostWithTransform(
-      {cmd: 'clone', resource_type: 'user'},
-      {extraParams: {id}},
-    );
-    return response.setData({id: new ActionResult(response.data).id});
+    return cloneNativeUser(this.http, id);
   }
 
   async currentAuthSettings(options: HttpCommandOptions = {}) {

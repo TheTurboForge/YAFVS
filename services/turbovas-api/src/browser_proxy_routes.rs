@@ -77,8 +77,8 @@ use crate::{
         MAX_TRASH_EMPTY_BODY_BYTES, browser_proxy_empty_trashcan, browser_proxy_trash_empty_preview,
     },
     user_management::{
-        MAX_USER_MANAGEMENT_BODY_BYTES, browser_proxy_create_user, browser_proxy_delete_user,
-        browser_proxy_modify_user, browser_proxy_user_management_detail,
+        MAX_USER_MANAGEMENT_BODY_BYTES, browser_proxy_clone_user, browser_proxy_create_user,
+        browser_proxy_delete_user, browser_proxy_modify_user, browser_proxy_user_management_detail,
         browser_proxy_user_management_users,
     },
     user_settings::{
@@ -397,6 +397,10 @@ pub(crate) fn browser_proxy_native_api_router(
             "/api/v1/user-management/users/:user_id",
             delete(browser_proxy_delete_user)
                 .layer(DefaultBodyLimit::max(MAX_USER_MANAGEMENT_BODY_BYTES)),
+        )
+        .route(
+            "/api/v1/user-management/users/:user_id/clone",
+            post(browser_proxy_clone_user),
         )
         .layer(DefaultBodyLimit::max(
             MAX_DIRECT_API_WRITE_BODY_BYTES as usize,

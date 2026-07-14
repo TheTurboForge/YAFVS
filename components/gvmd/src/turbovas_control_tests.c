@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+#define copy_user turbovas_control_test_copy_user
 #define g_log_structured turbovas_control_test_log_structured
 #include "turbovas_control.c"
 #undef g_log_structured
+#undef copy_user
 
 #include <cgreen/cgreen.h>
 #include <stdarg.h>
@@ -40,6 +42,10 @@ static int create_alert_calls;
 static int create_alert_result;
 static int create_user_calls;
 static int create_user_result;
+static int clone_user_calls;
+static int clone_user_result;
+static int clone_user_audit_fail_calls;
+static int clone_user_audit_success_calls;
 static int delete_user_calls;
 static int delete_user_result;
 static int create_schedule_calls;
@@ -304,6 +310,22 @@ __wrap_create_user (const gchar *name, const gchar *password,
   assert_that (error_description, is_null);
   *user = 11;
   return create_user_result;
+}
+
+int
+turbovas_control_test_copy_user (const char *name, const char *comment,
+                                 const char *user_id, user_t *new_user)
+{
+  assert_that (current_credentials.uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (current_credentials.username, is_equal_to_string ("operator"));
+  clone_user_calls++;
+  g_free (received_user_target_uuid);
+  received_user_target_uuid = g_strdup (user_id);
+  assert_that (name, is_null);
+  assert_that (comment, is_null);
+  *new_user = 11;
+  return clone_user_result;
 }
 
 Ensure (turbovas_control,
@@ -646,6 +668,18 @@ __wrap_log_event (const char *resource, const char *resource_name,
       g_free (received_audit_uuid);
       received_audit_uuid = g_strdup (uuid);
     }
+  else if (strcmp (resource, "user") == 0)
+    {
+      assert_that (resource_name, is_equal_to_string ("User"));
+      if (strcmp (action, "created") == 0)
+        {
+          clone_user_audit_success_calls++;
+          g_free (received_audit_uuid);
+          received_audit_uuid = g_strdup (uuid);
+        }
+      else
+        assert_that (action, is_equal_to_string ("password changed"));
+    }
   else
     {
       assert_trash_empty_audit_operator_session ();
@@ -708,6 +742,18 @@ __wrap_log_event_fail (const char *resource, const char *resource_name,
       task_audit_fail_calls++;
       g_free (received_audit_uuid);
       received_audit_uuid = g_strdup (uuid);
+    }
+  else if (strcmp (resource, "user") == 0)
+    {
+      assert_that (resource_name, is_equal_to_string ("User"));
+      if (strcmp (action, "created") == 0)
+        {
+          clone_user_audit_fail_calls++;
+          g_free (received_audit_uuid);
+          received_audit_uuid = g_strdup (uuid);
+        }
+      else
+        assert_that (action, is_equal_to_string ("password changed"));
     }
   else
     {
@@ -5774,6 +5820,10 @@ Ensure (turbovas_control, dispatches_user_setting_results_and_rejects_bad_frames
 
 Ensure (turbovas_control, parses_bounded_user_management_frames)
 {
+  const char *clone_request =
+    "user-clone " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001\n";
   const char *create_request =
     "user-create " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 file VXNlcg== Q29tbWVudA== "
@@ -5788,6 +5838,7 @@ Ensure (turbovas_control, parses_bounded_user_management_frames)
     "123e4567-e89b-12d3-a456-426614174000 "
     "123e4567-e89b-12d3-a456-426614174001 -\n";
   char operator_uuid[37];
+  char source_user_uuid[37];
   turbovas_control_user_create_request_t create = {0};
   turbovas_control_user_modify_request_t modify = {0};
   turbovas_control_user_delete_request_t delete_request_data = {0};
@@ -5822,6 +5873,15 @@ Ensure (turbovas_control, parses_bounded_user_management_frames)
   assert_that (delete_request_data.inheritor_uuid, is_equal_to_string (""));
   turbovas_control_secure_clear (&delete_request_data,
                                  sizeof (delete_request_data));
+
+  assert_that (turbovas_control_parse_user_clone_request (
+                 clone_request, strlen (clone_request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid,
+                 source_user_uuid), is_true);
+  assert_that (operator_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (source_user_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
 }
 
 Ensure (turbovas_control, rejects_malformed_or_unauthenticated_user_management_frames)
@@ -5842,11 +5902,24 @@ Ensure (turbovas_control, rejects_malformed_or_unauthenticated_user_management_f
     "user-delete " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 "
     "123e4567-e89b-12d3-a456-426614174001 - extra\n",
+    "user-clone badsecretbadsecretbadsecretbadsec "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001\n",
+    "user-clone " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-42661417400z "
+    "123e4567-e89b-12d3-a456-426614174001\n",
+    "user-clone " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-42661417400z\n",
+    "user-clone " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 extra\n",
   };
   guchar *oversized_name;
   gchar *oversized_name_64;
   gchar *oversized_request;
   char operator_uuid[37];
+  char source_user_uuid[37];
   turbovas_control_user_create_request_t create = {0};
   turbovas_control_user_modify_request_t modify = {0};
   turbovas_control_user_delete_request_t delete_request_data = {0};
@@ -5871,6 +5944,22 @@ Ensure (turbovas_control, rejects_malformed_or_unauthenticated_user_management_f
                  invalid[5], strlen (invalid[5]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid,
                  &delete_request_data), is_false);
+  assert_that (turbovas_control_parse_user_clone_request (
+                 invalid[6], strlen (invalid[6]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid,
+                 source_user_uuid), is_false);
+  assert_that (turbovas_control_parse_user_clone_request (
+                 invalid[7], strlen (invalid[7]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid,
+                 source_user_uuid), is_false);
+  assert_that (turbovas_control_parse_user_clone_request (
+                 invalid[8], strlen (invalid[8]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid,
+                 source_user_uuid), is_false);
+  assert_that (turbovas_control_parse_user_clone_request (
+                 invalid[9], strlen (invalid[9]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid,
+                 source_user_uuid), is_false);
 
   oversized_name = g_malloc (TURBOVAS_CONTROL_USER_NAME_MAX_BYTES + 1);
   memset (oversized_name, 'u', TURBOVAS_CONTROL_USER_NAME_MAX_BYTES + 1);
@@ -5958,6 +6047,73 @@ Ensure (turbovas_control, maps_authoritative_user_management_responses)
                is_equal_to_string ("-2 malformed\n"));
   assert_that (turbovas_control_user_delete_response (-1),
                is_equal_to_string ("-1 internal\n"));
+
+  assert_that (turbovas_control_user_clone_response (
+                 0, "123e4567-e89b-12d3-a456-426614174001", response),
+               is_equal_to_string (
+                 "0 created 123e4567-e89b-12d3-a456-426614174001\n"));
+  assert_that (turbovas_control_user_clone_response (1, NULL, response),
+               is_equal_to_string ("1 duplicate\n"));
+  assert_that (turbovas_control_user_clone_response (2, NULL, response),
+               is_equal_to_string ("2 not_found\n"));
+  assert_that (turbovas_control_user_clone_response (99, NULL, response),
+               is_equal_to_string ("99 forbidden\n"));
+  assert_that (turbovas_control_user_clone_response (-3, NULL, response),
+               is_equal_to_string ("-3 committed_indeterminate\n"));
+  assert_that (turbovas_control_user_clone_response (-2, NULL, response),
+               is_equal_to_string ("-2 malformed\n"));
+  assert_that (turbovas_control_user_clone_response (-1, NULL, response),
+               is_equal_to_string ("-1 internal\n"));
+}
+
+Ensure (turbovas_control,
+        clones_user_in_operator_session_and_reports_indeterminate_commit)
+{
+  const char *operator_uuid = "123e4567-e89b-12d3-a456-426614174000";
+  const char *source_user_uuid = "123e4567-e89b-12d3-a456-426614174001";
+  char created_uuid[37];
+
+  cleanup_calls = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  clone_user_calls = 0;
+  clone_user_result = 0;
+  clone_user_audit_fail_calls = 0;
+  clone_user_audit_success_calls = 0;
+  mock_operator_name = "operator";
+  user_uuid_lookup_fails = FALSE;
+
+  assert_that (turbovas_control_clone_user (operator_uuid, source_user_uuid,
+                                             created_uuid), is_equal_to (0));
+  assert_that (created_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174003"));
+  assert_that (clone_user_calls, is_equal_to (1));
+  assert_that (received_user_target_uuid, is_equal_to_string (source_user_uuid));
+  assert_that (clone_user_audit_success_calls, is_equal_to (1));
+  assert_that (clone_user_audit_fail_calls, is_equal_to (0));
+  assert_that (received_audit_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174003"));
+
+  user_uuid_lookup_fails = TRUE;
+  assert_that (turbovas_control_clone_user (operator_uuid, source_user_uuid,
+                                             created_uuid), is_equal_to (-3));
+  assert_that (created_uuid, is_equal_to_string (""));
+  assert_that (clone_user_audit_success_calls, is_equal_to (2));
+  assert_that (received_audit_uuid, is_null);
+
+  user_uuid_lookup_fails = FALSE;
+  clone_user_result = 2;
+  assert_that (turbovas_control_clone_user (operator_uuid, source_user_uuid,
+                                             created_uuid), is_equal_to (2));
+  assert_that (clone_user_audit_fail_calls, is_equal_to (1));
+  assert_that (received_audit_uuid, is_equal_to_string (source_user_uuid));
+  assert_that (reinit_calls, is_equal_to (3));
+  assert_that (session_init_calls, is_equal_to (3));
+  assert_that (cleanup_calls, is_equal_to (3));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+  g_clear_pointer (&received_audit_uuid, g_free);
+  g_clear_pointer (&received_user_target_uuid, g_free);
 }
 
 Ensure (turbovas_control, runs_native_user_management_in_operator_sessions)
@@ -6085,9 +6241,17 @@ Ensure (turbovas_control,
 
 Ensure (turbovas_control, dispatches_user_management_results_without_secrets)
 {
+  const char *clone_request =
+    "user-clone " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001\n";
   const char *create_request =
     "user-create " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 ldap_connect VXNlcg== Qw== -\n";
+  const char *bad_clone_secret =
+    "user-clone badsecretbadsecretbadsecretbadsec "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001\n";
   const char *modify_request =
     "user-modify " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 "
@@ -6113,6 +6277,7 @@ Ensure (turbovas_control, dispatches_user_management_results_without_secrets)
   mock_target_name = "target";
   mock_target_auth_method = "ldap_connect";
   create_user_result = -2;
+  clone_user_result = 2;
   modify_user_result = 8;
   delete_user_result = 9;
   assert_that (
@@ -6128,6 +6293,9 @@ Ensure (turbovas_control, dispatches_user_management_results_without_secrets)
   response_len = dispatch_trash_empty_request (delete_request, response);
   response[response_len] = '\0';
   assert_that (response, is_equal_to_string ("5 last_user\n"));
+  response_len = dispatch_trash_empty_request (clone_request, response);
+  response[response_len] = '\0';
+  assert_that (response, is_equal_to_string ("2 not_found\n"));
   response_len = dispatch_trash_empty_request (invalid_create_method, response);
   response[response_len] = '\0';
   assert_that (response, is_equal_to_string ("4 invalid_method\n"));
@@ -6135,6 +6303,9 @@ Ensure (turbovas_control, dispatches_user_management_results_without_secrets)
   response[response_len] = '\0';
   assert_that (response, is_equal_to_string ("7 invalid_method\n"));
   response_len = dispatch_trash_empty_request (bad_secret, response);
+  response[response_len] = '\0';
+  assert_that (response, is_equal_to_string ("-2 malformed\n"));
+  response_len = dispatch_trash_empty_request (bad_clone_secret, response);
   response[response_len] = '\0';
   assert_that (response, is_equal_to_string ("-2 malformed\n"));
   assert_that (strstr (response, "VXNlcg=="), is_null);
@@ -6167,6 +6338,9 @@ main (int argc, char **argv)
     rejects_malformed_or_unauthenticated_user_management_frames);
   add_test_with_context (suite, turbovas_control,
                          maps_authoritative_user_management_responses);
+  add_test_with_context (
+    suite, turbovas_control,
+    clones_user_in_operator_session_and_reports_indeterminate_commit);
   add_test_with_context (suite, turbovas_control,
                          runs_native_user_management_in_operator_sessions);
   add_test_with_context (

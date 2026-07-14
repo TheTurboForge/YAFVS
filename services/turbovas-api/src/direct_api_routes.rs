@@ -32,6 +32,7 @@ use crate::{
         restore_port_list,
     },
     request_shapes::MAX_DIRECT_API_WRITE_BODY_BYTES,
+    scan_config_backup::{MAX_SCAN_CONFIG_BACKUP_BODY_BYTES, import_scan_config},
     scan_config_writes::{
         clone_scan_config, create_scan_config, delete_scan_config, hard_delete_scan_config,
         patch_scan_config, patch_scan_config_family_nvts, restore_scan_config,
@@ -83,6 +84,11 @@ pub(crate) fn direct_native_api_router(
                 post(generate_scope_report),
             )
             .route("/api/v1/scan-configs", post(create_scan_config))
+            .route(
+                "/api/v1/scan-configs/import",
+                post(import_scan_config)
+                    .layer(DefaultBodyLimit::max(MAX_SCAN_CONFIG_BACKUP_BODY_BYTES)),
+            )
             .route(
                 "/api/v1/scan-configs/:scan_config_id",
                 patch(patch_scan_config),

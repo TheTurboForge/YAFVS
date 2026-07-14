@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -23,9 +24,10 @@ const ImportDialog = ({title, text, onClose, onSave}) => {
       {({values, onValueChange}) => (
         <FormGroup title={text}>
           <FileField
+            accept="application/json,.json"
             grow="1"
-            name="xml_file"
-            value={values.xml_file}
+            name="jsonFile"
+            value={values.jsonFile}
             onChange={onValueChange}
           />
         </FormGroup>

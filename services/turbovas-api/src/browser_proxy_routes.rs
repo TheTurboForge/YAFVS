@@ -45,8 +45,8 @@ use crate::{
     browser_proxy_scan_config::{
         browser_proxy_clone_scan_config, browser_proxy_create_scan_config,
         browser_proxy_delete_scan_config, browser_proxy_hard_delete_scan_config,
-        browser_proxy_patch_scan_config, browser_proxy_patch_scan_config_family_nvts,
-        browser_proxy_restore_scan_config,
+        browser_proxy_import_scan_config, browser_proxy_patch_scan_config,
+        browser_proxy_patch_scan_config_family_nvts, browser_proxy_restore_scan_config,
     },
     browser_proxy_schedule::{
         browser_proxy_clone_schedule, browser_proxy_create_schedule, browser_proxy_delete_schedule,
@@ -72,6 +72,7 @@ use crate::{
         MAX_CURRENT_USER_PASSWORD_CHANGE_BODY_BYTES, browser_proxy_change_current_user_password,
     },
     request_shapes::MAX_DIRECT_API_WRITE_BODY_BYTES,
+    scan_config_backup::MAX_SCAN_CONFIG_BACKUP_BODY_BYTES,
     trash_empty::{
         MAX_TRASH_EMPTY_BODY_BYTES, browser_proxy_empty_trashcan, browser_proxy_trash_empty_preview,
     },
@@ -229,6 +230,11 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/scan-configs",
             post(browser_proxy_create_scan_config),
+        )
+        .route(
+            "/api/v1/scan-configs/import",
+            post(browser_proxy_import_scan_config)
+                .layer(DefaultBodyLimit::max(MAX_SCAN_CONFIG_BACKUP_BODY_BYTES)),
         )
         .route(
             "/api/v1/scan-configs/:scan_config_id/clone",

@@ -276,17 +276,8 @@ char *
 save_config_nvt_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                      gsad_command_response_data_t *);
 char *
-import_config_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                   gsad_command_response_data_t *);
-char *
 delete_config_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
-char *
-export_config_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                   gsad_command_response_data_t *);
-char *
-export_configs_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                    gsad_command_response_data_t *);
 
 char *
 export_preference_file_gmp (gvm_connection_t *, gsad_credentials_t *,

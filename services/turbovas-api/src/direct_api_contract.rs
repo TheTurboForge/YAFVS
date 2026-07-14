@@ -109,6 +109,7 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
             | ["", "api", "v1", "tags", "resource-names", _]
             | ["", "api", "v1", "scan-configs", _, "families"]
             | ["", "api", "v1", "scan-configs", _, "families", _, "nvts"]
+            | ["", "api", "v1", "scan-configs", _, "backup"]
             | ["", "api", "v1", "scan-configs", _, "export"]
             if direct_api_segments_are_nonempty(&parts)
     ) || matches!(
@@ -186,6 +187,7 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
             direct_api_write_id_segment_is_allowed(tag_id)
         }
         (&Method::POST, ["", "api", "v1", "scan-configs"]) => true,
+        (&Method::POST, ["", "api", "v1", "scan-configs", "import"]) => true,
         (&Method::PATCH | &Method::DELETE, ["", "api", "v1", "scan-configs", scan_config_id]) => {
             direct_api_write_id_segment_is_allowed(scan_config_id)
         }

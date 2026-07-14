@@ -632,6 +632,52 @@ export const exportNativeScanConfigMetadata = async (
   return new Response(`${JSON.stringify(payload, null, 2)}\n`);
 };
 
+export const downloadNativeScanConfigBackup = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<ArrayBuffer>> => {
+  const response = await fetch(
+    gmp.buildUrl(`api/v1/scan-configs/${encodeURIComponent(id)}/backup`, {
+      token: gmp.session.token,
+    }),
+    {
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        ...(gmp.session.jwt
+          ? {Authorization: `Bearer ${gmp.session.jwt}`}
+          : {}),
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+
+  return new Response(await response.arrayBuffer());
+};
+
+export const importNativeScanConfigBackup = async (
+  gmp: NativeApiGmp,
+  backup: unknown,
+): Promise<Response<ActionResult>> => {
+  const payload = await writeNativeJson<NativeScanConfigPayload>(
+    gmp,
+    'api/v1/scan-configs/import',
+    backup,
+  );
+  return new Response(
+    new ActionResult({
+      action_result: {
+        action: 'import_config',
+        id: stringValue(payload.id),
+        message: 'OK',
+      },
+    }),
+  );
+};
+
 export const exportNativeScanConfigsMetadata = async (
   gmp: NativeApiGmp,
   ids: string[],

@@ -493,17 +493,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def import_scan_config(self, config: str) -> T:
-        """Import a scan config from XML
-
-        Args:
-            config: Scan Config XML as string to import. This XML must
-                contain a :code:`<get_configs_response>` root element.
-        """
-        return self._send_request_and_transform_response(
-            ScanConfigs.import_scan_config(config)
-        )
-
     def modify_scan_config_set_nvt_preference(
         self,
         config_id: EntityID,

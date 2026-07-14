@@ -59,7 +59,7 @@ const ScanConfigDetailsPageToolBarIcons = ({
         />
         <TrashIcon entity={entity} onClick={onScanConfigDeleteClick} />
         <ExportIcon
-          title={_('Export Scan Config as JSON')}
+          title={_('Download Scan Config Backup JSON')}
           value={entity}
           onClick={onScanConfigDownloadClick}
         />

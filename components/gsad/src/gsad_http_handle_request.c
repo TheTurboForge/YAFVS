@@ -32,6 +32,8 @@
 gsad_http_handler_t *global_handlers;
 
 #define NATIVE_API_TOKEN_HEADER "X-TurboVAS-Token"
+#define SCAN_CONFIG_IMPORT_PATH "/api/v1/scan-configs/import"
+#define SCAN_CONFIG_IMPORT_MAX_BODY_BYTES (2 * 1024 * 1024)
 
 static void
 add_native_api_header_token (gsad_http_connection_t *connection,
@@ -397,8 +399,13 @@ gsad_http_handle_request (void *cls, gsad_http_connection_t *connection,
       /* Second or later call for this request, a write method. */
       if (*upload_data_size != 0)
         {
+          gsize max_body_size =
+            g_strcmp0 (gsad_connection_info_get_url (con_info),
+                       SCAN_CONFIG_IMPORT_PATH) == 0
+              ? SCAN_CONFIG_IMPORT_MAX_BODY_BYTES
+              : POST_BUFFER_SIZE;
           if (!gsad_connection_info_append_raw_body (
-                con_info, upload_data, *upload_data_size, POST_BUFFER_SIZE))
+                con_info, upload_data, *upload_data_size, max_body_size))
             {
               *upload_data_size = 0;
               return gsad_http_send_response_for_content (

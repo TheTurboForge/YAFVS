@@ -254,16 +254,10 @@ describe('ScanConfigDetailsPage tests', () => {
     expect(tasksRow.getByText('task2')).toHaveAttribute('href', '/task/5678');
   });
 
-  test('should use native metadata export for downloads', async () => {
-    const nativePayload = {
-      id: config.id,
-      name: 'foo',
-      comment: 'Some Comment',
-      family_count: 3,
-      nvt_count: 3,
-    };
+  test('should use native JSON backup for downloads', async () => {
+    const backup = new ArrayBuffer(8);
     const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue(nativePayload),
+      arrayBuffer: testing.fn().mockResolvedValue(backup),
       ok: true,
       status: 200,
     });
@@ -286,17 +280,17 @@ describe('ScanConfigDetailsPage tests', () => {
     await wait();
 
     fetchMock.mockClear();
-    const exportIcon = screen.getByTitle('Export Scan Config as JSON');
+    const exportIcon = screen.getByTitle('Download Scan Config Backup JSON');
     fireEvent.click(exportIcon);
     await expect.poll(() => fetchMock.mock.calls.length).toBe(1);
 
     expect(exportConfig).not.toHaveBeenCalled();
     expect(buildUrl).toHaveBeenCalledWith(
-      `api/v1/scan-configs/${config.id}/export`,
+      `api/v1/scan-configs/${config.id}/backup`,
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      `https://turbovas.example/api/v1/scan-configs/${config.id}/export`,
+      `https://turbovas.example/api/v1/scan-configs/${config.id}/backup`,
       expect.objectContaining({credentials: 'include'}),
     );
   });
@@ -425,7 +419,6 @@ describe('ScanConfigDetailsPage tests', () => {
     expect(container).toHaveTextContent('No user tags available');
   });
 
-
   test('should call commands', async () => {
     const deleteFunc = testing.fn().mockRejectedValue({
       foo: 'bar',
@@ -461,7 +454,7 @@ describe('ScanConfigDetailsPage tests', () => {
     expect(gmp.nvtfamilies.get).toHaveBeenCalled();
     expect(gmp.scanners.getAll).toHaveBeenCalled();
 
-    const exportIcon = screen.getByTitle('Export Scan Config as JSON');
+    const exportIcon = screen.getByTitle('Download Scan Config Backup JSON');
     expect(exportIcon).toBeInTheDocument();
     expect(gmp.scanconfig.export).not.toHaveBeenCalled();
 
@@ -531,7 +524,7 @@ describe('ScanConfigDetailsPage tests', () => {
     expect(gmp.nvtfamilies.get).not.toHaveBeenCalled();
     expect(gmp.scanners.getAll).not.toHaveBeenCalled();
 
-    const exportIcon = screen.getByTitle('Export Scan Config as JSON');
+    const exportIcon = screen.getByTitle('Download Scan Config Backup JSON');
     expect(exportIcon).toBeInTheDocument();
     expect(gmp.scanconfig.export).not.toHaveBeenCalled();
 
@@ -603,7 +596,7 @@ describe('ScanConfigDetailsPage tests', () => {
     fireEvent.click(deleteIcon);
     expect(gmp.scanconfig.delete).not.toHaveBeenCalled();
 
-    const exportIcon = screen.getByTitle('Export Scan Config as JSON');
+    const exportIcon = screen.getByTitle('Download Scan Config Backup JSON');
     expect(exportIcon).toBeInTheDocument();
     expect(gmp.scanconfig.export).not.toHaveBeenCalled();
 
@@ -671,7 +664,7 @@ describe('ScanConfigDetailsPage tests', () => {
     expect(gmp.scanconfig.delete).not.toHaveBeenCalled();
     expect(deleteIcon).toHaveAttribute('title', 'Scan Config is not writable');
 
-    const exportIcon = screen.getByTitle('Export Scan Config as JSON');
+    const exportIcon = screen.getByTitle('Download Scan Config Backup JSON');
     expect(exportIcon).toBeInTheDocument();
     expect(gmp.scanconfig.export).not.toHaveBeenCalled();
 

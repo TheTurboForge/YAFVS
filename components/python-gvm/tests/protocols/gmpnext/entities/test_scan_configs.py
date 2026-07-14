@@ -8,7 +8,6 @@ from ...gmpv224.entities.scan_configs import (
     GmpDeleteScanConfigTestMixin,
     GmpGetScanConfigsTestMixin,
     GmpGetScanConfigTestMixin,
-    GmpImportScanConfigTestMixin,
     GmpModifyScanConfigSetCommentTestMixin,
     GmpModifyScanConfigSetFamilySelectionTestMixin,
     GmpModifyScanConfigSetNameTestMixin,
@@ -28,10 +27,6 @@ class GMPGetScanConfigTestCase(GmpGetScanConfigTestMixin, GMPTestCase):
 
 
 class GMPGetScanConfigsTestCase(GmpGetScanConfigsTestMixin, GMPTestCase):
-    pass
-
-
-class GMPImportScanConfigTestCase(GmpImportScanConfigTestMixin, GMPTestCase):
     pass
 
 

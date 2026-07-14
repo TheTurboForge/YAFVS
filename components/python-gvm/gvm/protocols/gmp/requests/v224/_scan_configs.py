@@ -7,7 +7,7 @@
 from gvm.errors import InvalidArgument, InvalidArgumentType, RequiredArgument
 from gvm.protocols.core import Request
 from gvm.utils import is_list_like, to_base64, to_bool
-from gvm.xml import XmlCommand, XmlError
+from gvm.xml import XmlCommand
 
 from .._entity_id import EntityID
 
@@ -168,30 +168,6 @@ class ScanConfigs:
 
         if config_id:
             cmd.set_attribute("config_id", str(config_id))
-
-        return cmd
-
-    @classmethod
-    def import_scan_config(cls, config: str) -> Request:
-        """Import a scan config from XML
-
-        Args:
-            config: Scan Config XML as string to import. This XML must
-                contain a :code:`<get_configs_response>` root element.
-        """
-        if not config:
-            raise RequiredArgument(
-                function=cls.import_scan_config.__name__, argument="config"
-            )
-
-        cmd = XmlCommand("create_config")
-
-        try:
-            cmd.append_xml_str(config)
-        except XmlError as e:
-            raise InvalidArgument(
-                function=cls.import_scan_config.__name__, argument="config"
-            ) from e
 
         return cmd
 

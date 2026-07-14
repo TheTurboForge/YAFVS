@@ -5,9 +5,9 @@
  */
 
 import {useState} from 'react';
-import {exportNativeScanConfigMetadata} from 'gmp/native-api/scan-configs';
-import {fetchNativeScanners} from 'gmp/native-api/scanners';
 import {SCANCONFIG_TREND_STATIC} from 'gmp/models/scan-config';
+import {downloadNativeScanConfigBackup} from 'gmp/native-api/scan-configs';
+import {fetchNativeScanners} from 'gmp/native-api/scanners';
 import {NO_VALUE, YES_VALUE} from 'gmp/parser';
 import {forEach} from 'gmp/utils/array';
 import {selectSaveId} from 'gmp/utils/id';
@@ -111,7 +111,7 @@ const isUnchangedScanConfigEditState = (data, scanConfig, allFamilies) => {
 };
 
 const exportScanConfig = (gmp, scanConfig) => {
-  return exportNativeScanConfigMetadata(gmp, scanConfig.id);
+  return downloadNativeScanConfigBackup(gmp, scanConfig.id);
 };
 
 export const createSelectedNvts = (configFamily, nvts) => {
@@ -573,7 +573,7 @@ const ScanConfigComponent = ({
       </EntityComponent>
       {importDialogVisible && (
         <ImportDialog
-          text={_('Import XML config')}
+          text={_('Import JSON backup')}
           title={_('Import Scan Config')}
           onClose={handleCloseImportDialog}
           onSave={handleImportConfig}

@@ -6,23 +6,18 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {
-  convertPreferences,
   ScanConfigCommand,
   ScanConfigsCommand,
 } from 'gmp/commands/scan-configs';
 import {
-  createEntityResponse,
   createHttp,
-  createHttpMany,
   createActionResultResponse,
-  createPlainResponse,
-  createResponse,
 } from 'gmp/commands/testing';
+import Filter from 'gmp/models/filter';
 import {
   SCANCONFIG_TREND_STATIC,
   SCANCONFIG_TREND_DYNAMIC,
 } from 'gmp/models/scan-config';
-import Filter from 'gmp/models/filter';
 import {YES_VALUE, NO_VALUE} from 'gmp/parser';
 import {createSession} from 'gmp/testing';
 
@@ -38,46 +33,6 @@ const createNativeHttp = () => {
   fakeHttp.session.jwt = 'jwt-token';
   return fakeHttp;
 };
-
-describe('convertPreferences tests', () => {
-  test('should convert preferences', () => {
-    const prefenceValues = {
-      'foo Password:': {
-        id: 1,
-        value: undefined,
-        type: 'password',
-      },
-      'foo Username:': {
-        id: 2,
-        value: 'user',
-        type: 'entry',
-      },
-      bar: {
-        id: 3,
-        value: 'foo',
-        type: 'password',
-      },
-      foo: {
-        id: 4,
-        type: 'file',
-        value: 'ABC',
-      },
-    };
-
-    expect(convertPreferences(prefenceValues, '1.2.3')).toEqual({
-      'file:1.2.3:4:file:foo': 'yes',
-      'password:1.2.3:3:password:bar': 'yes',
-      'preference:1.2.3:2:entry:foo Username:': 'user',
-      'preference:1.2.3:3:password:bar': 'foo',
-      'preference:1.2.3:4:file:foo': 'ABC',
-    });
-  });
-
-  test('should return empty object if preferences are empty', () => {
-    expect(convertPreferences(undefined, '1.2.3')).toEqual({});
-    expect(convertPreferences({}, '1.2.3')).toEqual({});
-  });
-});
 
 describe('ScanConfigsCommand tests', () => {
   test('should fetch scan configs through native API', async () => {
@@ -343,21 +298,6 @@ describe('ScanConfigsCommand tests', () => {
 });
 
 describe('ScanConfigCommand tests', () => {
-  test('should return single config', async () => {
-    const response = createEntityResponse('config', {_id: 'foo'});
-    const fakeHttp = createHttp(response);
-    const cmd = new ScanConfigCommand(fakeHttp);
-    const resp = await cmd.get({id: 'foo'});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_config',
-        config_id: 'foo',
-      },
-    });
-    const {data} = resp;
-    expect(data.id).toEqual('foo');
-  });
-
   test('should return a native detail and families without GMP fallback', async () => {
     const id = 'daba56c8-73ec-11df-a475-002264764cea';
     const fetchMock = testing.fn().mockImplementation(url =>
@@ -421,26 +361,60 @@ describe('ScanConfigCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
-  test('should import a config', async () => {
-    const response = createActionResultResponse();
-    const fakeHttp = createHttp(response);
-    const cmd = new ScanConfigCommand(fakeHttp);
-    await cmd.import({xml_file: 'content'});
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'import_config',
-        xml_file: 'content',
-      },
+  test('should import a scan config JSON backup through native API', async () => {
+    const backup = {
+      schema: 'turbovas.scan-config-backup',
+      version: 1,
+      usage_type: 'scan',
+      name: 'Imported config',
+    };
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'imported-config-id'}),
+      ok: true,
+      status: 201,
     });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigCommand(fakeHttp);
+    const result = await cmd.import({jsonFile: JSON.stringify(backup)});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/scan-configs/import',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scan-configs/import',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify(backup),
+      },
+    );
+    expect(result.data.id).toEqual('imported-config-id');
   });
 
-  test('should export scan config metadata through native API when available', async () => {
+  test('should reject invalid scan config backup JSON before any request', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigCommand(fakeHttp);
+
+    await expect(cmd.import({jsonFile: 'not json'})).rejects.toThrow(
+      'Scan config backup must contain valid JSON.',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test('should download a scan config JSON backup through native API', async () => {
+    const backup = new ArrayBuffer(8);
     const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({
-        id: 'scan-config-id',
-        name: 'Full and fast',
-        usage_type: 'scan',
-      }),
+      arrayBuffer: testing.fn().mockResolvedValue(backup),
       ok: true,
       status: 200,
     });
@@ -456,11 +430,11 @@ describe('ScanConfigCommand tests', () => {
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
-      'api/v1/scan-configs/scan-config-id/export',
+      'api/v1/scan-configs/scan-config-id/backup',
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scan-configs/scan-config-id/export',
+      'https://turbovas.example/api/v1/scan-configs/scan-config-id/backup',
       {
         credentials: 'include',
         headers: {
@@ -469,25 +443,7 @@ describe('ScanConfigCommand tests', () => {
         },
       },
     );
-    expect(JSON.parse(result.data)).toEqual({
-      id: 'scan-config-id',
-      name: 'Full and fast',
-      usage_type: 'scan',
-    });
-  });
-
-  test('should not create a config through GMP without the native API', async () => {
-    const response = createActionResultResponse();
-    const fakeHttp = createHttp(response);
-    const cmd = new ScanConfigCommand(fakeHttp);
-    await expect(
-      cmd.create({
-        baseScanConfig: 'uuid1',
-        name: 'foo',
-        comment: 'somecomment',
-      }),
-    ).rejects.toThrow('Native API scan config creation is unavailable');
-    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(result.data).toBe(backup);
   });
 
   test('should create a scan config from base through native API when available', async () => {
@@ -677,67 +633,6 @@ describe('ScanConfigCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
-  test('should save a config', async () => {
-    const response = createActionResultResponse();
-    const fakeHttp = createHttp(response);
-    const trend = {
-      'AIX Local Security Checks': SCANCONFIG_TREND_DYNAMIC,
-      'Family Foo': SCANCONFIG_TREND_STATIC,
-    };
-    const select = {
-      'AIX Local Security Checks': YES_VALUE,
-      'Brute force attacks': YES_VALUE,
-      'Foo Family': NO_VALUE,
-    };
-    const scannerPreferenceValues = {
-      foo: 'bar',
-    };
-    const cmd = new ScanConfigCommand(fakeHttp);
-    await cmd.save({
-      id: 'c1',
-      name: 'foo',
-      comment: 'somecomment',
-      trend,
-      select,
-      scannerPreferenceValues,
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'save_config',
-        comment: 'somecomment',
-        config_id: 'c1',
-        name: 'foo',
-        'preference:scanner:scanner:scanner:foo': 'bar',
-        'select:AIX Local Security Checks': 1,
-        'select:Brute force attacks': 1,
-        'trend:AIX Local Security Checks': 1,
-        'trend:Family Foo': 0,
-      },
-    });
-  });
-
-  test('should save an in use config with undefined input objects', async () => {
-    const response = createActionResultResponse();
-    const fakeHttp = createHttp(response);
-    const cmd = new ScanConfigCommand(fakeHttp);
-    await cmd.save({
-      id: 'c1',
-      name: 'foo',
-      comment: 'somecomment',
-      trend: undefined,
-      select: undefined,
-      scannerPreferenceValues: undefined,
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'save_config',
-        comment: 'somecomment',
-        config_id: 'c1',
-        name: 'foo',
-      },
-    });
-  });
-
   test('should save metadata through the native API when only name and comment are provided', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({id: 'scan-config-id'}),
@@ -845,8 +740,8 @@ describe('ScanConfigCommand tests', () => {
         method: 'PATCH',
         body: JSON.stringify({
           comment: 'Native comment',
-          'family_selection': {
-            'families_growing': true,
+          family_selection: {
+            families_growing: true,
             families: [
               {growing: true, name: 'Alpha family', selected: true},
               {growing: false, name: 'Zulu family', selected: false},
@@ -997,31 +892,6 @@ describe('ScanConfigCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
-  test('should save a config family', async () => {
-    const response = createActionResultResponse();
-    const fakeHttp = createHttp(response);
-    const selected = {
-      'oid:1': YES_VALUE,
-      'oid:2': NO_VALUE,
-      'oid:3': YES_VALUE,
-    };
-    const cmd = new ScanConfigCommand(fakeHttp);
-    await cmd.saveScanConfigFamily({
-      id: 'c1',
-      familyName: 'foo',
-      selected,
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'save_config_family',
-        config_id: 'c1',
-        family: 'foo',
-        'nvt:oid:1': 1,
-        'nvt:oid:3': 1,
-      },
-    });
-  });
-
   test('should save NVT entry, radio, password, and file preferences through native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({id: 'scan-config-id'}),
@@ -1152,101 +1022,6 @@ describe('ScanConfigCommand tests', () => {
     ]);
   });
 
-  test('should save a config nvt', async () => {
-    const response = createActionResultResponse();
-    const fakeHttp = createHttp(response);
-    const preferenceValues = {
-      Foo: {
-        id: 1,
-        value: 'bar',
-        type: 'entry',
-      },
-      Bar: {
-        id: 2,
-        value: 'foo',
-        type: 'password',
-      },
-    };
-    const cmd = new ScanConfigCommand(fakeHttp);
-    await cmd.saveScanConfigNvt({
-      id: 'c1',
-      oid: '1.2.3',
-      timeout: 123,
-      preferenceValues,
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'save_config_nvt',
-        config_id: 'c1',
-        oid: '1.2.3',
-        'password:1.2.3:2:password:Bar': 'yes',
-        'preference:1.2.3:0:entry:timeout': 123,
-        'preference:1.2.3:1:entry:Foo': 'bar',
-        'preference:1.2.3:2:password:Bar': 'foo',
-        timeout: 1,
-      },
-    });
-  });
-
-  test('should request scan config family data', async () => {
-    const response = createResponse({
-      get_config_family_response: {
-        get_nvts_response: {
-          nvt: [
-            {
-              _oid: 1,
-            },
-            {
-              _oid: 2,
-            },
-          ],
-        },
-      },
-    });
-    const responseAll = createResponse({
-      get_config_family_response: {
-        get_nvts_response: {
-          nvt: [
-            {
-              _oid: 1,
-              cvss_base: 1.1,
-            },
-            {
-              _oid: 2,
-              cvss_base: 2.2,
-            },
-            {
-              _oid: 3,
-              cvss_base: 3.3,
-            },
-          ],
-        },
-      },
-    });
-    const responses = [response, responseAll];
-    const fakeHttp = createHttpMany(responses);
-    const cmd = new ScanConfigCommand(fakeHttp);
-    const resp = await cmd.editScanConfigFamilySettings({
-      id: 'foo',
-      familyName: 'bar',
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'edit_config_family',
-        config_id: 'foo',
-        family: 'bar',
-      },
-    });
-    const {nvts} = resp.data;
-    expect(nvts.length).toEqual(3);
-    expect(nvts[0].selected).toEqual(YES_VALUE);
-    expect(nvts[0].severity).toEqual(1.1);
-    expect(nvts[1].selected).toEqual(YES_VALUE);
-    expect(nvts[1].severity).toEqual(2.2);
-    expect(nvts[2].selected).toEqual(NO_VALUE);
-    expect(nvts[2].severity).toEqual(3.3);
-  });
-
   test('should request native scan config family NVT data', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -1340,9 +1115,7 @@ describe('ScanConfigCommand tests', () => {
       oid: `1.2.${index}`,
       selected: NO_VALUE,
     }));
-    const selected = Object.fromEntries(
-      nvts.map(({oid}) => [oid, YES_VALUE]),
-    );
+    const selected = Object.fromEntries(nvts.map(({oid}) => [oid, YES_VALUE]));
 
     await expect(
       cmd.saveScanConfigFamily({
@@ -1358,28 +1131,4 @@ describe('ScanConfigCommand tests', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  test('should request scan config nvt data', async () => {
-    const response = createResponse({
-      get_config_nvt_response: {
-        get_nvts_response: {
-          nvt: {
-            _oid: '1.2.3',
-          },
-        },
-      },
-    });
-    const fakeHttp = createHttp(response);
-    const cmd = new ScanConfigCommand(fakeHttp);
-    const resp = await cmd.editScanConfigNvtSettings({id: 'foo', oid: '1.2.3'});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_config_nvt',
-        config_id: 'foo',
-        oid: '1.2.3',
-        name: '',
-      },
-    });
-    const {data: nvt} = resp;
-    expect(nvt.id).toEqual('1.2.3');
-  });
 });

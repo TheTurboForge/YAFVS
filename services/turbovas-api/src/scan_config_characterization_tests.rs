@@ -846,7 +846,15 @@ fn native_scan_config_family_nvt_routes_and_openapi_are_read_and_guarded_write()
     assert!(detail.contains(
         "x-turbovas-replaces: scan-config-detail-info-tags-task-backlinks-and-preferences-read"
     ));
-    assert!(detail.contains("x-turbovas-inherited-still-owns: scan-config-import-and-xml-export"));
+    assert!(!detail.contains("x-turbovas-inherited-still-owns"));
+
+    let backup = openapi_path_block("/scan-configs/{scan_config_id}/backup");
+    assert!(backup.contains("operationId: getScanConfigsByScanConfigIdBackup"));
+    assert!(backup.contains("x-turbovas-replaces: scan-config-versioned-json-backup"));
+
+    let import = openapi_path_block("/scan-configs/import");
+    assert!(import.contains("operationId: postScanConfigsImport"));
+    assert!(import.contains("x-turbovas-replaces: scan-config-versioned-json-import"));
 
     let path = openapi_path_block("/scan-configs/{scan_config_id}/families/{family}/nvts");
     for required in [

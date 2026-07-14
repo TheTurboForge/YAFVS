@@ -756,6 +756,8 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "scan-config-family-nvt-selection-mutation",
         "scan-config-family-mode-and-preference-mutation",
         "scan-config-create-from-base",
+        "scan-config-versioned-json-backup",
+        "scan-config-versioned-json-import",
         "scan-config-detail-info-tags-task-backlinks-and-preferences-read",
         "scan-config-family-nvt-selection-read",
         "scan-config-family-summary-read",
@@ -858,7 +860,6 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "report-format-file-import-export-verify-param-writes-and-deletes",
         "retention-mutations",
         "saved-filter-alert-linkage",
-        "scan-config-import-and-xml-export",
         "schedule-calendar-edit-and-task-recalculation",
         "remote-scanner-tls-relay-verification",
         "target-file-input-task-control-and-credential-secret-workflows",
@@ -962,7 +963,9 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/tasks/{task_id}/export"): "direct-read",
     ("get", "/scan-configs"): "direct-read",
     ("post", "/scan-configs"): "direct-write",
+    ("post", "/scan-configs/import"): "direct-write",
     ("get", "/scan-configs/{scan_config_id}"): "direct-read",
+    ("get", "/scan-configs/{scan_config_id}/backup"): "direct-read",
     ("get", "/scan-configs/{scan_config_id}/export"): "direct-read",
     ("patch", "/scan-configs/{scan_config_id}"): "direct-write",
     ("delete", "/scan-configs/{scan_config_id}"): "direct-write",
@@ -1573,10 +1576,21 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-maturity": "live-write",
         "x-turbovas-replaces": "scan-config-create-from-base",
     },
+    ("post", "/scan-configs/import"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "request-operator-owner",
+        "x-turbovas-replaces": "scan-config-versioned-json-import",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "scan-config-selector-and-preference-write",
+    },
     ("get", "/scan-configs/{scan_config_id}"): {
-        "x-turbovas-inherited-still-owns": "scan-config-import-and-xml-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-detail-info-tags-task-backlinks-and-preferences-read",
+    },
+    ("get", "/scan-configs/{scan_config_id}/backup"): {
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "scan-config-versioned-json-backup",
     },
     ("get", "/scan-configs/{scan_config_id}/export"): {
         "x-turbovas-maturity": "live-read",
@@ -1603,12 +1617,10 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scan-config-hard-delete",
     },
     ("get", "/scan-configs/{scan_config_id}/families"): {
-        "x-turbovas-inherited-still-owns": "scan-config-import-and-xml-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-family-summary-read",
     },
     ("get", "/scan-configs/{scan_config_id}/families/{family}/nvts"): {
-        "x-turbovas-inherited-still-owns": "scan-config-import-and-xml-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-family-nvt-selection-read",
     },
@@ -2151,6 +2163,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/timezones",
         "/api/v1/scan-configs",
         "/api/v1/scan-configs/{}",
+        "/api/v1/scan-configs/{}/backup",
         "/api/v1/scan-configs/{}/export",
         "/api/v1/scan-configs/{}/families",
         "/api/v1/scan-configs/{}/families/{}/nvts",
@@ -4593,7 +4606,7 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
     if name == "report-format.ts":
         return "report-format-file-import-export-verify-param-writes-and-deletes", "Report-format file import/export, verification, parameter mutations, deletes, and dialog side effects remain inherited."
     if name == "scan-configs.js":
-        return "scan-config-import-or-xml-export", "Scan-config import and inherited XML export remain after native reads and retained writes."
+        return None
     if name == "schedules.js":
         return "schedule-calendar-edit-and-task-recalculation", "Existing-schedule calendar edit and linked-task next-time recalculation remain inherited."
     if name == "filter.ts":
@@ -10135,6 +10148,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         ("operating_system_prefix", "operating_system_export_suffix"),
         ("override_prefix", "override_export_suffix"),
         ("port_list_prefix", "port_list_export_suffix"),
+        ("scan_config_prefix", "scan_config_backup_suffix"),
         ("scan_config_prefix", "scan_config_export_suffix"),
         ("scan_config_prefix", "scan_config_families_suffix"),
         ("scanner_prefix", "scanner_export_suffix"),
@@ -11163,14 +11177,24 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["GSA Scan Config create-from-base dialog flow", "direct native scan-config create-from-base"],
-                "residual_inherited": [
-                    "Scan-config import/XML create, blank scanner-id create, preference edits, NVT selector/family mutations, scanner control, and inherited file export remain inherited until separately migrated."
-                ],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/scan-configs/import",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["GSA strict versioned JSON scan-config import", "direct native portable scan-config import"],
             },
             {
                 "endpoint": "/api/v1/scan-configs/{scan_config_id}",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Scan Config detail Information fields (migrated through gsad same-origin proxy)", "read-only scan-config metadata automation", "native-api-request helper"],
+            },
+            {
+                "endpoint": "/api/v1/scan-configs/{scan_config_id}/backup",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["GSA strict versioned JSON scan-config backup", "direct native portable scan-config backup"],
             },
             {
                 "endpoint": "/api/v1/scan-configs/{scan_config_id}/export",
@@ -11184,9 +11208,6 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["GSA Scan Config metadata save (migrated through gsad same-origin proxy)", "direct native scan-config name/comment metadata modification"],
-                "residual_inherited": [
-                    "Scan-config import/XML create, blank scanner-id create, export XML, preference edits, NVT selector/family mutations, and scanner control remain inherited until separately migrated."
-                ],
             },
             {
                 "method": "delete",
@@ -11235,9 +11256,6 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/scan-configs/{scan_config_id}/families/{family}/nvts",
                 "status": "implemented_internal_and_browser_proxied",
                 "replacement_candidates": ["GSA Scan Config family NVT selection editor read (migrated through gsad same-origin proxy)", "read-only scan-config selector automation", "native-api-request helper"],
-                "residual_inherited": [
-                    "Scan-config preference and family-mode mutations, XML import/export, and blank create remain inherited."
-                ],
             },
             {
                 "method": "patch",
@@ -11245,9 +11263,6 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["GSA Scan Config family NVT selection editor mutation (migrated through gsad same-origin proxy)", "direct native scan-config selector automation"],
-                "residual_inherited": [
-                    "Scan-config preference and family-mode mutations, XML import/export, and blank create remain inherited."
-                ],
             },
             {
                 "endpoint": "/api/v1/filters",
@@ -20525,6 +20540,12 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.scan-config-family-nvt-toggle-readback",
             "native-api-direct.scan-config-family-nvt-restore",
             "native-api-direct.scan-config-family-nvt-restore-readback",
+            "native-api-direct.scan-config-backup",
+            "native-api-direct.scan-config-import",
+            "native-api-direct.scan-config-import-roundtrip",
+            "native-api-direct.scan-config-import-delete",
+            "native-api-direct.scan-config-import-hard-delete",
+            "native-api-direct.scan-config-import-post-hard-delete",
             "native-api-direct.scan-config-write-clone",
             "native-api-direct.scan-config-write-delete-clone",
             "native-api-direct.scan-config-write-hard-delete-clone",
@@ -21762,8 +21783,10 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
     schedule_patch_icalendar = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//TurboVAS//Schedule//EN\r\nBEGIN:VEVENT\r\nDTSTART:20360101T000000Z\r\nRRULE:FREQ=WEEKLY\r\nDURATION:PT2H\r\nUID:turbovas-direct-write-smoke-schedule\r\nDTSTAMP:19700101T000000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
     scan_config_id: str | None = None
     scan_config_clone_id: str | None = None
+    scan_config_import_id: str | None = None
     scan_config_name = f"turbovas-direct-write-smoke-scan-config-{int(time.time())}-{os.getpid()}"
     scan_config_clone_name = f"{scan_config_name}-clone"
+    scan_config_import_name = f"{scan_config_name}-import"
     override_id: str | None = None
     override_clone_id: str | None = None
     override_nvt_id: str | None = None
@@ -22249,6 +22272,104 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 scan_config_family_after_restore_ok = scan_config_family_after_restore.returncode == 0 and scan_config_family_after_restore_status == 200 and isinstance(scan_config_family_after_restore_nvt, dict) and scan_config_family_after_restore_nvt.get("selected") is scan_config_family_original_selected
                 findings.append(native_api_probe_finding("pass" if scan_config_family_after_restore_ok else "fail", "native-api-direct.scan-config-family-nvt-restore-readback", "Direct API readback confirms the original family-NVT selection was restored." if scan_config_family_after_restore_ok else "Direct API readback did not confirm restoration of the original family-NVT selection.", scan_config_family_after_restore, direct_native_api_display_command(scan_config_family_path, token=token, env=env), scan_config_family_after_restore_json, {"http_status": scan_config_family_after_restore_status, "scan_config_id": scan_config_id, "family": scan_config_family, "nvt_oid": scan_config_family_oid, **summarize_native_api_response(scan_config_family_after_restore_json)}))
 
+            scan_config_backup_path = f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}/backup"
+            scan_config_backup = direct_native_api_curl(repo_root, scan_config_backup_path, token=token, env=env)
+            scan_config_backup_json, scan_config_backup_status = parse_json_output_with_http_status(scan_config_backup)
+            scan_config_backup_keys = {
+                "schema",
+                "version",
+                "usage_type",
+                "name",
+                "comment",
+                "families_growing",
+                "family_inventory",
+                "selectors",
+                "preferences",
+                "omitted_secret_preference_count",
+                "omitted_secret_preferences",
+            }
+            scan_config_omitted_secret_preferences = (
+                scan_config_backup_json.get("omitted_secret_preferences")
+                if isinstance(scan_config_backup_json, dict)
+                else None
+            )
+            scan_config_backup_secret_safe = isinstance(scan_config_omitted_secret_preferences, list) and all(
+                isinstance(identity, dict)
+                and "value" not in identity
+                and "default" not in identity
+                for identity in scan_config_omitted_secret_preferences
+            )
+            scan_config_backup_ok = (
+                scan_config_backup.returncode == 0
+                and scan_config_backup_status == 200
+                and isinstance(scan_config_backup_json, dict)
+                and set(scan_config_backup_json) == scan_config_backup_keys
+                and scan_config_backup_json.get("schema") == "turbovas.scan-config-backup"
+                and scan_config_backup_json.get("version") == 1
+                and scan_config_backup_json.get("usage_type") == "scan"
+                and scan_config_backup_json.get("name") == scan_config_name
+                and isinstance(scan_config_backup_json.get("family_inventory"), list)
+                and isinstance(scan_config_backup_json.get("selectors"), list)
+                and isinstance(scan_config_backup_json.get("preferences"), list)
+                and scan_config_backup_json.get("omitted_secret_preference_count")
+                == len(scan_config_omitted_secret_preferences or [])
+                and scan_config_backup_secret_safe
+            )
+            findings.append(native_api_probe_finding("pass" if scan_config_backup_ok else "fail", "native-api-direct.scan-config-backup", "Direct API emitted a strict, secret-safe versioned JSON backup for the temporary scan config." if scan_config_backup_ok else "Direct API did not emit the expected strict, secret-safe versioned JSON scan-config backup.", scan_config_backup, direct_native_api_display_command(scan_config_backup_path, token=token, env=env), scan_config_backup_json, {"http_status": scan_config_backup_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_backup_json)}))
+
+            if scan_config_backup_ok and isinstance(scan_config_backup_json, dict):
+                scan_config_import_document = json.loads(json.dumps(scan_config_backup_json))
+                scan_config_import_document["name"] = scan_config_import_name
+                scan_config_import_body = json.dumps(scan_config_import_document, separators=(",", ":"))
+                scan_config_import = direct_native_api_curl(repo_root, "/api/v1/scan-configs/import", token=token, env=env, method="POST", body=scan_config_import_body, extra_headers=content_type)
+                scan_config_import_json, scan_config_import_status = parse_json_output_with_http_status(scan_config_import)
+                scan_config_import_id = scan_config_import_json.get("id") if isinstance(scan_config_import_json, dict) and isinstance(scan_config_import_json.get("id"), str) else None
+                scan_config_import_ok = scan_config_import.returncode == 0 and scan_config_import_status == 201 and bool(scan_config_import_id) and scan_config_import_id != scan_config_id and scan_config_import_json.get("name") == scan_config_import_name and scan_config_import_json.get("predefined") is False
+                findings.append(native_api_probe_finding("pass" if scan_config_import_ok else "fail", "native-api-direct.scan-config-import", "Direct write-control imported the versioned JSON backup as a fresh operator-owned scan config." if scan_config_import_ok else "Direct write-control failed to import the versioned JSON scan-config backup as a fresh resource.", scan_config_import, direct_native_api_display_command("/api/v1/scan-configs/import", token=token, env=env, method="POST", body=scan_config_import_body, extra_headers=content_type), scan_config_import_json, {"http_status": scan_config_import_status, "source_scan_config_id": scan_config_id, "scan_config_import_id": scan_config_import_id, **summarize_native_api_response(scan_config_import_json)}))
+
+                if scan_config_import_id:
+                    scan_config_import_backup_path = f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_import_id)}/backup"
+                    scan_config_import_backup = direct_native_api_curl(repo_root, scan_config_import_backup_path, token=token, env=env)
+                    scan_config_import_backup_json, scan_config_import_backup_status = parse_json_output_with_http_status(scan_config_import_backup)
+                    scan_config_portable_fields = (
+                        "schema",
+                        "version",
+                        "usage_type",
+                        "name",
+                        "comment",
+                        "families_growing",
+                        "family_inventory",
+                        "selectors",
+                        "preferences",
+                    )
+                    scan_config_import_roundtrip_ok = (
+                        scan_config_import_backup.returncode == 0
+                        and scan_config_import_backup_status == 200
+                        and isinstance(scan_config_import_backup_json, dict)
+                        and all(
+                            scan_config_import_backup_json.get(field) == scan_config_import_document.get(field)
+                            for field in scan_config_portable_fields
+                        )
+                        and scan_config_import_backup_json.get("omitted_secret_preference_count") == 0
+                        and scan_config_import_backup_json.get("omitted_secret_preferences") == []
+                    )
+                    findings.append(native_api_probe_finding("pass" if scan_config_import_roundtrip_ok else "fail", "native-api-direct.scan-config-import-roundtrip", "Direct API readback proves the imported scan config preserved every portable non-secret backup field." if scan_config_import_roundtrip_ok else "Direct API readback did not preserve the portable non-secret scan-config backup contract.", scan_config_import_backup, direct_native_api_display_command(scan_config_import_backup_path, token=token, env=env), scan_config_import_backup_json, {"http_status": scan_config_import_backup_status, "source_scan_config_id": scan_config_id, "scan_config_import_id": scan_config_import_id, **summarize_native_api_response(scan_config_import_backup_json)}))
+
+                    scan_config_import_delete = direct_native_api_curl(repo_root, f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_import_id)}", token=token, env=env, method="DELETE")
+                    scan_config_import_delete_json, scan_config_import_delete_status = parse_json_output_with_http_status(scan_config_import_delete)
+                    scan_config_import_delete_ok = scan_config_import_delete.returncode == 0 and scan_config_import_delete_status == 204
+                    findings.append(native_api_probe_finding("pass" if scan_config_import_delete_ok else "fail", "native-api-direct.scan-config-import-delete", "Direct write-control moved the imported scan config to trash." if scan_config_import_delete_ok else "Direct write-control failed to move the imported scan config to trash.", scan_config_import_delete, direct_native_api_display_command(f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_import_id)}", token=token, env=env, method="DELETE"), scan_config_import_delete_json, {"http_status": scan_config_import_delete_status, "scan_config_import_id": scan_config_import_id, **summarize_native_api_response(scan_config_import_delete_json)}))
+
+                    scan_config_import_hard_delete = direct_native_api_curl(repo_root, f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_import_id)}/trash", token=token, env=env, method="DELETE")
+                    scan_config_import_hard_delete_json, scan_config_import_hard_delete_status = parse_json_output_with_http_status(scan_config_import_hard_delete)
+                    scan_config_import_hard_delete_ok = scan_config_import_hard_delete.returncode == 0 and scan_config_import_hard_delete_status == 204
+                    findings.append(native_api_probe_finding("pass" if scan_config_import_hard_delete_ok else "fail", "native-api-direct.scan-config-import-hard-delete", "Direct write-control hard-deleted the imported scan config from trash." if scan_config_import_hard_delete_ok else "Direct write-control failed to hard-delete the imported scan config from trash.", scan_config_import_hard_delete, direct_native_api_display_command(f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_import_id)}/trash", token=token, env=env, method="DELETE"), scan_config_import_hard_delete_json, {"http_status": scan_config_import_hard_delete_status, "scan_config_import_id": scan_config_import_id, **summarize_native_api_response(scan_config_import_hard_delete_json)}))
+
+                    scan_config_import_post_hard_delete = direct_native_api_curl(repo_root, f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_import_id)}", token=token, env=env)
+                    scan_config_import_post_hard_delete_json, scan_config_import_post_hard_delete_status = parse_json_output_with_http_status(scan_config_import_post_hard_delete)
+                    scan_config_import_post_hard_delete_ok = scan_config_import_post_hard_delete.returncode == 0 and scan_config_import_post_hard_delete_status == 404 and isinstance(scan_config_import_post_hard_delete_json, dict) and scan_config_import_post_hard_delete_json.get("error", {}).get("code") == "not_found"
+                    findings.append(native_api_probe_finding("pass" if scan_config_import_post_hard_delete_ok else "fail", "native-api-direct.scan-config-import-post-hard-delete", "Direct API confirms the imported scan config is gone after native hard delete." if scan_config_import_post_hard_delete_ok else "Direct API did not confirm the imported scan config was removed by native hard delete.", scan_config_import_post_hard_delete, direct_native_api_display_command(f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_import_id)}", token=token, env=env), scan_config_import_post_hard_delete_json, {"http_status": scan_config_import_post_hard_delete_status, "scan_config_import_id": scan_config_import_id, **summarize_native_api_response(scan_config_import_post_hard_delete_json)}))
+
             scan_config_clone_body = json.dumps(
                 {"comment": scan_config_clone_comment, "name": scan_config_clone_name},
                 separators=(",", ":"),
@@ -22308,10 +22429,12 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
             scan_config_cleanup_sql = (
                 "WITH live_target AS (SELECT id FROM configs "
                 f"WHERE (uuid = {sql_literal(scan_config_id)} AND name = {sql_literal(scan_config_name)}) "
-                f"OR (uuid = {sql_literal(scan_config_clone_id or '')} AND name = {sql_literal(scan_config_clone_name)})), "
+                f"OR (uuid = {sql_literal(scan_config_clone_id or '')} AND name = {sql_literal(scan_config_clone_name)}) "
+                f"OR (uuid = {sql_literal(scan_config_import_id or '')} AND name = {sql_literal(scan_config_import_name)})), "
                 "trash_target AS (SELECT id FROM configs_trash "
                 f"WHERE (uuid = {sql_literal(scan_config_id)} AND name = {sql_literal(scan_config_name)}) "
-                f"OR (uuid = {sql_literal(scan_config_clone_id or '')} AND name = {sql_literal(scan_config_clone_name)})), "
+                f"OR (uuid = {sql_literal(scan_config_clone_id or '')} AND name = {sql_literal(scan_config_clone_name)}) "
+                f"OR (uuid = {sql_literal(scan_config_import_id or '')} AND name = {sql_literal(scan_config_import_name)})), "
                 "deleted_live_tags AS (DELETE FROM tag_resources WHERE resource_type = 'config' AND resource IN (SELECT id FROM live_target)), "
                 "deleted_trash_tags AS (DELETE FROM tag_resources WHERE resource_type = 'config' AND resource IN (SELECT id FROM trash_target)), "
                 "deleted_live_tag_trash AS (DELETE FROM tag_resources_trash WHERE resource_type = 'config' AND resource IN (SELECT id FROM live_target)), "
@@ -22324,11 +22447,11 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
             )
             scan_config_cleanup = psql(repo_root, scan_config_cleanup_sql)
             scan_config_cleanup_deleted = psql_value(scan_config_cleanup)
-            scan_config_cleanup_ok = scan_config_cleanup.returncode == 0 and scan_config_cleanup_deleted in {"0", "1", "2"}
+            scan_config_cleanup_ok = scan_config_cleanup.returncode == 0 and scan_config_cleanup_deleted in {"0", "1", "2", "3"}
             scan_config_cleanup_finding = process_step_finding("pass" if scan_config_cleanup_ok else "fail", "native-api-direct.scan-config-write-cleanup", "Direct write-control smoke removed any leftover temporary scan-config residue through fixed cleanup SQL." if scan_config_cleanup_ok else "Direct write-control smoke failed to clean up temporary scan-config residue.", scan_config_cleanup, ["psql", "fixed-scan-config-smoke-cleanup"])
             scan_config_cleanup_details = scan_config_cleanup_finding.setdefault("details", {})
             if isinstance(scan_config_cleanup_details, dict):
-                scan_config_cleanup_details.update({"scan_config_id": scan_config_id, "scan_config_clone_id": scan_config_clone_id, "scan_config_name": scan_config_name, "scan_config_clone_name": scan_config_clone_name, "deleted_count": scan_config_cleanup_deleted})
+                scan_config_cleanup_details.update({"scan_config_id": scan_config_id, "scan_config_clone_id": scan_config_clone_id, "scan_config_import_id": scan_config_import_id, "scan_config_name": scan_config_name, "scan_config_clone_name": scan_config_clone_name, "scan_config_import_name": scan_config_import_name, "deleted_count": scan_config_cleanup_deleted})
             findings.append(scan_config_cleanup_finding)
 
             scan_config_post_cleanup = direct_native_api_curl(repo_root, f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}", token=token, env=env)

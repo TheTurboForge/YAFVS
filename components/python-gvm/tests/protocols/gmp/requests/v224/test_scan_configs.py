@@ -189,35 +189,6 @@ class ScanConfigsTestCase(unittest.TestCase):
             b'<get_configs usage_type="scan" tasks="0"/>',
         )
 
-    def test_import_scan_config(self):
-        config_xml_string = (
-            '<get_configs_response status="200" status_text="OK">'
-            '<config id="c4aa21e4-23e6-4064-ae49-c0d425738a98">'
-            "<name>Foobar</name>"
-            "<comment>Foobar config</comment>"
-            "<creation_time>2018-11-09T10:48:03Z</creation_time>"
-            "<modification_time>2018-11-09T10:48:03Z</modification_time>"
-            "</config>"
-            "</get_configs_response>"
-        )
-        request = ScanConfigs.import_scan_config(config_xml_string)
-
-        self.assertEqual(
-            bytes(request),
-            f"<create_config>{config_xml_string}</create_config>".encode(),
-        )
-
-    def test_import_missing_scan_config_xml(self):
-        with self.assertRaises(RequiredArgument):
-            ScanConfigs.import_scan_config(None)
-
-        with self.assertRaises(RequiredArgument):
-            ScanConfigs.import_scan_config("")
-
-    def test_import_invalid_xml(self):
-        with self.assertRaises(InvalidArgument):
-            ScanConfigs.import_scan_config("abcdef")
-
     def test_modify_scan_config_set_comment(self):
         request = ScanConfigs.modify_scan_config_set_comment("c1")
 

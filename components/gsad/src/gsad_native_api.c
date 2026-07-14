@@ -831,6 +831,7 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *schedules_path = "/api/v1/schedules";
   const gchar *scopes_path = "/api/v1/scopes";
   const gchar *scan_configs_path = "/api/v1/scan-configs";
+  const gchar *scan_config_import_path = "/api/v1/scan-configs/import";
   const gchar *tags_path = "/api/v1/tags";
   const gchar *targets_path = "/api/v1/targets";
   const gchar *tasks_path = "/api/v1/tasks";
@@ -892,6 +893,9 @@ native_api_post_path_is_allowed (const gchar *path)
     return TRUE;
 
   if (g_strcmp0 (path, scan_configs_path) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, scan_config_import_path) == 0)
     return TRUE;
 
   if (g_strcmp0 (path, scanners_path) == 0)
@@ -1214,6 +1218,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *user_prefix = "/api/v1/users/";
   const gchar *scan_configs_path = "/api/v1/scan-configs";
   const gchar *scan_config_prefix = "/api/v1/scan-configs/";
+  const gchar *scan_config_backup_suffix = "/backup";
   const gchar *scan_config_export_suffix = "/export";
   const gchar *scan_config_families_suffix = "/families";
   const gchar *scan_config_family_nvts_separator = "/families/";
@@ -1471,6 +1476,10 @@ native_api_path_is_allowed (const gchar *path)
         return is_uuid_segment (id,
                                 strlen (id)
                                 - strlen (scan_config_export_suffix));
+      if (g_str_has_suffix (id, scan_config_backup_suffix))
+        return is_uuid_segment (id,
+                                strlen (id)
+                                - strlen (scan_config_backup_suffix));
       if (g_str_has_suffix (id, scan_config_families_suffix))
         return is_uuid_segment (id,
                                 strlen (id)

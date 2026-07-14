@@ -143,6 +143,7 @@ mod result_query_sql;
 mod routes;
 mod row_helpers;
 mod runtime;
+mod scan_config_backup;
 mod scan_config_families;
 mod scan_config_payloads;
 mod scan_config_query_sql;

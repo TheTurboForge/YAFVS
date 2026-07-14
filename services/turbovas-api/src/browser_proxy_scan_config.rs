@@ -12,6 +12,7 @@ use crate::{
     app_state::AppState,
     browser_proxy_api::{BrowserProxyAuth, browser_proxy_operator_from_headers},
     errors::ApiError,
+    scan_config_backup::{ScanConfigBackupDocument, import_scan_config},
     scan_config_payloads::ScanConfigAssetDetail,
     scan_config_write_validation::{
         ScanConfigCloneRequest, ScanConfigCreateRequest, ScanConfigFamilyNvtsPatchRequest,
@@ -22,6 +23,16 @@ use crate::{
         patch_scan_config, patch_scan_config_family_nvts, restore_scan_config,
     },
 };
+
+pub(crate) async fn browser_proxy_import_scan_config(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    headers: HeaderMap,
+    payload: Result<Json<ScanConfigBackupDocument>, JsonRejection>,
+) -> Result<(StatusCode, HeaderMap, Json<ScanConfigAssetDetail>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    import_scan_config(State(state), Some(Extension(operator)), payload).await
+}
 
 pub(crate) async fn browser_proxy_restore_scan_config(
     State(state): State<AppState>,

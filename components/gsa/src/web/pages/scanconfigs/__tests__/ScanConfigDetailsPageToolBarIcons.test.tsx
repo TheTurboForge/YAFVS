@@ -150,7 +150,9 @@ describe('ScanConfigDetailPageToolBarIcons tests', () => {
     expect(
       screen.getByTitle('Move Scan Config to trashcan'),
     ).toBeInTheDocument();
-    expect(screen.getByTitle('Export Scan Config as JSON')).toBeInTheDocument();
+    expect(
+      screen.getByTitle('Download Scan Config Backup JSON'),
+    ).toBeInTheDocument();
     expect(screen.getByTitle('Import Scan Config')).toBeInTheDocument();
   });
 
@@ -192,7 +194,7 @@ describe('ScanConfigDetailPageToolBarIcons tests', () => {
     fireEvent.click(screen.getByTitle('Move Scan Config to trashcan'));
     expect(handleScanConfigDelete).toHaveBeenCalledWith(config);
 
-    fireEvent.click(screen.getByTitle('Export Scan Config as JSON'));
+    fireEvent.click(screen.getByTitle('Download Scan Config Backup JSON'));
     expect(handleScanConfigDownload).toHaveBeenCalledWith(config);
 
     fireEvent.click(screen.getByTitle('Import Scan Config'));
@@ -250,9 +252,7 @@ describe('ScanConfigDetailPageToolBarIcons tests', () => {
       screen.queryByTitle('Create new Scan Config'),
     ).not.toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByTitle('Clone Scan Config command unavailable'),
-    );
+    fireEvent.click(screen.getByTitle('Clone Scan Config command unavailable'));
     expect(handleScanConfigClone).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByTitle('Edit Scan Config command unavailable'));
@@ -263,7 +263,7 @@ describe('ScanConfigDetailPageToolBarIcons tests', () => {
     );
     expect(handleScanConfigDelete).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByTitle('Export Scan Config as JSON'));
+    fireEvent.click(screen.getByTitle('Download Scan Config Backup JSON'));
     expect(handleScanConfigDownload).toHaveBeenCalledWith(config2);
   });
 
@@ -326,7 +326,7 @@ describe('ScanConfigDetailPageToolBarIcons tests', () => {
     fireEvent.click(screen.getByTitle('Scan Config is still in use'));
     expect(handleScanConfigDelete).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByTitle('Export Scan Config as JSON'));
+    fireEvent.click(screen.getByTitle('Download Scan Config Backup JSON'));
     expect(handleScanConfigDownload).toHaveBeenCalledWith(config3);
 
     fireEvent.click(screen.getByTitle('Import Scan Config'));
@@ -392,7 +392,7 @@ describe('ScanConfigDetailPageToolBarIcons tests', () => {
     fireEvent.click(screen.getByTestId('trashcan-icon'));
     expect(handleScanConfigDelete).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByTitle('Export Scan Config as JSON'));
+    fireEvent.click(screen.getByTitle('Download Scan Config Backup JSON'));
     expect(handleScanConfigDownload).toHaveBeenCalledWith(config4);
 
     fireEvent.click(screen.getByTitle('Import Scan Config'));

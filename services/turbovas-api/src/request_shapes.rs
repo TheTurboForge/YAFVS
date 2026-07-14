@@ -7,6 +7,8 @@ use axum::{
     http::{Method, header},
 };
 
+use crate::scan_config_backup::MAX_SCAN_CONFIG_BACKUP_BODY_BYTES;
+
 pub(crate) const MAX_DIRECT_API_QUERY_BYTES: usize = 8 * 1024;
 pub(crate) const MAX_DIRECT_API_WRITE_BODY_BYTES: u64 = 256 * 1024;
 
@@ -39,9 +41,17 @@ pub(crate) fn direct_api_request_shape_is_allowed_for_method(
     if method == Method::GET || method == Method::DELETE {
         length == 0
     } else if matches!(method, &Method::POST | &Method::PATCH | &Method::PUT) {
-        length <= MAX_DIRECT_API_WRITE_BODY_BYTES
+        length <= direct_api_write_body_limit(request.uri().path())
     } else {
         false
+    }
+}
+
+fn direct_api_write_body_limit(path: &str) -> u64 {
+    if path == "/api/v1/scan-configs/import" {
+        MAX_SCAN_CONFIG_BACKUP_BODY_BYTES as u64
+    } else {
+        MAX_DIRECT_API_WRITE_BODY_BYTES
     }
 }
 
@@ -203,6 +213,37 @@ mod tests {
         assert!(!direct_api_request_shape_is_allowed_for_method(
             &Method::OPTIONS,
             &unsupported
+        ));
+    }
+
+    #[test]
+    fn scan_config_backup_import_has_a_bounded_endpoint_specific_body_limit() {
+        let import = Request::builder()
+            .method("POST")
+            .uri("/api/v1/scan-configs/import")
+            .header(
+                header::CONTENT_LENGTH,
+                MAX_SCAN_CONFIG_BACKUP_BODY_BYTES.to_string(),
+            )
+            .body(axum::body::Body::empty())
+            .unwrap();
+        assert!(direct_api_request_shape_is_allowed_for_method(
+            &Method::POST,
+            &import
+        ));
+
+        let oversized = Request::builder()
+            .method("POST")
+            .uri("/api/v1/scan-configs/import")
+            .header(
+                header::CONTENT_LENGTH,
+                (MAX_SCAN_CONFIG_BACKUP_BODY_BYTES + 1).to_string(),
+            )
+            .body(axum::body::Body::empty())
+            .unwrap();
+        assert!(!direct_api_request_shape_is_allowed_for_method(
+            &Method::POST,
+            &oversized
         ));
     }
 }

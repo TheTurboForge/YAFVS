@@ -48,6 +48,37 @@ gsad_credentials_get_user (gsad_credentials_t *credentials)
            : NULL;
 }
 
+Ensure (gsad_native_api,
+        should_only_allow_canonical_scan_config_backup_and_import_paths)
+{
+  const gchar *backup =
+    "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/backup";
+  const gchar *import = "/api/v1/scan-configs/import";
+  const gchar *rejected_gets[] = {
+    "/api/v1/scan-configs/not-a-uuid/backup",
+    "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/backup/extra",
+    "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/backup?x=1",
+  };
+  const gchar *rejected_posts[] = {
+    "/api/v1/scan-configs/import/",
+    "/api/v1/scan-configs/import?x=1",
+    "/api/v1/scan-configs/not-import",
+  };
+
+  assert_that (gsad_native_api_test_get_path_is_allowed (backup), is_true);
+  assert_that (gsad_native_api_test_post_path_is_allowed (import), is_true);
+  assert_that (gsad_native_api_test_get_path_is_allowed (import), is_false);
+  assert_that (gsad_native_api_test_post_path_is_allowed (backup), is_false);
+  for (gsize index = 0; index < G_N_ELEMENTS (rejected_gets); index++)
+    assert_that (gsad_native_api_test_get_path_is_allowed (
+                   rejected_gets[index]),
+                 is_false);
+  for (gsize index = 0; index < G_N_ELEMENTS (rejected_posts); index++)
+    assert_that (gsad_native_api_test_post_path_is_allowed (
+                   rejected_posts[index]),
+                 is_false);
+}
+
 const gchar *
 gsad_user_get_token (gsad_user_t *user)
 {
@@ -513,6 +544,9 @@ main (int argc, char **argv)
   add_test_with_context (
     suite, gsad_native_api,
     should_only_allow_canonical_scan_config_family_nvt_gets);
+  add_test_with_context (
+    suite, gsad_native_api,
+    should_only_allow_canonical_scan_config_backup_and_import_paths);
   add_test_with_context (
     suite, gsad_native_api,
     should_only_allow_canonical_scan_config_family_nvt_patches);

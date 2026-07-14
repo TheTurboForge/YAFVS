@@ -4279,9 +4279,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-detail-info-tags-task-backlinks-and-preferences-read
-      x-turbovas-inherited-still-owns: scan-config-import-and-xml-export
       summary: Read one scan config with effective preferences
-      description: Read-only scan-config detail backed directly by gvmd/PostgreSQL, including active User Tags, shallow task backlinks, scanner preferences, and NVT preferences. Preference values use the config override when present and the current feed default otherwise; configured indicates whether an explicit override row exists. Password and file preference values/defaults are returned as empty strings with redacted set to true. Native direct write-control can create from base, atomically patch metadata, complete family selection, and catalog-validated preference overrides for eligible scan configs, clone operator-owned or predefined scan configs, change individual NVT selection in an eligible family, move eligible live scan configs to trash, restore trash rows, and hard-delete unreferenced trash rows. Import and inherited XML export remain on temporary compatibility paths.
+      description: Read-only scan-config detail backed directly by gvmd/PostgreSQL, including active User Tags, shallow task backlinks, scanner preferences, and NVT preferences. Preference values use the config override when present and the current feed default otherwise; configured indicates whether an explicit override row exists. Password and file preference values/defaults are returned as empty strings with redacted set to true. Native direct write-control can create from base, atomically patch metadata, complete family selection, and catalog-validated preference overrides for eligible scan configs, clone operator-owned or predefined scan configs, change individual NVT selection in an eligible family, move eligible live scan configs to trash, restore trash rows, hard-delete unreferenced trash rows, and import or back up the portable strict versioned JSON contract.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -4559,9 +4558,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-family-summary-read
-      x-turbovas-inherited-still-owns: scan-config-import-and-xml-export
       summary: Read scan config NVT family selection summary
-      description: Complete read-only snapshot of every current nonempty, non-Credentials feed family for the NVT Families editor. Complete family-mode selection is written atomically through the scan-config PATCH endpoint and individual NVT selection through the family NVT PATCH endpoint. Import and inherited XML export remain on temporary compatibility paths.
+      description: Complete read-only snapshot of every current nonempty, non-Credentials feed family for the NVT Families editor. Complete family-mode selection is written atomically through the scan-config PATCH endpoint and individual NVT selection through the family NVT PATCH endpoint.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -4592,9 +4590,8 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-family-nvt-selection-read
-      x-turbovas-inherited-still-owns: scan-config-import-and-xml-export
       summary: Read NVT selection for one scan config family
-      description: Returns every currently known NVT in the requested family with numeric severity and effective selected state. Selection follows growing-family exclusion and static-family inclusion selector representations. PATCH changes individual NVT selection for an eligible operator-owned config while preserving the current family mode. Import and inherited XML export remain on temporary compatibility paths.
+      description: Returns every currently known NVT in the requested family with numeric severity and effective selected state. Selection follows growing-family exclusion and static-family inclusion selector representations. PATCH changes individual NVT selection for an eligible operator-owned config while preserving the current family mode.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
         - $ref: '#/components/parameters/ScanConfigFamilyName'
@@ -4687,6 +4684,92 @@ paths:
           $ref: '#/components/responses/NotFound'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /scan-configs/{scan_config_id}/backup:
+    get:
+      operationId: getScanConfigsByScanConfigIdBackup
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: scan-config-versioned-json-backup
+      summary: Download a portable scan-config JSON backup
+      description: Returns version 1 of the strict turbovas.scan-config-backup JSON document for one scan config. The document contains only scan usage, explicit name/comment, the complete current feed-family inventory, families_growing, canonical type-1 family and type-2 NVT selector rows, and explicit non-secret preference overrides. It excludes source UUID, owner, predefined state, timestamps, tasks, tags, password/file values and defaults. Configured password/file identities are listed without values so a later import can validate and intentionally omit them.
+      parameters:
+        - $ref: '#/components/parameters/ScanConfigId'
+      responses:
+        '200':
+          description: Portable scan-config JSON backup
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: Attachment filename for the JSON backup.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScanConfigBackupDocument'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /scan-configs/import:
+    post:
+      operationId: postScanConfigsImport
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: scan-config-versioned-json-import
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: scan-config-selector-and-preference-write
+      summary: Import a portable scan-config JSON backup
+      description: Direct write-control only. Validates the strict versioned JSON document, its 2 MiB bounded size, duplicate identities, canonical selector form, complete current feed-family inventory, all referenced NVTs, and every preference identity against the current feed. It never overwrites: import creates a fresh UUID, current-operator-owned, non-predefined scan config with the explicit unique document name. Password/file override identities are validated but no secret value/default is accepted or written. Metadata, selectors, non-secret overrides, and cache recomputation commit in one transaction or roll back together.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScanConfigBackupDocument'
+      responses:
+        '201':
+          description: New scan config imported from the backup
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Relative URL for the newly created scan config.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScanConfigAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/RequestTooLarge'
         '429':
@@ -8342,6 +8425,111 @@ components:
         redacted:
           type: boolean
           description: True for password and file preferences; value and default are then empty strings.
+    ScanConfigBackupDocument:
+      type: object
+      additionalProperties: false
+      required: [schema, version, usage_type, name, comment, families_growing, family_inventory, selectors, preferences, omitted_secret_preference_count, omitted_secret_preferences]
+      description: Versioned portable scan-config JSON. Source identity, ownership, timestamps, task/tag links, predefined state, and all password/file values/defaults are intentionally absent.
+      properties:
+        schema:
+          type: string
+          enum: [turbovas.scan-config-backup]
+        version:
+          type: integer
+          enum: [1]
+        usage_type:
+          type: string
+          enum: [scan]
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        comment:
+          type: string
+          maxLength: 4096
+        families_growing:
+          type: boolean
+        family_inventory:
+          type: array
+          maxItems: 512
+          description: Exact current nonempty, non-Credentials feed-family inventory. Import rejects a changed inventory rather than applying a stale selector snapshot.
+          items:
+            type: string
+            minLength: 1
+            maxLength: 256
+        selectors:
+          type: array
+          maxItems: 16384
+          items:
+            $ref: '#/components/schemas/ScanConfigBackupSelector'
+        preferences:
+          type: array
+          maxItems: 4096
+          description: Explicit configured non-password/non-file preference overrides only. Defaults are never serialized.
+          items:
+            $ref: '#/components/schemas/ScanConfigBackupPreference'
+        omitted_secret_preference_count:
+          type: integer
+          minimum: 0
+        omitted_secret_preferences:
+          type: array
+          maxItems: 4096
+          description: Explicit configured password/file preference identities without values or defaults. Import validates these identities and does not write an override.
+          items:
+            $ref: '#/components/schemas/ScanConfigBackupPreferenceIdentity'
+    ScanConfigBackupSelector:
+      type: object
+      additionalProperties: false
+      required: [type, exclude, family_or_nvt]
+      properties:
+        type:
+          type: integer
+          enum: [1, 2]
+        exclude:
+          type: boolean
+        family_or_nvt:
+          type: string
+          minLength: 1
+          maxLength: 256
+        family:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Required only for type 2 NVT rows and omitted for type 1 family rows.
+      description: Canonical selector row. Type 1 rows are family exceptions with family omitted; type 2 rows identify an NVT plus its current feed family and have the exclusion required by that family mode.
+    ScanConfigBackupPreference:
+      type: object
+      additionalProperties: false
+      required: [scope, name, value]
+      properties:
+        scope:
+          type: string
+          enum: [scanner, nvt]
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        nvt:
+          $ref: '#/components/schemas/ScanConfigPreferenceNvtIdentity'
+        value:
+          type: string
+          maxLength: 196608
+          x-turbovas-max-bytes: 196608
+    ScanConfigBackupPreferenceIdentity:
+      type: object
+      additionalProperties: false
+      required: [scope, name]
+      properties:
+        scope:
+          type: string
+          enum: [scanner, nvt]
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        nvt:
+          $ref: '#/components/schemas/ScanConfigPreferenceNvtIdentity'
+      description: Scanner identities omit nvt. NVT identities require the exact current feed-owned OID, preference id, type, and name identity.
     FilterAssetCollection:
       type: object
       required: [page, items]

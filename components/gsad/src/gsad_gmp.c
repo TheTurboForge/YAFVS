@@ -4975,75 +4975,6 @@ export_targets_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Import config, get all configs, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-import_config_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  gchar *command, *html;
-  entity_t entity;
-  int ret;
-
-  /* Create the config. */
-
-  entity = NULL;
-  command = g_strdup_printf ("<create_config>"
-                             "%s"
-                             "</create_config>",
-                             params_value (params, "xml_file"));
-  ret = gmp (connection, credentials, NULL, &entity, response_data, command);
-  g_free (command);
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while importing a config. "
-        "The schedule remains the same. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while importing a config. "
-        "It is unclear whether the schedule has been saved or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while importing a config. "
-        "It is unclear whether the schedule has been saved or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  /* Cleanup, and return transformed XML. */
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Import Config", response_data);
-  free_entity (entity);
-  return html;
-}
-
-/**
  * @brief Get all scan configs, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -5946,44 +5877,6 @@ delete_config_gmp (gvm_connection_t *connection,
 {
   return move_resource_to_trash (connection, "config", credentials, params,
                                  response_data);
-}
-
-/**
- * @brief Export a config.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Config XML on success.  Enveloped XML on error.
- */
-char *
-export_config_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  return export_resource (connection, "config", credentials, params,
-                          response_data);
-}
-
-/**
- * @brief Export a list of scan configs.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Scan configs XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_configs_gmp (gvm_connection_t *connection,
-                    gsad_credentials_t *credentials, params_t *params,
-                    gsad_command_response_data_t *response_data)
-{
-  return export_many (connection, "config", credentials, params, response_data);
 }
 
 /**
@@ -12047,8 +11940,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (export_alerts)
   ELSE (export_asset)
   ELSE (export_assets)
-  ELSE (export_config)
-  ELSE (export_configs)
   ELSE (download_credential)
   ELSE (export_credential)
   ELSE (export_credentials)
@@ -12379,7 +12270,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_task)
   ELSE (delete_tls_certificate)
   ELSE (delete_user)
-  ELSE (import_config)
   ELSE (import_port_list)
   ELSE (modify_scope)
   ELSE (move_task)

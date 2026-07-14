@@ -31,6 +31,7 @@ use crate::{
     report_raw_results::report_raw_results,
     report_tls_certificates::report_tls_certificates,
     result_payloads::*,
+    scan_config_backup::backup_scan_config,
     scan_config_families::{scan_config_asset_families, scan_config_asset_family_nvts},
     scan_configs::*,
     scanner_assets::*,
@@ -146,6 +147,10 @@ pub(crate) fn native_api_router() -> Router<AppState> {
         .route(
             "/api/v1/scan-configs/:scan_config_id/export",
             get(export_scan_config_metadata),
+        )
+        .route(
+            "/api/v1/scan-configs/:scan_config_id/backup",
+            get(backup_scan_config),
         )
         .route(
             "/api/v1/scan-configs/:scan_config_id/families",

@@ -14,13 +14,17 @@ BeforeEach (gsad_validator)
   gsad_init_validator ();
 }
 
-Ensure (gsad_validator, reject_removed_create_config_command)
+Ensure (gsad_validator, reject_removed_scan_config_commands)
 {
   validator_t validator = gsad_get_validator ();
   assert_that (gvm_validate (validator, "cmd", "create_config"),
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "import_config"),
-               is_equal_to (0));
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "export_config"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "export_configs"),
+               is_equal_to (2));
 }
 
 Ensure (gsad_validator, reject_removed_report_alert_command)

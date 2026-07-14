@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -520,14 +521,14 @@ class CredentialsTestCase(unittest.TestCase):
                 certificate="",
             )
 
-    def test_delete_alert(self):
+    def test_delete_credential(self):
         request = Credentials.delete_credential("a1")
         self.assertEqual(
             bytes(request),
             b'<delete_credential credential_id="a1" ultimate="0"/>',
         )
 
-    def test_delete_alert_with_ultimate(self):
+    def test_delete_credential_with_ultimate(self):
         request = Credentials.delete_credential("a1", ultimate=False)
         self.assertEqual(
             bytes(request),
@@ -540,7 +541,7 @@ class CredentialsTestCase(unittest.TestCase):
             b'<delete_credential credential_id="a1" ultimate="1"/>',
         )
 
-    def test_delete_alert_missing_credential_id(self):
+    def test_delete_credential_missing_credential_id(self):
         with self.assertRaises(RequiredArgument):
             Credentials.delete_credential(None)
 

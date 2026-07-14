@@ -10,6 +10,9 @@ use axum::{
 
 use crate::{
     app_state::AppState,
+    browser_proxy_alert_definition::{
+        browser_proxy_get_alert_definition, browser_proxy_put_alert_definition,
+    },
     browser_proxy_api::BrowserProxyAuth,
     browser_proxy_filter::{
         browser_proxy_clone_filter, browser_proxy_create_filter, browser_proxy_delete_filter,
@@ -78,6 +81,10 @@ pub(crate) fn browser_proxy_native_api_router(
         return router;
     };
     let router = router
+        .route(
+            "/api/v1/alerts/:alert_id/definition",
+            get(browser_proxy_get_alert_definition).put(browser_proxy_put_alert_definition),
+        )
         .route("/api/v1/alerts", post(browser_proxy_create_alert))
         .route("/api/v1/alerts/:alert_id", patch(browser_proxy_patch_alert))
         .route(

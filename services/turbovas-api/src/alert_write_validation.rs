@@ -102,7 +102,7 @@ impl AlertEmailNoticeMode {
 pub(crate) struct SensitiveAlertField(Vec<u8>);
 
 impl SensitiveAlertField {
-    fn empty() -> Self {
+    pub(crate) fn empty() -> Self {
         Self(Vec::new())
     }
 
@@ -639,7 +639,7 @@ fn invalid_smb_path(field_name: &str) -> ApiError {
     ))
 }
 
-fn validate_sensitive_alert_message(
+pub(crate) fn validate_sensitive_alert_message(
     value: SensitiveAlertField,
     field_name: &str,
     max_bytes: usize,
@@ -658,7 +658,7 @@ fn validate_sensitive_alert_message(
     Ok(value)
 }
 
-fn normalize_alert_create_text(
+pub(crate) fn normalize_alert_create_text(
     value: String,
     field_name: &str,
     required: bool,
@@ -676,7 +676,7 @@ fn normalize_alert_create_text(
     Ok(value)
 }
 
-fn validate_sensitive_alert_text(
+pub(crate) fn validate_sensitive_alert_text(
     value: SensitiveAlertField,
     field_name: &str,
     required: bool,

@@ -12,11 +12,11 @@ from gvm.protocols.gmp.requests.v225 import ResourceNames, ResourceType
 
 class ResourceNamesTestCase(unittest.TestCase):
     def test_get_resource_names(self) -> None:
-        request = ResourceNames.get_resource_names(ResourceType.ALERT)
+        request = ResourceNames.get_resource_names(ResourceType.HOST)
 
         self.assertIsInstance(request, Request)
 
-        self.assertEqual(bytes(request), b'<get_resource_names type="ALERT"/>')
+        self.assertEqual(bytes(request), b'<get_resource_names type="HOST"/>')
 
         request = ResourceNames.get_resource_names(ResourceType.CERT_BUND_ADV)
 
@@ -151,12 +151,12 @@ class ResourceNamesTestCase(unittest.TestCase):
 
     def test_get_resource_name(self):
         request = ResourceNames.get_resource_name(
-            resource_type=ResourceType.ALERT, resource_id="i1"
+            resource_type=ResourceType.HOST, resource_id="i1"
         )
 
         self.assertEqual(
             bytes(request),
-            b'<get_resource_names resource_id="i1" type="ALERT"/>',
+            b'<get_resource_names resource_id="i1" type="HOST"/>',
         )
 
         request = ResourceNames.get_resource_name(

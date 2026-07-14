@@ -29,6 +29,9 @@ struct NativeWriteRouteContract {
     safety_contract: &'static str,
 }
 
+const APPROVED_NATIVE_DIRECT_READ_ROUTES: &[(&str, &str)] =
+    &[("get", "/api/v1/alerts/:alert_id/definition")];
+
 const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
     NativeWriteRouteContract {
         method: "get",
@@ -43,6 +46,11 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
     NativeWriteRouteContract {
         method: "post",
         path: "/api/v1/alerts",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
+        method: "put",
+        path: "/api/v1/alerts/:alert_id/definition",
         safety_contract: "write-control-v1",
     },
     NativeWriteRouteContract {
@@ -498,7 +506,10 @@ fn direct_api_write_control_routes_are_direct_only_and_flag_gated() {
     let internal_routes = registered_routes(app_route_registration_block(routes_source));
     let direct_routes =
         registered_routes(direct_api_route_registration_block(direct_routes_source));
-    let direct_control_routes = direct_routes.iter().collect::<Vec<_>>();
+    let direct_control_routes = direct_routes
+        .iter()
+        .filter(|route| !APPROVED_NATIVE_DIRECT_READ_ROUTES.contains(&(route.method, route.path)))
+        .collect::<Vec<_>>();
 
     assert_eq!(
         direct_control_routes.len(),
@@ -549,6 +560,48 @@ fn direct_api_write_control_routes_are_direct_only_and_flag_gated() {
     assert!(
         direct_api_route_registration_block(direct_routes_source).contains("post(create_alert)")
     );
+}
+
+#[test]
+fn alert_definition_direct_get_remains_available_when_write_control_is_disabled() {
+    let source = include_str!("direct_api_routes.rs");
+    let gate = source.find("if write_control_enabled").unwrap();
+    let get = source.find("get(get_alert_definition)").unwrap();
+    let put = source.find("put(put_alert_definition)").unwrap();
+    assert!(
+        get < gate,
+        "definition GET must be registered before the write gate"
+    );
+    assert!(
+        gate < put,
+        "definition PUT must remain inside the write gate"
+    );
+
+    let path = "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/definition";
+    assert!(direct_api_v1_method_is_allowed(
+        &axum::http::Method::GET,
+        path,
+        false
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &axum::http::Method::PUT,
+        path,
+        false
+    ));
+    assert_eq!(
+        ApiError::MethodNotAllowed.status_code(),
+        StatusCode::METHOD_NOT_ALLOWED
+    );
+    assert!(direct_api_v1_method_is_allowed(
+        &axum::http::Method::PUT,
+        path,
+        true
+    ));
+    assert!(!direct_api_v1_method_is_allowed(
+        &axum::http::Method::GET,
+        "/api/v1/alerts/not-a-uuid/definition",
+        false
+    ));
 }
 
 #[test]

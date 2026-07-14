@@ -6,7 +6,9 @@ use axum::http::Method;
 use uuid::Uuid;
 
 pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
-    if direct_api_wildcard_detail_path_is_allowed(path) {
+    if direct_api_wildcard_detail_path_is_allowed(path)
+        || direct_api_alert_definition_path_is_allowed(path)
+    {
         return true;
     }
     let parts = path.split('/').collect::<Vec<_>>();
@@ -147,6 +149,9 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         (&Method::GET, ["", "api", "v1", "trashcan", "empty-preview"]) => true,
         (&Method::POST, ["", "api", "v1", "trashcan", "empty"]) => true,
         (&Method::POST, ["", "api", "v1", "alerts"]) => true,
+        (&Method::PUT, ["", "api", "v1", "alerts", alert_id, "definition"]) => {
+            direct_api_write_id_segment_is_allowed(alert_id)
+        }
         (&Method::POST, ["", "api", "v1", "alerts", alert_id, "test"]) => {
             direct_api_write_id_segment_is_allowed(alert_id)
         }
@@ -355,6 +360,15 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         }
         _ => false,
     }
+}
+
+fn direct_api_alert_definition_path_is_allowed(path: &str) -> bool {
+    let parts = path.split('/').collect::<Vec<_>>();
+    matches!(
+        parts.as_slice(),
+        ["", "api", "v1", "alerts", alert_id, "definition"]
+            if direct_api_write_id_segment_is_allowed(alert_id)
+    )
 }
 
 fn direct_api_write_id_segment_is_allowed(segment: &str) -> bool {

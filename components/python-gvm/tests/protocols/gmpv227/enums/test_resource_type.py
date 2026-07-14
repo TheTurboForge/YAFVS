@@ -21,10 +21,6 @@ class GetResourceTypeFromStringTestCase(unittest.TestCase):
         ct = ResourceType.from_string("")
         self.assertIsNone(ct)
 
-    def test_alert(self):
-        ct = ResourceType.from_string("alert")
-        self.assertEqual(ct, ResourceType.ALERT)
-
     def test_cert_bund_adv(self):
         ct = ResourceType.from_string("cert_bund_adv")
         self.assertEqual(ct, ResourceType.CERT_BUND_ADV)

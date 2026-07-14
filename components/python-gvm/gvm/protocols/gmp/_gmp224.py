@@ -15,10 +15,6 @@ from .._protocol import GvmProtocol, T
 from .requests.v224 import (
     Aggregates,
     AggregateStatistic,
-    AlertCondition,
-    AlertEvent,
-    AlertMethod,
-    Alerts,
     AliveTest,
     Authentication,
     CertBundAdvisories,
@@ -70,9 +66,6 @@ from .requests.v224 import (
 
 _TYPE_FIELDS = [
     AggregateStatistic,
-    AlertCondition,
-    AlertEvent,
-    AlertMethod,
     AliveTest,
     CredentialFormat,
     CredentialType,
@@ -1209,178 +1202,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def create_alert(
-        self,
-        name: str,
-        condition: AlertCondition,
-        event: AlertEvent,
-        method: AlertMethod,
-        *,
-        method_data: dict[str, str] | None = None,
-        event_data: dict[str, str] | None = None,
-        condition_data: dict[str, str] | None = None,
-        filter_id: EntityID | None = None,
-        comment: str | None = None,
-    ) -> T:
-        """Create a new alert
-
-        Args:
-            name: Name of the new Alert
-            condition: The condition that must be satisfied for the alert
-                to occur; if the event is either 'Updated SecInfo arrived' or
-                'New SecInfo arrived', condition must be 'Always'. Otherwise,
-                condition can also be on of 'Severity at least', 'Filter count
-                changed' or 'Filter count at least'.
-            event: The event that must happen for the alert to occur, one
-                of 'Task run status changed', 'Updated SecInfo arrived' or 'New
-                SecInfo arrived'
-            method: The method by which the user is alerted, one of 'SCP',
-                'SMB', 'SNMP', 'Syslog' or 'Email'; if the event is
-                neither 'Updated SecInfo arrived' nor 'New SecInfo arrived',
-                method can also be 'Start Task'.
-            condition_data: Data that defines the condition
-            event_data: Data that defines the event
-            method_data: Data that defines the method
-            filter_id: Filter to apply when executing alert
-            comment: Comment for the alert
-        """
-        return self._send_request_and_transform_response(
-            Alerts.create_alert(
-                name,
-                condition,
-                event,
-                method,
-                method_data=method_data,
-                event_data=event_data,
-                condition_data=condition_data,
-                filter_id=filter_id,
-                comment=comment,
-            )
-        )
-
-    def modify_alert(
-        self,
-        alert_id: EntityID,
-        *,
-        name: str | None = None,
-        comment: str | None = None,
-        filter_id: EntityID | None = None,
-        event: AlertEvent | str | None = None,
-        event_data: dict | None = None,
-        condition: AlertCondition | str | None = None,
-        condition_data: dict[str, str] | None = None,
-        method: AlertMethod | str | None = None,
-        method_data: dict[str, str] | None = None,
-    ) -> T:
-        """Modify an existing alert.
-
-        Args:
-            alert_id: UUID of the alert to be modified.
-            name: Name of the Alert.
-            condition: The condition that must be satisfied for the alert to
-                occur. If the event is either 'Updated SecInfo
-                arrived' or 'New SecInfo arrived', condition must be 'Always'.
-                Otherwise, condition can also be on of 'Severity at least',
-                'Filter count changed' or 'Filter count at least'.
-            condition_data: Data that defines the condition
-            event: The event that must happen for the alert to occur, one of
-                'Task run status changed', 'Updated SecInfo arrived' or
-                'New SecInfo arrived'
-            event_data: Data that defines the event
-            method: The method by which the user is alerted, one of 'SCP',
-                'SMB', 'SNMP', 'Syslog' or 'Email';
-                if the event is neither 'Updated SecInfo arrived' nor
-                'New SecInfo arrived', method can also be 'Start Task'.
-            method_data: Data that defines the method
-            filter_id: Filter to apply when executing alert
-            comment: Comment for the alert
-        """
-        return self._send_request_and_transform_response(
-            Alerts.modify_alert(
-                alert_id,
-                name=name,
-                comment=comment,
-                filter_id=filter_id,
-                event=event,
-                event_data=event_data,
-                condition=condition,
-                condition_data=condition_data,
-                method=method,
-                method_data=method_data,
-            )
-        )
-
-    def clone_alert(self, alert_id: EntityID) -> T:
-        """Clone an existing alert
-
-        Args:
-            alert_id: UUID of the alert to clone from
-        """
-        return self._send_request_and_transform_response(
-            Alerts.clone_alert(alert_id)
-        )
-
-    def delete_alert(
-        self, alert_id: EntityID, *, ultimate: bool | None = False
-    ) -> T:
-        """Delete an existing alert
-
-        Args:
-            alert_id: UUID of the alert to delete
-            ultimate: Whether to remove entirely or to the trashcan.
-        """
-        return self._send_request_and_transform_response(
-            Alerts.delete_alert(alert_id, ultimate=ultimate)
-        )
-
-    def test_alert(self, alert_id: EntityID) -> T:
-        """Run an alert
-
-        Invoke a test run of an alert
-
-        Args:
-            alert_id: UUID of the alert to be tested
-        """
-        return self._send_request_and_transform_response(
-            Alerts.test_alert(alert_id)
-        )
-
-    def get_alerts(
-        self,
-        *,
-        filter_string: str | None = None,
-        filter_id: EntityID | None = None,
-        trash: bool | None = None,
-        tasks: bool | None = None,
-    ) -> T:
-        """Request a list of alerts
-
-        Args:
-            filter: Filter term to use for the query
-            filter_id: UUID of an existing filter to use for the query
-            trash: True to request the alerts in the trashcan
-            tasks: Whether to include the tasks using the alerts
-        """
-        return self._send_request_and_transform_response(
-            Alerts.get_alerts(
-                filter_string=filter_string,
-                filter_id=filter_id,
-                trash=trash,
-                tasks=tasks,
-            )
-        )
-
-    def get_alert(self, alert_id: EntityID, *, tasks: bool | None = None) -> T:
-        """Request a single alert
-
-        Arguments:
-            alert_id: UUID of an existing alert
-            tasks: Whether to include the tasks using the alert
-        """
-        return self._send_request_and_transform_response(
-            Alerts.get_alert(alert_id, tasks=tasks)
-        )
-
     def clone_credential(self, credential_id: EntityID) -> T:
         """Clone an existing credential
 
@@ -1410,8 +1231,6 @@ class GMPv224(GvmProtocol[T]):
         public_key: str | None = None,
     ) -> T:
         """Create a new credential
-
-        Create a new credential e.g. to be used in the method of an alert.
 
         Currently the following credential types are supported:
 

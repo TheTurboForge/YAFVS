@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2025 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -39,8 +40,6 @@ class Credentials(CredentialsV224):
         host_identifier: str | None = None,
     ) -> Request:
         """Create a new credential that is fetched from a credential store
-
-        Create a new credential e.g. to be used in the method of an alert.
 
         Currently the following credential types are supported:
 

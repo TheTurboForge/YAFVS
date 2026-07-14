@@ -21,10 +21,10 @@ class AggregatesTestCase(unittest.TestCase):
         Test basic get_aggregates calls with only resource_type except special
         cases for audit, policy, scan_config and task.
         """
-        request = Aggregates.get_aggregates(EntityType.ALERT)
+        request = Aggregates.get_aggregates(EntityType.CPE)
 
         self.assertIsInstance(request, Request)
-        self.assertEqual(bytes(request), b'<get_aggregates type="alert"/>')
+        self.assertEqual(bytes(request), b'<get_aggregates type="cpe"/>')
 
         request = Aggregates.get_aggregates(
             resource_type=EntityType.CERT_BUND_ADV
@@ -169,12 +169,12 @@ class AggregatesTestCase(unittest.TestCase):
         """
         with self.assertRaises(InvalidArgumentType):
             Aggregates.get_aggregates(
-                resource_type=EntityType.ALERT, sort_criteria="INVALID"
+                resource_type=EntityType.CPE, sort_criteria="INVALID"
             )
 
         with self.assertRaises(InvalidArgumentType):
             Aggregates.get_aggregates(
-                resource_type=EntityType.ALERT, sort_criteria=["INVALID"]
+                resource_type=EntityType.CPE, sort_criteria=["INVALID"]
             )
 
         with self.assertRaisesRegex(
@@ -183,13 +183,13 @@ class AggregatesTestCase(unittest.TestCase):
             "MAX,MEAN,MIN,SUM,TEXT,VALUE.$",
         ):
             Aggregates.get_aggregates(
-                resource_type=EntityType.ALERT,
+                resource_type=EntityType.CPE,
                 sort_criteria=[{"stat": "INVALID"}],
             )
 
         with self.assertRaises(InvalidArgument):
             Aggregates.get_aggregates(
-                resource_type=EntityType.ALERT,
+                resource_type=EntityType.CPE,
                 sort_criteria=[{"order": "INVALID"}],
             )
 
@@ -242,7 +242,7 @@ class AggregatesTestCase(unittest.TestCase):
         """
         with self.assertRaises(InvalidArgumentType):
             Aggregates.get_aggregates(
-                resource_type=EntityType.ALERT, data_columns=123
+                resource_type=EntityType.CPE, data_columns=123
             )
 
     def test_get_aggregates_group_column(self):
@@ -316,7 +316,7 @@ class AggregatesTestCase(unittest.TestCase):
         """
         with self.assertRaises(InvalidArgumentType):
             Aggregates.get_aggregates(
-                resource_type=EntityType.ALERT, text_columns=123
+                resource_type=EntityType.CPE, text_columns=123
             )
 
     def test_get_aggregates_mode(self):

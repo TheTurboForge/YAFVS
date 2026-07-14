@@ -12,9 +12,6 @@ class FilterTypeTestsCase(unittest.TestCase):
     def test_filter_type_all_secinfo(self):
         self.assertEqual(FilterType.ALL_SECINFO.value, "secinfo")
 
-    def test_filter_type_alert(self):
-        self.assertEqual(FilterType.ALERT.value, "alert")
-
     def test_filter_type_asset(self):
         self.assertEqual(FilterType.ASSET.value, "asset")
 

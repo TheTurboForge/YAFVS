@@ -11,10 +11,6 @@ from gvm.protocols.gmp.requests.v226 import FilterType
 
 
 class GetFilterTypeFomStringTestCase(unittest.TestCase):
-    def test_filter_type_alert(self):
-        ft = FilterType.from_string("alert")
-        self.assertEqual(ft, FilterType.ALERT)
-
     def test_filter_type_asset(self):
         ft = FilterType.from_string("asset")
         self.assertEqual(ft, FilterType.ASSET)

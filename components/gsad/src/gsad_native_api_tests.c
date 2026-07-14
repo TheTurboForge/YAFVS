@@ -28,7 +28,11 @@ gsad_native_api_test_browser_credentials_are_session_bound (
 extern gboolean
 gsad_native_api_test_post_path_is_allowed (const gchar *path);
 extern gboolean
+gsad_native_api_test_get_path_is_allowed (const gchar *path);
+extern gboolean
 gsad_native_api_test_patch_path_is_allowed (const gchar *path);
+extern gboolean
+gsad_native_api_test_put_path_is_allowed (const gchar *path);
 extern gboolean
 gsad_native_api_test_delete_path_is_allowed (const gchar *path);
 
@@ -54,6 +58,32 @@ gsad_user_get_username (gsad_user_t *user)
 }
 
 Describe (gsad_native_api);
+
+Ensure (gsad_native_api,
+        should_only_allow_canonical_alert_definition_get_and_put)
+{
+  const gchar *valid =
+    "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/definition";
+  const gchar *rejected[] = {
+    "/api/v1/alerts/not-a-uuid/definition",
+    "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/definition/extra",
+    "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/definition?x=1",
+  };
+  const gchar *alert = "/api/v1/alerts/12345678-1234-1234-1234-123456789abc";
+
+  assert_that (gsad_native_api_test_get_path_is_allowed (valid), is_true);
+  assert_that (gsad_native_api_test_put_path_is_allowed (valid), is_true);
+  for (gsize index = 0; index < G_N_ELEMENTS (rejected); index++)
+    {
+      assert_that (gsad_native_api_test_get_path_is_allowed (rejected[index]),
+                   is_false);
+      assert_that (gsad_native_api_test_put_path_is_allowed (rejected[index]),
+                   is_false);
+    }
+
+  assert_that (gsad_native_api_test_get_path_is_allowed (alert), is_true);
+  assert_that (gsad_native_api_test_put_path_is_allowed (alert), is_false);
+}
 
 Ensure (gsad_native_api, should_only_allow_canonical_alert_test_posts)
 {
@@ -365,6 +395,9 @@ main (int argc, char **argv)
                          should_only_forward_the_canonical_pdf_format);
   add_test_with_context (suite, gsad_native_api,
                          should_require_a_session_user_for_browser_reads);
+  add_test_with_context (
+    suite, gsad_native_api,
+    should_only_allow_canonical_alert_definition_get_and_put);
   add_test_with_context (suite, gsad_native_api,
                          should_only_allow_canonical_task_clone_posts);
   add_test_with_context (suite, gsad_native_api,

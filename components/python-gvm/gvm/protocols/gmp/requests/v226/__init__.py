@@ -12,10 +12,6 @@ from .._version import Version
 from ..v225 import (
     Aggregates,
     AggregateStatistic,
-    AlertCondition,
-    AlertEvent,
-    AlertMethod,
-    Alerts,
     AliveTest,
     Authentication,
     CertBundAdvisories,
@@ -66,10 +62,6 @@ from ._resource_names import ResourceNames, ResourceType
 __all__ = (
     "AggregateStatistic",
     "Aggregates",
-    "AlertCondition",
-    "AlertEvent",
-    "AlertMethod",
-    "Alerts",
     "AliveTest",
     "Authentication",
     "CertBundAdvisories",

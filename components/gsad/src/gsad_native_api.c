@@ -290,6 +290,23 @@ malformed:
   return FALSE;
 }
 
+static gboolean is_uuid_segment_with_suffix (const gchar *value,
+                                             const gchar *suffix);
+
+static gboolean
+native_api_put_path_is_allowed (const gchar *path)
+{
+  const gchar *alert_prefix = "/api/v1/alerts/";
+  const gchar *definition_suffix = "/definition";
+
+  if (path == NULL || strchr (path, '?') != NULL
+      || !g_str_has_prefix (path, alert_prefix))
+    return FALSE;
+
+  return is_uuid_segment_with_suffix (path + strlen (alert_prefix),
+                                      definition_suffix);
+}
+
 static gboolean
 native_api_pdf_download_path_is_allowed (const gchar *path)
 {
@@ -1069,6 +1086,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *alerts_path = "/api/v1/alerts";
   const gchar *alert_prefix = "/api/v1/alerts/";
   const gchar *alert_export_suffix = "/export";
+  const gchar *alert_definition_suffix = "/definition";
   const gchar *tags_path = "/api/v1/tags";
   const gchar *tag_resource_names_prefix = "/api/v1/tags/resource-names/";
   const gchar *tag_prefix = "/api/v1/tags/";
@@ -1336,6 +1354,10 @@ native_api_path_is_allowed (const gchar *path)
         return is_uuid_segment (id,
                                 strlen (id)
                                 - strlen (alert_export_suffix));
+      if (g_str_has_suffix (id, alert_definition_suffix))
+        return is_uuid_segment (id,
+                                strlen (id)
+                                - strlen (alert_definition_suffix));
       return is_uuid_segment (id, strlen (id));
     }
 
@@ -1868,6 +1890,7 @@ fetch_native_api_json (const gchar *method, const gchar *path,
     port = DEFAULT_NATIVE_API_PORT;
   mutation_method = g_strcmp0 (method, "POST") == 0
                     || g_strcmp0 (method, "PATCH") == 0
+                    || g_strcmp0 (method, "PUT") == 0
                     || g_strcmp0 (method, "DELETE") == 0;
   *mutation_outcome_indeterminate = FALSE;
   if (mutation_method
@@ -1912,11 +1935,15 @@ fetch_native_api_json (const gchar *method, const gchar *path,
     {
       g_string_append_printf (request,
                               "Content-Type: application/json\r\n"
-                              "Content-Length: %" G_GSIZE_FORMAT "\r\n"
+                              "Content-Length: %" G_GSIZE_FORMAT "\r\n",
+                              request_body_length);
+    }
+  if (browser_proxy_secret != NULL && operator_name != NULL)
+    {
+      g_string_append_printf (request,
                               BROWSER_PROXY_SECRET_HEADER ": %s\r\n"
                               BROWSER_PROXY_OPERATOR_HEADER ": %s\r\n",
-                              request_body_length, browser_proxy_secret,
-                              operator_name);
+                              browser_proxy_secret, operator_name);
     }
   g_string_append (request, "\r\n");
   if (request_body != NULL && request_body_length > 0)
@@ -2158,8 +2185,24 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
                               "Native API path is not available.");
     }
 
+  const gchar *secret = NULL;
+  const gchar *operator_name = NULL;
+  if (native_api_put_path_is_allowed (path))
+    {
+      secret = browser_proxy_secret ();
+      operator_name = browser_proxy_operator_name (credentials);
+      if (secret == NULL || operator_name == NULL)
+        {
+          gsad_credentials_free (credentials);
+          return send_json_error (
+            connection, MHD_HTTP_SERVICE_UNAVAILABLE, "control_unavailable",
+            "Native API browser definition read is not configured.");
+        }
+    }
+
   request_target = native_api_request_target (path, params);
-  body = fetch_native_api_json ("GET", request_target, NULL, 0, NULL, NULL,
+  body = fetch_native_api_json ("GET", request_target, NULL, 0, secret,
+                                operator_name,
                                 &status_code, &error_message,
                                 &mutation_outcome_indeterminate);
   g_free (request_target);
@@ -2270,6 +2313,17 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
 }
 
 gsad_http_result_t
+gsad_http_handle_native_api_put (gsad_http_handler_t *handler_next,
+                                 void *handler_data,
+                                 gsad_http_connection_t *connection,
+                                 gsad_connection_info_t *con_info, void *data)
+{
+  return handle_native_api_write (handler_next, handler_data, connection,
+                                  con_info, data, "PUT",
+                                  native_api_put_path_is_allowed);
+}
+
+gsad_http_result_t
 gsad_http_handle_native_api_post (gsad_http_handler_t *handler_next,
                                   void *handler_data,
                                   gsad_http_connection_t *connection,
@@ -2306,6 +2360,18 @@ gsad_http_handle_native_api_delete (gsad_http_handler_t *handler_next,
 }
 
 #ifdef GSAD_NATIVE_API_TEST
+gboolean
+gsad_native_api_test_get_path_is_allowed (const gchar *path)
+{
+  return native_api_path_is_allowed (path);
+}
+
+gboolean
+gsad_native_api_test_put_path_is_allowed (const gchar *path)
+{
+  return native_api_put_path_is_allowed (path);
+}
+
 gboolean
 gsad_native_api_test_pdf_download_target (const gchar *path,
                                           const gchar *report_format_id,

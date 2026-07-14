@@ -2240,6 +2240,95 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /alerts/{alert_id}/definition:
+    get:
+      operationId: getAlertsByAlertIdDefinition
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: alert-retained-definition-read
+      x-turbovas-operator-identity: resolved-request-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      summary: Read one retained alert definition
+      description: Authenticated operator-owned DB-backed definition read for fixed Task run status changed, Always, no-filter EMAIL, SMB, SYSLOG, SNMP, SCP, and START_TASK alerts. The strict tagged response includes all retained non-secret method fields. SNMP community data is never selected or returned; snmp_community_configured reports only whether exactly one nonempty secret is configured. Other alert methods, events, conditions, and filter-backed semantics are intentionally not retained; malformed or unsupported definitions return 409.
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      responses:
+        '200':
+          description: Strict retained alert definition with secrets redacted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertDefinition'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: putAlertsByAlertIdDefinition
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: alert-retained-definition-modify
+      x-turbovas-operator-identity: resolved-request-operator
+      x-turbovas-owner-semantics: preserve-existing-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: alert-delivery-control
+      summary: Fully replace one retained alert definition
+      description: Atomically replaces an operator-owned alert with a strict Task run status changed, Always, no-filter EMAIL, SMB, SYSLOG, SNMP, SCP, or START_TASK definition. The required opaque expected_revision prevents a stale editor from overwriting a newer definition. The transaction locks the operator/name namespace, target alert, and every referenced credential, report format, or task before deleting and reinserting the fixed definition. Unknown method fields are rejected and SQL is prepared and parameterized. SNMP requires snmp_community_mode preserve or replace. Preserve is valid only when the target is already SNMP with exactly one nonempty community row and retains that row without selecting its value; replace requires a bounded nonempty write-only community. Other alert methods, events, conditions, and filter-backed semantics are intentionally not retained. A 502 mutation_outcome_indeterminate response means commit acknowledgement failed and current state must be checked before retrying. A 502 committed_response_unavailable response means commit succeeded but the authoritative response reload failed.
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertDefinitionReplaceRequest'
+      responses:
+        '200':
+          description: Alert definition replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertDefinition'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          description: The commit outcome is indeterminate, or the committed definition could not be reloaded. Inspect the Error code and verify current state before retrying.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /alerts/{alert_id}/clone:
     post:
       operationId: postAlertsByAlertIdClone
@@ -10229,6 +10318,245 @@ components:
           SNMP: '#/components/schemas/AlertSnmpCreateRequest'
           SCP: '#/components/schemas/AlertScpCreateRequest'
           START_TASK: '#/components/schemas/AlertStartTaskCreateRequest'
+    AlertDefinition:
+      oneOf:
+        - $ref: '#/components/schemas/AlertEmailDefinition'
+        - $ref: '#/components/schemas/AlertSmbDefinition'
+        - $ref: '#/components/schemas/AlertSyslogDefinition'
+        - $ref: '#/components/schemas/AlertSnmpDefinition'
+        - $ref: '#/components/schemas/AlertScpDefinition'
+        - $ref: '#/components/schemas/AlertStartTaskDefinition'
+      discriminator:
+        propertyName: method
+        mapping:
+          EMAIL: '#/components/schemas/AlertEmailDefinition'
+          SMB: '#/components/schemas/AlertSmbDefinition'
+          SYSLOG: '#/components/schemas/AlertSyslogDefinition'
+          SNMP: '#/components/schemas/AlertSnmpDefinition'
+          SCP: '#/components/schemas/AlertScpDefinition'
+          START_TASK: '#/components/schemas/AlertStartTaskDefinition'
+    AlertDefinitionBase:
+      type: object
+      required: [revision, name, comment, active, status]
+      properties:
+        revision:
+          type: string
+          pattern: '^[0-9]{1,20}$'
+          readOnly: true
+          description: Opaque PostgreSQL row revision required as expected_revision by full replacement.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        comment:
+          type: string
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        active:
+          type: boolean
+        status:
+          type: string
+          maxLength: 32
+          x-turbovas-max-bytes: 32
+          enum: [Delete Requested, Ultimate Delete Requested, Ultimate Delete Waiting, Delete Waiting, Done, New, Requested, Running, Queued, Stop Requested, Stop Waiting, Stopped, Processing, Interrupted]
+    AlertEmailDefinition:
+      allOf:
+        - $ref: '#/components/schemas/AlertDefinitionBase'
+        - type: object
+          required: [method, to_address, subject, notice]
+          properties:
+            method:
+              type: string
+              const: EMAIL
+            to_address:
+              type: string
+            from_address:
+              type: string
+            subject:
+              type: string
+            notice:
+              type: string
+              enum: [simple, include, attach]
+            recipient_credential_id:
+              type: string
+              format: uuid
+            report_format_id:
+              type: string
+              format: uuid
+            message:
+              type: string
+      unevaluatedProperties: false
+    AlertSmbDefinition:
+      allOf:
+        - $ref: '#/components/schemas/AlertDefinitionBase'
+        - type: object
+          required: [method, smb_credential_id, smb_share_path, smb_file_path, report_format_id, smb_max_protocol]
+          properties:
+            method:
+              type: string
+              const: SMB
+            smb_credential_id:
+              type: string
+              format: uuid
+            smb_share_path:
+              type: string
+            smb_file_path:
+              type: string
+            report_format_id:
+              type: string
+              format: uuid
+            smb_max_protocol:
+              type: string
+              enum: [default, NT1, SMB2, SMB3]
+      unevaluatedProperties: false
+    AlertSyslogDefinition:
+      allOf:
+        - $ref: '#/components/schemas/AlertDefinitionBase'
+        - type: object
+          required: [method]
+          properties:
+            method:
+              type: string
+              const: SYSLOG
+      unevaluatedProperties: false
+    AlertSnmpDefinition:
+      allOf:
+        - $ref: '#/components/schemas/AlertDefinitionBase'
+        - type: object
+          required: [method, snmp_agent, snmp_community_configured, snmp_message]
+          properties:
+            method:
+              type: string
+              const: SNMP
+            snmp_agent:
+              type: string
+            snmp_community_configured:
+              type: boolean
+              description: True only when exactly one nonempty SNMP community row is configured. The community value is never selected or returned.
+            snmp_message:
+              type: string
+      unevaluatedProperties: false
+    AlertScpDefinition:
+      allOf:
+        - $ref: '#/components/schemas/AlertDefinitionBase'
+        - type: object
+          required: [method, scp_credential_id, scp_host, scp_port, scp_known_hosts, scp_path, report_format_id]
+          properties:
+            method:
+              type: string
+              const: SCP
+            scp_credential_id:
+              type: string
+              format: uuid
+            scp_host:
+              type: string
+            scp_port:
+              type: integer
+              format: uint16
+              minimum: 1
+              maximum: 65535
+            scp_known_hosts:
+              type: string
+            scp_path:
+              type: string
+            report_format_id:
+              type: string
+              format: uuid
+      unevaluatedProperties: false
+    AlertStartTaskDefinition:
+      allOf:
+        - $ref: '#/components/schemas/AlertDefinitionBase'
+        - type: object
+          required: [method, task_id]
+          properties:
+            method:
+              type: string
+              const: START_TASK
+            task_id:
+              type: string
+              format: uuid
+      unevaluatedProperties: false
+    AlertDefinitionReplaceRequest:
+      type: object
+      additionalProperties: false
+      required: [expected_revision, definition]
+      properties:
+        expected_revision:
+          type: string
+          pattern: '^[0-9]{1,20}$'
+          description: Opaque revision returned by the definition GET; a stale value returns 409.
+        definition:
+          oneOf:
+            - $ref: '#/components/schemas/AlertEmailCreateRequest'
+            - $ref: '#/components/schemas/AlertSmbCreateRequest'
+            - $ref: '#/components/schemas/AlertSyslogCreateRequest'
+            - $ref: '#/components/schemas/AlertSnmpDefinitionReplaceRequest'
+            - $ref: '#/components/schemas/AlertScpCreateRequest'
+            - $ref: '#/components/schemas/AlertStartTaskCreateRequest'
+          discriminator:
+            propertyName: method
+            mapping:
+              EMAIL: '#/components/schemas/AlertEmailCreateRequest'
+              SMB: '#/components/schemas/AlertSmbCreateRequest'
+              SYSLOG: '#/components/schemas/AlertSyslogCreateRequest'
+              SNMP: '#/components/schemas/AlertSnmpDefinitionReplaceRequest'
+              SCP: '#/components/schemas/AlertScpCreateRequest'
+              START_TASK: '#/components/schemas/AlertStartTaskCreateRequest'
+    AlertSnmpDefinitionReplaceRequest:
+      type: object
+      additionalProperties: false
+      required: [method, name, active, status, snmp_agent, snmp_community_mode, snmp_message]
+      description: Strict SNMP full-replacement shape. Preserve retains an existing nonempty SNMP community without selecting it. Replace requires a bounded nonempty write-only community.
+      properties:
+        method:
+          type: string
+          const: SNMP
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        comment:
+          type: string
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        active:
+          type: boolean
+        status:
+          type: string
+          maxLength: 32
+          x-turbovas-max-bytes: 32
+          enum: [Delete Requested, Ultimate Delete Requested, Ultimate Delete Waiting, Delete Waiting, Done, New, Requested, Running, Queued, Stop Requested, Stop Waiting, Stopped, Processing, Interrupted]
+        snmp_agent:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+        snmp_community_mode:
+          type: string
+          enum: [preserve, replace]
+        snmp_community:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+          writeOnly: true
+        snmp_message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          x-turbovas-max-bytes: 2000
+      oneOf:
+        - properties:
+            snmp_community_mode:
+              const: preserve
+          not:
+            required: [snmp_community]
+        - properties:
+            snmp_community_mode:
+              const: replace
+          required: [snmp_community]
     AlertDeliverReportRequest:
       type: object
       additionalProperties: false

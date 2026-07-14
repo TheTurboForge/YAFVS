@@ -42,7 +42,7 @@ class GMPv225(GMPv224[T]):
         """Request a list of resource names and IDs
 
         Arguments:
-            resource_type: Type must be either ALERT, CERT_BUND_ADV,
+            resource_type: Type must be either CERT_BUND_ADV,
                 CONFIG, CPE, CREDENTIAL, CVE, DFN_CERT_ADV, FILTER,
                 HOST, NVT, OS, OVERRIDE, PORT_LIST, REPORT_FORMAT,
                 REPORT, RESULT,
@@ -63,7 +63,7 @@ class GMPv225(GMPv224[T]):
 
         Arguments:
             resource_id: ID of an existing resource
-            resource_type: Type must be either ALERT, CERT_BUND_ADV,
+            resource_type: Type must be either CERT_BUND_ADV,
                 CONFIG, CPE, CREDENTIAL, CVE, DFN_CERT_ADV, FILTER,
                 HOST, NVT, OS, OVERRIDE, PORT_LIST, REPORT_FORMAT,
                 REPORT, RESULT,

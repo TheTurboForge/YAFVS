@@ -10,7 +10,6 @@ GMP Request implementations for GMP version 22.4.
 from .._entity_id import EntityID
 from .._version import Version
 from ._aggregates import Aggregates, AggregateStatistic, SortOrder
-from ._alerts import AlertCondition, AlertEvent, AlertMethod, Alerts
 from ._auth import Authentication
 from ._cert_bund_advisories import CertBundAdvisories
 from ._cpes import Cpes
@@ -51,10 +50,6 @@ from ._vulnerabilities import Vulnerabilities
 __all__ = (
     "AggregateStatistic",
     "Aggregates",
-    "AlertCondition",
-    "AlertEvent",
-    "AlertMethod",
-    "Alerts",
     "AliveTest",
     "Authentication",
     "CertBundAdvisories",

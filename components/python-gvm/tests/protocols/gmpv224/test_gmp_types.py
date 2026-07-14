@@ -14,10 +14,6 @@ class GmpWithStatementTestMixin:
         with self.gmp:
             # Test that the values are equal
             self.assertEqual(
-                self.gmp.types.AlertEvent.TASK_RUN_STATUS_CHANGED.value,
-                "Task run status changed",
-            )
-            self.assertEqual(
                 self.gmp.types.HostsOrdering.RANDOM.value, "random"
             )
 

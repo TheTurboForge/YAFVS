@@ -13,8 +13,6 @@ import {
 import UserCommand, {
   DEFAULT_SETTINGS,
   type CertificateInfo,
-  DEFAULT_FILTER_SETTINGS,
-  saveDefaultFilterSettingId,
   transformSettingName,
 } from 'gmp/commands/user';
 import {createSession} from 'gmp/testing';
@@ -274,6 +272,20 @@ test('should expose native schedule create and modification capabilities', async
   expect(caps.mayEdit('schedule')).toBe(true);
 });
 
+test('should expose native alert create and modification capabilities', async () => {
+  const response = createResponse({
+    get_capabilities: {
+      help_response: {
+        schema: {command: [{name: 'get_alerts'}]},
+      },
+    },
+  });
+  const cmd = new UserCommand(createNativeHttp(response));
+  const {data: caps} = await cmd.currentCapabilities();
+
+  expect(caps.mayCreate('alert')).toBe(true);
+  expect(caps.mayEdit('alert')).toBe(true);
+});
 
 describe('UserCommand saveTimezone() tests', () => {
   test('should call httpPost with correct args and handle success', async () => {

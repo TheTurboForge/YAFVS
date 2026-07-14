@@ -15,7 +15,6 @@ from .._entity_id import EntityID
 class ResourceType(Enum):
     """Enum for resource types"""
 
-    ALERT = "ALERT"
     CERT_BUND_ADV = "CERT_BUND_ADV"
     CONFIG = "CONFIG"
     CPE = "CPE"
@@ -50,7 +49,7 @@ class ResourceNames:
         """Request a list of resource names and IDs
 
         Args:
-            resource_type: Type must be either ALERT, CERT_BUND_ADV,
+            resource_type: Type must be either CERT_BUND_ADV,
                 CONFIG, CPE, CREDENTIAL, CVE, DFN_CERT_ADV, FILTER,
                 HOST, NVT, OS, OVERRIDE, PORT_LIST, REPORT_FORMAT,
                 REPORT, RESULT,
@@ -83,7 +82,7 @@ class ResourceNames:
 
         Args:
             resource_id: ID of an existing resource
-            resource_type: Type must be either ALERT, CERT_BUND_ADV,
+            resource_type: Type must be either CERT_BUND_ADV,
                 CONFIG, CPE, CREDENTIAL, CVE, DFN_CERT_ADV, FILTER,
                 HOST, NVT, OS, OVERRIDE, PORT_LIST, REPORT_FORMAT,
                 REPORT, RESULT,

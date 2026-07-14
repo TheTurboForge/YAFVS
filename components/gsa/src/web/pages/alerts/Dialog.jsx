@@ -5,7 +5,6 @@
  */
 
 import React from 'react';
-import styled from 'styled-components';
 import _ from 'gmp/locale';
 import {
   CONDITION_TYPE_ALWAYS,
@@ -16,11 +15,8 @@ import {
   METHOD_TYPE_SYSLOG,
   METHOD_TYPE_EMAIL,
   METHOD_TYPE_START_TASK,
-  isTaskEvent,
-  isSecinfoEvent,
 } from 'gmp/models/alert';
 import {YES_VALUE} from 'gmp/parser';
-import {selectSaveId} from 'gmp/utils/id';
 import {isDefined} from 'gmp/utils/identity';
 import SaveDialog from 'web/components/dialog/SaveDialog';
 import FormGroup from 'web/components/form/FormGroup';
@@ -28,22 +24,13 @@ import Radio from 'web/components/form/Radio';
 import Select from 'web/components/form/Select';
 import TextField from 'web/components/form/TextField';
 import YesNoRadio from 'web/components/form/YesNoRadio';
-import {ReportIcon} from 'web/components/icon';
-import Divider from 'web/components/layout/Divider';
 import EmailMethodPart from 'web/pages/alerts/dialog/EmailMethodPart';
 import ScpMethodPart from 'web/pages/alerts/dialog/ScpMethodPart';
 import SmbMethodPart from 'web/pages/alerts/dialog/SmbMethodPart';
 import SnmpMethodPart from 'web/pages/alerts/dialog/SnmpMethodPart';
 import StartTaskMethodPart from 'web/pages/alerts/dialog/StartTaskMethodPart';
-import FilterCountChangedConditionPart from 'web/pages/alerts/FilterCountChangedConditionPart';
-import FilterCountLeastConditionPart from 'web/pages/alerts/FilterCountLeastConditionPart';
-import SecInfoEventPart from 'web/pages/alerts/SecInfoEventPart';
-import SeverityChangedConditionPart from 'web/pages/alerts/SeverityChangedConditionPart';
-import SeverityLeastConditionPart from 'web/pages/alerts/SeverityLeastConditionPart';
 import TaskEventPart from 'web/pages/alerts/TaskEventPart';
 import PropTypes from 'web/utils/PropTypes';
-import {UNSET_VALUE} from 'web/utils/Render';
-import withCapabilities from 'web/utils/withCapabilities';
 
 export const DEFAULT_DIRECTION = 'changed';
 export const DEFAULT_EVENT_STATUS = 'Done';
@@ -51,10 +38,6 @@ export const DEFAULT_METHOD = METHOD_TYPE_EMAIL;
 export const DEFAULT_SCP_PATH = 'report.xml';
 export const DEFAULT_SECINFO_TYPE = 'nvt';
 export const DEFAULT_SEVERITY = 0.1;
-
-export const DEFAULT_DETAILS_URL =
-  'https://secinfo.greenbone.net/omp?' +
-  'cmd=get_info&info_type=$t&info_id=$o&details=1&token=guest';
 
 export const DEFAULT_NOTICE = '1';
 export const NOTICE_SIMPLE = '1';
@@ -128,19 +111,10 @@ const DEFAULTS = {
   active: YES_VALUE,
   comment: '',
   condition: CONDITION_TYPE_ALWAYS,
-  condition_data_at_least_count: 1,
-  condition_data_count: 1,
-  condition_data_direction: DEFAULT_DIRECTION,
-  condition_data_filters: [],
-  condition_data_severity: DEFAULT_SEVERITY,
-  event_data_feed_event: 'new',
-  event_data_secinfo_type: DEFAULT_SECINFO_TYPE,
   event_data_status: DEFAULT_EVENT_STATUS,
   event: EVENT_TYPE_TASK_RUN_STATUS_CHANGED,
   filter_id: 0,
-  filters: [],
   method: DEFAULT_METHOD,
-  method_data_details_url: DEFAULT_DETAILS_URL,
   method_data_from_address: '',
   method_data_message_attach: ATTACH_MESSAGE_DEFAULT,
   method_data_message: INCLUDE_MESSAGE_DEFAULT,
@@ -154,21 +128,17 @@ const DEFAULTS = {
   method_data_smb_file_path: 'report.xml',
   method_data_smb_share_path: '\\\\localhost\\gvm-reports',
   method_data_snmp_agent: 'localhost',
-  method_data_snmp_community: 'public',
+  method_data_snmp_community: '',
+  method_data_snmp_community_configured: '0',
   method_data_snmp_message: '$e',
   method_data_status: 'Done',
   method_data_subject: TASK_SUBJECT,
-  method_data_submethod: 'syslog',
   method_data_to_address: '',
   name: _('Unnamed'),
   report_formats: [],
   result_filters: [],
   secinfo_filters: [],
 };
-
-const StyledDivider = styled(Divider)`
-  cursor: pointer;
-`;
 
 class AlertDialog extends React.Component {
   constructor(...args) {
@@ -184,32 +154,8 @@ class AlertDialog extends React.Component {
   }
 
   handleEventChange(value, onValueChange) {
-    const {result_filters, secinfo_filters} = this.props;
-
-    const is_task_event = isTaskEvent(value);
-    let filter_id;
-
     if (onValueChange) {
       onValueChange(CONDITION_TYPE_ALWAYS, 'condition'); // reset condition
-
-      if (is_task_event) {
-        onValueChange(TASK_SUBJECT, 'method_data_subject');
-        onValueChange(INCLUDE_MESSAGE_DEFAULT, 'method_data_message');
-        onValueChange(ATTACH_MESSAGE_DEFAULT, 'method_data_message_attach');
-        onValueChange(result_filters, 'condition_data_filters');
-        filter_id = selectSaveId(result_filters);
-      } else {
-        onValueChange(DEFAULT_METHOD, 'method'); // reset method to avoid having an invalid method for secinfo
-        onValueChange(SECINFO_SUBJECT, 'method_data_subject');
-        onValueChange(INCLUDE_MESSAGE_SECINFO, 'method_data_message');
-        onValueChange(ATTACH_MESSAGE_SECINFO, 'method_data_message_attach');
-        onValueChange(secinfo_filters, 'condition_data_filters');
-
-        filter_id = selectSaveId(secinfo_filters);
-        onValueChange(UNSET_VALUE, 'filter_id'); // reset filter_id
-      }
-
-      onValueChange(filter_id, 'condition_data_at_least_filter_id');
     }
     // in addition to changing the event in the dialog, change it here as well
     // to have it handy in render()
@@ -218,13 +164,11 @@ class AlertDialog extends React.Component {
 
   render() {
     const {
-      capabilities,
+      alert,
       credentials,
       filter_id,
       title = _('New Alert'),
       report_formats,
-      method_data_composer_ignore_pagination,
-      method_data_composer_include_overrides,
       method_data_recipient_credential,
       method_data_scp_credential,
       method_data_smb_credential,
@@ -233,7 +177,6 @@ class AlertDialog extends React.Component {
       onNewEmailCredentialClick,
       onNewScpCredentialClick,
       onNewSmbCredentialClick,
-      onOpenContentComposerDialogClick,
       onSave,
       onScpCredentialChange,
       onSmbCredentialChange,
@@ -244,64 +187,14 @@ class AlertDialog extends React.Component {
 
     const methodTypes = [];
 
-    const taskEvent = isTaskEvent(event);
-    const secinfoEvent = isSecinfoEvent(event);
-
-    if (taskEvent) {
-      methodTypes.push(
-        {
-          value: METHOD_TYPE_EMAIL,
-          label: _('Email'),
-        },
-        {
-          value: METHOD_TYPE_SCP,
-          label: _('SCP'),
-        },
-        {
-          value: METHOD_TYPE_SMB,
-          label: _('SMB'),
-        },
-        {
-          value: METHOD_TYPE_SNMP,
-          label: _('SNMP'),
-        },
-        {
-          value: METHOD_TYPE_START_TASK,
-          label: _('Start Task'),
-        },
-        {
-          value: METHOD_TYPE_SYSLOG,
-          label: _('System Logger'),
-        },
-      );
-    } else {
-      methodTypes.push(
-        {
-          value: METHOD_TYPE_EMAIL,
-          label: _('Email'),
-        },
-        {
-          value: METHOD_TYPE_SCP,
-          label: _('SCP'),
-        },
-        {
-          value: METHOD_TYPE_SMB,
-          label: _('SMB'),
-        },
-        {
-          value: METHOD_TYPE_SNMP,
-          label: _('SNMP'),
-        },
-        {
-          value: METHOD_TYPE_START_TASK,
-          label: _('Start Task'),
-        },
-        {
-          value: METHOD_TYPE_SYSLOG,
-          label: _('System Logger'),
-        },
-      );
-    }
+    methodTypes.push(
+      {value: METHOD_TYPE_EMAIL, label: _('Email')},
+      {value: METHOD_TYPE_SCP, label: _('SCP')},
+      {value: METHOD_TYPE_SMB, label: _('SMB')},
+      {value: METHOD_TYPE_SNMP, label: _('SNMP')},
+      {value: METHOD_TYPE_START_TASK, label: _('Start Task')},
+      {value: METHOD_TYPE_SYSLOG, label: _('System Logger')},
+    );
 
     const data = {
       ...DEFAULTS,
@@ -317,8 +210,6 @@ class AlertDialog extends React.Component {
     const controlledValues = {
       event,
       filter_id,
-      method_data_composer_ignore_pagination,
-      method_data_composer_include_overrides,
       method_data_recipient_credential,
       method_data_scp_credential,
       method_data_smb_credential,
@@ -363,17 +254,6 @@ class AlertDialog extends React.Component {
                     this.handleEventChange(value, onValueChange)
                   }
                 />
-
-                <SecInfoEventPart
-                  event={values.event}
-                  feedEvent={values.event_data_feed_event}
-                  prefix="event_data"
-                  secinfoType={values.event_data_secinfo_type}
-                  onChange={onValueChange}
-                  onEventChange={value =>
-                    this.handleEventChange(value, onValueChange)
-                  }
-                />
               </FormGroup>
 
               <FormGroup title={_('Condition')}>
@@ -384,74 +264,22 @@ class AlertDialog extends React.Component {
                   value={CONDITION_TYPE_ALWAYS}
                   onChange={onValueChange}
                 />
-
-                {taskEvent && (
-                  <SeverityLeastConditionPart
-                    condition={values.condition}
-                    prefix="condition_data"
-                    severity={values.condition_data_severity}
-                    onChange={onValueChange}
-                  />
-                )}
-
-                {taskEvent && (
-                  <SeverityChangedConditionPart
-                    condition={values.condition}
-                    direction={values.condition_data_direction}
-                    prefix="condition_data"
-                    onChange={onValueChange}
-                  />
-                )}
-
-                {(secinfoEvent || taskEvent) && (
-                  <FilterCountLeastConditionPart
-                    atLeastCount={values.condition_data_at_least_count}
-                    atLeastFilterId={values.condition_data_at_least_filter_id}
-                    condition={values.condition}
-                    filters={values.condition_data_filters}
-                    prefix="condition_data"
-                    onChange={onValueChange}
-                  />
-                )}
-
-                {taskEvent && (
-                  <FilterCountChangedConditionPart
-                    condition={values.condition}
-                    count={values.condition_data_count}
-                    filterId={values.condition_data_filter_id}
-                    filters={values.condition_data_filters}
-                    prefix="condition_data"
-                    onChange={onValueChange}
-                  />
-                )}
               </FormGroup>
-
-              {secinfoEvent && (
-                <FormGroup title={_('Details URL')}>
-                  <TextField
-                    grow="1"
-                    name="method_data_details_url"
-                    value={values.method_data_details_url}
-                    onChange={onValueChange}
-                  />
-                </FormGroup>
-              )}
-
-              {capabilities.mayOp('get_filters') && taskEvent && (
-                <FormGroup title={_('Report Content')}>
-                  <StyledDivider onClick={onOpenContentComposerDialogClick}>
-                    <ReportIcon title={_('Compose Report Content')} />
-                    <span>{_('Compose')}</span>
-                  </StyledDivider>
-                </FormGroup>
-              )}
 
               <FormGroup title={_('Method')}>
                 <Select
                   items={methodTypes}
                   name="method"
                   value={values.method}
-                  onChange={onValueChange}
+                  onChange={value => {
+                    if (
+                      values.method === METHOD_TYPE_SNMP &&
+                      value !== METHOD_TYPE_SNMP
+                    ) {
+                      onValueChange('', 'method_data_snmp_community');
+                    }
+                    onValueChange(value, 'method');
+                  }}
                 />
               </FormGroup>
 
@@ -546,7 +374,7 @@ class AlertDialog extends React.Component {
 
 AlertDialog.propTypes = {
   active: PropTypes.yesno,
-  capabilities: PropTypes.capabilities.isRequired,
+  alert: PropTypes.model,
   comment: PropTypes.string,
   condition: PropTypes.string,
   condition_data_at_least_count: PropTypes.number,
@@ -561,11 +389,9 @@ AlertDialog.propTypes = {
   event_data_feed_event: PropTypes.string,
   event_data_secinfo_type: PropTypes.string,
   event_data_status: PropTypes.string,
+  expected_revision: PropTypes.string,
   filter_id: PropTypes.idOrZero,
   method: PropTypes.string,
-  method_data_composer_ignore_pagination: PropTypes.number,
-  method_data_composer_include_overrides: PropTypes.number,
-  method_data_details_url: PropTypes.string,
   method_data_from_address: PropTypes.string,
   method_data_message: PropTypes.string,
   method_data_message_attach: PropTypes.string,
@@ -600,10 +426,9 @@ AlertDialog.propTypes = {
   onNewEmailCredentialClick: PropTypes.func.isRequired,
   onNewScpCredentialClick: PropTypes.func.isRequired,
   onNewSmbCredentialClick: PropTypes.func.isRequired,
-  onOpenContentComposerDialogClick: PropTypes.func.isRequired,
   onSave: PropTypes.func.isRequired,
   onScpCredentialChange: PropTypes.func.isRequired,
   onSmbCredentialChange: PropTypes.func.isRequired,
 };
 
-export default withCapabilities(AlertDialog);
+export default AlertDialog;

@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
@@ -86,8 +87,6 @@ class Credentials:
         public_key: str | None = None,
     ) -> Request:
         """Create a new credential
-
-        Create a new credential e.g. to be used in the method of an alert.
 
         Currently the following credential types are supported:
 

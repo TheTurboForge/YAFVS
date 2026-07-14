@@ -34,7 +34,7 @@
  * @return MHD_YES if the request was handled successfully, MHD_NO otherwise.
  */
 static gsad_http_result_t
-handle_get_post_patch_delete (gsad_http_handler_t *handler_next,
+handle_get_post_patch_put_delete (gsad_http_handler_t *handler_next,
                               void *handler_data,
                               gsad_http_connection_t *connection,
                               gsad_connection_info_t *con_info, void *data)
@@ -61,6 +61,12 @@ handle_get_post_patch_delete (gsad_http_handler_t *handler_next,
     {
       g_debug ("Handling PATCH method");
       return gsad_http_handler_call (routes->patch, connection, con_info, data);
+    }
+  else if (routes->put != NULL
+           && gsad_connection_info_get_method_type (con_info) == METHOD_TYPE_PUT)
+    {
+      g_debug ("Handling PUT method");
+      return gsad_http_handler_call (routes->put, connection, con_info, data);
     }
   else if (routes->delete != NULL
            && gsad_connection_info_get_method_type (con_info)
@@ -99,6 +105,10 @@ gsad_http_method_handler_set_leaf (gsad_http_handler_t *handler,
   if (routes->patch != NULL)
     {
       routes->patch->set_leaf (routes->patch, next, FALSE);
+    }
+  if (routes->put != NULL)
+    {
+      routes->put->set_leaf (routes->put, next, FALSE);
     }
   if (routes->delete != NULL)
     {
@@ -142,14 +152,25 @@ gsad_http_method_handler_new_with_delete_handler (gsad_http_handler_t *get_handl
                                                   gsad_http_handler_t *patch_handler,
                                                   gsad_http_handler_t *delete_handler)
 {
+  return gsad_http_method_handler_new_with_put_and_delete_handler (
+    get_handler, post_handler, patch_handler, NULL, delete_handler);
+}
+
+gsad_http_handler_t *
+gsad_http_method_handler_new_with_put_and_delete_handler (
+  gsad_http_handler_t *get_handler, gsad_http_handler_t *post_handler,
+  gsad_http_handler_t *patch_handler, gsad_http_handler_t *put_handler,
+  gsad_http_handler_t *delete_handler)
+{
   gsad_http_method_handler_t *router =
     g_malloc0 (sizeof (gsad_http_method_handler_t));
   router->get = get_handler;
   router->post = post_handler;
   router->patch = patch_handler;
+  router->put = put_handler;
   router->delete = delete_handler;
   return gsad_http_handler_new_with_data (
-    handle_get_post_patch_delete, gsad_http_method_handler_set_leaf,
+    handle_get_post_patch_put_delete, gsad_http_method_handler_set_leaf,
     gsad_http_method_handler_free, router);
 }
 
@@ -234,6 +255,7 @@ gsad_http_method_handler_free (void *data)
   gsad_http_handler_free (routes->get);
   gsad_http_handler_free (routes->post);
   gsad_http_handler_free (routes->patch);
+  gsad_http_handler_free (routes->put);
   gsad_http_handler_free (routes->delete);
 
   g_free (routes);

@@ -17,6 +17,7 @@ typedef struct gsad_http_method_handler
   gsad_http_handler_t *get;  ///< Handler for GET requests.
   gsad_http_handler_t *post; ///< Handler for POST requests.
   gsad_http_handler_t *patch; ///< Handler for PATCH requests.
+  gsad_http_handler_t *put; ///< Handler for PUT requests.
   gsad_http_handler_t *delete; ///< Handler for DELETE requests.
 } gsad_http_method_handler_t;
 

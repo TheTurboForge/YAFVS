@@ -23,11 +23,11 @@ import User, {
   AUTH_METHOD_RADIUS,
   type UserElement,
 } from 'gmp/models/user';
+import {exportNativeUserMetadata, fetchNativeUser} from 'gmp/native-api/users';
 import {parseBoolean, parseInt} from 'gmp/parser';
 import {filter, forEach, map} from 'gmp/utils/array';
 import {type EntityType} from 'gmp/utils/entity-type';
 import {isArray, isDefined} from 'gmp/utils/identity';
-import {exportNativeUserMetadata, fetchNativeUser} from 'gmp/native-api/users';
 
 interface AuthSettingsResponseData extends XmlResponseData {
   auth_settings: {
@@ -186,10 +186,7 @@ class UserCommand extends EntityCommand<User, PortListElement> {
     super(http, 'user', User);
   }
 
-  async get(
-    {id}: {id: string},
-    _options: {filter?: string} = {},
-  ) {
+  async get({id}: {id: string}, _options: {filter?: string} = {}) {
     const user = await fetchNativeUser(this.http, id);
     return new Response(user);
   }
@@ -283,7 +280,12 @@ class UserCommand extends EntityCommand<User, PortListElement> {
     const {command: commands} = data.get_capabilities.help_response.schema;
     const caps = map(commands, command => command.name as Capability);
     if (canUseNativeApi(this.http)) {
-      caps.push('create_schedule', 'modify_schedule');
+      caps.push(
+        'create_alert',
+        'modify_alert',
+        'create_schedule',
+        'modify_schedule',
+      );
     }
     return response.setData(new Capabilities(caps));
   }

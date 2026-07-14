@@ -19,24 +19,6 @@
 ## Enums
 
 ```{eval-rst}
-.. autoclass:: gvm.protocols.gmp.requests.v224.AlertCondition
-    :members:
-    :undoc-members:
-```
-
-```{eval-rst}
-.. autoclass:: gvm.protocols.gmp.requests.v224.AlertEvent
-    :members:
-    :undoc-members:
-```
-
-```{eval-rst}
-.. autoclass:: gvm.protocols.gmp.requests.v224.AlertMethod
-    :members:
-    :undoc-members:
-```
-
-```{eval-rst}
 .. autoclass:: gvm.protocols.gmp.requests.v224.AliveTest
     :members:
     :undoc-members:

@@ -660,6 +660,8 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "alert-metadata-list-read",
         "alert-metadata-detail-read",
         "alert-metadata-export-read",
+        "alert-retained-definition-read",
+        "alert-retained-definition-modify",
         "alert-metadata-modify",
         "alert-clone",
         "alert-deliver-report",
@@ -878,8 +880,10 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/alerts"): "direct-read",
     ("post", "/alerts"): "direct-write",
     ("get", "/alerts/{alert_id}"): "direct-read",
+    ("get", "/alerts/{alert_id}/definition"): "direct-read",
     ("get", "/alerts/{alert_id}/export"): "direct-read",
     ("patch", "/alerts/{alert_id}"): "direct-write",
+    ("put", "/alerts/{alert_id}/definition"): "direct-write",
     ("delete", "/alerts/{alert_id}"): "direct-write",
     ("post", "/alerts/{alert_id}/clone"): "direct-write",
     ("post", "/alerts/{alert_id}/deliver-report"): "direct-write",
@@ -1046,6 +1050,20 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("get", "/alerts/{alert_id}"): {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "alert-metadata-detail-read",
+    },
+    ("get", "/alerts/{alert_id}/definition"): {
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-operator-identity": "resolved-request-operator",
+        "x-turbovas-owner-semantics": "request-operator-owner",
+        "x-turbovas-replaces": "alert-retained-definition-read",
+    },
+    ("put", "/alerts/{alert_id}/definition"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "resolved-request-operator",
+        "x-turbovas-owner-semantics": "preserve-existing-owner",
+        "x-turbovas-replaces": "alert-retained-definition-modify",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "alert-delivery-control",
     },
     ("get", "/alerts/{alert_id}/export"): {
         "x-turbovas-maturity": "live-read",
@@ -2083,6 +2101,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/feeds",
         "/api/v1/alerts",
         "/api/v1/alerts/{}",
+        "/api/v1/alerts/{}/definition",
         "/api/v1/alerts/{}/export",
         "/api/v1/tags",
         "/api/v1/tags/resource-names/{}",
@@ -9676,13 +9695,22 @@ def rust_native_api_route_operations(
     route_source = rust_source_function_body(source, function_name) if function_name else source
     if function_name and not route_source:
         return set()
-    return {
+    operations = {
         (match.group(2).lower(), rust_route_to_endpoint_template(match.group(1)))
         for match in re.finditer(
             r'\.route\(\s*"(/api/v1[^"]*)"\s*,\s*([a-z]+)\s*\(',
             route_source,
         )
     }
+    operations.update(
+        (match.group(2).lower(), rust_route_to_endpoint_template(match.group(1)))
+        for match in re.finditer(
+            r'\.route\(\s*"(/api/v1[^"]*)"\s*,\s*[a-z]+\s*\([^)]*\)\s*\.\s*([a-z]+)\s*\(',
+            route_source,
+            re.DOTALL,
+        )
+    )
+    return operations
 
 
 def rust_native_api_route_operation_declared(
@@ -10060,6 +10088,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
 
     for prefix_variable, suffix_variable in (
         ("alert_prefix", "alert_export_suffix"),
+        ("alert_prefix", "alert_definition_suffix"),
         ("cert_bund_advisory_prefix", "cert_bund_advisory_export_suffix"),
         ("credential_prefix", "credential_export_suffix"),
         ("cve_prefix", "cve_export_suffix"),
@@ -10375,6 +10404,21 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in patch_function_body:
                 operations.add(f"PATCH {prefix.rstrip('/')}/{{}}")
 
+    put_function_body = c_source_function_body(source, "native_api_put_path_is_allowed")
+    if put_function_body:
+        put_constants = c_string_constants(put_function_body)
+        alert_prefix = put_constants.get("alert_prefix")
+        definition_suffix = put_constants.get("definition_suffix")
+        if (
+            alert_prefix
+            and definition_suffix
+            and "g_str_has_prefix (path, alert_prefix)" in put_function_body
+            and "is_uuid_segment_with_suffix" in put_function_body
+        ):
+            operations.add(f"PUT {alert_prefix.rstrip('/')}/{{}}{definition_suffix}")
+        else:
+            errors.append("unresolved_put_alert_definition_path")
+
     delete_function_body = c_source_function_body(source, "native_api_delete_path_is_allowed")
     if delete_function_body:
         delete_constants = c_string_constants(delete_function_body)
@@ -10430,12 +10474,15 @@ def native_api_gsad_proxy_methods(repo_root: Path | None) -> tuple[list[str], li
         or "gsad_http_method_handler_new_with_handlers (native_api_get_handler" in source
         or "gsad_http_method_handler_new_with_patch_handler (native_api_get_handler" in source
         or "gsad_http_method_handler_new_with_delete_handler (native_api_get_handler" in source
+        or "gsad_http_method_handler_new_with_put_and_delete_handler (native_api_get_handler" in source
     ):
         methods.add("GET")
     if "gsad_http_method_handler_new_post (native_api_post_handler)" in source or "native_api_post_handler" in source:
         methods.add("POST")
     if "native_api_patch_handler" in source:
         methods.add("PATCH")
+    if "native_api_put_handler" in source:
+        methods.add("PUT")
     if "native_api_delete_handler" in source or "gsad_http_method_handler_new_with_delete_handler" in source:
         methods.add("DELETE")
     return sorted(methods), [] if methods else ["missing_native_api_method_handler"]
@@ -11186,6 +11233,29 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                     "Redacted metadata detail only; alert delivery and payload detail remain inherited.",
                     "Task references are id/name metadata only.",
                     "No alert active state, delivery/test, credentials, URLs, hosts, paths, email/message bodies, or certificate data.",
+                ],
+            },
+            {
+                "endpoint": "/api/v1/alerts/{alert_id}/definition",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["GSA retained alert definition editor read", "direct native retained alert definition read"],
+                "notes": [
+                    "Strict Task run status changed, Always, no-filter EMAIL, SMB, SYSLOG, SNMP, SCP, and START_TASK definitions only.",
+                    "All retained non-secret editor fields are returned; SNMP community data is never selected or returned.",
+                    "Unsupported inherited methods, events, conditions, filters, and malformed definitions return conflict instead of being silently rewritten.",
+                ],
+            },
+            {
+                "method": "put",
+                "endpoint": "/api/v1/alerts/{alert_id}/definition",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["GSA retained alert definition editor save", "direct native retained alert definition replacement"],
+                "notes": [
+                    "Atomic strict full replacement with owner, target, namespace, and reference locks.",
+                    "SNMP community is write-only and must be explicitly preserved or replaced.",
+                    "Replaces inherited generic GMP create_alert and modify_alert compatibility for retained TurboVAS alert workflows.",
                 ],
             },
             {
@@ -22643,6 +22713,70 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 alert_resource_id = None
             findings.append(native_api_probe_finding("pass" if alert_create_ok else "fail", "native-api-direct.alert-write-create", "Direct write-control created an inactive EMAIL alert and returned redacted metadata only." if alert_create_ok else "Direct write-control failed to create an inactive EMAIL alert with a redacted response.", alert_create, direct_native_api_display_command("/api/v1/alerts", token=token, env=env, method="POST", body=alert_create_body, extra_headers=content_type), alert_create_json, {"http_status": alert_create_status, "alert_id": alert_resource_id, **summarize_native_alert_detail_response(alert_create_json)}))
 
+            if alert_resource_id:
+                alert_definition_path = f"/api/v1/alerts/{urllib.parse.quote(alert_resource_id)}/definition"
+                alert_definition_read = direct_native_api_curl(repo_root, alert_definition_path, token=token, env=env)
+                alert_definition_read_json, alert_definition_read_status = parse_json_output_with_http_status(alert_definition_read)
+                alert_definition_read_ok = (
+                    alert_definition_read.returncode == 0
+                    and alert_definition_read_status == 200
+                    and isinstance(alert_definition_read_json, dict)
+                    and alert_definition_read_json.get("method") == "EMAIL"
+                    and alert_definition_read_json.get("name") == alert_name
+                    and alert_definition_read_json.get("to_address") == "turbovas-smoke@example.invalid"
+                    and alert_definition_read_json.get("subject") == "TurboVAS delivery subject sentinel"
+                    and "snmp_community" not in alert_definition_read_json
+                )
+                findings.append(native_api_probe_finding("pass" if alert_definition_read_ok else "fail", "native-api-direct.alert-definition-read", "Direct native API returned the strict retained alert definition without an SNMP community field." if alert_definition_read_ok else "Direct native API failed to return the expected strict retained alert definition.", alert_definition_read, direct_native_api_display_command(alert_definition_path, token=token, env=env), alert_definition_read_json, {"http_status": alert_definition_read_status, "alert_id": alert_resource_id, "method": alert_definition_read_json.get("method") if isinstance(alert_definition_read_json, dict) else None, "snmp_community_present": isinstance(alert_definition_read_json, dict) and "snmp_community" in alert_definition_read_json}))
+
+                alert_definition_put_body = json.dumps(
+                    {
+                        "expected_revision": alert_definition_read_json.get("revision"),
+                        "definition": {
+                            "method": "SYSLOG",
+                            "name": alert_name,
+                            "comment": "TurboVAS direct write smoke replaced temporary alert definition",
+                            "active": False,
+                            "status": "Done",
+                        },
+                    },
+                    separators=(",", ":"),
+                )
+                alert_definition_put = direct_native_api_curl(repo_root, alert_definition_path, token=token, env=env, method="PUT", body=alert_definition_put_body, extra_headers=content_type)
+                alert_definition_put_json, alert_definition_put_status = parse_json_output_with_http_status(alert_definition_put)
+                alert_definition_put_ok = (
+                    alert_definition_put.returncode == 0
+                    and alert_definition_put_status == 200
+                    and isinstance(alert_definition_put_json, dict)
+                    and alert_definition_put_json.get("method") == "SYSLOG"
+                    and alert_definition_put_json.get("name") == alert_name
+                    and alert_definition_put_json.get("comment") == "TurboVAS direct write smoke replaced temporary alert definition"
+                    and "to_address" not in alert_definition_put_json
+                    and "subject" not in alert_definition_put_json
+                    and "snmp_community" not in alert_definition_put_json
+                )
+                findings.append(native_api_probe_finding("pass" if alert_definition_put_ok else "fail", "native-api-direct.alert-definition-replace", "Direct write-control atomically replaced the temporary EMAIL definition with a strict SYSLOG definition." if alert_definition_put_ok else "Direct write-control failed to replace the temporary alert definition cleanly.", alert_definition_put, direct_native_api_display_command(alert_definition_path, token=token, env=env, method="PUT", body=alert_definition_put_body, extra_headers=content_type), alert_definition_put_json, {"http_status": alert_definition_put_status, "alert_id": alert_resource_id, "method": alert_definition_put_json.get("method") if isinstance(alert_definition_put_json, dict) else None, "stale_email_fields_present": isinstance(alert_definition_put_json, dict) and any(key in alert_definition_put_json for key in ("to_address", "subject")), "snmp_community_present": isinstance(alert_definition_put_json, dict) and "snmp_community" in alert_definition_put_json}))
+
+                alert_definition_stale_put = direct_native_api_curl(repo_root, alert_definition_path, token=token, env=env, method="PUT", body=alert_definition_put_body, extra_headers=content_type)
+                alert_definition_stale_put_json, alert_definition_stale_put_status = parse_json_output_with_http_status(alert_definition_stale_put)
+                alert_definition_stale_put_ok = (
+                    alert_definition_stale_put.returncode == 0
+                    and alert_definition_stale_put_status == 409
+                    and isinstance(alert_definition_stale_put_json, dict)
+                    and alert_definition_stale_put_json.get("error", {}).get("code") == "conflict"
+                )
+                findings.append(native_api_probe_finding("pass" if alert_definition_stale_put_ok else "fail", "native-api-direct.alert-definition-stale-revision", "Direct write-control rejected a stale full-definition replacement without overwriting the committed definition." if alert_definition_stale_put_ok else "Direct write-control did not reject a stale full-definition replacement cleanly.", alert_definition_stale_put, direct_native_api_display_command(alert_definition_path, token=token, env=env, method="PUT", body=alert_definition_put_body, extra_headers=content_type), alert_definition_stale_put_json, {"http_status": alert_definition_stale_put_status, "alert_id": alert_resource_id, **summarize_native_api_response(alert_definition_stale_put_json)}))
+
+                alert_definition_after = direct_native_api_curl(repo_root, alert_definition_path, token=token, env=env)
+                alert_definition_after_json, alert_definition_after_status = parse_json_output_with_http_status(alert_definition_after)
+                alert_definition_after_ok = (
+                    alert_definition_after.returncode == 0
+                    and alert_definition_after_status == 200
+                    and isinstance(alert_definition_after_json, dict)
+                    and alert_definition_after_json == alert_definition_put_json
+                )
+                findings.append(native_api_probe_finding("pass" if alert_definition_after_ok else "fail", "native-api-direct.alert-definition-read-after-replace", "Direct native API reloaded the committed alert definition exactly after replacement." if alert_definition_after_ok else "Direct native API did not reload the committed alert definition consistently after replacement.", alert_definition_after, direct_native_api_display_command(alert_definition_path, token=token, env=env), alert_definition_after_json, {"http_status": alert_definition_after_status, "alert_id": alert_resource_id, "method": alert_definition_after_json.get("method") if isinstance(alert_definition_after_json, dict) else None}))
+
             alert_missing_format_body = json.dumps(
                 {
                     "method": "EMAIL",
@@ -24259,6 +24393,31 @@ def _command_runtime_native_api_direct_smoke_unlocked(repo_root: Path, status_on
     disabled_scope_write_json, disabled_scope_write_status = parse_json_output_with_http_status(disabled_scope_write)
     disabled_scope_write_ok = disabled_scope_write.returncode == 0 and disabled_scope_write_status == 405 and isinstance(disabled_scope_write_json, dict) and disabled_scope_write_json.get("error", {}).get("code") == "method_not_allowed"
     findings.append(native_api_probe_finding("pass" if disabled_scope_write_ok else "fail", "native-api-direct.scope-write-disabled", "Direct native API rejects scope writes while direct write-control is disabled." if disabled_scope_write_ok else "Direct native API did not reject a scope write while direct write-control is disabled.", disabled_scope_write, direct_native_api_display_command("/api/v1/scopes", token=token, env=env, method="POST"), disabled_scope_write_json, {"http_status": disabled_scope_write_status, **summarize_native_api_response(disabled_scope_write_json)}))
+
+    disabled_alert_definition_put_body = json.dumps(
+        {
+            "expected_revision": "0",
+            "definition": {
+                "method": "SYSLOG",
+                "name": "disabled alert definition replacement",
+                "active": False,
+                "status": "Done",
+            },
+        },
+        separators=(",", ":"),
+    )
+    disabled_alert_definition_put = direct_native_api_curl(
+        repo_root,
+        "/api/v1/alerts/00000000-0000-0000-0000-000000000000/definition",
+        token=token,
+        env=env,
+        method="PUT",
+        body=disabled_alert_definition_put_body,
+        extra_headers=content_type,
+    )
+    disabled_alert_definition_put_json, disabled_alert_definition_put_status = parse_json_output_with_http_status(disabled_alert_definition_put)
+    disabled_alert_definition_put_ok = disabled_alert_definition_put.returncode == 0 and disabled_alert_definition_put_status == 405 and isinstance(disabled_alert_definition_put_json, dict) and disabled_alert_definition_put_json.get("error", {}).get("code") == "method_not_allowed"
+    findings.append(native_api_probe_finding("pass" if disabled_alert_definition_put_ok else "fail", "native-api-direct.alert-definition-put-disabled", "Direct native API rejects alert definition replacement while direct write-control is disabled." if disabled_alert_definition_put_ok else "Direct native API did not reject alert definition replacement while direct write-control is disabled.", disabled_alert_definition_put, direct_native_api_display_command("/api/v1/alerts/00000000-0000-0000-0000-000000000000/definition", token=token, env=env, method="PUT", body=disabled_alert_definition_put_body, extra_headers=content_type), disabled_alert_definition_put_json, {"http_status": disabled_alert_definition_put_status, **summarize_native_api_response(disabled_alert_definition_put_json)}))
 
     disabled_filter_create_body = json.dumps(
         {"name": "disabled saved filter", "filter_type": "task"},

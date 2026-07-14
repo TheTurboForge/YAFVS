@@ -10,10 +10,10 @@ from gvm.protocols.gmp.requests.v226 import ResourceType
 
 class GmpGetResourceNamesListTestMixin:
     def test_get_resource_names(self):
-        self.gmp.get_resource_names(ResourceType.ALERT)
+        self.gmp.get_resource_names(ResourceType.HOST)
 
         self.connection.send.has_been_called_with(
-            b'<get_resource_names type="ALERT"/>'
+            b'<get_resource_names type="HOST"/>'
         )
 
         self.gmp.get_resource_names(ResourceType.CERT_BUND_ADV)

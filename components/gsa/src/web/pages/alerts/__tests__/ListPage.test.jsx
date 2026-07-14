@@ -154,13 +154,20 @@ const createGmp = ({
   }),
 } = {}) => {
   const resolvedBuildUrl =
-    buildUrl ?? testing.fn((path, _params) => `https://turbovas.example/${path}`);
+    buildUrl ??
+    testing.fn((path, _params) => `https://turbovas.example/${path}`);
   if (buildUrl === undefined) {
     testing.stubGlobal(
       'fetch',
       testing.fn().mockResolvedValue({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 10, total: nativeAlertItems.length, sort: 'name', filter: ''},
+          page: {
+            page: 1,
+            page_size: 10,
+            total: nativeAlertItems.length,
+            sort: 'name',
+            filter: '',
+          },
           items: nativeAlertItems,
         }),
         ok: true,
@@ -333,13 +340,6 @@ describe('Alert ListPage tests', () => {
       'api/v1/report-formats': {
         page: {page: 1, page_size: 500, total: 1, sort: 'name', filter: ''},
         items: [{id: 'rf-1', name: 'PDF', active: true, trust: 'yes'}],
-      },
-      'api/v1/filters': {
-        page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: ''},
-        items: [
-          {id: 'filter-result', name: 'Result Filter', filter_type: 'result'},
-          {id: 'filter-info', name: 'Info Filter', filter_type: 'info'},
-        ],
       },
       'api/v1/tasks': {
         page: {page: 1, page_size: 500, total: 1, sort: 'name', filter: ''},

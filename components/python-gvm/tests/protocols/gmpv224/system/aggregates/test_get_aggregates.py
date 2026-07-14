@@ -18,10 +18,10 @@ class GmpGetAggregatesTestMixin:
         Test basic get_aggregates calls with only resource_type except special
         cases for audit, policy, scan_config and task.
         """
-        self.gmp.get_aggregates(EntityType.ALERT)
+        self.gmp.get_aggregates(EntityType.CPE)
 
         self.connection.send.has_been_called_with(
-            b'<get_aggregates type="alert"/>'
+            b'<get_aggregates type="cpe"/>'
         )
 
         self.gmp.get_aggregates(resource_type=EntityType.CERT_BUND_ADV)
@@ -181,23 +181,23 @@ class GmpGetAggregatesTestMixin:
         """
         with self.assertRaises(InvalidArgumentType):
             self.gmp.get_aggregates(
-                resource_type=EntityType.ALERT, sort_criteria="INVALID"
+                resource_type=EntityType.CPE, sort_criteria="INVALID"
             )
 
         with self.assertRaises(InvalidArgumentType):
             self.gmp.get_aggregates(
-                resource_type=EntityType.ALERT, sort_criteria=["INVALID"]
+                resource_type=EntityType.CPE, sort_criteria=["INVALID"]
             )
 
         with self.assertRaises(InvalidArgument):
             self.gmp.get_aggregates(
-                resource_type=EntityType.ALERT,
+                resource_type=EntityType.CPE,
                 sort_criteria=[{"stat": "INVALID"}],
             )
 
         with self.assertRaises(InvalidArgument):
             self.gmp.get_aggregates(
-                resource_type=EntityType.ALERT,
+                resource_type=EntityType.CPE,
                 sort_criteria=[{"order": "INVALID"}],
             )
 
@@ -241,11 +241,11 @@ class GmpGetAggregatesTestMixin:
         )
 
         self.gmp.get_aggregates(
-            resource_type=EntityType.ALERT, data_columns="severity"
+            resource_type=EntityType.CPE, data_columns="severity"
         )
 
         self.connection.send.has_been_called_with(
-            b'<get_aggregates type="alert">'
+            b'<get_aggregates type="cpe">'
             b"<data_column>severity</data_column>"
             b"</get_aggregates>"
         )

@@ -39,25 +39,25 @@ class FilterTestsCase(unittest.TestCase):
 
     def test_create_filter_with_filter_type(self):
         request = Filters.create_filter(
-            "filter_name", filter_type=FilterType.ALERT
+            "filter_name", filter_type=FilterType.HOST
         )
         self.assertEqual(
             bytes(request),
             b"<create_filter>"
             b"<name>filter_name</name>"
-            b"<type>alert</type>"
+            b"<type>host</type>"
             b"</create_filter>",
         )
 
         request = Filters.create_filter(
             "filter_name",
-            filter_type="alert",
+            filter_type="host",
         )
         self.assertEqual(
             bytes(request),
             b"<create_filter>"
             b"<name>filter_name</name>"
-            b"<type>alert</type>"
+            b"<type>host</type>"
             b"</create_filter>",
         )
 
@@ -182,20 +182,20 @@ class FilterTestsCase(unittest.TestCase):
 
     def test_modify_filter_with_type(self):
         request = Filters.modify_filter(
-            "filter_id", filter_type=FilterType.ALERT
+            "filter_id", filter_type=FilterType.HOST
         )
         self.assertEqual(
             bytes(request),
             b'<modify_filter filter_id="filter_id">'
-            b"<type>alert</type>"
+            b"<type>host</type>"
             b"</modify_filter>",
         )
 
-        request = Filters.modify_filter("filter_id", filter_type="alert")
+        request = Filters.modify_filter("filter_id", filter_type="host")
         self.assertEqual(
             bytes(request),
             b'<modify_filter filter_id="filter_id">'
-            b"<type>alert</type>"
+            b"<type>host</type>"
             b"</modify_filter>",
         )
 

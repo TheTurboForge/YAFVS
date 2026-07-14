@@ -5,10 +5,11 @@
 use axum::{
     Router,
     extract::DefaultBodyLimit,
-    routing::{delete, get, patch, post},
+    routing::{delete, get, patch, post, put},
 };
 
 use crate::{
+    alert_definition::{get_alert_definition, put_alert_definition},
     alert_deliver_report::deliver_alert_report,
     alert_test::test_alert,
     alert_writes::{clone_alert, create_alert, delete_alert, patch_alert},
@@ -63,6 +64,10 @@ pub(crate) fn direct_native_api_router(
     router: Router<AppState>,
     write_control_enabled: bool,
 ) -> Router<AppState> {
+    let router = router.route(
+        "/api/v1/alerts/:alert_id/definition",
+        get(get_alert_definition),
+    );
     let router = if write_control_enabled {
         router
             .route("/api/v1/scopes", post(create_scope))
@@ -122,6 +127,10 @@ pub(crate) fn direct_native_api_router(
                 delete(hard_delete_filter),
             )
             .route("/api/v1/alerts/:alert_id", patch(patch_alert))
+            .route(
+                "/api/v1/alerts/:alert_id/definition",
+                put(put_alert_definition),
+            )
             .route("/api/v1/alerts/:alert_id", delete(delete_alert))
             .route("/api/v1/alerts", post(create_alert))
             .route("/api/v1/alerts/:alert_id/test", post(test_alert))

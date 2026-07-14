@@ -2,6 +2,11 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+mod alert_definition;
+mod alert_definition_db;
+mod alert_definition_payloads;
+mod alert_definition_sql;
+mod alert_definition_transactions;
 mod alert_deliver_report;
 mod alert_payloads;
 mod alert_query_sql;
@@ -15,6 +20,7 @@ mod alerts;
 mod app_state;
 mod asset_user_tag_query_sql;
 mod auth;
+mod browser_proxy_alert_definition;
 mod browser_proxy_api;
 mod browser_proxy_filter;
 mod browser_proxy_host;
@@ -265,6 +271,10 @@ async fn main() -> Result<(), ApiError> {
     startup::run().await
 }
 
+#[cfg(test)]
+mod alert_definition_characterization_tests;
+#[cfg(test)]
+mod alert_definition_tests;
 #[cfg(test)]
 mod alert_deliver_report_characterization_tests;
 #[cfg(test)]

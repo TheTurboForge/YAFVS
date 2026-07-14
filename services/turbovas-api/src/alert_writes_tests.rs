@@ -406,7 +406,7 @@ fn email_and_smb_alert_references_are_locked_inside_create_transactions() {
         .split_once("create_alert_smb_with_report_refs")
         .unwrap()
         .1
-        .split_once("/**\n * @brief Modify an alert.")
+        .split_once("/**\n * @brief Delete an alert.")
         .unwrap()
         .0;
     for required in [

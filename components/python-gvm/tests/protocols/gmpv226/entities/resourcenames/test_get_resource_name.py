@@ -11,11 +11,11 @@ from gvm.protocols.gmp.requests.v226 import ResourceType
 class GmpGetResourceNameTestMixin:
     def test_get_resource_name(self):
         self.gmp.get_resource_name(
-            resource_type=ResourceType.ALERT, resource_id="i1"
+            resource_type=ResourceType.HOST, resource_id="i1"
         )
 
         self.connection.send.has_been_called_with(
-            b'<get_resource_names resource_id="i1" type="ALERT"/>'
+            b'<get_resource_names resource_id="i1" type="HOST"/>'
         )
 
         self.gmp.get_resource_name(

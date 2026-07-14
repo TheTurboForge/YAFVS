@@ -30,6 +30,11 @@ gsad_http_handle_native_api_patch (gsad_http_handler_t *, void *,
                                    gsad_connection_info_t *, void *);
 
 gsad_http_result_t
+gsad_http_handle_native_api_put (gsad_http_handler_t *, void *,
+                                 gsad_http_connection_t *,
+                                 gsad_connection_info_t *, void *);
+
+gsad_http_result_t
 gsad_http_handle_native_api_delete (gsad_http_handler_t *, void *,
                                     gsad_http_connection_t *,
                                     gsad_connection_info_t *, void *);

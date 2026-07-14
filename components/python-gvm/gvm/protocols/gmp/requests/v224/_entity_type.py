@@ -11,7 +11,6 @@ from gvm._enum import Enum
 class EntityType(Enum):
     """Enum for entity types"""
 
-    ALERT = "alert"
     ASSET = "asset"
     CERT_BUND_ADV = "cert_bund_adv"
     CPE = "cpe"

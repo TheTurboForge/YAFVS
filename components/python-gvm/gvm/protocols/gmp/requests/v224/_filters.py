@@ -17,7 +17,6 @@ from .._entity_id import EntityID
 class FilterType(Enum):
     """Enum for filter types"""
 
-    ALERT = "alert"
     ASSET = "asset"
     SCAN_CONFIG = "config"
     CREDENTIAL = "credential"

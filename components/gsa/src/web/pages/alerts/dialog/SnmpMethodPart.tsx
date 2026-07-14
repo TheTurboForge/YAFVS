@@ -1,9 +1,11 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import FormGroup from 'web/components/form/FormGroup';
+import PasswordField from 'web/components/form/PasswordField';
 import TextField from 'web/components/form/TextField';
 import useTranslation from 'web/hooks/useTranslation';
 import addPrefix from 'web/utils/add-prefix';
@@ -28,7 +30,8 @@ const SnmpMethodPart = ({
   return (
     <>
       <FormGroup>
-        <TextField
+        <PasswordField
+          autoComplete="new-password"
           name={prefix('snmp_community')}
           title={_('Community')}
           value={snmpCommunity}

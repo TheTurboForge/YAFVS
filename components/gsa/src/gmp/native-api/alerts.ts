@@ -85,8 +85,34 @@ export interface NativeAlertCloneArgs {
   comment?: string;
 }
 
+export type NativeAlertMethod =
+  | 'EMAIL'
+  | 'SMB'
+  | 'SYSLOG'
+  | 'SNMP'
+  | 'SCP'
+  | 'START_TASK';
+
 export interface NativeAlertCreateArgs {
-  method: 'EMAIL' | 'SMB' | 'SYSLOG' | 'SNMP' | 'SCP' | 'START_TASK';
+  method: NativeAlertMethod;
+  [key: string]: unknown;
+}
+
+export interface NativeAlertDefinitionPayload {
+  revision: string;
+  method: NativeAlertMethod;
+  name?: string;
+  comment?: string;
+  active?: boolean;
+  status?: string;
+  snmp_community_configured?: boolean;
+  [key: string]: unknown;
+}
+
+export interface NativeAlertDefinitionPutArgs {
+  method: NativeAlertMethod;
+  snmp_community_mode?: 'preserve' | 'replace';
+  snmp_community?: string;
   [key: string]: unknown;
 }
 
@@ -192,6 +218,151 @@ const nativeCounts = (page: NativePage, length: number): CollectionCounts =>
     rows: page.page_size,
   });
 
+const nativeAlertDefinitionData = (name: string, value: unknown) =>
+  value === undefined
+    ? []
+    : [
+        {
+          name,
+          __text:
+            typeof value === 'string' || typeof value === 'number'
+              ? value
+              : value === true
+                ? '1'
+                : value === false
+                  ? '0'
+                  : '',
+        },
+      ];
+
+const nativeAlertDefinitionMethodType = (method: NativeAlertMethod) => {
+  switch (method) {
+    case 'EMAIL':
+      return 'Email';
+    case 'SYSLOG':
+      return 'Syslog';
+    case 'START_TASK':
+      return 'Start Task';
+    default:
+      return method;
+  }
+};
+
+const nativeAlertDefinitionToModel = (
+  id: string,
+  definition: NativeAlertDefinitionPayload,
+): Alert => {
+  const methodData: Array<{
+    name: string;
+    __text?: string | number;
+    credential?: {_id: string};
+  }> = [
+    ...nativeAlertDefinitionData('to_address', definition.to_address),
+    ...nativeAlertDefinitionData('from_address', definition.from_address),
+    ...nativeAlertDefinitionData('subject', definition.subject),
+    ...nativeAlertDefinitionData(
+      'recipient_credential',
+      definition.recipient_credential_id,
+    ),
+    ...nativeAlertDefinitionData('message', definition.message),
+    ...nativeAlertDefinitionData('snmp_agent', definition.snmp_agent),
+    ...nativeAlertDefinitionData(
+      'snmp_community_configured',
+      definition.snmp_community_configured,
+    ),
+    ...nativeAlertDefinitionData('snmp_message', definition.snmp_message),
+    ...nativeAlertDefinitionData('scp_host', definition.scp_host),
+    ...nativeAlertDefinitionData('scp_port', definition.scp_port),
+    ...nativeAlertDefinitionData('scp_known_hosts', definition.scp_known_hosts),
+    ...nativeAlertDefinitionData('scp_path', definition.scp_path),
+    ...nativeAlertDefinitionData('smb_share_path', definition.smb_share_path),
+    ...nativeAlertDefinitionData('smb_file_path', definition.smb_file_path),
+    ...nativeAlertDefinitionData(
+      'smb_max_protocol',
+      definition.smb_max_protocol,
+    ),
+    ...nativeAlertDefinitionData('start_task_task', definition.task_id),
+  ];
+
+  if (definition.method === 'EMAIL') {
+    const notice = definition.notice;
+    methodData.push(
+      ...nativeAlertDefinitionData(
+        'notice',
+        notice === 'simple'
+          ? '1'
+          : notice === 'include'
+            ? '0'
+            : notice === 'attach'
+              ? '2'
+              : notice,
+      ),
+      ...nativeAlertDefinitionData(
+        notice === 'attach' ? 'notice_attach_format' : 'notice_report_format',
+        definition.report_format_id,
+      ),
+    );
+  }
+
+  if (definition.method === 'SCP') {
+    methodData.push(
+      ...nativeAlertDefinitionData(
+        'scp_report_format',
+        definition.report_format_id,
+      ),
+      ...(definition.scp_credential_id === undefined
+        ? []
+        : [
+            {
+              name: 'scp_credential',
+              credential: {_id: String(definition.scp_credential_id)},
+            },
+          ]),
+    );
+  }
+
+  if (definition.method === 'SMB') {
+    methodData.push(
+      ...nativeAlertDefinitionData(
+        'smb_credential',
+        definition.smb_credential_id,
+      ),
+      ...nativeAlertDefinitionData(
+        'smb_report_format',
+        definition.report_format_id,
+      ),
+    );
+  }
+
+  const model = Alert.fromElement({
+    _id: id,
+    name: stringValue(definition.name),
+    comment: stringValue(definition.comment),
+    active: yesNoValue(definition.active),
+    writable: 1,
+    permissions: {
+      permission: [
+        {name: 'get_alerts'},
+        {name: 'create_alert'},
+        {name: 'modify_alert'},
+        {name: 'delete_alert'},
+        {name: 'test_alert'},
+      ],
+    },
+    event: {
+      __text: 'Task run status changed',
+      data: nativeAlertDefinitionData('status', definition.status),
+    },
+    condition: {__text: 'Always'},
+    method: {
+      __text: nativeAlertDefinitionMethodType(definition.method),
+      data: methodData,
+    },
+    tasks: {task: []},
+  });
+  return Object.assign(model, {definitionRevision: definition.revision});
+};
+
 const fetchNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
@@ -212,6 +383,25 @@ const fetchNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
+export const fetchNativeAlertDefinitionPayload = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<NativeAlertDefinitionPayload> =>
+  await fetchNativeJson<NativeAlertDefinitionPayload>(
+    gmp,
+    `api/v1/alerts/${encodeURIComponent(id)}/definition`,
+    {token: gmp.session.token},
+  );
+
+export const fetchNativeAlertDefinition = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Alert> =>
+  nativeAlertDefinitionToModel(
+    id,
+    await fetchNativeAlertDefinitionPayload(gmp, id),
+  );
+
 const deleteNative = async (gmp: NativeApiGmp, path: string): Promise<void> => {
   const response = await fetch(gmp.buildUrl(path), {
     method: 'DELETE',
@@ -226,6 +416,25 @@ const deleteNative = async (gmp: NativeApiGmp, path: string): Promise<void> => {
   if (!response.ok) {
     throw await nativeAlertRequestError(response);
   }
+};
+
+export const replaceNativeAlertDefinition = async (
+  gmp: NativeApiGmp,
+  id: string,
+  expectedRevision: string,
+  definition: NativeAlertDefinitionPutArgs,
+): Promise<Response<ActionResult>> => {
+  await writeNativeJson<NativeAlertDefinitionPayload>(
+    gmp,
+    `api/v1/alerts/${encodeURIComponent(id)}/definition`,
+    {expected_revision: expectedRevision, definition},
+    'PUT',
+  );
+  return new Response(
+    new ActionResult({
+      action_result: {action: 'save_alert', id, message: 'OK'},
+    }),
+  );
 };
 
 export const deliverNativeAlertReport = async (

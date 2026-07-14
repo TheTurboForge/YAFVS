@@ -38,7 +38,7 @@ pub(crate) fn direct_api_request_shape_is_allowed_for_method(
     };
     if method == Method::GET || method == Method::DELETE {
         length == 0
-    } else if matches!(method, &Method::POST | &Method::PATCH) {
+    } else if matches!(method, &Method::POST | &Method::PATCH | &Method::PUT) {
         length <= MAX_DIRECT_API_WRITE_BODY_BYTES
     } else {
         false
@@ -136,6 +136,17 @@ mod tests {
             &patch
         ));
 
+        let put = Request::builder()
+            .method("PUT")
+            .uri("/api/v1/alerts/12345678-1234-1234-1234-123456789abc/definition")
+            .header(header::CONTENT_LENGTH, "128")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        assert!(direct_api_request_shape_is_allowed_for_method(
+            &Method::PUT,
+            &put
+        ));
+
         let patch_query = Request::builder()
             .method("PATCH")
             .uri("/api/v1/scopes/12345678-1234-1234-1234-123456789abc?unexpected=1")
@@ -184,13 +195,13 @@ mod tests {
         ));
 
         let unsupported = Request::builder()
-            .method("PUT")
+            .method("OPTIONS")
             .uri("/api/v1/scopes")
             .header(header::CONTENT_LENGTH, "0")
             .body(axum::body::Body::empty())
             .unwrap();
         assert!(!direct_api_request_shape_is_allowed_for_method(
-            &Method::PUT,
+            &Method::OPTIONS,
             &unsupported
         ));
     }

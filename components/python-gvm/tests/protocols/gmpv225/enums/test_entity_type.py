@@ -21,10 +21,6 @@ class GetEntityTypeFromStringTestCase(unittest.TestCase):
         ct = EntityType.from_string("")
         self.assertIsNone(ct)
 
-    def test_alert(self):
-        ct = EntityType.from_string("alert")
-        self.assertEqual(ct, EntityType.ALERT)
-
     def test_asset(self):
         ct = EntityType.from_string("asset")
         self.assertEqual(ct, EntityType.ASSET)

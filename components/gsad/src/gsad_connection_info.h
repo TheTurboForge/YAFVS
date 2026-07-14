@@ -29,7 +29,8 @@ typedef enum gsad_method_type
   METHOD_TYPE_POST = 1, ///< POST method.
   METHOD_TYPE_GET = 2,  ///< GET method.
   METHOD_TYPE_PATCH = 3, ///< PATCH method.
-  METHOD_TYPE_DELETE = 4 ///< DELETE method.
+  METHOD_TYPE_DELETE = 4, ///< DELETE method.
+  METHOD_TYPE_PUT = 5 ///< PUT method.
 } gsad_method_type_t;
 
 /**

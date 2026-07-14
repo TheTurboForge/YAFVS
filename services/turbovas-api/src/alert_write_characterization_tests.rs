@@ -23,7 +23,6 @@ const GSA_ZH_CN_LOCALE: &str =
     include_str!("../../../components/gsa/public/locales/gsa-zh_CN.json");
 const GSA_ZH_TW_LOCALE: &str =
     include_str!("../../../components/gsa/public/locales/gsa-zh_TW.json");
-const GSA_ENTITY_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/entity.ts");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GVMD_CMAKE: &str = include_str!("../../../components/gvmd/CMakeLists.txt");
 const GVMD_GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
@@ -35,8 +34,6 @@ const MANAGE_SQL_C: &str = include_str!("../../../components/gvmd/src/manage_sql
 const MANAGE_SQL_ALERTS_C: &str = include_str!("../../../components/gvmd/src/manage_sql_alerts.c");
 const MANAGE_SQL_REPORT_FORMATS_C: &str =
     include_str!("../../../components/gvmd/src/manage_sql_report_formats.c");
-const PYTHON_GVM_ALERTS: &str =
-    include_str!("../../../components/python-gvm/gvm/protocols/gmp/requests/v224/_alerts.py");
 const ALERT_QUERY_SQL: &str = include_str!("alert_query_sql.rs");
 const ALERT_WRITES: &str = include_str!("alert_writes.rs");
 const TURBOVAS_CONTROL_C: &str = include_str!("../../../components/gvmd/src/turbovas_control.c");
@@ -85,7 +82,6 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
         ("gvmd alert SQL", MANAGE_SQL_ALERTS_C),
         ("gvmd report-format SQL", MANAGE_SQL_REPORT_FORMATS_C),
         ("gvmd database cleanup", MANAGE_SQL_C),
-        ("python-gvm alert requests", PYTHON_GVM_ALERTS),
         ("native alert query SQL", ALERT_QUERY_SQL),
         ("native alert writes", ALERT_WRITES),
     ] {
@@ -127,7 +123,6 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
         ("gvmd alert SQL", MANAGE_SQL_ALERTS_C),
         ("gvmd report-format SQL", MANAGE_SQL_REPORT_FORMATS_C),
         ("gvmd database cleanup", MANAGE_SQL_C),
-        ("python-gvm alert requests", PYTHON_GVM_ALERTS),
         ("native alert query SQL", ALERT_QUERY_SQL),
         ("native alert writes", ALERT_WRITES),
     ] {
@@ -354,50 +349,25 @@ fn openapi_operation_block(path_block: &str, method: &str) -> String {
 }
 
 #[test]
-fn inherited_alert_create_and_modify_are_acl_filter_and_payload_guarded() {
-    let create = format!(
-        "{}\n{}",
-        inherited_function(MANAGE_SQL_ALERTS_C, "create_alert"),
-        inherited_function(MANAGE_SQL_ALERTS_C, "create_alert_body")
-    );
-    for required in [
-        "acl_user_may (\"create_alert\") == 0",
-        "check_alert_params (event, condition)",
-        "find_filter_with_permission (filter_id, &filter, \"get_filters\")",
-        "SELECT type FROM filters WHERE id = %llu;",
-        "resource_with_name_exists (name, \"alert\", 0)",
-        "INSERT INTO alerts (uuid, owner, name, comment, event, condition,",
-        "validate_alert_condition_data (data_name,",
-        "INSERT INTO alert_condition_data (alert, name, data)",
-        "validate_alert_event_data (data_name, data, event)",
-        "INSERT INTO alert_event_data (alert, name, data)",
-        "validate_email_data (method, data_name, &data, 0)",
-        "validate_scp_data (method, data_name, &data)",
-        "validate_smb_data (method, data_name, &data)",
-        "INSERT INTO alert_method_data (alert, name, data)",
-        "sql_commit ();",
-    ] {
-        assert!(create.contains(required), "create_alert missing {required}");
+fn generic_gvmd_alert_create_and_modify_entry_points_are_removed() {
+    for retired in ["\ncreate_alert (", "\nmodify_alert ("] {
+        assert!(
+            !MANAGE_SQL_ALERTS_C.contains(retired),
+            "generic gvmd Alert mutation entry point remains: {retired}"
+        );
     }
 
-    let modify = inherited_function(MANAGE_SQL_ALERTS_C, "modify_alert");
-    for required in [
-        "acl_user_may (\"modify_alert\") == 0",
-        "check_alert_params (event, condition)",
-        "find_alert_with_permission (alert_id, &alert, \"modify_alert\")",
-        "resource_with_name_exists (name, \"alert\", alert)",
-        "find_filter_with_permission (filter_id, &filter, \"get_filters\")",
-        "UPDATE alerts SET",
-        "DELETE FROM alert_event_data WHERE alert = %llu",
-        "INSERT INTO alert_event_data (alert, name, data)",
-        "DELETE FROM alert_condition_data WHERE alert = %llu",
-        "INSERT INTO alert_condition_data (alert, name, data)",
-        "DELETE FROM alert_method_data WHERE alert = %llu",
-        "validate_email_data (method, data_name, &data, 1)",
-        "INSERT INTO alert_method_data (alert, name, data)",
-        "sql_commit ();",
+    for retained_native_control_helper in [
+        "create_alert_task_status_changed (",
+        "create_alert_email_with_report_refs",
+        "create_alert_smb_with_report_refs",
+        "create_alert_scp_with_report_refs",
+        "create_alert_start_task_with_task_ref",
     ] {
-        assert!(modify.contains(required), "modify_alert missing {required}");
+        assert!(
+            MANAGE_SQL_ALERTS_C.contains(retained_native_control_helper),
+            "native-control Alert helper missing {retained_native_control_helper}"
+        );
     }
 }
 
@@ -486,125 +456,61 @@ fn inherited_alert_copy_delete_restore_and_test_keep_child_tables_and_task_links
 }
 
 #[test]
-fn gsad_and_gsa_alert_commands_proxy_delivery_payloads_and_control_verbs() {
-    let append_method = inherited_function(GSAD_GMP_C, "append_alert_method_data");
-    for required in [
-        "scp_credential",
-        "smb_credential",
-        "recipient_credential",
-        "notice_report_format",
-        "composer_include_overrides",
-        "composer_ignore_pagination",
-    ] {
-        assert!(
-            append_method.contains(required),
-            "append_alert_method_data missing {required}"
-        );
-    }
-
-    for (name, required) in [
-        (
-            "create_alert_gmp",
-            &[
-                "CHECK_VARIABLE_INVALID (name, \"Create Alert\")",
-                "params_values (params, \"method_data:\")",
-                "params_values (params, \"event_data:\")",
-                "params_values (params, \"condition_data:\")",
-                "<create_alert>",
-                "append_alert_event_data (xml, event_data, event)",
-                "append_alert_method_data (xml, method_data, method)",
-                "append_alert_condition_data (xml, condition_data, condition)",
-            ][..],
-        ),
-        (
-            "save_alert_gmp",
-            &[
-                "CHECK_VARIABLE_INVALID (alert_id, \"Save Alert\")",
-                "params_values (params, \"method_data:\")",
-                "<modify_alert alert_id=\\\"%s\\\">",
-                "append_alert_event_data (xml, event_data, event)",
-                "append_alert_method_data (xml, method_data, method)",
-                "append_alert_condition_data (xml, condition_data, condition)",
-            ][..],
-        ),
-    ] {
-        let function = inherited_function(GSAD_GMP_C, name);
-        for needle in required {
-            assert!(function.contains(needle), "{name} missing {needle}");
-        }
-    }
-
-    for required in [
-        "return move_resource_to_trash (connection, \"alert\"",
-        "gvm_connection_sendf (connection, \"<test_alert alert_id=\\\"%s\\\"/>",
-        "return export_resource (connection, \"alert\"",
-        "return export_many (connection, \"alert\"",
+fn gsad_and_gsa_alert_definition_paths_are_native_only() {
+    for retired in [
+        "append_alert_method_data",
+        "create_alert_gmp",
+        "save_alert_gmp",
+        "<create_alert>",
+        "<modify_alert",
         "ELSE (create_alert)",
-        "ELSE (delete_alert)",
         "ELSE (save_alert)",
-        "ELSE (test_alert)",
     ] {
         assert!(
-            GSAD_GMP_C.contains(required),
-            "gsad alert surface missing {required}"
+            !GSAD_GMP_C.contains(retired),
+            "gsad still contains retired Alert GMP surface {retired}"
         );
     }
 
     for required in [
+        "fetchNativeAlertDefinition",
+        "replaceNativeAlertDefinition",
+        "createNativeAlert",
+        "cloneNativeAlert",
+        "deleteNativeAlert",
+        "testNativeAlert",
+    ] {
+        assert!(
+            GSA_ALERT_COMMAND.contains(required),
+            "GSA native Alert command missing {required}"
+        );
+    }
+
+    for retired in [
         "cmd: 'create_alert'",
         "cmd: 'save_alert'",
         "cmd: 'new_alert'",
         "cmd: 'edit_alert'",
+        "cmd: 'test_alert'",
         "convertData('method_data'",
         "convertData('condition_data'",
         "convertData('event_data'",
-        "credentials: map(",
-        "filters: map(",
-        "tasks: map(",
     ] {
         assert!(
-            GSA_ALERT_COMMAND.contains(required),
-            "GSA alert command missing {required}"
-        );
-    }
-
-    assert!(
-        !GSA_ALERT_COMMAND.contains("cmd: 'test_alert'"),
-        "GSA alert test action must not fall back to GMP after native replacement"
-    );
-
-    for required in [
-        "cmd: 'clone'",
-        "cmd: 'delete_' + this.name",
-        "cmd: 'bulk_export'",
-    ] {
-        assert!(
-            GSA_ENTITY_COMMAND.contains(required),
-            "generic GSA entity command missing alert {required} surface"
+            !GSA_ALERT_COMMAND.contains(retired),
+            "GSA Alert command still contains retired GMP surface {retired}"
         );
     }
 }
 
 #[test]
-fn python_gvm_still_exposes_alert_mutation_and_test_requests() {
-    for required in [
-        "def create_alert(",
-        "def modify_alert(",
-        "def clone_alert(cls, alert_id: EntityID)",
-        "def delete_alert(",
-        "def test_alert(cls, alert_id: EntityID)",
-        "XmlCommand(\"create_alert\")",
-        "XmlCommand(\"modify_alert\")",
-        "XmlCommand(\"delete_alert\")",
-        "XmlCommand(\"test_alert\")",
-        "cmd.add_element(\"copy\", str(alert_id))",
-        "cmd.set_attribute(\"ultimate\", to_bool(ultimate))",
-    ] {
-        assert!(
-            PYTHON_GVM_ALERTS.contains(required),
-            "python-gvm alert request surface missing {required}"
-        );
-    }
+fn python_gvm_alert_request_surface_is_removed() {
+    let alerts = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../components/python-gvm/gvm/protocols/gmp/requests/v224/_alerts.py");
+    assert!(
+        !alerts.exists(),
+        "python-gvm Alert request compatibility must remain removed"
+    );
 }
 
 #[test]

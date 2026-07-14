@@ -18,10 +18,6 @@ from .._version import Version
 from ..v227 import (
     Aggregates,
     AggregateStatistic,
-    AlertCondition,
-    AlertEvent,
-    AlertMethod,
-    Alerts,
     AliveTest,
     Authentication,
     CertBundAdvisories,
@@ -72,10 +68,6 @@ from ..v227 import (
 __all__ = (
     "AggregateStatistic",
     "Aggregates",
-    "AlertCondition",
-    "AlertEvent",
-    "AlertMethod",
-    "Alerts",
     "AliveTest",
     "Authentication",
     "CertBundAdvisories",

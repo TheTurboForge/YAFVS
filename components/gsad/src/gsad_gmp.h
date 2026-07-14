@@ -115,12 +115,6 @@ export_results_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                     gsad_command_response_data_t *);
 
 char *
-new_alert_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-               gsad_command_response_data_t *);
-char *
-create_alert_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                  gsad_command_response_data_t *);
-char *
 delete_alert_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                   gsad_command_response_data_t *);
 char *
@@ -129,12 +123,6 @@ test_alert_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
 char *
 get_alert_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                gsad_command_response_data_t *);
-char *
-edit_alert_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                gsad_command_response_data_t *);
-char *
-save_alert_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                gsad_command_response_data_t *);
 char *
 get_alerts_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                 gsad_command_response_data_t *);

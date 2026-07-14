@@ -32,7 +32,6 @@
  */
 command_t gmp_commands[]
  = {{"AUTHENTICATE", "Authenticate with the manager." },
-    {"CREATE_ALERT", "Create an alert."},
     {"CREATE_ASSET", "Create an asset."},
     {"CREATE_CONFIG", "Create a config."},
     {"CREATE_CREDENTIAL", "Create a credential."},
@@ -103,7 +102,6 @@ command_t gmp_commands[]
     {"GET_VERSION", "Get the Greenbone Management Protocol version."},
     {"GET_VULNS", "Get all vulnerabilities."},
     {"HELP", "Get this help text."},
-    {"MODIFY_ALERT", "Modify an existing alert."},
     {"MODIFY_ASSET", "Modify an existing asset."},
     {"MODIFY_AUTH", "Modify the authentication methods."},
     {"MODIFY_CONFIG", "Update an existing config."},

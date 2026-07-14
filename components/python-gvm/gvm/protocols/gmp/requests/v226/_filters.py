@@ -22,7 +22,6 @@ __all__ = (
 class FilterType(Enum):
     """Enum for filter types"""
 
-    ALERT = "alert"
     ALL_SECINFO = "secinfo"
     ASSET = "asset"
     CREDENTIAL = "credential"

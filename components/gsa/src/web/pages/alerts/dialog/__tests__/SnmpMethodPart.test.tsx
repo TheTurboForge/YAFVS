@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -20,8 +21,9 @@ describe('SnmpMethodPart tests', () => {
       />,
     );
 
-    const communityInput = screen.getByRole('textbox', {name: 'Community'});
+    const communityInput = screen.getByLabelText('Community');
     expect(communityInput).toHaveAttribute('name', 'snmp_community');
+    expect(communityInput).toHaveAttribute('type', 'password');
     expect(communityInput).toHaveValue('community');
 
     const agentInput = screen.getByRole('textbox', {name: 'Agent'});
@@ -46,7 +48,7 @@ describe('SnmpMethodPart tests', () => {
       />,
     );
 
-    const communityInput = screen.getByRole('textbox', {name: 'Community'});
+    const communityInput = screen.getByLabelText('Community');
     expect(communityInput).toHaveAttribute('name', 'test_snmp_community');
     expect(communityInput).toHaveValue('community');
 
@@ -71,7 +73,7 @@ describe('SnmpMethodPart tests', () => {
       />,
     );
 
-    const communityInput = screen.getByRole('textbox', {name: 'Community'});
+    const communityInput = screen.getByLabelText('Community');
     changeInputValue(communityInput, 'new_community');
     expect(onChange).toHaveBeenCalledWith('new_community', 'snmp_community');
 

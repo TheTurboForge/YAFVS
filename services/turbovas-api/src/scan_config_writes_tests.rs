@@ -5,12 +5,14 @@
 use crate::errors::ApiError;
 use crate::gvmd_control::MAX_CONTROL_REQUEST_BYTES;
 use crate::scan_config_write_db::{
-    ScanConfigWriteState, ensure_scan_config_clone_source_allowed,
+    ScanConfigPreferenceDefinition, ScanConfigWriteState, ensure_scan_config_clone_source_allowed,
     ensure_scan_config_family_is_not_whole_only, ensure_scan_config_not_predefined,
     ensure_scan_config_owner_matches_operator,
 };
 use crate::scan_config_write_sql::*;
-use crate::scan_config_write_transactions::scan_config_family_nvt_selector_exclude;
+use crate::scan_config_write_transactions::{
+    canonical_scan_config_preference_value, scan_config_family_nvt_selector_exclude,
+};
 use crate::scan_config_write_validation::*;
 use crate::scan_config_writes::{
     DiagnosticNvtSelectionOutcome, diagnostic_nvt_selection_command,
@@ -27,6 +29,214 @@ fn create_request(
         base_scan_config_id: base_scan_config_id.to_string(),
         comment: comment.map(str::to_string),
     }
+}
+
+#[test]
+fn scan_config_preference_mutations_are_strict_typed_and_secret_safe() {
+    let request = serde_json::json!({
+        "preferences": [
+            {
+                "scope": "scanner",
+                "name": "safe_checks",
+                "action": "set",
+                "value": "yes"
+            },
+            {
+                "scope": "nvt",
+                "name": "credential",
+                "action": "set",
+                "value": "secret",
+                "nvt": {
+                    "oid": "1.3.6.1.4.1.25623.1.0.100001",
+                    "id": 2,
+                    "type": "password"
+                }
+            },
+            {
+                "scope": "nvt",
+                "name": "timeout",
+                "action": "reset",
+                "nvt": {
+                    "oid": "1.3.6.1.4.1.25623.1.0.100001",
+                    "id": 0,
+                    "type": "entry"
+                }
+            }
+        ]
+    });
+    let validated = validate_scan_config_patch_request(
+        serde_json::from_value(request).expect("strict preference request"),
+    )
+    .expect("valid preference mutations");
+    let preferences = validated.preferences.expect("preferences");
+    assert_eq!(preferences.len(), 3);
+    assert_eq!(preferences[0].scope, ScanConfigPreferenceScope::Scanner);
+    assert_eq!(
+        preferences[1].value.as_ref().map(|value| value.as_str()),
+        Some("secret")
+    );
+    assert_eq!(preferences[2].action, ScanConfigPreferenceAction::Reset);
+    assert!(preferences[2].value.is_none());
+
+    for invalid in [
+        serde_json::json!({"preferences": []}),
+        serde_json::json!({"preferences": [{
+            "scope": "scanner", "name": "safe_checks", "action": "set"
+        }]}),
+        serde_json::json!({"preferences": [{
+            "scope": "scanner", "name": "safe_checks", "action": "reset", "value": "yes"
+        }]}),
+        serde_json::json!({"preferences": [{
+            "scope": "scanner", "name": "safe_checks", "action": "set", "value": "yes",
+            "nvt": {"oid": "1.3.6.1.4.1", "id": 1, "type": "entry"}
+        }]}),
+        serde_json::json!({"preferences": [{
+            "scope": "nvt", "name": "timeout", "action": "reset"
+        }]}),
+        serde_json::json!({"preferences": [{
+            "scope": "nvt", "name": "choice", "action": "set", "value": "",
+            "nvt": {"oid": "1.3.6.1.4.1", "id": 1, "type": "radio"}
+        }]}),
+    ] {
+        let request =
+            serde_json::from_value::<ScanConfigPatchRequest>(invalid).expect("request shape");
+        assert!(matches!(
+            validate_scan_config_patch_request(request),
+            Err(ApiError::BadRequest(_))
+        ));
+    }
+}
+
+#[test]
+fn scan_config_preference_mutations_reject_duplicates_and_oversized_values() {
+    let duplicate = serde_json::json!({"preferences": [
+        {"scope": "scanner", "name": "safe_checks", "action": "set", "value": "yes"},
+        {"scope": "scanner", "name": "safe_checks", "action": "reset"}
+    ]});
+    assert!(matches!(
+        validate_scan_config_patch_request(
+            serde_json::from_value(duplicate).expect("duplicate request shape")
+        ),
+        Err(ApiError::BadRequest(_))
+    ));
+
+    let oversized = ScanConfigPatchRequest {
+        name: None,
+        comment: None,
+        family_selection: None,
+        preferences: Some(vec![ScanConfigPreferenceMutationRequest {
+            scope: ScanConfigPreferenceScope::Scanner,
+            name: "safe_checks".to_string(),
+            action: ScanConfigPreferenceAction::Set,
+            value: Some(SensitiveScanConfigPreferenceValue::from_string(
+                "x".repeat(MAX_SCAN_CONFIG_PREFERENCE_VALUE_BYTES + 1),
+            )),
+            nvt: None,
+        }]),
+    };
+    assert!(matches!(
+        validate_scan_config_patch_request(oversized),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+#[test]
+fn scan_config_preference_sql_is_parameterized_and_catalog_validated() {
+    let definition = scan_config_preference_definition_sql();
+    for required in [
+        "FROM nvt_preferences",
+        "np.pref_nvt IS NULL",
+        "np.pref_nvt = $3",
+        "coalesce(np.pref_id, 0) = $4",
+        "coalesce(np.pref_type, '') = $5",
+        "coalesce(np.pref_name, '') = $2",
+    ] {
+        assert!(
+            definition.contains(required),
+            "definition SQL missing {required}"
+        );
+    }
+    let delete = scan_config_delete_preference_override_sql();
+    assert!(delete.contains("config = $1"));
+    assert!(delete.contains("type = $2"));
+    assert!(delete.contains("name = $3"));
+    let insert = scan_config_insert_preference_override_sql();
+    assert!(insert.contains("VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"));
+    assert!(!format!("{definition}{delete}{insert}").contains("format!("));
+}
+
+#[test]
+fn scan_config_radio_values_are_canonicalized_from_feed_options() {
+    let mutation = ValidatedScanConfigPreferenceMutation {
+        scope: ScanConfigPreferenceScope::Nvt,
+        name: "Mode".to_string(),
+        action: ScanConfigPreferenceAction::Set,
+        value: Some(SensitiveScanConfigPreferenceValue::from_string(
+            "third".to_string(),
+        )),
+        nvt: Some(ValidatedScanConfigPreferenceNvtIdentity {
+            oid: "1.3.6.1.4.1.25623.1.0.100001".to_string(),
+            id: 3,
+            preference_type: "radio".to_string(),
+        }),
+    };
+    let definition = ScanConfigPreferenceDefinition {
+        canonical_name: "1.3.6.1.4.1.25623.1.0.100001:3:radio:Mode".to_string(),
+        default_value: "first;second;third".to_string(),
+        nvt_oid: "1.3.6.1.4.1.25623.1.0.100001".to_string(),
+        preference_id: 3,
+        preference_type: "radio".to_string(),
+        preference_name: "Mode".to_string(),
+    };
+    assert_eq!(
+        canonical_scan_config_preference_value(&mutation, &definition)
+            .expect("known radio option")
+            .as_str(),
+        "third;first;second"
+    );
+    let unknown = ValidatedScanConfigPreferenceMutation {
+        value: Some(SensitiveScanConfigPreferenceValue::from_string(
+            "unknown".to_string(),
+        )),
+        ..mutation
+    };
+    assert!(matches!(
+        canonical_scan_config_preference_value(&unknown, &definition),
+        Err(ApiError::BadRequest(_))
+    ));
+}
+
+#[test]
+fn scan_config_preference_patch_is_atomic_owner_and_task_guarded() {
+    let source = include_str!("scan_config_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn patch_scan_config")
+        .expect("patch handler")
+        .1
+        .split_once("pub(crate) fn parse_scan_config_patch_payload")
+        .expect("patch handler end")
+        .0;
+    for required in [
+        "config_preferences, nvt_preferences",
+        "ensure_scan_config_owner_matches_operator",
+        "ensure_scan_config_not_predefined",
+        "ensure_scan_config_not_referenced_by_any_task",
+        "execute_scan_config_preference_mutations_transaction",
+        "tx.commit()",
+    ] {
+        assert!(
+            handler.contains(required),
+            "patch handler missing {required}"
+        );
+    }
+    assert!(
+        handler
+            .find("ensure_scan_config_not_referenced_by_any_task")
+            .expect("task guard")
+            < handler
+                .find("execute_scan_config_preference_mutations_transaction")
+                .expect("preference write")
+    );
 }
 
 #[test]
@@ -469,6 +679,7 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> ScanConfigPatchRe
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
         family_selection: None,
+        preferences: None,
     }
 }
 
@@ -915,6 +1126,7 @@ fn scan_config_patch_request_rejects_oversized_metadata_fields() {
             name: Some("x".repeat(MAX_SCAN_CONFIG_TEXT_BYTES + 1)),
             comment: None,
             family_selection: None,
+            preferences: None,
         }),
         Err(ApiError::BadRequest(_))
     ));

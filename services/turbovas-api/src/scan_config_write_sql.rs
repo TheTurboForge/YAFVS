@@ -6,6 +6,37 @@ pub(crate) fn scan_config_write_operator_owner_sql() -> &'static str {
     "SELECT id::integer FROM users WHERE uuid = $1;"
 }
 
+pub(crate) fn scan_config_preference_definition_sql() -> &'static str {
+    "SELECT np.name,
+            coalesce(np.value, ''),
+            coalesce(np.pref_nvt, ''),
+            coalesce(np.pref_id, 0)::integer,
+            coalesce(np.pref_type, ''),
+            coalesce(np.pref_name, '')
+       FROM nvt_preferences np
+      WHERE ($1 = 'scanner' AND np.pref_nvt IS NULL AND np.name = $2)
+         OR ($1 = 'nvt'
+             AND np.pref_nvt = $3
+             AND coalesce(np.pref_id, 0) = $4
+             AND coalesce(np.pref_type, '') = $5
+             AND coalesce(np.pref_name, '') = $2)
+      ORDER BY np.name
+      LIMIT 1;"
+}
+
+pub(crate) fn scan_config_delete_preference_override_sql() -> &'static str {
+    "DELETE FROM config_preferences
+      WHERE config = $1
+        AND type = $2
+        AND name = $3;"
+}
+
+pub(crate) fn scan_config_insert_preference_override_sql() -> &'static str {
+    "INSERT INTO config_preferences
+        (config, type, name, value, pref_nvt, pref_id, pref_type, pref_name)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8);"
+}
+
 pub(crate) fn scan_config_known_family_names_sql() -> &'static str {
     "SELECT DISTINCT n.family
        FROM nvts n

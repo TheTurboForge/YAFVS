@@ -4,7 +4,7 @@
 
 use std::collections::HashSet;
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 use crate::{
     errors::ApiError,
@@ -14,6 +14,8 @@ use crate::{
 pub(crate) const MAX_SCAN_CONFIG_TEXT_BYTES: usize = 4096;
 pub(crate) const MAX_SCAN_CONFIG_FAMILY_SELECTIONS: usize = 512;
 pub(crate) const MAX_SCAN_CONFIG_FAMILY_NVT_SELECTION_CHANGES: usize = 1024;
+pub(crate) const MAX_SCAN_CONFIG_PREFERENCE_MUTATIONS: usize = 512;
+pub(crate) const MAX_SCAN_CONFIG_PREFERENCE_VALUE_BYTES: usize = 192 * 1024;
 pub(crate) const WHOLE_ONLY_SCAN_CONFIG_FAMILIES: &[&str] = &[
     "AIX Local Security Checks",
     "AlmaLinux Local Security Checks",
@@ -86,7 +88,7 @@ pub(crate) struct ScanConfigFamilyNvtsPatchRequest {
     pub(crate) changes: Vec<ScanConfigFamilyNvtSelectionChange>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ScanConfigPatchRequest {
     #[serde(default)]
@@ -95,6 +97,43 @@ pub(crate) struct ScanConfigPatchRequest {
     pub(crate) comment: Option<String>,
     #[serde(default)]
     pub(crate) family_selection: Option<ScanConfigFamilySelectionRequest>,
+    #[serde(default)]
+    pub(crate) preferences: Option<Vec<ScanConfigPreferenceMutationRequest>>,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ScanConfigPreferenceScope {
+    Scanner,
+    Nvt,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ScanConfigPreferenceAction {
+    Set,
+    Reset,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ScanConfigPreferenceNvtIdentityRequest {
+    pub(crate) oid: String,
+    pub(crate) id: i32,
+    #[serde(rename = "type")]
+    pub(crate) preference_type: String,
+}
+
+#[derive(Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ScanConfigPreferenceMutationRequest {
+    pub(crate) scope: ScanConfigPreferenceScope,
+    pub(crate) name: String,
+    pub(crate) action: ScanConfigPreferenceAction,
+    #[serde(default)]
+    pub(crate) value: Option<SensitiveScanConfigPreferenceValue>,
+    #[serde(default)]
+    pub(crate) nvt: Option<ScanConfigPreferenceNvtIdentityRequest>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -169,11 +208,56 @@ pub(crate) fn validate_diagnostic_nvt_selection_request(
     })
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub(crate) struct ValidatedScanConfigPatch {
     pub(crate) name: Option<String>,
     pub(crate) comment: Option<String>,
     pub(crate) family_selection: Option<ValidatedScanConfigFamilySelection>,
+    pub(crate) preferences: Option<Vec<ValidatedScanConfigPreferenceMutation>>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ValidatedScanConfigPreferenceNvtIdentity {
+    pub(crate) oid: String,
+    pub(crate) id: i32,
+    pub(crate) preference_type: String,
+}
+
+#[derive(PartialEq, Eq)]
+pub(crate) struct ValidatedScanConfigPreferenceMutation {
+    pub(crate) scope: ScanConfigPreferenceScope,
+    pub(crate) name: String,
+    pub(crate) action: ScanConfigPreferenceAction,
+    pub(crate) value: Option<SensitiveScanConfigPreferenceValue>,
+    pub(crate) nvt: Option<ValidatedScanConfigPreferenceNvtIdentity>,
+}
+
+#[derive(PartialEq, Eq)]
+pub(crate) struct SensitiveScanConfigPreferenceValue(Vec<u8>);
+
+impl SensitiveScanConfigPreferenceValue {
+    pub(crate) fn from_string(value: String) -> Self {
+        Self(value.into_bytes())
+    }
+
+    pub(crate) fn as_str(&self) -> &str {
+        std::str::from_utf8(&self.0).expect("JSON preference values are valid UTF-8")
+    }
+}
+
+impl<'de> Deserialize<'de> for SensitiveScanConfigPreferenceValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        String::deserialize(deserializer).map(Self::from_string)
+    }
+}
+
+impl Drop for SensitiveScanConfigPreferenceValue {
+    fn drop(&mut self) {
+        self.0.fill(0);
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -226,16 +310,149 @@ pub(crate) fn validate_scan_config_patch_request(
             .family_selection
             .map(validate_scan_config_family_selection_request)
             .transpose()?,
+        preferences: request
+            .preferences
+            .map(validate_scan_config_preference_mutations)
+            .transpose()?,
     };
     if validated.name.is_none()
         && validated.comment.is_none()
         && validated.family_selection.is_none()
+        && validated.preferences.is_none()
     {
         return Err(ApiError::BadRequest(
             "scan-config patch request must include at least one field".to_string(),
         ));
     }
     Ok(validated)
+}
+
+pub(crate) fn validate_scan_config_preference_mutations(
+    mutations: Vec<ScanConfigPreferenceMutationRequest>,
+) -> Result<Vec<ValidatedScanConfigPreferenceMutation>, ApiError> {
+    if mutations.is_empty() {
+        return Err(ApiError::BadRequest(
+            "preferences must contain at least one mutation".to_string(),
+        ));
+    }
+    if mutations.len() > MAX_SCAN_CONFIG_PREFERENCE_MUTATIONS {
+        return Err(ApiError::BadRequest(format!(
+            "preferences must contain at most {MAX_SCAN_CONFIG_PREFERENCE_MUTATIONS} mutations"
+        )));
+    }
+
+    let mut seen = HashSet::with_capacity(mutations.len());
+    let mut validated = Vec::with_capacity(mutations.len());
+    for mutation in mutations {
+        validate_scan_config_preference_text(&mutation.name, "preferences[].name", 4096, false)?;
+        let nvt = match (mutation.scope, mutation.nvt) {
+            (ScanConfigPreferenceScope::Scanner, None) => None,
+            (ScanConfigPreferenceScope::Scanner, Some(_)) => {
+                return Err(ApiError::BadRequest(
+                    "scanner preference mutations must not include nvt".to_string(),
+                ));
+            }
+            (ScanConfigPreferenceScope::Nvt, None) => {
+                return Err(ApiError::BadRequest(
+                    "NVT preference mutations must include nvt".to_string(),
+                ));
+            }
+            (ScanConfigPreferenceScope::Nvt, Some(nvt)) => {
+                validate_nvt_oid(&nvt.oid).map_err(|_| {
+                    ApiError::BadRequest(
+                        "preferences[].nvt.oid must be a numeric dotted NVT OID up to 128 bytes"
+                            .to_string(),
+                    )
+                })?;
+                if nvt.id < 0 {
+                    return Err(ApiError::BadRequest(
+                        "preferences[].nvt.id must be zero or greater".to_string(),
+                    ));
+                }
+                validate_scan_config_preference_text(
+                    &nvt.preference_type,
+                    "preferences[].nvt.type",
+                    128,
+                    false,
+                )?;
+                Some(ValidatedScanConfigPreferenceNvtIdentity {
+                    oid: nvt.oid,
+                    id: nvt.id,
+                    preference_type: nvt.preference_type,
+                })
+            }
+        };
+
+        match mutation.action {
+            ScanConfigPreferenceAction::Set => {
+                let value = mutation.value.as_ref().ok_or_else(|| {
+                    ApiError::BadRequest("set preference mutations must include value".to_string())
+                })?;
+                validate_scan_config_preference_text(
+                    value.as_str(),
+                    "preferences[].value",
+                    MAX_SCAN_CONFIG_PREFERENCE_VALUE_BYTES,
+                    true,
+                )?;
+                if nvt
+                    .as_ref()
+                    .is_some_and(|nvt| nvt.preference_type.eq_ignore_ascii_case("radio"))
+                    && value.as_str().is_empty()
+                {
+                    return Err(ApiError::BadRequest(
+                        "radio preference values must not be empty".to_string(),
+                    ));
+                }
+            }
+            ScanConfigPreferenceAction::Reset if mutation.value.is_some() => {
+                return Err(ApiError::BadRequest(
+                    "reset preference mutations must not include value".to_string(),
+                ));
+            }
+            ScanConfigPreferenceAction::Reset => {}
+        }
+
+        let key = (
+            match mutation.scope {
+                ScanConfigPreferenceScope::Scanner => "scanner".to_string(),
+                ScanConfigPreferenceScope::Nvt => "nvt".to_string(),
+            },
+            mutation.name.clone(),
+            nvt.as_ref().map(|identity| identity.oid.clone()),
+            nvt.as_ref().map(|identity| identity.id),
+            nvt.as_ref()
+                .map(|identity| identity.preference_type.clone()),
+        );
+        if !seen.insert(key) {
+            return Err(ApiError::BadRequest(
+                "preferences must not contain duplicate mutations".to_string(),
+            ));
+        }
+
+        validated.push(ValidatedScanConfigPreferenceMutation {
+            scope: mutation.scope,
+            name: mutation.name,
+            action: mutation.action,
+            value: mutation.value,
+            nvt,
+        });
+    }
+    Ok(validated)
+}
+
+fn validate_scan_config_preference_text(
+    value: &str,
+    field: &str,
+    max_bytes: usize,
+    allow_empty: bool,
+) -> Result<(), ApiError> {
+    if (!allow_empty && value.is_empty()) || value.len() > max_bytes || value.contains('\0') {
+        return Err(ApiError::BadRequest(format!(
+            "{field} must {}contain no NUL bytes and be at most {max_bytes} bytes",
+            if allow_empty { "" } else { "not be empty, " }
+        )));
+    }
+    Ok(())
 }
 
 pub(crate) fn validate_scan_config_family_selection_request(

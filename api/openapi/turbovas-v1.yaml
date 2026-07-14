@@ -4279,9 +4279,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-detail-info-tags-task-backlinks-and-preferences-read
-      x-turbovas-inherited-still-owns: scan-config-preference-mutations-import-xml-export-and-blank-create
+      x-turbovas-inherited-still-owns: scan-config-import-xml-export-and-blank-create
       summary: Read one scan config with effective preferences
-      description: Read-only scan-config detail backed directly by gvmd/PostgreSQL, including active User Tags, shallow task backlinks, scanner preferences, and NVT preferences. Preference values use the config override when present and the current feed default otherwise; configured indicates whether an explicit override row exists. Password and file preference values/defaults are returned as empty strings with redacted set to true. Native direct write-control can create from base, atomically patch metadata and complete family selection for eligible scan configs, clone operator-owned or predefined scan configs, change individual NVT selection in an eligible family, move eligible live scan configs to trash, restore trash rows, and hard-delete unreferenced trash rows; preference edits, import, inherited XML export, scanner control, and blank create remain inherited.
+      description: Read-only scan-config detail backed directly by gvmd/PostgreSQL, including active User Tags, shallow task backlinks, scanner preferences, and NVT preferences. Preference values use the config override when present and the current feed default otherwise; configured indicates whether an explicit override row exists. Password and file preference values/defaults are returned as empty strings with redacted set to true. Native direct write-control can create from base, atomically patch metadata, complete family selection, and catalog-validated preference overrides for eligible scan configs, clone operator-owned or predefined scan configs, change individual NVT selection in an eligible family, move eligible live scan configs to trash, restore trash rows, and hard-delete unreferenced trash rows. Import, inherited XML export, scanner control, and blank create remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -4310,13 +4310,13 @@ paths:
       x-turbovas-direct: true
       x-turbovas-exposure: direct-write
       x-turbovas-maturity: live-write
-      x-turbovas-replaces: scan-config-family-mode-mutation
+      x-turbovas-replaces: scan-config-family-mode-and-preference-mutation
       x-turbovas-operator-identity: direct-token-operator
       x-turbovas-owner-semantics: preserve-existing-owner
       x-turbovas-safety-contract: write-control-v1
-      x-turbovas-side-effect: scan-config-nvt-selector-write
-      summary: Patch scan-config metadata and family selection
-      description: Direct write-control endpoint for atomically changing an operator-owned non-predefined scan config name, comment, and/or complete family-selection snapshot. Family snapshots must name every current non-Credentials feed family exactly once; stale, missing, unknown, whole-only-invalid, shared-selector, or task-referenced mutations return conflict without partial writes. The server rebuilds canonical selector rows and cache counters from live database state. Preference values, import/export, blank create, and scanner control remain inherited; individual NVT selection has a separate family-scoped PATCH endpoint.
+      x-turbovas-side-effect: scan-config-selector-and-preference-write
+      summary: Patch scan-config metadata, family selection, and preferences
+      description: Direct write-control endpoint for atomically changing an operator-owned non-predefined scan config name, comment, complete family-selection snapshot, and/or explicit scanner/NVT preference overrides. Family snapshots must name every current non-Credentials feed family exactly once; preference identities must match the current feed catalog exactly. Set and reset are distinct operations, radio selections are normalized against current feed options, and password/file values are write-only and remain redacted in the response. Stale, missing, unknown, whole-only-invalid, shared-selector, or task-referenced mutations fail without partial writes. Import, inherited XML export, blank create, and scanner control remain inherited; individual NVT selection has a separate family-scoped PATCH endpoint.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       requestBody:
@@ -4327,7 +4327,7 @@ paths:
               $ref: '#/components/schemas/ScanConfigPatchRequest'
       responses:
         '200':
-          description: Scan-config metadata and/or family selection updated
+          description: Scan-config metadata, family selection, and/or preferences updated
           content:
             application/json:
               schema:
@@ -4559,7 +4559,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-family-summary-read
-      x-turbovas-inherited-still-owns: scan-config-preference-mutations-import-xml-export-and-blank-create
+      x-turbovas-inherited-still-owns: scan-config-import-xml-export-and-blank-create
       summary: Read scan config NVT family selection summary
       description: Complete read-only snapshot of every current nonempty, non-Credentials feed family for the NVT Families editor. Complete family-mode selection is written atomically through the scan-config PATCH endpoint and individual NVT selection through the family NVT PATCH endpoint; preference edits, import, inherited XML export, and blank create remain on inherited compatibility paths.
       parameters:
@@ -4592,7 +4592,7 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-family-nvt-selection-read
-      x-turbovas-inherited-still-owns: scan-config-preference-mutations-import-xml-export-and-blank-create
+      x-turbovas-inherited-still-owns: scan-config-import-xml-export-and-blank-create
       summary: Read NVT selection for one scan config family
       description: Returns every currently known NVT in the requested family with numeric severity and effective selected state. Selection follows growing-family exclusion and static-family inclusion selector representations. PATCH changes individual NVT selection for an eligible operator-owned config while preserving the current family mode; preference edits, import, inherited XML export, and blank create remain inherited.
       parameters:
@@ -7369,6 +7369,7 @@ components:
           type: string
           minLength: 1
           maxLength: 4096
+          x-turbovas-max-bytes: 4096
         comment:
           type: string
           maxLength: 4096
@@ -8900,6 +8901,61 @@ components:
           maxLength: 4096
         family_selection:
           $ref: '#/components/schemas/ScanConfigFamilySelectionPatch'
+        preferences:
+          type: array
+          minItems: 1
+          maxItems: 512
+          description: Atomic preference override mutations. Omit a redacted password/file preference to preserve its current value; use set only with a new write-only value. Reset removes the config override and restores the current feed default.
+          items:
+            $ref: '#/components/schemas/ScanConfigPreferenceMutation'
+    ScanConfigPreferenceMutation:
+      type: object
+      additionalProperties: false
+      required:
+        - scope
+        - name
+        - action
+      properties:
+        scope:
+          type: string
+          enum: [scanner, nvt]
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        action:
+          type: string
+          enum: [set, reset]
+          description: Set requires value. Reset forbids value and deletes the override.
+        value:
+          type: string
+          maxLength: 196608
+          x-turbovas-max-bytes: 196608
+          writeOnly: true
+          description: New scalar, radio, password, or file value, bounded to 196608 UTF-8 bytes. The service never echoes password/file values.
+        nvt:
+          $ref: '#/components/schemas/ScanConfigPreferenceNvtIdentity'
+      description: Scanner mutations omit nvt. NVT mutations require the exact current feed-owned OID, preference id, type, and name identity.
+    ScanConfigPreferenceNvtIdentity:
+      type: object
+      additionalProperties: false
+      required:
+        - oid
+        - id
+        - type
+      properties:
+        oid:
+          type: string
+          pattern: '^[0-9]+(?:\.[0-9]+)+$'
+          maxLength: 128
+        id:
+          type: integer
+          minimum: 0
+        type:
+          type: string
+          minLength: 1
+          maxLength: 128
+          x-turbovas-max-bytes: 128
     ScanConfigFamilySelectionPatch:
       type: object
       additionalProperties: false

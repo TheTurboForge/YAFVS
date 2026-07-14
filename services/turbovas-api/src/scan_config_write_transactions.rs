@@ -7,12 +7,15 @@ use tokio_postgres::Transaction;
 use crate::{
     errors::ApiError,
     scan_config_write_db::{
-        ScanConfigWriteRecord, execute_scan_config_write_sql, query_scan_config_write_record,
+        ScanConfigPreferenceDefinition, ScanConfigWriteRecord, execute_scan_config_write_sql,
+        load_scan_config_preference_definition, query_scan_config_write_record,
     },
     scan_config_write_sql::*,
     scan_config_write_validation::{
+        ScanConfigPreferenceAction, ScanConfigPreferenceScope, SensitiveScanConfigPreferenceValue,
         ValidatedScanConfigClone, ValidatedScanConfigCreate, ValidatedScanConfigFamilyNvtsPatch,
         ValidatedScanConfigFamilySelection, ValidatedScanConfigPatch,
+        ValidatedScanConfigPreferenceMutation,
     },
 };
 
@@ -60,6 +63,90 @@ pub(crate) async fn execute_scan_config_create_from_base_transaction(
     )
     .await?;
     Ok(record)
+}
+
+pub(crate) async fn execute_scan_config_preference_mutations_transaction(
+    tx: &Transaction<'_>,
+    scan_config_internal_id: i32,
+    mutations: &[ValidatedScanConfigPreferenceMutation],
+) -> Result<(), ApiError> {
+    for mutation in mutations {
+        let definition = load_scan_config_preference_definition(tx, mutation).await?;
+        let storage_type = match mutation.scope {
+            ScanConfigPreferenceScope::Scanner => "SERVER_PREFS",
+            ScanConfigPreferenceScope::Nvt => "PLUGINS_PREFS",
+        };
+        execute_scan_config_write_sql(
+            tx,
+            scan_config_delete_preference_override_sql(),
+            &[
+                &scan_config_internal_id,
+                &storage_type,
+                &definition.canonical_name,
+            ],
+            "delete scan-config preference override",
+        )
+        .await?;
+
+        if mutation.action == ScanConfigPreferenceAction::Set {
+            let value = canonical_scan_config_preference_value(mutation, &definition)?;
+            let value_text = value.as_str();
+            let nvt_oid = (mutation.scope == ScanConfigPreferenceScope::Nvt)
+                .then_some(definition.nvt_oid.as_str());
+            let preference_id = nvt_oid.map(|_| definition.preference_id);
+            let preference_type = nvt_oid.map(|_| definition.preference_type.as_str());
+            let preference_name = nvt_oid.map(|_| definition.preference_name.as_str());
+            execute_scan_config_write_sql(
+                tx,
+                scan_config_insert_preference_override_sql(),
+                &[
+                    &scan_config_internal_id,
+                    &storage_type,
+                    &definition.canonical_name,
+                    &value_text,
+                    &nvt_oid,
+                    &preference_id,
+                    &preference_type,
+                    &preference_name,
+                ],
+                "insert scan-config preference override",
+            )
+            .await?;
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn canonical_scan_config_preference_value(
+    mutation: &ValidatedScanConfigPreferenceMutation,
+    definition: &ScanConfigPreferenceDefinition,
+) -> Result<SensitiveScanConfigPreferenceValue, ApiError> {
+    let value = mutation.value.as_ref().ok_or_else(|| {
+        ApiError::BadRequest("set preference mutations must include value".to_string())
+    })?;
+    let value = value.as_str();
+    if !definition.preference_type.eq_ignore_ascii_case("radio") {
+        return Ok(SensitiveScanConfigPreferenceValue::from_string(
+            value.to_string(),
+        ));
+    }
+
+    let options = definition
+        .default_value
+        .split(';')
+        .filter(|option| !option.is_empty())
+        .collect::<Vec<_>>();
+    if !options.contains(&value) {
+        return Err(ApiError::BadRequest(
+            "radio preference value is not one of the current feed options".to_string(),
+        ));
+    }
+    Ok(SensitiveScanConfigPreferenceValue::from_string(
+        std::iter::once(value)
+            .chain(options.into_iter().filter(|option| *option != value))
+            .collect::<Vec<_>>()
+            .join(";"),
+    ))
 }
 
 pub(crate) async fn execute_scan_config_family_selection_transaction(

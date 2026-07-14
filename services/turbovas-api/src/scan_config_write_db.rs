@@ -6,14 +6,30 @@ use axum::extract::Extension;
 use tokio_postgres::{Transaction, types::ToSql};
 
 use crate::{
-    auth::DirectApiOperator, errors::ApiError, path_ids::parse_uuid, scan_config_write_sql::*,
-    scan_config_write_validation::WHOLE_ONLY_SCAN_CONFIG_FAMILIES,
+    auth::DirectApiOperator,
+    errors::ApiError,
+    path_ids::parse_uuid,
+    scan_config_write_sql::*,
+    scan_config_write_validation::{
+        ScanConfigPreferenceScope, ValidatedScanConfigPreferenceMutation,
+        WHOLE_ONLY_SCAN_CONFIG_FAMILIES,
+    },
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ScanConfigWriteRecord {
     pub(crate) internal_id: i32,
     pub(crate) uuid: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ScanConfigPreferenceDefinition {
+    pub(crate) canonical_name: String,
+    pub(crate) default_value: String,
+    pub(crate) nvt_oid: String,
+    pub(crate) preference_id: i32,
+    pub(crate) preference_type: String,
+    pub(crate) preference_name: String,
 }
 
 pub(crate) async fn load_scan_config_known_family_names(
@@ -23,6 +39,50 @@ pub(crate) async fn load_scan_config_known_family_names(
         .await
         .map_err(|error| map_scan_config_write_db_error(error, "load scan-config family inventory"))
         .map(|rows| rows.into_iter().map(|row| row.get(0)).collect())
+}
+
+pub(crate) async fn load_scan_config_preference_definition(
+    tx: &Transaction<'_>,
+    mutation: &ValidatedScanConfigPreferenceMutation,
+) -> Result<ScanConfigPreferenceDefinition, ApiError> {
+    let (scope, nvt_oid, preference_id, preference_type) =
+        match (mutation.scope, mutation.nvt.as_ref()) {
+            (ScanConfigPreferenceScope::Scanner, None) => ("scanner", "", 0, ""),
+            (ScanConfigPreferenceScope::Nvt, Some(nvt)) => (
+                "nvt",
+                nvt.oid.as_str(),
+                nvt.id,
+                nvt.preference_type.as_str(),
+            ),
+            _ => {
+                return Err(ApiError::BadRequest(
+                    "invalid preference identity".to_string(),
+                ));
+            }
+        };
+    tx.query_opt(
+        scan_config_preference_definition_sql(),
+        &[
+            &scope,
+            &mutation.name,
+            &nvt_oid,
+            &preference_id,
+            &preference_type,
+        ],
+    )
+    .await
+    .map_err(|error| {
+        map_scan_config_write_db_error(error, "load scan-config preference definition")
+    })?
+    .map(|row| ScanConfigPreferenceDefinition {
+        canonical_name: row.get(0),
+        default_value: row.get(1),
+        nvt_oid: row.get(2),
+        preference_id: row.get(3),
+        preference_type: row.get(4),
+        preference_name: row.get(5),
+    })
+    .ok_or(ApiError::NotFound)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

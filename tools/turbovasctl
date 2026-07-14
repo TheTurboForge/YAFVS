@@ -533,7 +533,7 @@ NATIVE_TOOLING_RESIDUE_KINDS = (
     "report-format-config-write-or-export",
     "report-format-file-import-export-verify-param-writes-and-deletes",
     "saved-filter-gsa-filter-actions-or-alert-linkage",
-    "scan-config-preference-write-or-export",
+    "scan-config-import-export-or-blank-create",
     "scanner-control-or-credential",
     "schedule-calendar-edit-and-task-recalculation",
     "tag-write-or-resource-actions",
@@ -633,6 +633,7 @@ OPENAPI_ALLOWED_SIDE_EFFECT_VALUES = frozenset(
         "resource-assignment-write",
         "report-generation",
         "scan-config-nvt-selector-write",
+        "scan-config-selector-and-preference-write",
         "schedule-and-task-timing-write",
         "scanner-control",
         "scanner-configuration-write",
@@ -753,7 +754,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "scan-config-clone",
         "scan-config-diagnostic-nvt-selection",
         "scan-config-family-nvt-selection-mutation",
-        "scan-config-family-mode-mutation",
+        "scan-config-family-mode-and-preference-mutation",
         "scan-config-create-from-base",
         "scan-config-detail-info-tags-task-backlinks-and-preferences-read",
         "scan-config-family-nvt-selection-read",
@@ -857,7 +858,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "report-format-file-import-export-verify-param-writes-and-deletes",
         "retention-mutations",
         "saved-filter-alert-linkage",
-        "scan-config-preference-mutations-import-xml-export-and-blank-create",
+        "scan-config-import-xml-export-and-blank-create",
         "schedule-calendar-edit-and-task-recalculation",
         "remote-scanner-tls-relay-verification",
         "target-file-input-task-control-and-credential-secret-workflows",
@@ -1573,7 +1574,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scan-config-create-from-base",
     },
     ("get", "/scan-configs/{scan_config_id}"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preference-mutations-import-xml-export-and-blank-create",
+        "x-turbovas-inherited-still-owns": "scan-config-import-xml-export-and-blank-create",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-detail-info-tags-task-backlinks-and-preferences-read",
     },
@@ -1583,7 +1584,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     },
     ("patch", "/scan-configs/{scan_config_id}"): {
         "x-turbovas-maturity": "live-write",
-        "x-turbovas-replaces": "scan-config-family-mode-mutation",
+        "x-turbovas-replaces": "scan-config-family-mode-and-preference-mutation",
     },
     ("delete", "/scan-configs/{scan_config_id}"): {
         "x-turbovas-maturity": "live-write",
@@ -1602,12 +1603,12 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scan-config-hard-delete",
     },
     ("get", "/scan-configs/{scan_config_id}/families"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preference-mutations-import-xml-export-and-blank-create",
+        "x-turbovas-inherited-still-owns": "scan-config-import-xml-export-and-blank-create",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-family-summary-read",
     },
     ("get", "/scan-configs/{scan_config_id}/families/{family}/nvts"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preference-mutations-import-xml-export-and-blank-create",
+        "x-turbovas-inherited-still-owns": "scan-config-import-xml-export-and-blank-create",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-family-nvt-selection-read",
     },
@@ -4592,7 +4593,7 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
     if name == "report-format.ts":
         return "report-format-file-import-export-verify-param-writes-and-deletes", "Report-format file import/export, verification, parameter mutations, deletes, and dialog side effects remain inherited."
     if name == "scan-configs.js":
-        return "scan-config-preference-write-or-export", "Scan-config preferences, selectors, imports, exports, creates, deletes, and trash handling remain inherited."
+        return "scan-config-import-export-or-blank-create", "Scan-config import, inherited XML export, and blank-create compatibility remain after native reads and retained writes."
     if name == "schedules.js":
         return "schedule-calendar-edit-and-task-recalculation", "Existing-schedule calendar edit and linked-task next-time recalculation remain inherited."
     if name == "filter.ts":
@@ -20501,6 +20502,16 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.scan-config-predefined-delete-denied",
             "native-api-direct.scan-config-write-create",
             "native-api-direct.scan-config-write-update",
+            "native-api-direct.scan-config-preference-fixture",
+            "native-api-direct.scan-config-preference-set",
+            "native-api-direct.scan-config-preference-set-readback",
+            "native-api-direct.scan-config-preference-reset",
+            "native-api-direct.scan-config-preference-reset-readback",
+            "native-api-direct.scan-config-preference-unknown-denied",
+            "native-api-direct.scan-config-secret-preference-set",
+            "native-api-direct.scan-config-secret-preference-readback",
+            "native-api-direct.scan-config-secret-preference-reset",
+            "native-api-direct.scan-config-secret-preference-reset-readback",
             "native-api-direct.scan-config-family-mode-fixture",
             "native-api-direct.scan-config-family-mode-malformed-json-denied",
             "native-api-direct.scan-config-family-mode-stale-denied",
@@ -22027,6 +22038,89 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
             scan_config_patch_json, scan_config_patch_status = parse_json_output_with_http_status(scan_config_patch)
             scan_config_patch_ok = scan_config_patch.returncode == 0 and scan_config_patch_status == 200 and isinstance(scan_config_patch_json, dict) and scan_config_patch_json.get("id") == scan_config_id and scan_config_patch_json.get("comment") == scan_config_patch_comment
             findings.append(native_api_probe_finding("pass" if scan_config_patch_ok else "fail", "native-api-direct.scan-config-write-update", "Direct write-control patched temporary scan-config comment metadata." if scan_config_patch_ok else "Direct write-control failed to patch temporary scan-config comment metadata.", scan_config_patch, direct_native_api_display_command(f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}", token=token, env=env, method="PATCH", body=scan_config_patch_body, extra_headers=content_type), scan_config_patch_json, {"http_status": scan_config_patch_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_patch_json)}))
+
+            scan_config_detail_path = f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}"
+            scan_config_preferences_before = direct_native_api_curl(repo_root, scan_config_detail_path, token=token, env=env)
+            scan_config_preferences_before_json, scan_config_preferences_before_status = parse_json_output_with_http_status(scan_config_preferences_before)
+            scan_config_preferences = scan_config_preferences_before_json.get("preferences") if isinstance(scan_config_preferences_before_json, dict) else None
+            scan_config_scanner_preferences = scan_config_preferences.get("scanner") if isinstance(scan_config_preferences, dict) else None
+            scan_config_nvt_preferences = scan_config_preferences.get("nvt") if isinstance(scan_config_preferences, dict) else None
+            scan_config_safe_checks_before = next((item for item in scan_config_scanner_preferences if isinstance(item, dict) and item.get("name") == "safe_checks"), None) if isinstance(scan_config_scanner_preferences, list) else None
+            scan_config_secret_before = next((item for item in scan_config_nvt_preferences if isinstance(item, dict) and item.get("redacted") is True and item.get("configured") is False and isinstance(item.get("name"), str) and isinstance(item.get("id"), int) and isinstance(item.get("type"), str) and isinstance(item.get("nvt"), dict) and isinstance(item["nvt"].get("oid"), str)), None) if isinstance(scan_config_nvt_preferences, list) else None
+            scan_config_preference_fixture_ok = (
+                scan_config_preferences_before.returncode == 0
+                and scan_config_preferences_before_status == 200
+                and isinstance(scan_config_safe_checks_before, dict)
+                and scan_config_safe_checks_before.get("configured") is False
+                and scan_config_safe_checks_before.get("redacted") is False
+                and scan_config_safe_checks_before.get("value") in {"0", "1"}
+                and isinstance(scan_config_secret_before, dict)
+            )
+            findings.append(native_api_probe_finding("pass" if scan_config_preference_fixture_ok else "fail", "native-api-direct.scan-config-preference-fixture", "Direct API loaded reversible scanner and redacted NVT preference fixtures." if scan_config_preference_fixture_ok else "Direct API did not expose the reversible scan-config preference fixtures required by the smoke.", scan_config_preferences_before, direct_native_api_display_command(scan_config_detail_path, token=token, env=env), scan_config_preferences_before_json, {"http_status": scan_config_preferences_before_status, "scan_config_id": scan_config_id, "scanner_fixture": isinstance(scan_config_safe_checks_before, dict), "redacted_nvt_fixture": isinstance(scan_config_secret_before, dict), **summarize_native_api_response(scan_config_preferences_before_json)}))
+
+            if scan_config_preference_fixture_ok and isinstance(scan_config_safe_checks_before, dict) and isinstance(scan_config_secret_before, dict):
+                scan_config_safe_checks_toggled = "0" if scan_config_safe_checks_before["value"] == "1" else "1"
+                scan_config_preference_set_body = json.dumps({"preferences": [{"scope": "scanner", "name": "safe_checks", "action": "set", "value": scan_config_safe_checks_toggled}]}, separators=(",", ":"))
+                scan_config_preference_set = direct_native_api_curl(repo_root, scan_config_detail_path, token=token, env=env, method="PATCH", body=scan_config_preference_set_body, extra_headers=content_type)
+                scan_config_preference_set_json, scan_config_preference_set_status = parse_json_output_with_http_status(scan_config_preference_set)
+                scan_config_preference_set_ok = scan_config_preference_set.returncode == 0 and scan_config_preference_set_status == 200
+                findings.append(native_api_probe_finding("pass" if scan_config_preference_set_ok else "fail", "native-api-direct.scan-config-preference-set", "Direct write-control set a scanner preference on the temporary scan config." if scan_config_preference_set_ok else "Direct write-control failed to set a scanner preference.", scan_config_preference_set, direct_native_api_display_command(scan_config_detail_path, token=token, env=env, method="PATCH", body=scan_config_preference_set_body, extra_headers=content_type), scan_config_preference_set_json, {"http_status": scan_config_preference_set_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_preference_set_json)}))
+
+                scan_config_preference_set_readback = direct_native_api_curl(repo_root, scan_config_detail_path, token=token, env=env)
+                scan_config_preference_set_readback_json, scan_config_preference_set_readback_status = parse_json_output_with_http_status(scan_config_preference_set_readback)
+                scan_config_preference_set_readback_items = scan_config_preference_set_readback_json.get("preferences", {}).get("scanner", []) if isinstance(scan_config_preference_set_readback_json, dict) else []
+                scan_config_safe_checks_after_set = next((item for item in scan_config_preference_set_readback_items if isinstance(item, dict) and item.get("name") == "safe_checks"), None)
+                scan_config_preference_set_readback_ok = scan_config_preference_set_readback.returncode == 0 and scan_config_preference_set_readback_status == 200 and isinstance(scan_config_safe_checks_after_set, dict) and scan_config_safe_checks_after_set.get("configured") is True and scan_config_safe_checks_after_set.get("value") == scan_config_safe_checks_toggled
+                findings.append(native_api_probe_finding("pass" if scan_config_preference_set_readback_ok else "fail", "native-api-direct.scan-config-preference-set-readback", "Direct API readback confirms the scanner preference override." if scan_config_preference_set_readback_ok else "Direct API readback did not confirm the scanner preference override.", scan_config_preference_set_readback, direct_native_api_display_command(scan_config_detail_path, token=token, env=env), scan_config_preference_set_readback_json, {"http_status": scan_config_preference_set_readback_status, "scan_config_id": scan_config_id, "configured": scan_config_safe_checks_after_set.get("configured") if isinstance(scan_config_safe_checks_after_set, dict) else None, **summarize_native_api_response(scan_config_preference_set_readback_json)}))
+
+                scan_config_preference_reset_body = json.dumps({"preferences": [{"scope": "scanner", "name": "safe_checks", "action": "reset"}]}, separators=(",", ":"))
+                scan_config_preference_reset = direct_native_api_curl(repo_root, scan_config_detail_path, token=token, env=env, method="PATCH", body=scan_config_preference_reset_body, extra_headers=content_type)
+                scan_config_preference_reset_json, scan_config_preference_reset_status = parse_json_output_with_http_status(scan_config_preference_reset)
+                scan_config_preference_reset_ok = scan_config_preference_reset.returncode == 0 and scan_config_preference_reset_status == 200
+                findings.append(native_api_probe_finding("pass" if scan_config_preference_reset_ok else "fail", "native-api-direct.scan-config-preference-reset", "Direct write-control reset the scanner preference to its feed default." if scan_config_preference_reset_ok else "Direct write-control failed to reset the scanner preference.", scan_config_preference_reset, direct_native_api_display_command(scan_config_detail_path, token=token, env=env, method="PATCH", body=scan_config_preference_reset_body, extra_headers=content_type), scan_config_preference_reset_json, {"http_status": scan_config_preference_reset_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_preference_reset_json)}))
+
+                scan_config_preference_reset_readback = direct_native_api_curl(repo_root, scan_config_detail_path, token=token, env=env)
+                scan_config_preference_reset_readback_json, scan_config_preference_reset_readback_status = parse_json_output_with_http_status(scan_config_preference_reset_readback)
+                scan_config_preference_reset_readback_items = scan_config_preference_reset_readback_json.get("preferences", {}).get("scanner", []) if isinstance(scan_config_preference_reset_readback_json, dict) else []
+                scan_config_safe_checks_after_reset = next((item for item in scan_config_preference_reset_readback_items if isinstance(item, dict) and item.get("name") == "safe_checks"), None)
+                scan_config_preference_reset_readback_ok = scan_config_preference_reset_readback.returncode == 0 and scan_config_preference_reset_readback_status == 200 and isinstance(scan_config_safe_checks_after_reset, dict) and scan_config_safe_checks_after_reset.get("configured") is False and scan_config_safe_checks_after_reset.get("value") == scan_config_safe_checks_before.get("default")
+                findings.append(native_api_probe_finding("pass" if scan_config_preference_reset_readback_ok else "fail", "native-api-direct.scan-config-preference-reset-readback", "Direct API readback confirms the scanner preference returned to its feed default." if scan_config_preference_reset_readback_ok else "Direct API readback did not confirm scanner preference reset.", scan_config_preference_reset_readback, direct_native_api_display_command(scan_config_detail_path, token=token, env=env), scan_config_preference_reset_readback_json, {"http_status": scan_config_preference_reset_readback_status, "scan_config_id": scan_config_id, "configured": scan_config_safe_checks_after_reset.get("configured") if isinstance(scan_config_safe_checks_after_reset, dict) else None, **summarize_native_api_response(scan_config_preference_reset_readback_json)}))
+
+                scan_config_unknown_preference_body = json.dumps({"preferences": [{"scope": "scanner", "name": "__turbovas_missing_preference__", "action": "set", "value": "1"}]}, separators=(",", ":"))
+                scan_config_unknown_preference = direct_native_api_curl(repo_root, scan_config_detail_path, token=token, env=env, method="PATCH", body=scan_config_unknown_preference_body, extra_headers=content_type)
+                scan_config_unknown_preference_json, scan_config_unknown_preference_status = parse_json_output_with_http_status(scan_config_unknown_preference)
+                scan_config_unknown_preference_ok = scan_config_unknown_preference.returncode == 0 and scan_config_unknown_preference_status == 404 and isinstance(scan_config_unknown_preference_json, dict) and scan_config_unknown_preference_json.get("error", {}).get("code") == "not_found"
+                findings.append(native_api_probe_finding("pass" if scan_config_unknown_preference_ok else "fail", "native-api-direct.scan-config-preference-unknown-denied", "Direct write-control rejects preference identities absent from the current feed catalog." if scan_config_unknown_preference_ok else "Direct write-control did not reject an unknown scanner preference identity.", scan_config_unknown_preference, direct_native_api_display_command(scan_config_detail_path, token=token, env=env, method="PATCH", body=scan_config_unknown_preference_body, extra_headers=content_type), scan_config_unknown_preference_json, {"http_status": scan_config_unknown_preference_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_unknown_preference_json)}))
+
+                scan_config_secret_identity = {"oid": scan_config_secret_before["nvt"]["oid"], "id": scan_config_secret_before["id"], "type": scan_config_secret_before["type"]}
+                scan_config_secret_value = f"turbovas-direct-write-smoke-secret-{os.getpid()}"
+                scan_config_secret_set_body = json.dumps({"preferences": [{"scope": "nvt", "name": scan_config_secret_before["name"], "action": "set", "value": scan_config_secret_value, "nvt": scan_config_secret_identity}]}, separators=(",", ":"))
+                scan_config_secret_set = direct_native_api_curl(repo_root, scan_config_detail_path, token=token, env=env, method="PATCH", body=scan_config_secret_set_body, extra_headers=content_type)
+                scan_config_secret_set_json, scan_config_secret_set_status = parse_json_output_with_http_status(scan_config_secret_set)
+                scan_config_secret_set_text = json.dumps(scan_config_secret_set_json, sort_keys=True) if isinstance(scan_config_secret_set_json, dict) else scan_config_secret_set.stdout
+                scan_config_secret_set_ok = scan_config_secret_set.returncode == 0 and scan_config_secret_set_status == 200 and scan_config_secret_value not in scan_config_secret_set_text
+                findings.append(native_api_probe_finding("pass" if scan_config_secret_set_ok else "fail", "native-api-direct.scan-config-secret-preference-set", "Direct write-control accepted a redacted NVT secret without echoing it." if scan_config_secret_set_ok else "Direct write-control failed the redacted NVT secret write proof.", scan_config_secret_set, direct_native_api_display_command(scan_config_detail_path, token=token, env=env, method="PATCH", body=scan_config_secret_set_body, extra_headers=content_type), scan_config_secret_set_json, {"http_status": scan_config_secret_set_status, "scan_config_id": scan_config_id, "secret_echoed": scan_config_secret_value in scan_config_secret_set_text, **summarize_native_api_response(scan_config_secret_set_json)}))
+
+                scan_config_secret_readback = direct_native_api_curl(repo_root, scan_config_detail_path, token=token, env=env)
+                scan_config_secret_readback_json, scan_config_secret_readback_status = parse_json_output_with_http_status(scan_config_secret_readback)
+                scan_config_secret_readback_items = scan_config_secret_readback_json.get("preferences", {}).get("nvt", []) if isinstance(scan_config_secret_readback_json, dict) else []
+                scan_config_secret_after_set = next((item for item in scan_config_secret_readback_items if isinstance(item, dict) and item.get("name") == scan_config_secret_before["name"] and item.get("id") == scan_config_secret_before["id"] and item.get("nvt", {}).get("oid") == scan_config_secret_before["nvt"]["oid"]), None)
+                scan_config_secret_readback_text = json.dumps(scan_config_secret_readback_json, sort_keys=True) if isinstance(scan_config_secret_readback_json, dict) else scan_config_secret_readback.stdout
+                scan_config_secret_readback_ok = scan_config_secret_readback.returncode == 0 and scan_config_secret_readback_status == 200 and isinstance(scan_config_secret_after_set, dict) and scan_config_secret_after_set.get("configured") is True and scan_config_secret_after_set.get("redacted") is True and scan_config_secret_after_set.get("value") == "" and scan_config_secret_after_set.get("default") == "" and scan_config_secret_value not in scan_config_secret_readback_text
+                findings.append(native_api_probe_finding("pass" if scan_config_secret_readback_ok else "fail", "native-api-direct.scan-config-secret-preference-readback", "Direct API readback exposes only configured/redacted state for the NVT secret." if scan_config_secret_readback_ok else "Direct API readback exposed or misreported the NVT secret preference.", scan_config_secret_readback, direct_native_api_display_command(scan_config_detail_path, token=token, env=env), scan_config_secret_readback_json, {"http_status": scan_config_secret_readback_status, "scan_config_id": scan_config_id, "configured": scan_config_secret_after_set.get("configured") if isinstance(scan_config_secret_after_set, dict) else None, "redacted": scan_config_secret_after_set.get("redacted") if isinstance(scan_config_secret_after_set, dict) else None, "secret_echoed": scan_config_secret_value in scan_config_secret_readback_text, **summarize_native_api_response(scan_config_secret_readback_json)}))
+
+                scan_config_secret_reset_body = json.dumps({"preferences": [{"scope": "nvt", "name": scan_config_secret_before["name"], "action": "reset", "nvt": scan_config_secret_identity}]}, separators=(",", ":"))
+                scan_config_secret_reset = direct_native_api_curl(repo_root, scan_config_detail_path, token=token, env=env, method="PATCH", body=scan_config_secret_reset_body, extra_headers=content_type)
+                scan_config_secret_reset_json, scan_config_secret_reset_status = parse_json_output_with_http_status(scan_config_secret_reset)
+                scan_config_secret_reset_ok = scan_config_secret_reset.returncode == 0 and scan_config_secret_reset_status == 200
+                findings.append(native_api_probe_finding("pass" if scan_config_secret_reset_ok else "fail", "native-api-direct.scan-config-secret-preference-reset", "Direct write-control reset the temporary NVT secret override." if scan_config_secret_reset_ok else "Direct write-control failed to reset the temporary NVT secret override.", scan_config_secret_reset, direct_native_api_display_command(scan_config_detail_path, token=token, env=env, method="PATCH", body=scan_config_secret_reset_body, extra_headers=content_type), scan_config_secret_reset_json, {"http_status": scan_config_secret_reset_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_secret_reset_json)}))
+
+                scan_config_secret_reset_readback = direct_native_api_curl(repo_root, scan_config_detail_path, token=token, env=env)
+                scan_config_secret_reset_readback_json, scan_config_secret_reset_readback_status = parse_json_output_with_http_status(scan_config_secret_reset_readback)
+                scan_config_secret_reset_readback_items = scan_config_secret_reset_readback_json.get("preferences", {}).get("nvt", []) if isinstance(scan_config_secret_reset_readback_json, dict) else []
+                scan_config_secret_after_reset = next((item for item in scan_config_secret_reset_readback_items if isinstance(item, dict) and item.get("name") == scan_config_secret_before["name"] and item.get("id") == scan_config_secret_before["id"] and item.get("nvt", {}).get("oid") == scan_config_secret_before["nvt"]["oid"]), None)
+                scan_config_secret_reset_readback_ok = scan_config_secret_reset_readback.returncode == 0 and scan_config_secret_reset_readback_status == 200 and isinstance(scan_config_secret_after_reset, dict) and scan_config_secret_after_reset.get("configured") is False and scan_config_secret_after_reset.get("redacted") is True and scan_config_secret_after_reset.get("value") == "" and scan_config_secret_after_reset.get("default") == ""
+                findings.append(native_api_probe_finding("pass" if scan_config_secret_reset_readback_ok else "fail", "native-api-direct.scan-config-secret-preference-reset-readback", "Direct API readback confirms the NVT secret override was removed without disclosure." if scan_config_secret_reset_readback_ok else "Direct API readback did not confirm the NVT secret preference reset.", scan_config_secret_reset_readback, direct_native_api_display_command(scan_config_detail_path, token=token, env=env), scan_config_secret_reset_readback_json, {"http_status": scan_config_secret_reset_readback_status, "scan_config_id": scan_config_id, "configured": scan_config_secret_after_reset.get("configured") if isinstance(scan_config_secret_after_reset, dict) else None, "redacted": scan_config_secret_after_reset.get("redacted") if isinstance(scan_config_secret_after_reset, dict) else None, **summarize_native_api_response(scan_config_secret_reset_readback_json)}))
 
             scan_config_families_path = f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}/families"
             scan_config_families_before = direct_native_api_curl(repo_root, scan_config_families_path, token=token, env=env)

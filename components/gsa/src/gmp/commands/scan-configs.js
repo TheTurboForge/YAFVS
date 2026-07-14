@@ -46,9 +46,6 @@ const shouldExportAllByFilter = filter => {
   return Number.isFinite(rows) && rows < 0;
 };
 
-const isEmptyOptionalObject = value =>
-  !isDefined(value) || Object.keys(value).length === 0;
-
 const isFamilyMap = value =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -121,16 +118,46 @@ const createNativeFamilySelection = ({familyTrend, trend, select}) => {
   };
 };
 
-const canPatchMetadataNatively = ({
-  familyTrend,
-  scannerPreferenceValues,
-  select,
-  trend,
-}) =>
-  !isDefined(familyTrend) &&
-  isEmptyOptionalObject(scannerPreferenceValues) &&
-  !isDefined(select) &&
+const canPatchMetadataNatively = ({familyTrend, select, trend}) =>
+  !isDefined(familyTrend) && !isDefined(select) &&
   !isDefined(trend);
+
+const createNativeScannerPreferenceMutations = (values = {}) =>
+  Object.entries(values).flatMap(([name, value]) =>
+    isDefined(value)
+      ? [
+          {
+            scope: 'scanner',
+            name,
+            action: 'set',
+            value: String(value),
+          },
+        ]
+      : [],
+  );
+
+const createNativeNvtPreferenceMutations = (values = {}, oid) =>
+  Object.entries(values).flatMap(([name, {id, type, value}]) =>
+    isDefined(value)
+      ? [
+          {
+            scope: 'nvt',
+            name,
+            action: 'set',
+            value: String(value),
+            nvt: {oid, id, type},
+          },
+        ]
+      : [],
+  );
+
+const createNativeNvtTimeoutMutation = (timeout, oid) => ({
+  scope: 'nvt',
+  name: 'timeout',
+  action: isDefined(timeout) ? 'set' : 'reset',
+  ...(isDefined(timeout) ? {value: String(timeout)} : {}),
+  nvt: {oid, id: 0, type: 'entry'},
+});
 
 export const convert = (values, prefix) => {
   const ret = {};
@@ -239,24 +266,22 @@ export class ScanConfigCommand extends EntityCommand {
     scannerPreferenceValues,
   }) {
     if (canUseNativeApi(this.http)) {
-      if (
-        isDefined(scannerPreferenceValues) &&
-        !isEmptyOptionalObject(scannerPreferenceValues)
-      ) {
-        throw new Error(
-          'Native scan config save does not support scanner preference values',
-        );
-      }
+      const preferences = createNativeScannerPreferenceMutations(
+        scannerPreferenceValues,
+      );
 
       if (
         canPatchMetadataNatively({
           familyTrend,
-          scannerPreferenceValues,
           select,
           trend,
         })
       ) {
-        return patchNativeScanConfig(this.http, id, {comment, name});
+        return patchNativeScanConfig(this.http, id, {
+          comment,
+          name,
+          ...(preferences.length > 0 ? {preferences} : {}),
+        });
       }
 
       const familySelection = createNativeFamilySelection({
@@ -268,6 +293,7 @@ export class ScanConfigCommand extends EntityCommand {
         comment,
         'family_selection': familySelection,
         name,
+        ...(preferences.length > 0 ? {preferences} : {}),
       });
     }
 
@@ -289,7 +315,7 @@ export class ScanConfigCommand extends EntityCommand {
       name,
       trend: familyTrend,
     };
-    log.debug('Saving scanconfig', data);
+    log.debug('Saving scanconfig');
     return this.action(data);
   }
 
@@ -367,6 +393,15 @@ export class ScanConfigCommand extends EntityCommand {
   }
 
   saveScanConfigNvt({id, timeout, oid, preferenceValues}) {
+    if (canUseNativeApi(this.http)) {
+      return patchNativeScanConfig(this.http, id, {
+        preferences: [
+          ...createNativeNvtPreferenceMutations(preferenceValues, oid),
+          createNativeNvtTimeoutMutation(timeout, oid),
+        ],
+      });
+    }
+
     const data = {
       ...convertPreferences(preferenceValues, oid),
       cmd: 'save_config_nvt',
@@ -379,7 +414,7 @@ export class ScanConfigCommand extends EntityCommand {
       ? timeout
       : '';
 
-    log.debug('Saving scanconfignvt', data);
+    log.debug('Saving scanconfignvt');
     return this.httpPostWithTransform(data);
   }
 

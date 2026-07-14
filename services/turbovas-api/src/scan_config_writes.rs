@@ -406,10 +406,20 @@ pub(crate) async fn patch_scan_config(
         map_scan_config_write_db_error(error, "begin patch scan-config transaction")
     })?;
     let operator_owner_id = resolve_scan_config_write_operator_owner(&tx, &operator).await?;
-    let lock_sql = if request.family_selection.is_some() {
-        "LOCK TABLE configs, configs_trash, nvt_selectors, tasks, nvts IN SHARE ROW EXCLUSIVE MODE;"
-    } else {
-        "LOCK TABLE configs, configs_trash IN SHARE ROW EXCLUSIVE MODE;"
+    let lock_sql = match (
+        request.family_selection.is_some(),
+        request.preferences.is_some(),
+    ) {
+        (true, true) => {
+            "LOCK TABLE configs, configs_trash, config_preferences, nvt_preferences, nvt_selectors, tasks, nvts IN SHARE ROW EXCLUSIVE MODE;"
+        }
+        (true, false) => {
+            "LOCK TABLE configs, configs_trash, nvt_selectors, tasks, nvts IN SHARE ROW EXCLUSIVE MODE;"
+        }
+        (false, true) => {
+            "LOCK TABLE configs, configs_trash, config_preferences, nvt_preferences, tasks IN SHARE ROW EXCLUSIVE MODE;"
+        }
+        (false, false) => "LOCK TABLE configs, configs_trash IN SHARE ROW EXCLUSIVE MODE;",
     };
     tx.batch_execute(lock_sql).await.map_err(|error| {
         map_scan_config_write_db_error(error, "lock scan-config tables for patch")
@@ -420,8 +430,10 @@ pub(crate) async fn patch_scan_config(
     if let Some(name) = request.name.as_ref() {
         ensure_unique_scan_config_name(&tx, name, config_state.internal_id).await?;
     }
-    if let Some(family_selection) = request.family_selection.as_ref() {
+    if request.family_selection.is_some() || request.preferences.is_some() {
         ensure_scan_config_not_referenced_by_any_task(&tx, config_state.internal_id).await?;
+    }
+    if let Some(family_selection) = request.family_selection.as_ref() {
         ensure_scan_config_selector_is_private(&tx, &config_state).await?;
         let known_families = load_scan_config_known_family_names(&tx).await?;
         ensure_scan_config_family_selection_is_complete(family_selection, &known_families)?;
@@ -430,6 +442,14 @@ pub(crate) async fn patch_scan_config(
             config_state.internal_id,
             &config_state.nvt_selector,
             family_selection,
+        )
+        .await?;
+    }
+    if let Some(preferences) = request.preferences.as_ref() {
+        execute_scan_config_preference_mutations_transaction(
+            &tx,
+            config_state.internal_id,
+            preferences,
         )
         .await?;
     }

@@ -839,6 +839,9 @@ describe('ScanConfigCommand tests', () => {
         'Zulu family': NO_VALUE,
         'Alpha family': YES_VALUE,
       },
+      scannerPreferenceValues: {
+        'Max checks': 10,
+      },
     });
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
@@ -856,6 +859,14 @@ describe('ScanConfigCommand tests', () => {
             ],
           },
           name: 'Native name',
+          preferences: [
+            {
+              scope: 'scanner',
+              name: 'Max checks',
+              action: 'set',
+              value: '10',
+            },
+          ],
         }),
       }),
     );
@@ -959,30 +970,36 @@ describe('ScanConfigCommand tests', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  test('should reject native scanner preference values without GMP fallback', async () => {
-    const fetchMock = testing.fn();
-    testing.stubGlobal('fetch', fetchMock);
-    const response = createActionResultResponse({
-      id: 'fallback-scan-config-id',
+  test('should save native scanner preference values without GMP fallback', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'scan-config-id'}),
+      ok: true,
+      status: 200,
     });
-    const fakeHttp = createHttp(response);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
     const cmd = new ScanConfigCommand(fakeHttp);
 
-    expect(() =>
-      cmd.save({
-        id: 'scan-config-id',
-        name: 'Native name',
-        comment: 'Native comment',
-        scannerPreferenceValues: {foo: 'bar'},
-      }),
-    ).toThrow(
-      'Native scan config save does not support scanner preference values',
-    );
+    await cmd.save({
+      id: 'scan-config-id',
+      name: 'Native name',
+      comment: 'Native comment',
+      scannerPreferenceValues: {foo: 'bar', omitted: undefined},
+    });
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scan-configs/scan-config-id',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          comment: 'Native comment',
+          name: 'Native name',
+          preferences: [
+            {scope: 'scanner', name: 'foo', action: 'set', value: 'bar'},
+          ],
+        }),
+      }),
+    );
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
@@ -1009,6 +1026,136 @@ describe('ScanConfigCommand tests', () => {
         'nvt:oid:3': 1,
       },
     });
+  });
+
+  test('should save NVT entry, radio, password, and file preferences through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'scan-config-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigCommand(fakeHttp);
+
+    await cmd.saveScanConfigNvt({
+      id: 'scan-config-id',
+      oid: '1.2.3',
+      timeout: 123,
+      preferenceValues: {
+        Entry: {id: 1, type: 'entry', value: 'entry value'},
+        Radio: {id: 2, type: 'radio', value: 2},
+        Password: {id: 3, type: 'password', value: 'password value'},
+        File: {id: 4, type: 'file', value: 'file value'},
+      },
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scan-configs/scan-config-id',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          preferences: [
+            {
+              scope: 'nvt',
+              name: 'Entry',
+              action: 'set',
+              value: 'entry value',
+              nvt: {oid: '1.2.3', id: 1, type: 'entry'},
+            },
+            {
+              scope: 'nvt',
+              name: 'Radio',
+              action: 'set',
+              value: '2',
+              nvt: {oid: '1.2.3', id: 2, type: 'radio'},
+            },
+            {
+              scope: 'nvt',
+              name: 'Password',
+              action: 'set',
+              value: 'password value',
+              nvt: {oid: '1.2.3', id: 3, type: 'password'},
+            },
+            {
+              scope: 'nvt',
+              name: 'File',
+              action: 'set',
+              value: 'file value',
+              nvt: {oid: '1.2.3', id: 4, type: 'file'},
+            },
+            {
+              scope: 'nvt',
+              name: 'timeout',
+              action: 'set',
+              value: '123',
+              nvt: {oid: '1.2.3', id: 0, type: 'entry'},
+            },
+          ],
+        }),
+      }),
+    );
+  });
+
+  test('should omit undefined native password and file preferences', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'scan-config-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigCommand(fakeHttp);
+
+    await cmd.saveScanConfigNvt({
+      id: 'scan-config-id',
+      oid: '1.2.3',
+      timeout: 30,
+      preferenceValues: {
+        Password: {id: 1, type: 'password', value: undefined},
+        File: {id: 2, type: 'file', value: undefined},
+      },
+    });
+
+    const {body} = fetchMock.mock.calls[0][1];
+    expect(JSON.parse(body).preferences).toEqual([
+      {
+        scope: 'nvt',
+        name: 'timeout',
+        action: 'set',
+        value: '30',
+        nvt: {oid: '1.2.3', id: 0, type: 'entry'},
+      },
+    ]);
+  });
+
+  test('should reset an undefined native NVT timeout', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'scan-config-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigCommand(fakeHttp);
+
+    await cmd.saveScanConfigNvt({
+      id: 'scan-config-id',
+      oid: '1.2.3',
+      timeout: undefined,
+      preferenceValues: {},
+    });
+
+    const {body} = fetchMock.mock.calls[0][1];
+    expect(JSON.parse(body).preferences).toEqual([
+      {
+        scope: 'nvt',
+        name: 'timeout',
+        action: 'reset',
+        nvt: {oid: '1.2.3', id: 0, type: 'entry'},
+      },
+    ]);
   });
 
   test('should save a config nvt', async () => {

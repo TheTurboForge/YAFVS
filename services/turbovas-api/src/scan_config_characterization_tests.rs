@@ -448,7 +448,9 @@ fn native_direct_api_allows_scan_config_write_control_paths() {
     assert!(detail.contains("delete:"));
     assert!(!detail.contains("\n  post:"));
     assert!(detail.contains("x-turbovas-exposure: direct-write"));
-    assert!(detail.contains("x-turbovas-replaces: scan-config-family-mode-mutation"));
+    assert!(
+        detail.contains("x-turbovas-replaces: scan-config-family-mode-and-preference-mutation")
+    );
     assert!(detail.contains("x-turbovas-replaces: scan-config-trash-move"));
     assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(!detail.contains(
@@ -851,7 +853,7 @@ fn native_scan_config_family_nvt_routes_and_openapi_are_read_and_guarded_write()
         "x-turbovas-replaces: scan-config-detail-info-tags-task-backlinks-and-preferences-read"
     ));
     assert!(detail.contains(
-        "x-turbovas-inherited-still-owns: scan-config-preference-mutations-import-xml-export-and-blank-create"
+        "x-turbovas-inherited-still-owns: scan-config-import-xml-export-and-blank-create"
     ));
 
     let path = openapi_path_block("/scan-configs/{scan_config_id}/families/{family}/nvts");
@@ -903,6 +905,8 @@ fn native_scan_config_family_nvt_routes_and_openapi_are_read_and_guarded_write()
         "ScanConfigFamilyNvts",
         "ScanConfigFamilyNvtsPatchRequest",
         "ScanConfigFamilyNvtSelectionChange",
+        "ScanConfigPreferenceMutation",
+        "ScanConfigPreferenceNvtIdentity",
     ] {
         let block = openapi_schema_block(schema);
         assert!(
@@ -915,6 +919,21 @@ fn native_scan_config_family_nvt_routes_and_openapi_are_read_and_guarded_write()
     assert!(detail_schema.contains("#/components/schemas/ScanConfigPreferences"));
     let patch_schema = openapi_schema_block("ScanConfigFamilyNvtsPatchRequest");
     assert!(patch_schema.contains("maxItems: 1024"));
+    let config_patch_schema = openapi_schema_block("ScanConfigPatchRequest");
+    assert!(config_patch_schema.contains("maxItems: 512"));
+    assert!(config_patch_schema.contains("#/components/schemas/ScanConfigPreferenceMutation"));
+    let preference_mutation = openapi_schema_block("ScanConfigPreferenceMutation");
+    for required in [
+        "enum: [scanner, nvt]",
+        "enum: [set, reset]",
+        "writeOnly: true",
+        "#/components/schemas/ScanConfigPreferenceNvtIdentity",
+    ] {
+        assert!(
+            preference_mutation.contains(required),
+            "preference mutation schema missing {required}"
+        );
+    }
 
     for schema in ["ScanConfigScannerPreference", "ScanConfigNvtPreference"] {
         let block = openapi_schema_block(schema);

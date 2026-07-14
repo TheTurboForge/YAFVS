@@ -170,6 +170,13 @@ export interface NativeScanConfigPatchRequest {
   name?: string;
   comment?: string;
   family_selection?: NativeScanConfigFamilySelection;
+  preferences?: Array<{
+    scope: 'scanner' | 'nvt';
+    name: string;
+    action: 'set' | 'reset';
+    value?: string;
+    nvt?: {oid: string; id: number; type: string};
+  }>;
 }
 
 export interface NativeScanConfigFamilySelection {

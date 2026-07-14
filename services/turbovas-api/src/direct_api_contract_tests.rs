@@ -29,10 +29,23 @@ struct NativeWriteRouteContract {
     safety_contract: &'static str,
 }
 
-const APPROVED_NATIVE_DIRECT_READ_ROUTES: &[(&str, &str)] =
-    &[("get", "/api/v1/alerts/:alert_id/definition")];
+const APPROVED_NATIVE_DIRECT_READ_ROUTES: &[(&str, &str)] = &[
+    ("get", "/api/v1/alerts/:alert_id/definition"),
+    ("get", "/api/v1/users/current/settings"),
+    ("get", "/api/v1/users/current/settings/:setting_id"),
+];
 
 const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
+    NativeWriteRouteContract {
+        method: "put",
+        path: "/api/v1/users/current/settings/:setting_id",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
+        method: "put",
+        path: "/api/v1/users/current/timezone",
+        safety_contract: "write-control-v1",
+    },
     NativeWriteRouteContract {
         method: "get",
         path: "/api/v1/trashcan/empty-preview",

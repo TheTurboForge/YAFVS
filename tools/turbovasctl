@@ -839,6 +839,10 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "trashcan-empty",
         "trashcan-owner-empty-preview",
         "trashcan-redacted-row-metadata-read",
+        "current-user-setting-read",
+        "current-user-setting-write",
+        "current-user-settings-read",
+        "current-user-timezone-write",
         "user-current-password-change",
         "user-redacted-detail-read",
         "user-redacted-list-read",
@@ -942,6 +946,10 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/credentials/{credential_id}"): "direct-read",
     ("patch", "/credentials/{credential_id}"): "direct-write",
     ("get", "/users"): "direct-read",
+    ("get", "/users/current/settings"): "direct-read",
+    ("get", "/users/current/settings/{setting_id}"): "direct-read",
+    ("put", "/users/current/settings/{setting_id}"): "direct-write",
+    ("put", "/users/current/timezone"): "direct-write",
     ("post", "/users/current/password"): "browser-write",
     ("get", "/users/{user_id}"): "direct-read",
     ("get", "/filters/{filter_id}/export"): "direct-read",
@@ -1128,6 +1136,30 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("get", "/users"): {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "user-redacted-list-read",
+    },
+    ("get", "/users/current/settings"): {
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "current-user-settings-read",
+    },
+    ("get", "/users/current/settings/{setting_id}"): {
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "current-user-setting-read",
+    },
+    ("put", "/users/current/settings/{setting_id}"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "gvmd-authoritative-operator-authorization",
+        "x-turbovas-replaces": "current-user-setting-write",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-write",
+    },
+    ("put", "/users/current/timezone"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "gvmd-authoritative-operator-authorization",
+        "x-turbovas-replaces": "current-user-timezone-write",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "metadata-write",
     },
     ("post", "/users/current/password"): {
         "x-turbovas-maturity": "live-write",
@@ -2137,6 +2169,8 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/credentials/{}",
         "/api/v1/credentials/{}/export",
         "/api/v1/users",
+        "/api/v1/users/current/settings",
+        "/api/v1/users/current/settings/{}",
         "/api/v1/users/{}",
         "/api/v1/filters",
         "/api/v1/filters/{}",
@@ -10038,11 +10072,28 @@ def c_string_constants(function_body: str) -> dict[str, str]:
     }
 
 
+def c_string_define_values(source: str) -> dict[str, str]:
+    return {
+        match.group(1): match.group(2)
+        for match in re.finditer(
+            r'^\s*#define\s+(\w+)\s+"([^"]*)"\s*$', source, re.MULTILINE
+        )
+    }
+
+
 def c_string_array_values(function_body: str, name: str) -> list[str]:
     match = re.search(rf"const\s+gchar\s+\*\s*{re.escape(name)}\s*\[\]\s*=\s*{{(?P<body>.*?)}};", function_body, re.DOTALL)
     if match is None:
         return []
     return re.findall(r'"([^"]+)"', match.group("body"))
+
+
+GSAD_LOCAL_NATIVE_API_PATHS = frozenset(
+    {"/api/v1/session/ping", "/api/v1/session/renew"}
+)
+GSAD_LOCAL_NATIVE_API_WRITE_OPERATIONS = frozenset(
+    {"POST /api/v1/session/renew"}
+)
 
 
 def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[list[str], list[str]]:
@@ -10058,7 +10109,8 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
     if not function_body:
         return [], ["missing_function:native_api_path_is_allowed"]
 
-    constants = c_string_constants(function_body)
+    global_constants = c_string_define_values(source)
+    constants = {**global_constants, **c_string_constants(function_body)}
     templates: set[str] = set()
     errors: list[str] = []
 
@@ -10066,7 +10118,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         source, "native_api_pdf_download_path_is_allowed"
     )
     if pdf_function_body:
-        pdf_constants = c_string_constants(pdf_function_body)
+        pdf_constants = {**global_constants, **c_string_constants(pdf_function_body)}
         pdf_prefix = pdf_constants.get("prefix")
         pdf_suffix = pdf_constants.get("suffix")
         if (
@@ -10129,6 +10181,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         "scope_report_prefix",
         "target_prefix",
         "task_prefix",
+        "USER_SETTING_PREFIX",
     )
     for variable in single_segment_prefixes:
         value = constants.get(variable)
@@ -10209,7 +10262,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
 
     post_function_body = c_source_function_body(source, "native_api_post_path_is_allowed")
     if post_function_body:
-        post_constants = c_string_constants(post_function_body)
+        post_constants = {**global_constants, **c_string_constants(post_function_body)}
         for match in re.finditer(
             r"if\s*\(\s*g_strcmp0\s*\(\s*path\s*,\s*(\w+)\s*\)\s*==\s*0\s*\)\s*return\s+TRUE\s*;",
             post_function_body,
@@ -10299,7 +10352,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
 
     patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
     if patch_function_body:
-        patch_constants = c_string_constants(patch_function_body)
+        patch_constants = {**global_constants, **c_string_constants(patch_function_body)}
         for prefix_variable in ("filter_prefix", "override_prefix", "port_list_prefix", "report_format_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = patch_constants.get(prefix_variable)
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in patch_function_body:
@@ -10317,9 +10370,30 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
                 f"{scan_config_family_separator}{{}}/nvts"
             )
 
+    put_function_body = c_source_function_body(source, "native_api_put_path_is_allowed")
+    if put_function_body:
+        put_constants = {**global_constants, **c_string_constants(put_function_body)}
+        for match in re.finditer(
+            r"if\s*\(\s*g_strcmp0\s*\(\s*path\s*,\s*(\w+)\s*\)\s*==\s*0\s*\)\s*return\s+TRUE\s*;",
+            put_function_body,
+            re.DOTALL,
+        ):
+            value = put_constants.get(match.group(1))
+            if value and value.startswith("/api/v1"):
+                templates.add(value)
+            else:
+                errors.append(f"unresolved_put_exact_path:{match.group(1)}")
+        user_setting_prefix = put_constants.get("USER_SETTING_PREFIX")
+        if (
+            user_setting_prefix
+            and "g_str_has_prefix (path, USER_SETTING_PREFIX)" in put_function_body
+            and "is_uuid_segment (id, strlen (id))" in put_function_body
+        ):
+            templates.add(f"{user_setting_prefix.rstrip('/')}/{{}}")
+
     delete_function_body = c_source_function_body(source, "native_api_delete_path_is_allowed")
     if delete_function_body:
-        delete_constants = c_string_constants(delete_function_body)
+        delete_constants = {**global_constants, **c_string_constants(delete_function_body)}
         trash_suffix = delete_constants.get("trash_suffix")
         for prefix_variable in (
             "filter_prefix",
@@ -10347,6 +10421,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         ):
             templates.add(f"{port_list_prefix.rstrip('/')}/{{}}/ranges/{{}}")
 
+    templates.difference_update(GSAD_LOCAL_NATIVE_API_PATHS)
     return sorted(templates), errors
 
 
@@ -10361,10 +10436,11 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
 
     operations: set[str] = set()
     errors: list[str] = []
+    global_constants = c_string_define_values(source)
 
     post_function_body = c_source_function_body(source, "native_api_post_path_is_allowed")
     if post_function_body:
-        post_constants = c_string_constants(post_function_body)
+        post_constants = {**global_constants, **c_string_constants(post_function_body)}
         for match in re.finditer(
             r"if\s*\(\s*g_strcmp0\s*\(\s*path\s*,\s*(\w+)\s*\)\s*==\s*0\s*\)\s*return\s+TRUE\s*;",
             post_function_body,
@@ -10458,7 +10534,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
 
     patch_function_body = c_source_function_body(source, "native_api_patch_path_is_allowed")
     if patch_function_body:
-        patch_constants = c_string_constants(patch_function_body)
+        patch_constants = {**global_constants, **c_string_constants(patch_function_body)}
         for prefix_variable in (
             "alert_prefix",
             "credential_prefix",
@@ -10493,7 +10569,24 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
 
     put_function_body = c_source_function_body(source, "native_api_put_path_is_allowed")
     if put_function_body:
-        put_constants = c_string_constants(put_function_body)
+        put_constants = {**global_constants, **c_string_constants(put_function_body)}
+        for match in re.finditer(
+            r"if\s*\(\s*g_strcmp0\s*\(\s*path\s*,\s*(\w+)\s*\)\s*==\s*0\s*\)\s*return\s+TRUE\s*;",
+            put_function_body,
+            re.DOTALL,
+        ):
+            value = put_constants.get(match.group(1))
+            if value and value.startswith("/api/v1"):
+                operations.add(f"PUT {value}")
+            else:
+                errors.append(f"unresolved_put_exact_path:{match.group(1)}")
+        user_setting_prefix = put_constants.get("USER_SETTING_PREFIX")
+        if (
+            user_setting_prefix
+            and "g_str_has_prefix (path, USER_SETTING_PREFIX)" in put_function_body
+            and "is_uuid_segment (id, strlen (id))" in put_function_body
+        ):
+            operations.add(f"PUT {user_setting_prefix.rstrip('/')}/{{}}")
         alert_prefix = put_constants.get("alert_prefix")
         definition_suffix = put_constants.get("definition_suffix")
         if (
@@ -10508,7 +10601,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
 
     delete_function_body = c_source_function_body(source, "native_api_delete_path_is_allowed")
     if delete_function_body:
-        delete_constants = c_string_constants(delete_function_body)
+        delete_constants = {**global_constants, **c_string_constants(delete_function_body)}
         trash_suffix = delete_constants.get("trash_suffix")
         for prefix_variable in (
             "alert_prefix",
@@ -10540,6 +10633,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
         ):
             operations.add(f"DELETE {port_list_prefix.rstrip('/')}/{{}}/ranges/{{}}")
 
+    operations.difference_update(GSAD_LOCAL_NATIVE_API_WRITE_OPERATIONS)
     return sorted(operations), errors
 
 
@@ -11144,8 +11238,34 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "scriptable_read",
                 "replacement_candidates": ["retired list-users.gmp.py", "direct native redacted user account list", "native-api-request helper"],
                 "residual_inherited": [
-                    "Password hashes, authentication methods, timezone, permissions, session state, and account writes remain inherited; current-password change is native through the authenticated browser proxy."
+                    "Password hashes are never exposed; authentication-provider configuration and account writes remain inherited. Current settings, timezone, and password changes are native."
                 ],
+            },
+            {
+                "endpoint": "/api/v1/users/current/settings",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["GSA resolved current-operator settings", "direct native settings automation"],
+            },
+            {
+                "endpoint": "/api/v1/users/current/settings/{setting_id}",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["GSA current-operator setting read", "direct native setting read"],
+            },
+            {
+                "method": "put",
+                "endpoint": "/api/v1/users/current/settings/{setting_id}",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["GSA current-operator setting save", "direct native setting replacement"],
+            },
+            {
+                "method": "put",
+                "endpoint": "/api/v1/users/current/timezone",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["GSA current-operator timezone save", "direct native timezone replacement"],
             },
             {
                 "method": "post",
@@ -11163,7 +11283,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "scriptable_read",
                 "replacement_candidates": ["direct native redacted user account detail", "native-api-request helper"],
                 "residual_inherited": [
-                    "Password hashes, authentication methods, timezone, permissions, session state, and account writes remain inherited; current-password change is native through the authenticated browser proxy."
+                    "Password hashes are never exposed; authentication-provider configuration and account writes remain inherited. Current settings, timezone, and password changes are native."
                 ],
             },
             {

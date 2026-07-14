@@ -14,7 +14,7 @@ import {type XmlMeta, type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
 import date, {type Date} from 'gmp/models/date';
 import {type PortListElement} from 'gmp/models/port-list';
-import Setting, {type SettingElement} from 'gmp/models/setting';
+import Setting from 'gmp/models/setting';
 import Settings from 'gmp/models/settings';
 import User, {
   AUTH_METHOD_LDAP,
@@ -26,7 +26,7 @@ import {exportNativeUserMetadata, fetchNativeUser} from 'gmp/native-api/users';
 import {parseInt} from 'gmp/parser';
 import {forEach} from 'gmp/utils/array';
 import {type EntityType} from 'gmp/utils/entity-type';
-import {isArray, isDefined} from 'gmp/utils/identity';
+import {isDefined} from 'gmp/utils/identity';
 
 interface AuthSettingsResponseData extends XmlResponseData {
   auth_settings: {
@@ -44,14 +44,6 @@ interface AuthSettingsResponseData extends XmlResponseData {
           };
         }[];
       }[];
-    };
-  };
-}
-
-export interface GetSettingsResponse extends XmlResponseData {
-  get_settings: {
-    get_settings_response: {
-      setting: SettingElement | SettingElement[];
     };
   };
 }
@@ -106,6 +98,58 @@ const nativeApiHeaders = (http: Http, withJsonBody = false) => ({
     ? {Authorization: `Bearer ${http.session.jwt}`}
     : {}),
 });
+
+interface NativeSettingPayload {
+  id: string;
+  name: string;
+  comment?: string;
+  value?: string;
+}
+
+interface NativeSettingsPayload {
+  items?: NativeSettingPayload[];
+}
+
+const nativeSettingToModel = (setting: NativeSettingPayload) =>
+  new Setting({
+    _id: setting.id,
+    name: setting.name,
+    comment: setting.comment,
+    value: setting.value,
+  });
+
+const fetchNativeJson = async <T>(http: Http, path: string): Promise<T> => {
+  const response = await fetch(http.buildUrl(path), {
+    method: 'GET',
+    credentials: 'include',
+    headers: nativeApiHeaders(http),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Native API request failed with status ${response.status}`,
+    );
+  }
+  return (await response.json()) as T;
+};
+
+const putNativeSetting = async (
+  http: Http,
+  path: string,
+  value: string | number,
+) => {
+  const response = await fetch(http.buildUrl(path), {
+    method: 'PUT',
+    credentials: 'include',
+    headers: nativeApiHeaders(http, true),
+    body: JSON.stringify({value}),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Native API request failed with status ${response.status}`,
+    );
+  }
+  return new Response(undefined);
+};
 
 export const ROWS_PER_PAGE_SETTING_ID = '5f5a8712-8017-11e1-8556-406186ea4fc5';
 
@@ -224,35 +268,24 @@ class UserCommand extends EntityCommand<User, PortListElement> {
   }
 
   async getSetting(id: string) {
-    const response = await this.httpGetWithTransform({
-      cmd: 'get_setting',
-      setting_id: id,
-    });
-    const {data} = response as Response<GetSettingsResponse, XmlMeta>;
-    const {setting} = data.get_settings.get_settings_response;
-    if (!isDefined(setting)) {
-      return response.setData(undefined);
-    }
-    return response.setData(
-      isArray(setting) ? new Setting(setting[0]) : new Setting(setting),
+    const setting = await fetchNativeJson<NativeSettingPayload>(
+      this.http,
+      `api/v1/users/current/settings/${id}`,
     );
+    return new Response(nativeSettingToModel(setting));
   }
 
-  async currentSettings(options: HttpCommandOptions = {}) {
-    const response = await this.httpGetWithTransform(
-      {
-        cmd: 'get_settings',
-      },
-      options,
+  async currentSettings(_options: HttpCommandOptions = {}) {
+    const payload = await fetchNativeJson<NativeSettingsPayload>(
+      this.http,
+      'api/v1/users/current/settings',
     );
     const settings: Record<string, Setting> = {};
-    const {data} = response as Response<GetSettingsResponse, XmlMeta>;
-    forEach(data.get_settings.get_settings_response.setting, setting => {
-      // set setting keys to lowercase and remove '-'
+    forEach(payload.items, setting => {
       const keyName = transformSettingName(setting.name);
-      settings[keyName] = new Setting(setting);
+      settings[keyName] = nativeSettingToModel(setting);
     });
-    return response.setData(settings);
+    return new Response(settings);
   }
 
   async currentCapabilities() {
@@ -341,19 +374,19 @@ class UserCommand extends EntityCommand<User, PortListElement> {
   }
 
   async saveSetting(settingId: string, settingValue: string | number) {
-    return this.httpPostWithTransform({
-      cmd: 'save_setting',
-      setting_id: settingId,
-      setting_value: settingValue,
-    });
+    return putNativeSetting(
+      this.http,
+      `api/v1/users/current/settings/${settingId}`,
+      settingValue,
+    );
   }
 
   async saveTimezone(settingValue: string | number) {
-    return this.httpPostWithTransform({
-      cmd: 'save_setting',
-      setting_name: 'Timezone',
-      setting_value: settingValue,
-    });
+    return putNativeSetting(
+      this.http,
+      'api/v1/users/current/timezone',
+      settingValue,
+    );
   }
 
   async getReportComposerDefaults() {
@@ -376,12 +409,10 @@ class UserCommand extends EntityCommand<User, PortListElement> {
 
   saveReportComposerDefaults(defaults: Record<string, unknown> = {}) {
     log.debug('Saving report composer defaults', defaults);
-
-    return this.action({
-      cmd: 'save_setting',
-      setting_id: REPORT_COMPOSER_DEFAULTS_SETTING_ID,
-      setting_value: JSON.stringify(defaults),
-    });
+    return this.saveSetting(
+      REPORT_COMPOSER_DEFAULTS_SETTING_ID,
+      JSON.stringify(defaults),
+    );
   }
 
   async renewSession() {

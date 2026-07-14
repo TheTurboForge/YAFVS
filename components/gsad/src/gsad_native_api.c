@@ -47,6 +47,9 @@
 #define USER_PASSWORD_MAX_BYTES 4096
 #define SESSION_PING_PATH "/api/v1/session/ping"
 #define SESSION_RENEW_PATH "/api/v1/session/renew"
+#define USER_SETTINGS_PATH "/api/v1/users/current/settings"
+#define USER_SETTING_PREFIX "/api/v1/users/current/settings/"
+#define USER_TIMEZONE_PATH "/api/v1/users/current/timezone"
 
 static void
 secure_clear (void *value, gsize length)
@@ -315,12 +318,21 @@ native_api_put_path_is_allowed (const gchar *path)
   const gchar *alert_prefix = "/api/v1/alerts/";
   const gchar *definition_suffix = "/definition";
 
-  if (path == NULL || strchr (path, '?') != NULL
-      || !g_str_has_prefix (path, alert_prefix))
+  if (path == NULL || strchr (path, '?') != NULL)
     return FALSE;
 
-  return is_uuid_segment_with_suffix (path + strlen (alert_prefix),
-                                      definition_suffix);
+  if (g_strcmp0 (path, USER_TIMEZONE_PATH) == 0)
+    return TRUE;
+
+  if (g_str_has_prefix (path, USER_SETTING_PREFIX))
+    {
+      const gchar *id = path + strlen (USER_SETTING_PREFIX);
+      return is_uuid_segment (id, strlen (id));
+    }
+
+  return g_str_has_prefix (path, alert_prefix)
+         && is_uuid_segment_with_suffix (path + strlen (alert_prefix),
+                                         definition_suffix);
 }
 
 static gboolean
@@ -1296,6 +1308,15 @@ native_api_path_is_allowed (const gchar *path)
 
   if (g_strcmp0 (path, SESSION_PING_PATH) == 0)
     return TRUE;
+
+  if (g_strcmp0 (path, USER_SETTINGS_PATH) == 0)
+    return TRUE;
+
+  if (g_str_has_prefix (path, USER_SETTING_PREFIX))
+    {
+      const gchar *id = path + strlen (USER_SETTING_PREFIX);
+      return is_uuid_segment (id, strlen (id));
+    }
 
   if (g_strcmp0 (path, raw_reports_path) == 0)
     return TRUE;
@@ -2364,7 +2385,8 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
 
   const gchar *secret = NULL;
   const gchar *operator_name = NULL;
-  if (native_api_put_path_is_allowed (path))
+  if (native_api_put_path_is_allowed (path)
+      || g_strcmp0 (path, USER_SETTINGS_PATH) == 0)
     {
       secret = browser_proxy_secret ();
       operator_name = browser_proxy_operator_name (credentials);

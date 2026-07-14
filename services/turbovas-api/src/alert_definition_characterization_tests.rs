@@ -11,7 +11,7 @@ const DIRECT_ROUTES: &str = include_str!("direct_api_routes.rs");
 const BROWSER_ROUTES: &str = include_str!("browser_proxy_routes.rs");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
 const GSAD_PROXY: &str = include_str!("../../../components/gsad/src/gsad_native_api.c");
-const GSA_USER: &str = include_str!("../../../components/gsa/src/gmp/commands/user.ts");
+const GSA_ALERTS: &str = include_str!("../../../components/gsa/src/gmp/native-api/alerts.ts");
 
 #[test]
 fn inherited_modify_alert_gaps_are_not_repeated() {
@@ -104,13 +104,15 @@ fn authenticated_direct_and_browser_routes_cover_get_and_put() {
     assert!(gate < DIRECT_ROUTES.find("put(put_alert_definition)").unwrap());
     assert!(BROWSER_ROUTES.contains("get(browser_proxy_get_alert_definition)"));
     assert!(BROWSER_ROUTES.contains("put(browser_proxy_put_alert_definition)"));
-    assert!(GSAD_PROXY.contains("if (native_api_put_path_is_allowed (path))"));
+    assert!(GSAD_PROXY.contains("if (native_api_put_path_is_allowed (path)"));
     assert!(
         GSAD_PROXY
             .contains("body = fetch_native_api_json (\"GET\", request_target, NULL, 0, secret,")
     );
-    assert!(GSA_USER.contains("'create_alert'"));
-    assert!(GSA_USER.contains("'modify_alert'"));
+    assert!(GSA_ALERTS.contains("fetchNativeAlertDefinitionPayload"));
+    assert!(GSA_ALERTS.contains("replaceNativeAlertDefinition"));
+    assert!(GSA_ALERTS.contains("`api/v1/alerts/${encodeURIComponent(id)}/definition`"));
+    assert!(GSA_ALERTS.contains("'PUT'"));
 }
 
 #[test]

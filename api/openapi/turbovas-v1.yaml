@@ -4115,6 +4115,156 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /users/current/settings:
+    get:
+      operationId: getUsersCurrentSettings
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: current-user-settings-read
+      summary: List the current operator's resolved settings
+      description: Returns each current-operator setting after resolving a user-owned override over the global default. Authentication-provider configuration and password material are not settings and are never returned here.
+      responses:
+        '200':
+          description: Resolved current-operator settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSettingCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /users/current/settings/{setting_id}:
+    get:
+      operationId: getUsersCurrentSettingsBySettingId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: current-user-setting-read
+      parameters:
+        - $ref: '#/components/parameters/SettingId'
+      summary: Read one resolved current-operator setting
+      responses:
+        '200':
+          description: Resolved current-operator setting
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserSetting'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    put:
+      operationId: putUsersCurrentSettingsBySettingId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: current-user-setting-write
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: gvmd-authoritative-operator-authorization
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      parameters:
+        - $ref: '#/components/parameters/SettingId'
+      summary: Replace one current-operator setting value
+      description: Passes the bounded setting UUID/value to authoritative gvmd validation and writes only the authenticated operator's setting override.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSettingUpdateRequest'
+      responses:
+        '204':
+          description: Setting value replaced
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /users/current/timezone:
+    put:
+      operationId: putUsersCurrentTimezone
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: current-user-timezone-write
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: gvmd-authoritative-operator-authorization
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: metadata-write
+      summary: Replace the current operator's timezone
+      description: Passes the bounded timezone value to authoritative gvmd supported-timezone validation before updating the authenticated operator.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserSettingUpdateRequest'
+      responses:
+        '204':
+          description: Timezone replaced
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /users/current/password:
     post:
       operationId: postUsersCurrentPassword
@@ -7166,6 +7316,13 @@ components:
       schema:
         type: string
         format: uuid
+    SettingId:
+      name: setting_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
     CanonicalPdfReportFormatId:
       name: report_format_id
       in: query
@@ -8302,6 +8459,38 @@ components:
         modified_at:
           type: string
           format: date-time
+    UserSettingCollection:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserSetting'
+    UserSetting:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        comment:
+          type: string
+        value:
+          type: string
+    UserSettingUpdateRequest:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        value:
+          oneOf:
+            - type: string
+              maxLength: 32768
+            - type: number
+          description: Replacement value. Its UTF-8 string representation must not exceed 32768 bytes or contain NUL characters.
     CurrentUserPasswordChangeRequest:
       type: object
       additionalProperties: false

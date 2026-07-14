@@ -60,16 +60,26 @@ use crate::{
     task_writes::{clone_task, create_task, delete_task, patch_task, replace_task},
     tls_certificate_writes::delete_tls_certificate,
     trash_empty::{MAX_TRASH_EMPTY_BODY_BYTES, empty_trashcan, trash_empty_preview},
+    user_settings::{
+        MAX_USER_SETTING_BODY_BYTES, current_user_setting, current_user_settings,
+        update_current_user_setting, update_current_user_timezone,
+    },
 };
 
 pub(crate) fn direct_native_api_router(
     router: Router<AppState>,
     write_control_enabled: bool,
 ) -> Router<AppState> {
-    let router = router.route(
-        "/api/v1/alerts/:alert_id/definition",
-        get(get_alert_definition),
-    );
+    let router = router
+        .route(
+            "/api/v1/alerts/:alert_id/definition",
+            get(get_alert_definition),
+        )
+        .route("/api/v1/users/current/settings", get(current_user_settings))
+        .route(
+            "/api/v1/users/current/settings/:setting_id",
+            get(current_user_setting),
+        );
     let router = if write_control_enabled {
         router
             .route("/api/v1/scopes", post(create_scope))
@@ -244,6 +254,16 @@ pub(crate) fn direct_native_api_router(
             .route("/api/v1/tags/:tag_id/restore", post(restore_tag))
             .route("/api/v1/tags/:tag_id/trash", delete(hard_delete_tag))
             .route("/api/v1/tags/:tag_id/resources", post(update_tag_resources))
+            .route(
+                "/api/v1/users/current/settings/:setting_id",
+                put(update_current_user_setting)
+                    .layer(DefaultBodyLimit::max(MAX_USER_SETTING_BODY_BYTES)),
+            )
+            .route(
+                "/api/v1/users/current/timezone",
+                put(update_current_user_timezone)
+                    .layer(DefaultBodyLimit::max(MAX_USER_SETTING_BODY_BYTES)),
+            )
             .route("/api/v1/trashcan/empty-preview", get(trash_empty_preview))
             .route(
                 "/api/v1/trashcan/empty",

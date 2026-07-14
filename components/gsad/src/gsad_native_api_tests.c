@@ -52,6 +52,42 @@ gsad_credentials_get_user (gsad_credentials_t *credentials)
            : NULL;
 }
 
+Ensure (gsad_native_api,
+        should_only_allow_exact_current_user_setting_paths)
+{
+  const gchar *setting =
+    "/api/v1/users/current/settings/"
+    "12345678-1234-1234-1234-123456789abc";
+
+  assert_that (
+    gsad_native_api_test_get_path_is_allowed (
+      "/api/v1/users/current/settings"),
+    is_true);
+  assert_that (gsad_native_api_test_get_path_is_allowed (setting), is_true);
+  assert_that (gsad_native_api_test_put_path_is_allowed (setting), is_true);
+  assert_that (
+    gsad_native_api_test_put_path_is_allowed (
+      "/api/v1/users/current/timezone"),
+    is_true);
+  assert_that (
+    gsad_native_api_test_put_path_is_allowed (
+      "/api/v1/users/current/settings"),
+    is_false);
+  assert_that (
+    gsad_native_api_test_get_path_is_allowed (
+      "/api/v1/users/current/timezone"),
+    is_false);
+  assert_that (
+    gsad_native_api_test_get_path_is_allowed (
+      "/api/v1/users/current/settings/not-a-uuid"),
+    is_false);
+  assert_that (
+    gsad_native_api_test_put_path_is_allowed (
+      "/api/v1/users/current/settings/"
+      "12345678-1234-1234-1234-123456789abc/extra"),
+    is_false);
+}
+
 gsad_settings_t *
 gsad_settings_get_global_settings (void)
 {
@@ -606,6 +642,12 @@ main (int argc, char **argv)
   add_test_with_context (
     suite, gsad_native_api,
     should_only_allow_strict_current_user_password_change_posts);
+  add_test_with_context (
+    suite, gsad_native_api,
+    should_only_allow_exact_session_ping_and_renew_paths);
+  add_test_with_context (
+    suite, gsad_native_api,
+    should_only_allow_exact_current_user_setting_paths);
   add_test_with_context (
     suite, gsad_native_api,
     should_only_allow_canonical_alert_report_delivery_posts);

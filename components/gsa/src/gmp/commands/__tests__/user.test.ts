@@ -146,38 +146,98 @@ describe('UserCommand tests', () => {
     expect(renewed.data).toEqual(date.unix(1234567890));
   });
 
-  test('should return the first single setting value if given an array', async () => {
-    const response = createResponse({
-      get_settings: {
-        get_settings_response: {
-          setting: [
-            {
-              _id: '123',
-              name: 'Rows Per Page',
-              value: '42',
-            },
-            {
-              _id: '123',
-              name: 'Rows Per Page',
-              value: '21',
-            },
-          ],
-        },
-      },
+  test('should fetch a current-user setting through the native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: '123',
+        name: 'Rows Per Page',
+        value: '42',
+      }),
+      ok: true,
+      status: 200,
     });
-    const fakeHttp = createHttp(response);
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
     const cmd = new UserCommand(fakeHttp);
+
     const {data} = await cmd.getSetting('123');
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_setting',
-        setting_id: '123',
-      },
-    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/users/current/settings/123',
+    );
     expect(data).toBeDefined();
     expect(data?.id).toEqual('123');
     expect(data?.name).toEqual('Rows Per Page');
     expect(data?.value).toEqual('42');
+  });
+
+  test('should fetch and update current-user settings through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          items: [
+            {
+              id: 'rows',
+              name: 'Rows Per Page',
+              value: '42',
+            },
+            {
+              id: 'language',
+              name: 'Preferred Language',
+              value: 'en',
+            },
+          ],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValue({
+        ok: true,
+        status: 204,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new UserCommand(fakeHttp);
+
+    const {data: settings} = await cmd.currentSettings();
+    await cmd.saveSetting('rows', 25);
+    await cmd.saveTimezone('Europe/Berlin');
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(settings.rowsperpage.value).toEqual('42');
+    expect(settings.preferredlanguage.value).toEqual('en');
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://turbovas.example/api/v1/users/current/settings/rows',
+      {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({value: 25}),
+      },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'https://turbovas.example/api/v1/users/current/timezone',
+      {
+        method: 'PUT',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({value: 'Europe/Berlin'}),
+      },
+    );
   });
 
   test('should change password through the native API', async () => {
@@ -318,30 +378,18 @@ test('should disable non-retained optional features without a GMP request', asyn
 });
 
 describe('UserCommand saveTimezone() tests', () => {
-  test('should call httpPost with correct args and handle success', async () => {
-    const response = createResponse({success: true});
-    const fakeHttp = createHttp(response);
+  test('should reject a failed native timezone update', async () => {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn().mockResolvedValue({ok: false, status: 400}),
+    );
+    const fakeHttp = createNativeHttp();
     const cmd = new UserCommand(fakeHttp);
-    const settingValue = 'Europe/Berlin';
-    await cmd.saveTimezone(settingValue);
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'save_setting',
-        setting_name: 'Timezone',
-        setting_value: settingValue,
-      },
-    });
-  });
 
-  test('should throw and log on httpPost error', async () => {
-    const error = new Error('fail');
-    const fakeHttp = createHttp({});
-    fakeHttp.request = () => {
-      throw error;
-    };
-    const cmd = new UserCommand(fakeHttp);
-    const settingValue = 'Europe/Berlin';
-    await expect(cmd.saveTimezone(settingValue)).rejects.toThrow('fail');
+    await expect(cmd.saveTimezone('Europe/Berlin')).rejects.toThrow(
+      'Native API request failed with status 400',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 });
 describe('UserCommand currentSettings() naming normalization', () => {

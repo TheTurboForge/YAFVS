@@ -38,6 +38,10 @@ static gboolean alert_delivery_filter_exists;
 static alert_method_t alert_delivery_method;
 static int create_alert_calls;
 static int create_alert_result;
+static int create_user_calls;
+static int create_user_result;
+static int delete_user_calls;
+static int delete_user_result;
 static int create_schedule_calls;
 static int create_credential_calls;
 static int create_credential_result;
@@ -50,6 +54,8 @@ static gboolean diagnostic_control_changed;
 static gboolean diagnostic_control_committed;
 static int modify_schedule_calls;
 static int modify_schedule_result;
+static int modify_user_calls;
+static int modify_user_result;
 static int modify_setting_calls;
 static modify_setting_result_t modify_setting_result;
 static int create_tag_calls;
@@ -78,6 +84,9 @@ static int audit_fail_calls;
 static int audit_success_calls;
 static const char *alert_test_script_message;
 static const char *mock_operator_name;
+static const char *mock_target_auth_method;
+static const char *mock_target_name;
+static gboolean user_uuid_lookup_fails;
 static gboolean alert_uuid_lookup_fails;
 static alert_condition_t received_alert_condition;
 static alert_method_t received_alert_method;
@@ -130,6 +139,9 @@ static gchar *received_tag_resources_action;
 static gchar *received_tag_active;
 static gchar *received_tag_first_resource_id;
 static gchar *received_timezone;
+static gchar *received_user_inheritor_uuid;
+static gchar *received_user_method;
+static gchar *received_user_target_uuid;
 static gchar *received_diagnostic_config_uuid;
 static gchar *received_diagnostic_nvt_oid;
 static gchar *trash_empty_audit_actual_total;
@@ -252,8 +264,117 @@ reset_trash_empty_audit (void)
 gchar *
 __wrap_user_name (const char *uuid)
 {
+  return strcmp (uuid, "123e4567-e89b-12d3-a456-426614174000") == 0
+           ? mock_operator_name ? g_strdup (mock_operator_name) : NULL
+           : mock_target_name ? g_strdup (mock_target_name) : NULL;
+}
+
+gchar *
+__wrap_user_auth_method (const char *uuid)
+{
   (void) uuid;
-  return mock_operator_name ? g_strdup (mock_operator_name) : NULL;
+  return mock_target_auth_method ? g_strdup (mock_target_auth_method) : NULL;
+}
+
+char *
+__wrap_user_uuid (user_t user)
+{
+  return user == 11 && !user_uuid_lookup_fails
+           ? g_strdup ("123e4567-e89b-12d3-a456-426614174003") : NULL;
+}
+
+int
+__wrap_create_user (const gchar *name, const gchar *password,
+                    const gchar *comment, const array_t *allowed_methods,
+                    gchar **error_description, user_t *user)
+{
+  assert_that (current_credentials.uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (current_credentials.username, is_equal_to_string ("operator"));
+  create_user_calls++;
+  g_free (received_name);
+  g_free (received_comment);
+  g_free (received_user_method);
+  received_name = g_strdup (name);
+  received_comment = g_strdup (comment);
+  received_user_method = g_strdup (g_ptr_array_index (allowed_methods, 0));
+  assert_that (password, is_equal_to_string (""));
+  assert_that (allowed_methods->len, is_equal_to (2));
+  assert_that (g_ptr_array_index (allowed_methods, 1), is_null);
+  assert_that (error_description, is_null);
+  *user = 11;
+  return create_user_result;
+}
+
+Ensure (turbovas_control,
+        reports_committed_user_create_when_uuid_lookup_fails)
+{
+  turbovas_control_user_create_request_t create = {0};
+  char created_uuid[37];
+
+  create_user_result = 0;
+  mock_operator_name = "operator";
+  user_uuid_lookup_fails = TRUE;
+  g_strlcpy (create.method, "ldap_connect", sizeof (create.method));
+  create.name = g_strdup ("created");
+  create.comment = g_strdup ("comment");
+
+  assert_that (turbovas_control_create_user (
+                 "123e4567-e89b-12d3-a456-426614174000", &create,
+                 created_uuid), is_equal_to (-3));
+  assert_that (created_uuid, is_equal_to_string (""));
+
+  user_uuid_lookup_fails = FALSE;
+  turbovas_control_user_create_request_clear (&create);
+}
+
+int
+__wrap_modify_user (const gchar *user_id, gchar **name, const gchar *new_name,
+                    const gchar *password, const gchar *comment,
+                    const array_t *allowed_methods, gchar **error_description)
+{
+  assert_that (current_credentials.uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (current_credentials.username, is_equal_to_string ("operator"));
+  modify_user_calls++;
+  g_free (received_user_target_uuid);
+  g_free (received_name);
+  g_free (received_comment);
+  g_free (received_user_method);
+  received_user_target_uuid = g_strdup (user_id);
+  received_name = g_strdup (new_name);
+  received_comment = g_strdup (comment);
+  received_user_method = g_strdup (g_ptr_array_index (allowed_methods, 0));
+  assert_that (
+    *name,
+    is_equal_to_string (
+      strcmp (user_id, "123e4567-e89b-12d3-a456-426614174000") == 0
+        ? mock_operator_name
+        : mock_target_name));
+  assert_that (password, is_null);
+  assert_that (allowed_methods->len, is_equal_to (2));
+  assert_that (g_ptr_array_index (allowed_methods, 1), is_null);
+  assert_that (error_description, is_null);
+  return modify_user_result;
+}
+
+int
+__wrap_delete_user (const char *user_id, const char *name,
+                    int forbid_super_admin, const char *inheritor_id,
+                    const char *inheritor_name)
+{
+  assert_that (current_credentials.uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (current_credentials.username, is_equal_to_string ("operator"));
+  delete_user_calls++;
+  g_free (received_user_target_uuid);
+  g_free (received_user_inheritor_uuid);
+  received_user_target_uuid = g_strdup (user_id);
+  received_user_inheritor_uuid = g_strdup (inheritor_id);
+  assert_that (name, is_null);
+  assert_that (forbid_super_admin, is_equal_to (1));
+  assert_that (inheritor_name, is_null);
+  return delete_user_result;
 }
 
 static const char *
@@ -5651,6 +5772,375 @@ Ensure (turbovas_control, dispatches_user_setting_results_and_rejects_bad_frames
   g_clear_pointer (&received_setting_value_64, g_free);
 }
 
+Ensure (turbovas_control, parses_bounded_user_management_frames)
+{
+  const char *create_request =
+    "user-create " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 file VXNlcg== Q29tbWVudA== "
+    "U2VjcmV0\n";
+  const char *modify_request =
+    "user-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 radius_connect VXNlcg== "
+    "- -\n";
+  const char *delete_request =
+    "user-delete " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 -\n";
+  char operator_uuid[37];
+  turbovas_control_user_create_request_t create = {0};
+  turbovas_control_user_modify_request_t modify = {0};
+  turbovas_control_user_delete_request_t delete_request_data = {0};
+
+  assert_that (turbovas_control_parse_user_create_request (
+                 create_request, strlen (create_request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &create), is_true);
+  assert_that (operator_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (create.method, is_equal_to_string ("file"));
+  assert_that (create.name, is_equal_to_string ("User"));
+  assert_that (create.comment, is_equal_to_string ("Comment"));
+  assert_that (create.password, is_equal_to_string ("Secret"));
+  turbovas_control_user_create_request_clear (&create);
+
+  assert_that (turbovas_control_parse_user_modify_request (
+                 modify_request, strlen (modify_request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &modify), is_true);
+  assert_that (modify.target_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
+  assert_that (modify.method, is_equal_to_string ("radius_connect"));
+  assert_that (modify.comment, is_equal_to_string (""));
+  assert_that (modify.password, is_null);
+  turbovas_control_user_modify_request_clear (&modify);
+
+  assert_that (turbovas_control_parse_user_delete_request (
+                 delete_request, strlen (delete_request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid,
+                 &delete_request_data), is_true);
+  assert_that (delete_request_data.target_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
+  assert_that (delete_request_data.inheritor_uuid, is_equal_to_string (""));
+  turbovas_control_secure_clear (&delete_request_data,
+                                 sizeof (delete_request_data));
+}
+
+Ensure (turbovas_control, rejects_malformed_or_unauthenticated_user_management_frames)
+{
+  const char *invalid[] = {
+    "user-create badsecretbadsecretbadsecretbadsec "
+    "123e4567-e89b-12d3-a456-426614174000 file VXNlcg== Qw== U2VjcmV0\n",
+    "user-create " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 LDAP VXNlcg== Qw== -\n",
+    "user-create " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 file VXNlcg== Qw== Zh==\n",
+    "user-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-42661417400z file VXNlcg== Qw== -\n",
+    "user-delete " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 self\n",
+    "user-delete " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 - extra\n",
+  };
+  guchar *oversized_name;
+  gchar *oversized_name_64;
+  gchar *oversized_request;
+  char operator_uuid[37];
+  turbovas_control_user_create_request_t create = {0};
+  turbovas_control_user_modify_request_t modify = {0};
+  turbovas_control_user_delete_request_t delete_request_data = {0};
+
+  assert_that (turbovas_control_parse_user_create_request (
+                 invalid[0], strlen (invalid[0]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &create), is_false);
+  assert_that (turbovas_control_parse_user_create_request (
+                 invalid[1], strlen (invalid[1]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &create), is_false);
+  assert_that (turbovas_control_parse_user_create_request (
+                 invalid[2], strlen (invalid[2]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &create), is_false);
+  assert_that (turbovas_control_parse_user_modify_request (
+                 invalid[3], strlen (invalid[3]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &modify), is_false);
+  assert_that (turbovas_control_parse_user_delete_request (
+                 invalid[4], strlen (invalid[4]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid,
+                 &delete_request_data), is_false);
+  assert_that (turbovas_control_parse_user_delete_request (
+                 invalid[5], strlen (invalid[5]), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid,
+                 &delete_request_data), is_false);
+
+  oversized_name = g_malloc (TURBOVAS_CONTROL_USER_NAME_MAX_BYTES + 1);
+  memset (oversized_name, 'u', TURBOVAS_CONTROL_USER_NAME_MAX_BYTES + 1);
+  oversized_name_64 = g_base64_encode (
+    oversized_name, TURBOVAS_CONTROL_USER_NAME_MAX_BYTES + 1);
+  oversized_request = g_strdup_printf (
+    "user-create %s 123e4567-e89b-12d3-a456-426614174000 file %s Qw== -\\n",
+    TEST_CONTROL_SECRET, oversized_name_64);
+  assert_that (turbovas_control_parse_user_create_request (
+                 oversized_request, strlen (oversized_request),
+                 TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                 operator_uuid, &create), is_false);
+  turbovas_control_secure_clear (oversized_name,
+                                 TURBOVAS_CONTROL_USER_NAME_MAX_BYTES + 1);
+  g_free (oversized_name);
+  g_free (oversized_name_64);
+  g_free (oversized_request);
+}
+
+Ensure (turbovas_control, maps_authoritative_user_management_responses)
+{
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+
+  assert_that (turbovas_control_user_create_response (
+                 0, "123e4567-e89b-12d3-a456-426614174001", response),
+               is_equal_to_string (
+                 "0 created 123e4567-e89b-12d3-a456-426614174001\n"));
+  assert_that (turbovas_control_user_create_response (1, NULL, response),
+               is_equal_to_string ("1 exists\n"));
+  assert_that (turbovas_control_user_create_response (2, NULL, response),
+               is_equal_to_string ("2 invalid_name\n"));
+  assert_that (turbovas_control_user_create_response (3, NULL, response),
+               is_equal_to_string ("3 password_rejected\n"));
+  assert_that (turbovas_control_user_create_response (4, NULL, response),
+               is_equal_to_string ("4 invalid_method\n"));
+  assert_that (turbovas_control_user_create_response (99, NULL, response),
+               is_equal_to_string ("99 forbidden\n"));
+  assert_that (turbovas_control_user_create_response (-3, NULL, response),
+               is_equal_to_string ("-3 committed_indeterminate\n"));
+  assert_that (turbovas_control_user_create_response (-2, NULL, response),
+               is_equal_to_string ("-2 malformed\n"));
+  assert_that (turbovas_control_user_create_response (-1, NULL, response),
+               is_equal_to_string ("-1 internal\n"));
+
+  assert_that (turbovas_control_user_modify_response (0),
+               is_equal_to_string ("0 modified\n"));
+  assert_that (turbovas_control_user_modify_response (1),
+               is_equal_to_string ("1 not_found\n"));
+  assert_that (turbovas_control_user_modify_response (2),
+               is_equal_to_string ("2 invalid_name\n"));
+  assert_that (turbovas_control_user_modify_response (3),
+               is_equal_to_string ("3 exists\n"));
+  assert_that (turbovas_control_user_modify_response (4),
+               is_equal_to_string ("4 password_rejected\n"));
+  assert_that (turbovas_control_user_modify_response (5),
+               is_equal_to_string ("5 password_required\n"));
+  assert_that (turbovas_control_user_modify_response (6),
+               is_equal_to_string ("6 self_mutation\n"));
+  assert_that (turbovas_control_user_modify_response (7),
+               is_equal_to_string ("7 invalid_method\n"));
+  assert_that (turbovas_control_user_modify_response (99),
+               is_equal_to_string ("99 forbidden\n"));
+  assert_that (turbovas_control_user_modify_response (-3),
+               is_equal_to_string ("-3 committed_indeterminate\n"));
+  assert_that (turbovas_control_user_modify_response (-2),
+               is_equal_to_string ("-2 malformed\n"));
+  assert_that (turbovas_control_user_modify_response (-1),
+               is_equal_to_string ("-1 internal\n"));
+
+  assert_that (turbovas_control_user_delete_response (0),
+               is_equal_to_string ("0 deleted\n"));
+  assert_that (turbovas_control_user_delete_response (1),
+               is_equal_to_string ("1 not_found\n"));
+  assert_that (turbovas_control_user_delete_response (2),
+               is_equal_to_string ("2 current_user\n"));
+  assert_that (turbovas_control_user_delete_response (3),
+               is_equal_to_string ("3 inheritor_not_found\n"));
+  assert_that (turbovas_control_user_delete_response (4),
+               is_equal_to_string ("4 same_inheritor\n"));
+  assert_that (turbovas_control_user_delete_response (5),
+               is_equal_to_string ("5 last_user\n"));
+  assert_that (turbovas_control_user_delete_response (99),
+               is_equal_to_string ("99 forbidden\n"));
+  assert_that (turbovas_control_user_delete_response (-2),
+               is_equal_to_string ("-2 malformed\n"));
+  assert_that (turbovas_control_user_delete_response (-1),
+               is_equal_to_string ("-1 internal\n"));
+}
+
+Ensure (turbovas_control, runs_native_user_management_in_operator_sessions)
+{
+  turbovas_control_user_create_request_t create = {0};
+  turbovas_control_user_modify_request_t modify = {0};
+  turbovas_control_user_delete_request_t delete_request_data = {0};
+  char created_uuid[37];
+
+  cleanup_calls = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  create_user_calls = 0;
+  modify_user_calls = 0;
+  delete_user_calls = 0;
+  create_user_result = 0;
+  modify_user_result = 0;
+  delete_user_result = 0;
+  mock_operator_name = "operator";
+  mock_target_name = "target";
+  mock_target_auth_method = "ldap_connect";
+
+  g_strlcpy (create.method, "ldap_connect", sizeof (create.method));
+  create.name = g_strdup ("created");
+  create.comment = g_strdup ("comment");
+  assert_that (turbovas_control_create_user (
+                 "123e4567-e89b-12d3-a456-426614174000", &create,
+                 created_uuid), is_equal_to (0));
+  assert_that (created_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174003"));
+  assert_that (create_user_calls, is_equal_to (1));
+  assert_that (received_user_method, is_equal_to_string ("ldap_connect"));
+  turbovas_control_user_create_request_clear (&create);
+
+  g_strlcpy (modify.target_uuid, "123e4567-e89b-12d3-a456-426614174001",
+             sizeof (modify.target_uuid));
+  g_strlcpy (modify.method, "ldap_connect", sizeof (modify.method));
+  modify.name = g_strdup ("target");
+  modify.comment = g_strdup ("comment");
+  assert_that (turbovas_control_modify_user (
+                 "123e4567-e89b-12d3-a456-426614174000", &modify),
+               is_equal_to (0));
+  assert_that (modify_user_calls, is_equal_to (1));
+  assert_that (received_name, is_null);
+  assert_that (received_user_method, is_equal_to_string ("ldap_connect"));
+
+  g_strlcpy (modify.method, "file", sizeof (modify.method));
+  assert_that (turbovas_control_modify_user (
+                 "123e4567-e89b-12d3-a456-426614174000", &modify),
+               is_equal_to (0));
+  assert_that (modify_user_calls, is_equal_to (2));
+  g_strlcpy (modify.target_uuid, "123e4567-e89b-12d3-a456-426614174000",
+             sizeof (modify.target_uuid));
+  g_strlcpy (modify.method, "ldap_connect", sizeof (modify.method));
+  g_free (modify.name);
+  modify.name = g_strdup ("renamed");
+  assert_that (turbovas_control_modify_user (
+                 "123e4567-e89b-12d3-a456-426614174000", &modify),
+               is_equal_to (6));
+  g_free (modify.name);
+  modify.name = g_strdup ("operator");
+  assert_that (turbovas_control_modify_user (
+                 "123e4567-e89b-12d3-a456-426614174000", &modify),
+               is_equal_to (0));
+  assert_that (modify_user_calls, is_equal_to (3));
+  turbovas_control_user_modify_request_clear (&modify);
+
+  g_strlcpy (delete_request_data.target_uuid,
+             "123e4567-e89b-12d3-a456-426614174001",
+             sizeof (delete_request_data.target_uuid));
+  g_strlcpy (delete_request_data.inheritor_uuid,
+             "123e4567-e89b-12d3-a456-426614174002",
+             sizeof (delete_request_data.inheritor_uuid));
+  assert_that (turbovas_control_delete_user (
+                 "123e4567-e89b-12d3-a456-426614174000",
+                 &delete_request_data), is_equal_to (0));
+  assert_that (delete_user_calls, is_equal_to (1));
+  assert_that (received_user_inheritor_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174002"));
+  assert_that (reinit_calls, is_equal_to (6));
+  assert_that (session_init_calls, is_equal_to (6));
+  assert_that (cleanup_calls, is_equal_to (6));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+  g_clear_pointer (&received_user_inheritor_uuid, g_free);
+  g_clear_pointer (&received_user_method, g_free);
+  g_clear_pointer (&received_user_target_uuid, g_free);
+  g_clear_pointer (&received_name, g_free);
+  g_clear_pointer (&received_comment, g_free);
+}
+
+Ensure (turbovas_control,
+        rejects_passwordless_file_transition_in_native_locked_update)
+{
+  turbovas_control_user_modify_request_t modify = {0};
+
+  cleanup_calls = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  modify_user_calls = 0;
+  modify_user_result = MODIFY_USER_PASSWORD_REQUIRED;
+  mock_operator_name = "operator";
+  mock_target_name = "target";
+  mock_target_auth_method = "ldap_connect";
+
+  g_strlcpy (modify.target_uuid, "123e4567-e89b-12d3-a456-426614174001",
+             sizeof (modify.target_uuid));
+  g_strlcpy (modify.method, "file", sizeof (modify.method));
+  modify.name = g_strdup ("target");
+  modify.comment = g_strdup ("comment");
+
+  assert_that (turbovas_control_modify_user (
+                 "123e4567-e89b-12d3-a456-426614174000", &modify),
+               is_equal_to (5));
+  assert_that (modify_user_calls, is_equal_to (1));
+  assert_that (received_user_method, is_equal_to_string ("file"));
+  assert_that (received_name, is_null);
+
+  turbovas_control_user_modify_request_clear (&modify);
+  g_clear_pointer (&received_user_method, g_free);
+  g_clear_pointer (&received_user_target_uuid, g_free);
+  g_clear_pointer (&received_name, g_free);
+  g_clear_pointer (&received_comment, g_free);
+}
+
+Ensure (turbovas_control, dispatches_user_management_results_without_secrets)
+{
+  const char *create_request =
+    "user-create " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 ldap_connect VXNlcg== Qw== -\n";
+  const char *modify_request =
+    "user-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 ldap_connect dGFyZ2V0 Qw== -\n";
+  const char *delete_request =
+    "user-delete " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 -\n";
+  const char *bad_secret =
+    "user-create badsecretbadsecretbadsecretbadsec "
+    "123e4567-e89b-12d3-a456-426614174000 ldap_connect VXNlcg== Qw== -\n";
+  const char *invalid_create_method =
+    "user-create " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 ldap VXNlcg== Qw== -\n";
+  const char *invalid_modify_method =
+    "user-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 ldap dGFyZ2V0 Qw== -\n";
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  ssize_t response_len;
+
+  mock_operator_name = "operator";
+  mock_target_name = "target";
+  mock_target_auth_method = "ldap_connect";
+  create_user_result = -2;
+  modify_user_result = 8;
+  delete_user_result = 9;
+  assert_that (
+    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+
+  response_len = dispatch_trash_empty_request (create_request, response);
+  response[response_len] = '\0';
+  assert_that (response, is_equal_to_string ("1 exists\n"));
+  assert_that (strstr (response, TEST_CONTROL_SECRET), is_null);
+  response_len = dispatch_trash_empty_request (modify_request, response);
+  response[response_len] = '\0';
+  assert_that (response, is_equal_to_string ("3 exists\n"));
+  response_len = dispatch_trash_empty_request (delete_request, response);
+  response[response_len] = '\0';
+  assert_that (response, is_equal_to_string ("5 last_user\n"));
+  response_len = dispatch_trash_empty_request (invalid_create_method, response);
+  response[response_len] = '\0';
+  assert_that (response, is_equal_to_string ("4 invalid_method\n"));
+  response_len = dispatch_trash_empty_request (invalid_modify_method, response);
+  response[response_len] = '\0';
+  assert_that (response, is_equal_to_string ("7 invalid_method\n"));
+  response_len = dispatch_trash_empty_request (bad_secret, response);
+  response[response_len] = '\0';
+  assert_that (response, is_equal_to_string ("-2 malformed\n"));
+  assert_that (strstr (response, "VXNlcg=="), is_null);
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -5670,6 +6160,24 @@ main (int argc, char **argv)
   add_test_with_context (
     suite, turbovas_control,
     dispatches_user_setting_results_and_rejects_bad_frames);
+  add_test_with_context (suite, turbovas_control,
+                         parses_bounded_user_management_frames);
+  add_test_with_context (
+    suite, turbovas_control,
+    rejects_malformed_or_unauthenticated_user_management_frames);
+  add_test_with_context (suite, turbovas_control,
+                         maps_authoritative_user_management_responses);
+  add_test_with_context (suite, turbovas_control,
+                         runs_native_user_management_in_operator_sessions);
+  add_test_with_context (
+    suite, turbovas_control,
+    rejects_passwordless_file_transition_in_native_locked_update);
+  add_test_with_context (
+    suite, turbovas_control,
+    reports_committed_user_create_when_uuid_lookup_fails);
+  add_test_with_context (
+    suite, turbovas_control,
+    dispatches_user_management_results_without_secrets);
 
   add_test_with_context (suite, turbovas_control,
                          accepts_exact_authenticated_stop_request);

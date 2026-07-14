@@ -15757,12 +15757,11 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                   " status=\"" STATUS_OK "\""
                   " status_text=\"" STATUS_OK_TEXT "\">"
                   "<role>%s</role>"
-                  "<timezone>%s</timezone>",
-                  current_credentials.role
-                    ? current_credentials.role
-                    : "",
-                  zone
-                );
+                  "<timezone>%s</timezone>"
+                  "<user_uuid>%s</user_uuid>",
+                  current_credentials.role ? current_credentials.role : "",
+                  zone,
+                  current_credentials.uuid ? current_credentials.uuid : "");
 
                 if (current_credentials.jwt)
                   // Skip password validation for passwordless auth methods

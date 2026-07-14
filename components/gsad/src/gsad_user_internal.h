@@ -18,6 +18,7 @@ struct gsad_user
 {
   gchar *cookie;       ///< Cookie token.
   gchar *token;        ///< Request session token.
+  gchar *uuid;         ///< Immutable GMP user UUID.
   gchar *username;     ///< Login name.
   gchar *password;     ///< Password.
   gchar *timezone;     ///< Timezone.

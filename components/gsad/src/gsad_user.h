@@ -49,6 +49,9 @@ gsad_user_set_timezone (gsad_user_t *user, const gchar *timezone);
 void
 gsad_user_set_username (gsad_user_t *user, const gchar *username);
 
+gboolean
+gsad_user_set_uuid (gsad_user_t *user, const gchar *uuid);
+
 void
 gsad_user_set_password (gsad_user_t *user, const gchar *password);
 
@@ -57,6 +60,9 @@ gsad_user_set_language (gsad_user_t *user, const gchar *language);
 
 const gchar *
 gsad_user_get_username (gsad_user_t *user);
+
+const gchar *
+gsad_user_get_uuid (gsad_user_t *user);
 
 const gchar *
 gsad_user_get_password (gsad_user_t *user);

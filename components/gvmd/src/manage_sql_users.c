@@ -105,6 +105,25 @@ user_name (const char *uuid)
 }
 
 /**
+ * @brief Return the authentication method of a user with a validated UUID.
+ *
+ * @param[in]  uuid  Validated UUID of user.
+ *
+ * @return Newly allocated authentication method if available, else NULL.
+ */
+gchar *
+user_auth_method (const char *uuid)
+{
+  gchar *method, *quoted_uuid;
+
+  quoted_uuid = sql_quote (uuid);
+  method = sql_string ("SELECT method FROM users WHERE uuid = '%s';",
+                       quoted_uuid);
+  g_free (quoted_uuid);
+  return method;
+}
+
+/**
  * @brief Return the UUID of a user.
  *
  * Warning: this is only safe for users that are known to be in the db.
@@ -920,13 +939,26 @@ modify_user (const gchar * user_id, gchar **name, const gchar *new_name,
   if (allowed_methods)
     {
       old_method =
-        sql_string ("SELECT method FROM users WHERE id = %llu", user);
+        sql_string ("SELECT method FROM users WHERE id = %llu FOR UPDATE;",
+                    user);
       if (old_method == NULL)
         {
           sql_rollback ();
           g_free (old_name);
           g_free (uuid);
           return -1;
+        }
+      if (strcmp (g_ptr_array_index (allowed_methods, 0),
+                  auth_method_name (AUTHENTICATION_METHOD_FILE)) == 0
+          && strcmp (old_method,
+                     auth_method_name (AUTHENTICATION_METHOD_FILE)) != 0
+          && (password == NULL || password[0] == 0))
+        {
+          sql_rollback ();
+          g_free (old_method);
+          g_free (old_name);
+          g_free (uuid);
+          return MODIFY_USER_PASSWORD_REQUIRED;
         }
     }
   else

@@ -24,6 +24,7 @@
 #include "manage_tags.h"
 #include "manage_users.h"
 
+#include <gvm/base/pwpolicy.h>
 #include <errno.h>
 #include <glib.h>
 #include <pthread.h>
@@ -135,6 +136,18 @@
 #define TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND_LENGTH \
   (sizeof (TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND) - 1)
 #define TURBOVAS_CONTROL_USER_PASSWORD_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_USER_CREATE_COMMAND "user-create "
+#define TURBOVAS_CONTROL_USER_CREATE_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_USER_CREATE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_USER_MODIFY_COMMAND "user-modify "
+#define TURBOVAS_CONTROL_USER_MODIFY_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_USER_MODIFY_COMMAND) - 1)
+#define TURBOVAS_CONTROL_USER_DELETE_COMMAND "user-delete "
+#define TURBOVAS_CONTROL_USER_DELETE_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_USER_DELETE_COMMAND) - 1)
+#define TURBOVAS_CONTROL_USER_NAME_MAX_BYTES 256
+#define TURBOVAS_CONTROL_USER_COMMENT_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_USER_METHOD_MAX_BYTES 16
 #define TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND \
   "user-setting-modify "
 #define TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND_LENGTH \
@@ -276,6 +289,29 @@ typedef struct
 
 typedef struct
 {
+  char method[TURBOVAS_CONTROL_USER_METHOD_MAX_BYTES];
+  gchar *name;
+  gchar *comment;
+  gchar *password;
+} turbovas_control_user_create_request_t;
+
+typedef struct
+{
+  char target_uuid[37];
+  char method[TURBOVAS_CONTROL_USER_METHOD_MAX_BYTES];
+  gchar *name;
+  gchar *comment;
+  gchar *password;
+} turbovas_control_user_modify_request_t;
+
+typedef struct
+{
+  char target_uuid[37];
+  char inheritor_uuid[37];
+} turbovas_control_user_delete_request_t;
+
+typedef struct
+{
   gboolean timezone;
   char setting_uuid[37];
   gchar *value;
@@ -322,6 +358,19 @@ static void
 turbovas_control_secure_array_free (array_t *);
 
 static gboolean
+turbovas_control_user_method_from_field (const char *, size_t,
+                                          char[TURBOVAS_CONTROL_USER_METHOD_MAX_BYTES]);
+
+static gboolean
+turbovas_control_user_method_is_valid (const char *);
+
+static gboolean
+turbovas_control_decode_user_password_field (const char *, size_t, gchar **);
+
+static gboolean
+turbovas_control_decode_user_comment_field (const char *, size_t, gchar **);
+
+static gboolean
 turbovas_control_secret_is_valid (const char *secret, size_t secret_len)
 {
   size_t i;
@@ -355,6 +404,224 @@ turbovas_control_user_password_change_request_clear (
   turbovas_control_secure_free (request->old_password);
   turbovas_control_secure_free (request->new_password);
   memset (request, 0, sizeof (*request));
+}
+
+static void
+turbovas_control_user_create_request_clear (
+  turbovas_control_user_create_request_t *request)
+{
+  g_free (request->name);
+  g_free (request->comment);
+  turbovas_control_secure_free (request->password);
+  memset (request, 0, sizeof (*request));
+}
+
+static void
+turbovas_control_user_modify_request_clear (
+  turbovas_control_user_modify_request_t *request)
+{
+  turbovas_control_secure_clear (request->target_uuid,
+                                 sizeof (request->target_uuid));
+  g_free (request->name);
+  g_free (request->comment);
+  turbovas_control_secure_free (request->password);
+  memset (request, 0, sizeof (*request));
+}
+
+static gboolean
+turbovas_control_user_method_from_field (
+  const char *field, size_t field_len,
+  char method[TURBOVAS_CONTROL_USER_METHOD_MAX_BYTES])
+{
+  size_t index;
+
+  if (field_len == 0 || field_len >= TURBOVAS_CONTROL_USER_METHOD_MAX_BYTES)
+    return FALSE;
+  for (index = 0; index < field_len; index++)
+    if (!g_ascii_islower (field[index]) && field[index] != '_')
+      return FALSE;
+
+  memcpy (method, field, field_len);
+  method[field_len] = '\0';
+  return TRUE;
+}
+
+static gboolean
+turbovas_control_user_method_is_valid (const char *method)
+{
+  return strcmp (method, "file") == 0
+         || strcmp (method, "ldap_connect") == 0
+         || strcmp (method, "radius_connect") == 0;
+}
+
+static gboolean
+turbovas_control_decode_user_comment_field (const char *field,
+                                             size_t field_len,
+                                             gchar **comment)
+{
+  if (field_len == 1 && field[0] == '-')
+    {
+      *comment = g_strdup ("");
+      return TRUE;
+    }
+
+  return turbovas_control_decode_base64_field (
+           field, field_len, TURBOVAS_CONTROL_USER_COMMENT_MAX_BYTES, FALSE,
+           comment)
+         && turbovas_control_text_has_allowed_controls (
+              *comment, strlen (*comment), FALSE);
+}
+
+static gboolean
+turbovas_control_decode_user_password_field (const char *field,
+                                              size_t field_len,
+                                              gchar **password)
+{
+  if (field_len == 1 && field[0] == '-')
+    {
+      *password = NULL;
+      return TRUE;
+    }
+
+  return turbovas_control_decode_base64_field (
+           field, field_len, TURBOVAS_CONTROL_USER_PASSWORD_MAX_BYTES, FALSE,
+           password)
+         && turbovas_control_text_has_allowed_controls (
+              *password, strlen (*password), FALSE);
+}
+
+static gboolean
+turbovas_control_parse_user_create_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37],
+  turbovas_control_user_create_request_t *user_request)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  size_t field_len;
+
+  if (!turbovas_control_parse_authenticated_prefix (
+        request, request_len, TURBOVAS_CONTROL_USER_CREATE_COMMAND,
+        TURBOVAS_CONTROL_USER_CREATE_COMMAND_LENGTH, expected_secret,
+        expected_secret_len, operator_uuid, &cursor, &end))
+    return FALSE;
+
+  if (!turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !turbovas_control_user_method_from_field (field, field_len,
+                                                    user_request->method)
+      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !turbovas_control_decode_base64_field (
+           field, field_len, TURBOVAS_CONTROL_USER_NAME_MAX_BYTES, TRUE,
+           &user_request->name)
+      || !turbovas_control_text_has_allowed_controls (
+           user_request->name, strlen (user_request->name), FALSE)
+      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !turbovas_control_decode_user_comment_field (
+           field, field_len, &user_request->comment)
+      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || cursor != end
+      || !turbovas_control_decode_user_password_field (
+           field, field_len, &user_request->password))
+    {
+      turbovas_control_user_create_request_clear (user_request);
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
+turbovas_control_parse_user_modify_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37],
+  turbovas_control_user_modify_request_t *user_request)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  size_t field_len;
+
+  if (!turbovas_control_parse_authenticated_prefix (
+        request, request_len, TURBOVAS_CONTROL_USER_MODIFY_COMMAND,
+        TURBOVAS_CONTROL_USER_MODIFY_COMMAND_LENGTH, expected_secret,
+        expected_secret_len, operator_uuid, &cursor, &end)
+      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || field_len != 36)
+    return FALSE;
+
+  memcpy (user_request->target_uuid, field, field_len);
+  user_request->target_uuid[36] = '\0';
+  if (!turbovas_control_uuid_is_valid (user_request->target_uuid)
+      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !turbovas_control_user_method_from_field (field, field_len,
+                                                    user_request->method)
+      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !turbovas_control_decode_base64_field (
+           field, field_len, TURBOVAS_CONTROL_USER_NAME_MAX_BYTES, TRUE,
+           &user_request->name)
+      || !turbovas_control_text_has_allowed_controls (
+           user_request->name, strlen (user_request->name), FALSE)
+      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !turbovas_control_decode_user_comment_field (
+           field, field_len, &user_request->comment)
+      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || cursor != end
+      || !turbovas_control_decode_user_password_field (
+           field, field_len, &user_request->password))
+    {
+      turbovas_control_user_modify_request_clear (user_request);
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+static gboolean
+turbovas_control_parse_user_delete_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37],
+  turbovas_control_user_delete_request_t *user_request)
+{
+  const char *cursor;
+  const char *end;
+  const char *field;
+  size_t field_len;
+
+  if (!turbovas_control_parse_authenticated_prefix (
+        request, request_len, TURBOVAS_CONTROL_USER_DELETE_COMMAND,
+        TURBOVAS_CONTROL_USER_DELETE_COMMAND_LENGTH, expected_secret,
+        expected_secret_len, operator_uuid, &cursor, &end)
+      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || field_len != 36)
+    return FALSE;
+
+  memcpy (user_request->target_uuid, field, field_len);
+  user_request->target_uuid[36] = '\0';
+  if (!turbovas_control_uuid_is_valid (user_request->target_uuid)
+      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || cursor != end)
+    {
+      turbovas_control_secure_clear (user_request, sizeof (*user_request));
+      return FALSE;
+    }
+
+  if (field_len == 1 && field[0] == '-')
+    return TRUE;
+  if (field_len != 36)
+    {
+      turbovas_control_secure_clear (user_request, sizeof (*user_request));
+      return FALSE;
+    }
+  memcpy (user_request->inheritor_uuid, field, field_len);
+  user_request->inheritor_uuid[36] = '\0';
+  if (!turbovas_control_uuid_is_valid (user_request->inheritor_uuid))
+    {
+      turbovas_control_secure_clear (user_request, sizeof (*user_request));
+      return FALSE;
+    }
+
+  return TRUE;
 }
 
 static gboolean
@@ -395,6 +662,68 @@ turbovas_control_parse_user_password_change_request (
     }
 
   return TRUE;
+}
+
+static const char *
+turbovas_control_user_create_response (
+  int result, const char *uuid,
+  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+{
+  if (result == 0 && uuid && turbovas_control_uuid_is_valid (uuid))
+    {
+      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+                  "0 created %s\n", uuid);
+      return response;
+    }
+
+  switch (result)
+    {
+      case 1: return "1 exists\n";
+      case 2: return "2 invalid_name\n";
+      case 3: return "3 password_rejected\n";
+      case 4: return "4 invalid_method\n";
+      case 99: return "99 forbidden\n";
+      case -3: return "-3 committed_indeterminate\n";
+      case -2: return "-2 malformed\n";
+      default: return "-1 internal\n";
+    }
+}
+
+static const char *
+turbovas_control_user_modify_response (int result)
+{
+  switch (result)
+    {
+      case 0: return "0 modified\n";
+      case 1: return "1 not_found\n";
+      case 2: return "2 invalid_name\n";
+      case 3: return "3 exists\n";
+      case 4: return "4 password_rejected\n";
+      case 5: return "5 password_required\n";
+      case 6: return "6 self_mutation\n";
+      case 7: return "7 invalid_method\n";
+      case 99: return "99 forbidden\n";
+      case -3: return "-3 committed_indeterminate\n";
+      case -2: return "-2 malformed\n";
+      default: return "-1 internal\n";
+    }
+}
+
+static const char *
+turbovas_control_user_delete_response (int result)
+{
+  switch (result)
+    {
+      case 0: return "0 deleted\n";
+      case 1: return "1 not_found\n";
+      case 2: return "2 current_user\n";
+      case 3: return "3 inheritor_not_found\n";
+      case 4: return "4 same_inheritor\n";
+      case 5: return "5 last_user\n";
+      case 99: return "99 forbidden\n";
+      case -2: return "-2 malformed\n";
+      default: return "-1 internal\n";
+    }
 }
 
 static gboolean
@@ -2972,6 +3301,169 @@ turbovas_control_change_user_password (
 }
 
 static int
+turbovas_control_create_user (
+  const char *operator_uuid,
+  const turbovas_control_user_create_request_t *request,
+  char created_uuid[37])
+{
+  array_t *allowed_methods;
+  gchar *password_error;
+  gchar *uuid;
+  user_t user = 0;
+  int native_result;
+  int result;
+
+  created_uuid[0] = '\0';
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  if (!turbovas_control_user_method_is_valid (request->method))
+    result = 4;
+  else if (validate_username (request->name) != 0)
+    result = 2;
+  else if (strcmp (request->method, "file") == 0
+           && (request->password == NULL || request->password[0] == '\0'))
+    result = 3;
+  else if (strcmp (request->method, "file") == 0
+           && (password_error = gvm_validate_password (request->password,
+                                                        request->name)) != NULL)
+    {
+      turbovas_control_secure_free (password_error);
+      result = 3;
+    }
+  else
+    {
+      allowed_methods = make_array ();
+      array_add (allowed_methods, g_strdup (request->method));
+      array_terminate (allowed_methods);
+      native_result = create_user (request->name,
+                                   request->password ? request->password : "",
+                                   request->comment, allowed_methods, NULL,
+                                   &user);
+      array_free (allowed_methods);
+      switch (native_result)
+        {
+          case 0:
+            uuid = user_uuid (user);
+            if (uuid && turbovas_control_uuid_is_valid (uuid))
+              {
+                g_strlcpy (created_uuid, uuid, 37);
+                result = 0;
+              }
+            else
+              result = -3;
+            g_free (uuid);
+            break;
+          case -2: result = 1; break;
+          case -4: result = 4; break;
+          case 99: result = 99; break;
+          default: result = -1; break;
+        }
+    }
+
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
+static int
+turbovas_control_modify_user (
+  const char *operator_uuid,
+  const turbovas_control_user_modify_request_t *request)
+{
+  array_t *allowed_methods;
+  gchar *current_name;
+  gchar *password_error;
+  const gchar *new_name;
+  int native_result;
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  if (!turbovas_control_user_method_is_valid (request->method))
+    result = 7;
+  else
+    {
+      current_name = user_name (request->target_uuid);
+      if (current_name == NULL)
+        result = 1;
+      else
+        {
+          if (validate_username (request->name) != 0)
+            result = 2;
+          else if (strcmp (operator_uuid, request->target_uuid) == 0
+                   && strcmp (current_name, request->name) != 0)
+            result = 6;
+          else if (request->password
+                   && (password_error = gvm_validate_password (
+                         request->password, current_name)) != NULL)
+            {
+              turbovas_control_secure_free (password_error);
+              result = 4;
+            }
+          else
+            {
+              allowed_methods = make_array ();
+              array_add (allowed_methods, g_strdup (request->method));
+              array_terminate (allowed_methods);
+              new_name = strcmp (current_name, request->name) == 0
+                           ? NULL : request->name;
+              native_result = modify_user (request->target_uuid, &current_name,
+                                           new_name, request->password,
+                                           request->comment, allowed_methods,
+                                           NULL);
+              array_free (allowed_methods);
+              switch (native_result)
+                {
+                  case 0: result = 0; break;
+                  case 2: result = 1; break;
+                  case 7: result = 2; break;
+                  case 8: result = 3; break;
+                  case MODIFY_USER_PASSWORD_REQUIRED: result = 5; break;
+                  case -4: result = 7; break;
+                  case 99: result = 99; break;
+                  default: result = -1; break;
+                }
+            }
+        }
+      g_free (current_name);
+    }
+
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
+static int
+turbovas_control_delete_user (
+  const char *operator_uuid,
+  const turbovas_control_user_delete_request_t *request)
+{
+  int native_result;
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return 99;
+
+  native_result = delete_user (
+    request->target_uuid, NULL, 1,
+    request->inheritor_uuid[0] ? request->inheritor_uuid : NULL, NULL);
+  switch (native_result)
+    {
+      case 0: result = 0; break;
+      case 2: result = 1; break;
+      case 5: result = 2; break;
+      case 6: result = 3; break;
+      case 7: result = 4; break;
+      case 9: result = 5; break;
+      case 99: result = 99; break;
+      default: result = -1; break;
+    }
+
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
+static int
 turbovas_control_clone_task (const char *operator_uuid,
                              const char *source_task_uuid,
                              char created_uuid[37])
@@ -3778,6 +4270,9 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_tag_create_request_t tag_create_request = {0};
   turbovas_control_tag_modify_request_t tag_modify_request = {0};
   turbovas_control_user_password_change_request_t password_change_request = {0};
+  turbovas_control_user_create_request_t user_create_request = {0};
+  turbovas_control_user_modify_request_t user_modify_request = {0};
+  turbovas_control_user_delete_request_t user_delete_request = {0};
   turbovas_control_user_setting_modify_request_t setting_modify_request = {0};
   memset (request, 0, sizeof (request));
 
@@ -3786,7 +4281,46 @@ turbovas_control_serve_client (int client_socket)
                                           &expected_secret_len)
       && turbovas_control_read_request (client_socket, request, &request_len))
     {
-      if (turbovas_control_parse_user_password_change_request (
+      if (turbovas_control_parse_user_create_request (
+            request, request_len, expected_secret, expected_secret_len,
+            operator_uuid, &user_create_request))
+        {
+          result = turbovas_control_create_user (operator_uuid,
+                                                 &user_create_request,
+                                                 created_uuid);
+          result_response = turbovas_control_user_create_response (
+            result, created_uuid, response);
+        }
+      else if (request_len >= TURBOVAS_CONTROL_USER_CREATE_COMMAND_LENGTH
+               && memcmp (request, TURBOVAS_CONTROL_USER_CREATE_COMMAND,
+                          TURBOVAS_CONTROL_USER_CREATE_COMMAND_LENGTH) == 0)
+        result_response = turbovas_control_user_create_response (-2, NULL,
+                                                                 response);
+      else if (turbovas_control_parse_user_modify_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, &user_modify_request))
+        {
+          result = turbovas_control_modify_user (operator_uuid,
+                                                 &user_modify_request);
+          result_response = turbovas_control_user_modify_response (result);
+        }
+      else if (request_len >= TURBOVAS_CONTROL_USER_MODIFY_COMMAND_LENGTH
+               && memcmp (request, TURBOVAS_CONTROL_USER_MODIFY_COMMAND,
+                          TURBOVAS_CONTROL_USER_MODIFY_COMMAND_LENGTH) == 0)
+        result_response = turbovas_control_user_modify_response (-2);
+      else if (turbovas_control_parse_user_delete_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, &user_delete_request))
+        {
+          result = turbovas_control_delete_user (operator_uuid,
+                                                 &user_delete_request);
+          result_response = turbovas_control_user_delete_response (result);
+        }
+      else if (request_len >= TURBOVAS_CONTROL_USER_DELETE_COMMAND_LENGTH
+               && memcmp (request, TURBOVAS_CONTROL_USER_DELETE_COMMAND,
+                          TURBOVAS_CONTROL_USER_DELETE_COMMAND_LENGTH) == 0)
+        result_response = turbovas_control_user_delete_response (-2);
+      else if (turbovas_control_parse_user_password_change_request (
             request, request_len, expected_secret, expected_secret_len,
             operator_uuid, &password_change_request))
         {
@@ -4067,6 +4601,20 @@ turbovas_control_serve_client (int client_socket)
         result_response = turbovas_control_response (result);
     }
   else if (
+    request_len >= TURBOVAS_CONTROL_USER_CREATE_COMMAND_LENGTH
+    && memcmp (request, TURBOVAS_CONTROL_USER_CREATE_COMMAND,
+               TURBOVAS_CONTROL_USER_CREATE_COMMAND_LENGTH) == 0)
+    result_response = turbovas_control_user_create_response (-2, NULL,
+                                                              response);
+  else if (request_len >= TURBOVAS_CONTROL_USER_MODIFY_COMMAND_LENGTH
+           && memcmp (request, TURBOVAS_CONTROL_USER_MODIFY_COMMAND,
+                      TURBOVAS_CONTROL_USER_MODIFY_COMMAND_LENGTH) == 0)
+    result_response = turbovas_control_user_modify_response (-2);
+  else if (request_len >= TURBOVAS_CONTROL_USER_DELETE_COMMAND_LENGTH
+           && memcmp (request, TURBOVAS_CONTROL_USER_DELETE_COMMAND,
+                      TURBOVAS_CONTROL_USER_DELETE_COMMAND_LENGTH) == 0)
+    result_response = turbovas_control_user_delete_response (-2);
+  else if (
     request_len >= TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH
     && memcmp (request, TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND,
                TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH)
@@ -4160,6 +4708,10 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_tag_modify_request_clear (&tag_modify_request);
   turbovas_control_user_password_change_request_clear (
     &password_change_request);
+  turbovas_control_user_create_request_clear (&user_create_request);
+  turbovas_control_user_modify_request_clear (&user_modify_request);
+  turbovas_control_secure_clear (&user_delete_request,
+                                 sizeof (user_delete_request));
   turbovas_control_user_setting_modify_request_clear (&setting_modify_request);
   if (request_len <= TURBOVAS_CONTROL_MAX_REQUEST_BYTES)
     {

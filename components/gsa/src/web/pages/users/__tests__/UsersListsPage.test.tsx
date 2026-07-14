@@ -15,8 +15,10 @@ import {
 } from 'web/testing';
 import Capabilities from 'gmp/capabilities/capabilities';
 import CollectionCounts from 'gmp/collection/collection-counts';
+import date from 'gmp/models/date';
 import Filter from 'gmp/models/filter';
 import User from 'gmp/models/user';
+import {YES_VALUE} from 'gmp/parser';
 import {createSession} from 'gmp/testing';
 import {currentSettingsDefaultResponse} from 'web/pages/__fixtures__/current-settings';
 import UsersListPage, {
@@ -25,16 +27,16 @@ import UsersListPage, {
 import {defaultFilterLoadingActions} from 'web/store/usersettings/defaultfilters/actions';
 import {loadingActions} from 'web/store/usersettings/defaults/actions';
 
-const user = User.fromElement({
-  _id: '1234',
-  creation_time: '2020-12-16T15:23:59Z',
+const user = new User({
+  id: '1234',
+  creationTime: date('2020-12-16T15:23:59Z'),
   comment: 'test comment',
-  in_use: 0,
-  modification_time: '2021-03-02T10:28:15Z',
+  inUse: false,
+  modificationTime: date('2021-03-02T10:28:15Z'),
   name: 'user 1',
   owner: {name: 'admin'},
-  permissions: {permission: {name: 'Everything'}},
-  writable: 1,
+  userCapabilities: new Capabilities(['everything']),
+  writable: YES_VALUE,
 });
 
 const reloadInterval = -1;

@@ -1,4 +1,5 @@
 /* Copyright (C) 2018-2021 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -35,6 +36,9 @@ gsad_session_get_users_by_username (const gchar *);
 
 void
 gsad_session_remove_other_sessions (const gchar *, const gchar *);
+
+void
+gsad_session_remove_sessions_by_uuid (const gchar *, const gchar *);
 
 void
 gsad_session_init (void);

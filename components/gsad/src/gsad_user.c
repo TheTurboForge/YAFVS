@@ -105,6 +105,7 @@ gsad_user_free (gsad_user_t *user)
 
   g_free (user->cookie);
   g_free (user->token);
+  g_free (user->uuid);
   g_free (user->username);
   gsad_user_secure_string_free (user->password);
   g_free (user->timezone);
@@ -134,6 +135,7 @@ gsad_user_copy (gsad_user_t *user)
 
   copy->cookie = g_strdup (user->cookie);
   copy->token = g_strdup (user->token);
+  copy->uuid = g_strdup (user->uuid);
   copy->username = g_strdup (user->username);
   copy->password = g_strdup (user->password);
   copy->timezone = g_strdup (user->timezone);
@@ -157,6 +159,19 @@ const gchar *
 gsad_user_get_username (gsad_user_t *user)
 {
   return user->username;
+}
+
+/**
+ * @brief Get the immutable GMP UUID of a user.
+ *
+ * @param[in] user User whose UUID is to be retrieved.
+ *
+ * @return The UUID owned by the user object, or NULL if it has not been set.
+ */
+const gchar *
+gsad_user_get_uuid (gsad_user_t *user)
+{
+  return user ? user->uuid : NULL;
 }
 
 /**
@@ -286,6 +301,39 @@ gsad_user_set_timezone (gsad_user_t *user, const gchar *timezone)
   g_free (user->timezone);
 
   user->timezone = g_strdup (timezone);
+}
+
+/**
+ * @brief Set the immutable GMP UUID of a user.
+ *
+ * The UUID may be assigned exactly once. This prevents a session's
+ * authorization identity from changing after authentication.
+ *
+ * @param[in] user User.
+ * @param[in] uuid Canonical UUID returned by GMP authentication.
+ *
+ * @return TRUE when the UUID was set, FALSE for invalid input or reassignment.
+ */
+gboolean
+gsad_user_set_uuid (gsad_user_t *user, const gchar *uuid)
+{
+  gsize index;
+
+  if (user == NULL || user->uuid != NULL || uuid == NULL || strlen (uuid) != 36)
+    return FALSE;
+
+  for (index = 0; index < 36; index++)
+    {
+      gboolean separator = index == 8 || index == 13 || index == 18
+                           || index == 23;
+
+      if ((separator && uuid[index] != '-')
+          || (!separator && !g_ascii_isxdigit (uuid[index])))
+        return FALSE;
+    }
+
+  user->uuid = g_ascii_strdown (uuid, -1);
+  return TRUE;
 }
 
 /**

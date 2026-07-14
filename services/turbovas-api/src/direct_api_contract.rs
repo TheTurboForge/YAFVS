@@ -27,6 +27,7 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
             | ["", "api", "v1", "scanners"]
             | ["", "api", "v1", "credentials"]
             | ["", "api", "v1", "users"]
+            | ["", "api", "v1", "user-management", "users"]
             | ["", "api", "v1", "users", "current", "settings"]
             | ["", "api", "v1", "scan-configs"]
             | ["", "api", "v1", "filters"]
@@ -68,6 +69,7 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
             | ["", "api", "v1", "credentials", _]
             | ["", "api", "v1", "credentials", _, "export"]
             | ["", "api", "v1", "users", _]
+            | ["", "api", "v1", "user-management", "users", _]
             | ["", "api", "v1", "users", "current", "settings", _]
             | ["", "api", "v1", "scan-configs", _]
             | ["", "api", "v1", "filters", _]
@@ -150,6 +152,7 @@ pub(crate) fn direct_api_v1_method_is_allowed(
 fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bool {
     let parts = path.split('/').collect::<Vec<_>>();
     match (method, parts.as_slice()) {
+        (&Method::POST, ["", "api", "v1", "user-management", "users"]) => true,
         (&Method::PUT, ["", "api", "v1", "users", "current", "timezone"]) => true,
         (&Method::PUT, ["", "api", "v1", "users", "current", "settings", setting_id]) => {
             direct_api_write_id_segment_is_allowed(setting_id)

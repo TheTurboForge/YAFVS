@@ -30,15 +30,22 @@ const createNativeHttp = () => {
 };
 
 describe('UsersCommand tests', () => {
-  test('should fetch users through native API when available', async () => {
+  test('should preserve collection query and count mappings on user-management reads', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 25, total: 1, sort: 'name', filter: 'admin'},
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 75,
+          sort: 'name',
+          filter: 'Alice',
+        },
         items: [
           {
-            id: '9f6c71ce-4f9c-41e2-8c8d-74b8a1aef001',
-            name: 'admin',
-            comment: 'redacted native account metadata',
+            id: 'user-1',
+            name: 'Alice',
+            comment: 'operator',
+            auth_method: 'ldap',
             created_at: '2026-07-07T00:00:00Z',
             modified_at: '2026-07-07T01:00:00Z',
           },
@@ -49,30 +56,51 @@ describe('UsersCommand tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createNativeHttp();
-
     const cmd = new UsersCommand(fakeHttp);
-    const result = await cmd.get({filter: 'first=1 rows=25 search=admin'});
+
+    const result = await cmd.get({filter: 'first=1 rows=25 search=Alice'});
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(result.data[0].id).toEqual('9f6c71ce-4f9c-41e2-8c8d-74b8a1aef001');
-    expect(result.data[0].name).toEqual('admin');
-    expect(result.data[0].comment).toEqual('redacted native account metadata');
-    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/users', {
-      token: 'test-token',
-      page: 1,
-      page_size: 25,
-      sort: 'name',
-      filter: 'admin',
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/user-management/users',
+      {
+        token: 'test-token',
+        page: 1,
+        page_size: 25,
+        sort: 'name',
+        filter: 'Alice',
+      },
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/user-management/users',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+    expect(result.data[0]).toMatchObject({
+      id: 'user-1',
+      name: 'Alice',
+      comment: 'operator',
+      authMethod: 'ldap',
     });
+    expect(result.data[0].creationTime?.toISOString()).toEqual(
+      '2026-07-07T00:00:00.000Z',
+    );
+    expect(result.meta.counts.all).toBe(75);
   });
 
-  test('should page through native API for getAll', async () => {
+  test('should page through the management collection for getAll', async () => {
     const fetchMock = testing
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
           page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: ''},
-          items: [{id: 'user-1', name: 'Alice'}],
+          items: [{id: 'user-1', name: 'Alice', auth_method: 'password'}],
         }),
         ok: true,
         status: 200,
@@ -80,45 +108,71 @@ describe('UsersCommand tests', () => {
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
           page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: ''},
-          items: [{id: 'user-2', name: 'Bob'}],
+          items: [{id: 'user-2', name: 'Ada', auth_method: 'radius'}],
         }),
         ok: true,
         status: 200,
       });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createNativeHttp();
-
     const cmd = new UsersCommand(fakeHttp);
+
     const result = await cmd.getAll();
 
-    expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(result.data).toHaveLength(2);
-    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/users', {
-      token: 'test-token',
-      page: 1,
-      page_size: 500,
-      sort: 'name',
-      filter: '',
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/user-management/users',
+      {token: 'test-token', page: 1, page_size: 500, sort: 'name', filter: ''},
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/user-management/users',
+      {token: 'test-token', page: 2, page_size: 500, sort: 'name', filter: ''},
+    );
+  });
+
+  test('should keep selected metadata exports on the redacted users route', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'user-1', name: 'Alice'}),
+      ok: true,
+      status: 200,
     });
-    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/users', {
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new UsersCommand(fakeHttp);
+
+    const result = await cmd.export([new User({id: 'user-1'})]);
+
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/users/user-1', {
       token: 'test-token',
-      page: 2,
-      page_size: 500,
-      sort: 'name',
-      filter: '',
+    });
+    expect(JSON.parse(result.data)).toEqual({
+      users: [{id: 'user-1', name: 'Alice'}],
     });
   });
 
-  test('should bulk export selected redacted users through native API', async () => {
+  test('should use management reads to select redacted exports by filter', async () => {
     const fetchMock = testing
       .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: ''},
+          items: [
+            {id: 'user-1', name: 'Alice', auth_method: 'password'},
+            {id: 'user-2', name: 'Ada', auth_method: 'radius'},
+          ],
+        }),
+        ok: true,
+        status: 200,
+      })
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({id: 'user-1', name: 'Alice'}),
         ok: true,
         status: 200,
       })
       .mockResolvedValueOnce({
-        json: testing.fn().mockResolvedValue({id: 'user-2', name: 'Bob'}),
+        json: testing.fn().mockResolvedValue({id: 'user-2', name: 'Ada'}),
         ok: true,
         status: 200,
       });
@@ -126,145 +180,49 @@ describe('UsersCommand tests', () => {
     const fakeHttp = createNativeHttp();
     const cmd = new UsersCommand(fakeHttp);
 
-    const result = await cmd.export([
-      new User({id: 'user-1'}),
-      new User({id: 'user-2'}),
-    ]);
+    const result = await cmd.exportByFilter(Filter.fromString('rows=-1'));
 
-    expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
       1,
+      'api/v1/user-management/users',
+      {token: 'test-token', page: 1, page_size: 500, sort: 'name', filter: ''},
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
       'api/v1/users/user-1',
       {token: 'test-token'},
     );
     expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
-      2,
+      3,
       'api/v1/users/user-2',
       {token: 'test-token'},
     );
     expect(JSON.parse(result.data).users).toEqual([
       {id: 'user-1', name: 'Alice'},
-      {id: 'user-2', name: 'Bob'},
-    ]);
-  });
-
-  test('should bulk export current page redacted users through native API', async () => {
-    const fetchMock = testing
-      .fn()
-      .mockResolvedValueOnce({
-        json: testing.fn().mockResolvedValue({
-          page: {
-            page: 2,
-            page_size: 1,
-            total: 3,
-            sort: 'name',
-            filter: 'a',
-          },
-          items: [{id: 'user-2', name: 'Alice'}],
-        }),
-        ok: true,
-        status: 200,
-      })
-      .mockResolvedValueOnce({
-        json: testing.fn().mockResolvedValue({
-          id: 'user-2',
-          name: 'Alice',
-        }),
-        ok: true,
-        status: 200,
-      });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createNativeHttp();
-    const cmd = new UsersCommand(fakeHttp);
-    const filter = Filter.fromString('first=2 rows=1 search=a');
-
-    const result = await cmd.exportByFilter(filter);
-
-    expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/users', {
-      token: 'test-token',
-      page: 2,
-      page_size: 1,
-      sort: 'name',
-      filter: 'a',
-    });
-    expect(JSON.parse(result.data).users).toEqual([
-      {id: 'user-2', name: 'Alice'},
-    ]);
-  });
-
-  test('should bulk export all filtered redacted users through native API', async () => {
-    const fetchMock = testing
-      .fn()
-      .mockResolvedValueOnce({
-        json: testing.fn().mockResolvedValue({
-          page: {
-            page: 1,
-            page_size: 500,
-            total: 2,
-            sort: 'name',
-            filter: 'a',
-          },
-          items: [{id: 'user-1', name: 'Alice'}],
-        }),
-        ok: true,
-        status: 200,
-      })
-      .mockResolvedValueOnce({
-        json: testing.fn().mockResolvedValue({
-          page: {
-            page: 2,
-            page_size: 500,
-            total: 2,
-            sort: 'name',
-            filter: 'a',
-          },
-          items: [{id: 'user-2', name: 'Ada'}],
-        }),
-        ok: true,
-        status: 200,
-      })
-      .mockResolvedValueOnce({
-        json: testing.fn().mockResolvedValue({
-          id: 'user-1',
-          name: 'Alice',
-        }),
-        ok: true,
-        status: 200,
-      })
-      .mockResolvedValueOnce({
-        json: testing.fn().mockResolvedValue({
-          id: 'user-2',
-          name: 'Ada',
-        }),
-        ok: true,
-        status: 200,
-      });
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createNativeHttp();
-    const cmd = new UsersCommand(fakeHttp);
-    const filter = Filter.fromString('first=1 rows=1 search=a').all();
-
-    const result = await cmd.exportByFilter(filter);
-
-    expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/users', {
-      token: 'test-token',
-      page: 1,
-      page_size: 500,
-      sort: 'name',
-      filter: 'a',
-    });
-    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/users', {
-      token: 'test-token',
-      page: 2,
-      page_size: 500,
-      sort: 'name',
-      filter: 'a',
-    });
-    expect(JSON.parse(result.data).users).toEqual([
-      {id: 'user-1', name: 'Alice'},
       {id: 'user-2', name: 'Ada'},
     ]);
+  });
+
+  test('should delete selected users through detail routes', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({ok: true, status: 204});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new UsersCommand(fakeHttp);
+
+    await cmd.delete([new User({id: 'user-1'}), new User({id: 'user-2'})], {
+      inheritor_id: 'owner-id',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      1,
+      'api/v1/user-management/users/user-1',
+      {inheritor_id: 'owner-id'},
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
+      2,
+      'api/v1/user-management/users/user-2',
+      {inheritor_id: 'owner-id'},
+    );
   });
 });

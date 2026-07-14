@@ -4,14 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import Model, {type ModelElement, type ModelProperties} from 'gmp/models/model';
-import {isDefined} from 'gmp/utils/identity';
-
-export interface UserElement extends ModelElement {
-  sources?: {
-    source: string;
-  };
-}
+import Model, {type ModelProperties} from 'gmp/models/model';
 
 export interface UserProperties extends ModelProperties {
   authMethod?: string;
@@ -34,29 +27,6 @@ class User extends Model {
     super(properties);
 
     this.authMethod = authMethod;
-  }
-
-  static fromElement(element: UserElement = {}): User {
-    return new User(this.parseElement(element));
-  }
-
-  static parseElement(element: UserElement): UserProperties {
-    const ret = super.parseElement(element) as UserProperties;
-
-    if (isDefined(element.sources)) {
-      const {source} = element.sources;
-      if (source === 'ldap_connect') {
-        ret.authMethod = AUTH_METHOD_LDAP;
-      } else if (source === 'radius_connect') {
-        ret.authMethod = AUTH_METHOD_RADIUS;
-      }
-      // @ts-expect-error
-      delete ret.sources;
-    } else {
-      ret.authMethod = AUTH_METHOD_PASSWORD;
-    }
-
-    return ret;
   }
 }
 

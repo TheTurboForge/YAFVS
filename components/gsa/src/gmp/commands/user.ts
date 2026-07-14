@@ -6,27 +6,39 @@
 
 import Capabilities from 'gmp/capabilities/capabilities';
 import Features from 'gmp/capabilities/features';
-import EntityCommand from 'gmp/commands/entity';
-import {type HttpCommandOptions} from 'gmp/commands/http';
+import HttpCommand, {type HttpCommandOptions} from 'gmp/commands/http';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import {type XmlMeta, type XmlResponseData} from 'gmp/http/transform/fast-xml';
 import logger from 'gmp/log';
+import ActionResult from 'gmp/models/action-result';
 import date, {type Date} from 'gmp/models/date';
-import {type PortListElement} from 'gmp/models/port-list';
 import Setting from 'gmp/models/setting';
 import Settings from 'gmp/models/settings';
-import User, {
+import {
   AUTH_METHOD_LDAP,
   AUTH_METHOD_NEW_PASSWORD,
+  AUTH_METHOD_PASSWORD,
   AUTH_METHOD_RADIUS,
-  type UserElement,
 } from 'gmp/models/user';
-import {exportNativeUserMetadata, fetchNativeUser} from 'gmp/native-api/users';
+import {
+  createNativeUser,
+  deleteNativeUser,
+  exportNativeUserMetadata,
+  fetchUserManagementUser,
+  patchNativeUser,
+} from 'gmp/native-api/users';
 import {parseInt} from 'gmp/parser';
 import {forEach} from 'gmp/utils/array';
 import {type EntityType} from 'gmp/utils/entity-type';
 import {isDefined} from 'gmp/utils/identity';
+
+export interface CertificateInfo {
+  issuer: string;
+  activationTime?: Date;
+  expirationTime?: Date;
+  md5Fingerprint: string;
+}
 
 interface AuthSettingsResponseData extends XmlResponseData {
   auth_settings: {
@@ -48,13 +60,6 @@ interface AuthSettingsResponseData extends XmlResponseData {
   };
 }
 
-export interface CertificateInfo {
-  issuer: string;
-  activationTime?: Date;
-  expirationTime?: Date;
-  md5Fingerprint: string;
-}
-
 interface AuthSettingsValues {
   enabled?: boolean;
   ldapsOnly?: boolean;
@@ -66,7 +71,7 @@ interface CreateArguments {
   auth_method: string;
   comment: string;
   name: string;
-  password: string;
+  password?: string;
 }
 
 interface SaveArguments {
@@ -75,12 +80,12 @@ interface SaveArguments {
   comment: string;
   name: string;
   old_name: string;
-  password: string;
+  password?: string;
 }
 
 interface DeleteArguments {
   id: string;
-  inheritorId: string;
+  inheritorId?: string;
 }
 
 const log = logger.getLogger('gmp.commands.users');
@@ -206,13 +211,20 @@ export const saveDefaultFilterSettingId = (entityType: string) =>
 export const transformSettingName = (name: string) =>
   name.toLowerCase().replace(/ |-/g, '');
 
-class UserCommand extends EntityCommand<User, PortListElement> {
+const authMethodFromInput = (authMethod: string) => {
+  if (authMethod === AUTH_METHOD_LDAP || authMethod === AUTH_METHOD_RADIUS) {
+    return authMethod;
+  }
+  return AUTH_METHOD_PASSWORD;
+};
+
+class UserCommand extends HttpCommand {
   constructor(http: Http) {
-    super(http, 'user', User);
+    super(http);
   }
 
   async get({id}: {id: string}, _options: {filter?: string} = {}) {
-    const user = await fetchNativeUser(this.http, id);
+    const user = await fetchUserManagementUser(this.http, id);
     return new Response(user);
   }
 
@@ -220,11 +232,19 @@ class UserCommand extends EntityCommand<User, PortListElement> {
     return exportNativeUserMetadata(this.http, id);
   }
 
+  async clone({id}: {id: string}) {
+    const response = await this.httpPostWithTransform(
+      {cmd: 'clone', resource_type: 'user'},
+      {extraParams: {id}},
+    );
+    return response.setData({id: new ActionResult(response.data).id});
+  }
+
   async currentAuthSettings(options: HttpCommandOptions = {}) {
     const response = await this.httpGetWithTransform(
       {
         cmd: 'auth_settings',
-        name: '--', // only used in old xslt and can be any string
+        name: '--',
       },
       options,
     );
@@ -298,26 +318,19 @@ class UserCommand extends EntityCommand<User, PortListElement> {
     name,
     password,
   }: CreateArguments) {
-    if (auth_method === AUTH_METHOD_LDAP) {
-      auth_method = '1';
-    } else if (auth_method === AUTH_METHOD_RADIUS) {
-      auth_method = '2';
-    } else {
-      auth_method = '0';
-    }
-    const data = {
-      cmd: 'create_user',
-      auth_method,
-      comment,
-      login: name,
-      password,
-    };
+    const authMethod = authMethodFromInput(auth_method);
     log.debug('Creating new user', {
-      authMethod: auth_method,
-      hasPassword: password.length > 0,
+      authMethod,
+      hasPassword: password !== undefined && password.length > 0,
       name,
     });
-    return this.action(data);
+    return createNativeUser(this.http, {
+      authMethod,
+      comment,
+      name,
+      password:
+        authMethod === AUTH_METHOD_PASSWORD ? (password ?? '') : undefined,
+    });
   }
 
   save({
@@ -328,44 +341,29 @@ class UserCommand extends EntityCommand<User, PortListElement> {
     name,
     // eslint-disable-next-line @typescript-eslint/naming-convention
     old_name,
-    password = '', // needs to be included in httpPost, should be optional in gsad
+    password,
   }: SaveArguments) {
-    if (auth_method === AUTH_METHOD_LDAP) {
-      auth_method = '2';
-    } else if (auth_method === AUTH_METHOD_RADIUS) {
-      auth_method = '3';
-    } else if (auth_method === AUTH_METHOD_NEW_PASSWORD) {
-      auth_method = '1';
-    } else {
-      auth_method = '0';
-    }
-    const data = {
-      cmd: 'save_user',
-      comment,
-      id,
-      login: name,
-      modify_password: auth_method,
-      old_login: old_name,
-      password,
-    };
+    const authMethod = authMethodFromInput(auth_method);
     log.debug('Saving user', {
-      authMethod: auth_method,
-      hasPassword: password.length > 0,
+      authMethod,
+      hasPassword: password !== undefined && password.length > 0,
       id,
       name,
       oldName: old_name,
     });
-    return this.action(data);
+    return patchNativeUser(this.http, {
+      id,
+      authMethod,
+      comment,
+      name,
+      password:
+        auth_method === AUTH_METHOD_NEW_PASSWORD ? (password ?? '') : undefined,
+    });
   }
 
   async delete({id, inheritorId}: DeleteArguments) {
-    const data = {
-      cmd: 'delete_user',
-      id,
-      inheritor_id: inheritorId,
-    };
-    log.debug('Deleting user', data);
-    await this.httpPostWithTransform(data);
+    log.debug('Deleting user', {id, inheritorId});
+    await deleteNativeUser(this.http, id, inheritorId);
   }
 
   async saveSetting(settingId: string, settingValue: string | number) {
@@ -463,10 +461,6 @@ class UserCommand extends EntityCommand<User, PortListElement> {
       );
     }
     return new Response(undefined);
-  }
-
-  getElementFromRoot(root): UserElement {
-    return root.get_user.get_users_response.user;
   }
 }
 

@@ -40,6 +40,7 @@
 #define BROWSER_PROXY_SECRET_ENV "TURBOVAS_API_BROWSER_PROXY_SECRET"
 #define BROWSER_PROXY_SECRET_HEADER "x-turbovas-browser-proxy-secret"
 #define BROWSER_PROXY_OPERATOR_HEADER "x-turbovas-operator-name"
+#define BROWSER_PROXY_OPERATOR_UUID_HEADER "x-turbovas-operator-uuid"
 #define BROWSER_PROXY_SECRET_MIN_LENGTH 32
 #define BROWSER_PROXY_SECRET_MAX_LENGTH 4096
 #define BROWSER_PROXY_OPERATOR_MAX_LENGTH 256
@@ -50,6 +51,8 @@
 #define USER_SETTINGS_PATH "/api/v1/users/current/settings"
 #define USER_SETTING_PREFIX "/api/v1/users/current/settings/"
 #define USER_TIMEZONE_PATH "/api/v1/users/current/timezone"
+#define USER_MANAGEMENT_USERS_PATH "/api/v1/user-management/users"
+#define USER_MANAGEMENT_USER_PREFIX "/api/v1/user-management/users/"
 
 static void
 secure_clear (void *value, gsize length)
@@ -99,6 +102,18 @@ is_uuid_segment (const gchar *value, gsize length)
     }
 
   return TRUE;
+}
+
+static gboolean
+is_user_management_user_path (const gchar *path)
+{
+  const gchar *id;
+
+  if (path == NULL || !g_str_has_prefix (path, USER_MANAGEMENT_USER_PREFIX))
+    return FALSE;
+
+  id = path + strlen (USER_MANAGEMENT_USER_PREFIX);
+  return is_uuid_segment (id, strlen (id));
 }
 
 typedef struct
@@ -380,6 +395,59 @@ response_body_is_json_object (const gchar *body)
 }
 
 static gboolean
+mutation_response_may_have_committed (const gchar *method, guint status_code,
+                                      const gchar *body)
+{
+  const char *parse_end = NULL;
+  cJSON *document = NULL;
+  cJSON *error;
+  cJSON *code;
+  gboolean indeterminate = FALSE;
+
+  if (body == NULL || status_code != MHD_HTTP_BAD_GATEWAY
+      || (g_strcmp0 (method, "POST") != 0
+          && g_strcmp0 (method, "PATCH") != 0
+          && g_strcmp0 (method, "PUT") != 0
+          && g_strcmp0 (method, "DELETE") != 0))
+    return FALSE;
+
+  document =
+    cJSON_ParseWithLengthOpts (body, strlen (body) + 1, &parse_end, TRUE);
+  if (document == NULL || !cJSON_IsObject (document)
+      || parse_end != body + strlen (body))
+    goto cleanup;
+
+  error = cJSON_GetObjectItemCaseSensitive (document, "error");
+  code = cJSON_IsObject (error)
+           ? cJSON_GetObjectItemCaseSensitive (error, "code")
+           : NULL;
+  indeterminate =
+    cJSON_IsString (code)
+    && (g_strcmp0 (code->valuestring, "committed_response_unavailable") == 0
+        || g_strcmp0 (code->valuestring,
+                      "mutation_outcome_indeterminate") == 0);
+
+cleanup:
+  cJSON_Delete (document);
+  return indeterminate;
+}
+
+static const gchar *
+native_api_affected_session_uuid (const gchar *method, const gchar *path,
+                                  const gchar *operator_uuid)
+{
+  if (g_strcmp0 (method, "POST") == 0
+      && g_strcmp0 (path, USER_PASSWORD_CHANGE_PATH) == 0)
+    return operator_uuid;
+
+  if ((g_strcmp0 (method, "PATCH") == 0 || g_strcmp0 (method, "DELETE") == 0)
+      && is_user_management_user_path (path))
+    return path + strlen (USER_MANAGEMENT_USER_PREFIX);
+
+  return NULL;
+}
+
+static gboolean
 password_value_is_valid (const gchar *value)
 {
   const gchar *cursor;
@@ -435,6 +503,61 @@ cleanup:
         secure_clear (old_item->valuestring, strlen (old_item->valuestring));
       if (cJSON_IsString (new_item) && new_item->valuestring)
         secure_clear (new_item->valuestring, strlen (new_item->valuestring));
+      cJSON_Delete (document);
+    }
+  return valid;
+}
+
+static gboolean
+extract_self_user_management_password (const gchar *method, const gchar *path,
+                                       const gchar *session_uuid,
+                                       const gchar *body, gsize body_length,
+                                       gchar **new_password)
+{
+  const char *parse_end = NULL;
+  const gchar *target_uuid;
+  cJSON *document = NULL;
+  cJSON *password_item;
+  gboolean valid = FALSE;
+
+  if (g_strcmp0 (method, "PATCH") != 0
+      || !is_user_management_user_path (path))
+    return TRUE;
+
+  target_uuid = path + strlen (USER_MANAGEMENT_USER_PREFIX);
+  if (session_uuid == NULL || g_ascii_strcasecmp (target_uuid, session_uuid) != 0)
+    return TRUE;
+
+  *new_password = NULL;
+  if (body == NULL || body_length == 0)
+    return FALSE;
+
+  document =
+    cJSON_ParseWithLengthOpts (body, body_length + 1, &parse_end, TRUE);
+  if (document == NULL || !cJSON_IsObject (document)
+      || parse_end != body + body_length)
+    goto cleanup;
+
+  password_item = cJSON_GetObjectItemCaseSensitive (document, "password");
+  if (password_item == NULL)
+    {
+      valid = TRUE;
+      goto cleanup;
+    }
+  if (!cJSON_IsString (password_item)
+      || !password_value_is_valid (password_item->valuestring))
+    goto cleanup;
+
+  *new_password = g_strdup (password_item->valuestring);
+  valid = TRUE;
+
+cleanup:
+  if (document)
+    {
+      password_item = cJSON_GetObjectItemCaseSensitive (document, "password");
+      if (cJSON_IsString (password_item) && password_item->valuestring)
+        secure_clear (password_item->valuestring,
+                      strlen (password_item->valuestring));
       cJSON_Delete (document);
     }
   return valid;
@@ -729,6 +852,9 @@ native_api_delete_path_is_allowed (const gchar *path)
   if (path == NULL || strchr (path, '?') != NULL)
     return FALSE;
 
+  if (is_user_management_user_path (path))
+    return TRUE;
+
   if (g_str_has_prefix (path, alert_prefix))
     {
       const gchar *id = path + strlen (alert_prefix);
@@ -882,6 +1008,9 @@ native_api_post_path_is_allowed (const gchar *path)
     return TRUE;
 
   if (g_strcmp0 (path, user_password_change_path) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, USER_MANAGEMENT_USERS_PATH) == 0)
     return TRUE;
 
   if (g_strcmp0 (path, alerts_path) == 0)
@@ -1078,6 +1207,36 @@ browser_proxy_operator_name (gsad_credentials_t *credentials)
   return username;
 }
 
+static const gchar *
+browser_proxy_operator_uuid (gsad_credentials_t *credentials)
+{
+  gsad_user_t *user;
+  const gchar *uuid;
+
+  if (credentials == NULL)
+    return NULL;
+
+  user = gsad_credentials_get_user (credentials);
+  if (user == NULL)
+    return NULL;
+
+  uuid = gsad_user_get_uuid (user);
+  if (!is_uuid_segment (uuid, uuid ? strlen (uuid) : 0))
+    return NULL;
+
+  return uuid;
+}
+
+static gboolean
+browser_proxy_operator_identity (gsad_credentials_t *credentials,
+                                 const gchar **operator_name,
+                                 const gchar **operator_uuid)
+{
+  *operator_name = browser_proxy_operator_name (credentials);
+  *operator_uuid = browser_proxy_operator_uuid (credentials);
+  return *operator_name != NULL && *operator_uuid != NULL;
+}
+
 static gboolean
 native_api_patch_path_is_allowed (const gchar *path)
 {
@@ -1098,6 +1257,9 @@ native_api_patch_path_is_allowed (const gchar *path)
 
   if (path == NULL || strchr (path, '?') != NULL)
     return FALSE;
+
+  if (is_user_management_user_path (path))
+    return TRUE;
 
   if (g_str_has_prefix (path, alert_prefix))
     {
@@ -1310,6 +1472,12 @@ native_api_path_is_allowed (const gchar *path)
     return TRUE;
 
   if (g_strcmp0 (path, USER_SETTINGS_PATH) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, USER_MANAGEMENT_USERS_PATH) == 0)
+    return TRUE;
+
+  if (is_user_management_user_path (path))
     return TRUE;
 
   if (g_str_has_prefix (path, USER_SETTING_PREFIX))
@@ -1850,6 +2018,31 @@ native_api_request_target (const gchar *path, params_t *params)
 }
 
 static gchar *
+native_api_user_management_delete_target (const gchar *path,
+                                          const gchar *inheritor_id)
+{
+  if (inheritor_id == NULL)
+    return g_strdup (path);
+
+  if (!is_uuid_segment (inheritor_id, strlen (inheritor_id)))
+    return NULL;
+
+  return g_strdup_printf ("%s?inheritor_id=%s", path, inheritor_id);
+}
+
+static gchar *
+native_api_write_request_target (const gchar *method, const gchar *path,
+                                 params_t *params)
+{
+  if (g_strcmp0 (method, "DELETE") != 0
+      || !is_user_management_user_path (path))
+    return g_strdup (path);
+
+  return native_api_user_management_delete_target (
+    path, params ? params_value (params, "inheritor_id") : NULL);
+}
+
+static gchar *
 native_api_pdf_download_request_target (const gchar *path, params_t *params)
 {
   return native_api_pdf_download_target (
@@ -2056,8 +2249,8 @@ static gchar *
 fetch_native_api_json (const gchar *method, const gchar *path,
                        const gchar *request_body, gsize request_body_length,
                        const gchar *browser_proxy_secret,
-                       const gchar *operator_name, guint *status_code,
-                       gchar **error_message,
+                       const gchar *operator_name, const gchar *operator_uuid,
+                       guint *status_code, gchar **error_message,
                        gboolean *mutation_outcome_indeterminate)
 {
   const gchar *host = g_getenv ("TURBOVAS_NATIVE_API_HOST");
@@ -2071,6 +2264,7 @@ fetch_native_api_json (const gchar *method, const gchar *path,
   gboolean mutation_method;
   gsize proxy_secret_length;
   gsize operator_name_length;
+  gsize operator_uuid_length;
   gsize declared_content_length;
   gboolean content_length_present;
 
@@ -2084,7 +2278,8 @@ fetch_native_api_json (const gchar *method, const gchar *path,
                     || g_strcmp0 (method, "DELETE") == 0;
   *mutation_outcome_indeterminate = FALSE;
   if (mutation_method
-      && (browser_proxy_secret == NULL || operator_name == NULL))
+      && (browser_proxy_secret == NULL || operator_name == NULL
+          || operator_uuid == NULL))
     {
       *error_message = g_strdup ("Native API browser write proxy is not configured.");
       return NULL;
@@ -2092,6 +2287,7 @@ fetch_native_api_json (const gchar *method, const gchar *path,
   proxy_secret_length = browser_proxy_secret
                           ? strlen (browser_proxy_secret) : 0;
   operator_name_length = operator_name ? strlen (operator_name) : 0;
+  operator_uuid_length = operator_uuid ? strlen (operator_uuid) : 0;
 
   fd = connect_to_native_api (host, port);
   if (fd == -1)
@@ -2103,7 +2299,7 @@ fetch_native_api_json (const gchar *method, const gchar *path,
   if (request_body_length
       > G_MAXSIZE - strlen (method) - strlen (path) - strlen (host)
           - strlen (port) - proxy_secret_length
-          - operator_name_length - 512)
+          - operator_name_length - operator_uuid_length - 512)
     {
       close (fd);
       *error_message = g_strdup ("Native API request is too large.");
@@ -2112,7 +2308,7 @@ fetch_native_api_json (const gchar *method, const gchar *path,
   request_capacity = request_body_length + strlen (method) + strlen (path)
                      + strlen (host) + strlen (port)
                      + proxy_secret_length + operator_name_length
-                     + 512;
+                     + operator_uuid_length + 512;
   request = g_string_sized_new (request_capacity);
   g_string_printf (request,
                    "%s %s HTTP/1.1\r\n"
@@ -2128,12 +2324,15 @@ fetch_native_api_json (const gchar *method, const gchar *path,
                               "Content-Length: %" G_GSIZE_FORMAT "\r\n",
                               request_body_length);
     }
-  if (browser_proxy_secret != NULL && operator_name != NULL)
+  if (browser_proxy_secret != NULL && operator_name != NULL
+      && operator_uuid != NULL)
     {
       g_string_append_printf (request,
                               BROWSER_PROXY_SECRET_HEADER ": %s\r\n"
-                              BROWSER_PROXY_OPERATOR_HEADER ": %s\r\n",
-                              browser_proxy_secret, operator_name);
+                              BROWSER_PROXY_OPERATOR_HEADER ": %s\r\n"
+                              BROWSER_PROXY_OPERATOR_UUID_HEADER ": %s\r\n",
+                              browser_proxy_secret, operator_name,
+                              operator_uuid);
     }
   g_string_append (request, "\r\n");
   if (request_body != NULL && request_body_length > 0)
@@ -2218,6 +2417,9 @@ fetch_native_api_json (const gchar *method, const gchar *path,
           *mutation_outcome_indeterminate = TRUE;
         }
     }
+  if (body != NULL
+      && mutation_response_may_have_committed (method, *status_code, body))
+    *mutation_outcome_indeterminate = TRUE;
   return body;
 }
 
@@ -2304,6 +2506,8 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
   gsad_credentials_t *credentials = (gsad_credentials_t *) data;
   const gchar *path = gsad_connection_info_get_url (con_info);
   params_t *params = gsad_connection_info_get_params (con_info);
+  const gchar *operator_name = NULL;
+  const gchar *operator_uuid = NULL;
   gchar *request_target = NULL;
   gchar *body = NULL;
   gchar *error_message = NULL;
@@ -2314,7 +2518,8 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
   (void) handler_next;
   (void) handler_data;
 
-  if (browser_proxy_operator_name (credentials) == NULL)
+  if (!browser_proxy_operator_identity (credentials, &operator_name,
+                                        &operator_uuid))
     {
       gsad_credentials_free (credentials);
       return send_json_error (
@@ -2384,13 +2589,13 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
     }
 
   const gchar *secret = NULL;
-  const gchar *operator_name = NULL;
   if (native_api_put_path_is_allowed (path)
-      || g_strcmp0 (path, USER_SETTINGS_PATH) == 0)
+      || g_strcmp0 (path, USER_SETTINGS_PATH) == 0
+      || g_strcmp0 (path, USER_MANAGEMENT_USERS_PATH) == 0
+      || is_user_management_user_path (path))
     {
       secret = browser_proxy_secret ();
-      operator_name = browser_proxy_operator_name (credentials);
-      if (secret == NULL || operator_name == NULL)
+      if (secret == NULL)
         {
           gsad_credentials_free (credentials);
           return send_json_error (
@@ -2401,7 +2606,8 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
 
   request_target = native_api_request_target (path, params);
   body = fetch_native_api_json ("GET", request_target, NULL, 0, secret,
-                                operator_name,
+                                secret ? operator_name : NULL,
+                                secret ? operator_uuid : NULL,
                                 &status_code, &error_message,
                                 &mutation_outcome_indeterminate);
   g_free (request_target);
@@ -2425,6 +2631,53 @@ gsad_http_handle_native_api_get (gsad_http_handler_t *handler_next,
 
 typedef gboolean (*native_api_write_path_check_t) (const gchar *path);
 
+static gboolean
+update_sessions_after_native_success (
+  gsad_credentials_t *credentials, const gchar *method, const gchar *path,
+  const gchar *operator_uuid, const gchar *new_password, guint status_code)
+{
+  gsad_user_t *user;
+  const gchar *affected_uuid;
+
+  if (status_code < MHD_HTTP_OK || status_code >= MHD_HTTP_MULTIPLE_CHOICES)
+    return TRUE;
+
+  affected_uuid = native_api_affected_session_uuid (method, path, operator_uuid);
+  if (affected_uuid == NULL)
+    return TRUE;
+
+  if (new_password == NULL)
+    {
+      gsad_session_remove_sessions_by_uuid (NULL, affected_uuid);
+      return TRUE;
+    }
+
+  user = gsad_credentials_get_user (credentials);
+  if (user == NULL)
+    return FALSE;
+
+  gsad_user_set_password (user, new_password);
+  gsad_session_remove_sessions_by_uuid (gsad_user_get_token (user),
+                                        affected_uuid);
+  gsad_session_replace_user_if_exists (user);
+  return TRUE;
+}
+
+static void
+revoke_sessions_after_indeterminate_native_mutation (
+  const gchar *method, const gchar *path, const gchar *operator_uuid,
+  gboolean mutation_outcome_indeterminate)
+{
+  const gchar *affected_uuid;
+
+  if (!mutation_outcome_indeterminate)
+    return;
+
+  affected_uuid = native_api_affected_session_uuid (method, path, operator_uuid);
+  if (affected_uuid != NULL)
+    gsad_session_remove_sessions_by_uuid (NULL, affected_uuid);
+}
+
 static gsad_http_result_t
 handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
                          gsad_http_connection_t *connection,
@@ -2434,11 +2687,14 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
 {
   gsad_credentials_t *credentials = (gsad_credentials_t *) data;
   const gchar *path = gsad_connection_info_get_url (con_info);
+  params_t *params = gsad_connection_info_get_params (con_info);
   const gchar *secret = NULL;
   const gchar *operator_name = NULL;
+  const gchar *operator_uuid = NULL;
   const gchar *request_body = NULL;
   gsize request_body_length = 0;
   gchar *body = NULL;
+  gchar *request_target = NULL;
   gchar *error_message = NULL;
   guint status_code = MHD_HTTP_BAD_GATEWAY;
   gsad_http_result_t ret;
@@ -2464,8 +2720,8 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
                               "Native API browser write proxy is not configured.");
     }
 
-  operator_name = browser_proxy_operator_name (credentials);
-  if (operator_name == NULL)
+  if (!browser_proxy_operator_identity (credentials, &operator_name,
+                                        &operator_uuid))
     {
       gsad_credentials_free (credentials);
       return send_json_error (connection, MHD_HTTP_UNAUTHORIZED,
@@ -2485,6 +2741,15 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
                               "invalid_password_change",
                               "The password change request is invalid.");
     }
+  if (!extract_self_user_management_password (
+        method, path, operator_uuid, request_body, request_body_length,
+        &new_password))
+    {
+      gsad_credentials_free (credentials);
+      return send_json_error (connection, MHD_HTTP_BAD_REQUEST,
+                              "invalid_password_change",
+                              "The password change request is invalid.");
+    }
   if (g_strcmp0 (method, "DELETE") == 0 && request_body_length != 0)
     {
       secure_string_free (new_password);
@@ -2493,10 +2758,22 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
                               "request_body_not_allowed",
                               "Native API DELETE requests must not include a request body.");
     }
-  body = fetch_native_api_json (method, path, request_body, request_body_length,
-                                secret, operator_name, &status_code,
+  request_target = native_api_write_request_target (method, path, params);
+  if (request_target == NULL)
+    {
+      secure_string_free (new_password);
+      gsad_credentials_free (credentials);
+      return send_json_error (connection, MHD_HTTP_NOT_FOUND, "not_found",
+                              "Native API path is not available.");
+    }
+  body = fetch_native_api_json (method, request_target, request_body,
+                                request_body_length,
+                                secret, operator_name, operator_uuid, &status_code,
                                 &error_message,
                                 &mutation_outcome_indeterminate);
+  g_free (request_target);
+  revoke_sessions_after_indeterminate_native_mutation (
+    method, path, operator_uuid, mutation_outcome_indeterminate);
   if (body == NULL)
     {
       gsad_http_result_t error_ret;
@@ -2516,24 +2793,15 @@ handle_native_api_write (gsad_http_handler_t *handler_next, void *handler_data,
       return error_ret;
     }
 
-  if (new_password != NULL && status_code == MHD_HTTP_NO_CONTENT)
+  if (!update_sessions_after_native_success (
+        credentials, method, path, operator_uuid, new_password, status_code))
     {
-      gsad_user_t *user = gsad_credentials_get_user (credentials);
-
-      if (user == NULL)
-        {
-          secure_string_free (new_password);
-          gsad_credentials_free (credentials);
-          g_free (body);
-          return send_json_error (
-            connection, MHD_HTTP_INTERNAL_SERVER_ERROR,
-            "session_update_failed",
-            "The password changed, but the browser session could not be updated.");
-        }
-      gsad_user_set_password (user, new_password);
-      gsad_session_remove_other_sessions (gsad_user_get_token (user),
-                                          gsad_user_get_username (user));
-      gsad_session_replace_user_if_exists (user);
+      secure_string_free (new_password);
+      gsad_credentials_free (credentials);
+      g_free (body);
+      return send_json_error (
+        connection, MHD_HTTP_INTERNAL_SERVER_ERROR, "session_update_failed",
+        "The password changed, but the browser session could not be updated.");
     }
   secure_string_free (new_password);
   gsad_credentials_free (credentials);
@@ -2573,7 +2841,11 @@ gsad_http_handle_native_api_post (gsad_http_handler_t *handler_next,
       gchar *body;
       gsad_http_result_t ret;
 
-      if (browser_proxy_operator_name (credentials) == NULL)
+      const gchar *operator_name;
+      const gchar *operator_uuid;
+
+      if (!browser_proxy_operator_identity (credentials, &operator_name,
+                                            &operator_uuid))
         {
           gsad_credentials_free (credentials);
           return send_json_error (
@@ -2678,7 +2950,11 @@ gboolean
 gsad_native_api_test_browser_credentials_are_session_bound (
   gsad_credentials_t *credentials)
 {
-  return browser_proxy_operator_name (credentials) != NULL;
+  const gchar *operator_name;
+  const gchar *operator_uuid;
+
+  return browser_proxy_operator_identity (credentials, &operator_name,
+                                          &operator_uuid);
 }
 
 gboolean
@@ -2695,6 +2971,48 @@ gsad_native_api_test_parse_user_password_change_request (
 }
 
 gboolean
+gsad_native_api_test_extract_self_user_management_password (
+  const gchar *method, const gchar *path, const gchar *session_uuid,
+  const gchar *body, gsize body_length, gchar **new_password)
+{
+  return extract_self_user_management_password (
+    method, path, session_uuid, body, body_length, new_password);
+}
+
+gboolean
+gsad_native_api_test_update_sessions_after_native_success (
+  gsad_credentials_t *credentials, const gchar *method, const gchar *path,
+  const gchar *operator_uuid, const gchar *new_password, guint status_code)
+{
+  return update_sessions_after_native_success (
+    credentials, method, path, operator_uuid, new_password, status_code);
+}
+
+const gchar *
+gsad_native_api_test_affected_session_uuid (const gchar *method,
+                                            const gchar *path,
+                                            const gchar *operator_uuid)
+{
+  return native_api_affected_session_uuid (method, path, operator_uuid);
+}
+
+void
+gsad_native_api_test_revoke_sessions_after_indeterminate_native_mutation (
+  const gchar *method, const gchar *path, const gchar *operator_uuid,
+  gboolean mutation_outcome_indeterminate)
+{
+  revoke_sessions_after_indeterminate_native_mutation (
+    method, path, operator_uuid, mutation_outcome_indeterminate);
+}
+
+gboolean
+gsad_native_api_test_mutation_response_may_have_committed (
+  const gchar *method, guint status_code, const gchar *body)
+{
+  return mutation_response_may_have_committed (method, status_code, body);
+}
+
+gboolean
 gsad_native_api_test_patch_path_is_allowed (const gchar *path)
 {
   return native_api_patch_path_is_allowed (path);
@@ -2704,5 +3022,17 @@ gboolean
 gsad_native_api_test_delete_path_is_allowed (const gchar *path)
 {
   return native_api_delete_path_is_allowed (path);
+}
+
+gboolean
+gsad_native_api_test_user_management_delete_target (const gchar *path,
+                                                     const gchar *inheritor_id,
+                                                     gchar **target)
+{
+  if (!is_user_management_user_path (path))
+    return FALSE;
+
+  *target = native_api_user_management_delete_target (path, inheritor_id);
+  return *target != NULL;
 }
 #endif

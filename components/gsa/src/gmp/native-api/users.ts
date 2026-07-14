@@ -1,5 +1,4 @@
 /* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
- * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -7,8 +6,9 @@
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
-import User from 'gmp/models/user';
+import date from 'gmp/models/date';
 import type QueryFilter from 'gmp/models/filter';
+import User from 'gmp/models/user';
 
 interface NativeApiSession {
   readonly jwt?: string;
@@ -20,6 +20,18 @@ interface NativeApiGmp {
   buildUrl(path: string, params?: UrlParams): string;
 }
 
+interface NativeUserMetadataPayload {
+  id: string;
+  name: string;
+  comment?: string;
+}
+
+interface NativeUserManagementPayload extends NativeUserMetadataPayload {
+  auth_method: 'password' | 'ldap' | 'radius';
+  created_at?: string;
+  modified_at?: string;
+}
+
 interface NativePage {
   page: number;
   page_size: number;
@@ -28,39 +40,34 @@ interface NativePage {
   filter: string;
 }
 
-interface NativeUserPayload {
-  id: string;
-  name: string;
-  comment?: string;
-  created_at?: string;
-  modified_at?: string;
-}
-
-interface NativeUsersPayload {
+interface NativeUserManagementCollectionPayload {
   page?: Partial<NativePage>;
-  items?: NativeUserPayload[];
+  items?: NativeUserManagementPayload[];
 }
 
-export interface NativeUsersQuery {
+export interface NativeUserManagementQuery {
   page: number;
   pageSize: number;
   sort: string;
   filter: string;
 }
 
-export interface NativeUsersResponse {
+export interface NativeUserManagementResponse {
   users: User[];
   counts: CollectionCounts;
   page: NativePage;
 }
 
-const USER_SORT_FIELDS: Record<string, string> = {
-  name: 'name',
-  created: 'created',
-  creation_time: 'created',
-  modified: 'modified',
-  modification_time: 'modified',
-};
+export interface NativeUserCreateArgs {
+  authMethod: 'password' | 'ldap' | 'radius';
+  comment: string;
+  name: string;
+  password?: string;
+}
+
+export interface NativeUserPatchArgs extends NativeUserCreateArgs {
+  id: string;
+}
 
 const stringValue = (value: unknown): string =>
   typeof value === 'string' ? value : '';
@@ -68,6 +75,14 @@ const stringValue = (value: unknown): string =>
 const integerValue = (value: unknown, fallback = 0): number => {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
   return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const USER_SORT_FIELDS: Record<string, string> = {
+  name: 'name',
+  created: 'created',
+  creation_time: 'created',
+  modified: 'modified',
+  modification_time: 'modified',
 };
 
 const nativeMappedSortFromFilter = (
@@ -112,9 +127,68 @@ const fetchNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
-export const nativeUsersQueryFromFilter = (
+const nativeUserManagementToModel = (item: NativeUserManagementPayload): User =>
+  new User({
+    id: stringValue(item.id),
+    name: stringValue(item.name),
+    comment: stringValue(item.comment),
+    authMethod: item.auth_method,
+    creationTime:
+      typeof item.created_at === 'string' && item.created_at !== ''
+        ? date(item.created_at)
+        : undefined,
+    modificationTime:
+      typeof item.modified_at === 'string' && item.modified_at !== ''
+        ? date(item.modified_at)
+        : undefined,
+  });
+
+const userManagementHeaders = (gmp: NativeApiGmp, withJsonBody = false) => ({
+  Accept: 'application/json',
+  ...(withJsonBody ? {'Content-Type': 'application/json'} : {}),
+  ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+  ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
+});
+
+const fetchUserManagementJson = async <T>(
+  gmp: NativeApiGmp,
+  path: string,
+  params?: UrlParams,
+): Promise<T> => {
+  const response = await fetch(
+    gmp.buildUrl(path, {token: gmp.session.token, ...params}),
+    {
+      credentials: 'include',
+      headers: userManagementHeaders(gmp),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+  return (await response.json()) as T;
+};
+
+const writeUserManagementJson = async <T>(
+  gmp: NativeApiGmp,
+  path: string,
+  body: unknown,
+  method: 'POST' | 'PATCH',
+): Promise<T> => {
+  const response = await fetch(gmp.buildUrl(path), {
+    method,
+    credentials: 'include',
+    headers: userManagementHeaders(gmp, true),
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
+  return (await response.json()) as T;
+};
+
+export const nativeUserManagementQueryFromFilter = (
   filter: QueryFilter,
-): NativeUsersQuery => {
+): NativeUserManagementQuery => {
   const first = integerValue(filter.get('first'), 1);
   const rows = integerValue(filter.get('rows'), 25);
   const pageSize = rows < 1 ? 25 : rows;
@@ -126,26 +200,21 @@ export const nativeUsersQueryFromFilter = (
   };
 };
 
-const nativeUserToModel = (item: NativeUserPayload): User =>
-  User.fromElement({
-    _id: stringValue(item.id),
-    name: stringValue(item.name),
-    comment: stringValue(item.comment),
-    creation_time: stringValue(item.created_at),
-    modification_time: stringValue(item.modified_at),
-  });
-
-export const fetchNativeUsers = async (
+export const fetchUserManagementUsers = async (
   gmp: NativeApiGmp,
-  query: NativeUsersQuery,
-): Promise<NativeUsersResponse> => {
-  const payload = await fetchNativeJson<NativeUsersPayload>(gmp, 'api/v1/users', {
-    token: gmp.session.token,
-    page: query.page,
-    page_size: query.pageSize,
-    sort: query.sort,
-    filter: query.filter,
-  });
+  query: NativeUserManagementQuery,
+): Promise<NativeUserManagementResponse> => {
+  const payload =
+    await fetchUserManagementJson<NativeUserManagementCollectionPayload>(
+      gmp,
+      'api/v1/user-management/users',
+      {
+        page: query.page,
+        page_size: query.pageSize,
+        sort: query.sort,
+        filter: query.filter,
+      },
+    );
   const page = {
     page: integerValue(payload.page?.page, query.page),
     page_size: integerValue(payload.page?.page_size, query.pageSize),
@@ -153,31 +222,83 @@ export const fetchNativeUsers = async (
     sort: stringValue(payload.page?.sort || query.sort),
     filter: stringValue(payload.page?.filter || query.filter),
   };
-  const users = (payload.items ?? []).map(item => nativeUserToModel(item));
-  return {
-    users,
-    counts: nativeCounts(page, users.length),
-    page,
-  };
+  const users = (payload.items ?? []).map(nativeUserManagementToModel);
+  return {users, counts: nativeCounts(page, users.length), page};
 };
 
-export const fetchNativeUser = async (
+export const fetchUserManagementUser = async (
   gmp: NativeApiGmp,
   id: string,
 ): Promise<User> => {
-  const payload = await fetchNativeJson<NativeUserPayload>(
+  const payload = await fetchUserManagementJson<NativeUserManagementPayload>(
     gmp,
-    `api/v1/users/${encodeURIComponent(id)}`,
-    {token: gmp.session.token},
+    `api/v1/user-management/users/${encodeURIComponent(id)}`,
   );
-  return nativeUserToModel(payload);
+  return nativeUserManagementToModel(payload);
+};
+
+export const createNativeUser = async (
+  gmp: NativeApiGmp,
+  {authMethod, comment, name, password}: NativeUserCreateArgs,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeUserManagementJson<NativeUserManagementPayload>(
+    gmp,
+    'api/v1/user-management/users',
+    {
+      name,
+      comment,
+      auth_method: authMethod,
+      ...(password === undefined ? {} : {password}),
+    },
+    'POST',
+  );
+  return new Response({id: stringValue(payload.id)});
+};
+
+export const patchNativeUser = async (
+  gmp: NativeApiGmp,
+  {id, authMethod, comment, name, password}: NativeUserPatchArgs,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeUserManagementJson<NativeUserManagementPayload>(
+    gmp,
+    `api/v1/user-management/users/${encodeURIComponent(id)}`,
+    {
+      name,
+      comment,
+      auth_method: authMethod,
+      ...(password === undefined ? {} : {password}),
+    },
+    'PATCH',
+  );
+  return new Response({id: stringValue(payload.id)});
+};
+
+export const deleteNativeUser = async (
+  gmp: NativeApiGmp,
+  id: string,
+  inheritorId?: string,
+): Promise<void> => {
+  const response = await fetch(
+    gmp.buildUrl(
+      `api/v1/user-management/users/${encodeURIComponent(id)}`,
+      inheritorId === undefined ? undefined : {inheritor_id: inheritorId},
+    ),
+    {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: userManagementHeaders(gmp),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Native API request failed with status ${response.status}`);
+  }
 };
 
 export const exportNativeUserMetadata = async (
   gmp: NativeApiGmp,
   id: string,
 ): Promise<Response<string>> => {
-  const payload = await fetchNativeJson<NativeUserPayload>(
+  const payload = await fetchNativeJson<NativeUserMetadataPayload>(
     gmp,
     `api/v1/users/${encodeURIComponent(id)}`,
     {token: gmp.session.token},
@@ -191,7 +312,7 @@ export const exportNativeUsersMetadata = async (
 ): Promise<Response<string>> => {
   const users = await Promise.all(
     ids.map(async id => {
-      const payload = await fetchNativeJson<NativeUserPayload>(
+      const payload = await fetchNativeJson<NativeUserMetadataPayload>(
         gmp,
         `api/v1/users/${encodeURIComponent(id)}`,
         {token: gmp.session.token},

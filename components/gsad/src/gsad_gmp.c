@@ -11512,13 +11512,15 @@ get_features_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
  * @param[out] language      User Interface Language, or NULL.
  * @param[out] pw_warning    Password warning message, NULL if password is OK.
  * @param[out] jwt           JWT value, NULL if not requested.
+ * @param[out] user_uuid     Authenticated user UUID, or NULL.
  *
  * @return 0 if valid, 1 manager down, 2 failed, 3 timeout, -1 error.
  */
-int
-authenticate_gmp (const gchar *username, const gchar *password,
-                  gchar **timezone, gchar **capabilities, gchar **language,
-                  gchar **jwt)
+static int
+authenticate_gmp_with_user_uuid (const gchar *username, const gchar *password,
+                                 gchar **timezone, gchar **capabilities,
+                                 gchar **language, gchar **jwt,
+                                 gchar **user_uuid)
 {
   gsad_settings_t *gsad_global_settings = gsad_settings_get_global_settings ();
   gvm_connection_t connection;
@@ -11531,6 +11533,7 @@ authenticate_gmp (const gchar *username, const gchar *password,
   auth_opts.jwt_requested =
     gsad_settings_is_jwt_requested (gsad_global_settings);
   auth_opts.jwt = jwt;
+  auth_opts.user_uuid = user_uuid;
 
   int auth = gsad_manager_connect_with_auth_opts (&connection, auth_opts);
   if (auth == 0)
@@ -11622,6 +11625,15 @@ authenticate_gmp (const gchar *username, const gchar *password,
     }
 }
 
+int
+authenticate_gmp (const gchar *username, const gchar *password,
+                  gchar **timezone, gchar **capabilities, gchar **language,
+                  gchar **jwt)
+{
+  return authenticate_gmp_with_user_uuid (
+    username, password, timezone, capabilities, language, jwt, NULL);
+}
+
 /**
  * @brief Log out.
  *
@@ -11707,6 +11719,7 @@ login (gsad_http_connection_t *con, params_t *params,
   gchar *capabilities;
   gchar *language;
   gchar *jwt = NULL;
+  gchar *user_uuid = NULL;
 
   const char *password = params_value (params, "password");
   const char *login = params_value (params, "login");
@@ -11716,8 +11729,8 @@ login (gsad_http_connection_t *con, params_t *params,
     password = "";
   if (login && password)
     {
-      ret = authenticate_gmp (login, password, &timezone, &capabilities,
-                              &language, &jwt);
+      ret = authenticate_gmp_with_user_uuid (
+        login, password, &timezone, &capabilities, &language, &jwt, &user_uuid);
       if (ret)
         {
           switch (ret)
@@ -11740,6 +11753,7 @@ login (gsad_http_connection_t *con, params_t *params,
           g_warning ("Authentication failure for '%s' from %s. "
                      "Status was %d.",
                      login ?: "", client_address, ret);
+          g_free (user_uuid);
           return gsad_http_send_reauthentication (con, status, auth_reason);
         }
       else
@@ -11747,6 +11761,21 @@ login (gsad_http_connection_t *con, params_t *params,
           gsad_user_t *user =
             gsad_user_new_with_data (login, password, timezone, capabilities,
                                      language, client_address);
+
+          if (!gsad_user_set_uuid (user, user_uuid))
+            {
+              g_warning ("Authentication failure for '%s' from %s. "
+                         "Manager returned no valid user identity.",
+                         login ?: "", client_address);
+              gsad_user_free (user);
+              g_free (timezone);
+              g_free (capabilities);
+              g_free (language);
+              g_free (jwt);
+              g_free (user_uuid);
+              return gsad_http_send_reauthentication (
+                con, MHD_HTTP_INTERNAL_SERVER_ERROR, LOGIN_ERROR);
+            }
 
           int add_user = gsad_user_session_add (user);
           if (add_user)
@@ -11758,10 +11787,12 @@ login (gsad_http_connection_t *con, params_t *params,
                          " Too many sessions for user.",
                          login ?: "", client_address);
 
+              gsad_user_free (user);
               g_free (timezone);
               g_free (capabilities);
               g_free (language);
               g_free (jwt);
+              g_free (user_uuid);
 
               return gsad_http_send_reauthentication (con, status, auth_reason);
             }
@@ -11789,6 +11820,7 @@ login (gsad_http_connection_t *con, params_t *params,
           g_free (capabilities);
           g_free (language);
           g_free (jwt);
+          g_free (user_uuid);
 
           return ret;
         }

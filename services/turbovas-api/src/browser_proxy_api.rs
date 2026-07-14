@@ -10,12 +10,14 @@ use crate::{
     app_state::AppState,
     auth::{DirectApiOperator, constant_time_str_eq, direct_api_bearer_token_is_acceptable},
     errors::ApiError,
-    operator_identity::resolve_browser_proxy_operator_by_name,
+    operator_identity::resolve_browser_proxy_operator,
 };
+use uuid::Uuid;
 
 const BROWSER_PROXY_SECRET_ENV: &str = "TURBOVAS_API_BROWSER_PROXY_SECRET";
 const BROWSER_PROXY_SECRET_HEADER: &str = "x-turbovas-browser-proxy-secret";
 const BROWSER_PROXY_OPERATOR_NAME_HEADER: &str = "x-turbovas-operator-name";
+const BROWSER_PROXY_OPERATOR_UUID_HEADER: &str = "x-turbovas-operator-uuid";
 
 #[derive(Clone)]
 pub(crate) struct BrowserProxyAuth {
@@ -60,10 +62,18 @@ pub(crate) async fn browser_proxy_operator_from_headers(
     if !constant_time_str_eq(secret, &auth.secret) {
         return Err(ApiError::Unauthorized);
     }
+    let user_uuid = browser_proxy_operator_uuid_from_headers(headers)?;
     let user_name = browser_proxy_operator_name_from_headers(headers)?;
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
-    let identity = resolve_browser_proxy_operator_by_name(&client, user_name).await?;
+    let identity = resolve_browser_proxy_operator(&client, &user_uuid, user_name).await?;
     DirectApiOperator::new(&identity.user_uuid, Some(identity.user_name))
+}
+
+fn browser_proxy_operator_uuid_from_headers(headers: &HeaderMap) -> Result<String, ApiError> {
+    let value = header_value(headers, BROWSER_PROXY_OPERATOR_UUID_HEADER)?.trim();
+    Uuid::parse_str(value)
+        .map(|uuid| uuid.to_string())
+        .map_err(|_| ApiError::Unauthorized)
 }
 
 fn browser_proxy_operator_name_from_headers(headers: &HeaderMap) -> Result<&str, ApiError> {
@@ -71,6 +81,7 @@ fn browser_proxy_operator_name_from_headers(headers: &HeaderMap) -> Result<&str,
     if value.is_empty() || value.len() > 256 || value.chars().any(char::is_control) {
         return Err(ApiError::Unauthorized);
     }
+
     Ok(value)
 }
 
@@ -130,6 +141,26 @@ mod tests {
             HeaderValue::from_str(&"a".repeat(257)).unwrap(),
         );
         assert!(browser_proxy_operator_name_from_headers(&headers).is_err());
+    }
+
+    #[test]
+    fn browser_proxy_operator_uuid_header_is_strict_and_canonical() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            BROWSER_PROXY_OPERATOR_UUID_HEADER,
+            HeaderValue::from_static("123E4567-E89B-12D3-A456-426614174000"),
+        );
+        assert_eq!(
+            browser_proxy_operator_uuid_from_headers(&headers).unwrap(),
+            "123e4567-e89b-12d3-a456-426614174000"
+        );
+        headers.insert(
+            BROWSER_PROXY_OPERATOR_UUID_HEADER,
+            HeaderValue::from_static("not-a-uuid"),
+        );
+        assert!(browser_proxy_operator_uuid_from_headers(&headers).is_err());
+        headers.remove(BROWSER_PROXY_OPERATOR_UUID_HEADER);
+        assert!(browser_proxy_operator_uuid_from_headers(&headers).is_err());
     }
 
     #[test]

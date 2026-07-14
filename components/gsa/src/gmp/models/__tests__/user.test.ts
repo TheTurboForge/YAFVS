@@ -15,27 +15,13 @@ import User, {
 testModel(User, 'user');
 
 describe('User model tests', () => {
-  test('should parse sources to auth_method', () => {
-    const elem1 = {
-      _id: '123',
-      sources: {
-        source: 'ldap_connect',
-      },
-    };
-    const elem2 = {
-      _id: '122',
-      sources: {
-        source: 'radius_connect',
-      },
-    };
-    const user1 = User.fromElement(elem1);
-    const user2 = User.fromElement(elem2);
-    const user3 = User.fromElement();
+  test('should retain native auth methods', () => {
+    const user1 = new User({id: '123', authMethod: AUTH_METHOD_LDAP});
+    const user2 = new User({id: '122', authMethod: AUTH_METHOD_RADIUS});
+    const user3 = new User();
 
     expect(user1.authMethod).toEqual(AUTH_METHOD_LDAP);
     expect(user2.authMethod).toEqual(AUTH_METHOD_RADIUS);
-    // @ts-expect-error
-    expect(user1.sources).toBeUndefined();
     expect(user3.authMethod).toEqual(AUTH_METHOD_PASSWORD);
   });
 });

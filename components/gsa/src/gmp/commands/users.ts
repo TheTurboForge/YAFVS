@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import EntitiesCommand from 'gmp/commands/entities';
 import {
   filterFromCommandParams,
   nativeCollectionMeta,
@@ -12,35 +11,26 @@ import {
 } from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
-import {type Element} from 'gmp/models/model';
 import User from 'gmp/models/user';
-import type Filter from 'gmp/models/filter';
 import {
+  deleteNativeUser,
   exportNativeUsersMetadata,
-  fetchNativeUsers,
-  nativeUsersQueryFromFilter,
+  fetchUserManagementUsers,
+  nativeUserManagementQueryFromFilter,
 } from 'gmp/native-api/users';
 
-const shouldExportAllByFilter = (filter: Filter): boolean => {
-  const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
-  return Number.isFinite(rows) && rows < 0;
-};
+class UsersCommand {
+  private readonly http: Http;
 
-class UsersCommand extends EntitiesCommand<User> {
   constructor(http: Http) {
-    super(http, 'user', User);
-  }
-
-  getEntitiesResponse(root: Element) {
-    // @ts-expect-error
-    return root.get_users.get_users_response;
+    this.http = http;
   }
 
   async get(params = {}, _options?) {
     const filter = filterFromCommandParams(params);
-    const nativeResponse = await fetchNativeUsers(
+    const nativeResponse = await fetchUserManagementUsers(
       this.http,
-      nativeUsersQueryFromFilter(filter),
+      nativeUserManagementQueryFromFilter(filter),
     );
     return new Response(nativeResponse.users, {
       filter,
@@ -54,8 +44,8 @@ class UsersCommand extends EntitiesCommand<User> {
     let total = Number.POSITIVE_INFINITY;
 
     for (let page = 1; users.length < total; page += 1) {
-      const nativeResponse = await fetchNativeUsers(this.http, {
-        ...nativeUsersQueryFromFilter(filter),
+      const nativeResponse = await fetchUserManagementUsers(this.http, {
+        ...nativeUserManagementQueryFromFilter(filter),
         page,
         pageSize: NATIVE_COMMAND_PAGE_SIZE,
       });
@@ -78,40 +68,32 @@ class UsersCommand extends EntitiesCommand<User> {
 
   export(entities: User[]) {
     return this.exportByIds(
-      entities.flatMap(entity =>
-        entity.id === undefined ? [] : [entity.id],
-      ),
+      entities.flatMap(entity => (entity.id === undefined ? [] : [entity.id])),
     );
   }
 
-  async exportByFilter(filter: Filter) {
-    const users: User[] = [];
-    if (shouldExportAllByFilter(filter)) {
-      let total = Number.POSITIVE_INFINITY;
-      for (let page = 1; users.length < total; page += 1) {
-        const nativeResponse = await fetchNativeUsers(this.http, {
-          ...nativeUsersQueryFromFilter(filter),
-          page,
-          pageSize: NATIVE_COMMAND_PAGE_SIZE,
-        });
-        users.push(...nativeResponse.users);
-        total = nativeResponse.page.total;
-        if (nativeResponse.users.length === 0) {
-          break;
-        }
-      }
-    } else {
-      const nativeResponse = await fetchNativeUsers(
-        this.http,
-        nativeUsersQueryFromFilter(filter),
-      );
-      users.push(...nativeResponse.users);
-    }
+  async exportByFilter(filter) {
+    const rows = Number.parseInt(String(filter.get('rows') ?? ''), 10);
+    const users =
+      Number.isFinite(rows) && rows < 0
+        ? (await this.getAll({filter})).data
+        : (await this.get({filter})).data;
 
     return exportNativeUsersMetadata(
       this.http,
       users.flatMap(user => (user.id === undefined ? [] : [user.id])),
     );
+  }
+
+  async delete(entities: User[], extraParams: {inheritor_id?: string} = {}) {
+    await Promise.all(
+      entities.flatMap(entity =>
+        entity.id === undefined
+          ? []
+          : [deleteNativeUser(this.http, entity.id, extraParams.inheritor_id)],
+      ),
+    );
+    return new Response(entities);
   }
 }
 

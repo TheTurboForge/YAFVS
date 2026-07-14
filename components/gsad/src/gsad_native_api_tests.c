@@ -38,18 +38,50 @@ gsad_native_api_test_put_path_is_allowed (const gchar *path);
 extern gboolean
 gsad_native_api_test_delete_path_is_allowed (const gchar *path);
 extern gboolean
+gsad_native_api_test_user_management_delete_target (const gchar *path,
+                                                     const gchar *inheritor_id,
+                                                     gchar **target);
+extern gboolean
 gsad_native_api_test_parse_user_password_change_request (
   const gchar *body, gsize body_length, gchar **new_password);
+extern gboolean
+gsad_native_api_test_extract_self_user_management_password (
+  const gchar *method, const gchar *path, const gchar *session_uuid,
+  const gchar *body, gsize body_length, gchar **new_password);
+extern gboolean
+gsad_native_api_test_update_sessions_after_native_success (
+  gsad_credentials_t *credentials, const gchar *method, const gchar *path,
+  const gchar *operator_uuid, const gchar *new_password, guint status_code);
+extern const gchar *
+gsad_native_api_test_affected_session_uuid (const gchar *method,
+                                            const gchar *path,
+                                            const gchar *operator_uuid);
+extern void
+gsad_native_api_test_revoke_sessions_after_indeterminate_native_mutation (
+  const gchar *method, const gchar *path, const gchar *operator_uuid,
+  gboolean mutation_outcome_indeterminate);
+extern gboolean
+gsad_native_api_test_mutation_response_may_have_committed (
+  const gchar *method, guint status_code, const gchar *body);
 
 Describe (gsad_native_api);
+
+static guint password_update_count;
+static guint session_revoke_count;
+static guint session_replace_count;
+static const gchar *updated_password;
+static const gchar *revoked_session_keep_id;
+static const gchar *revoked_session_uuid;
 
 /* Handler dependencies are not part of this parser-focused unit target. */
 gsad_user_t *
 gsad_credentials_get_user (gsad_credentials_t *credentials)
 {
-  return credentials == (gsad_credentials_t *) GINT_TO_POINTER (1)
-           ? (gsad_user_t *) GINT_TO_POINTER (1)
-           : NULL;
+  if (credentials == (gsad_credentials_t *) GINT_TO_POINTER (1)
+      || credentials == (gsad_credentials_t *) GINT_TO_POINTER (3)
+      || credentials == (gsad_credentials_t *) GINT_TO_POINTER (4))
+    return (gsad_user_t *) credentials;
+  return NULL;
 }
 
 Ensure (gsad_native_api,
@@ -153,21 +185,23 @@ void
 gsad_user_set_password (gsad_user_t *user, const gchar *password)
 {
   (void) user;
-  (void) password;
+  password_update_count++;
+  updated_password = password;
 }
 
 void
-gsad_session_remove_other_sessions (const gchar *keep_id,
-                                    const gchar *username)
+gsad_session_remove_sessions_by_uuid (const gchar *keep_id, const gchar *uuid)
 {
-  (void) keep_id;
-  (void) username;
+  session_revoke_count++;
+  revoked_session_keep_id = keep_id;
+  revoked_session_uuid = uuid;
 }
 
 void
 gsad_session_replace_user_if_exists (gsad_user_t *user)
 {
   (void) user;
+  session_replace_count++;
 }
 
 void
@@ -241,10 +275,189 @@ Ensure (gsad_native_api,
     }
 }
 
+Ensure (gsad_native_api,
+        should_only_capture_password_for_self_user_management_patch)
+{
+  const gchar *uuid = "12345678-1234-1234-1234-123456789abc";
+  const gchar *self_path =
+    "/api/v1/user-management/users/"
+    "12345678-1234-1234-1234-123456789abc";
+  const gchar *other_path =
+    "/api/v1/user-management/users/"
+    "abcdefab-cdef-cdef-cdef-abcdefabcdef";
+  const gchar *with_password =
+    "{\"name\":\"operator\",\"comment\":\"\","
+    "\"auth_method\":\"password\",\"password\":\"new secret\"}";
+  const gchar *without_password =
+    "{\"name\":\"operator\",\"comment\":\"\","
+    "\"auth_method\":\"password\"}";
+  gchar *new_password = NULL;
+
+  assert_that (gsad_native_api_test_extract_self_user_management_password (
+                 "PATCH", self_path, uuid, with_password,
+                 strlen (with_password), &new_password),
+               is_true);
+  assert_that (new_password, is_equal_to_string ("new secret"));
+  memset (new_password, 0, strlen (new_password));
+  g_clear_pointer (&new_password, g_free);
+
+  assert_that (gsad_native_api_test_extract_self_user_management_password (
+                 "PATCH", self_path, uuid, without_password,
+                 strlen (without_password), &new_password),
+               is_true);
+  assert_that (new_password, is_null);
+
+  assert_that (gsad_native_api_test_extract_self_user_management_password (
+                 "PATCH", other_path, uuid, with_password,
+                 strlen (with_password), &new_password),
+               is_true);
+  assert_that (new_password, is_null);
+
+  assert_that (gsad_native_api_test_extract_self_user_management_password (
+                 "PATCH", self_path, uuid,
+                 "{\"password\":\"bad\\nsecret\"}",
+                 strlen ("{\"password\":\"bad\\nsecret\"}"), &new_password),
+               is_false);
+  assert_that (new_password, is_null);
+}
+
+Ensure (gsad_native_api, should_revoke_affected_sessions_by_uuid)
+{
+  gsad_credentials_t *credentials =
+    (gsad_credentials_t *) GINT_TO_POINTER (1);
+  const gchar *operator_uuid = "12345678-1234-1234-1234-123456789abc";
+  const gchar *other_path =
+    "/api/v1/user-management/users/"
+    "abcdefab-cdef-cdef-cdef-abcdefabcdef";
+
+  password_update_count = 0;
+  session_revoke_count = 0;
+  session_replace_count = 0;
+  updated_password = NULL;
+  revoked_session_keep_id = NULL;
+  revoked_session_uuid = NULL;
+
+  assert_that (gsad_native_api_test_update_sessions_after_native_success (
+                 credentials, "POST", "/api/v1/users/current/password",
+                 operator_uuid, "new secret", MHD_HTTP_BAD_REQUEST),
+               is_true);
+  assert_that (password_update_count, is_equal_to (0));
+  assert_that (session_revoke_count, is_equal_to (0));
+  assert_that (session_replace_count, is_equal_to (0));
+
+  assert_that (gsad_native_api_test_update_sessions_after_native_success (
+                 credentials, "POST", "/api/v1/users/current/password",
+                 operator_uuid, "new secret", MHD_HTTP_OK),
+               is_true);
+  assert_that (password_update_count, is_equal_to (1));
+  assert_that (session_revoke_count, is_equal_to (1));
+  assert_that (session_replace_count, is_equal_to (1));
+  assert_that (updated_password, is_equal_to_string ("new secret"));
+  assert_that (revoked_session_keep_id, is_equal_to_string ("token"));
+  assert_that (revoked_session_uuid, is_equal_to_string (operator_uuid));
+
+  assert_that (gsad_native_api_test_update_sessions_after_native_success (
+                 credentials, "PATCH", other_path, operator_uuid, NULL,
+                 MHD_HTTP_OK),
+               is_true);
+  assert_that (password_update_count, is_equal_to (1));
+  assert_that (session_revoke_count, is_equal_to (2));
+  assert_that (session_replace_count, is_equal_to (1));
+  assert_that (revoked_session_keep_id, is_null);
+  assert_that (revoked_session_uuid,
+               is_equal_to_string ("abcdefab-cdef-cdef-cdef-abcdefabcdef"));
+  assert_that (gsad_native_api_test_affected_session_uuid (
+                 "DELETE", other_path, operator_uuid),
+               is_equal_to_string ("abcdefab-cdef-cdef-cdef-abcdefabcdef"));
+  assert_that (gsad_native_api_test_affected_session_uuid (
+                 "POST", "/api/v1/user-management/users", operator_uuid),
+               is_null);
+
+  assert_that (gsad_native_api_test_update_sessions_after_native_success (
+                 (gsad_credentials_t *) GINT_TO_POINTER (2), "POST",
+                 "/api/v1/users/current/password", operator_uuid,
+                 "new secret", MHD_HTTP_NO_CONTENT),
+               is_false);
+  assert_that (password_update_count, is_equal_to (1));
+}
+
+Ensure (gsad_native_api,
+        should_fail_closed_for_indeterminate_user_authentication_mutations)
+{
+  const gchar *operator_uuid = "12345678-1234-1234-1234-123456789abc";
+  const gchar *other_path =
+    "/api/v1/user-management/users/"
+    "abcdefab-cdef-cdef-cdef-abcdefabcdef";
+
+  session_revoke_count = 0;
+  revoked_session_keep_id = NULL;
+  revoked_session_uuid = NULL;
+
+  gsad_native_api_test_revoke_sessions_after_indeterminate_native_mutation (
+    "POST", "/api/v1/users/current/password", operator_uuid, FALSE);
+  assert_that (session_revoke_count, is_equal_to (0));
+
+  gsad_native_api_test_revoke_sessions_after_indeterminate_native_mutation (
+    "POST", "/api/v1/users/current/password", operator_uuid, TRUE);
+  assert_that (session_revoke_count, is_equal_to (1));
+  assert_that (revoked_session_keep_id, is_null);
+  assert_that (revoked_session_uuid, is_equal_to_string (operator_uuid));
+
+  gsad_native_api_test_revoke_sessions_after_indeterminate_native_mutation (
+    "PATCH", other_path, operator_uuid, TRUE);
+  assert_that (session_revoke_count, is_equal_to (2));
+  assert_that (revoked_session_keep_id, is_null);
+  assert_that (revoked_session_uuid,
+               is_equal_to_string ("abcdefab-cdef-cdef-cdef-abcdefabcdef"));
+}
+
+Ensure (gsad_native_api,
+        should_recognize_complete_indeterminate_mutation_responses)
+{
+  const gchar *committed =
+    "{\"error\":{\"code\":\"committed_response_unavailable\","
+    "\"message\":\"verify state\"}}";
+  const gchar *indeterminate =
+    "{\"error\":{\"code\":\"mutation_outcome_indeterminate\","
+    "\"message\":\"verify state\"}}";
+  const gchar *rejected =
+    "{\"error\":{\"code\":\"bad_request\",\"message\":\"no\"}}";
+
+  assert_that (gsad_native_api_test_mutation_response_may_have_committed (
+                 "PATCH", MHD_HTTP_BAD_GATEWAY, committed),
+               is_true);
+  assert_that (gsad_native_api_test_mutation_response_may_have_committed (
+                 "DELETE", MHD_HTTP_BAD_GATEWAY, indeterminate),
+               is_true);
+  assert_that (gsad_native_api_test_mutation_response_may_have_committed (
+                 "PATCH", MHD_HTTP_BAD_GATEWAY, rejected),
+               is_false);
+  assert_that (gsad_native_api_test_mutation_response_may_have_committed (
+                 "GET", MHD_HTTP_BAD_GATEWAY, committed),
+               is_false);
+  assert_that (gsad_native_api_test_mutation_response_may_have_committed (
+                 "PATCH", MHD_HTTP_CONFLICT, committed),
+               is_false);
+}
+
 const gchar *
 gsad_user_get_username (gsad_user_t *user)
 {
-  return user == (gsad_user_t *) GINT_TO_POINTER (1) ? "operator" : NULL;
+  return user == (gsad_user_t *) GINT_TO_POINTER (1)
+             || user == (gsad_user_t *) GINT_TO_POINTER (3)
+             || user == (gsad_user_t *) GINT_TO_POINTER (4)
+           ? "operator"
+           : NULL;
+}
+
+const gchar *
+gsad_user_get_uuid (gsad_user_t *user)
+{
+  if (user == (gsad_user_t *) GINT_TO_POINTER (1))
+    return "12345678-1234-1234-1234-123456789abc";
+  if (user == (gsad_user_t *) GINT_TO_POINTER (4))
+    return "not-a-uuid";
+  return NULL;
 }
 
 Ensure (gsad_native_api,
@@ -358,6 +571,12 @@ Ensure (gsad_native_api, should_require_a_session_user_for_browser_reads)
   assert_that (gsad_native_api_test_browser_credentials_are_session_bound (
                  (gsad_credentials_t *) GINT_TO_POINTER (1)),
                is_true);
+  assert_that (gsad_native_api_test_browser_credentials_are_session_bound (
+                 (gsad_credentials_t *) GINT_TO_POINTER (3)),
+               is_false);
+  assert_that (gsad_native_api_test_browser_credentials_are_session_bound (
+                 (gsad_credentials_t *) GINT_TO_POINTER (4)),
+               is_false);
 }
 
 Ensure (gsad_native_api, should_only_allow_canonical_task_clone_posts)
@@ -458,6 +677,69 @@ Ensure (gsad_native_api, should_only_allow_canonical_override_mutations)
   g_free (trash);
   g_free (restore);
   g_free (clone);
+  g_free (detail);
+}
+
+Ensure (gsad_native_api, should_only_allow_exact_user_management_paths)
+{
+  const gchar *id = "12345678-1234-1234-1234-123456789abc";
+  gchar *detail = g_strdup_printf ("/api/v1/user-management/users/%s", id);
+  gchar *target = NULL;
+  const gchar *rejected[] = {
+    "/api/v1/user-management/users/",
+    "/api/v1/user-management/users/not-a-uuid",
+    "/api/v1/user-management/users/12345678-1234-1234-1234-123456789abc/extra",
+    "/api/v1/user-management/users/12345678-1234-1234-1234-123456789abc?unexpected=query",
+  };
+
+  assert_that (gsad_native_api_test_get_path_is_allowed (
+                 "/api/v1/user-management/users"),
+               is_true);
+  assert_that (gsad_native_api_test_get_path_is_allowed (detail), is_true);
+  assert_that (gsad_native_api_test_post_path_is_allowed (
+                 "/api/v1/user-management/users"),
+               is_true);
+  assert_that (gsad_native_api_test_patch_path_is_allowed (detail), is_true);
+  assert_that (gsad_native_api_test_delete_path_is_allowed (detail), is_true);
+  assert_that (gsad_native_api_test_post_path_is_allowed (detail), is_false);
+  assert_that (gsad_native_api_test_patch_path_is_allowed (
+                 "/api/v1/user-management/users"),
+               is_false);
+  assert_that (gsad_native_api_test_delete_path_is_allowed (
+                 "/api/v1/user-management/users"),
+               is_false);
+
+  for (gsize index = 0; index < G_N_ELEMENTS (rejected); index++)
+    {
+      assert_that (gsad_native_api_test_get_path_is_allowed (rejected[index]),
+                   is_false);
+      assert_that (gsad_native_api_test_post_path_is_allowed (rejected[index]),
+                   is_false);
+      assert_that (gsad_native_api_test_patch_path_is_allowed (rejected[index]),
+                   is_false);
+      assert_that (
+        gsad_native_api_test_delete_path_is_allowed (rejected[index]),
+        is_false);
+    }
+
+  assert_that (gsad_native_api_test_user_management_delete_target (
+                 detail, "abcdefab-cdef-cdef-cdef-abcdefabcdef", &target),
+               is_true);
+  assert_that (target, is_equal_to_string (
+                        "/api/v1/user-management/users/"
+                        "12345678-1234-1234-1234-123456789abc"
+                        "?inheritor_id=abcdefab-cdef-cdef-cdef-abcdefabcdef"));
+  g_free (target);
+  target = NULL;
+
+  assert_that (gsad_native_api_test_user_management_delete_target (
+                 detail, "not-a-uuid", &target),
+               is_false);
+  assert_that (gsad_native_api_test_user_management_delete_target (
+                 detail, NULL, &target),
+               is_true);
+  assert_that (target, is_equal_to_string (detail));
+  g_free (target);
   g_free (detail);
 }
 
@@ -644,6 +926,18 @@ main (int argc, char **argv)
     should_only_allow_strict_current_user_password_change_posts);
   add_test_with_context (
     suite, gsad_native_api,
+    should_only_capture_password_for_self_user_management_patch);
+  add_test_with_context (
+    suite, gsad_native_api,
+    should_revoke_affected_sessions_by_uuid);
+  add_test_with_context (
+    suite, gsad_native_api,
+    should_fail_closed_for_indeterminate_user_authentication_mutations);
+  add_test_with_context (
+    suite, gsad_native_api,
+    should_recognize_complete_indeterminate_mutation_responses);
+  add_test_with_context (
+    suite, gsad_native_api,
     should_only_allow_exact_session_ping_and_renew_paths);
   add_test_with_context (
     suite, gsad_native_api,
@@ -661,6 +955,8 @@ main (int argc, char **argv)
     should_only_allow_canonical_scanner_configuration_replacement_posts);
   add_test_with_context (suite, gsad_native_api,
                          should_only_allow_canonical_override_mutations);
+  add_test_with_context (suite, gsad_native_api,
+                         should_only_allow_exact_user_management_paths);
   add_test_with_context (suite, gsad_native_api,
                          should_preserve_embedded_nul_in_pdf_response);
   add_test_with_context (suite, gsad_native_api,

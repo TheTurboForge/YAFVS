@@ -23,10 +23,12 @@ const createNativeHttp = (response?: Parameters<typeof createHttp>[0]) => {
     buildUrl: ReturnType<typeof testing.fn>;
     session: ReturnType<typeof createSession>;
   };
-  fakeHttp.buildUrl = testing.fn((path: string, params?: {token?: string}) => {
-    const query = params?.token ? `?token=${params.token}` : '';
-    return `https://turbovas.example/${path}${query}`;
-  });
+  fakeHttp.buildUrl = testing.fn(
+    (path: string, params?: Record<string, string>) => {
+      const query = params ? `?${new URLSearchParams(params).toString()}` : '';
+      return `https://turbovas.example/${path}${query}`;
+    },
+  );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
   fakeHttp.session.jwt = 'jwt-token';
@@ -41,25 +43,13 @@ describe('UserCommand tests', () => {
           group: [
             {
               _name: 'foo',
-              auth_conf_setting: [
-                {
-                  key: 'enable',
-                  value: true,
-                },
-              ],
+              auth_conf_setting: [{key: 'enable', value: true}],
             },
             {
               _name: 'bar',
               auth_conf_setting: [
-                {
-                  key: 'foo',
-                  value: 'true',
-                },
-                {
-                  certificate_info: {
-                    issuer: 'ipsum',
-                  },
-                },
+                {key: 'foo', value: 'true'},
+                {certificate_info: {issuer: 'ipsum'}},
               ],
             },
           ],
@@ -70,25 +60,182 @@ describe('UserCommand tests', () => {
     const cmd = new UserCommand(fakeHttp);
     const resp = await cmd.currentAuthSettings();
     expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'auth_settings',
-        name: '--',
-      },
+      args: {cmd: 'auth_settings', name: '--'},
     });
     const {data: settings} = resp;
-    expect(settings.has('foo')).toEqual(true);
-    expect(settings.has('bar')).toEqual(true);
-    expect(settings.has('ipsum')).toEqual(false);
+    expect(settings.has('foo')).toBe(true);
+    expect(settings.has('bar')).toBe(true);
     const fooSettings = settings.get('foo') as {enabled: boolean};
-    expect(fooSettings.enabled).toEqual(true);
     const barSettings = settings.get('bar') as {
       foo: string;
       certificateInfo: CertificateInfo;
     };
-    expect(barSettings.foo).toEqual('true');
-    expect(barSettings.certificateInfo.issuer).toEqual('ipsum');
+    expect(fooSettings.enabled).toBe(true);
+    expect(barSettings.foo).toBe('true');
+    expect(barSettings.certificateInfo.issuer).toBe('ipsum');
   });
 
+  test('should retain GMP user cloning', async () => {
+    const fakeHttp = createHttp(
+      createResponse({
+        action_result: {id: 'cloned-user'},
+      }),
+    );
+    const cmd = new UserCommand(fakeHttp);
+
+    const response = await cmd.clone({id: 'source-user'});
+
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {cmd: 'clone', id: 'source-user', resource_type: 'user'},
+    });
+    expect(response.data).toEqual({id: 'cloned-user'});
+  });
+
+  test('should create, update, and delete users through the management API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'new-user'}),
+        ok: true,
+        status: 201,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'user-id'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({ok: true, status: 204});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new UserCommand(fakeHttp);
+
+    await cmd.create({
+      auth_method: 'ldap',
+      comment: 'directory account',
+      name: 'alice',
+    });
+    await cmd.save({
+      id: 'user-id',
+      auth_method: 'newpassword',
+      comment: 'updated',
+      name: 'alice',
+      old_name: 'alice',
+      password: 'new-secret',
+    });
+    await cmd.delete({id: 'user-id', inheritorId: 'owner-id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://turbovas.example/api/v1/user-management/users',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'alice',
+          comment: 'directory account',
+          auth_method: 'ldap',
+        }),
+      },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://turbovas.example/api/v1/user-management/users/user-id',
+      {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          name: 'alice',
+          comment: 'updated',
+          auth_method: 'password',
+          password: 'new-secret',
+        }),
+      },
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      'https://turbovas.example/api/v1/user-management/users/user-id?inheritor_id=owner-id',
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+  });
+
+  test('should send an explicit empty password only for password creation or replacement', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'new-user'}),
+        ok: true,
+        status: 201,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'user-id'}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const cmd = new UserCommand(createNativeHttp());
+
+    await cmd.create({
+      auth_method: 'password',
+      comment: '',
+      name: 'alice',
+      password: '',
+    });
+    await cmd.save({
+      id: 'user-id',
+      auth_method: 'newpassword',
+      comment: '',
+      name: 'alice',
+      old_name: 'alice',
+      password: '',
+    });
+
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      auth_method: 'password',
+      password: '',
+    });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({
+      auth_method: 'password',
+      password: '',
+    });
+  });
+
+  test('should reject failed user-management writes', async () => {
+    testing.stubGlobal(
+      'fetch',
+      testing.fn().mockResolvedValue({ok: false, status: 409}),
+    );
+    const cmd = new UserCommand(createNativeHttp());
+
+    await expect(
+      cmd.create({
+        auth_method: 'password',
+        comment: '',
+        name: 'alice',
+        password: 'secret',
+      }),
+    ).rejects.toThrow('Native API request failed with status 409');
+  });
   test('should ping and renew the GSAD session through native JSON routes', async () => {
     const fetchMock = testing
       .fn()
@@ -286,12 +433,15 @@ describe('UserCommand tests', () => {
     );
   });
 
-  test('should fetch redacted user metadata through native API when available', async () => {
+  test('should fetch a user through the management API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         id: 'user-id',
         name: 'admin',
-        comment: 'redacted native account metadata',
+        comment: 'account metadata',
+        auth_method: 'radius',
+        created_at: '2026-07-07T00:00:00Z',
+        modified_at: '2026-07-07T01:00:00Z',
       }),
       ok: true,
       status: 200,
@@ -305,10 +455,14 @@ describe('UserCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(result.data.id).toEqual('user-id');
     expect(result.data.name).toEqual('admin');
-    expect(result.data.comment).toEqual('redacted native account metadata');
-    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/users/user-id', {
-      token: 'test-token',
-    });
+    expect(result.data.comment).toEqual('account metadata');
+    expect(result.data.authMethod).toEqual('radius');
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/user-management/users/user-id',
+      {
+        token: 'test-token',
+      },
+    );
   });
 
   test('should export redacted user metadata through native API when available', async () => {

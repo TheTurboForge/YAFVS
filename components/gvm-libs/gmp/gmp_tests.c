@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -368,12 +369,15 @@ Ensure (gmp, gmp_authenticate_info_ext_c_returns_success_and_sets_outputs)
 
   entity_t timezone = create_mock_entity ("timezone", "Europe/Berlin");
   entity_t role = create_mock_entity ("role", "Admin");
+  entity_t user_uuid =
+    create_mock_entity ("user_uuid", "d3c1b0ba-57f0-4d6d-a934-54a9345a56d7");
   entity_t pw_warning =
     create_mock_entity ("password_warning", "Password is short");
   entity_t token = create_mock_entity ("token", "jwt-token-value");
 
   add_mock_child (response, timezone);
   add_mock_child (response, role);
+  add_mock_child (response, user_uuid);
   add_mock_child (response, pw_warning);
   add_mock_child (response, token);
 
@@ -385,6 +389,7 @@ Ensure (gmp, gmp_authenticate_info_ext_c_returns_success_and_sets_outputs)
   char *out_timezone = NULL;
   char *out_pw_warning = NULL;
   char *out_jwt = NULL;
+  char *out_user_uuid = NULL;
 
   gmp_authenticate_info_opts_t opts = gmp_authenticate_info_opts_defaults;
   opts.timeout = 10;
@@ -395,6 +400,7 @@ Ensure (gmp, gmp_authenticate_info_ext_c_returns_success_and_sets_outputs)
   opts.pw_warning = &out_pw_warning;
   opts.jwt_requested = 1;
   opts.jwt = &out_jwt;
+  opts.user_uuid = &out_user_uuid;
 
   int result = gmp_authenticate_info_ext_c (NULL, opts);
 
@@ -403,11 +409,95 @@ Ensure (gmp, gmp_authenticate_info_ext_c_returns_success_and_sets_outputs)
   assert_that (out_timezone, is_equal_to_string ("Europe/Berlin"));
   assert_that (out_pw_warning, is_equal_to_string ("Password is short"));
   assert_that (out_jwt, is_equal_to_string ("jwt-token-value"));
+  assert_that (out_user_uuid,
+               is_equal_to_string ("d3c1b0ba-57f0-4d6d-a934-54a9345a56d7"));
 
   g_free (out_role);
   g_free (out_timezone);
   g_free (out_pw_warning);
   g_free (out_jwt);
+  g_free (out_user_uuid);
+}
+
+Ensure (gmp, gmp_authenticate_info_ext_sets_user_uuid)
+{
+  entity_t response = create_mock_entity ("authenticate_response", "");
+  add_mock_attribute (response, "status", "200");
+
+  entity_t timezone = create_mock_entity ("timezone", "Europe/Berlin");
+  entity_t role = create_mock_entity ("role", "Admin");
+  entity_t user_uuid =
+    create_mock_entity ("user_uuid", "d3c1b0ba-57f0-4d6d-a934-54a9345a56d7");
+
+  add_mock_child (response, timezone);
+  add_mock_child (response, role);
+  add_mock_child (response, user_uuid);
+
+  expect (__wrap_gvm_server_sendf_xml_quiet, will_return (0));
+  expect (__wrap_try_read_entity, will_return (0));
+  expect (__wrap_try_read_entity, will_return (response));
+
+  char *out_role = NULL;
+  char *out_timezone = NULL;
+  char *out_pw_warning = NULL;
+  char *out_user_uuid = NULL;
+
+  gmp_authenticate_info_opts_t opts = gmp_authenticate_info_opts_defaults;
+  opts.timeout = 10;
+  opts.username = "admin";
+  opts.password = "secret";
+  opts.role = &out_role;
+  opts.timezone = &out_timezone;
+  opts.pw_warning = &out_pw_warning;
+  opts.user_uuid = &out_user_uuid;
+
+  int result = gmp_authenticate_info_ext (NULL, opts);
+
+  assert_that (result, is_equal_to (0));
+  assert_that (out_user_uuid,
+               is_equal_to_string ("d3c1b0ba-57f0-4d6d-a934-54a9345a56d7"));
+
+  g_free (out_role);
+  g_free (out_timezone);
+  g_free (out_user_uuid);
+}
+
+Ensure (gmp, gmp_authenticate_info_ext_leaves_user_uuid_null_when_absent)
+{
+  entity_t response = create_mock_entity ("authenticate_response", "");
+  add_mock_attribute (response, "status", "200");
+
+  entity_t timezone = create_mock_entity ("timezone", "Europe/Berlin");
+  entity_t role = create_mock_entity ("role", "Admin");
+
+  add_mock_child (response, timezone);
+  add_mock_child (response, role);
+
+  expect (__wrap_gvm_server_sendf_xml_quiet, will_return (0));
+  expect (__wrap_try_read_entity, will_return (0));
+  expect (__wrap_try_read_entity, will_return (response));
+
+  char *out_role = NULL;
+  char *out_timezone = NULL;
+  char *out_pw_warning = NULL;
+  char *out_user_uuid = (char *) 0x1;
+
+  gmp_authenticate_info_opts_t opts = gmp_authenticate_info_opts_defaults;
+  opts.timeout = 10;
+  opts.username = "admin";
+  opts.password = "secret";
+  opts.role = &out_role;
+  opts.timezone = &out_timezone;
+  opts.pw_warning = &out_pw_warning;
+  opts.user_uuid = &out_user_uuid;
+
+  int result = gmp_authenticate_info_ext (NULL, opts);
+
+  assert_that (result, is_equal_to (0));
+  assert_that (out_user_uuid, is_null);
+
+  g_free (out_role);
+  g_free (out_timezone);
 }
 
 Ensure (gmp, gmp_authenticate_info_ext_c_succeeds_without_optional_outputs)
@@ -548,6 +638,7 @@ Ensure (gmp,
   char *out_role = (char *) 0x1;
   char *out_timezone = (char *) 0x1;
   char *out_pw_warning = (char *) 0x1;
+  char *out_user_uuid = (char *) 0x1;
 
   gmp_authenticate_info_opts_t opts = gmp_authenticate_info_opts_defaults;
   opts.timeout = 10;
@@ -556,6 +647,7 @@ Ensure (gmp,
   opts.role = &out_role;
   opts.timezone = &out_timezone;
   opts.pw_warning = &out_pw_warning;
+  opts.user_uuid = &out_user_uuid;
 
   int result = gmp_authenticate_info_ext_c (NULL, opts);
 
@@ -563,6 +655,7 @@ Ensure (gmp,
   assert_that (out_role, is_null);
   assert_that (out_timezone, is_null);
   assert_that (out_pw_warning, is_null);
+  assert_that (out_user_uuid, is_null);
 }
 
 /* Test suite. */
@@ -605,6 +698,9 @@ main (int argc, char **argv)
                          gmp_ping_returns_error_with_invalid_status);
   add_test_with_context (
     suite, gmp, gmp_authenticate_info_ext_c_returns_success_and_sets_outputs);
+  add_test_with_context (suite, gmp, gmp_authenticate_info_ext_sets_user_uuid);
+  add_test_with_context (
+    suite, gmp, gmp_authenticate_info_ext_leaves_user_uuid_null_when_absent);
   add_test_with_context (
     suite, gmp, gmp_authenticate_info_ext_c_succeeds_without_optional_outputs);
   add_test_with_context (suite, gmp,

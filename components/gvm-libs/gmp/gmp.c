@@ -371,6 +371,8 @@ gmp_authenticate_info_ext (gnutls_session_t *session,
   int ret;
 
   *(opts.timezone) = NULL;
+  if (opts.user_uuid)
+    *opts.user_uuid = NULL;
 
   /* Send the auth request. */
 
@@ -412,7 +414,7 @@ gmp_authenticate_info_ext (gnutls_session_t *session,
   first = status[0];
   if (first == '2')
     {
-      entity_t timezone_entity, role_entity, pw_warn_entity;
+      entity_t timezone_entity, role_entity, pw_warn_entity, user_uuid_entity;
       /* Get the extra info. */
       timezone_entity = entity_child (entity, "timezone");
       if (timezone_entity)
@@ -425,6 +427,9 @@ gmp_authenticate_info_ext (gnutls_session_t *session,
         *(opts.pw_warning) = g_strdup (entity_text (pw_warn_entity));
       else
         *(opts.pw_warning) = NULL;
+      user_uuid_entity = entity_child (entity, "user_uuid");
+      if (user_uuid_entity && opts.user_uuid)
+        *opts.user_uuid = g_strdup (entity_text (user_uuid_entity));
 
       free_entity (entity);
       return 0;
@@ -459,6 +464,8 @@ gmp_authenticate_info_ext_c (gvm_connection_t *connection,
     *opts.pw_warning = NULL;
   if (opts.jwt)
     *opts.jwt = NULL;
+  if (opts.user_uuid)
+    *opts.user_uuid = NULL;
 
   /* Send the auth request. */
 
@@ -503,7 +510,7 @@ gmp_authenticate_info_ext_c (gvm_connection_t *connection,
   first = status[0];
   if (first == '2')
     {
-      entity_t timezone_entity, role_entity, token_entity;
+      entity_t timezone_entity, role_entity, token_entity, user_uuid_entity;
       /* Get the extra info. */
       timezone_entity = entity_child (entity, "timezone");
       if (timezone_entity && opts.timezone)
@@ -523,6 +530,9 @@ gmp_authenticate_info_ext_c (gvm_connection_t *connection,
       token_entity = entity_child (entity, "token");
       if (token_entity && opts.jwt_requested == 1 && opts.jwt)
         *opts.jwt = g_strdup (entity_text (token_entity));
+      user_uuid_entity = entity_child (entity, "user_uuid");
+      if (user_uuid_entity && opts.user_uuid)
+        *opts.user_uuid = g_strdup (entity_text (user_uuid_entity));
 
       free_entity (entity);
       return 0;

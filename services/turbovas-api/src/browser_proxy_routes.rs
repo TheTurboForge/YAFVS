@@ -76,6 +76,11 @@ use crate::{
     trash_empty::{
         MAX_TRASH_EMPTY_BODY_BYTES, browser_proxy_empty_trashcan, browser_proxy_trash_empty_preview,
     },
+    user_management::{
+        MAX_USER_MANAGEMENT_BODY_BYTES, browser_proxy_create_user, browser_proxy_delete_user,
+        browser_proxy_modify_user, browser_proxy_user_management_detail,
+        browser_proxy_user_management_users,
+    },
     user_settings::{
         MAX_USER_SETTING_BODY_BYTES, browser_proxy_current_user_setting,
         browser_proxy_current_user_settings, browser_proxy_update_current_user_setting,
@@ -375,6 +380,23 @@ pub(crate) fn browser_proxy_native_api_router(
             "/api/v1/users/current/timezone",
             put(browser_proxy_update_current_user_timezone)
                 .layer(DefaultBodyLimit::max(MAX_USER_SETTING_BODY_BYTES)),
+        )
+        .route(
+            "/api/v1/user-management/users",
+            get(browser_proxy_user_management_users)
+                .post(browser_proxy_create_user)
+                .layer(DefaultBodyLimit::max(MAX_USER_MANAGEMENT_BODY_BYTES)),
+        )
+        .route(
+            "/api/v1/user-management/users/:user_id",
+            get(browser_proxy_user_management_detail)
+                .patch(browser_proxy_modify_user)
+                .layer(DefaultBodyLimit::max(MAX_USER_MANAGEMENT_BODY_BYTES)),
+        )
+        .route(
+            "/api/v1/user-management/users/:user_id",
+            delete(browser_proxy_delete_user)
+                .layer(DefaultBodyLimit::max(MAX_USER_MANAGEMENT_BODY_BYTES)),
         )
         .layer(DefaultBodyLimit::max(
             MAX_DIRECT_API_WRITE_BODY_BYTES as usize,

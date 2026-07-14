@@ -24,6 +24,7 @@ Ensure (gsad_user, should_create_new_user)
 
   assert_that (user, is_not_null);
   assert_that (gsad_user_get_username (user), is_null);
+  assert_that (gsad_user_get_uuid (user), is_null);
   assert_that (gsad_user_get_password (user), is_null);
   assert_that (gsad_user_get_timezone (user), is_null);
   assert_that (gsad_user_get_capabilities (user), is_null);
@@ -75,6 +76,9 @@ Ensure (gsad_user, should_copy_user)
 
   gsad_user_t *user = gsad_user_new_with_data (username, password, timezone,
                                                capabilities, language, address);
+  assert_that (gsad_user_set_uuid (
+                 user, "12345678-1234-ABCD-9876-123456789ABC"),
+               is_true);
 
   gsad_user_t *copy = gsad_user_copy (user);
 
@@ -84,6 +88,8 @@ Ensure (gsad_user, should_copy_user)
   /* ensure deep copy */
   assert_that (gsad_user_get_username (copy),
                is_not_equal_to (gsad_user_get_username (user)));
+  assert_that (gsad_user_get_uuid (copy),
+               is_not_equal_to (gsad_user_get_uuid (user)));
   assert_that (gsad_user_get_password (copy),
                is_not_equal_to (gsad_user_get_password (user)));
   assert_that (gsad_user_get_timezone (copy),
@@ -102,6 +108,8 @@ Ensure (gsad_user, should_copy_user)
                is_equal_to (gsad_user_get_time (user)));
 
   assert_that (gsad_user_get_username (copy), is_equal_to_string (username));
+  assert_that (gsad_user_get_uuid (copy),
+               is_equal_to_string ("12345678-1234-abcd-9876-123456789abc"));
   assert_that (gsad_user_get_password (copy), is_equal_to_string (password));
   assert_that (gsad_user_get_timezone (copy), is_equal_to_string (timezone));
   assert_that (gsad_user_get_capabilities (copy),
@@ -132,6 +140,26 @@ Ensure (gsad_user, should_set_timezone)
   gsad_user_set_timezone (user, timezone);
 
   assert_that (gsad_user_get_timezone (user), is_equal_to_string (timezone));
+
+  gsad_user_free (user);
+}
+
+Ensure (gsad_user, should_only_set_valid_uuid_once)
+{
+  gsad_user_t *user = gsad_user_new ();
+
+  assert_that (gsad_user_set_uuid (user, "not-a-uuid"), is_false);
+  assert_that (gsad_user_get_uuid (user), is_null);
+  assert_that (gsad_user_set_uuid (
+                 user, "12345678-1234-ABCD-9876-123456789ABC"),
+               is_true);
+  assert_that (gsad_user_get_uuid (user),
+               is_equal_to_string ("12345678-1234-abcd-9876-123456789abc"));
+  assert_that (gsad_user_set_uuid (
+                 user, "abcdefab-cdef-cdef-cdef-abcdefabcdef"),
+               is_false);
+  assert_that (gsad_user_get_uuid (user),
+               is_equal_to_string ("12345678-1234-abcd-9876-123456789abc"));
 
   gsad_user_free (user);
 }
@@ -230,6 +258,7 @@ main (int argc, char **argv)
   add_test_with_context (suite, gsad_user, should_copy_null_user);
   add_test_with_context (suite, gsad_user, should_set_timezone);
   add_test_with_context (suite, gsad_user, should_set_password);
+  add_test_with_context (suite, gsad_user, should_only_set_valid_uuid_once);
   add_test_with_context (suite, gsad_user, should_set_language);
   add_test_with_context (suite, gsad_user, should_set_username);
   add_test_with_context (suite, gsad_user,

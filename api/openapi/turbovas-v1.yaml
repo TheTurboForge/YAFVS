@@ -4090,7 +4090,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: user-redacted-list-read
       summary: List redacted user account metadata
-      description: Read-only user account metadata backed by gvmd/PostgreSQL. This endpoint replaces the retired user-list gvm-tools script and returns only user UUID/name/comment/timestamps; passwords, auth cache hashes, authentication method, timezone, permissions, session state, and account writes remain inherited. Current-password changes use the separate authenticated browser-session operation.
+      description: Read-only user account metadata backed by gvmd/PostgreSQL. This endpoint replaces the retired user-list gvm-tools script and deliberately returns only user UUID/name/comment/timestamps for safe scriptable export. Passwords, auth cache hashes, authentication method, timezone, permissions, and session state are excluded; account administration uses the separate /user-management/users surface.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -4115,6 +4115,216 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+  /user-management/users:
+    get:
+      operationId: getUserManagementUsers
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: user-management-list-read
+      summary: List operator accounts for administration
+      description: Returns the bounded account metadata needed by the operator-only Users interface, including authentication method but never passwords, password hashes, authentication cache values, session state, or provider secrets. Every authenticated TurboVAS console user is intentionally a trusted scanner operator; this surface does not reproduce inherited per-user RBAC. The separate /users collection remains the redacted script-safe export surface.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Operator account collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserManagementCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: postUserManagementUsers
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: user-account-create
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: gvmd-authoritative-operator-authorization
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: account-auth-control
+      summary: Create an operator account
+      description: Passes a strict account definition to authoritative gvmd validation. Local-password accounts require a write-only password; LDAP and RADIUS accounts reject password input.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserManagementMutationRequest'
+      responses:
+        '201':
+          description: Operator account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserManagementAccount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /user-management/users/{user_id}:
+    get:
+      operationId: getUserManagementUsersByUserId
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: user-management-detail-read
+      summary: Read one operator account for administration
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: Operator account detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserManagementAccount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      operationId: patchUserManagementUsersByUserId
+      x-turbovas-exposure: browser-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: user-account-modify
+      x-turbovas-operator-identity: proxied-session-operator
+      x-turbovas-owner-semantics: gvmd-authoritative-operator-authorization
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: account-auth-control
+      summary: Replace one operator account definition
+      description: Replaces the editable account definition through authoritative gvmd validation. Password input is write-only. The authenticated operator may update its own comment, authentication method, and password, but cannot rename itself; affected browser sessions are revoked by immutable user UUID, with a successful self-password change replacing only the current session. This operation is intentionally browser-session-only because direct bearer access cannot invalidate gsad session state.
+      security:
+        - operatorSession: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserManagementMutationRequest'
+      responses:
+        '200':
+          description: Operator account modified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserManagementAccount'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+    delete:
+      operationId: deleteUserManagementUsersByUserId
+      x-turbovas-exposure: browser-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: user-account-delete
+      x-turbovas-operator-identity: proxied-session-operator
+      x-turbovas-owner-semantics: gvmd-authoritative-operator-authorization
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: account-auth-control
+      summary: Delete an operator account
+      description: Deletes a non-current operator account through authoritative gvmd checks and revokes its browser sessions by immutable user UUID. An optional inheritor receives owned resources. The current account and the last account cannot be deleted. This operation is intentionally browser-session-only because direct bearer access cannot invalidate gsad session state.
+      security:
+        - operatorSession: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+        - name: inheritor_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Existing operator account that should inherit owned resources.
+      responses:
+        '204':
+          description: Operator account deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /users/current/settings:
     get:
       operationId: getUsersCurrentSettings
@@ -4312,7 +4522,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: user-redacted-detail-read
       summary: Read one redacted user account metadata record
-      description: Read-only user account metadata backed by gvmd/PostgreSQL. This endpoint returns only user UUID/name/comment/timestamps; passwords, auth cache hashes, authentication method, timezone, permissions, session state, and account writes remain inherited. Current-password changes use the separate authenticated browser-session operation.
+      description: Read-only user account metadata backed by gvmd/PostgreSQL. This endpoint deliberately returns only user UUID/name/comment/timestamps for safe scriptable export. Passwords, auth cache hashes, authentication method, timezone, permissions, and session state are excluded; account administration uses the separate /user-management/users surface.
       parameters:
         - $ref: '#/components/parameters/UserId'
       responses:
@@ -8459,6 +8669,63 @@ components:
         modified_at:
           type: string
           format: date-time
+    UserManagementCollection:
+      type: object
+      required: [page, items]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageInfo'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserManagementAccount'
+    UserManagementAccount:
+      type: object
+      additionalProperties: false
+      required: [id, name, comment, auth_method]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        comment:
+          type: string
+        auth_method:
+          type: string
+          enum: [password, ldap, radius]
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        modified_at:
+          type: string
+          format: date-time
+          nullable: true
+    UserManagementMutationRequest:
+      type: object
+      additionalProperties: false
+      required: [name, auth_method]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 256
+          description: Operator login name, limited to 256 UTF-8 bytes and no control characters.
+        comment:
+          type: string
+          maxLength: 4096
+          default: ''
+          description: Account comment, limited to 4096 UTF-8 bytes and no control characters.
+        auth_method:
+          type: string
+          enum: [password, ldap, radius]
+        password:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          writeOnly: true
+          description: Required for new password-authenticated accounts and when changing an external account to password authentication; otherwise optional and never returned.
     UserSettingCollection:
       type: object
       required: [items]

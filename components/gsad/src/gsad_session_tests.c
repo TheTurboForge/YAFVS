@@ -128,6 +128,50 @@ Ensure (gsad_session, should_allow_to_get_users_by_username)
   gsad_user_free (user3);
 }
 
+Ensure (gsad_session, should_revoke_sessions_by_immutable_user_uuid)
+{
+  const gchar *uuid = "12345678-1234-1234-1234-123456789ABC";
+  gsad_user_t *user1 =
+    gsad_user_new_with_data ("username1", "password1", "timezone1",
+                             "capabilities1", "language1", "address1");
+  gsad_user_t *user2 =
+    gsad_user_new_with_data ("renamed-user", "password2", "timezone2",
+                             "capabilities2", "language2", "address2");
+  gsad_user_t *user3 =
+    gsad_user_new_with_data ("username1", "password3", "timezone3",
+                             "capabilities3", "language3", "address3");
+  gsad_user_t *retrieved_user;
+
+  assert_that (gsad_user_set_uuid (user1, uuid), is_true);
+  assert_that (gsad_user_set_uuid (user2, uuid), is_true);
+  assert_that (gsad_user_set_uuid (
+                 user3, "abcdefab-cdef-cdef-cdef-abcdefabcdef"),
+               is_true);
+  gsad_session_add_user (user1);
+  gsad_session_add_user (user2);
+  gsad_session_add_user (user3);
+
+  gsad_session_remove_sessions_by_uuid (gsad_user_get_token (user1), uuid);
+  assert_that (gsad_session_get_user_count (), is_equal_to (2));
+  retrieved_user = gsad_session_get_user_by_id (gsad_user_get_token (user1));
+  assert_that (retrieved_user, is_not_null);
+  gsad_user_free (retrieved_user);
+  assert_that (gsad_session_get_user_by_id (gsad_user_get_token (user2)),
+               is_null);
+
+  gsad_session_remove_sessions_by_uuid (NULL, uuid);
+  assert_that (gsad_session_get_user_count (), is_equal_to (1));
+  assert_that (gsad_session_get_user_by_id (gsad_user_get_token (user1)),
+               is_null);
+  retrieved_user = gsad_session_get_user_by_id (gsad_user_get_token (user3));
+  assert_that (retrieved_user, is_not_null);
+  gsad_user_free (retrieved_user);
+
+  gsad_user_free (user1);
+  gsad_user_free (user2);
+  gsad_user_free (user3);
+}
+
 Ensure (gsad_session,
         should_allow_to_call_gsad_session_get_user_by_id_with_null)
 {
@@ -333,6 +377,8 @@ main (int argc, char **argv)
   add_test_with_context (suite, gsad_session,
                          should_allow_to_remove_user_with_null);
   add_test_with_context (suite, gsad_session, should_remove_other_sessions);
+  add_test_with_context (
+    suite, gsad_session, should_revoke_sessions_by_immutable_user_uuid);
   add_test_with_context (suite, gsad_session, should_replace_user);
   add_test_with_context (suite, gsad_session,
                          should_not_replace_user_if_not_exists);

@@ -31,11 +31,18 @@ struct NativeWriteRouteContract {
 
 const APPROVED_NATIVE_DIRECT_READ_ROUTES: &[(&str, &str)] = &[
     ("get", "/api/v1/alerts/:alert_id/definition"),
+    ("get", "/api/v1/user-management/users"),
+    ("get", "/api/v1/user-management/users/:user_id"),
     ("get", "/api/v1/users/current/settings"),
     ("get", "/api/v1/users/current/settings/:setting_id"),
 ];
 
 const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
+    NativeWriteRouteContract {
+        method: "post",
+        path: "/api/v1/user-management/users",
+        safety_contract: "write-control-v1",
+    },
     NativeWriteRouteContract {
         method: "put",
         path: "/api/v1/users/current/settings/:setting_id",
@@ -703,6 +710,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
         .filter(|contract| contract.method == "delete")
         .map(|contract| contract.path)
         .collect::<Vec<_>>();
+    expected_delete_routes.push("/api/v1/user-management/users/:user_id");
     expected_delete_routes.sort_unstable();
 
     assert!(startup_source.contains("let browser_proxy_auth = browser_proxy_api_config()?;"));
@@ -752,6 +760,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("patch(browser_proxy_patch_tag)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_target)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_task)"));
+    assert!(browser_routes.contains("patch(browser_proxy_modify_user)"));
     assert!(browser_routes.contains("post(browser_proxy_start_task)"));
     assert!(browser_routes.contains("post(browser_proxy_stop_task)"));
     assert!(browser_routes.contains("post(browser_proxy_replace_task_target)"));
@@ -791,6 +800,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("delete(browser_proxy_delete_task)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_target)"));
     assert!(browser_routes.contains("delete(browser_proxy_hard_delete_target)"));
+    assert!(browser_routes.contains("delete(browser_proxy_delete_user)"));
     assert_eq!(browser_delete_routes, expected_delete_routes);
     assert!(browser_routes.contains("DefaultBodyLimit::max("));
     assert!(browser_routes.contains("Extension(auth)"));

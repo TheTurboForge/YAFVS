@@ -844,6 +844,11 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "current-user-settings-read",
         "current-user-timezone-write",
         "user-current-password-change",
+        "user-account-create",
+        "user-account-modify",
+        "user-account-delete",
+        "user-management-list-read",
+        "user-management-detail-read",
         "user-redacted-detail-read",
         "user-redacted-list-read",
         "vulnerability-detail-read",
@@ -952,6 +957,11 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("put", "/users/current/timezone"): "direct-write",
     ("post", "/users/current/password"): "browser-write",
     ("get", "/users/{user_id}"): "direct-read",
+    ("get", "/user-management/users"): "direct-read",
+    ("post", "/user-management/users"): "direct-write",
+    ("get", "/user-management/users/{user_id}"): "direct-read",
+    ("patch", "/user-management/users/{user_id}"): "browser-write",
+    ("delete", "/user-management/users/{user_id}"): "browser-write",
     ("get", "/filters/{filter_id}/export"): "direct-read",
     ("post", "/targets"): "direct-write",
     ("patch", "/targets/{target_id}"): "direct-write",
@@ -1172,6 +1182,38 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("get", "/users/{user_id}"): {
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "user-redacted-detail-read",
+    },
+    ("get", "/user-management/users"): {
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "user-management-list-read",
+    },
+    ("post", "/user-management/users"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "gvmd-authoritative-operator-authorization",
+        "x-turbovas-replaces": "user-account-create",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "account-auth-control",
+    },
+    ("get", "/user-management/users/{user_id}"): {
+        "x-turbovas-maturity": "live-read",
+        "x-turbovas-replaces": "user-management-detail-read",
+    },
+    ("patch", "/user-management/users/{user_id}"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "proxied-session-operator",
+        "x-turbovas-owner-semantics": "gvmd-authoritative-operator-authorization",
+        "x-turbovas-replaces": "user-account-modify",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "account-auth-control",
+    },
+    ("delete", "/user-management/users/{user_id}"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "proxied-session-operator",
+        "x-turbovas-owner-semantics": "gvmd-authoritative-operator-authorization",
+        "x-turbovas-replaces": "user-account-delete",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "account-auth-control",
     },
     ("get", "/filters"): {
         "x-turbovas-maturity": "live-read",
@@ -2168,6 +2210,8 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/credentials",
         "/api/v1/credentials/{}",
         "/api/v1/credentials/{}/export",
+        "/api/v1/user-management/users",
+        "/api/v1/user-management/users/{}",
         "/api/v1/users",
         "/api/v1/users/current/settings",
         "/api/v1/users/current/settings/{}",
@@ -10187,6 +10231,9 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         value = constants.get(variable)
         if value and f"g_str_has_prefix (path, {variable})" in function_body:
             templates.add(f"{value.rstrip('/')}/{{}}")
+    user_management_prefix = constants.get("USER_MANAGEMENT_USER_PREFIX")
+    if user_management_prefix and "is_user_management_user_path (path)" in function_body:
+        templates.add(f"{user_management_prefix.rstrip('/')}/{{}}")
 
     for prefix_variable, suffix_variable in (
         ("alert_prefix", "alert_export_suffix"),
@@ -10296,6 +10343,9 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
                 templates.add(f"{prefix.rstrip('/')}/{{}}{deliver_report_suffix}")
             if prefix_variable != "alert_prefix" and prefix and restore_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{restore_suffix}")
+        user_management_prefix = post_constants.get("USER_MANAGEMENT_USER_PREFIX")
+        if user_management_prefix and "is_user_management_user_path (path)" in post_function_body:
+            templates.add(f"{user_management_prefix.rstrip('/')}/{{}}")
         tag_prefix = post_constants.get("tag_prefix")
         if (
             tag_prefix
@@ -10554,6 +10604,9 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             prefix = patch_constants.get(prefix_variable)
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in patch_function_body:
                 operations.add(f"PATCH {prefix.rstrip('/')}/{{}}")
+        user_management_prefix = patch_constants.get("USER_MANAGEMENT_USER_PREFIX")
+        if user_management_prefix and "is_user_management_user_path (path)" in patch_function_body:
+            operations.add(f"PATCH {user_management_prefix.rstrip('/')}/{{}}")
         scan_config_prefix = patch_constants.get("scan_config_prefix")
         scan_config_family_separator = patch_constants.get("scan_config_family_nvts_separator")
         if (
@@ -10625,6 +10678,9 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
                 operations.add(f"DELETE {prefix.rstrip('/')}/{{}}")
                 if prefix_variable not in {"alert_prefix", "host_identifier_prefix", "host_operating_system_prefix", "host_prefix", "scope_prefix", "scope_report_prefix", "task_prefix", "tls_certificate_prefix"} and trash_suffix and "trash_suffix" in delete_function_body:
                     operations.add(f"DELETE {prefix.rstrip('/')}/{{}}{trash_suffix}")
+        user_management_prefix = delete_constants.get("USER_MANAGEMENT_USER_PREFIX")
+        if user_management_prefix and "is_user_management_user_path (path)" in delete_function_body:
+            operations.add(f"DELETE {user_management_prefix.rstrip('/')}/{{}}")
         port_list_prefix = delete_constants.get("port_list_prefix")
         if (
             port_list_prefix
@@ -11284,6 +11340,45 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["direct native redacted user account detail", "native-api-request helper"],
                 "residual_inherited": [
                     "Password hashes are never exposed; authentication-provider configuration and account writes remain inherited. Current settings, timezone, and password changes are native."
+                ],
+            },
+            {
+                "endpoint": "/api/v1/user-management/users",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["GSA operator account administration list", "direct native user-management list automation"],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/user-management/users",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["GSA operator account creation", "direct native user-account create control"],
+            },
+            {
+                "endpoint": "/api/v1/user-management/users/{user_id}",
+                "status": "implemented_internal_browser_proxied_and_scriptable_read",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["GSA operator account administration detail", "direct native user-management detail automation"],
+            },
+            {
+                "method": "patch",
+                "endpoint": "/api/v1/user-management/users/{user_id}",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "browser_write",
+                "replacement_candidates": ["GSA operator account metadata and credential modification"],
+                "residual_inherited": [
+                    "The endpoint is intentionally not bearer-scriptable because direct API access cannot invalidate gsad browser sessions."
+                ],
+            },
+            {
+                "method": "delete",
+                "endpoint": "/api/v1/user-management/users/{user_id}",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "browser_write",
+                "replacement_candidates": ["GSA operator account deletion"],
+                "residual_inherited": [
+                    "The endpoint is intentionally not bearer-scriptable because direct API access cannot invalidate gsad browser sessions."
                 ],
             },
             {
@@ -20582,6 +20677,7 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.write-control-operator",
             "native-api-direct.write-control-up",
             "native-api-direct.write-control-healthz",
+            "native-api-direct.user-management-list",
             "native-api-direct.scope-write-create",
             "native-api-direct.scope-write-update",
             "native-api-direct.scope-write-query-denied",
@@ -21982,6 +22078,49 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 check="native-api-direct.write-control-healthz",
                 ready_message="Direct write-control native API health endpoint is reachable after restart.",
                 failed_message="Direct write-control native API health endpoint did not become reachable after restart.",
+            )
+        )
+
+    if aggregate_status(findings) != "fail" and admin_uuid:
+        user_management_list = direct_native_api_curl(
+            repo_root,
+            "/api/v1/user-management/users?page_size=1",
+            token=token,
+            env=env,
+        )
+        user_management_json, user_management_status = parse_json_output_with_http_status(
+            user_management_list
+        )
+        user_management_items = (
+            user_management_json.get("items")
+            if isinstance(user_management_json, dict)
+            else None
+        )
+        user_management_ok = (
+            user_management_list.returncode == 0
+            and user_management_status == 200
+            and isinstance(user_management_items, list)
+        )
+        findings.append(
+            native_api_probe_finding(
+                "pass" if user_management_ok else "fail",
+                "native-api-direct.user-management-list",
+                "Direct write-control token is bound to the configured operator and can read the bounded user-management collection."
+                if user_management_ok
+                else "Direct write-control could not read the user-management collection through its configured operator identity.",
+                user_management_list,
+                direct_native_api_display_command(
+                    "/api/v1/user-management/users?page_size=1",
+                    token=token,
+                    env=env,
+                ),
+                None,
+                {
+                    "http_status": user_management_status,
+                    "item_count": len(user_management_items)
+                    if isinstance(user_management_items, list)
+                    else None,
+                },
             )
         )
 

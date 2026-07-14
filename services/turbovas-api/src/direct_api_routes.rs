@@ -60,6 +60,9 @@ use crate::{
     task_writes::{clone_task, create_task, delete_task, patch_task, replace_task},
     tls_certificate_writes::delete_tls_certificate,
     trash_empty::{MAX_TRASH_EMPTY_BODY_BYTES, empty_trashcan, trash_empty_preview},
+    user_management::{
+        MAX_USER_MANAGEMENT_BODY_BYTES, create_user, user_management_detail, user_management_users,
+    },
     user_settings::{
         MAX_USER_SETTING_BODY_BYTES, current_user_setting, current_user_settings,
         update_current_user_setting, update_current_user_timezone,
@@ -76,6 +79,11 @@ pub(crate) fn direct_native_api_router(
             get(get_alert_definition),
         )
         .route("/api/v1/users/current/settings", get(current_user_settings))
+        .route("/api/v1/user-management/users", get(user_management_users))
+        .route(
+            "/api/v1/user-management/users/:user_id",
+            get(user_management_detail),
+        )
         .route(
             "/api/v1/users/current/settings/:setting_id",
             get(current_user_setting),
@@ -263,6 +271,10 @@ pub(crate) fn direct_native_api_router(
                 "/api/v1/users/current/timezone",
                 put(update_current_user_timezone)
                     .layer(DefaultBodyLimit::max(MAX_USER_SETTING_BODY_BYTES)),
+            )
+            .route(
+                "/api/v1/user-management/users",
+                post(create_user).layer(DefaultBodyLimit::max(MAX_USER_MANAGEMENT_BODY_BYTES)),
             )
             .route("/api/v1/trashcan/empty-preview", get(trash_empty_preview))
             .route(

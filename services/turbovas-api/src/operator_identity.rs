@@ -31,19 +31,24 @@ pub(crate) async fn resolve_configured_direct_api_operator(
     Ok(Some(operator_identity_from_row(&row)))
 }
 
-pub(crate) async fn resolve_browser_proxy_operator_by_name(
+pub(crate) async fn resolve_browser_proxy_operator(
     client: &Client,
+    user_uuid: &str,
     user_name: &str,
 ) -> Result<OperatorIdentity, ApiError> {
     let row = client
-        .query_opt(browser_proxy_operator_lookup_sql(), &[&user_name])
+        .query_opt(browser_proxy_operator_lookup_sql(), &[&user_uuid])
         .await
         .map_err(|error| {
             tracing::warn!(%error, "browser proxy operator lookup failed");
             ApiError::Database
         })?
         .ok_or(ApiError::Forbidden)?;
-    Ok(operator_identity_from_row(&row))
+    let identity = operator_identity_from_row(&row);
+    if identity.user_name != user_name {
+        return Err(ApiError::Forbidden);
+    }
+    Ok(identity)
 }
 
 pub(crate) fn direct_operator_lookup_sql() -> &'static str {
@@ -55,7 +60,7 @@ pub(crate) fn direct_operator_lookup_sql() -> &'static str {
 pub(crate) fn browser_proxy_operator_lookup_sql() -> &'static str {
     "SELECT id::bigint, uuid::text, coalesce(name, '')::text
        FROM users
-      WHERE name = $1;"
+      WHERE uuid = $1;"
 }
 
 fn operator_identity_from_row(row: &Row) -> OperatorIdentity {
@@ -85,12 +90,12 @@ mod tests {
     }
 
     #[test]
-    fn browser_proxy_operator_lookup_is_single_user_name_only() {
+    fn browser_proxy_operator_lookup_is_single_user_uuid_only() {
         let sql = browser_proxy_operator_lookup_sql();
         let upper_sql = sql.to_ascii_uppercase();
 
         assert!(sql.contains("FROM users"));
-        assert!(sql.contains("WHERE name = $1"));
+        assert!(sql.contains("WHERE uuid = $1"));
         assert!(!upper_sql.contains("ORDER BY"));
         assert!(!upper_sql.contains("LIMIT"));
         assert!(!upper_sql.contains("INSERT"));

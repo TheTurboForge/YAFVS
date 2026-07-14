@@ -221,6 +221,50 @@ gsad_session_add_user (gsad_user_t *user)
 }
 
 /**
+ * @brief Removes all sessions for a user UUID, except an optional session.
+ *
+ * @param[in] keep_id  Session ID to keep, or NULL to revoke all sessions.
+ * @param[in] uuid     Immutable user UUID whose sessions are revoked.
+ */
+void
+gsad_session_remove_sessions_by_uuid (const gchar *keep_id, const gchar *uuid)
+{
+  int index;
+
+  if (uuid == NULL)
+    return;
+
+  g_mutex_lock (mutex);
+
+  for (index = 0; index < users->len; index++)
+    {
+      gsad_user_t *item = (gsad_user_t *) g_ptr_array_index (users, index);
+      const gchar *itemtoken = gsad_user_get_token (item);
+      const gchar *itemuuid = gsad_user_get_uuid (item);
+
+      if (itemuuid != NULL && g_ascii_strcasecmp (itemuuid, uuid) == 0
+          && (keep_id == NULL || !str_equal (keep_id, itemtoken)))
+        {
+          const gchar *itemname = gsad_user_get_username (item);
+          const gchar *itempassword = gsad_user_get_password (item);
+
+          g_debug ("%s: logging out session for user UUID '%s'", __func__,
+                   itemuuid);
+
+          if (itemname && itempassword)
+            logout_gmp (itemname, itempassword);
+
+          /* user is freed by g_ptr_array_remove via the free function */
+          g_ptr_array_remove (users, (gpointer) item);
+
+          index--;
+        }
+    }
+
+  g_mutex_unlock (mutex);
+}
+
+/**
  * @brief Remove a user from the session "database"
  *
  * If the user is NULL or no user with the given token exists, this function

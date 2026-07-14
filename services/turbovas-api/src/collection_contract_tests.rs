@@ -279,6 +279,13 @@ const ASSET_CATALOG_COLLECTION_CONTRACTS: &[CollectionContract] = &[
         tie_breakers: &["name", "id"],
     },
     CollectionContract {
+        path: "/api/v1/user-management/users",
+        default_sort: USER_ACCOUNT_DEFAULT_SORT,
+        allowed_sort_fields: USER_ACCOUNT_SORT_FIELDS,
+        filter_fields: &["id", "name", "comment"],
+        tie_breakers: &["name", "id"],
+    },
+    CollectionContract {
         path: "/api/v1/scan-configs",
         default_sort: SCAN_CONFIG_ASSET_DEFAULT_SORT,
         allowed_sort_fields: SCAN_CONFIG_ASSET_SORT_FIELDS,
@@ -531,6 +538,7 @@ fn asset_catalog_collection_contracts_define_sort_filter_and_tie_breakers() {
             "/api/v1/scanners",
             "/api/v1/credentials",
             "/api/v1/users",
+            "/api/v1/user-management/users",
             "/api/v1/scan-configs",
             "/api/v1/filters",
             "/api/v1/overrides",

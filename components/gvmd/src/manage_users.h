@@ -11,8 +11,13 @@
 #include "manage_resources_types.h"
 #include "sql.h" // Sadly, for db_conn_info_t
 
+#define MODIFY_USER_PASSWORD_REQUIRED 10
+
 gchar *
 user_name (const char *);
+
+gchar *
+user_auth_method (const char *);
 
 char *
 user_uuid (user_t);

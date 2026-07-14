@@ -1345,37 +1345,6 @@ class GMPv224(GvmProtocol[T]):
             Alerts.test_alert(alert_id)
         )
 
-    def trigger_alert(
-        self,
-        alert_id: EntityID,
-        report_id: EntityID,
-        *,
-        filter_string: str | None = None,
-        filter_id: EntityID | None = None,
-        report_format_id: EntityID | ReportFormatType | None = None,
-    ) -> T:
-        """Run an alert by ignoring its event and conditions
-
-        The alert is triggered to run immediately with the provided filtered
-        report by ignoring the even and condition settings.
-
-        Args:
-            alert_id: UUID of the alert to be run
-            report_id: UUID of the report to be provided to the alert
-            filter: Filter term to use to filter results in the report
-            filter_id: UUID of filter to use to filter results in the report
-            report_format_id: UUID of report format to use                              or ReportFormatType (enum)
-        """
-        return self._send_request_and_transform_response(
-            Alerts.trigger_alert(
-                alert_id,
-                report_id,
-                filter_string=filter_string,
-                filter_id=filter_id,
-                report_format_id=report_format_id,
-            )
-        )
-
     def get_alerts(
         self,
         *,

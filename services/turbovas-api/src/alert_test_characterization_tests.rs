@@ -14,8 +14,8 @@ fn alert_test_remains_an_explicit_real_delivery_action_on_both_write_paths() {
         .split_once("  /alerts/{alert_id}/test:\n")
         .expect("alert test operation must be declared")
         .1
-        .split_once("  /alerts/{alert_id}/export:\n")
-        .expect("alert test operation must end before alert export")
+        .split_once("  /alerts/{alert_id}/deliver-report:\n")
+        .expect("alert test operation must end before alert deliver-report")
         .0;
 
     for required in [

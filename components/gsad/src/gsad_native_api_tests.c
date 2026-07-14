@@ -72,6 +72,23 @@ Ensure (gsad_native_api, should_only_allow_canonical_alert_test_posts)
                  is_false);
 }
 
+Ensure (gsad_native_api, should_only_allow_canonical_alert_report_delivery_posts)
+{
+  const gchar *valid =
+    "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/deliver-report";
+  const gchar *rejected[] = {
+    "/api/v1/alerts/not-a-uuid/deliver-report",
+    "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/deliver-report/extra",
+    "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/deliver-report?unexpected=query",
+    "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/deliver-report/",
+  };
+
+  assert_that (gsad_native_api_test_post_path_is_allowed (valid), is_true);
+  for (gsize index = 0; index < G_N_ELEMENTS (rejected); index++)
+    assert_that (gsad_native_api_test_post_path_is_allowed (rejected[index]),
+                 is_false);
+}
+
 Ensure (gsad_native_api, should_require_a_session_user_for_browser_reads)
 {
   assert_that (
@@ -352,6 +369,9 @@ main (int argc, char **argv)
                          should_only_allow_canonical_task_clone_posts);
   add_test_with_context (suite, gsad_native_api,
                          should_only_allow_canonical_alert_test_posts);
+  add_test_with_context (
+    suite, gsad_native_api,
+    should_only_allow_canonical_alert_report_delivery_posts);
   add_test_with_context (
     suite, gsad_native_api,
     should_only_allow_canonical_task_configuration_replacement_posts);

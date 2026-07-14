@@ -165,7 +165,6 @@ gsad_init_validator ()
                      "|(new_alert)"
                      "|(ping)"
                      "|(renew_session)"
-                     "|(report_alert)"
                      "|(restore)"
                      "|(test_alert)"
                      "|(save_alert)"

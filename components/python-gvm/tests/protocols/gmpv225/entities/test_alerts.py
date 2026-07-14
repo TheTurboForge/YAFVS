@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2023-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -11,14 +12,12 @@ from ...gmpv224.entities.alerts import (
     GmpGetAlertTestMixin,
     GmpModifyAlertTestMixin,
     GmpTestAlertTestMixin,
-    GmpTriggerAlertTestMixin,
 )
 from ...gmpv225 import GMPTestCase
 
 
 class Gmpv225CloneAlertTestCase(GmpCloneAlertTestMixin, GMPTestCase):
     pass
-
 
 class Gmpv225CreateAlertTestCase(GmpCreateAlertTestMixin, GMPTestCase):
     pass
@@ -41,8 +40,4 @@ class Gmpv225ModifyAlertTestCase(GmpModifyAlertTestMixin, GMPTestCase):
 
 
 class Gmpv225TestAlertTestCase(GmpTestAlertTestMixin, GMPTestCase):
-    pass
-
-
-class Gmpv225TriggerAlertTestCase(GmpTriggerAlertTestMixin, GMPTestCase):
     pass

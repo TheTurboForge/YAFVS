@@ -11,7 +11,6 @@ from gvm.utils import to_bool
 from gvm.xml import XmlCommand
 
 from .._entity_id import EntityID
-from ._report_formats import ReportFormatType
 
 
 class AlertEvent(Enum):
@@ -338,50 +337,6 @@ class Alerts:
 
         cmd = XmlCommand("test_alert")
         cmd.set_attribute("alert_id", str(alert_id))
-        return cmd
-
-    @classmethod
-    def trigger_alert(
-        cls,
-        alert_id: EntityID,
-        report_id: EntityID,
-        *,
-        filter_string: str | None = None,
-        filter_id: EntityID | None = None,
-        report_format_id: EntityID | ReportFormatType | None = None,
-    ) -> Request:
-        """Run an alert by ignoring its event and conditions
-
-        The alert is triggered to run immediately with the provided filtered
-        report by ignoring the even and condition settings.
-
-        Args:
-            alert_id: UUID of the alert to be run
-            report_id: UUID of the report to be provided to the alert
-            filter: Filter term to use to filter results in the report
-            filter_id: UUID of filter to use to filter results in the report
-            report_format_id: UUID of report format to use                              or ReportFormatType (enum)
-        """
-        if not alert_id:
-            raise RequiredArgument(
-                function=cls.trigger_alert.__name__,
-                argument="alert_id argument",
-            )
-
-        if not report_id:
-            raise RequiredArgument(
-                function=cls.trigger_alert.__name__,
-                argument="report_id argument",
-            )
-
-        cmd = XmlCommand("get_reports")
-        cmd.set_attribute("report_id", str(report_id))
-        cmd.set_attribute("alert_id", str(alert_id))
-        cmd.add_filter(filter_string, filter_id)
-
-        if report_format_id:
-            cmd.set_attribute("format_id", str(report_format_id))
-
         return cmd
 
     @staticmethod

@@ -27,6 +27,15 @@ static int alert_test_calls;
 static int alert_test_result;
 static int alert_test_audit_fail_calls;
 static int alert_test_audit_success_calls;
+static int alert_delivery_calls;
+static int alert_delivery_result;
+static int alert_delivery_audit_fail_calls;
+static int alert_delivery_audit_success_calls;
+static gboolean alert_delivery_active;
+static gboolean alert_delivery_alert_exists;
+static gboolean alert_delivery_report_exists;
+static gboolean alert_delivery_filter_exists;
+static alert_method_t alert_delivery_method;
 static int create_alert_calls;
 static int create_alert_result;
 static int create_schedule_calls;
@@ -97,6 +106,10 @@ static gchar *received_snmp_message;
 static gchar *received_syslog_submethod;
 static gchar *received_audit_uuid;
 static gchar *received_alert_test_uuid;
+static gchar *received_alert_delivery_uuid;
+static gchar *received_alert_delivery_report_uuid;
+static gchar *received_alert_delivery_filter;
+static gchar *received_alert_delivery_filter_uuid;
 static gchar *received_credential_type;
 static gchar *received_comment;
 static gchar *received_icalendar;
@@ -455,6 +468,12 @@ __wrap_log_event (const char *resource, const char *resource_name,
           g_free (received_audit_uuid);
           received_audit_uuid = g_strdup (uuid);
         }
+      else if (strcmp (action, "delivered") == 0)
+        {
+          assert_that (uuid,
+                       is_equal_to_string (received_alert_delivery_uuid));
+          alert_delivery_audit_success_calls++;
+        }
       else
         {
           assert_that (action, is_equal_to_string ("tested"));
@@ -511,6 +530,12 @@ __wrap_log_event_fail (const char *resource, const char *resource_name,
         {
           assert_that (uuid, is_null);
           audit_fail_calls++;
+        }
+      else if (strcmp (action, "delivered") == 0)
+        {
+          assert_that (uuid,
+                       is_equal_to_string (received_alert_delivery_uuid));
+          alert_delivery_audit_fail_calls++;
         }
       else
         {
@@ -762,6 +787,94 @@ __wrap_manage_test_alert (const char *alert_uuid, gchar **script_message)
   *script_message = alert_test_script_message
                       ? g_strdup (alert_test_script_message) : NULL;
   return alert_test_result;
+}
+
+gboolean
+__wrap_find_alert_with_permission (const char *uuid, alert_t *alert,
+                                   const char *permission)
+{
+  assert_that (alert_delivery_active, is_true);
+  assert_that (uuid, is_equal_to_string (received_alert_delivery_uuid));
+  assert_that (permission, is_equal_to_string ("get_alerts"));
+  *alert = alert_delivery_alert_exists ? 17 : 0;
+  return FALSE;
+}
+
+gboolean
+__wrap_find_report_with_permission (const char *uuid, report_t *report,
+                                    const char *permission)
+{
+  assert_that (alert_delivery_active, is_true);
+  assert_that (uuid,
+               is_equal_to_string (received_alert_delivery_report_uuid));
+  assert_that (permission, is_equal_to_string ("get_reports"));
+  *report = alert_delivery_report_exists ? 19 : 0;
+  return FALSE;
+}
+
+gboolean
+__wrap_find_filter_with_permission (const char *uuid, filter_t *filter,
+                                    const char *permission)
+{
+  assert_that (alert_delivery_active, is_true);
+  assert_that (uuid,
+               is_equal_to_string (received_alert_delivery_filter_uuid));
+  assert_that (permission, is_equal_to_string ("get_filters"));
+  *filter = alert_delivery_filter_exists ? 23 : 0;
+  return FALSE;
+}
+
+char *
+__wrap_filter_term (const char *uuid)
+{
+  assert_that (alert_delivery_active, is_true);
+  assert_that (uuid,
+               is_equal_to_string (received_alert_delivery_filter_uuid));
+  return g_strdup ("first=1 rows=5");
+}
+
+alert_method_t
+__wrap_alert_method (alert_t alert)
+{
+  assert_that (alert_delivery_active, is_true);
+  assert_that (alert, is_equal_to (17));
+  return alert_delivery_method;
+}
+
+int
+__wrap_manage_send_report (
+  report_t report, report_format_t report_format, const get_data_t *get,
+  int overrides_details, int result_tags, int ignore_pagination, int lean,
+  int base64,
+  gboolean (*send) (const char *, int (*) (const char *, void *), void *),
+  int (*send_data_1) (const char *, void *), void *send_data_2,
+  const char *alert_id, const gchar *prefix)
+{
+  assert_that (alert_delivery_active, is_true);
+  assert_that (report, is_equal_to (19));
+  assert_that (report_format, is_equal_to (-1));
+  assert_that (get->details, is_equal_to (1));
+  assert_that (get->ignore_pagination, is_equal_to (0));
+  assert_that (get->filter,
+               is_equal_to_string (received_alert_delivery_filter));
+  if (received_alert_delivery_filter_uuid)
+    assert_that (get->filt_id,
+                 is_equal_to_string (received_alert_delivery_filter_uuid));
+  else
+    assert_that (get->filt_id, is_null);
+  assert_that (overrides_details, is_equal_to (0));
+  assert_that (result_tags, is_equal_to (0));
+  assert_that (ignore_pagination, is_equal_to (1));
+  assert_that (lean, is_equal_to (0));
+  assert_that (base64, is_equal_to (0));
+  assert_that (send, is_null);
+  assert_that (send_data_1, is_null);
+  assert_that (send_data_2, is_null);
+  assert_that (alert_id,
+               is_equal_to_string (received_alert_delivery_uuid));
+  assert_that (prefix, is_null);
+  alert_delivery_calls++;
+  return alert_delivery_result;
 }
 
 enum trash_empty_db_event
@@ -5011,6 +5124,168 @@ Ensure (turbovas_control, maps_alert_test_responses_without_malformed_overlap)
                  is_equal_to_string (cases[index].response));
 }
 
+Ensure (turbovas_control, parses_strict_alert_report_delivery_frames)
+{
+  const char *filter_request =
+    "alert-deliver-report " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 "
+    "123e4567-e89b-12d3-a456-426614174002 c2V2ZXJpdHk+Nw== -\n";
+  const char *filter_id_request =
+    "alert-deliver-report " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 "
+    "123e4567-e89b-12d3-a456-426614174002 - "
+    "123e4567-e89b-12d3-a456-426614174003\n";
+  const char *malformed[] = {
+    "alert-deliver-report " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 "
+    "123e4567-e89b-12d3-a456-426614174002 c2V2ZXJpdHk+Nw== "
+    "123e4567-e89b-12d3-a456-426614174003\n",
+    "alert-deliver-report " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-42661417400z "
+    "123e4567-e89b-12d3-a456-426614174002 - -\n",
+    "alert-deliver-report " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 "
+    "123e4567-e89b-12d3-a456-426614174001 "
+    "123e4567-e89b-12d3-a456-426614174002 not-base64 -\n",
+  };
+  char operator_uuid[37];
+  turbovas_control_alert_deliver_report_request_t delivery = {0};
+  size_t index;
+
+  assert_that (turbovas_control_parse_alert_deliver_report_request (
+                 filter_request, strlen (filter_request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &delivery),
+               is_true);
+  assert_that (operator_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (delivery.alert_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
+  assert_that (delivery.report_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174002"));
+  assert_that (delivery.filter, is_equal_to_string ("severity>7"));
+  assert_that (delivery.filter_uuid, is_equal_to_string (""));
+  turbovas_control_alert_deliver_report_request_clear (&delivery);
+
+  assert_that (turbovas_control_parse_alert_deliver_report_request (
+                 filter_id_request, strlen (filter_id_request),
+                 TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                 operator_uuid, &delivery),
+               is_true);
+  assert_that (delivery.filter, is_equal_to_string (""));
+  assert_that (delivery.filter_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174003"));
+  turbovas_control_alert_deliver_report_request_clear (&delivery);
+
+  for (index = 0; index < G_N_ELEMENTS (malformed); index++)
+    assert_that (turbovas_control_parse_alert_deliver_report_request (
+                   malformed[index], strlen (malformed[index]),
+                   TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                   operator_uuid, &delivery),
+                 is_false);
+}
+
+Ensure (turbovas_control, maps_alert_report_delivery_responses)
+{
+  static const struct
+  {
+    int result;
+    const char *response;
+  } cases[] = {
+    {0, "0 delivered\n"},
+    {1, "1 alert_not_found\n"},
+    {2, "2 report_not_found\n"},
+    {3, "3 filter_not_found\n"},
+    {99, "99 forbidden\n"},
+    {-2, "-2 report_format_not_found\n"},
+    {-3, "-3 delivery_failed\n"},
+    {-4, "-1 internal\n"},
+    {-1, "-1 internal\n"},
+  };
+  size_t index;
+
+  for (index = 0; index < G_N_ELEMENTS (cases); index++)
+    assert_that (
+      turbovas_control_alert_deliver_report_response (cases[index].result),
+      is_equal_to_string (cases[index].response));
+}
+
+Ensure (turbovas_control, delivers_report_in_operator_session_and_audits)
+{
+  const char *operator_uuid = "123e4567-e89b-12d3-a456-426614174000";
+  turbovas_control_alert_deliver_report_request_t delivery = {
+    .alert_uuid = "123e4567-e89b-12d3-a456-426614174001",
+    .report_uuid = "123e4567-e89b-12d3-a456-426614174002",
+    .filter = "severity>7",
+  };
+
+  cleanup_calls = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  alert_delivery_active = TRUE;
+  alert_delivery_alert_exists = TRUE;
+  alert_delivery_report_exists = TRUE;
+  alert_delivery_filter_exists = TRUE;
+  alert_delivery_method = ALERT_METHOD_EMAIL;
+  alert_delivery_result = 0;
+  alert_delivery_calls = 0;
+  alert_delivery_audit_success_calls = 0;
+  alert_delivery_audit_fail_calls = 0;
+  mock_operator_name = "operator";
+  g_clear_pointer (&received_alert_delivery_uuid, g_free);
+  g_clear_pointer (&received_alert_delivery_report_uuid, g_free);
+  g_clear_pointer (&received_alert_delivery_filter, g_free);
+  g_clear_pointer (&received_alert_delivery_filter_uuid, g_free);
+  received_alert_delivery_uuid = g_strdup (delivery.alert_uuid);
+  received_alert_delivery_report_uuid = g_strdup (delivery.report_uuid);
+  received_alert_delivery_filter = g_strdup ("severity>7 rows=1000");
+
+  assert_that (
+    turbovas_control_deliver_alert_report (operator_uuid, &delivery),
+    is_equal_to (0));
+  assert_that (alert_delivery_calls, is_equal_to (1));
+  assert_that (alert_delivery_audit_success_calls, is_equal_to (1));
+  assert_that (alert_delivery_audit_fail_calls, is_equal_to (0));
+  assert_that (reinit_calls, is_equal_to (1));
+  assert_that (session_init_calls, is_equal_to (1));
+  assert_that (cleanup_calls, is_equal_to (1));
+
+  g_strlcpy (delivery.filter_uuid,
+             "123e4567-e89b-12d3-a456-426614174003",
+             sizeof (delivery.filter_uuid));
+  delivery.filter = "";
+  g_free (received_alert_delivery_filter);
+  received_alert_delivery_filter = g_strdup ("first=1 rows=5");
+  received_alert_delivery_filter_uuid = g_strdup (delivery.filter_uuid);
+  alert_delivery_result = -4;
+  assert_that (
+    turbovas_control_deliver_alert_report (operator_uuid, &delivery),
+    is_equal_to (3));
+  assert_that (alert_delivery_calls, is_equal_to (2));
+  assert_that (alert_delivery_audit_fail_calls, is_equal_to (1));
+
+  alert_delivery_report_exists = FALSE;
+  g_clear_pointer (&received_alert_delivery_filter_uuid, g_free);
+  assert_that (
+    turbovas_control_deliver_alert_report (operator_uuid, &delivery),
+    is_equal_to (2));
+  assert_that (alert_delivery_calls, is_equal_to (2));
+  assert_that (alert_delivery_audit_fail_calls, is_equal_to (2));
+
+  mock_operator_name = NULL;
+  assert_that (
+    turbovas_control_deliver_alert_report (operator_uuid, &delivery),
+    is_equal_to (99));
+  assert_that (alert_delivery_calls, is_equal_to (2));
+  alert_delivery_active = FALSE;
+  g_clear_pointer (&received_alert_delivery_uuid, g_free);
+  g_clear_pointer (&received_alert_delivery_report_uuid, g_free);
+  g_clear_pointer (&received_alert_delivery_filter, g_free);
+}
+
 Ensure (turbovas_control, tests_alert_in_operator_session_audits_and_scrubs)
 {
   const char *operator_uuid = "123e4567-e89b-12d3-a456-426614174000";
@@ -5291,6 +5566,14 @@ main (int argc, char **argv)
   add_test_with_context (
     suite, turbovas_control,
     maps_alert_test_responses_without_malformed_overlap);
+  add_test_with_context (
+    suite, turbovas_control,
+    parses_strict_alert_report_delivery_frames);
+  add_test_with_context (suite, turbovas_control,
+                         maps_alert_report_delivery_responses);
+  add_test_with_context (
+    suite, turbovas_control,
+    delivers_report_in_operator_session_and_audits);
   add_test_with_context (suite, turbovas_control,
                          tests_alert_in_operator_session_audits_and_scrubs);
   add_test_with_context (

@@ -617,6 +617,7 @@ OPENAPI_ALLOWED_OWNER_SEMANTICS_VALUES = frozenset(
 OPENAPI_ALLOWED_SIDE_EFFECT_VALUES = frozenset(
     {
         "alert-delivery-control",
+        "alert-report-delivery-control",
         "alert-real-delivery-control",
         "account-auth-control",
         "credential-secret-control",
@@ -661,6 +662,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "alert-metadata-export-read",
         "alert-metadata-modify",
         "alert-clone",
+        "alert-deliver-report",
         "alert-email-smb-syslog-snmp-scp-start-task-create",
         "alert-test-actions",
         "alert-trash-move",
@@ -880,6 +882,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("patch", "/alerts/{alert_id}"): "direct-write",
     ("delete", "/alerts/{alert_id}"): "direct-write",
     ("post", "/alerts/{alert_id}/clone"): "direct-write",
+    ("post", "/alerts/{alert_id}/deliver-report"): "direct-write",
     ("post", "/alerts/{alert_id}/test"): "direct-write",
     ("get", "/cert-bund-advisories"): "direct-read",
     ("get", "/cert-bund-advisories/{cert_bund_advisory_id}"): "direct-read",
@@ -1063,6 +1066,14 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "alert-test-actions",
         "x-turbovas-safety-contract": "write-control-v1",
         "x-turbovas-side-effect": "alert-real-delivery-control",
+    },
+    ("post", "/alerts/{alert_id}/deliver-report"): {
+        "x-turbovas-maturity": "live-write",
+        "x-turbovas-operator-identity": "direct-token-operator",
+        "x-turbovas-owner-semantics": "request-operator-owner",
+        "x-turbovas-replaces": "alert-deliver-report",
+        "x-turbovas-safety-contract": "write-control-v1",
+        "x-turbovas-side-effect": "alert-report-delivery-control",
     },
     ("delete", "/alerts/{alert_id}"): {
         "x-turbovas-maturity": "live-write",
@@ -4519,7 +4530,7 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
     if relative_path == "components/gsa/src/gmp/http/http.ts":
         return "gsa-session-http-transport", "GSA still needs inherited session/transport plumbing for retained GMP workflows."
     if name == "alert.ts":
-        return "alert-delivery-and-credentials", "Alert delivery payloads, tests, credentials, and broad alert control remain inherited; native direct write-control covers name/comment metadata only."
+        return "alert-delivery-and-credentials", "Alert delivery payload mutation, credentials, and broad alert-definition editing remain inherited; native control covers retained creation, metadata, cloning, deletion, testing, and manual report delivery."
     if name in {"credential-store.ts", "scanner.ts"}:
         return "scanner-control-or-credential", "Scanner and credential surfaces remain inherited until control/secret handling is designed."
     if name == "hosts.js":
@@ -10120,6 +10131,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
                 errors.append(f"unresolved_post_exact_path:{variable}")
 
         clone_suffix = post_constants.get("clone_suffix")
+        deliver_report_suffix = post_constants.get("deliver_report_suffix")
         test_suffix = post_constants.get("test_suffix")
         restore_suffix = post_constants.get("restore_suffix")
         resources_suffix = post_constants.get("resources_suffix")
@@ -10135,6 +10147,8 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
                 templates.add(f"{prefix.rstrip('/')}/{{}}{clone_suffix}")
             if prefix_variable == "alert_prefix" and prefix and test_suffix and f"is_uuid_segment_with_suffix (id, test_suffix)" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{test_suffix}")
+            if prefix_variable == "alert_prefix" and prefix and deliver_report_suffix and f"is_uuid_segment_with_suffix (id, deliver_report_suffix)" in post_function_body:
+                templates.add(f"{prefix.rstrip('/')}/{{}}{deliver_report_suffix}")
             if prefix_variable != "alert_prefix" and prefix and restore_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{restore_suffix}")
         tag_prefix = post_constants.get("tag_prefix")
@@ -10260,6 +10274,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
                 errors.append(f"unresolved_post_exact_path:{variable}")
 
         clone_suffix = post_constants.get("clone_suffix")
+        deliver_report_suffix = post_constants.get("deliver_report_suffix")
         test_suffix = post_constants.get("test_suffix")
         restore_suffix = post_constants.get("restore_suffix")
         resources_suffix = post_constants.get("resources_suffix")
@@ -10271,6 +10286,8 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{clone_suffix}")
             if prefix_variable == "alert_prefix" and prefix and test_suffix and f"is_uuid_segment_with_suffix (id, test_suffix)" in post_function_body:
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{test_suffix}")
+            if prefix_variable == "alert_prefix" and prefix and deliver_report_suffix and f"is_uuid_segment_with_suffix (id, deliver_report_suffix)" in post_function_body:
+                operations.add(f"POST {prefix.rstrip('/')}/{{}}{deliver_report_suffix}")
             if prefix_variable != "alert_prefix" and prefix and restore_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{restore_suffix}")
         tag_prefix = post_constants.get("tag_prefix")
@@ -10738,6 +10755,18 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                     "GSA Security Information CERT-Bund advisory rich detail reads (migrated through gsad same-origin proxy)",
                     "read-only CERT-Bund advisory catalog-detail automation",
                     "native-api-request helper",
+                ],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/alerts/{alert_id}/deliver-report",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser manual report delivery", "direct native manual report delivery", "native-api-request helper"],
+                "notes": [
+                    "This sends a real report through the alert's configured delivery method.",
+                    "A Start Task alert can start its configured task; routine validation must not exercise the successful action.",
+                    "The inherited report_format_id argument is deliberately omitted because it does not affect alert dispatch.",
                 ],
             },
             {

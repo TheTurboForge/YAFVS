@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+mod alert_deliver_report;
 mod alert_payloads;
 mod alert_query_sql;
 mod alert_test;
@@ -264,6 +265,10 @@ async fn main() -> Result<(), ApiError> {
     startup::run().await
 }
 
+#[cfg(test)]
+mod alert_deliver_report_characterization_tests;
+#[cfg(test)]
+mod alert_deliver_report_tests;
 #[cfg(test)]
 mod alert_test_characterization_tests;
 #[cfg(test)]

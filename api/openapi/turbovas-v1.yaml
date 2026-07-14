@@ -2324,6 +2324,52 @@ paths:
           $ref: '#/components/responses/ServiceUnavailable'
         '500':
           $ref: '#/components/responses/InternalError'
+  /alerts/{alert_id}/deliver-report:
+    post:
+      operationId: postAlertsByAlertIdDeliverReport
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-write
+      x-turbovas-maturity: live-write
+      x-turbovas-replaces: alert-deliver-report
+      x-turbovas-operator-identity: direct-token-operator
+      x-turbovas-owner-semantics: request-operator-owner
+      x-turbovas-safety-contract: write-control-v1
+      x-turbovas-side-effect: alert-report-delivery-control
+      summary: Deliver a report through an alert
+      description: Sends a real delivery using the alert's configured delivery settings. A Start Task alert can start its configured task. The inherited report_format_id parameter is ineffective for alert dispatch and is deliberately neither accepted nor exposed. This action is available through direct bearer-token access and the authenticated same-origin browser proxy.
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertDeliverReportRequest'
+      responses:
+        '204':
+          description: Real report delivery completed
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /alerts/{alert_id}/export:
     get:
       operationId: getAlertsByAlertIdExport
@@ -10183,6 +10229,26 @@ components:
           SNMP: '#/components/schemas/AlertSnmpCreateRequest'
           SCP: '#/components/schemas/AlertScpCreateRequest'
           START_TASK: '#/components/schemas/AlertStartTaskCreateRequest'
+    AlertDeliverReportRequest:
+      type: object
+      additionalProperties: false
+      required: [report_id]
+      description: Dispatches the supplied report through the alert's configured delivery method. Exactly zero or one of filter and filter_id may be supplied. report_format_id is intentionally absent because inherited alert dispatch ignores it.
+      properties:
+        report_id:
+          type: string
+          format: uuid
+        filter:
+          type: string
+          maxLength: 4096
+          x-turbovas-max-bytes: 4096
+          description: Optional report filter text, bounded to 4096 UTF-8 bytes after normalization.
+        filter_id:
+          type: string
+          format: uuid
+      allOf:
+        - not:
+            required: [filter, filter_id]
     AlertEmailCreateRequest:
       type: object
       additionalProperties: false

@@ -228,6 +228,42 @@ const deleteNative = async (gmp: NativeApiGmp, path: string): Promise<void> => {
   }
 };
 
+export const deliverNativeAlertReport = async (
+  gmp: NativeApiGmp,
+  alertId: string,
+  reportId: string,
+  filter: string,
+): Promise<Response<unknown>> => {
+  const response = await fetch(
+    gmp.buildUrl(`api/v1/alerts/${encodeURIComponent(alertId)}/deliver-report`),
+    {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+        ...(gmp.session.jwt
+          ? {Authorization: `Bearer ${gmp.session.jwt}`}
+          : {}),
+      },
+      body: JSON.stringify({report_id: reportId, filter}),
+    },
+  );
+
+  if (!response.ok) {
+    throw await nativeAlertRequestError(response);
+  }
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    // Successful report delivery may not include a response body.
+  }
+  return new Response(payload);
+};
+
 const writeNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,

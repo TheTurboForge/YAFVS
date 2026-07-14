@@ -150,6 +150,9 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         (&Method::POST, ["", "api", "v1", "alerts", alert_id, "test"]) => {
             direct_api_write_id_segment_is_allowed(alert_id)
         }
+        (&Method::POST, ["", "api", "v1", "alerts", alert_id, "deliver-report"]) => {
+            direct_api_write_id_segment_is_allowed(alert_id)
+        }
         (&Method::POST, ["", "api", "v1", "scopes"]) => true,
         (&Method::POST, ["", "api", "v1", "scopes", scope_id, "reports"]) => {
             direct_api_write_id_segment_is_allowed(scope_id)

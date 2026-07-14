@@ -11,7 +11,6 @@ from gvm.protocols.gmp.requests.v224 import (
     AlertEvent,
     AlertMethod,
     Alerts,
-    ReportFormatType,
 )
 
 
@@ -510,70 +509,6 @@ class AlertsTestCase(unittest.TestCase):
 
         with self.assertRaises(RequiredArgument):
             Alerts.test_alert(alert_id=None)
-
-    def test_trigger_alert(self):
-        request = Alerts.trigger_alert(alert_id="a1", report_id="r1")
-
-        self.assertEqual(
-            bytes(request), b'<get_reports report_id="r1" alert_id="a1"/>'
-        )
-
-    def test_trigger_alert_with_filter_string(self):
-        request = Alerts.trigger_alert(
-            alert_id="a1", report_id="r1", filter_string="name=foo"
-        )
-
-        self.assertEqual(
-            bytes(request),
-            b'<get_reports report_id="r1" alert_id="a1" filter="name=foo"/>',
-        )
-
-    def test_trigger_alert_with_filter_id(self):
-        request = Alerts.trigger_alert(
-            alert_id="a1", report_id="r1", filter_id="f1"
-        )
-
-        self.assertEqual(
-            bytes(request),
-            b'<get_reports report_id="r1" alert_id="a1" filt_id="f1"/>',
-        )
-
-    def test_trigger_alert_with_report_format_id(self):
-        request = Alerts.trigger_alert(
-            alert_id="a1", report_id="r1", report_format_id="bar"
-        )
-
-        self.assertEqual(
-            bytes(request),
-            b'<get_reports report_id="r1" alert_id="a1" format_id="bar"/>',
-        )
-
-    def test_trigger_alert_with_report_format_type(self):
-        request = Alerts.trigger_alert(
-            alert_id="a1",
-            report_id="r1",
-            report_format_id=ReportFormatType.SVG,
-        )
-
-        self.assertEqual(
-            bytes(request),
-            '<get_reports report_id="r1" alert_id="a1" '
-            f'format_id="{ReportFormatType.SVG}"/>'.encode(),
-        )
-
-    def test_trigger_alert_missing_alert_id(self):
-        with self.assertRaises(RequiredArgument):
-            Alerts.trigger_alert(alert_id="", report_id="r1")
-
-        with self.assertRaises(RequiredArgument):
-            Alerts.trigger_alert(alert_id=None, report_id="r1")
-
-    def test_trigger_alert_missing_report_id(self):
-        with self.assertRaises(RequiredArgument):
-            Alerts.trigger_alert(alert_id="a1", report_id="")
-
-        with self.assertRaises(RequiredArgument):
-            Alerts.trigger_alert(alert_id="a1", report_id=None)
 
     def test_get_alerts(self):
         request = Alerts.get_alerts()

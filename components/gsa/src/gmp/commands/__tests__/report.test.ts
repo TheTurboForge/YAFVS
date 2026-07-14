@@ -71,4 +71,44 @@ describe('ReportCommand tests', () => {
     expect(data.id).toEqual('foo');
     expect(data.name).toEqual('Report Foo');
   });
+
+  test('should deliver a report through the native alert API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockRejectedValue(new Error('no content')),
+      ok: true,
+      status: 204,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ReportCommand(fakeHttp);
+
+    const response = await cmd.alert({
+      alert_id: 'alert/id',
+      report_id: 'report/id',
+      filter: 'first=1 rows=-1',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/alerts/alert%2Fid/deliver-report',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/alerts/alert%2Fid/deliver-report',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({
+          report_id: 'report/id',
+          filter: 'first=1 rows=-1',
+        }),
+      },
+    );
+    expect(response.data).toBeUndefined();
+  });
 });

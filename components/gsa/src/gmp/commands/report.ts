@@ -8,6 +8,7 @@ import HttpCommand from 'gmp/commands/http';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import type Filter from 'gmp/models/filter';
+import {deliverNativeAlertReport} from 'gmp/native-api/alerts';
 import {fetchNativeReport} from 'gmp/native-api/reports';
 
 interface ReportCommandAddAssetsParams {
@@ -58,12 +59,7 @@ class ReportCommand extends HttpCommand {
 
   // eslint-disable-next-line @typescript-eslint/naming-convention
   alert({alert_id, report_id, filter}: ReportCommandAlertParams) {
-    return this.httpPostWithTransform({
-      cmd: 'report_alert',
-      alert_id,
-      report_id,
-      filter,
-    });
+    return deliverNativeAlertReport(this.http, alert_id, report_id, filter);
   }
 
   async get(

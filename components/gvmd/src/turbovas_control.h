@@ -32,6 +32,9 @@
  *
  * alert-test <secret> <operator_uuid> <alert_uuid>\n
  *
+ * alert-deliver-report <secret> <operator_uuid> <alert_uuid> <report_uuid>
+ *                      <filter_b64_or_-> <filter_uuid_or_->\n
+ *
  * alert-smb-create <secret> <operator_uuid> <active:0|1> <name_b64>
  *                  <comment_b64> <status_b64> <smb_credential_uuid_b64>
  *                  <share_path_b64> <file_path_b64>

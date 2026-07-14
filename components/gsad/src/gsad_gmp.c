@@ -8201,113 +8201,6 @@ get_report_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
 }
 
 /**
- * @brief Run alert for a report.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-report_alert_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                  params_t *params, gsad_command_response_data_t *response_data)
-{
-  entity_t entity;
-  const char *alert_id, *report_id;
-  const char *status, *filter;
-  gchar *html;
-  int ret;
-
-  alert_id = params_value (params, "alert_id");
-  report_id = params_value (params, "report_id");
-
-  if ((alert_id == NULL) || (report_id == NULL))
-    {
-      gsad_command_response_data_set_status_code (response_data,
-                                                  MHD_HTTP_BAD_REQUEST);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "Missing parameter alert_id or report_id. "
-        "Diagnostics: Required parameter was NULL.",
-        response_data);
-    }
-
-  filter = params_value (params, "filter");
-
-  if (filter == NULL && !params_given (params, "filter"))
-    filter = "first=1 rows=-1"
-             "  result_hosts_only=0"
-             "  apply_overrides=1"
-             "  overrides=1"
-             "  sort-reverse=severity";
-
-  ret = gvm_connection_sendf_xml (connection,
-                                  "<get_reports"
-                                  " report_id=\"%s\""
-                                  " ignore_pagination=\"1\""
-                                  " filter=\"%s\""
-                                  " alert_id=\"%s\"/>",
-                                  report_id, filter ? filter : "", alert_id);
-  if (ret == -1)
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while getting a report. "
-        "The report could not be delivered. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    }
-
-  if (read_entity_c (connection, &entity))
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while getting a report. "
-        "The report could not be delivered. "
-        "Diagnostics: Failure to receive response from "
-        "manager daemon.",
-        response_data);
-    }
-
-  status = entity_attribute (entity, "status");
-  if ((status == NULL) || (strlen (status) == 0))
-    {
-      free_entity (entity);
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while getting a report. "
-        "The report could not be delivered. "
-        "Diagnostics: Failure to parse response from manager daemon.",
-        response_data);
-    }
-  if (strcmp (status, "200"))
-    {
-      free_entity (entity);
-      gsad_command_response_data_set_status_code (response_data,
-                                                  MHD_HTTP_BAD_REQUEST);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "Running the report alert failed."
-        "The report could not be delivered.",
-        response_data);
-    }
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Report Alert", response_data);
-
-  free_entity (entity);
-  return html;
-}
-
-/**
  * @brief Get all reports, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -13975,7 +13868,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (modify_scope)
   ELSE (move_task)
   ELSE (renew_session)
-  ELSE (report_alert)
   ELSE (restore)
   ELSE (save_alert)
   ELSE (save_asset)

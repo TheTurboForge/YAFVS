@@ -17,6 +17,7 @@
 #include "manage_filters.h"
 #include "manage_filter_utils.h"
 #include "manage_schedules.h"
+#include "manage_settings.h"
 #include "manage_sql.h"
 #include "manage_sql_alerts.h"
 #include "manage_sql_users.h"
@@ -134,6 +135,11 @@
 #define TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND_LENGTH \
   (sizeof (TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND) - 1)
 #define TURBOVAS_CONTROL_USER_PASSWORD_MAX_BYTES 4096
+#define TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND \
+  "user-setting-modify "
+#define TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND_LENGTH \
+  (sizeof (TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND) - 1)
+#define TURBOVAS_CONTROL_USER_SETTING_VALUE_MAX_BYTES 32768
 
 typedef struct
 {
@@ -268,6 +274,13 @@ typedef struct
   gchar *new_password;
 } turbovas_control_user_password_change_request_t;
 
+typedef struct
+{
+  gboolean timezone;
+  char setting_uuid[37];
+  gchar *value;
+} turbovas_control_user_setting_modify_request_t;
+
 static gboolean
 turbovas_control_decode_base64_field (const char *, size_t, size_t, gboolean,
                                       gchar **);
@@ -326,6 +339,16 @@ turbovas_control_secret_is_valid (const char *secret, size_t secret_len)
 }
 
 static void
+turbovas_control_user_setting_modify_request_clear (
+  turbovas_control_user_setting_modify_request_t *request)
+{
+  turbovas_control_secure_clear (request->setting_uuid,
+                                 sizeof (request->setting_uuid));
+  turbovas_control_secure_free (request->value);
+  memset (request, 0, sizeof (*request));
+}
+
+static void
 turbovas_control_user_password_change_request_clear (
   turbovas_control_user_password_change_request_t *request)
 {
@@ -375,6 +398,74 @@ turbovas_control_parse_user_password_change_request (
 }
 
 static gboolean
+turbovas_control_parse_user_setting_modify_request (
+  const char *request, size_t request_len, const char *expected_secret,
+  size_t expected_secret_len, char operator_uuid[37],
+  turbovas_control_user_setting_modify_request_t *setting_request)
+{
+  const char *cursor;
+  const char *end;
+  const char *kind;
+  const char *identifier;
+  const char *identifier_end;
+  const char *value;
+  size_t kind_len;
+  size_t identifier_len;
+  size_t value_len;
+  gboolean timezone;
+
+  if (!turbovas_control_parse_authenticated_prefix (
+        request, request_len, TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND,
+        TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND_LENGTH, expected_secret,
+        expected_secret_len, operator_uuid, &cursor, &end)
+      || !turbovas_control_next_field (&cursor, end, &kind, &kind_len)
+      || cursor > end)
+    return FALSE;
+
+  identifier = cursor;
+  identifier_end = memchr (identifier, ' ', (size_t) (end - identifier));
+  if (identifier_end == NULL)
+    return FALSE;
+  identifier_len = (size_t) (identifier_end - identifier);
+  value = identifier_end + 1;
+  value_len = (size_t) (end - value);
+  if (memchr (value, ' ', value_len) != NULL)
+    return FALSE;
+
+  timezone = kind_len == strlen ("timezone")
+             && memcmp (kind, "timezone", kind_len) == 0;
+  if (timezone)
+    {
+      if (identifier_len != 1 || identifier[0] != '-')
+        return FALSE;
+    }
+  else
+    {
+      if (kind_len != strlen ("id") || memcmp (kind, "id", kind_len) != 0
+          || identifier_len != 36)
+        return FALSE;
+      memcpy (setting_request->setting_uuid, identifier, identifier_len);
+      setting_request->setting_uuid[identifier_len] = '\0';
+      if (!turbovas_control_uuid_is_valid (setting_request->setting_uuid))
+        {
+          turbovas_control_user_setting_modify_request_clear (setting_request);
+          return FALSE;
+        }
+    }
+
+  if (!turbovas_control_decode_base64_field (
+        value, value_len, TURBOVAS_CONTROL_USER_SETTING_VALUE_MAX_BYTES, FALSE,
+        &setting_request->value))
+    {
+      turbovas_control_user_setting_modify_request_clear (setting_request);
+      return FALSE;
+    }
+
+  setting_request->timezone = timezone;
+  return TRUE;
+}
+
+static gboolean
 turbovas_control_text_has_allowed_controls (const gchar *text, gsize text_len,
                                              gboolean icalendar)
 {
@@ -395,6 +486,28 @@ turbovas_control_text_has_allowed_controls (const gchar *text, gsize text_len,
     }
 
   return TRUE;
+}
+
+static const char *
+turbovas_control_user_setting_modify_response (int result)
+{
+  switch (result)
+    {
+      case MODIFY_SETTING_RESULT_OK:
+        return "0 modified\n";
+      case MODIFY_SETTING_RESULT_NOT_FOUND:
+        return "1 not_found\n";
+      case MODIFY_SETTING_RESULT_SYNTAX_ERROR:
+        return "2 invalid_value\n";
+      case MODIFY_SETTING_RESULT_FEATURE_DISABLED:
+        return "3 feature_disabled\n";
+      case MODIFY_SETTING_RESULT_PERMISSION_DENIED:
+        return "99 forbidden\n";
+      case -2:
+        return "-2 malformed\n";
+      default:
+        return "-1 internal\n";
+    }
 }
 
 static const char *
@@ -2815,6 +2928,29 @@ turbovas_control_stop_task (const char *operator_uuid, const char *task_uuid)
 }
 
 static int
+turbovas_control_modify_user_setting (
+  const char *operator_uuid,
+  const turbovas_control_user_setting_modify_request_t *request)
+{
+  gchar *error_description = NULL;
+  gchar *value_64;
+  int result;
+
+  if (!turbovas_control_start_operator_session (operator_uuid))
+    return MODIFY_SETTING_RESULT_PERMISSION_DENIED;
+
+  value_64 = g_base64_encode ((const guchar *) request->value,
+                              strlen (request->value));
+  result = modify_setting (request->timezone ? NULL : request->setting_uuid,
+                           request->timezone ? "Timezone" : NULL, value_64,
+                           &error_description);
+  turbovas_control_secure_free (value_64);
+  turbovas_control_secure_free (error_description);
+  turbovas_control_finish_operator_session ();
+  return result;
+}
+
+static int
 turbovas_control_change_user_password (
   const char *operator_uuid,
   const turbovas_control_user_password_change_request_t *request)
@@ -3642,6 +3778,7 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_tag_create_request_t tag_create_request = {0};
   turbovas_control_tag_modify_request_t tag_modify_request = {0};
   turbovas_control_user_password_change_request_t password_change_request = {0};
+  turbovas_control_user_setting_modify_request_t setting_modify_request = {0};
   memset (request, 0, sizeof (request));
 
   turbovas_control_set_timeouts (client_socket);
@@ -3663,6 +3800,20 @@ turbovas_control_serve_client (int client_socket)
         && memcmp (request, TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND,
                    TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND_LENGTH) == 0)
         result_response = turbovas_control_user_password_change_response (-2);
+      else if (turbovas_control_parse_user_setting_modify_request (
+                 request, request_len, expected_secret, expected_secret_len,
+                 operator_uuid, &setting_modify_request))
+        {
+          result = turbovas_control_modify_user_setting (
+            operator_uuid, &setting_modify_request);
+          result_response =
+            turbovas_control_user_setting_modify_response (result);
+        }
+      else if (
+        request_len >= TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND_LENGTH
+        && memcmp (request, TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND,
+                   TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND_LENGTH) == 0)
+        result_response = turbovas_control_user_setting_modify_response (-2);
       else if (turbovas_control_parse_scan_config_nvt_diagnostic_request (
             request, request_len, expected_secret, expected_secret_len,
             operator_uuid, config_uuid, nvt_oid))
@@ -4009,6 +4160,7 @@ turbovas_control_serve_client (int client_socket)
   turbovas_control_tag_modify_request_clear (&tag_modify_request);
   turbovas_control_user_password_change_request_clear (
     &password_change_request);
+  turbovas_control_user_setting_modify_request_clear (&setting_modify_request);
   if (request_len <= TURBOVAS_CONTROL_MAX_REQUEST_BYTES)
     {
       turbovas_control_secure_clear (request, request_len);

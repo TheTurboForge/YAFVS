@@ -37,6 +37,55 @@
  */
 
 /**
+ * @brief Remove cached credentials for a username.
+ *
+ * Callers must invoke this inside the transaction that changes the user's
+ * authentication state.
+ *
+ * @param[in] name  Username whose cached credentials must be removed.
+ */
+static void
+invalidate_auth_cache_for_username (const gchar *name)
+{
+  if (name == NULL)
+    return;
+
+  sql_ps ("DELETE FROM auth_cache WHERE username = $1;", SQL_STR_PARAM (name),
+          NULL);
+}
+
+/**
+ * @brief Remove credentials cached under names affected by a user change.
+ *
+ * @param[in] old_name                Username before the change.
+ * @param[in] new_name                Requested username, or NULL.
+ * @param[in] authentication_changed  Whether password or method changed.
+ */
+static void
+invalidate_auth_cache_for_user_change (const gchar *old_name,
+                                       const gchar *new_name,
+                                       gboolean authentication_changed)
+{
+  if (authentication_changed == FALSE && new_name == NULL)
+    return;
+
+  invalidate_auth_cache_for_username (old_name);
+  if (new_name && g_strcmp0 (old_name, new_name) != 0)
+    invalidate_auth_cache_for_username (new_name);
+}
+
+/**
+ * @brief Return whether a password or authentication method really changed.
+ */
+static gboolean
+user_authentication_changed (const gchar *password, const gchar *old_method,
+                             const gchar *requested_method)
+{
+  return password != NULL
+         || (requested_method && g_strcmp0 (old_method, requested_method) != 0);
+}
+
+/**
  * @brief Return the name of a user.
  *
  * @param[in]  uuid  UUID of user.
@@ -457,8 +506,6 @@ current_user_change_password (const gchar *old_password,
       goto rollback;
     }
 
-  sql_ps ("DELETE FROM auth_cache WHERE username = $1;",
-          SQL_STR_PARAM (current_credentials.username), NULL);
   sql_commit ();
   result = 0;
   goto cleanup;
@@ -611,6 +658,8 @@ create_user (const gchar * name, const gchar * password, const gchar *comment,
     }
   g_free (uuid);
 
+  invalidate_auth_cache_for_username (name);
+
   sql_commit ();
   return 0;
 }
@@ -620,6 +669,7 @@ delete_user (const char *user_id_arg, const char *name_arg,
              int forbid_super_admin,
              const char* inheritor_id, const char *inheritor_name)
 {
+  gchar *deleted_name;
   user_t user, inheritor, locked_user;
 
 
@@ -727,6 +777,13 @@ delete_user (const char *user_id_arg, const char *name_arg,
       return 7;
     }
 
+  deleted_name = sql_string ("SELECT name FROM users WHERE id = %llu;", user);
+  if (deleted_name == NULL)
+    {
+      sql_rollback ();
+      return -1;
+    }
+
   if (inheritor)
     sql ("DO $$ DECLARE r record; BEGIN"
          " FOR r IN SELECT table_name FROM information_schema.columns"
@@ -753,7 +810,9 @@ delete_user (const char *user_id_arg, const char *name_arg,
   sql ("DELETE FROM tag_resources_trash"
        " WHERE resource_type = 'user' AND resource = %llu;",
        user);
+  invalidate_auth_cache_for_username (deleted_name);
   sql ("DELETE FROM users WHERE id = %llu;", user);
+  g_free (deleted_name);
 
   sql_commit ();
   return 0;
@@ -792,7 +851,7 @@ modify_user (const gchar * user_id, gchar **name, const gchar *new_name,
              const array_t * allowed_methods, gchar **r_errdesc)
 {
   char *errstr;
-  gchar *hash, *quoted_method, *uuid;
+  gchar *hash, *old_method, *old_name, *quoted_method, *uuid;
   gchar *quoted_new_name, *quoted_comment;
   user_t user;
 
@@ -845,25 +904,50 @@ modify_user (const gchar * user_id, gchar **name, const gchar *new_name,
 
   uuid = sql_string ("SELECT uuid FROM users WHERE id = %llu", user);
 
+  if (password || new_name || allowed_methods)
+    {
+      old_name = sql_string ("SELECT name FROM users WHERE id = %llu", user);
+      if (old_name == NULL)
+        {
+          sql_rollback ();
+          g_free (uuid);
+          return -1;
+        }
+    }
+  else
+    old_name = NULL;
+
+  if (allowed_methods)
+    {
+      old_method =
+        sql_string ("SELECT method FROM users WHERE id = %llu", user);
+      if (old_method == NULL)
+        {
+          sql_rollback ();
+          g_free (old_name);
+          g_free (uuid);
+          return -1;
+        }
+    }
+  else
+    old_method = NULL;
+
   if (password)
     {
-      char *user_name;
-
-      user_name = sql_string ("SELECT name FROM users WHERE id = %llu", user);
-      errstr = gvm_validate_password (password, user_name);
+      errstr = gvm_validate_password (password, old_name);
       if (errstr)
         {
-          g_warning ("new password for '%s' rejected: %s", user_name, errstr);
+          g_warning ("new password for '%s' rejected: %s", old_name, errstr);
           if (r_errdesc)
             *r_errdesc = errstr;
           else
             g_free (errstr);
           sql_rollback ();
-          g_free (user_name);
+          g_free (old_method);
+          g_free (old_name);
           g_free (uuid);
           return -1;
         }
-      g_free (user_name);
     }
 
   if (new_name)
@@ -871,6 +955,8 @@ modify_user (const gchar * user_id, gchar **name, const gchar *new_name,
       if (validate_username (new_name) != 0)
         {
           sql_rollback ();
+          g_free (old_method);
+          g_free (old_name);
           g_free (uuid);
           return 7;
         }
@@ -878,6 +964,8 @@ modify_user (const gchar * user_id, gchar **name, const gchar *new_name,
       if (strcmp (uuid, current_credentials.uuid) == 0)
         {
           sql_rollback ();
+          g_free (old_method);
+          g_free (old_name);
           g_free (uuid);
           return 99;
         }
@@ -885,6 +973,8 @@ modify_user (const gchar * user_id, gchar **name, const gchar *new_name,
       if (resource_with_name_exists_global (new_name, "user", user))
         {
           sql_rollback ();
+          g_free (old_method);
+          g_free (old_name);
           g_free (uuid);
           return 8;
         }
@@ -922,6 +1012,14 @@ modify_user (const gchar * user_id, gchar **name, const gchar *new_name,
   if (hash)
     sql ("UPDATE users SET password = '%s' WHERE id = %llu;", hash, user);
   g_free (hash);
+
+  invalidate_auth_cache_for_user_change (
+    old_name, new_name,
+    user_authentication_changed (
+      password, old_method,
+      allowed_methods ? g_ptr_array_index (allowed_methods, 0) : NULL));
+  g_free (old_method);
+  g_free (old_name);
   g_free (uuid);
 
   sql_commit ();
@@ -1103,10 +1201,17 @@ set_password (const gchar *name, const gchar *uuid, const gchar *password,
       return -1;
     }
   hash = manage_authentication_hash (password);
-  sql ("UPDATE users SET password = '%s', modification_time = m_now ()"
-       " WHERE uuid = '%s';",
-       hash,
-       uuid);
+  sql_ps_sensitive ("WITH updated_user AS ("
+                    " UPDATE users"
+                    " SET password = $1, modification_time = m_now ()"
+                    " WHERE uuid = $2"
+                    " RETURNING 1"
+                    ")"
+                    " DELETE FROM auth_cache"
+                    " WHERE username = $3"
+                    " AND EXISTS (SELECT 1 FROM updated_user);",
+                    SQL_STR_PARAM (hash), SQL_STR_PARAM (uuid),
+                    SQL_STR_PARAM (name), NULL);
   g_free (hash);
   return 0;
 }

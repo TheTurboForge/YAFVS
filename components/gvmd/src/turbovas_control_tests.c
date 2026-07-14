@@ -50,6 +50,8 @@ static gboolean diagnostic_control_changed;
 static gboolean diagnostic_control_committed;
 static int modify_schedule_calls;
 static int modify_schedule_result;
+static int modify_setting_calls;
+static modify_setting_result_t modify_setting_result;
 static int create_tag_calls;
 static int create_tag_result;
 static int modify_tag_calls;
@@ -118,6 +120,9 @@ static gchar *received_login;
 static gchar *received_name;
 static gchar *received_secret;
 static gchar *received_schedule_uuid;
+static gchar *received_setting_name;
+static gchar *received_setting_uuid;
+static gchar *received_setting_value_64;
 static gchar *received_tag_uuid;
 static gchar *received_tag_resource_type;
 static gchar *received_tag_resource_filter;
@@ -140,6 +145,27 @@ assert_trash_empty_audit_operator_session (void)
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
   assert_that (current_credentials.username, is_equal_to_string ("operator"));
   assert_that (cleanup_calls, is_equal_to (0));
+}
+
+modify_setting_result_t
+__wrap_modify_setting (const gchar *uuid, const gchar *name,
+                       const gchar *value_64, gchar **error_description)
+{
+  assert_that (current_credentials.uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (current_credentials.username, is_equal_to_string ("operator"));
+  modify_setting_calls++;
+  g_free (received_setting_uuid);
+  g_free (received_setting_name);
+  g_free (received_setting_value_64);
+  received_setting_uuid = g_strdup (uuid);
+  received_setting_name = g_strdup (name);
+  received_setting_value_64 = g_strdup (value_64);
+  if (error_description)
+    *error_description = modify_setting_result == MODIFY_SETTING_RESULT_ERROR
+                           ? g_strdup ("private setting error")
+                           : NULL;
+  return modify_setting_result;
 }
 
 void
@@ -5368,6 +5394,263 @@ Ensure (turbovas_control, dispatches_alert_test_without_sensitive_response_data)
   alert_test_script_message = NULL;
 }
 
+Ensure (turbovas_control, parses_strict_user_setting_modify_frames)
+{
+  const char *id_request =
+    "user-setting-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 id "
+    "123e4567-e89b-12d3-a456-426614174001 ZmlsdGVy\n";
+  const char *timezone_request =
+    "user-setting-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 timezone - "
+    "RXVyb3BlL0Jlcmxpbg==\n";
+  const char *empty_request =
+    "user-setting-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 id "
+    "123e4567-e89b-12d3-a456-426614174001 \n";
+  char operator_uuid[37];
+  turbovas_control_user_setting_modify_request_t setting = {0};
+
+  assert_that (turbovas_control_parse_user_setting_modify_request (
+                 id_request, strlen (id_request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &setting),
+               is_true);
+  assert_that (operator_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
+  assert_that (setting.timezone, is_false);
+  assert_that (setting.setting_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
+  assert_that (setting.value, is_equal_to_string ("filter"));
+  turbovas_control_user_setting_modify_request_clear (&setting);
+
+  assert_that (turbovas_control_parse_user_setting_modify_request (
+                 timezone_request, strlen (timezone_request),
+                 TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                 operator_uuid, &setting),
+               is_true);
+  assert_that (setting.timezone, is_true);
+  assert_that (setting.setting_uuid, is_equal_to_string (""));
+  assert_that (setting.value, is_equal_to_string ("Europe/Berlin"));
+  turbovas_control_user_setting_modify_request_clear (&setting);
+
+  assert_that (turbovas_control_parse_user_setting_modify_request (
+                 empty_request, strlen (empty_request), TEST_CONTROL_SECRET,
+                 strlen (TEST_CONTROL_SECRET), operator_uuid, &setting),
+               is_true);
+  assert_that (setting.value, is_equal_to_string (""));
+  turbovas_control_user_setting_modify_request_clear (&setting);
+}
+
+Ensure (turbovas_control, rejects_malformed_user_setting_modify_frames)
+{
+  const char *invalid[] = {
+    "user-setting-modify wrongsecretwrongsecretwrongsecret12 "
+    "123e4567-e89b-12d3-a456-426614174000 id "
+    "123e4567-e89b-12d3-a456-426614174001 Zg==\n",
+    "user-setting-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 Password - Zg==\n",
+    "user-setting-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 other - Zg==\n",
+    "user-setting-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 timezone "
+    "123e4567-e89b-12d3-a456-426614174001 Zg==\n",
+    "user-setting-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 id - Zg==\n",
+    "user-setting-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 id "
+    "123e4567-e89b-12d3-a456-42661417400z Zg==\n",
+    "user-setting-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 id "
+    "123e4567-e89b-12d3-a456-426614174001 Zh==\n",
+    "user-setting-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 id "
+    "123e4567-e89b-12d3-a456-426614174001 Zg== extra\n",
+    "user-setting-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 id "
+    "123e4567-e89b-12d3-a456-426614174001\n",
+  };
+  char operator_uuid[37];
+  turbovas_control_user_setting_modify_request_t setting = {0};
+  guchar *oversized_value;
+  gchar *oversized_64;
+  gchar *oversized_request;
+  size_t index;
+
+  for (index = 0; index < G_N_ELEMENTS (invalid); index++)
+    assert_that (turbovas_control_parse_user_setting_modify_request (
+                   invalid[index], strlen (invalid[index]),
+                   TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                   operator_uuid, &setting),
+                 is_false);
+
+  oversized_value = g_malloc (TURBOVAS_CONTROL_USER_SETTING_VALUE_MAX_BYTES
+                              + 1);
+  memset (oversized_value, 'x',
+          TURBOVAS_CONTROL_USER_SETTING_VALUE_MAX_BYTES + 1);
+  oversized_64 = g_base64_encode (
+    oversized_value, TURBOVAS_CONTROL_USER_SETTING_VALUE_MAX_BYTES + 1);
+  oversized_request = g_strdup_printf (
+    "user-setting-modify %s 123e4567-e89b-12d3-a456-426614174000 id "
+    "123e4567-e89b-12d3-a456-426614174001 %s\n",
+    TEST_CONTROL_SECRET, oversized_64);
+  assert_that (turbovas_control_parse_user_setting_modify_request (
+                 oversized_request, strlen (oversized_request),
+                 TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
+                 operator_uuid, &setting),
+               is_false);
+  turbovas_control_secure_clear (oversized_value,
+                                 TURBOVAS_CONTROL_USER_SETTING_VALUE_MAX_BYTES
+                                   + 1);
+  g_free (oversized_value);
+  turbovas_control_secure_free (oversized_64);
+  turbovas_control_secure_free (oversized_request);
+}
+
+Ensure (turbovas_control, maps_user_setting_modify_responses)
+{
+  assert_that (turbovas_control_user_setting_modify_response (
+                 MODIFY_SETTING_RESULT_OK),
+               is_equal_to_string ("0 modified\n"));
+  assert_that (turbovas_control_user_setting_modify_response (
+                 MODIFY_SETTING_RESULT_NOT_FOUND),
+               is_equal_to_string ("1 not_found\n"));
+  assert_that (turbovas_control_user_setting_modify_response (
+                 MODIFY_SETTING_RESULT_SYNTAX_ERROR),
+               is_equal_to_string ("2 invalid_value\n"));
+  assert_that (turbovas_control_user_setting_modify_response (
+                 MODIFY_SETTING_RESULT_FEATURE_DISABLED),
+               is_equal_to_string ("3 feature_disabled\n"));
+  assert_that (turbovas_control_user_setting_modify_response (
+                 MODIFY_SETTING_RESULT_PERMISSION_DENIED),
+               is_equal_to_string ("99 forbidden\n"));
+  assert_that (turbovas_control_user_setting_modify_response (-2),
+               is_equal_to_string ("-2 malformed\n"));
+  assert_that (turbovas_control_user_setting_modify_response (
+                 MODIFY_SETTING_RESULT_ERROR),
+               is_equal_to_string ("-1 internal\n"));
+  assert_that (turbovas_control_user_setting_modify_response (55),
+               is_equal_to_string ("-1 internal\n"));
+}
+
+Ensure (turbovas_control, modifies_user_settings_in_operator_session)
+{
+  turbovas_control_user_setting_modify_request_t request = {
+    .timezone = FALSE,
+    .setting_uuid = "123e4567-e89b-12d3-a456-426614174001",
+    .value = "filter",
+  };
+
+  cleanup_calls = 0;
+  reinit_calls = 0;
+  session_init_calls = 0;
+  modify_setting_calls = 0;
+  modify_setting_result = MODIFY_SETTING_RESULT_OK;
+  mock_operator_name = "operator";
+
+  assert_that (turbovas_control_modify_user_setting (
+                 "123e4567-e89b-12d3-a456-426614174000", &request),
+               is_equal_to (MODIFY_SETTING_RESULT_OK));
+  assert_that (modify_setting_calls, is_equal_to (1));
+  assert_that (received_setting_uuid,
+               is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
+  assert_that (received_setting_name, is_null);
+  assert_that (received_setting_value_64, is_equal_to_string ("ZmlsdGVy"));
+  assert_that (reinit_calls, is_equal_to (1));
+  assert_that (session_init_calls, is_equal_to (1));
+  assert_that (cleanup_calls, is_equal_to (1));
+  assert_that (current_credentials.uuid, is_null);
+  assert_that (current_credentials.username, is_null);
+
+  request.timezone = TRUE;
+  request.setting_uuid[0] = '\0';
+  request.value = "Europe/Berlin";
+  modify_setting_result = MODIFY_SETTING_RESULT_SYNTAX_ERROR;
+  assert_that (turbovas_control_modify_user_setting (
+                 "123e4567-e89b-12d3-a456-426614174000", &request),
+               is_equal_to (MODIFY_SETTING_RESULT_SYNTAX_ERROR));
+  assert_that (modify_setting_calls, is_equal_to (2));
+  assert_that (received_setting_uuid, is_null);
+  assert_that (received_setting_name, is_equal_to_string ("Timezone"));
+  assert_that (received_setting_value_64,
+               is_equal_to_string ("RXVyb3BlL0Jlcmxpbg=="));
+  assert_that (cleanup_calls, is_equal_to (2));
+
+  mock_operator_name = NULL;
+  assert_that (turbovas_control_modify_user_setting (
+                 "123e4567-e89b-12d3-a456-426614174000", &request),
+               is_equal_to (MODIFY_SETTING_RESULT_PERMISSION_DENIED));
+  assert_that (modify_setting_calls, is_equal_to (2));
+  assert_that (cleanup_calls, is_equal_to (3));
+}
+
+Ensure (turbovas_control, dispatches_user_setting_results_and_rejects_bad_frames)
+{
+  static const struct
+  {
+    modify_setting_result_t result;
+    const char *response;
+  } cases[] = {
+    {MODIFY_SETTING_RESULT_OK, "0 modified\n"},
+    {MODIFY_SETTING_RESULT_NOT_FOUND, "1 not_found\n"},
+    {MODIFY_SETTING_RESULT_SYNTAX_ERROR, "2 invalid_value\n"},
+    {MODIFY_SETTING_RESULT_FEATURE_DISABLED, "3 feature_disabled\n"},
+    {MODIFY_SETTING_RESULT_PERMISSION_DENIED, "99 forbidden\n"},
+    {MODIFY_SETTING_RESULT_ERROR, "-1 internal\n"},
+  };
+  const char *request =
+    "user-setting-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 id "
+    "123e4567-e89b-12d3-a456-426614174001 ZmlsdGVy\n";
+  const char *malformed =
+    "user-setting-modify " TEST_CONTROL_SECRET " "
+    "123e4567-e89b-12d3-a456-426614174000 Password - c2VjcmV0\n";
+  size_t index;
+
+  modify_setting_calls = 0;
+  mock_operator_name = "operator";
+  assert_that (
+    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+  for (index = 0; index < G_N_ELEMENTS (cases); index++)
+    {
+      char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+      ssize_t response_len;
+
+      modify_setting_result = cases[index].result;
+      response_len = dispatch_trash_empty_request (request, response);
+      assert_that (response_len,
+                   is_equal_to ((ssize_t) strlen (cases[index].response)));
+      response[response_len] = '\0';
+      assert_that (response, is_equal_to_string (cases[index].response));
+      assert_that (strstr (response, "filter"), is_null);
+      assert_that (strstr (response, "private setting error"), is_null);
+    }
+  assert_that (modify_setting_calls,
+               is_equal_to ((int) G_N_ELEMENTS (cases)));
+
+  {
+    char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+    ssize_t response_len = dispatch_trash_empty_request (malformed, response);
+    response[response_len] = '\0';
+    assert_that (response, is_equal_to_string ("-2 malformed\n"));
+    assert_that (modify_setting_calls,
+                 is_equal_to ((int) G_N_ELEMENTS (cases)));
+  }
+
+  mock_operator_name = NULL;
+  {
+    char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+    ssize_t response_len = dispatch_trash_empty_request (request, response);
+    response[response_len] = '\0';
+    assert_that (response, is_equal_to_string ("99 forbidden\n"));
+    assert_that (modify_setting_calls,
+                 is_equal_to ((int) G_N_ELEMENTS (cases)));
+  }
+  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_clear_pointer (&received_setting_uuid, g_free);
+  g_clear_pointer (&received_setting_name, g_free);
+  g_clear_pointer (&received_setting_value_64, g_free);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -5375,6 +5658,18 @@ main (int argc, char **argv)
   TestSuite *suite;
 
   suite = create_test_suite ();
+
+  add_test_with_context (suite, turbovas_control,
+                         parses_strict_user_setting_modify_frames);
+  add_test_with_context (suite, turbovas_control,
+                         rejects_malformed_user_setting_modify_frames);
+  add_test_with_context (suite, turbovas_control,
+                         maps_user_setting_modify_responses);
+  add_test_with_context (suite, turbovas_control,
+                         modifies_user_settings_in_operator_session);
+  add_test_with_context (
+    suite, turbovas_control,
+    dispatches_user_setting_results_and_rejects_bad_frames);
 
   add_test_with_context (suite, turbovas_control,
                          accepts_exact_authenticated_stop_request);

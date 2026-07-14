@@ -91,12 +91,8 @@ const REPORT_COMPOSER_DEFAULTS_SETTING_ID =
 const nativeApiHeaders = (http: Http, withJsonBody = false) => ({
   Accept: 'application/json',
   ...(withJsonBody ? {'Content-Type': 'application/json'} : {}),
-  ...(http.session.token
-    ? {'X-TurboVAS-Token': http.session.token}
-    : {}),
-  ...(http.session.jwt
-    ? {Authorization: `Bearer ${http.session.jwt}`}
-    : {}),
+  ...(http.session.token ? {'X-TurboVAS-Token': http.session.token} : {}),
+  ...(http.session.jwt ? {Authorization: `Bearer ${http.session.jwt}`} : {}),
 });
 
 interface NativeSettingPayload {
@@ -119,15 +115,16 @@ const nativeSettingToModel = (setting: NativeSettingPayload) =>
   });
 
 const fetchNativeJson = async <T>(http: Http, path: string): Promise<T> => {
-  const response = await fetch(http.buildUrl(path), {
-    method: 'GET',
-    credentials: 'include',
-    headers: nativeApiHeaders(http),
-  });
+  const response = await fetch(
+    http.buildUrl(path, {token: http.session.token}),
+    {
+      method: 'GET',
+      credentials: 'include',
+      headers: nativeApiHeaders(http),
+    },
+  );
   if (!response.ok) {
-    throw new Error(
-      `Native API request failed with status ${response.status}`,
-    );
+    throw new Error(`Native API request failed with status ${response.status}`);
   }
   return (await response.json()) as T;
 };
@@ -144,9 +141,7 @@ const putNativeSetting = async (
     body: JSON.stringify({value}),
   });
   if (!response.ok) {
-    throw new Error(
-      `Native API request failed with status ${response.status}`,
-    );
+    throw new Error(`Native API request failed with status ${response.status}`);
   }
   return new Response(undefined);
 };

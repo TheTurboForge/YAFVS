@@ -23,9 +23,10 @@ const createNativeHttp = (response?: Parameters<typeof createHttp>[0]) => {
     buildUrl: ReturnType<typeof testing.fn>;
     session: ReturnType<typeof createSession>;
   };
-  fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
-  );
+  fakeHttp.buildUrl = testing.fn((path: string, params?: {token?: string}) => {
+    const query = params?.token ? `?token=${params.token}` : '';
+    return `https://turbovas.example/${path}${query}`;
+  });
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
   fakeHttp.session.jwt = 'jwt-token';
@@ -109,10 +110,7 @@ describe('UserCommand tests', () => {
     const renewed = await cmd.renewSession();
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
-      1,
-      'api/v1/session/ping',
-    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/session/ping');
     expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
       2,
       'api/v1/session/renew',
@@ -165,6 +163,7 @@ describe('UserCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
       'api/v1/users/current/settings/123',
+      {token: 'test-token'},
     );
     expect(data).toBeDefined();
     expect(data?.id).toEqual('123');
@@ -208,6 +207,19 @@ describe('UserCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(settings.rowsperpage.value).toEqual('42');
     expect(settings.preferredlanguage.value).toEqual('en');
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      'https://turbovas.example/api/v1/users/current/settings?token=test-token',
+      {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-TurboVAS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       'https://turbovas.example/api/v1/users/current/settings/rows',

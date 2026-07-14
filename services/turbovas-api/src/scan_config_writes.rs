@@ -24,9 +24,9 @@ use crate::{
     scan_config_write_validation::{
         DiagnosticNvtSelectionRequest, ScanConfigCloneRequest, ScanConfigCreateRequest,
         ScanConfigFamilyNvtsPatchRequest, ScanConfigPatchRequest,
-        validate_diagnostic_nvt_selection_request, validate_scan_config_clone_request,
-        validate_scan_config_create_request, validate_scan_config_family_nvts_patch_request,
-        validate_scan_config_patch_request,
+        ensure_scan_config_family_selection_is_complete, validate_diagnostic_nvt_selection_request,
+        validate_scan_config_clone_request, validate_scan_config_create_request,
+        validate_scan_config_family_nvts_patch_request, validate_scan_config_patch_request,
     },
     scan_configs::load_scan_config_asset_detail,
 };
@@ -396,25 +396,42 @@ pub(crate) async fn patch_scan_config(
     State(state): State<AppState>,
     Path(scan_config_id): Path<String>,
     operator: Option<Extension<DirectApiOperator>>,
-    Json(request): Json<ScanConfigPatchRequest>,
+    payload: Result<Json<ScanConfigPatchRequest>, JsonRejection>,
 ) -> Result<Json<ScanConfigAssetDetail>, ApiError> {
     let operator = require_scan_config_write_operator(operator)?;
+    let request = parse_scan_config_patch_payload(payload)?;
     let request = validate_scan_config_patch_request(request)?;
     let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let tx = client.transaction().await.map_err(|error| {
         map_scan_config_write_db_error(error, "begin patch scan-config transaction")
     })?;
     let operator_owner_id = resolve_scan_config_write_operator_owner(&tx, &operator).await?;
-    tx.batch_execute("LOCK TABLE configs, configs_trash IN SHARE ROW EXCLUSIVE MODE;")
-        .await
-        .map_err(|error| {
-            map_scan_config_write_db_error(error, "lock scan-config tables for patch")
-        })?;
+    let lock_sql = if request.family_selection.is_some() {
+        "LOCK TABLE configs, configs_trash, nvt_selectors, tasks, nvts IN SHARE ROW EXCLUSIVE MODE;"
+    } else {
+        "LOCK TABLE configs, configs_trash IN SHARE ROW EXCLUSIVE MODE;"
+    };
+    tx.batch_execute(lock_sql).await.map_err(|error| {
+        map_scan_config_write_db_error(error, "lock scan-config tables for patch")
+    })?;
     let config_state = load_scan_config_write_state(&tx, &scan_config_id).await?;
     ensure_scan_config_owner_matches_operator(config_state.owner_id, operator_owner_id)?;
     ensure_scan_config_not_predefined(&config_state)?;
     if let Some(name) = request.name.as_ref() {
         ensure_unique_scan_config_name(&tx, name, config_state.internal_id).await?;
+    }
+    if let Some(family_selection) = request.family_selection.as_ref() {
+        ensure_scan_config_not_referenced_by_any_task(&tx, config_state.internal_id).await?;
+        ensure_scan_config_selector_is_private(&tx, &config_state).await?;
+        let known_families = load_scan_config_known_family_names(&tx).await?;
+        ensure_scan_config_family_selection_is_complete(family_selection, &known_families)?;
+        execute_scan_config_family_selection_transaction(
+            &tx,
+            config_state.internal_id,
+            &config_state.nvt_selector,
+            family_selection,
+        )
+        .await?;
     }
     let record =
         execute_scan_config_metadata_patch_transaction(&tx, config_state.internal_id, &request)
@@ -425,4 +442,14 @@ pub(crate) async fn patch_scan_config(
     Ok(Json(
         load_scan_config_asset_detail(&client, &record.uuid).await?,
     ))
+}
+
+pub(crate) fn parse_scan_config_patch_payload(
+    payload: Result<Json<ScanConfigPatchRequest>, JsonRejection>,
+) -> Result<ScanConfigPatchRequest, ApiError> {
+    payload.map(|Json(request)| request).map_err(|_| {
+        ApiError::BadRequest(
+            "request body must be application/json matching ScanConfigPatchRequest".to_string(),
+        )
+    })
 }

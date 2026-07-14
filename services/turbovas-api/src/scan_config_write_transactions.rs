@@ -12,7 +12,7 @@ use crate::{
     scan_config_write_sql::*,
     scan_config_write_validation::{
         ValidatedScanConfigClone, ValidatedScanConfigCreate, ValidatedScanConfigFamilyNvtsPatch,
-        ValidatedScanConfigPatch,
+        ValidatedScanConfigFamilySelection, ValidatedScanConfigPatch,
     },
 };
 
@@ -60,6 +60,52 @@ pub(crate) async fn execute_scan_config_create_from_base_transaction(
     )
     .await?;
     Ok(record)
+}
+
+pub(crate) async fn execute_scan_config_family_selection_transaction(
+    tx: &Transaction<'_>,
+    scan_config_internal_id: i32,
+    nvt_selector: &str,
+    request: &ValidatedScanConfigFamilySelection,
+) -> Result<(), ApiError> {
+    let family_names = request
+        .families
+        .iter()
+        .map(|family| family.name.clone())
+        .collect::<Vec<_>>();
+    let family_growing = request
+        .families
+        .iter()
+        .map(|family| family.growing)
+        .collect::<Vec<_>>();
+    let family_selected = request
+        .families
+        .iter()
+        .map(|family| family.selected)
+        .collect::<Vec<_>>();
+    let families_growing = i32::from(request.families_growing);
+
+    execute_scan_config_write_sql(
+        tx,
+        scan_config_replace_family_selection_sql(),
+        &[
+            &scan_config_internal_id,
+            &nvt_selector,
+            &families_growing,
+            &family_names,
+            &family_growing,
+            &family_selected,
+        ],
+        "replace scan-config family selection",
+    )
+    .await?;
+    execute_scan_config_write_sql(
+        tx,
+        scan_config_recalculate_family_nvt_caches_sql(),
+        &[&scan_config_internal_id],
+        "recalculate scan-config family selection caches",
+    )
+    .await
 }
 
 pub(crate) async fn execute_scan_config_family_nvts_patch_transaction(

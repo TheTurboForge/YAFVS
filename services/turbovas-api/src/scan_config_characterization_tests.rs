@@ -448,7 +448,7 @@ fn native_direct_api_allows_scan_config_write_control_paths() {
     assert!(detail.contains("delete:"));
     assert!(!detail.contains("\n  post:"));
     assert!(detail.contains("x-turbovas-exposure: direct-write"));
-    assert!(detail.contains("x-turbovas-replaces: scan-config-metadata-modify"));
+    assert!(detail.contains("x-turbovas-replaces: scan-config-family-mode-mutation"));
     assert!(detail.contains("x-turbovas-replaces: scan-config-trash-move"));
     assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
     assert!(!detail.contains(
@@ -496,6 +496,7 @@ fn native_scan_config_family_query_is_family_context_only() {
         "coalesce(c.families_growing, 0)::integer AS families_growing",
         "FROM nvts n",
         "FROM nvt_selectors ns",
+        "n.family != 'Credentials'",
         "ORDER BY lower(name), name",
         "SELECT EXISTS (SELECT 1 FROM configs",
     ] {
@@ -504,6 +505,8 @@ fn native_scan_config_family_query_is_family_context_only() {
             "scan-config family SQL missing {required}"
         );
     }
+    assert!(!list_sql.contains("all_mode_families"));
+    assert!(!list_sql.contains("static_mode_families"));
 
     let combined_lower = combined.to_ascii_lowercase();
     for forbidden in ["insert ", "update ", "delete ", "grant ", "drop "] {
@@ -848,7 +851,7 @@ fn native_scan_config_family_nvt_routes_and_openapi_are_read_and_guarded_write()
         "x-turbovas-replaces: scan-config-detail-info-tags-task-backlinks-and-preferences-read"
     ));
     assert!(detail.contains(
-        "x-turbovas-inherited-still-owns: scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create"
+        "x-turbovas-inherited-still-owns: scan-config-preference-mutations-import-xml-export-and-blank-create"
     ));
 
     let path = openapi_path_block("/scan-configs/{scan_config_id}/families/{family}/nvts");

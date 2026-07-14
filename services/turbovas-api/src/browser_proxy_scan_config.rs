@@ -100,14 +100,14 @@ pub(crate) async fn browser_proxy_patch_scan_config(
     Extension(auth): Extension<BrowserProxyAuth>,
     Path(scan_config_id): Path<String>,
     headers: HeaderMap,
-    Json(request): Json<ScanConfigPatchRequest>,
+    payload: Result<Json<ScanConfigPatchRequest>, JsonRejection>,
 ) -> Result<Json<ScanConfigAssetDetail>, ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     patch_scan_config(
         State(state),
         Path(scan_config_id),
         Some(Extension(operator)),
-        Json(request),
+        payload,
     )
     .await
 }

@@ -166,11 +166,21 @@ export interface NativeScanConfigFamilyNvtsPatchRequest {
   changes: NativeScanConfigFamilyNvtChange[];
 }
 
-export const MAX_SCAN_CONFIG_FAMILY_NVT_SELECTION_CHANGES = 1024;
-
 export interface NativeScanConfigPatchRequest {
   name?: string;
   comment?: string;
+  family_selection?: NativeScanConfigFamilySelection;
+}
+
+export interface NativeScanConfigFamilySelection {
+  families_growing: boolean;
+  families: NativeScanConfigFamilySelectionItem[];
+}
+
+export interface NativeScanConfigFamilySelectionItem {
+  name: string;
+  growing: boolean;
+  selected: boolean;
 }
 
 export interface NativeScanConfigCloneRequest {
@@ -183,6 +193,8 @@ export interface NativeScanConfigCreateRequest {
   name: string;
   comment?: string;
 }
+
+export const MAX_SCAN_CONFIG_FAMILY_NVT_SELECTION_CHANGES = 1024;
 
 const SCAN_CONFIG_SORT_FIELDS: Record<string, string> = {
   name: 'name',

@@ -156,38 +156,12 @@ pub(crate) fn scan_config_families_sql() -> &'static str {
                AND coalesce(c.usage_type, 'scan') = 'scan'
              LIMIT 1
         ),
-        all_mode_families AS (
+        family_rows AS (
             SELECT DISTINCT n.family
               FROM nvts n
-              JOIN config_row c ON c.families_growing <> 0
-             WHERE n.family != 'Credentials'
-            EXCEPT
-            SELECT DISTINCT ns.family
-              FROM nvt_selectors ns
-              JOIN config_row c ON c.families_growing <> 0
-             WHERE ns.name = c.nvt_selector
-               AND ns.type = 1
-               AND ns.exclude = 1
-            UNION
-            SELECT DISTINCT ns.family
-              FROM nvt_selectors ns
-              JOIN config_row c ON c.families_growing <> 0
-             WHERE ns.name = c.nvt_selector
-               AND ns.type = 2
-               AND ns.exclude = 0
-        ),
-        static_mode_families AS (
-            SELECT DISTINCT ns.family
-              FROM nvt_selectors ns
-              JOIN config_row c ON c.families_growing = 0
-             WHERE ns.name = c.nvt_selector
-               AND ns.type IN (1, 2)
-               AND ns.family != 'Credentials'
-        ),
-        family_rows AS (
-            SELECT family FROM all_mode_families
-            UNION
-            SELECT family FROM static_mode_families
+             WHERE n.family IS NOT NULL
+               AND n.family != ''
+               AND n.family != 'Credentials'
         ),
         family_state AS (
             SELECT c.scan_config_id,

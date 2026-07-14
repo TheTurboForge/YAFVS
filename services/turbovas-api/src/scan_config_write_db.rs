@@ -7,12 +7,22 @@ use tokio_postgres::{Transaction, types::ToSql};
 
 use crate::{
     auth::DirectApiOperator, errors::ApiError, path_ids::parse_uuid, scan_config_write_sql::*,
+    scan_config_write_validation::WHOLE_ONLY_SCAN_CONFIG_FAMILIES,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ScanConfigWriteRecord {
     pub(crate) internal_id: i32,
     pub(crate) uuid: String,
+}
+
+pub(crate) async fn load_scan_config_known_family_names(
+    tx: &Transaction<'_>,
+) -> Result<Vec<String>, ApiError> {
+    tx.query(scan_config_known_family_names_sql(), &[])
+        .await
+        .map_err(|error| map_scan_config_write_db_error(error, "load scan-config family inventory"))
+        .map(|rows| rows.into_iter().map(|row| row.get(0)).collect())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -156,36 +166,7 @@ pub(crate) async fn ensure_scan_config_family_nvt_change_oids_exist(
 }
 
 pub(crate) fn ensure_scan_config_family_is_not_whole_only(family: &str) -> Result<(), ApiError> {
-    const WHOLE_ONLY_FAMILIES: &[&str] = &[
-        "AIX Local Security Checks",
-        "AlmaLinux Local Security Checks",
-        "Amazon Linux Local Security Checks",
-        "Arch Linux Local Security Checks",
-        "CentOS Local Security Checks",
-        "Debian Local Security Checks",
-        "Fedora Local Security Checks",
-        "FreeBSD Local Security Checks",
-        "Gentoo Local Security Checks",
-        "HCE Local Security Checks",
-        "HP-UX Local Security Checks",
-        "Huawei EulerOS Local Security Checks",
-        "Mageia Linux Local Security Checks",
-        "Mandrake Local Security Checks",
-        "openEuler Local Security Checks",
-        "openSUSE Local Security Checks",
-        "Oracle Linux Local Security Checks",
-        "Red Hat Local Security Checks",
-        "Rocky Linux Local Security Checks",
-        "Slackware Local Security Checks",
-        "Solaris Local Security Checks",
-        "SuSE Local Security Checks",
-        "Ubuntu Local Security Checks",
-        "VMware Local Security Checks",
-        "Windows : Microsoft Bulletins",
-        "Windows Local Security Checks",
-    ];
-
-    if WHOLE_ONLY_FAMILIES.contains(&family) {
+    if WHOLE_ONLY_SCAN_CONFIG_FAMILIES.contains(&family) {
         Err(ApiError::Conflict(
             "the selected NVT family only supports whole-family selection".to_string(),
         ))

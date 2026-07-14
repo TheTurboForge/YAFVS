@@ -753,6 +753,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "scan-config-clone",
         "scan-config-diagnostic-nvt-selection",
         "scan-config-family-nvt-selection-mutation",
+        "scan-config-family-mode-mutation",
         "scan-config-create-from-base",
         "scan-config-detail-info-tags-task-backlinks-and-preferences-read",
         "scan-config-family-nvt-selection-read",
@@ -760,7 +761,6 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "scan-config-hard-delete",
         "scan-config-metadata-export-read",
         "scan-config-metadata-list-read",
-        "scan-config-metadata-modify",
         "scan-config-restore",
         "scan-config-trash-move",
         "scanner-metadata-detail-info-tags-and-task-backlink-read",
@@ -857,7 +857,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "report-format-file-import-export-verify-param-writes-and-deletes",
         "retention-mutations",
         "saved-filter-alert-linkage",
-        "scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create",
+        "scan-config-preference-mutations-import-xml-export-and-blank-create",
         "schedule-calendar-edit-and-task-recalculation",
         "remote-scanner-tls-relay-verification",
         "target-file-input-task-control-and-credential-secret-workflows",
@@ -1573,7 +1573,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scan-config-create-from-base",
     },
     ("get", "/scan-configs/{scan_config_id}"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create",
+        "x-turbovas-inherited-still-owns": "scan-config-preference-mutations-import-xml-export-and-blank-create",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-detail-info-tags-task-backlinks-and-preferences-read",
     },
@@ -1583,7 +1583,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     },
     ("patch", "/scan-configs/{scan_config_id}"): {
         "x-turbovas-maturity": "live-write",
-        "x-turbovas-replaces": "scan-config-metadata-modify",
+        "x-turbovas-replaces": "scan-config-family-mode-mutation",
     },
     ("delete", "/scan-configs/{scan_config_id}"): {
         "x-turbovas-maturity": "live-write",
@@ -1602,12 +1602,12 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scan-config-hard-delete",
     },
     ("get", "/scan-configs/{scan_config_id}/families"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create",
+        "x-turbovas-inherited-still-owns": "scan-config-preference-mutations-import-xml-export-and-blank-create",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-family-summary-read",
     },
     ("get", "/scan-configs/{scan_config_id}/families/{family}/nvts"): {
-        "x-turbovas-inherited-still-owns": "scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create",
+        "x-turbovas-inherited-still-owns": "scan-config-preference-mutations-import-xml-export-and-blank-create",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-family-nvt-selection-read",
     },
@@ -20501,6 +20501,13 @@ def direct_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
             "native-api-direct.scan-config-predefined-delete-denied",
             "native-api-direct.scan-config-write-create",
             "native-api-direct.scan-config-write-update",
+            "native-api-direct.scan-config-family-mode-fixture",
+            "native-api-direct.scan-config-family-mode-malformed-json-denied",
+            "native-api-direct.scan-config-family-mode-stale-denied",
+            "native-api-direct.scan-config-family-mode-toggle",
+            "native-api-direct.scan-config-family-mode-toggle-readback",
+            "native-api-direct.scan-config-family-mode-restore",
+            "native-api-direct.scan-config-family-mode-restore-readback",
             "native-api-direct.scan-config-family-nvt-fixture",
             "native-api-direct.scan-config-family-nvt-malformed-json-denied",
             "native-api-direct.scan-config-family-nvt-toggle",
@@ -22020,6 +22027,89 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
             scan_config_patch_json, scan_config_patch_status = parse_json_output_with_http_status(scan_config_patch)
             scan_config_patch_ok = scan_config_patch.returncode == 0 and scan_config_patch_status == 200 and isinstance(scan_config_patch_json, dict) and scan_config_patch_json.get("id") == scan_config_id and scan_config_patch_json.get("comment") == scan_config_patch_comment
             findings.append(native_api_probe_finding("pass" if scan_config_patch_ok else "fail", "native-api-direct.scan-config-write-update", "Direct write-control patched temporary scan-config comment metadata." if scan_config_patch_ok else "Direct write-control failed to patch temporary scan-config comment metadata.", scan_config_patch, direct_native_api_display_command(f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}", token=token, env=env, method="PATCH", body=scan_config_patch_body, extra_headers=content_type), scan_config_patch_json, {"http_status": scan_config_patch_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_patch_json)}))
+
+            scan_config_families_path = f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}/families"
+            scan_config_families_before = direct_native_api_curl(repo_root, scan_config_families_path, token=token, env=env)
+            scan_config_families_before_json, scan_config_families_before_status = parse_json_output_with_http_status(scan_config_families_before)
+            scan_config_families_before_items = scan_config_families_before_json.get("families") if isinstance(scan_config_families_before_json, dict) else None
+            scan_config_families_before_normalized = [
+                {
+                    "name": item.get("name"),
+                    "growing": bool(item.get("growing")),
+                    "selected": item.get("nvt_count") == item.get("max_nvt_count"),
+                    "nvt_count": item.get("nvt_count"),
+                    "max_nvt_count": item.get("max_nvt_count"),
+                }
+                for item in scan_config_families_before_items
+                if isinstance(item, dict)
+                and isinstance(item.get("name"), str)
+                and isinstance(item.get("growing"), int)
+                and isinstance(item.get("nvt_count"), int)
+                and isinstance(item.get("max_nvt_count"), int)
+            ] if isinstance(scan_config_families_before_items, list) else []
+            scan_config_port_family_before = next((item for item in scan_config_families_before_normalized if item["name"] == "Port scanners"), None)
+            scan_config_family_mode_fixture_ok = (
+                scan_config_families_before.returncode == 0
+                and scan_config_families_before_status == 200
+                and isinstance(scan_config_families_before_items, list)
+                and len(scan_config_families_before_normalized) == len(scan_config_families_before_items)
+                and len(scan_config_families_before_normalized) > 1
+                and isinstance(scan_config_families_before_json.get("families_growing"), int)
+                and isinstance(scan_config_port_family_before, dict)
+            )
+            findings.append(native_api_probe_finding("pass" if scan_config_family_mode_fixture_ok else "fail", "native-api-direct.scan-config-family-mode-fixture", "Direct write-control loaded a complete reversible scan-config family snapshot." if scan_config_family_mode_fixture_ok else "Direct write-control could not load a complete reversible scan-config family snapshot.", scan_config_families_before, direct_native_api_display_command(scan_config_families_path, token=token, env=env), scan_config_families_before_json, {"http_status": scan_config_families_before_status, "scan_config_id": scan_config_id, "family_count": len(scan_config_families_before_normalized), **summarize_native_api_response(scan_config_families_before_json)}))
+
+            if scan_config_family_mode_fixture_ok and isinstance(scan_config_port_family_before, dict):
+                scan_config_family_mode_original = {
+                    "families_growing": bool(scan_config_families_before_json["families_growing"]),
+                    "families": [
+                        {"name": item["name"], "growing": item["growing"], "selected": item["selected"]}
+                        for item in scan_config_families_before_normalized
+                    ],
+                }
+                scan_config_family_mode_modified = json.loads(json.dumps(scan_config_family_mode_original))
+                scan_config_port_family_modified = next(item for item in scan_config_family_mode_modified["families"] if item["name"] == "Port scanners")
+                scan_config_port_family_modified["growing"] = not scan_config_port_family_modified["growing"]
+
+                scan_config_family_mode_malformed = direct_native_api_curl(repo_root, f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}", token=token, env=env, method="PATCH", body="{", extra_headers=content_type)
+                scan_config_family_mode_malformed_json, scan_config_family_mode_malformed_status = parse_json_output_with_http_status(scan_config_family_mode_malformed)
+                scan_config_family_mode_malformed_ok = scan_config_family_mode_malformed.returncode == 0 and scan_config_family_mode_malformed_status == 400 and isinstance(scan_config_family_mode_malformed_json, dict) and scan_config_family_mode_malformed_json.get("error", {}).get("code") == "bad_request"
+                findings.append(native_api_probe_finding("pass" if scan_config_family_mode_malformed_ok else "fail", "native-api-direct.scan-config-family-mode-malformed-json-denied", "Direct write-control rejects malformed scan-config family-mode JSON before mutation." if scan_config_family_mode_malformed_ok else "Direct write-control did not reject malformed scan-config family-mode JSON with the shared bad-request contract.", scan_config_family_mode_malformed, direct_native_api_display_command(f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}", token=token, env=env, method="PATCH", body="{", extra_headers=content_type), scan_config_family_mode_malformed_json, {"http_status": scan_config_family_mode_malformed_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_family_mode_malformed_json)}))
+
+                scan_config_family_mode_stale_body = json.dumps({"family_selection": {**scan_config_family_mode_original, "families": scan_config_family_mode_original["families"][:-1]}}, separators=(",", ":"))
+                scan_config_family_mode_stale = direct_native_api_curl(repo_root, f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}", token=token, env=env, method="PATCH", body=scan_config_family_mode_stale_body, extra_headers=content_type)
+                scan_config_family_mode_stale_json, scan_config_family_mode_stale_status = parse_json_output_with_http_status(scan_config_family_mode_stale)
+                scan_config_family_mode_stale_ok = scan_config_family_mode_stale.returncode == 0 and scan_config_family_mode_stale_status == 409 and isinstance(scan_config_family_mode_stale_json, dict) and scan_config_family_mode_stale_json.get("error", {}).get("code") == "conflict"
+                findings.append(native_api_probe_finding("pass" if scan_config_family_mode_stale_ok else "fail", "native-api-direct.scan-config-family-mode-stale-denied", "Direct write-control rejects an incomplete stale family snapshot without mutation." if scan_config_family_mode_stale_ok else "Direct write-control did not reject an incomplete scan-config family snapshot.", scan_config_family_mode_stale, direct_native_api_display_command(f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}", token=token, env=env, method="PATCH", body=scan_config_family_mode_stale_body, extra_headers=content_type), scan_config_family_mode_stale_json, {"http_status": scan_config_family_mode_stale_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_family_mode_stale_json)}))
+
+                scan_config_family_mode_toggle_body = json.dumps({"family_selection": scan_config_family_mode_modified}, separators=(",", ":"))
+                scan_config_family_mode_toggle = direct_native_api_curl(repo_root, f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}", token=token, env=env, method="PATCH", body=scan_config_family_mode_toggle_body, extra_headers=content_type)
+                scan_config_family_mode_toggle_json, scan_config_family_mode_toggle_status = parse_json_output_with_http_status(scan_config_family_mode_toggle)
+                scan_config_family_mode_toggle_ok = scan_config_family_mode_toggle.returncode == 0 and scan_config_family_mode_toggle_status == 200 and isinstance(scan_config_family_mode_toggle_json, dict) and scan_config_family_mode_toggle_json.get("id") == scan_config_id
+                findings.append(native_api_probe_finding("pass" if scan_config_family_mode_toggle_ok else "fail", "native-api-direct.scan-config-family-mode-toggle", "Direct write-control atomically changed one family mode on the temporary scan config." if scan_config_family_mode_toggle_ok else "Direct write-control failed to change the temporary scan-config family mode.", scan_config_family_mode_toggle, direct_native_api_display_command(f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}", token=token, env=env, method="PATCH", body=scan_config_family_mode_toggle_body, extra_headers=content_type), scan_config_family_mode_toggle_json, {"http_status": scan_config_family_mode_toggle_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_family_mode_toggle_json)}))
+
+                scan_config_families_after_toggle = direct_native_api_curl(repo_root, scan_config_families_path, token=token, env=env)
+                scan_config_families_after_toggle_json, scan_config_families_after_toggle_status = parse_json_output_with_http_status(scan_config_families_after_toggle)
+                scan_config_port_after_toggle = next((item for item in scan_config_families_after_toggle_json.get("families", []) if isinstance(item, dict) and item.get("name") == "Port scanners"), None) if isinstance(scan_config_families_after_toggle_json, dict) else None
+                scan_config_family_mode_toggle_readback_ok = scan_config_families_after_toggle.returncode == 0 and scan_config_families_after_toggle_status == 200 and isinstance(scan_config_port_after_toggle, dict) and bool(scan_config_port_after_toggle.get("growing")) is scan_config_port_family_modified["growing"] and scan_config_port_after_toggle.get("nvt_count") == scan_config_port_family_before["nvt_count"] and scan_config_port_after_toggle.get("max_nvt_count") == scan_config_port_family_before["max_nvt_count"]
+                findings.append(native_api_probe_finding("pass" if scan_config_family_mode_toggle_readback_ok else "fail", "native-api-direct.scan-config-family-mode-toggle-readback", "Direct API readback confirms the family-mode transition preserved the selected NVT set." if scan_config_family_mode_toggle_readback_ok else "Direct API readback did not confirm the family-mode transition and selected NVT preservation.", scan_config_families_after_toggle, direct_native_api_display_command(scan_config_families_path, token=token, env=env), scan_config_families_after_toggle_json, {"http_status": scan_config_families_after_toggle_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_families_after_toggle_json)}))
+
+                scan_config_family_mode_restore_body = json.dumps({"family_selection": scan_config_family_mode_original}, separators=(",", ":"))
+                scan_config_family_mode_restore = direct_native_api_curl(repo_root, f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}", token=token, env=env, method="PATCH", body=scan_config_family_mode_restore_body, extra_headers=content_type)
+                scan_config_family_mode_restore_json, scan_config_family_mode_restore_status = parse_json_output_with_http_status(scan_config_family_mode_restore)
+                scan_config_family_mode_restore_ok = scan_config_family_mode_restore.returncode == 0 and scan_config_family_mode_restore_status == 200 and isinstance(scan_config_family_mode_restore_json, dict) and scan_config_family_mode_restore_json.get("id") == scan_config_id
+                findings.append(native_api_probe_finding("pass" if scan_config_family_mode_restore_ok else "fail", "native-api-direct.scan-config-family-mode-restore", "Direct write-control restored the original complete family snapshot." if scan_config_family_mode_restore_ok else "Direct write-control failed to restore the original scan-config family snapshot.", scan_config_family_mode_restore, direct_native_api_display_command(f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}", token=token, env=env, method="PATCH", body=scan_config_family_mode_restore_body, extra_headers=content_type), scan_config_family_mode_restore_json, {"http_status": scan_config_family_mode_restore_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_family_mode_restore_json)}))
+
+                scan_config_families_after_restore = direct_native_api_curl(repo_root, scan_config_families_path, token=token, env=env)
+                scan_config_families_after_restore_json, scan_config_families_after_restore_status = parse_json_output_with_http_status(scan_config_families_after_restore)
+                scan_config_families_after_restore_items = scan_config_families_after_restore_json.get("families") if isinstance(scan_config_families_after_restore_json, dict) else None
+                scan_config_families_after_restore_normalized = [
+                    {"name": item.get("name"), "growing": bool(item.get("growing")), "selected": item.get("nvt_count") == item.get("max_nvt_count"), "nvt_count": item.get("nvt_count"), "max_nvt_count": item.get("max_nvt_count")}
+                    for item in scan_config_families_after_restore_items
+                    if isinstance(item, dict)
+                ] if isinstance(scan_config_families_after_restore_items, list) else []
+                scan_config_family_mode_restore_readback_ok = scan_config_families_after_restore.returncode == 0 and scan_config_families_after_restore_status == 200 and bool(scan_config_families_after_restore_json.get("families_growing")) is scan_config_family_mode_original["families_growing"] and scan_config_families_after_restore_normalized == scan_config_families_before_normalized
+                findings.append(native_api_probe_finding("pass" if scan_config_family_mode_restore_readback_ok else "fail", "native-api-direct.scan-config-family-mode-restore-readback", "Direct API readback confirms the original complete family snapshot was restored exactly." if scan_config_family_mode_restore_readback_ok else "Direct API readback did not confirm exact restoration of the original family snapshot.", scan_config_families_after_restore, direct_native_api_display_command(scan_config_families_path, token=token, env=env), scan_config_families_after_restore_json, {"http_status": scan_config_families_after_restore_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_families_after_restore_json)}))
 
             scan_config_family = "Port scanners"
             scan_config_family_path = f"/api/v1/scan-configs/{urllib.parse.quote(scan_config_id)}/families/{urllib.parse.quote(scan_config_family)}/nvts"

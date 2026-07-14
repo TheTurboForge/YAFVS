@@ -4348,13 +4348,13 @@ class TurboVASCtlTests(unittest.TestCase):
          'scan-config-create-from-base',
          'scan-config-detail-info-tags-task-backlinks-and-preferences-read',
          'scan-config-diagnostic-nvt-selection',
+         'scan-config-family-mode-mutation',
          'scan-config-family-nvt-selection-mutation',
          'scan-config-family-nvt-selection-read',
          'scan-config-family-summary-read',
          'scan-config-hard-delete',
          'scan-config-metadata-export-read',
          'scan-config-metadata-list-read',
-         'scan-config-metadata-modify',
          'scan-config-restore',
          'scan-config-trash-move',
          'scanner-complete-retained-editor-configuration-modify',
@@ -4448,7 +4448,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'report-format-file-import-export-verify-param-writes-and-deletes',
          'retention-mutations',
          'saved-filter-alert-linkage',
-         'scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create',
+         'scan-config-preference-mutations-import-xml-export-and-blank-create',
          'schedule-calendar-edit-and-task-recalculation',
          'target-credential-secrets-create-delete-restore-export',
          'target-credential-secrets-writes-and-deletes',
@@ -5100,9 +5100,9 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/scanners/{scanner_id}": ("getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", None),
             "/api/v1/scanners/{scanner_id}/export": ("getScannersByScannerIdExport", "scanner-metadata-export-read", None),
             "/api/v1/scan-configs": ("getScanConfigs", "scan-config-metadata-list-read", None),
-            "/api/v1/scan-configs/{scan_config_id}": ("getScanConfigsByScanConfigId", "scan-config-detail-info-tags-task-backlinks-and-preferences-read", "scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create"),
-            "/api/v1/scan-configs/{scan_config_id}/families": ("getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create"),
-            "/api/v1/scan-configs/{scan_config_id}/families/{family}/nvts": ("getScanConfigsByScanConfigIdFamiliesByFamilyNvts", "scan-config-family-nvt-selection-read", "scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create"),
+            "/api/v1/scan-configs/{scan_config_id}": ("getScanConfigsByScanConfigId", "scan-config-detail-info-tags-task-backlinks-and-preferences-read", "scan-config-preference-mutations-import-xml-export-and-blank-create"),
+            "/api/v1/scan-configs/{scan_config_id}/families": ("getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-preference-mutations-import-xml-export-and-blank-create"),
+            "/api/v1/scan-configs/{scan_config_id}/families/{family}/nvts": ("getScanConfigsByScanConfigIdFamiliesByFamilyNvts", "scan-config-family-nvt-selection-read", "scan-config-preference-mutations-import-xml-export-and-blank-create"),
         }
         for endpoint, (operation_id, replaces, inherited_still_owns) in expected_asset_metadata.items():
             row = rows[("get", endpoint)]
@@ -10802,9 +10802,9 @@ class TurboVASCtlTests(unittest.TestCase):
             (scanner_detail, "getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", None),
             (scanner_export, "getScannersByScannerIdExport", "scanner-metadata-export-read", None),
             (scan_configs, "getScanConfigs", "scan-config-metadata-list-read", None),
-            (scan_config_detail, "getScanConfigsByScanConfigId", "scan-config-detail-info-tags-task-backlinks-and-preferences-read", "scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create"),
-            (scan_config_families, "getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create"),
-            (scan_config_family_nvts, "getScanConfigsByScanConfigIdFamiliesByFamilyNvts", "scan-config-family-nvt-selection-read", "scan-config-preference-family-mode-mutations-import-xml-export-and-blank-create"),
+            (scan_config_detail, "getScanConfigsByScanConfigId", "scan-config-detail-info-tags-task-backlinks-and-preferences-read", "scan-config-preference-mutations-import-xml-export-and-blank-create"),
+            (scan_config_families, "getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-preference-mutations-import-xml-export-and-blank-create"),
+            (scan_config_family_nvts, "getScanConfigsByScanConfigIdFamiliesByFamilyNvts", "scan-config-family-nvt-selection-read", "scan-config-preference-mutations-import-xml-export-and-blank-create"),
         ]
         for operation, operation_id, replaces, inherited_still_owns in expected_asset_metadata:
             self.assertEqual(operation["operation_id"], operation_id)
@@ -13364,6 +13364,7 @@ db2:keys=5,expires=0,avg_ttl=0
             alert_definition = {"value": None}
             scan_config_live = {"value": True}
             scan_config_family_selected = {"value": True}
+            scan_config_family_growing = {"value": True}
             schedule_live = {"value": True}
             schedule_fixture = {"comment": "", "icalendar": "", "timezone": ""}
             target_in_use = {"value": False}
@@ -13883,8 +13884,29 @@ db2:keys=5,expires=0,avg_ttl=0
                         "items": [{"oid": override_nvt_id, "name": "fixture", "severity": 0.0, "selected": scan_config_family_selected["value"]}],
                     }
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps(payload) + "\n200", "")
+                scan_config_families_path = f"/api/v1/scan-configs/{scan_config_uuid}/families"
+                if method == "GET" and path == scan_config_families_path:
+                    payload = {
+                        "scan_config_id": scan_config_uuid,
+                        "family_count": 2,
+                        "families_growing": 1,
+                        "families": [
+                            {"name": "General", "growing": 1, "nvt_count": 1, "max_nvt_count": 1},
+                            {"name": "Port scanners", "growing": int(scan_config_family_growing["value"]), "nvt_count": 1, "max_nvt_count": 1},
+                        ],
+                    }
+                    return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps(payload) + "\n200", "")
                 if method == "PATCH" and path.startswith(f"/api/v1/scan-configs/{scan_config_uuid}"):
+                    if body == "{":
+                        return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"bad_request"}}\n400', "")
                     payload = json.loads(body)
+                    if "family_selection" in payload:
+                        families = payload["family_selection"]["families"]
+                        if len(families) != 2:
+                            return turbovasctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"conflict"}}\n409', "")
+                        port_family = next(item for item in families if item["name"] == "Port scanners")
+                        scan_config_family_growing["value"] = port_family["growing"]
+                        return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": scan_config_uuid}) + "\n200", "")
                     return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps({"id": scan_config_uuid, "comment": payload["comment"]}) + "\n200", "")
                 if method == "POST" and path.startswith(f"/api/v1/scan-configs/{scan_config_uuid}/clone"):
                     payload = json.loads(body)
@@ -14081,6 +14103,13 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(checks["native-api-direct.scan-config-predefined-delete-denied"], "pass")
         self.assertEqual(checks["native-api-direct.scan-config-write-create"], "pass")
         self.assertEqual(checks["native-api-direct.scan-config-write-update"], "pass")
+        self.assertEqual(checks["native-api-direct.scan-config-family-mode-fixture"], "pass")
+        self.assertEqual(checks["native-api-direct.scan-config-family-mode-malformed-json-denied"], "pass")
+        self.assertEqual(checks["native-api-direct.scan-config-family-mode-stale-denied"], "pass")
+        self.assertEqual(checks["native-api-direct.scan-config-family-mode-toggle"], "pass")
+        self.assertEqual(checks["native-api-direct.scan-config-family-mode-toggle-readback"], "pass")
+        self.assertEqual(checks["native-api-direct.scan-config-family-mode-restore"], "pass")
+        self.assertEqual(checks["native-api-direct.scan-config-family-mode-restore-readback"], "pass")
         self.assertEqual(checks["native-api-direct.scan-config-family-nvt-fixture"], "pass")
         self.assertEqual(checks["native-api-direct.scan-config-family-nvt-malformed-json-denied"], "pass")
         self.assertEqual(checks["native-api-direct.scan-config-family-nvt-toggle"], "pass")

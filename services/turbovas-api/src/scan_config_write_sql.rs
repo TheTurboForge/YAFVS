@@ -6,6 +6,149 @@ pub(crate) fn scan_config_write_operator_owner_sql() -> &'static str {
     "SELECT id::integer FROM users WHERE uuid = $1;"
 }
 
+pub(crate) fn scan_config_known_family_names_sql() -> &'static str {
+    "SELECT DISTINCT n.family
+       FROM nvts n
+      WHERE n.family IS NOT NULL
+        AND n.family != ''
+        AND n.family != 'Credentials'
+      ORDER BY n.family;"
+}
+
+pub(crate) fn scan_config_replace_family_selection_sql() -> &'static str {
+    r#"WITH desired AS MATERIALIZED (
+            SELECT family, growing, selected
+              FROM unnest($4::text[], $5::boolean[], $6::boolean[])
+                   AS item(family, growing, selected)
+        ),
+        config_state AS MATERIALIZED (
+            SELECT coalesce(c.families_growing, 0)::integer AS families_growing
+              FROM configs c
+             WHERE c.id = $1
+        ),
+        current_family_state AS MATERIALIZED (
+            SELECT d.family,
+                   d.growing AS desired_growing,
+                   d.selected AS desired_all_selected,
+                   CASE
+                     WHEN c.families_growing <> 0 THEN NOT EXISTS (
+                       SELECT 1
+                         FROM nvt_selectors family_selector
+                        WHERE family_selector.name = $2
+                          AND family_selector.type = 1
+                          AND family_selector.family_or_nvt = d.family
+                          AND family_selector.exclude = 1
+                     )
+                     ELSE EXISTS (
+                       SELECT 1
+                         FROM nvt_selectors family_selector
+                        WHERE family_selector.name = $2
+                          AND family_selector.type = 1
+                          AND family_selector.family_or_nvt = d.family
+                          AND family_selector.exclude = 0
+                     )
+                   END AS current_growing
+              FROM desired d
+              CROSS JOIN config_state c
+        ),
+        current_nvt_state AS MATERIALIZED (
+            SELECT family.family,
+                   family.desired_growing,
+                   family.desired_all_selected,
+                   n.oid,
+                   CASE
+                     WHEN family.current_growing THEN NOT EXISTS (
+                       SELECT 1
+                         FROM nvt_selectors nvt_selector
+                        WHERE nvt_selector.name = $2
+                          AND nvt_selector.type = 2
+                          AND nvt_selector.family = family.family
+                          AND nvt_selector.family_or_nvt = n.oid
+                          AND nvt_selector.exclude = 1
+                     )
+                     ELSE EXISTS (
+                       SELECT 1
+                         FROM nvt_selectors nvt_selector
+                        WHERE nvt_selector.name = $2
+                          AND nvt_selector.type = 2
+                          AND nvt_selector.family = family.family
+                          AND nvt_selector.family_or_nvt = n.oid
+                          AND nvt_selector.exclude = 0
+                     )
+                   END AS current_selected
+              FROM current_family_state family
+              JOIN nvts n
+                ON n.family = family.family
+        ),
+        current_counts AS MATERIALIZED (
+            SELECT family,
+                   count(*)::bigint AS max_nvt_count,
+                   count(*) FILTER (WHERE current_selected)::bigint
+                     AS selected_nvt_count
+              FROM current_nvt_state
+             GROUP BY family
+        ),
+        desired_nvt_state AS MATERIALIZED (
+            SELECT current.family,
+                   current.desired_growing,
+                   current.oid,
+                   CASE
+                     WHEN current.desired_all_selected THEN true
+                     WHEN counts.selected_nvt_count = counts.max_nvt_count
+                       THEN false
+                     ELSE current.current_selected
+                   END AS selected
+              FROM current_nvt_state current
+              JOIN current_counts counts USING (family)
+        ),
+        deleted AS (
+            DELETE FROM nvt_selectors
+             WHERE name = $2
+             RETURNING 1
+        ),
+        selector_rows AS (
+            SELECT $2::text AS name,
+                   0::integer AS exclude,
+                   0::integer AS type,
+                   '0'::text AS family_or_nvt,
+                   NULL::text AS family
+             WHERE $3::integer <> 0
+            UNION ALL
+            SELECT $2,
+                   CASE WHEN $3::integer <> 0 THEN 1 ELSE 0 END,
+                   1,
+                   family,
+                   NULL::text
+              FROM desired
+             WHERE growing <> ($3::integer <> 0)
+            UNION ALL
+            SELECT $2,
+                   CASE WHEN desired_growing THEN 1 ELSE 0 END,
+                   2,
+                   oid,
+                   family
+              FROM desired_nvt_state
+             WHERE (desired_growing AND NOT selected)
+                OR (NOT desired_growing AND selected)
+        ),
+        inserted AS (
+            INSERT INTO nvt_selectors
+                   (name, exclude, type, family_or_nvt, family)
+            SELECT rows.name,
+                   rows.exclude,
+                   rows.type,
+                   rows.family_or_nvt,
+                   rows.family
+              FROM selector_rows rows
+              CROSS JOIN (SELECT count(*) FROM deleted) deletion_barrier
+            RETURNING 1
+        )
+        UPDATE configs
+           SET families_growing = $3::integer
+         WHERE id = $1
+           AND (SELECT count(*) FROM inserted) >= 0;"#
+}
+
 pub(crate) fn scan_config_write_state_sql() -> &'static str {
     "SELECT id::integer, owner::integer, coalesce(predefined, 0)::integer,
             coalesce(nvt_selector, ''), coalesce(families_growing, 0)::integer

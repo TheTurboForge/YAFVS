@@ -30,6 +30,224 @@ fn create_request(
 }
 
 #[test]
+fn scan_config_patch_accepts_complete_family_selection_without_metadata() {
+    let request = serde_json::json!({
+        "family_selection": {
+            "families_growing": true,
+            "families": [
+                {"name": "Port scanners", "growing": false, "selected": true},
+                {"name": "Ubuntu Local Security Checks", "growing": true, "selected": true}
+            ]
+        }
+    });
+    let request = serde_json::from_value::<ScanConfigPatchRequest>(request)
+        .expect("strict family selection request");
+    let validated = validate_scan_config_patch_request(request)
+        .expect("family selection is a valid patch field");
+    let selection = validated.family_selection.expect("family selection");
+    assert!(selection.families_growing);
+    assert_eq!(selection.families.len(), 2);
+}
+
+#[test]
+fn scan_config_family_selection_is_bounded_unique_and_strict() {
+    let duplicate = ScanConfigFamilySelectionRequest {
+        families_growing: true,
+        families: vec![
+            ScanConfigFamilySelectionItem {
+                name: "Port scanners".to_string(),
+                growing: true,
+                selected: true,
+            },
+            ScanConfigFamilySelectionItem {
+                name: "Port scanners".to_string(),
+                growing: false,
+                selected: false,
+            },
+        ],
+    };
+    assert!(matches!(
+        validate_scan_config_family_selection_request(duplicate),
+        Err(ApiError::BadRequest(_))
+    ));
+
+    let oversized = ScanConfigFamilySelectionRequest {
+        families_growing: false,
+        families: (0..=MAX_SCAN_CONFIG_FAMILY_SELECTIONS)
+            .map(|index| ScanConfigFamilySelectionItem {
+                name: format!("Family {index}"),
+                growing: false,
+                selected: false,
+            })
+            .collect(),
+    };
+    assert!(matches!(
+        validate_scan_config_family_selection_request(oversized),
+        Err(ApiError::BadRequest(_))
+    ));
+
+    for request in [
+        serde_json::json!({"families_growing": true, "families": [], "extra": true}),
+        serde_json::json!({
+            "families_growing": true,
+            "families": [{"name": "Port scanners", "growing": true, "selected": true, "extra": true}]
+        }),
+    ] {
+        assert!(serde_json::from_value::<ScanConfigFamilySelectionRequest>(request).is_err());
+    }
+}
+
+#[test]
+fn scan_config_whole_only_families_allow_only_growing_all_or_static_empty() {
+    assert_eq!(WHOLE_ONLY_SCAN_CONFIG_FAMILIES.len(), 26);
+    for family in [
+        "Ubuntu Local Security Checks",
+        "VMware Local Security Checks",
+        "Windows : Microsoft Bulletins",
+    ] {
+        for (growing, selected) in [(true, true), (false, false)] {
+            let request = ScanConfigFamilySelectionRequest {
+                families_growing: growing,
+                families: vec![ScanConfigFamilySelectionItem {
+                    name: family.to_string(),
+                    growing,
+                    selected,
+                }],
+            };
+            assert!(validate_scan_config_family_selection_request(request).is_ok());
+        }
+        for (growing, selected) in [(false, true), (true, false)] {
+            let request = ScanConfigFamilySelectionRequest {
+                families_growing: growing,
+                families: vec![ScanConfigFamilySelectionItem {
+                    name: family.to_string(),
+                    growing,
+                    selected,
+                }],
+            };
+            assert!(matches!(
+                validate_scan_config_family_selection_request(request),
+                Err(ApiError::Conflict(_))
+            ));
+        }
+    }
+}
+
+#[test]
+fn scan_config_family_selection_requires_exact_live_inventory() {
+    let request = ValidatedScanConfigFamilySelection {
+        families_growing: true,
+        families: vec![
+            ScanConfigFamilySelectionItem {
+                name: "General".to_string(),
+                growing: true,
+                selected: true,
+            },
+            ScanConfigFamilySelectionItem {
+                name: "Port scanners".to_string(),
+                growing: false,
+                selected: false,
+            },
+        ],
+    };
+    assert!(
+        ensure_scan_config_family_selection_is_complete(
+            &request,
+            &["Port scanners".to_string(), "General".to_string()]
+        )
+        .is_ok()
+    );
+    for stale in [
+        vec!["General".to_string()],
+        vec![
+            "General".to_string(),
+            "Port scanners".to_string(),
+            "Unknown".to_string(),
+        ],
+    ] {
+        assert!(matches!(
+            ensure_scan_config_family_selection_is_complete(&request, &stale),
+            Err(ApiError::Conflict(_))
+        ));
+    }
+}
+
+#[test]
+fn scan_config_family_selection_sql_rebuilds_canonical_rows_from_materialized_state() {
+    let inventory = scan_config_known_family_names_sql();
+    assert!(inventory.contains("SELECT DISTINCT n.family"));
+    assert!(inventory.contains("n.family != 'Credentials'"));
+    assert!(inventory.contains("ORDER BY n.family"));
+
+    let sql = scan_config_replace_family_selection_sql();
+    for required in [
+        "unnest($4::text[], $5::boolean[], $6::boolean[])",
+        "current_family_state AS MATERIALIZED",
+        "current_nvt_state AS MATERIALIZED",
+        "current_counts AS MATERIALIZED",
+        "WHEN current.desired_all_selected THEN true",
+        "WHEN counts.selected_nvt_count = counts.max_nvt_count",
+        "DELETE FROM nvt_selectors",
+        "INSERT INTO nvt_selectors",
+        "0::integer AS type",
+        "1,",
+        "2,",
+        "SET families_growing = $3::integer",
+    ] {
+        assert!(
+            sql.contains(required),
+            "family replacement SQL missing {required}"
+        );
+    }
+    assert!(!sql.contains("format!("));
+}
+
+#[test]
+fn scan_config_family_selection_handler_guards_before_atomic_commit() {
+    let source = include_str!("scan_config_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn patch_scan_config(")
+        .expect("scan-config patch handler")
+        .1
+        .split_once("pub(crate) fn parse_scan_config_patch_payload")
+        .expect("scan-config patch parser boundary")
+        .0;
+    for required in [
+        "parse_scan_config_patch_payload(payload)?",
+        "configs, configs_trash, nvt_selectors, tasks, nvts",
+        "ensure_scan_config_owner_matches_operator",
+        "ensure_scan_config_not_predefined",
+        "ensure_unique_scan_config_name",
+        "ensure_scan_config_not_referenced_by_any_task",
+        "ensure_scan_config_selector_is_private",
+        "load_scan_config_known_family_names",
+        "ensure_scan_config_family_selection_is_complete",
+        "execute_scan_config_family_selection_transaction",
+        "tx.commit()",
+    ] {
+        assert!(
+            handler.contains(required),
+            "family patch handler missing {required}"
+        );
+    }
+    assert!(
+        handler.find("ensure_unique_scan_config_name")
+            < handler.find("execute_scan_config_family_selection_transaction")
+    );
+
+    let browser = include_str!("browser_proxy_scan_config.rs");
+    let browser_handler = browser
+        .split_once("pub(crate) async fn browser_proxy_patch_scan_config")
+        .expect("browser patch handler")
+        .1
+        .split_once("pub(crate) async fn browser_proxy_clone_scan_config")
+        .expect("browser patch handler boundary")
+        .0;
+    assert!(browser_handler.contains("Result<Json<ScanConfigPatchRequest>, JsonRejection>"));
+    assert!(browser_handler.contains("patch_scan_config("));
+}
+
+#[test]
 fn scan_config_family_nvt_patch_request_is_strict_bounded_and_duplicate_free() {
     let request = serde_json::json!({
         "changes": [
@@ -250,6 +468,7 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> ScanConfigPatchRe
     ScanConfigPatchRequest {
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
+        family_selection: None,
     }
 }
 
@@ -695,6 +914,7 @@ fn scan_config_patch_request_rejects_oversized_metadata_fields() {
         validate_scan_config_patch_request(ScanConfigPatchRequest {
             name: Some("x".repeat(MAX_SCAN_CONFIG_TEXT_BYTES + 1)),
             comment: None,
+            family_selection: None,
         }),
         Err(ApiError::BadRequest(_))
     ));

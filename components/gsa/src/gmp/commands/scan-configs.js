@@ -16,7 +16,10 @@ import {
 import Response from 'gmp/http/response';
 import logger from 'gmp/log';
 import Nvt from 'gmp/models/nvt';
-import ScanConfig from 'gmp/models/scan-config';
+import ScanConfig, {
+  SCANCONFIG_TREND_DYNAMIC,
+  SCANCONFIG_TREND_STATIC,
+} from 'gmp/models/scan-config';
 import {
   cloneNativeScanConfig,
   createNativeScanConfig,
@@ -46,6 +49,78 @@ const shouldExportAllByFilter = filter => {
 const isEmptyOptionalObject = value =>
   !isDefined(value) || Object.keys(value).length === 0;
 
+const isFamilyMap = value =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const hasOwn = (object, key) =>
+  Object.prototype.hasOwnProperty.call(object, key);
+
+const createNativeFamilySelection = ({familyTrend, trend, select}) => {
+  if (!isFamilyMap(trend) || !isFamilyMap(select)) {
+    throw new Error(
+      'Native scan config family selection requires both trend and select maps',
+    );
+  }
+  if (
+    familyTrend !== SCANCONFIG_TREND_DYNAMIC &&
+    familyTrend !== SCANCONFIG_TREND_STATIC
+  ) {
+    throw new Error(
+      'Native scan config family selection requires an explicit family trend',
+    );
+  }
+
+  const familyNames = [
+    ...new Set([...Object.keys(trend), ...Object.keys(select)]),
+  ].sort();
+
+  if (familyNames.length === 0) {
+    throw new Error(
+      'Native scan config family selection maps must contain at least one family',
+    );
+  }
+  const missingTrend = familyNames.filter(name => !hasOwn(trend, name));
+  const missingSelect = familyNames.filter(name => !hasOwn(select, name));
+  if (missingTrend.length > 0 || missingSelect.length > 0) {
+    const missing = [
+      ...(missingTrend.length > 0 ? [`trend: ${missingTrend.join(', ')}`] : []),
+      ...(missingSelect.length > 0 ? [`select: ${missingSelect.join(', ')}`] : []),
+    ];
+    throw new Error(
+      `Native scan config family selection maps must contain every family in both maps (missing ${missing.join('; ')})`,
+    );
+  }
+  if (
+    familyNames.some(
+      name =>
+        trend[name] !== SCANCONFIG_TREND_DYNAMIC &&
+        trend[name] !== SCANCONFIG_TREND_STATIC,
+    )
+  ) {
+    throw new Error(
+      'Native scan config family trends must be explicitly static or dynamic',
+    );
+  }
+  if (
+    familyNames.some(
+      name => select[name] !== YES_VALUE && select[name] !== NO_VALUE,
+    )
+  ) {
+    throw new Error(
+      'Native scan config family selections must be explicitly yes or no',
+    );
+  }
+
+  return {
+    'families_growing': familyTrend === SCANCONFIG_TREND_DYNAMIC,
+    families: familyNames.map(name => ({
+      growing: trend[name] === SCANCONFIG_TREND_DYNAMIC,
+      name,
+      selected: select[name] === YES_VALUE,
+    })),
+  };
+};
+
 const canPatchMetadataNatively = ({
   familyTrend,
   scannerPreferenceValues,
@@ -54,8 +129,8 @@ const canPatchMetadataNatively = ({
 }) =>
   !isDefined(familyTrend) &&
   isEmptyOptionalObject(scannerPreferenceValues) &&
-  isEmptyOptionalObject(select) &&
-  isEmptyOptionalObject(trend);
+  !isDefined(select) &&
+  !isDefined(trend);
 
 export const convert = (values, prefix) => {
   const ret = {};
@@ -163,20 +238,37 @@ export class ScanConfigCommand extends EntityCommand {
     select,
     scannerPreferenceValues,
   }) {
-    if (
-      canUseNativeApi(this.http) &&
-      canPatchMetadataNatively({
+    if (canUseNativeApi(this.http)) {
+      if (
+        isDefined(scannerPreferenceValues) &&
+        !isEmptyOptionalObject(scannerPreferenceValues)
+      ) {
+        throw new Error(
+          'Native scan config save does not support scanner preference values',
+        );
+      }
+
+      if (
+        canPatchMetadataNatively({
+          familyTrend,
+          scannerPreferenceValues,
+          select,
+          trend,
+        })
+      ) {
+        return patchNativeScanConfig(this.http, id, {comment, name});
+      }
+
+      const familySelection = createNativeFamilySelection({
         familyTrend,
-        scannerPreferenceValues,
         select,
         trend,
-      })
-    ) {
-      return patchNativeScanConfig(this.http, id, {comment, name});
-    }
-
-    if (canUseNativeApi(this.http)) {
-      throw new Error('Native scan config save only supports metadata fields');
+      });
+      return patchNativeScanConfig(this.http, id, {
+        comment,
+        'family_selection': familySelection,
+        name,
+      });
     }
 
     const trendData = isDefined(trend) ? convert(trend, 'trend:') : {};

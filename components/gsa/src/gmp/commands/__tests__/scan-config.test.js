@@ -808,7 +808,179 @@ describe('ScanConfigCommand tests', () => {
         comment: 'Native comment',
         select: {General: YES_VALUE},
       }),
-    ).toThrow('Native scan config save only supports metadata fields');
+    ).toThrow(
+      'Native scan config family selection requires both trend and select maps',
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should save complete family selection through native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'scan-config-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigCommand(fakeHttp);
+
+    await cmd.save({
+      id: 'scan-config-id',
+      name: 'Native name',
+      comment: 'Native comment',
+      familyTrend: SCANCONFIG_TREND_DYNAMIC,
+      trend: {
+        'Zulu family': SCANCONFIG_TREND_STATIC,
+        'Alpha family': SCANCONFIG_TREND_DYNAMIC,
+      },
+      select: {
+        'Zulu family': NO_VALUE,
+        'Alpha family': YES_VALUE,
+      },
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://turbovas.example/api/v1/scan-configs/scan-config-id',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({
+          comment: 'Native comment',
+          'family_selection': {
+            'families_growing': true,
+            families: [
+              {growing: true, name: 'Alpha family', selected: true},
+              {growing: false, name: 'Zulu family', selected: false},
+            ],
+          },
+          name: 'Native name',
+        }),
+      }),
+    );
+  });
+
+  test('should order native family selection by the sorted union of map keys', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'scan-config-id'}),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigCommand(fakeHttp);
+
+    await cmd.save({
+      id: 'scan-config-id',
+      name: 'Native name',
+      familyTrend: SCANCONFIG_TREND_STATIC,
+      trend: {
+        Beta: SCANCONFIG_TREND_STATIC,
+        Alpha: SCANCONFIG_TREND_DYNAMIC,
+        Gamma: SCANCONFIG_TREND_STATIC,
+      },
+      select: {Gamma: YES_VALUE, Alpha: NO_VALUE, Beta: YES_VALUE},
+    });
+
+    const {body} = fetchMock.mock.calls[0][1];
+    expect(JSON.parse(body).family_selection.families).toEqual([
+      {growing: true, name: 'Alpha', selected: false},
+      {growing: false, name: 'Beta', selected: true},
+      {growing: false, name: 'Gamma', selected: true},
+    ]);
+  });
+
+  test('should reject empty or inconsistent native family maps locally', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigCommand(fakeHttp);
+
+    expect(() =>
+      cmd.save({
+        id: 'scan-config-id',
+        name: 'Native name',
+        familyTrend: SCANCONFIG_TREND_STATIC,
+        trend: {},
+        select: {},
+      }),
+    ).toThrow(
+      'Native scan config family selection maps must contain at least one family',
+    );
+
+    expect(() =>
+      cmd.save({
+        id: 'scan-config-id',
+        name: 'Native name',
+        familyTrend: SCANCONFIG_TREND_STATIC,
+        trend: {Alpha: SCANCONFIG_TREND_STATIC},
+        select: {Beta: YES_VALUE},
+      }),
+    ).toThrow(
+      'Native scan config family selection maps must contain every family in both maps',
+    );
+
+    expect(() =>
+      cmd.save({
+        id: 'scan-config-id',
+        name: 'Native name',
+        trend: {Alpha: SCANCONFIG_TREND_STATIC},
+        select: {Alpha: YES_VALUE},
+      }),
+    ).toThrow(
+      'Native scan config family selection requires an explicit family trend',
+    );
+
+    expect(() =>
+      cmd.save({
+        id: 'scan-config-id',
+        name: 'Native name',
+        familyTrend: SCANCONFIG_TREND_STATIC,
+        trend: {Alpha: 99},
+        select: {Alpha: YES_VALUE},
+      }),
+    ).toThrow(
+      'Native scan config family trends must be explicitly static or dynamic',
+    );
+
+    expect(() =>
+      cmd.save({
+        id: 'scan-config-id',
+        name: 'Native name',
+        familyTrend: SCANCONFIG_TREND_STATIC,
+        trend: {Alpha: SCANCONFIG_TREND_STATIC},
+        select: {Alpha: 'maybe'},
+      }),
+    ).toThrow(
+      'Native scan config family selections must be explicitly yes or no',
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test('should reject native scanner preference values without GMP fallback', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const response = createActionResultResponse({
+      id: 'fallback-scan-config-id',
+    });
+    const fakeHttp = createHttp(response);
+    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    const cmd = new ScanConfigCommand(fakeHttp);
+
+    expect(() =>
+      cmd.save({
+        id: 'scan-config-id',
+        name: 'Native name',
+        comment: 'Native comment',
+        scannerPreferenceValues: {foo: 'bar'},
+      }),
+    ).toThrow(
+      'Native scan config save does not support scanner preference values',
+    );
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(fakeHttp.request).not.toHaveBeenCalled();

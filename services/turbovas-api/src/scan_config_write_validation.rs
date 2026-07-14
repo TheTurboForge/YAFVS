@@ -6,10 +6,42 @@ use std::collections::HashSet;
 
 use serde::Deserialize;
 
-use crate::{errors::ApiError, path_ids::validate_nvt_oid};
+use crate::{
+    errors::ApiError,
+    path_ids::{validate_nvt_oid, validate_scan_config_family},
+};
 
 pub(crate) const MAX_SCAN_CONFIG_TEXT_BYTES: usize = 4096;
+pub(crate) const MAX_SCAN_CONFIG_FAMILY_SELECTIONS: usize = 512;
 pub(crate) const MAX_SCAN_CONFIG_FAMILY_NVT_SELECTION_CHANGES: usize = 1024;
+pub(crate) const WHOLE_ONLY_SCAN_CONFIG_FAMILIES: &[&str] = &[
+    "AIX Local Security Checks",
+    "AlmaLinux Local Security Checks",
+    "Amazon Linux Local Security Checks",
+    "Arch Linux Local Security Checks",
+    "CentOS Local Security Checks",
+    "Debian Local Security Checks",
+    "Fedora Local Security Checks",
+    "FreeBSD Local Security Checks",
+    "Gentoo Local Security Checks",
+    "HCE Local Security Checks",
+    "HP-UX Local Security Checks",
+    "Huawei EulerOS Local Security Checks",
+    "Mageia Linux Local Security Checks",
+    "Mandrake Local Security Checks",
+    "openEuler Local Security Checks",
+    "openSUSE Local Security Checks",
+    "Oracle Linux Local Security Checks",
+    "Red Hat Local Security Checks",
+    "Rocky Linux Local Security Checks",
+    "Slackware Local Security Checks",
+    "Solaris Local Security Checks",
+    "SuSE Local Security Checks",
+    "Ubuntu Local Security Checks",
+    "VMware Local Security Checks",
+    "Windows : Microsoft Bulletins",
+    "Windows Local Security Checks",
+];
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -18,6 +50,21 @@ pub(crate) struct ScanConfigCreateRequest {
     pub(crate) base_scan_config_id: String,
     #[serde(default)]
     pub(crate) comment: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ScanConfigFamilySelectionRequest {
+    pub(crate) families_growing: bool,
+    pub(crate) families: Vec<ScanConfigFamilySelectionItem>,
+}
+
+#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ScanConfigFamilySelectionItem {
+    pub(crate) name: String,
+    pub(crate) growing: bool,
+    pub(crate) selected: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,6 +93,8 @@ pub(crate) struct ScanConfigPatchRequest {
     pub(crate) name: Option<String>,
     #[serde(default)]
     pub(crate) comment: Option<String>,
+    #[serde(default)]
+    pub(crate) family_selection: Option<ScanConfigFamilySelectionRequest>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -124,6 +173,13 @@ pub(crate) fn validate_diagnostic_nvt_selection_request(
 pub(crate) struct ValidatedScanConfigPatch {
     pub(crate) name: Option<String>,
     pub(crate) comment: Option<String>,
+    pub(crate) family_selection: Option<ValidatedScanConfigFamilySelection>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ValidatedScanConfigFamilySelection {
+    pub(crate) families_growing: bool,
+    pub(crate) families: Vec<ScanConfigFamilySelectionItem>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -166,13 +222,77 @@ pub(crate) fn validate_scan_config_patch_request(
     let validated = ValidatedScanConfigPatch {
         name: normalize_optional_required_scan_config_text(request.name, "name")?,
         comment: normalize_optional_scan_config_text(request.comment, "comment")?,
+        family_selection: request
+            .family_selection
+            .map(validate_scan_config_family_selection_request)
+            .transpose()?,
     };
-    if validated.name.is_none() && validated.comment.is_none() {
+    if validated.name.is_none()
+        && validated.comment.is_none()
+        && validated.family_selection.is_none()
+    {
         return Err(ApiError::BadRequest(
             "scan-config patch request must include at least one field".to_string(),
         ));
     }
     Ok(validated)
+}
+
+pub(crate) fn validate_scan_config_family_selection_request(
+    request: ScanConfigFamilySelectionRequest,
+) -> Result<ValidatedScanConfigFamilySelection, ApiError> {
+    if request.families.len() > MAX_SCAN_CONFIG_FAMILY_SELECTIONS {
+        return Err(ApiError::BadRequest(format!(
+            "family_selection.families must contain at most {MAX_SCAN_CONFIG_FAMILY_SELECTIONS} families"
+        )));
+    }
+
+    let mut seen = HashSet::with_capacity(request.families.len());
+    for family in &request.families {
+        validate_scan_config_family(&family.name)?;
+        if !seen.insert(family.name.as_str()) {
+            return Err(ApiError::BadRequest(
+                "family_selection.families must not contain duplicate family names".to_string(),
+            ));
+        }
+        let whole_only_state_is_valid =
+            (family.growing && family.selected) || (!family.growing && !family.selected);
+        if WHOLE_ONLY_SCAN_CONFIG_FAMILIES.contains(&family.name.as_str())
+            && !whole_only_state_is_valid
+        {
+            return Err(ApiError::Conflict(format!(
+                "whole-only family '{}' must be growing-all or static-empty",
+                family.name
+            )));
+        }
+    }
+
+    Ok(ValidatedScanConfigFamilySelection {
+        families_growing: request.families_growing,
+        families: request.families,
+    })
+}
+
+pub(crate) fn ensure_scan_config_family_selection_is_complete(
+    request: &ValidatedScanConfigFamilySelection,
+    known_families: &[String],
+) -> Result<(), ApiError> {
+    let requested = request
+        .families
+        .iter()
+        .map(|family| family.name.as_str())
+        .collect::<HashSet<_>>();
+    let known = known_families
+        .iter()
+        .map(String::as_str)
+        .collect::<HashSet<_>>();
+    if requested == known {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "scan-config family inventory changed; reload the editor and retry".to_string(),
+        ))
+    }
 }
 
 fn normalize_optional_required_scan_config_text(

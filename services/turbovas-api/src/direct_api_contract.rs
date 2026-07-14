@@ -108,6 +108,7 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
             | ["", "api", "v1", "tags", _, "trash"]
             | ["", "api", "v1", "tags", "resource-names", _]
             | ["", "api", "v1", "scan-configs", _, "families"]
+            | ["", "api", "v1", "scan-configs", _, "families", _, "nvts"]
             | ["", "api", "v1", "scan-configs", _, "export"]
             if direct_api_segments_are_nonempty(&parts)
     ) || matches!(

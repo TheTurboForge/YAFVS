@@ -358,6 +358,69 @@ describe('ScanConfigCommand tests', () => {
     expect(data.id).toEqual('foo');
   });
 
+  test('should return a native detail and families without GMP fallback', async () => {
+    const id = 'daba56c8-73ec-11df-a475-002264764cea';
+    const fetchMock = testing.fn().mockImplementation(url =>
+      Promise.resolve({
+        json: testing.fn().mockResolvedValue(
+          url.endsWith('/families')
+            ? {
+                scan_config_id: id,
+                families: [
+                  {
+                    name: 'Port scanners',
+                    nvt_count: 1,
+                    max_nvt_count: 2,
+                  },
+                ],
+              }
+            : {
+                id,
+                name: 'Native config',
+                preferences: {
+                  scanner: [{name: 'native-preference', value: 'native'}],
+                },
+              },
+        ),
+        ok: true,
+        status: 200,
+      }),
+    );
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigCommand(fakeHttp);
+
+    const response = await cmd.get({id});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      `api/v1/scan-configs/${id}`,
+      {token: 'test-token'},
+    );
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      `api/v1/scan-configs/${id}/families`,
+      {token: 'test-token'},
+    );
+    expect(response.data.family_list[0].name).toEqual('Port scanners');
+    expect(response.data.preferences.scanner[0].value).toEqual('native');
+  });
+
+  test('should not fall back to GMP when a native detail request fails', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigCommand(fakeHttp);
+
+    await expect(cmd.get({id: 'scan-config-id'})).rejects.toThrow(
+      'Native API request failed with status 503',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should import a config', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);
@@ -383,9 +446,7 @@ describe('ScanConfigCommand tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(
-      path => `https://turbovas.example/${path}`,
-    );
+    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
     fakeHttp.session.jwt = 'jwt-token';
@@ -728,7 +789,9 @@ describe('ScanConfigCommand tests', () => {
   });
 
   test('should reject unsupported native scan config save payloads without GMP fallback', async () => {
-    const response = createActionResultResponse({id: 'fallback-scan-config-id'});
+    const response = createActionResultResponse({
+      id: 'fallback-scan-config-id',
+    });
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(response);
@@ -743,7 +806,7 @@ describe('ScanConfigCommand tests', () => {
         id: 'scan-config-id',
         name: 'Native name',
         comment: 'Native comment',
-        select: {'General': YES_VALUE},
+        select: {General: YES_VALUE},
       }),
     ).toThrow('Native scan config save only supports metadata fields');
 
@@ -869,6 +932,41 @@ describe('ScanConfigCommand tests', () => {
     expect(nvts[1].severity).toEqual(2.2);
     expect(nvts[2].selected).toEqual(NO_VALUE);
     expect(nvts[2].severity).toEqual(3.3);
+  });
+
+  test('should request native scan config family NVT data', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        scan_config_id: 'scan-config-id',
+        family: 'Port scanners',
+        items: [
+          {oid: '1.2.3', name: 'First NVT', severity: 7.5, selected: true},
+          {oid: '1.2.4', name: 'Second NVT', severity: 2.1, selected: false},
+        ],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScanConfigCommand(fakeHttp);
+
+    const response = await cmd.editScanConfigFamilySettings({
+      id: 'scan-config-id',
+      familyName: 'Port scanners',
+    });
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/scan-configs/scan-config-id/families/Port%20scanners/nvts',
+      {token: 'test-token'},
+    );
+    expect(response.data).toEqual({
+      nvts: [
+        {oid: '1.2.3', name: 'First NVT', severity: 7.5, selected: YES_VALUE},
+        {oid: '1.2.4', name: 'Second NVT', severity: 2.1, selected: NO_VALUE},
+      ],
+    });
   });
 
   test('should request scan config nvt data', async () => {

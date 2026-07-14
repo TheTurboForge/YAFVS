@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -19,10 +20,13 @@ export interface ScanConfigFamilyElement {
 }
 
 export interface ScanConfigPreferenceElement {
+  alt?: string[];
+  configured?: boolean;
   default?: ScanConfigPreferenceValue;
-  id?: number;
+  id?: string | number;
   name?: string;
   hr_name?: string;
+  redacted?: boolean;
   nvt?: {
     name?: string;
     _oid?: string;
@@ -76,14 +80,17 @@ export interface ScanConfigFamilies {
 }
 
 export interface ScanConfigPreference {
+  alt?: string[];
+  configured?: boolean;
   default?: ScanConfigPreferenceValue;
   hr_name?: string;
-  id?: number;
+  id?: string | number;
   name?: string;
   nvt?: {
     name?: string;
     oid?: string;
   };
+  redacted?: boolean;
   type?: string;
   value?: ScanConfigPreferenceValue;
 }

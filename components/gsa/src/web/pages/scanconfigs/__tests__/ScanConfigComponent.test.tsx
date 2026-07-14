@@ -438,7 +438,7 @@ describe('ScanConfigComponent', () => {
   });
 
   describe('openEditConfigDialog / closeEditConfigDialog', () => {
-    test('should open edit dialog and load config, native families, scanners', async () => {
+    test('should open edit dialog from the native config load without a duplicate family fetch', async () => {
       const {gmp, mocks} = createGmp();
       const childFn = renderComponent(gmp);
 
@@ -455,9 +455,10 @@ describe('ScanConfigComponent', () => {
       });
       expect(mocks.getNvtFamilies).not.toHaveBeenCalled();
       expect(mocks.getScannersAll).not.toHaveBeenCalled();
-      expect(mocks.buildUrl).toHaveBeenCalledWith('api/v1/scan-configs/c1/families', {
-        token: 'test-token',
-      });
+      expect(mocks.buildUrl).not.toHaveBeenCalledWith(
+        'api/v1/scan-configs/c1/families',
+        {token: 'test-token'},
+      );
 
       await screen.findByText('Edit Scan Config Test Config');
     });
@@ -873,7 +874,7 @@ describe('ScanConfigComponent', () => {
       await waitFor(async () => {
         expect(mocks.getScanConfig).toHaveBeenCalledWith({id: 'c1'});
         expect(mocks.getNvtFamilies).not.toHaveBeenCalled();
-        expect(mocks.buildUrl).toHaveBeenCalledWith(
+        expect(mocks.buildUrl).not.toHaveBeenCalledWith(
           'api/v1/scan-configs/c1/families',
           {
             token: 'test-token',

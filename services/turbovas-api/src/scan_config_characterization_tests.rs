@@ -3,14 +3,27 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use axum::http::Method;
+use serde_json::json;
 
 use crate::direct_api::direct_api_v1_method_is_allowed;
-use crate::scan_config_query_sql::{scan_config_families_exists_sql, scan_config_families_sql};
+use crate::scan_config_families::ensure_scan_config_family_nvts_exist;
+use crate::scan_config_payloads::{
+    ScanConfigFamilyNvtItem, ScanConfigFamilyNvtsPayload, ScanConfigNvtPreference,
+    ScanConfigPreferenceNvt, ScanConfigPreferences, ScanConfigScannerPreference,
+    redact_scan_config_preference_values,
+};
+use crate::scan_config_query_sql::{
+    scan_config_families_exists_sql, scan_config_families_sql, scan_config_family_nvts_exists_sql,
+    scan_config_family_nvts_sql, scan_config_preferences_sql,
+};
 
+const GMP: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GMP_CONFIGS: &str = include_str!("../../../components/gvmd/src/gmp_configs.c");
 const MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
 const MANAGE_SQL_CONFIGS: &str = include_str!("../../../components/gvmd/src/manage_sql_configs.c");
+const MANAGE_SQL_NVTS: &str = include_str!("../../../components/gvmd/src/manage_sql_nvts.c");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
+const READ_API_ROUTES: &str = include_str!("read_api_routes.rs");
 
 fn inherited_function(source: &str, name: &str) -> String {
     let marker = format!("\n{name} (");
@@ -33,6 +46,25 @@ fn openapi_path_block(path: &str) -> String {
         .skip(1)
         .find_map(|(index, line)| {
             if line.starts_with("  /") && line.ends_with(':') {
+                Some(tail.lines().take(index).collect::<Vec<_>>().join("\n"))
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| tail.to_string())
+}
+
+fn openapi_schema_block(name: &str) -> String {
+    let marker = format!("    {name}:");
+    let start = OPENAPI
+        .find(&marker)
+        .unwrap_or_else(|| panic!("{name} schema block must exist"));
+    let tail = &OPENAPI[start..];
+    tail.lines()
+        .enumerate()
+        .skip(1)
+        .find_map(|(index, line)| {
+            if line.starts_with("    ") && !line.starts_with("      ") && line.ends_with(':') {
                 Some(tail.lines().take(index).collect::<Vec<_>>().join("\n"))
             } else {
                 None
@@ -479,5 +511,391 @@ fn native_scan_config_family_query_is_family_context_only() {
             !combined_lower.contains(forbidden),
             "scan-config family SQL must not include {forbidden}"
         );
+    }
+}
+
+#[test]
+fn inherited_scan_config_details_define_preference_filtering_fallback_and_redaction_anchors() {
+    let get_configs = inherited_function(GMP, "handle_get_configs");
+    for required in [
+        "get_configs_data->preferences || get_configs_data->get.details",
+        "init_nvt_preference_iterator (&prefs, NULL, TRUE)",
+        "buffer_config_preference_xml (buffer, &prefs, config, 1)",
+    ] {
+        assert!(
+            get_configs.contains(required),
+            "get_configs missing {required}"
+        );
+    }
+
+    let preference_iterator =
+        inherited_function(MANAGE_SQL_CONFIGS, "init_nvt_preference_iterator");
+    for required in [
+        "name != 'cache_folder'",
+        "name != 'include_folders'",
+        "name != 'nasl_no_signature_check'",
+        "name != 'network_targets'",
+        "name != 'ntp_save_sessions'",
+        "'server_info_%%'",
+        "name != 'max_checks'",
+        "name != 'max_hosts'",
+    ] {
+        assert!(
+            preference_iterator.contains(required),
+            "inherited preference filter missing {required}"
+        );
+    }
+
+    let preference_xml = inherited_function(GMP, "buffer_config_preference_xml");
+    for required in [
+        "nvt_preference_iterator_config_value (prefs, config)",
+        "nvt_preference_iterator_value (prefs)",
+        "strcmp (type, \"password\") == 0",
+        "<value></value>",
+        "<default></default>",
+    ] {
+        assert!(
+            preference_xml.contains(required),
+            "inherited preference output missing {required}"
+        );
+    }
+}
+
+#[test]
+fn native_scan_config_preference_sql_matches_inherited_read_contract() {
+    let sql = scan_config_preferences_sql();
+    for required in [
+        "FROM config_preferences config_value",
+        "config_value.config = c.internal_id",
+        "config_value.name = np.name",
+        "coalesce(cp.value, np.value, '')",
+        "coalesce(np.value, '')",
+        "ELSE coalesce(np.pref_name, '')",
+        "END AS preference_name",
+        "THEN 'Timeout'",
+        "END AS preference_hr_name",
+        "lower(coalesce(np.pref_type, '')) IN ('password', 'file')",
+        "THEN ''",
+        "cp.id IS NOT NULL AS configured",
+        "np.name NOT ILIKE 'server_info_%'",
+        "np.name != 'max_checks'",
+        "np.name != 'max_hosts'",
+        "ORDER BY np.name ASC",
+    ] {
+        assert!(sql.contains(required), "preference SQL missing {required}");
+    }
+    for hidden in [
+        "cache_folder",
+        "include_folders",
+        "nasl_no_signature_check",
+        "network_targets",
+        "ntp_save_sessions",
+    ] {
+        assert!(sql.contains(hidden), "preference SQL must hide {hidden}");
+    }
+    assert!(sql.contains("JOIN nvt_preferences np ON true"));
+    assert!(!sql.contains("config_only_preferences"));
+    assert!(!sql.contains("UNION"));
+
+    let sql_lower = sql.to_ascii_lowercase();
+    for forbidden in ["insert ", "update ", "delete ", "grant ", "drop "] {
+        assert!(
+            !sql_lower.contains(forbidden),
+            "preference SQL must not include {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn native_scan_config_preference_payload_is_exact_and_scalar() {
+    let payload = ScanConfigPreferences {
+        scanner: vec![ScanConfigScannerPreference {
+            name: "safe_checks".into(),
+            value: "yes".into(),
+            default: "no".into(),
+            configured: true,
+            redacted: false,
+        }],
+        nvt: vec![ScanConfigNvtPreference {
+            nvt: ScanConfigPreferenceNvt {
+                oid: "1.3.6.1.4.1.25623.1.0.100001".into(),
+                name: "Example NVT".into(),
+            },
+            id: 7,
+            name: "Credential file".into(),
+            hr_name: "Credential file".into(),
+            preference_type: "file".into(),
+            value: String::new(),
+            default: String::new(),
+            configured: true,
+            redacted: true,
+        }],
+    };
+
+    assert_eq!(
+        serde_json::to_value(payload).expect("preferences serialize"),
+        json!({
+            "scanner": [{
+                "name": "safe_checks",
+                "value": "yes",
+                "default": "no",
+                "configured": true,
+                "redacted": false
+            }],
+            "nvt": [{
+                "nvt": {
+                    "oid": "1.3.6.1.4.1.25623.1.0.100001",
+                    "name": "Example NVT"
+                },
+                "id": 7,
+                "name": "Credential file",
+                "hr_name": "Credential file",
+                "type": "file",
+                "value": "",
+                "default": "",
+                "configured": true,
+                "redacted": true
+            }]
+        })
+    );
+}
+
+#[test]
+fn native_scan_config_preference_redaction_never_preserves_sensitive_values() {
+    for preference_type in ["password", "Password", "file", "FILE"] {
+        assert_eq!(
+            redact_scan_config_preference_values(
+                preference_type,
+                "configured-secret".into(),
+                "feed-secret".into(),
+            ),
+            (String::new(), String::new(), true)
+        );
+    }
+    assert_eq!(
+        redact_scan_config_preference_values("entry", "configured".into(), "feed".into()),
+        ("configured".into(), "feed".into(), false)
+    );
+}
+
+#[test]
+fn native_scan_config_timeout_and_radio_preferences_preserve_gsa_values() {
+    let timeout = ScanConfigNvtPreference {
+        nvt: ScanConfigPreferenceNvt {
+            oid: "1.3.6.1.4.1.25623.1.0.100001".into(),
+            name: "Example NVT".into(),
+        },
+        id: 0,
+        name: "timeout".into(),
+        hr_name: "Timeout".into(),
+        preference_type: "entry".into(),
+        value: "600".into(),
+        default: "300".into(),
+        configured: true,
+        redacted: false,
+    };
+    let radio = ScanConfigNvtPreference {
+        nvt: ScanConfigPreferenceNvt {
+            oid: "1.3.6.1.4.1.25623.1.0.100002".into(),
+            name: "Radio NVT".into(),
+        },
+        id: 4,
+        name: "mode".into(),
+        hr_name: "mode".into(),
+        preference_type: "radio".into(),
+        value: "enabled;disabled".into(),
+        default: "disabled;enabled".into(),
+        configured: false,
+        redacted: false,
+    };
+
+    assert_eq!(
+        serde_json::to_value(timeout).expect("timeout preference serializes"),
+        json!({
+            "nvt": {"oid": "1.3.6.1.4.1.25623.1.0.100001", "name": "Example NVT"},
+            "id": 0,
+            "name": "timeout",
+            "hr_name": "Timeout",
+            "type": "entry",
+            "value": "600",
+            "default": "300",
+            "configured": true,
+            "redacted": false
+        })
+    );
+    let radio = serde_json::to_value(radio).expect("radio preference serializes");
+    assert_eq!(radio["value"], "enabled;disabled");
+    assert_eq!(radio["default"], "disabled;enabled");
+    assert_eq!(radio["configured"], false);
+}
+
+#[test]
+fn inherited_and_native_family_nvt_selection_cover_growing_and_static_representations() {
+    let inherited = inherited_function(MANAGE_SQL_NVTS, "select_config_nvts");
+    for required in [
+        "config_nvts_growing (config)",
+        "config_families_growing (config)",
+        "nvt_selectors.exclude = 1",
+        "nvt_selectors.exclude = 0",
+        "NVT_SELECTOR_TYPE_FAMILY",
+        "NVT_SELECTOR_TYPE_NVT",
+        "The number of NVT's is static",
+    ] {
+        assert!(
+            inherited.contains(required),
+            "inherited selector source missing {required}"
+        );
+    }
+
+    let sql = scan_config_family_nvts_sql();
+    for required in [
+        "coalesce(c.nvts_growing, 0)::integer AS nvts_growing",
+        "WHEN c.nvts_growing = 0 THEN 0",
+        "WHEN c.families_growing <> 0 THEN",
+        "ns.type = 1",
+        "ns.type = 2",
+        "ns.exclude = 1",
+        "ns.exclude = 0",
+        "WHEN f.growing <> 0 THEN NOT EXISTS",
+        "JOIN nvts n ON n.family = $2",
+        "n.cvss_base::double precision",
+        "END AS selected",
+    ] {
+        assert!(sql.contains(required), "family NVT SQL missing {required}");
+    }
+
+    let combined = format!("{sql}\n{}", scan_config_family_nvts_exists_sql());
+    let combined_lower = combined.to_ascii_lowercase();
+    for forbidden in ["insert ", "update ", "delete ", "grant ", "drop "] {
+        assert!(
+            !combined_lower.contains(forbidden),
+            "family NVT SQL must not include {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn native_scan_config_family_nvt_payload_and_not_found_contract_are_exact() {
+    let payload = ScanConfigFamilyNvtsPayload {
+        scan_config_id: "12345678-1234-1234-1234-123456789abc".into(),
+        family: "General".into(),
+        items: vec![ScanConfigFamilyNvtItem {
+            oid: "1.3.6.1.4.1.25623.1.0.100001".into(),
+            name: "Example NVT".into(),
+            severity: 7.5,
+            selected: true,
+        }],
+    };
+    assert_eq!(
+        serde_json::to_value(payload).expect("family NVT payload serializes"),
+        json!({
+            "scan_config_id": "12345678-1234-1234-1234-123456789abc",
+            "family": "General",
+            "items": [{
+                "oid": "1.3.6.1.4.1.25623.1.0.100001",
+                "name": "Example NVT",
+                "severity": 7.5,
+                "selected": true
+            }]
+        })
+    );
+
+    assert!(ensure_scan_config_family_nvts_exist(true, true).is_ok());
+    assert!(matches!(
+        ensure_scan_config_family_nvts_exist(false, true),
+        Err(crate::errors::ApiError::NotFound)
+    ));
+    assert!(matches!(
+        ensure_scan_config_family_nvts_exist(true, false),
+        Err(crate::errors::ApiError::NotFound)
+    ));
+}
+
+#[test]
+fn native_scan_config_context_routes_and_openapi_are_strict_and_read_only() {
+    let direct_path =
+        "/api/v1/scan-configs/12345678-1234-1234-1234-123456789abc/families/Port%20scanners/nvts";
+    assert!(
+        READ_API_ROUTES.contains("\"/api/v1/scan-configs/:scan_config_id/families/:family/nvts\"")
+    );
+    assert!(READ_API_ROUTES.contains("get(scan_config_asset_family_nvts)"));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        direct_path,
+        false
+    ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::GET,
+        direct_path,
+        true
+    ));
+    for method in [Method::POST, Method::PUT, Method::PATCH, Method::DELETE] {
+        assert!(!direct_api_v1_method_is_allowed(&method, direct_path, true));
+    }
+
+    let detail = openapi_path_block("/scan-configs/{scan_config_id}");
+    assert!(detail.contains(
+        "x-turbovas-replaces: scan-config-detail-info-tags-task-backlinks-and-preferences-read"
+    ));
+    assert!(detail.contains(
+        "x-turbovas-inherited-still-owns: scan-config-preference-selector-mutations-import-xml-export-and-blank-create"
+    ));
+
+    let path = openapi_path_block("/scan-configs/{scan_config_id}/families/{family}/nvts");
+    for required in [
+        "get:",
+        "operationId: getScanConfigsByScanConfigIdFamiliesByFamilyNvts",
+        "x-turbovas-direct: true",
+        "x-turbovas-exposure: direct-read",
+        "x-turbovas-maturity: live-read",
+        "x-turbovas-replaces: scan-config-family-nvt-selection-read",
+        "#/components/parameters/ScanConfigFamilyName",
+        "#/components/schemas/ScanConfigFamilyNvts",
+        "'404':",
+    ] {
+        assert!(
+            path.contains(required),
+            "family NVT OpenAPI missing {required}"
+        );
+    }
+    for forbidden in ["\n    post:", "\n    patch:", "\n    put:", "\n    delete:"] {
+        assert!(
+            !path.contains(forbidden),
+            "family NVT path contains {forbidden}"
+        );
+    }
+    assert_eq!(
+        OPENAPI
+            .matches("operationId: getScanConfigsByScanConfigIdFamiliesByFamilyNvts")
+            .count(),
+        1
+    );
+    let family_parameter = openapi_schema_block("ScanConfigFamilyName");
+    assert!(family_parameter.contains("maxLength: 256"));
+    assert!(!family_parameter.contains("maxLength: 512"));
+
+    for schema in [
+        "ScanConfigPreferences",
+        "ScanConfigScannerPreference",
+        "ScanConfigPreferenceNvt",
+        "ScanConfigNvtPreference",
+        "ScanConfigFamilyNvt",
+        "ScanConfigFamilyNvts",
+    ] {
+        let block = openapi_schema_block(schema);
+        assert!(
+            block.contains("additionalProperties: false"),
+            "{schema} must reject undeclared fields"
+        );
+    }
+    let detail_schema = openapi_schema_block("ScanConfigAssetDetail");
+    assert!(detail_schema.contains("required: [preferences]"));
+    assert!(detail_schema.contains("#/components/schemas/ScanConfigPreferences"));
+
+    for schema in ["ScanConfigScannerPreference", "ScanConfigNvtPreference"] {
+        let block = openapi_schema_block(schema);
+        assert!(block.contains("configured"));
+        assert!(block.contains("explicit override row"));
+        assert!(block.contains("redacted"));
     }
 }

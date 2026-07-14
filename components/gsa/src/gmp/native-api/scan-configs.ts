@@ -48,6 +48,31 @@ interface NativeUserTagPayload {
   comment: string;
 }
 
+type NativeScanConfigPreferenceValue = string | number;
+
+interface NativeScanConfigPreferencePayload {
+  configured?: boolean;
+  default?: NativeScanConfigPreferenceValue;
+  id?: string | number;
+  name?: string;
+  hr_name?: string;
+  redacted?: boolean;
+  type?: string;
+  value?: NativeScanConfigPreferenceValue;
+}
+
+interface NativeScanConfigNvtPreferencePayload extends NativeScanConfigPreferencePayload {
+  nvt?: {
+    oid?: string;
+    name?: string;
+  };
+}
+
+interface NativeScanConfigPreferencesPayload {
+  scanner?: NativeScanConfigPreferencePayload[];
+  nvt?: NativeScanConfigNvtPreferencePayload[];
+}
+
 interface NativeScanConfigPayload {
   id: string;
   name?: string;
@@ -70,6 +95,7 @@ interface NativeScanConfigPayload {
   user_tags?: NativeUserTagPayload[];
   created_at?: string;
   modified_at?: string;
+  preferences?: NativeScanConfigPreferencesPayload;
 }
 
 interface NativeScanConfigFamilyPayload {
@@ -84,6 +110,13 @@ interface NativeScanConfigFamiliesPayload {
   family_count?: number;
   families_growing?: number;
   families?: NativeScanConfigFamilyPayload[];
+}
+
+interface NativeScanConfigFamilyNvtPayload {
+  oid?: string;
+  name?: string;
+  severity?: number;
+  selected?: boolean;
 }
 
 interface NativeScanConfigsPayload {
@@ -111,6 +144,15 @@ export interface NativeScanConfigResponse {
 
 export interface NativeScanConfigFamiliesResponse {
   scanConfig: ScanConfig;
+}
+
+export interface NativeScanConfigFamilyNvtsResponse {
+  nvts: Array<{
+    oid: string;
+    name: string;
+    severity?: number;
+    selected: YesNo;
+  }>;
 }
 
 export interface NativeScanConfigPatchRequest {
@@ -228,6 +270,55 @@ const nativeTaskToElement = (task: NativeScanConfigTaskPayload) => ({
   usage_type: 'scan' as const,
 });
 
+const nativeScanConfigPreferenceToElement = (
+  preference: NativeScanConfigPreferencePayload,
+) => {
+  const type = stringValue(preference.type);
+  const currentValues = stringValue(preference.value)
+    .split(';')
+    .filter(value => value !== '');
+  const options = stringValue(preference.default)
+    .split(';')
+    .filter(value => value !== '');
+  const values =
+    type === 'radio'
+      ? {
+          alt: options.filter(option => option !== currentValues[0]),
+          default: options[0] ?? preference.default,
+          value: currentValues[0] ?? preference.value,
+        }
+      : {default: preference.default, value: preference.value};
+
+  return {
+    ...(preference.redacted ? {} : values),
+    ...(preference.configured === undefined
+      ? {}
+      : {configured: preference.configured}),
+    ...(preference.redacted === undefined
+      ? {}
+      : {redacted: preference.redacted}),
+    id: preference.id,
+    name: stringValue(preference.name),
+    hr_name: stringValue(preference.hr_name),
+    type,
+  };
+};
+
+const nativeScanConfigPreferencesToElement = (
+  preferences: NativeScanConfigPreferencesPayload = {},
+) => ({
+  preference: [
+    ...(preferences.scanner ?? []).map(nativeScanConfigPreferenceToElement),
+    ...(preferences.nvt ?? []).map(preference => ({
+      ...nativeScanConfigPreferenceToElement(preference),
+      nvt: {
+        _oid: stringValue(preference.nvt?.oid),
+        name: stringValue(preference.nvt?.name),
+      },
+    })),
+  ],
+});
+
 const fetchNativeJson = async <T>(
   gmp: NativeApiGmp,
   path: string,
@@ -328,6 +419,9 @@ const nativeScanConfigToModel = (
       ? {task: (item.tasks ?? []).map(nativeTaskToElement)}
       : undefined,
     user_tags: detail ? nativeUserTagsElement(item.user_tags ?? []) : undefined,
+    preferences: detail
+      ? nativeScanConfigPreferencesToElement(item.preferences)
+      : undefined,
   });
 };
 
@@ -415,6 +509,50 @@ export const fetchNativeScanConfigFamilies = async (
   );
   return {
     scanConfig: nativeScanConfigFamiliesToModel(payload),
+  };
+};
+
+export const mergeNativeScanConfig = (
+  scanConfig: ScanConfig,
+  scanConfigFamilies: ScanConfig,
+): ScanConfig =>
+  Object.assign(Object.create(Object.getPrototypeOf(scanConfig)), scanConfig, {
+    family_list: scanConfigFamilies.family_list,
+    families: scanConfigFamilies.families,
+  });
+
+export const fetchNativeScanConfigWithFamilies = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<NativeScanConfigResponse> => {
+  const [detail, families] = await Promise.all([
+    fetchNativeScanConfig(gmp, id),
+    fetchNativeScanConfigFamilies(gmp, id),
+  ]);
+  return {
+    scanConfig: mergeNativeScanConfig(detail.scanConfig, families.scanConfig),
+  };
+};
+
+export const fetchNativeScanConfigFamilyNvts = async (
+  gmp: NativeApiGmp,
+  id: string,
+  family: string,
+): Promise<NativeScanConfigFamilyNvtsResponse> => {
+  const payload = await fetchNativeJson<{
+    items?: NativeScanConfigFamilyNvtPayload[];
+  }>(
+    gmp,
+    `api/v1/scan-configs/${encodeURIComponent(id)}/families/${encodeURIComponent(family)}/nvts`,
+    {token: gmp.session.token},
+  );
+  return {
+    nvts: (payload.items ?? []).map(nvt => ({
+      oid: stringValue(nvt.oid),
+      name: stringValue(nvt.name),
+      severity: nvt.severity,
+      selected: nvt.selected === true ? YES_VALUE : NO_VALUE,
+    })),
   };
 };
 

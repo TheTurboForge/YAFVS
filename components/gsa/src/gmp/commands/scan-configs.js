@@ -23,6 +23,8 @@ import {
   deleteNativeScanConfig,
   exportNativeScanConfigsMetadata,
   exportNativeScanConfigMetadata,
+  fetchNativeScanConfigFamilyNvts,
+  fetchNativeScanConfigWithFamilies,
   fetchNativeScanConfigs,
   nativeScanConfigsQueryFromFilter,
   patchNativeScanConfig,
@@ -101,6 +103,15 @@ export class ScanConfigCommand extends EntityCommand {
     return this.httpPostWithTransform(data);
   }
 
+  async get({id}, options) {
+    if (!canUseNativeApi(this.http)) {
+      return await super.get({id}, options);
+    }
+
+    const response = await fetchNativeScanConfigWithFamilies(this.http, id);
+    return new Response(response.scanConfig);
+  }
+
   async export({id}) {
     return await exportNativeScanConfigMetadata(this.http, id);
   }
@@ -162,9 +173,7 @@ export class ScanConfigCommand extends EntityCommand {
     }
 
     if (canUseNativeApi(this.http)) {
-      throw new Error(
-        'Native scan config save only supports metadata fields',
-      );
+      throw new Error('Native scan config save only supports metadata fields');
     }
 
     const trendData = isDefined(trend) ? convert(trend, 'trend:') : {};
@@ -201,6 +210,12 @@ export class ScanConfigCommand extends EntityCommand {
   }
 
   editScanConfigFamilySettings({id, familyName}) {
+    if (canUseNativeApi(this.http)) {
+      return fetchNativeScanConfigFamilyNvts(this.http, id, familyName).then(
+        data => new Response(data),
+      );
+    }
+
     const get = this.httpGetWithTransform({
       cmd: 'edit_config_family',
       id,

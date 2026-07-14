@@ -5,10 +5,7 @@
  */
 
 import {useState} from 'react';
-import {
-  exportNativeScanConfigMetadata,
-  fetchNativeScanConfigFamilies,
-} from 'gmp/native-api/scan-configs';
+import {exportNativeScanConfigMetadata} from 'gmp/native-api/scan-configs';
 import {fetchNativeScanners} from 'gmp/native-api/scanners';
 import {SCANCONFIG_TREND_STATIC} from 'gmp/models/scan-config';
 import {NO_VALUE, YES_VALUE} from 'gmp/parser';
@@ -44,12 +41,16 @@ const sameFlatObject = (actual = {}, expected = {}) => {
     actualKeys.length === expectedKeys.length &&
     actualKeys.every(
       (key, index) =>
-        key === expectedKeys[index] && String(actual[key]) === String(expected[key]),
+        key === expectedKeys[index] &&
+        String(actual[key]) === String(expected[key]),
     )
   );
 };
 
-const expectedFamilyEditValues = (scanConfigFamilies = {}, allFamilies = []) => {
+const expectedFamilyEditValues = (
+  scanConfigFamilies = {},
+  allFamilies = [],
+) => {
   const trend = {};
   const select = {};
 
@@ -90,7 +91,8 @@ const isUnchangedFamilyEditState = (data, scanConfig, allFamilies) => {
 
   return (
     String(familyTrend ?? '') === String(scanConfig.families?.trend ?? '') &&
-    (isEmptyFlatObject(trend) || sameFlatObject(trend, expectedFamilies.trend)) &&
+    (isEmptyFlatObject(trend) ||
+      sameFlatObject(trend, expectedFamilies.trend)) &&
     (isEmptyFlatObject(select) ||
       sameFlatObject(select, expectedFamilies.select))
   );
@@ -230,6 +232,7 @@ const ScanConfigComponent = ({
       .get({id: configId})
       .then(response => {
         setConfig(response.data);
+        return response.data;
       })
       .finally(() => {
         setIsLoadingConfig(false);
@@ -239,16 +242,6 @@ const ScanConfigComponent = ({
   const loadFamilies = (configId, silent = false) => {
     if (!silent) {
       setIsLoadingFamilies(true);
-    }
-
-    if (canUseNativeApi(gmp)) {
-      return fetchNativeScanConfigFamilies(gmp, configId)
-        .then(response => {
-          setFamilies(nativeFamiliesForEditDialog(response.scanConfig));
-        })
-        .finally(() => {
-          setIsLoadingFamilies(false);
-        });
     }
 
     return gmp.nvtfamilies
@@ -262,6 +255,12 @@ const ScanConfigComponent = ({
   };
 
   const loadEditScanConfigSettings = (configId, silent) => {
+    if (canUseNativeApi(gmp)) {
+      return loadScanConfig(configId, silent).then(configData => {
+        setFamilies(nativeFamiliesForEditDialog(configData));
+      });
+    }
+
     return Promise.all([
       loadScanConfig(configId, silent),
       loadFamilies(configId, silent),
@@ -349,7 +348,10 @@ const ScanConfigComponent = ({
   const handleSaveScanConfig = data => {
     const {name, comment, id} = data;
     let saveData = data;
-    if (config.isInUse() || isUnchangedScanConfigEditState(data, config, families)) {
+    if (
+      config.isInUse() ||
+      isUnchangedScanConfigEditState(data, config, families)
+    ) {
       saveData = {name, comment, id};
     }
 

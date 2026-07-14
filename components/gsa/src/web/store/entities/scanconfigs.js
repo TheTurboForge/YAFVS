@@ -4,13 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {createAll} from 'web/store/entities/utils/main';
 import {
-  fetchNativeScanConfig,
-  fetchNativeScanConfigFamilies,
+  fetchNativeScanConfigWithFamilies,
   fetchNativeScanConfigs,
   nativeScanConfigsQueryFromFilter,
 } from 'gmp/native-api/scan-configs';
+import {createAll} from 'web/store/entities/utils/main';
 
 const {
   loadAllEntities,
@@ -22,26 +21,6 @@ const {
 } = createAll('scanconfig');
 
 const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
-
-const mergeNativeInformation = (inherited, native, nativeFamilies) =>
-  Object.assign(Object.create(Object.getPrototypeOf(inherited)), inherited, {
-    name: native.name,
-    comment: native.comment,
-    creationTime: native.creationTime,
-    modificationTime: native.modificationTime,
-    owner: native.owner,
-    family_list: nativeFamilies.family_list,
-    families: nativeFamilies.families,
-    nvts: native.nvts,
-    predefined: native.predefined,
-    deprecated: native.deprecated,
-    writable: native.writable,
-    inUse: native.inUse,
-    orphan: native.orphan,
-    trash: native.trash,
-    tasks: native.tasks,
-    userTags: native.userTags,
-  });
 
 const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
   const rootState = getState();
@@ -84,24 +63,9 @@ const nativeLoadEntity = gmp => id => (dispatch, getState) => {
 
   dispatch(entityLoadingActions.request(id));
 
-  return gmp.scanconfig
-    .get({id})
-    .then(inheritedResponse =>
-      Promise.all([
-        fetchNativeScanConfig(gmp, id),
-        fetchNativeScanConfigFamilies(gmp, id),
-      ]).then(([nativeResponse, nativeFamiliesResponse]) =>
-        dispatch(
-          entityLoadingActions.success(
-            id,
-            mergeNativeInformation(
-              inheritedResponse.data,
-              nativeResponse.scanConfig,
-              nativeFamiliesResponse.scanConfig,
-            ),
-          ),
-        ),
-      ),
+  return fetchNativeScanConfigWithFamilies(gmp, id)
+    .then(response =>
+      dispatch(entityLoadingActions.success(id, response.scanConfig)),
     )
     .catch(error => dispatch(entityLoadingActions.error(id, error)));
 };

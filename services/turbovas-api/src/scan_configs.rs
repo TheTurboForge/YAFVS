@@ -19,11 +19,13 @@ use crate::{
         normalize_collection_query, sort_clause,
     },
     scan_config_payloads::{
-        ScanConfigAssetDetail, ScanConfigAssetItem, ScanConfigTaskReference,
-        scan_config_asset_from_row, scan_config_task_reference_from_row,
+        ScanConfigAssetDetail, ScanConfigAssetItem, ScanConfigPreferences, ScanConfigTaskReference,
+        scan_config_asset_from_row, scan_config_preferences_payload_from_rows,
+        scan_config_task_reference_from_row,
     },
     scan_config_query_sql::{
-        scan_config_asset_detail_sql, scan_config_asset_list_sql, scan_config_task_references_sql,
+        scan_config_asset_detail_sql, scan_config_asset_list_sql, scan_config_preferences_sql,
+        scan_config_task_references_sql,
     },
     user_tags::ReportUserTag,
 };
@@ -114,11 +116,27 @@ pub(crate) async fn load_scan_config_asset_detail(
 
     let tasks = scan_config_task_references(&client, &scan_config_id).await?;
     let user_tags = scan_config_user_tags(&client, &scan_config_id).await?;
+    let preferences = scan_config_preferences(&client, &scan_config_id).await?;
     Ok(ScanConfigAssetDetail {
         asset: scan_config_asset_from_row(&row),
+        preferences,
         tasks,
         user_tags,
     })
+}
+
+async fn scan_config_preferences(
+    client: &tokio_postgres::Client,
+    scan_config_id: &str,
+) -> Result<ScanConfigPreferences, ApiError> {
+    let rows = client
+        .query(scan_config_preferences_sql(), &[&scan_config_id])
+        .await
+        .map_err(|error| {
+            tracing::warn!(%error, "scan config preference query failed");
+            ApiError::Database
+        })?;
+    Ok(scan_config_preferences_payload_from_rows(&rows))
 }
 
 async fn scan_config_task_references(

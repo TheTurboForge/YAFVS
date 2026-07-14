@@ -31,7 +31,7 @@ use crate::{
     report_raw_results::report_raw_results,
     report_tls_certificates::report_tls_certificates,
     result_payloads::*,
-    scan_config_families::scan_config_asset_families,
+    scan_config_families::{scan_config_asset_families, scan_config_asset_family_nvts},
     scan_configs::*,
     scanner_assets::*,
     schedules::*,
@@ -150,6 +150,10 @@ pub(crate) fn native_api_router() -> Router<AppState> {
         .route(
             "/api/v1/scan-configs/:scan_config_id/families",
             get(scan_config_asset_families),
+        )
+        .route(
+            "/api/v1/scan-configs/:scan_config_id/families/:family/nvts",
+            get(scan_config_asset_family_nvts),
         )
         .route("/api/v1/filters", get(filter_assets))
         .route("/api/v1/filters/:filter_id", get(filter_asset_detail))

@@ -91,6 +91,60 @@ pub(crate) fn scan_config_task_references_sql() -> &'static str {
         ORDER BY t.name ASC, t.uuid ASC;"#
 }
 
+pub(crate) fn scan_config_preferences_sql() -> &'static str {
+    r#"WITH config_row AS (
+            SELECT c.id AS internal_id
+              FROM configs c
+             WHERE c.uuid = $1
+               AND coalesce(c.usage_type, 'scan') = 'scan'
+             LIMIT 1
+        )
+        SELECT CASE WHEN np.pref_nvt IS NULL THEN 'scanner' ELSE 'nvt' END AS preference_kind,
+               CASE WHEN np.pref_nvt IS NULL
+                    THEN np.name
+                    ELSE coalesce(np.pref_name, '')
+               END AS preference_name,
+               CASE
+                 WHEN np.pref_nvt IS NULL THEN np.name
+                 WHEN coalesce(np.pref_name, '') = 'timeout' THEN 'Timeout'
+                 ELSE coalesce(np.pref_name, '')
+               END AS preference_hr_name,
+               coalesce(np.pref_nvt, '') AS nvt_oid,
+               coalesce(n.name, '') AS nvt_name,
+               coalesce(np.pref_id, 0)::integer AS pref_id,
+               coalesce(np.pref_type, '') AS pref_type,
+               CASE
+                 WHEN lower(coalesce(np.pref_type, '')) IN ('password', 'file') THEN ''
+                 ELSE coalesce(cp.value, np.value, '')
+               END AS value,
+               CASE
+                 WHEN lower(coalesce(np.pref_type, '')) IN ('password', 'file') THEN ''
+                 ELSE coalesce(np.value, '')
+               END AS default_value,
+               cp.id IS NOT NULL AS configured,
+               lower(coalesce(np.pref_type, '')) IN ('password', 'file') AS redacted
+          FROM config_row c
+          JOIN nvt_preferences np ON true
+     LEFT JOIN nvts n ON n.oid = np.pref_nvt
+     LEFT JOIN LATERAL (
+               SELECT config_value.id, config_value.value
+                 FROM config_preferences config_value
+                WHERE config_value.config = c.internal_id
+                  AND config_value.name = np.name
+                ORDER BY config_value.type ASC NULLS LAST, config_value.id ASC
+                LIMIT 1
+          ) cp ON true
+         WHERE np.name != 'cache_folder'
+           AND np.name != 'include_folders'
+           AND np.name != 'nasl_no_signature_check'
+           AND np.name != 'network_targets'
+           AND np.name != 'ntp_save_sessions'
+           AND np.name NOT ILIKE 'server_info_%'
+           AND np.name != 'max_checks'
+           AND np.name != 'max_hosts'
+         ORDER BY np.name ASC;"#
+}
+
 pub(crate) fn scan_config_families_sql() -> &'static str {
     r#"WITH config_row AS (
             SELECT c.uuid AS scan_config_id,
@@ -195,4 +249,76 @@ pub(crate) fn scan_config_families_sql() -> &'static str {
 
 pub(crate) fn scan_config_families_exists_sql() -> &'static str {
     "SELECT EXISTS (SELECT 1 FROM configs WHERE uuid = $1 AND coalesce(usage_type, 'scan') = 'scan');"
+}
+
+pub(crate) fn scan_config_family_nvts_sql() -> &'static str {
+    r#"WITH config_row AS (
+            SELECT coalesce(c.nvt_selector, '') AS nvt_selector,
+                   coalesce(c.families_growing, 0)::integer AS families_growing,
+                   coalesce(c.nvts_growing, 0)::integer AS nvts_growing
+              FROM configs c
+             WHERE c.uuid = $1
+               AND coalesce(c.usage_type, 'scan') = 'scan'
+             LIMIT 1
+        ),
+        family_state AS (
+            SELECT c.nvt_selector,
+                   CASE
+                     WHEN c.nvts_growing = 0 THEN 0
+                     WHEN c.families_growing <> 0 THEN
+                       CASE WHEN EXISTS (
+                              SELECT 1 FROM nvt_selectors ns
+                               WHERE ns.name = c.nvt_selector
+                                 AND ns.type = 1
+                                 AND ns.family_or_nvt = $2
+                                 AND ns.exclude = 1
+                            ) THEN 0 ELSE 1 END
+                     ELSE
+                       CASE WHEN EXISTS (
+                              SELECT 1 FROM nvt_selectors ns
+                               WHERE ns.name = c.nvt_selector
+                                 AND ns.type = 1
+                                 AND ns.family_or_nvt = $2
+                                 AND ns.exclude = 0
+                            ) THEN 1 ELSE 0 END
+                   END AS growing
+              FROM config_row c
+        )
+        SELECT n.oid AS oid,
+               coalesce(n.name, '') AS name,
+               CASE
+                 WHEN coalesce(n.cvss_base, '') ~ '^-?[0-9]+(\.[0-9]+)?$'
+                 THEN n.cvss_base::double precision
+                 ELSE 0::double precision
+               END AS severity,
+               CASE
+                 WHEN f.growing <> 0 THEN NOT EXISTS (
+                   SELECT 1 FROM nvt_selectors ns
+                    WHERE ns.name = f.nvt_selector
+                      AND ns.type = 2
+                      AND ns.family = $2
+                      AND ns.family_or_nvt = n.oid
+                      AND ns.exclude = 1
+                 )
+                 ELSE EXISTS (
+                   SELECT 1 FROM nvt_selectors ns
+                    WHERE ns.name = f.nvt_selector
+                      AND ns.type = 2
+                      AND ns.family = $2
+                      AND ns.family_or_nvt = n.oid
+                      AND ns.exclude = 0
+                 )
+               END AS selected
+          FROM family_state f
+          JOIN nvts n ON n.family = $2
+         ORDER BY lower(coalesce(n.name, '')), coalesce(n.name, ''), n.oid;"#
+}
+
+pub(crate) fn scan_config_family_nvts_exists_sql() -> &'static str {
+    r#"SELECT EXISTS (
+               SELECT 1 FROM configs
+                WHERE uuid = $1
+                  AND coalesce(usage_type, 'scan') = 'scan'
+           ) AS config_exists,
+           EXISTS (SELECT 1 FROM nvts WHERE family = $2) AS family_exists;"#
 }

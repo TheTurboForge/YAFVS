@@ -537,6 +537,51 @@ hex_value (gchar value)
 }
 
 static gboolean
+is_scan_config_family_segment (const gchar *value, gsize length)
+{
+  gsize decoded_length = 0;
+  gboolean all_dots = TRUE;
+
+  if (value == NULL || length == 0 || length > 768)
+    return FALSE;
+
+  for (gsize i = 0; i < length; i++)
+    {
+      gchar decoded = value[i];
+
+      if (decoded == '%')
+        {
+          gint high;
+          gint low;
+
+          if (i + 2 >= length)
+            return FALSE;
+
+          high = hex_value (value[i + 1]);
+          low = hex_value (value[i + 2]);
+          if (high < 0 || low < 0)
+            return FALSE;
+
+          decoded = (gchar) ((high << 4) | low);
+          i += 2;
+        }
+
+      if (decoded == '/' || decoded == '\\' || decoded == '?' || decoded == '#'
+          || (guchar) decoded < 0x20 || (guchar) decoded == 0x7f)
+        return FALSE;
+
+      decoded_length++;
+      if (decoded_length > 256)
+        return FALSE;
+
+      if (decoded != '.')
+        all_dots = FALSE;
+    }
+
+  return !all_dots;
+}
+
+static gboolean
 is_advisory_id_segment (const gchar *value, gsize length)
 {
   gsize decoded_length = 0;
@@ -1157,6 +1202,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *scan_config_prefix = "/api/v1/scan-configs/";
   const gchar *scan_config_export_suffix = "/export";
   const gchar *scan_config_families_suffix = "/families";
+  const gchar *scan_config_family_nvts_separator = "/families/";
   const gchar *filters_path = "/api/v1/filters";
   const gchar *filter_prefix = "/api/v1/filters/";
   const gchar *filter_export_suffix = "/export";
@@ -1395,6 +1441,18 @@ native_api_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, scan_config_prefix))
     {
       const gchar *id = path + strlen (scan_config_prefix);
+      const gchar *family_separator =
+        strstr (id, scan_config_family_nvts_separator);
+
+      if (family_separator != NULL)
+        {
+          const gchar *family = family_separator
+                                + strlen (scan_config_family_nvts_separator);
+          return is_uuid_segment (id, family_separator - id)
+                 && g_str_has_suffix (family, "/nvts")
+                 && is_scan_config_family_segment (
+                   family, strlen (family) - strlen ("/nvts"));
+        }
       if (g_str_has_suffix (id, scan_config_export_suffix))
         return is_uuid_segment (id,
                                 strlen (id)

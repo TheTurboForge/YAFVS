@@ -65,6 +65,21 @@ pub(crate) fn validate_nvt_oid(value: &str) -> Result<(), ApiError> {
     Ok(())
 }
 
+pub(crate) fn validate_scan_config_family(value: &str) -> Result<(), ApiError> {
+    if value.is_empty()
+        || value.len() > 256
+        || value.bytes().all(|byte| byte == b'.')
+        || value
+            .bytes()
+            .any(|byte| byte < 0x20 || byte == 0x7f || matches!(byte, b'/' | b'\\' | b'?' | b'#'))
+    {
+        return Err(ApiError::BadRequest(
+            "path family must be a bounded family name".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -114,5 +129,20 @@ mod tests {
         assert!(validate_nvt_oid("1.3.6?download=true").is_err());
         assert!(validate_nvt_oid("1.3.6;drop").is_err());
         assert!(validate_nvt_oid(&format!("1.{}", "2".repeat(128))).is_err());
+    }
+
+    #[test]
+    fn scan_config_family_validator_matches_proxy_path_boundary() {
+        assert!(validate_scan_config_family("Port scanners").is_ok());
+        assert!(validate_scan_config_family("Web Servers").is_ok());
+        assert!(validate_scan_config_family("").is_err());
+        assert!(validate_scan_config_family(".").is_err());
+        assert!(validate_scan_config_family("..").is_err());
+        assert!(validate_scan_config_family("Port/scanners").is_err());
+        assert!(validate_scan_config_family("Port\\scanners").is_err());
+        assert!(validate_scan_config_family("Port?scanners").is_err());
+        assert!(validate_scan_config_family("Port#scanners").is_err());
+        assert!(validate_scan_config_family("Port\nscanners").is_err());
+        assert!(validate_scan_config_family(&"x".repeat(257)).is_err());
     }
 }

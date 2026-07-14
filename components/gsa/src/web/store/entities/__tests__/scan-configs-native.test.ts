@@ -16,7 +16,10 @@ import {loadEntities, loadEntity} from 'web/store/entities/scanconfigs';
 import {createState} from 'web/store/entities/utils/testing';
 import {filterIdentifier} from 'web/store/utils';
 
-const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
+const createGmp = ({
+  jwt,
+  token = 'test-token',
+}: {jwt?: string; token?: string} = {}) => ({
   buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
   session: {jwt, token},
 });
@@ -180,6 +183,42 @@ describe('native API scan configs', () => {
             comment: 'Native tag comment',
           },
         ],
+        preferences: {
+          scanner: [
+            {
+              name: 'visible-scanner-preference',
+              value: 'visible value',
+              default: 'scanner default',
+              configured: true,
+            },
+            {
+              name: 'redacted-scanner-preference',
+              value: 'do-not-expose-scanner-value',
+              default: 'do-not-expose-scanner-default',
+              configured: true,
+              redacted: true,
+            },
+          ],
+          nvt: [
+            {
+              nvt: {oid: '1.3.6.1.4.1.25623.1.0.1', name: 'Native NVT'},
+              id: '42',
+              name: 'visible-nvt-preference',
+              value: 'enabled;disabled',
+              default: 'disabled;enabled;auto',
+              type: 'radio',
+            },
+            {
+              nvt: {oid: '1.3.6.1.4.1.25623.1.0.2', name: 'Redacted NVT'},
+              id: '43',
+              name: 'redacted-nvt-preference',
+              value: 'do-not-expose-nvt-value',
+              default: 'do-not-expose-nvt-default',
+              configured: true,
+              redacted: true,
+            },
+          ],
+        },
         created_at: '2026-06-02T11:57:09Z',
         modified_at: '2026-06-02T11:59:37Z',
       }),
@@ -203,9 +242,40 @@ describe('native API scan configs', () => {
     expect(config.isInUse()).toEqual(true);
     expect(config.tasks[0].id).toEqual('b14d191b-69a2-43e1-bf03-74d01fcced19');
     expect(config.tasks[0].name).toEqual('Native task');
-    expect(config.userTags?.[0].id).toEqual('8afbe92e-f808-447c-9399-1492f3f9ef3f');
+    expect(config.userTags?.[0].id).toEqual(
+      '8afbe92e-f808-447c-9399-1492f3f9ef3f',
+    );
     expect(config.userTags?.[0].name).toEqual('Native tag');
     expect(config.userTags?.[0].value).toEqual('true');
+    expect(config.preferences.scanner[0]).toMatchObject({
+      name: 'visible-scanner-preference',
+      value: 'visible value',
+      default: 'scanner default',
+      configured: true,
+    });
+    expect(config.preferences.scanner[1]).toMatchObject({
+      name: 'redacted-scanner-preference',
+      configured: true,
+      redacted: true,
+    });
+    expect(config.preferences.scanner[1].value).toBeUndefined();
+    expect(config.preferences.scanner[1].default).toBeUndefined();
+    expect(config.preferences.nvt[0]).toMatchObject({
+      id: '42',
+      name: 'visible-nvt-preference',
+      nvt: {oid: '1.3.6.1.4.1.25623.1.0.1', name: 'Native NVT'},
+      value: 'enabled',
+      default: 'disabled',
+      alt: ['disabled', 'auto'],
+    });
+    expect(config.preferences.nvt[1]).toMatchObject({
+      id: '43',
+      name: 'redacted-nvt-preference',
+      configured: true,
+      redacted: true,
+      nvt: {oid: '1.3.6.1.4.1.25623.1.0.2', name: 'Redacted NVT'},
+    });
+    expect(JSON.stringify(config)).not.toContain('do-not-expose');
     expect(gmp.buildUrl).toHaveBeenCalledWith(`api/v1/scan-configs/${id}`, {
       token: 'test-token',
     });
@@ -259,58 +329,9 @@ describe('native API scan configs', () => {
     );
   });
 
-  test('loads inherited detail context before overlaying native Information fields', async () => {
+  test('loads native detail and families without a GMP detail request', async () => {
     const id = 'daba56c8-73ec-11df-a475-002264764cea';
     const calls: string[] = [];
-    const inherited = ScanConfig.fromElement({
-      _id: id,
-      name: 'Inherited config',
-      comment: 'inherited comment',
-      writable: 1,
-      predefined: 0,
-      deprecated: 1,
-      family_count: {__text: '1', growing: 0},
-      nvt_count: {__text: '2', growing: 0},
-      families: {
-        family: [
-          {
-            name: 'Inherited family',
-            growing: 0,
-            nvt_count: '2',
-            max_nvt_count: '2',
-          },
-        ],
-      },
-      preferences: {
-        preference: [
-          {
-            id: 1,
-            name: 'scanner-pref',
-            hr_name: 'Scanner preference',
-            type: 'entry',
-            value: 'retained',
-          },
-          {
-            id: 2,
-            name: 'nvt-pref',
-            hr_name: 'NVT preference',
-            nvt: {_oid: '1.3.6.1.4.1.25623.1.0.1', name: 'Retained NVT'},
-            type: 'entry',
-            value: 'retained-nvt',
-          },
-        ],
-      },
-      scanner: {
-        _id: '08b69003-5fc2-4037-a479-93b440211c73',
-        __text: 'Inherited Scanner',
-      },
-      tasks: {
-        task: [{_id: 'task-1', name: 'Retained task'}],
-      },
-      user_tags: {
-        tag: [{_id: 'tag-1', name: 'Retained tag', value: 'true'}],
-      },
-    });
     const fetchMock = testing.fn().mockImplementation((url: string) => {
       if (url.endsWith('/families')) {
         calls.push('native-families');
@@ -362,6 +383,9 @@ describe('native API scan configs', () => {
               comment: 'native tag comment',
             },
           ],
+          preferences: {
+            scanner: [{name: 'native-scanner-preference', value: 'native'}],
+          },
           created_at: '2026-06-02T11:57:09Z',
           modified_at: '2026-06-02T11:59:37Z',
         }),
@@ -373,10 +397,7 @@ describe('native API scan configs', () => {
     const gmp = {
       ...createGmp({jwt: 'jwt-token'}),
       scanconfig: {
-        get: testing.fn().mockImplementation(() => {
-          calls.push('gmp');
-          return Promise.resolve({data: inherited});
-        }),
+        get: testing.fn(),
       },
     };
     const actions: Array<{type: string; data?: ScanConfig}> = [];
@@ -400,8 +421,10 @@ describe('native API scan configs', () => {
       action => action.type === 'ENTITY_LOADING_SUCCESS',
     );
     const config = success?.data;
-    expect(calls).toEqual(['gmp', 'native-detail', 'native-families']);
-    expect(gmp.scanconfig.get).toHaveBeenCalledWith({id});
+    expect(calls).toHaveLength(2);
+    expect(calls).toContain('native-detail');
+    expect(calls).toContain('native-families');
+    expect(gmp.scanconfig.get).not.toHaveBeenCalled();
     expect(config).toBeInstanceOf(ScanConfig);
     expect(config?.name).toEqual('Native Full and fast');
     expect(config?.comment).toEqual('native comment');
@@ -415,13 +438,35 @@ describe('native API scan configs', () => {
     expect(config?.family_list?.[0].name).toEqual('Native family');
     expect(config?.family_list?.[0].nvts?.count).toEqual(7);
     expect(config?.family_list?.[0].nvts?.max).toEqual(9);
-    expect(config?.preferences.scanner[0].name).toEqual('scanner-pref');
-    expect(config?.preferences.nvt[0].nvt?.oid).toEqual(
-      '1.3.6.1.4.1.25623.1.0.1',
+    expect(config?.preferences.scanner[0].name).toEqual(
+      'native-scanner-preference',
     );
-    expect(config?.scanner?.name).toEqual('Inherited Scanner');
     expect(config?.tasks[0].name).toEqual('Native retained task');
     expect(config?.userTags?.[0].name).toEqual('Native retained tag');
     expect(config?.userTags?.[0].value).toEqual('yes');
+  });
+
+  test('does not fall back to GMP when a native detail load fails', async () => {
+    const id = 'daba56c8-73ec-11df-a475-002264764cea';
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = {
+      ...createGmp(),
+      scanconfig: {get: testing.fn()},
+    };
+    const dispatch = testing.fn(action => action);
+    const getState = () => ({
+      entities: {scanconfig: {byId: {}, errors: {}, isLoading: {}}},
+    });
+
+    await loadEntity(gmp)(id)(dispatch, getState);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(gmp.scanconfig.get).not.toHaveBeenCalled();
+    expect(dispatch.mock.calls[1][0].type).toEqual('ENTITY_LOADING_ERROR');
   });
 });

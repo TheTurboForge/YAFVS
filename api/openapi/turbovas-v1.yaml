@@ -4278,14 +4278,15 @@ paths:
       x-turbovas-direct: true
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
-      x-turbovas-replaces: scan-config-metadata-detail-info-tags-and-task-backlink-read
-      summary: Read one scan config metadata record
-      description: Metadata-only detail for automation and proof probes, including active User Tags and shallow task backlinks. Native direct write-control can create from base, patch name/comment metadata for non-predefined scan configs, clone operator-owned or predefined scan configs, move eligible live scan configs to trash, restore trash rows, and hard-delete unreferenced trash rows; preference edit payloads, import/export, scanner control, blank create, and selector/preference mutations remain inherited while native contracts are designed.
+      x-turbovas-replaces: scan-config-detail-info-tags-task-backlinks-and-preferences-read
+      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutations-import-xml-export-and-blank-create
+      summary: Read one scan config with effective preferences
+      description: Read-only scan-config detail backed directly by gvmd/PostgreSQL, including active User Tags, shallow task backlinks, scanner preferences, and NVT preferences. Preference values use the config override when present and the current feed default otherwise; configured indicates whether an explicit override row exists. Password and file preference values/defaults are returned as empty strings with redacted set to true. Native direct write-control can create from base, patch name/comment metadata for non-predefined scan configs, clone operator-owned or predefined scan configs, move eligible live scan configs to trash, restore trash rows, and hard-delete unreferenced trash rows; preference/selector mutations, import, inherited XML export, scanner control, and blank create remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
         '200':
-          description: Scan-config metadata detail
+          description: Scan-config detail with effective preferences
           content:
             application/json:
               schema:
@@ -4558,8 +4559,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-family-summary-read
+      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutations-import-xml-export-and-blank-create
       summary: Read scan config NVT family selection summary
-      description: Read-only expansion of the NVT Families detail tab. Scanner preferences, NVT preferences, selector edit payloads, import/export, and writes remain on inherited compatibility paths.
+      description: Read-only expansion of the NVT Families detail tab. Per-family NVT selection is exposed separately; selector/preference mutations, import, inherited XML export, and blank create remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -4569,6 +4571,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScanConfigFamilies'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /scan-configs/{scan_config_id}/families/{family}/nvts:
+    get:
+      operationId: getScanConfigsByScanConfigIdFamiliesByFamilyNvts
+      x-turbovas-direct: true
+      x-turbovas-exposure: direct-read
+      x-turbovas-maturity: live-read
+      x-turbovas-replaces: scan-config-family-nvt-selection-read
+      x-turbovas-inherited-still-owns: scan-config-preference-selector-mutations-import-xml-export-and-blank-create
+      summary: Read NVT selection for one scan config family
+      description: Returns every currently known NVT in the requested family with numeric severity and effective selected state. Selection follows inherited growing-family exclusion and static-family inclusion selector representations. The route is read-only; selector/preference mutations, import, inherited XML export, and blank create remain inherited.
+      parameters:
+        - $ref: '#/components/parameters/ScanConfigId'
+        - $ref: '#/components/parameters/ScanConfigFamilyName'
+      responses:
+        '200':
+          description: All known family NVTs with effective selection state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScanConfigFamilyNvts'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -7191,6 +7227,15 @@ components:
       schema:
         type: string
         format: uuid
+    ScanConfigFamilyName:
+      name: family
+      in: path
+      required: true
+      description: Exact NVT family name. Reserved path characters must be URL-encoded.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 256
     ReportFormatId:
       name: report_format_id
       in: path
@@ -8174,7 +8219,10 @@ components:
       allOf:
         - $ref: '#/components/schemas/ScanConfigAsset'
         - type: object
+          required: [preferences]
           properties:
+            preferences:
+              $ref: '#/components/schemas/ScanConfigPreferences'
             tasks:
               type: array
               description: Non-hidden task backlinks that use this scan config. Task control remains inherited.
@@ -8185,6 +8233,72 @@ components:
               description: Active user tags attached directly to this scan config. Write/tag actions remain inherited.
               items:
                 $ref: '#/components/schemas/ReportUserTag'
+    ScanConfigPreferences:
+      type: object
+      additionalProperties: false
+      required: [scanner, nvt]
+      properties:
+        scanner:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScanConfigScannerPreference'
+        nvt:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScanConfigNvtPreference'
+    ScanConfigScannerPreference:
+      type: object
+      additionalProperties: false
+      required: [name, value, default, configured, redacted]
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+        default:
+          type: string
+        configured:
+          type: boolean
+          description: True when this scan config has an explicit override row for the preference. For redacted values, clients use this flag to distinguish configured/keep from unset without receiving the secret.
+        redacted:
+          type: boolean
+          description: True when a sensitive value/default was replaced with empty strings.
+    ScanConfigPreferenceNvt:
+      type: object
+      additionalProperties: false
+      required: [oid, name]
+      properties:
+        oid:
+          type: string
+        name:
+          type: string
+    ScanConfigNvtPreference:
+      type: object
+      additionalProperties: false
+      required: [nvt, id, name, hr_name, type, value, default, configured, redacted]
+      properties:
+        nvt:
+          $ref: '#/components/schemas/ScanConfigPreferenceNvt'
+        id:
+          type: integer
+          format: int32
+          minimum: 0
+        name:
+          type: string
+        hr_name:
+          type: string
+        type:
+          type: string
+        value:
+          type: string
+        default:
+          type: string
+        configured:
+          type: boolean
+          description: True when this scan config has an explicit override row matching the feed preference. For redacted values, clients use this flag to distinguish configured/keep from unset without receiving the secret.
+        redacted:
+          type: boolean
+          description: True for password and file preferences; value and default are then empty strings.
     FilterAssetCollection:
       type: object
       required: [page, items]
@@ -10245,6 +10359,34 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ScanConfigFamily'
+    ScanConfigFamilyNvt:
+      type: object
+      additionalProperties: false
+      required: [oid, name, severity, selected]
+      properties:
+        oid:
+          type: string
+        name:
+          type: string
+        severity:
+          type: number
+          format: double
+        selected:
+          type: boolean
+    ScanConfigFamilyNvts:
+      type: object
+      additionalProperties: false
+      required: [scan_config_id, family, items]
+      properties:
+        scan_config_id:
+          type: string
+          format: uuid
+        family:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScanConfigFamilyNvt'
     FilterAlertReference:
       type: object
       required: [id, name]

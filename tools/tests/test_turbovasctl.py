@@ -3130,6 +3130,10 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/scan-configs", endpoints)
         self.assertIn("/api/v1/scan-configs/{scan_config_id}", endpoints)
         self.assertIn("/api/v1/scan-configs/{scan_config_id}/families", endpoints)
+        self.assertIn(
+            "/api/v1/scan-configs/{scan_config_id}/families/{family}/nvts",
+            endpoints,
+        )
         self.assertIn("/api/v1/feeds", endpoints)
         self.assertIn("/api/v1/alerts", endpoints)
         self.assertIn("/api/v1/alerts/{alert_id}", endpoints)
@@ -3321,8 +3325,8 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 185)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 105)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 186)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 106)
         self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 80)
         self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 80)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
@@ -3477,7 +3481,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(contract["missing_rust_direct_allowlist"], [])
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
-        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 105)
+        self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 106)
         self.assertEqual(contract["openapi_marked_direct_write_control_count"], 80)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
@@ -4151,7 +4155,7 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 186)
+        self.assertEqual(contract["operation_count"], 187)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertIn(
@@ -4339,10 +4343,11 @@ class TurboVASCtlTests(unittest.TestCase):
          'saved-filter-trash-move',
          'scan-config-clone',
          'scan-config-create-from-base',
+         'scan-config-detail-info-tags-task-backlinks-and-preferences-read',
          'scan-config-diagnostic-nvt-selection',
+         'scan-config-family-nvt-selection-read',
          'scan-config-family-summary-read',
          'scan-config-hard-delete',
-         'scan-config-metadata-detail-info-tags-and-task-backlink-read',
          'scan-config-metadata-export-read',
          'scan-config-metadata-list-read',
          'scan-config-metadata-modify',
@@ -4439,7 +4444,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'report-format-file-import-export-verify-param-writes-and-deletes',
          'retention-mutations',
          'saved-filter-alert-linkage',
-         'scan-config-preference-selector-mutation-import-export-blank-create',
+         'scan-config-preference-selector-mutations-import-xml-export-and-blank-create',
          'schedule-calendar-edit-and-task-recalculation',
          'target-credential-secrets-create-delete-restore-export',
          'target-credential-secrets-writes-and-deletes',
@@ -4522,9 +4527,9 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass", json.dumps(result, sort_keys=True))
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 186)
-        self.assertEqual(details["direct_operation_count"], 185)
-        self.assertEqual(details["direct_read_operation_count"], 105)
+        self.assertEqual(details["operation_count"], 187)
+        self.assertEqual(details["direct_operation_count"], 186)
+        self.assertEqual(details["direct_read_operation_count"], 106)
         self.assertIn(
             "POST /tasks/{task_id}/replace-target",
             details["non_get_direct_operations"],
@@ -4835,11 +4840,11 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 186)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 186)
-        self.assertEqual(details["summary"]["inventory_rows"], 186)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 186)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 186)
+        self.assertEqual(details["summary"]["total_rows"], 187)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 187)
+        self.assertEqual(details["summary"]["inventory_rows"], 187)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 187)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 187)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -5090,8 +5095,9 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/scanners/{scanner_id}": ("getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", None),
             "/api/v1/scanners/{scanner_id}/export": ("getScannersByScannerIdExport", "scanner-metadata-export-read", None),
             "/api/v1/scan-configs": ("getScanConfigs", "scan-config-metadata-list-read", None),
-            "/api/v1/scan-configs/{scan_config_id}": ("getScanConfigsByScanConfigId", "scan-config-metadata-detail-info-tags-and-task-backlink-read", None),
-            "/api/v1/scan-configs/{scan_config_id}/families": ("getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", None),
+            "/api/v1/scan-configs/{scan_config_id}": ("getScanConfigsByScanConfigId", "scan-config-detail-info-tags-task-backlinks-and-preferences-read", "scan-config-preference-selector-mutations-import-xml-export-and-blank-create"),
+            "/api/v1/scan-configs/{scan_config_id}/families": ("getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-preference-selector-mutations-import-xml-export-and-blank-create"),
+            "/api/v1/scan-configs/{scan_config_id}/families/{family}/nvts": ("getScanConfigsByScanConfigIdFamiliesByFamilyNvts", "scan-config-family-nvt-selection-read", "scan-config-preference-selector-mutations-import-xml-export-and-blank-create"),
         }
         for endpoint, (operation_id, replaces, inherited_still_owns) in expected_asset_metadata.items():
             row = rows[("get", endpoint)]
@@ -5674,7 +5680,7 @@ class TurboVASCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 186)
+        self.assertEqual(len(operation_ids), 187)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(turbovasctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(turbovasctl.openapi_contract_operation_id("patch", "/alerts/{alert_id}"), "patchAlertsByAlertId")
@@ -5828,6 +5834,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 "POST /scan-configs/{scan_config_id}/restore",
                 "DELETE /scan-configs/{scan_config_id}/trash",
                 "GET /scan-configs/{scan_config_id}/families",
+                "GET /scan-configs/{scan_config_id}/families/{family}/nvts",
                 "GET /tags",
                 "GET /tags/resource-names/{resource_type}",
                 "GET /tags/{tag_id}",
@@ -10734,6 +10741,7 @@ class TurboVASCtlTests(unittest.TestCase):
         scan_configs = operations[("get", "/scan-configs")]
         scan_config_detail = operations[("get", "/scan-configs/{scan_config_id}")]
         scan_config_families = operations[("get", "/scan-configs/{scan_config_id}/families")]
+        scan_config_family_nvts = operations[("get", "/scan-configs/{scan_config_id}/families/{family}/nvts")]
         tag_resource_names = operations[("get", "/tags/resource-names/{resource_type}")]
         trashcan_summary = operations[("get", "/trashcan/summary")]
 
@@ -10788,8 +10796,9 @@ class TurboVASCtlTests(unittest.TestCase):
             (scanner_detail, "getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", None),
             (scanner_export, "getScannersByScannerIdExport", "scanner-metadata-export-read", None),
             (scan_configs, "getScanConfigs", "scan-config-metadata-list-read", None),
-            (scan_config_detail, "getScanConfigsByScanConfigId", "scan-config-metadata-detail-info-tags-and-task-backlink-read", None),
-            (scan_config_families, "getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", None),
+            (scan_config_detail, "getScanConfigsByScanConfigId", "scan-config-detail-info-tags-task-backlinks-and-preferences-read", "scan-config-preference-selector-mutations-import-xml-export-and-blank-create"),
+            (scan_config_families, "getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-preference-selector-mutations-import-xml-export-and-blank-create"),
+            (scan_config_family_nvts, "getScanConfigsByScanConfigIdFamiliesByFamilyNvts", "scan-config-family-nvt-selection-read", "scan-config-preference-selector-mutations-import-xml-export-and-blank-create"),
         ]
         for operation, operation_id, replaces, inherited_still_owns in expected_asset_metadata:
             self.assertEqual(operation["operation_id"], operation_id)

@@ -268,7 +268,7 @@ does not store. Trashcan Contents reads can use
 `/api/v1/trashcan/summary` for counts-only native JSON, but row-level
 Trashcan data and restore/delete/empty mutations remain inherited because
 credential/target/scanner trash tables contain secret-adjacent payloads.
-Further native API expansion should now move toward remaining helper/tooling
-replacements and direct read-only automation, then carefully designed
-write/control paths that remove required GMP/XML, `python-gvm`, or `gvm-tools`
-dependence without weakening scanner-control or secret boundaries.
+The legacy Python client/tooling dependency is removed. Further native API
+expansion should target the remaining explicit GSA/gsad/gvmd owner tails and
+production direct-access hardening without weakening scanner-control or secret
+boundaries.

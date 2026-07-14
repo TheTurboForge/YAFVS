@@ -504,16 +504,6 @@ fn gsad_and_gsa_alert_definition_paths_are_native_only() {
 }
 
 #[test]
-fn python_gvm_alert_request_surface_is_removed() {
-    let alerts = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../components/python-gvm/gvm/protocols/gmp/requests/v224/_alerts.py");
-    assert!(
-        !alerts.exists(),
-        "python-gvm Alert request compatibility must remain removed"
-    );
-}
-
-#[test]
 fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_remain_closed() {
     for path in [
         "/api/v1/alerts",

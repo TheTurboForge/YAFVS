@@ -343,12 +343,4 @@ mod task_stop_tests;
 #[cfg(test)]
 mod task_target_replace_tests;
 #[cfg(test)]
-mod tooling_account_characterization_tests;
-#[cfg(test)]
-mod tooling_cert_config_characterization_tests;
-#[cfg(test)]
-mod tooling_schedule_write_characterization_tests;
-#[cfg(test)]
-mod tooling_tag_write_characterization_tests;
-#[cfg(test)]
 mod user_account_contract_tests;

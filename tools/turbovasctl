@@ -128,11 +128,9 @@ MODIFIED_IMPORTED_NO_COMMENT_FILES = {
     "components/gsa/index.html": "HTML application shell served to browsers; a file-level modification comment would become runtime page content.",
     "components/gsa/package-lock.json": "JSON dependency lockfile; comments would make the file invalid.",
     "components/gsa/package.json": "JSON package manifest; comments would make the file invalid.",
-    "components/gvm-tools/uv.lock": "Python uv dependency lockfile; comments would make the file invalid.",
     "components/notus-scanner/poetry.lock": "Python dependency lockfile; comments would make the file invalid.",
     "components/openvas-scanner/rust/Cargo.lock": "Rust dependency lockfile; comments would make the file invalid.",
     "components/ospd-openvas/poetry.lock": "Python dependency lockfile; comments would make the file invalid.",
-    "components/python-gvm/uv.lock": "Python uv dependency lockfile; comments would make the file invalid.",
     "components/gsa/public/img/enterprise-container.svg": "SVG browser asset; adding a text notice would alter the rendered asset payload.",
     "components/gsa/public/img/favicon.svg": "SVG browser asset; adding a text notice would alter the rendered asset payload.",
     "components/gsa/public/img/login-bottom.svg": "SVG browser asset; adding a text notice would alter the rendered asset payload.",
@@ -250,13 +248,10 @@ OSV_LOCKFILES = (
     NATIVE_API_CARGO_LOCK,
     Path("components/openvas-scanner/rust/Cargo.lock"),
     GSA_PACKAGE_LOCK,
-    Path("components/python-gvm/uv.lock"),
-    Path("components/gvm-tools/uv.lock"),
 )
 OSV_HIGH_SEVERITIES = {"high", "critical"}
-LEGACY_GMP_PYTHON_CHAIN = ("python-gvm", "gvm-tools")
 RUNTIME_PYTHON_CHAIN = ("greenbone-feed-sync", "ospd-openvas", "notus-scanner")
-PYTHON_CHAIN = (*LEGACY_GMP_PYTHON_CHAIN, *RUNTIME_PYTHON_CHAIN)
+PYTHON_CHAIN = RUNTIME_PYTHON_CHAIN
 BASELINE_CHAIN = (*C_SERVICES_CHAIN, "gsa", *RUNTIME_PYTHON_CHAIN)
 RUNTIME_SERVICES = ("postgres", "redis-openvas", "mosquitto")
 APP_SERVICES = ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "turbovas-api")
@@ -2330,8 +2325,6 @@ NATIVE_TOOLING_SCAN_PREFIXES = (
     "tools/",
     "docs/",
     "components/gsa/src/gmp/",
-    "components/python-gvm/",
-    "components/gvm-tools/",
 )
 GSA_NATIVE_API_CLIENT_PREFIX = "components/gsa/src/gmp/native-api/"
 NATIVE_TOOLING_SCAN_FILES = {"README.md", "UPSTREAMS.md", "LICENSE_AUDIT.md", "BUILDING.md"}
@@ -2649,8 +2642,6 @@ COMPONENTS: tuple[Component, ...] = (
     Component("openvas-smb", "components/openvas-smb", "SMB support library", ("COPYING",), ("README.md", "CMakeLists.txt")),
     Component("notus-scanner", "components/notus-scanner", "Notus local security check scanner", ("LICENSE",), ("README.md", "pyproject.toml")),
     Component("greenbone-feed-sync", "components/greenbone-feed-sync", "feed synchronization tooling", ("LICENSE",), ("README.md", "pyproject.toml")),
-    Component("python-gvm", "components/python-gvm", "Python GMP client library", ("LICENSE",), ("README.md", "pyproject.toml")),
-    Component("gvm-tools", "components/gvm-tools", "command-line GMP tools", ("LICENSE",), ("README.md", "pyproject.toml")),
 )
 COMPONENT_BY_NAME = {component.name: component for component in COMPONENTS}
 FEED_CLASSES: tuple[FeedClass, ...] = (
@@ -2742,23 +2733,6 @@ BUILD_META: dict[str, BuildMeta] = {
         programs=("node", "npm"),
         package_hints=("Node.js 22 official binary install", "npm 11"),
         node_scripts=("build",),
-    ),
-    "python-gvm": BuildMeta(
-        "python-gvm",
-        "python-uv",
-        70,
-        programs=("python3", "uv"),
-        package_hints=("uv",),
-        python_imports=("gvm",),
-    ),
-    "gvm-tools": BuildMeta(
-        "gvm-tools",
-        "python-uv",
-        80,
-        programs=("python3", "uv"),
-        package_hints=("uv",),
-        python_imports=("gvmtools",),
-        python_local_deps=("python-gvm",),
     ),
     "greenbone-feed-sync": BuildMeta(
         "greenbone-feed-sync",
@@ -8413,9 +8387,9 @@ def native_tooling_category(relative_path: str) -> tuple[str, str] | None:
     if relative_path == "components/gsa/src/gmp/__tests__/gmp.test.ts":
         return "compatibility_bridge", "GSA session tests characterize compatibility login/logout behavior; they are not a product workflow."
     if relative_path == "tools/runtime_browser_smoke.py":
-        return "compatibility_bridge", "Browser smoke uses native cleanup first; inherited GMP/python-gvm remains only as optional fallback cleanup plumbing."
+        return "compatibility_bridge", "Browser smoke keeps a bounded raw GMP cleanup fallback for test artifacts; it imports neither removed legacy client."
     if relative_path == "tools/turbovasctl":
-        return "compatibility_bridge", "turbovasctl can still build or describe inherited compatibility components, but default runtime/baseline paths no longer require python-gvm or gvm-tools."
+        return "compatibility_bridge", "turbovasctl measures the completed legacy-client teardown and remaining GMP owner tails."
     if relative_path.startswith("tools/runtime_") and relative_path.endswith(".py"):
         return "required_runtime", "TurboVAS runtime/helper command path still depends on inherited GMP/python-gvm plumbing."
     if relative_path.startswith("tools/tests/"):
@@ -8430,15 +8404,6 @@ def native_tooling_category(relative_path: str) -> tuple[str, str] | None:
         return "product_workflow", "GSA product workflow still reads or writes through an inherited GMP command owner."
     if relative_path.startswith("components/gsa/src/gmp/"):
         return "compatibility_bridge", "Generic GSA model, locale, parser, HTTP, or test plumbing remains until inherited GMP command owners are removed."
-    if relative_path.startswith("components/gvm-tools/scripts/"):
-        if path.name in NATIVE_TOOLING_PRODUCT_GVM_TOOLS_SCRIPTS:
-            return "product_workflow", "gvm-tools script supports a retained TurboVAS report/scope workflow until native APIs replace it."
-        if path.suffix == ".py":
-            return "candidate_for_removal", "Inherited gvm-tools operator script is a removal candidate once native tooling covers retained needs."
-    if relative_path.startswith("components/python-gvm/") or relative_path.startswith("components/gvm-tools/gvmtools/"):
-        return "compatibility_bridge", "Inherited client library remains as temporary compatibility plumbing, not the desired product API."
-    if relative_path.startswith("components/gvm-tools/"):
-        return "compatibility_bridge", "Inherited gvm-tools component remains only as temporary compatibility plumbing."
     if relative_path.startswith("docs/") or relative_path in {"README.md", "UPSTREAMS.md", "LICENSE_AUDIT.md", "BUILDING.md"}:
         return "compatibility_bridge", "Documentation references inherited tooling while the native API retirement map is active."
     return None
@@ -12346,7 +12311,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "endpoint": "/api/v1/scope-reports/{scope_report_id}/results",
                 "status": "implemented_internal_browser_proxied_and_scriptable_read",
                 "direct_access": "scriptable_read",
-                "replacement_candidates": ["scope-report result automation by scope-report id", "native-api-request helper", "python-gvm get_scope_report_results replacement"],
+                "replacement_candidates": ["scope-report result automation by scope-report id", "native-api-request helper"],
             },
             {
                 "endpoint": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/hosts",
@@ -12405,7 +12370,6 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
         ],
         "next_replacement_candidates": [
-            {"workflow": "remaining gvm-tools write/control scripts", "current_dependency": "gvm-tools GMP scripts", "native_target": "native write/control API after separate safety design"},
             {"workflow": "deep Trashcan row reads and per-row mutations", "current_dependency": "GSA/GMP get_trash_* plus restore/delete variants", "native_target": "deferred; redacted row metadata and guarded global emptying are native, while full row payloads and per-row mutations are secret-adjacent and require separate design"},
         ],
     }

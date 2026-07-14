@@ -8,10 +8,9 @@ compatibility and high-consequence scanner control, but it should no longer be
 the default shape for new TurboVAS product data flow. Native HTTP/JSON product
 APIs should replace inherited client/tooling paths workflow by workflow.
 
-Explicit end-state: TurboVAS should remove the need for `python-gvm` and
-`gvm-tools` entirely from required product, runtime-helper, test, and operator
-tooling paths. They may remain temporarily as compatibility bridges while
-replacement APIs land.
+The legacy-client end-state is complete: `python-gvm` and `gvm-tools` are
+removed from product, runtime-helper, test, build, and operator tooling paths.
+Remaining GMP/XML work is tracked by the native API owner-tail inventory.
 
 The end-state also includes scriptable access to TurboVAS through typed
 HTTP/JSON and OpenAPI clients. The authenticated same-origin `gsad` proxy is a
@@ -43,7 +42,7 @@ the authenticated same-origin `gsad` proxy defined in
 | Ready for native API proof | Low-risk read workflows with DB-owned state and existing validation. | Raw report reads, scope metadata reads, and remaining helper/tooling replacement paths. |
 | Later after product semantics | Workflows needing stronger operator-model decisions first. | Exposure-duration views, owner/patchability/support status, non-operator delivery, BYO inventory. |
 | High-consequence control path | Keep inherited control path except for separately proven bounded slices. | Task start and stop are now guarded native direct-write/browser-proxied slices. Resume, credential secret/control paths, account/auth, feed import, scanner registration, and runtime feed state remain inherited. |
-| Compatibility-only | Retain only until no required TurboVAS workflow depends on it. | `python-gvm` request helpers, `gvm-tools` GMP scripts, direct XML report helper paths. |
+| Compatibility-only | Retain only until no required TurboVAS workflow depends on it. | Residual GSA/gsad/gvmd GMP owner tails and direct XML compatibility probes. |
 
 ## Initial Map
 
@@ -80,8 +79,8 @@ the authenticated same-origin `gsad` proxy defined in
 | Scope-report retention preview | B-143 dry-run retention planning can be inspected without running destructive retention | `/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan` | The authenticated `gsad` proxy and direct native API expose the non-destructive preview only. Retention mutation and compaction remain closed until separately designed and validated. |
 | Runtime report/scope helpers | Some `turbovasctl` helpers still use inherited control paths; raw report summary/export and scope-report summary/metrics no longer use legacy XML helper scripts | Native API-backed helper calls | `runtime-report-summary`, `runtime-report-export`, `runtime-report-metrics`, `runtime-scope-report-metrics`, and `runtime-scope-report-summary` now use the internal native API. Native result rows carry hostname, NVT family, and description excerpts, and the old `tools/runtime_report.py` XML helper has been removed. Raw report `vulnerability_count` mirrors inherited raw-report summary semantics. |
 | Read-only report/scope/target/task/config/tag/override/alert automation | Imported GMP scripts, plus TurboVAS scope/report list scripts | `tools/turbovasctl native-api-request --json --path '/api/v1/...'` or `just native-api-request --json --path '/api/v1/...'` | Raw report, scope, scope-report, target, task, scan-config metadata, tag metadata, override metadata, redacted alert metadata, CERT-Bund report generation, and scope-report result listing now have a DB-backed native GET path or native helper. The obsolete read-only `gvm-tools` scripts are removed where equivalent native reads exist; alert method/event/condition payloads remain intentionally excluded from the native metadata contract. |
-| gvm-tools write/control scripts | Imported GMP scripts for generation or scanner/control workflows | Future native write/control APIs after safety design | Write/control scripts remain compatibility-only until the corresponding native APIs are explicitly designed and proven. Narrow direct write-control slices already cover selected scope, tag, alert metadata, scan-config, saved-filter, credential name/comment metadata, and target name/comment metadata writes, but broad scanner/feed/credential-secret/account/target-collection control remains inherited. |
-| Direct scriptable operator API | Temporary automation still uses inherited GMP helpers, `turbovasctl` wrappers, or internal native probes depending on workflow coverage. | Authenticated `/api/v1` access usable by `curl`, generated OpenAPI clients, and TurboVAS-owned automation without GSA, `gsad`, GMP/XML, `python-gvm`, or `gvm-tools` as required interfaces. | First read-only bearer-auth direct development listener lands; next migrate read-only automation to `native-api-request --direct`, add production TLS/host-binding/audit hardening, and add write/control endpoints only after safety review. |
+| Retired gvm-tools write/control scripts | Imported GMP scripts for generation or scanner/control workflows | Typed native write/control APIs plus bounded `turbovasctl` compositions | All tracked scripts are removed. Retained behavior is native; non-retained compatibility behavior stays deleted. |
+| Direct scriptable operator API | Authenticated native reads and guarded writes are exposed through the direct development listener and TurboVAS-owned helpers. | Authenticated `/api/v1` access usable by `curl`, generated OpenAPI clients, and TurboVAS-owned automation without GSA, `gsad`, GMP/XML, `python-gvm`, or `gvm-tools` as required interfaces. | Continue production TLS/host-binding/audit hardening and remaining workflow-owner replacement under their explicit contracts. |
 
 ## Expansion Rule
 

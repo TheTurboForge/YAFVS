@@ -201,11 +201,12 @@ CREDENTIAL_SMOKE_SPEC.loader.exec_module(runtime_credential_smoke)
 class TurboVASCtlTests(unittest.TestCase):
     def test_component_registry_has_expected_components(self):
         names = [component.name for component in turbovasctl.COMPONENTS]
-        self.assertEqual(len(names), 12)
-        self.assertEqual(len(set(names)), 12)
+        self.assertEqual(len(names), 10)
+        self.assertEqual(len(set(names)), 10)
         self.assertIn("openvas-scanner", names)
         self.assertIn("pg-gvm", names)
-        self.assertIn("gvm-tools", names)
+        self.assertNotIn("python-gvm", names)
+        self.assertNotIn("gvm-tools", names)
 
     def test_build_metadata_covers_all_components(self):
         component_names = {component.name for component in turbovasctl.COMPONENTS}
@@ -224,9 +225,8 @@ class TurboVASCtlTests(unittest.TestCase):
 
     def test_expanded_chains_are_stable(self):
         self.assertEqual(turbovasctl.C_SERVICES_CHAIN, ("gvm-libs", "openvas-smb", "openvas-scanner", "pg-gvm", "gvmd", "gsad"))
-        self.assertEqual(turbovasctl.LEGACY_GMP_PYTHON_CHAIN, ("python-gvm", "gvm-tools"))
         self.assertEqual(turbovasctl.RUNTIME_PYTHON_CHAIN, ("greenbone-feed-sync", "ospd-openvas", "notus-scanner"))
-        self.assertEqual(turbovasctl.PYTHON_CHAIN, ("python-gvm", "gvm-tools", "greenbone-feed-sync", "ospd-openvas", "notus-scanner"))
+        self.assertEqual(turbovasctl.PYTHON_CHAIN, turbovasctl.RUNTIME_PYTHON_CHAIN)
         self.assertEqual(turbovasctl.BASELINE_CHAIN, (*turbovasctl.C_SERVICES_CHAIN, "gsa", *turbovasctl.RUNTIME_PYTHON_CHAIN))
         self.assertNotIn("python-gvm", turbovasctl.BASELINE_CHAIN)
         self.assertNotIn("gvm-tools", turbovasctl.BASELINE_CHAIN)
@@ -1277,7 +1277,7 @@ class TurboVASCtlTests(unittest.TestCase):
             result = turbovasctl.command_inventory(root)
             self.assertEqual(result["status"], "fail")
             missing = [item for item in result["findings"] if item["status"] == "fail"]
-            self.assertEqual(len(missing), 12)
+            self.assertEqual(len(missing), 10)
 
     def test_gvmd_target_parser_consumes_target_elements(self):
         gmp_source = (Path(__file__).resolve().parents[2] / "components" / "gvmd" / "src" / "gmp.c").read_text(encoding="utf-8")
@@ -1433,7 +1433,6 @@ class TurboVASCtlTests(unittest.TestCase):
         gvmd_scopes = (root / "components" / "gvmd" / "src" / "manage_sql_scopes.c").read_text(encoding="utf-8")
         gsad = (root / "components" / "gsad" / "src" / "gsad_gmp.c").read_text(encoding="utf-8")
         gsa_scopes = (root / "components" / "gsa" / "src" / "gmp" / "commands" / "scopes.ts").read_text(encoding="utf-8")
-        python_scopes = root / "components" / "python-gvm" / "gvm" / "protocols" / "gmp" / "requests" / "v226" / "_scopes.py"
         gmp_schema = (root / "components" / "gvmd" / "src" / "schema_formats" / "XML" / "GMP.xml.in").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "turbovasctl").read_text(encoding="utf-8")
         for marker in (
@@ -1452,7 +1451,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("fetchNativeScopeReports", gsa_scopes)
         self.assertIn("nativeScopeReportQueryFromFilter", gsa_scopes)
         self.assertNotIn("parseScopeReportCounts", gsa_scopes)
-        self.assertFalse(python_scopes.exists())
+        self.assertFalse((root / "components" / "python-gvm").exists())
         self.assertIn("def command_native_api_request", native_tooling)
         self.assertFalse((root / "components" / "gvm-tools" / "scripts" / "list-scope-reports.gmp.py").exists())
         self.assertNotIn("<name>get_scope_reports</name>", gmp_schema)
@@ -1463,10 +1462,6 @@ class TurboVASCtlTests(unittest.TestCase):
         gvmd_commands = (root / "components" / "gvmd" / "src" / "manage_commands.c").read_text(encoding="utf-8")
         gvmd_gmp = (root / "components" / "gvmd" / "src" / "gmp.c").read_text(encoding="utf-8")
         gsad = (root / "components" / "gsad" / "src" / "gsad_gmp.c").read_text(encoding="utf-8")
-        python_gmp = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in (root / "components" / "python-gvm" / "gvm" / "protocols" / "gmp").rglob("*.py")
-        )
         gsa_report = (root / "components" / "gsa" / "src" / "gmp" / "commands" / "report.ts").read_text(encoding="utf-8")
         gsa_native_reports = (root / "components" / "gsa" / "src" / "gmp" / "native-api" / "reports.ts").read_text(encoding="utf-8")
         gsa_native_metrics = (root / "components" / "gsa" / "src" / "gmp" / "native-api" / "report-metrics.ts").read_text(encoding="utf-8")
@@ -1488,7 +1483,6 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertNotIn(command, gvmd_gmp.lower())
             self.assertNotIn(command, gsad.lower())
             self.assertNotIn(f"<name>{command}</name>", schema.lower())
-            self.assertNotIn(f"def {command}(", python_gmp.lower())
         for native_loader in (
             "fetchNativeReportResults",
             "fetchNativeReportHosts",
@@ -2672,7 +2666,7 @@ class TurboVASCtlTests(unittest.TestCase):
         payload = {
             "results": [
                 {
-                    "source": {"path": "/repo/TurboVAS/components/python-gvm/uv.lock"},
+                    "source": {"path": "/repo/TurboVAS/components/ospd-openvas/poetry.lock"},
                     "packages": [
                         {
                             "package": {"ecosystem": "PyPI", "name": "paramiko", "version": "4.0.0"},
@@ -2699,7 +2693,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["high_or_critical_count"], 0)
         self.assertEqual(result["findings"][0]["check"], "osv-lockfile-audit.vulnerabilities")
         self.assertEqual(result["findings"][0]["top_findings"][0]["package"], "paramiko")
-        self.assertEqual(result["findings"][0]["top_findings"][0]["path"], "components/python-gvm/uv.lock")
+        self.assertEqual(result["findings"][0]["top_findings"][0]["path"], "components/ospd-openvas/poetry.lock")
 
     def test_osv_lockfile_audit_fails_for_high_vulnerabilities(self):
         payload = {
@@ -3095,7 +3089,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("components/gvm-tools/scripts/list-scope-reports.gmp.py", details["by_category"]["product_workflow"]["paths"])
         self.assertNotIn("components/gvm-tools/scripts/list-scope-report-results.gmp.py", details["by_category"]["product_workflow"]["paths"])
         self.assertNotIn("components/gvm-tools/scripts/generate-scope-report.gmp.py", details["by_category"]["product_workflow"]["paths"])
-        self.assertIn("components/python-gvm/gvm/protocols/gmp/requests/v226/_reports.py", details["by_category"]["compatibility_bridge"]["paths"])
+        self.assertFalse((root / "components" / "python-gvm").exists())
+        self.assertFalse((root / "components" / "gvm-tools").exists())
         all_paths = {path for category in details["by_category"].values() for path in category["paths"]}
         self.assertNotIn("tools/runtime_metrics.py", all_paths)
         self.assertNotIn("components/gvm-tools/scripts/report-metrics.gmp.py", all_paths)
@@ -3120,7 +3115,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "components/gvm-tools/scripts/create-credentials-from-csv.gmp.py",
         ):
             self.assertNotIn(removed_wrapper, all_paths)
-        self.assertIn("remaining gvm-tools write/control scripts", {item["workflow"] for item in details["next_replacement_candidates"]})
+        self.assertNotIn("remaining gvm-tools write/control scripts", {item["workflow"] for item in details["next_replacement_candidates"]})
         endpoints = {item["endpoint"] for item in details["implemented_native_endpoints"]}
         self.assertIn("/api/v1/cpes", endpoints)
         self.assertIn("/api/v1/cpes/{cpe_id}", endpoints)
@@ -11160,7 +11155,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(turbovasctl.native_tooling_category("components/gsa/src/gmp/__tests__/gmp.test.ts")[0], "compatibility_bridge")
         self.assertIsNone(turbovasctl.native_tooling_category("components/gsa/src/gmp/native-api/tags.ts"))
         self.assertFalse(turbovasctl.native_tooling_scan_candidate("components/gsa/src/gmp/native-api/tags.ts"))
-        self.assertEqual(turbovasctl.native_tooling_category("components/gvm-tools/scripts/list-scopes.gmp.py")[0], "candidate_for_removal")
+        self.assertIsNone(turbovasctl.native_tooling_category("components/gvm-tools/scripts/list-scopes.gmp.py"))
+        self.assertFalse(turbovasctl.native_tooling_scan_candidate("components/gvm-tools/scripts/list-scopes.gmp.py"))
         self.assertFalse((Path(__file__).resolve().parents[2] / "components/gvm-tools/scripts/generate-scope-report.gmp.py").exists())
         self.assertFalse((Path(__file__).resolve().parents[2] / "components/gvm-tools/scripts/empty-trash.gmp.py").exists())
         self.assertFalse((Path(__file__).resolve().parents[2] / "components/gvm-tools/scripts/export-pdf-report.gmp.py").exists())
@@ -12197,10 +12193,10 @@ db2:keys=5,expires=0,avg_ttl=0
             self.assertEqual(build, root / "build" / "gvm-libs")
             self.assertEqual(prefix, root / "build" / "prefix")
 
-    def test_python_venv_path_uses_ignored_build_tree(self):
+    def test_runtime_python_venv_path_uses_ignored_build_tree(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            self.assertEqual(turbovasctl.venv_python(root, "python-gvm"), root / "build" / "venvs" / "python-gvm" / "bin" / "python")
+            self.assertEqual(turbovasctl.venv_python(root, "ospd-openvas"), root / "build" / "venvs" / "ospd-openvas" / "bin" / "python")
 
     def test_version_tuple_parses_tool_versions(self):
         self.assertGreaterEqual(turbovasctl.version_tuple("v22.12.0"), (22, 12, 0))

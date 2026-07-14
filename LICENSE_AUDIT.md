@@ -35,8 +35,12 @@ artifacts that include the service.
 | notus-scanner | `components/notus-scanner` | AGPL-3.0-or-later. | `LICENSE`, `pyproject.toml` license declaration | Scanner service with feed and MQTT integration implications. |
 | openvas-smb | `components/openvas-smb` | GPL-2.0-or-later. | `COPYING`, `README.md`, `samba/README` | README records the Zenoss `wmi-1.3.14` origin and Samba-derived GPLv2 basis; `samba/README` records the stripped-down and modified Samba 4 library origin. Preserve these provenance notes. |
 | greenbone-feed-sync | `components/greenbone-feed-sync` | GPL-3.0-or-later. | `LICENSE`, `pyproject.toml` license declaration | Source license does not determine Greenbone Community Feed data terms. Treat feed data/signature/use terms separately. |
-| python-gvm | `components/python-gvm` | GPL-3.0-or-later. | `LICENSE`, `pyproject.toml` license declaration | Protocol library for GMP and OSP. |
-| gvm-tools | `components/gvm-tools` | GPL-3.0-or-later. | `LICENSE`, `pyproject.toml` license declaration | Depends on `python-gvm`; useful for CLI/operator tooling and smoke tests. |
+
+The GPL-3.0-or-later `python-gvm` and `gvm-tools` source snapshots were
+removed after their retained workflows were replaced by TurboVAS-native
+HTTP/JSON and operator tooling. Their exact imported source, notices, and
+modification history remain available in Git history; they are not current
+components or packaged dependencies.
 
 ## Standing License Rules
 

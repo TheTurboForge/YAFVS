@@ -9,10 +9,6 @@ TurboVAS currently has a local required build baseline for:
 - Web UI: `gsa`
 - Runtime Python components: `greenbone-feed-sync`, `ospd-openvas`, `notus-scanner`
 
-Inherited compatibility clients `python-gvm` and `gvm-tools` can still be built
-explicitly for characterization work with `just build-python` or
-`just build python-gvm`, but they are no longer part of the required baseline.
-
 Build output, local install artifacts, Python virtual environments, and component dependency directories are kept under ignored paths. C components install into `build/prefix` when downstream components need their pkg-config metadata and headers.
 
 ## Commands
@@ -32,7 +28,6 @@ just build gvmd
 just build gsad
 just build pg-gvm
 just build gsa
-just build python-gvm
 ```
 
 Build grouped baselines:
@@ -41,7 +36,7 @@ Build grouped baselines:
 just build-core-c
 just build-c-services
 just build-ui
-just build-python   # all Python components, including inherited compatibility clients
+just build-python   # retained runtime Python components
 just build-baseline
 just quality-gate
 just quality-gate-state

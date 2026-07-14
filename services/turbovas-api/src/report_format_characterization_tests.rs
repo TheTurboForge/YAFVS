@@ -21,11 +21,6 @@ const GSA_REPORT_FORMAT_CAPABILITIES: &str =
     include_str!("../../../components/gsa/src/gmp/capabilities/capabilities.ts");
 const GSA_REPORT_FORMAT_TABLE: &str =
     include_str!("../../../components/gsa/src/web/pages/reportformats/Table.jsx");
-const PYTHON_GMP: &str =
-    include_str!("../../../components/python-gvm/gvm/protocols/gmp/_gmp224.py");
-const PYTHON_REPORT_FORMAT_REQUESTS: &str = include_str!(
-    "../../../components/python-gvm/gvm/protocols/gmp/requests/v224/_report_formats.py"
-);
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -272,36 +267,6 @@ fn custom_executable_report_format_mutation_surfaces_are_retired() {
             "GMP schema",
             GVMD_GMP_SCHEMA,
             "<name>verify_report_format</name>",
-        ),
-        ("python-gvm", PYTHON_GMP, "def clone_report_format("),
-        ("python-gvm", PYTHON_GMP, "def delete_report_format("),
-        ("python-gvm", PYTHON_GMP, "def import_report_format("),
-        ("python-gvm", PYTHON_GMP, "def modify_report_format("),
-        ("python-gvm", PYTHON_GMP, "def verify_report_format("),
-        (
-            "python-gvm requests",
-            PYTHON_REPORT_FORMAT_REQUESTS,
-            "def clone_report_format(",
-        ),
-        (
-            "python-gvm requests",
-            PYTHON_REPORT_FORMAT_REQUESTS,
-            "def delete_report_format(",
-        ),
-        (
-            "python-gvm requests",
-            PYTHON_REPORT_FORMAT_REQUESTS,
-            "def import_report_format(",
-        ),
-        (
-            "python-gvm requests",
-            PYTHON_REPORT_FORMAT_REQUESTS,
-            "def modify_report_format(",
-        ),
-        (
-            "python-gvm requests",
-            PYTHON_REPORT_FORMAT_REQUESTS,
-            "def verify_report_format(",
         ),
     ] {
         assert!(

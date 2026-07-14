@@ -1,5 +1,0 @@
-lxml
-paramiko
-defusedxml
-sphinx
-furo

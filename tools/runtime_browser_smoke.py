@@ -24,21 +24,6 @@ PLAYWRIGHT_NODE_PATHS = (
 )
 
 
-def add_greenbone_python_paths(repo_root: Path) -> None:
-    for source_path in (repo_root / "components" / "python-gvm", repo_root / "components" / "gvm-tools"):
-        if source_path.is_dir():
-            path = str(source_path)
-            if path not in sys.path:
-                sys.path.insert(0, path)
-    for venv_name in ("python-gvm", "gvm-tools"):
-        site_root = repo_root / "build" / "venvs" / venv_name / "lib"
-        for site_packages in sorted(site_root.glob("python*/site-packages")):
-            if site_packages.is_dir():
-                path = str(site_packages)
-                if path not in sys.path:
-                    sys.path.insert(0, path)
-
-
 def now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
@@ -1212,7 +1197,6 @@ def cleanup_filter_write_smoke(args: argparse.Namespace, payload: dict[str, Any]
         append_finding(payload, "fail", "filter.write-cleanup", "Saved-filter write smoke created filters but native cleanup failed and no cleanup GMP socket was provided.", details)
         return
     try:
-        add_greenbone_python_paths(Path(__file__).resolve().parents[1])
         import runtime_full_test_scan
 
         gmp, _password = runtime_full_test_scan.connect_gmp(

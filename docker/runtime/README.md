@@ -150,8 +150,9 @@ the ignored development OpenVAS config under runtime state, and verifies that
 generated config carries the runtime-only OpenVAS MQTT credential and is mounted
 only into OSPD; do not copy it into tracked configuration or operator artifacts.
 
-`runtime-gmp-smoke` authenticates over the persistent `gvmd` Unix socket with a
-small `python-gvm` probe and calls `get_version` without printing secrets.
+`runtime-gmp-smoke` authenticates over the persistent `gvmd` Unix socket with
+a bounded raw compatibility probe and calls `get_version` without printing
+secrets or requiring a legacy Python client.
 
 `runtime-native-api-smoke` verifies the internal `turbovas-api` sidecar by
 querying `/healthz`, `/api/v1/scope-reports`, and the first scope report's

@@ -13,8 +13,6 @@ const MANAGE_PG_C: &str = include_str!("../../../components/gvmd/src/manage_pg.c
 const MANAGE_SQL_TARGETS_C: &str =
     include_str!("../../../components/gvmd/src/manage_sql_targets.c");
 const GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
-const PYTHON_GVM_TARGETS: &str =
-    include_str!("../../../components/python-gvm/gvm/protocols/gmp/requests/v224/_targets.py");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -260,7 +258,7 @@ fn inherited_target_clone_delete_and_restore_preserve_login_data_and_task_links(
 }
 
 #[test]
-fn inherited_target_gmp_gsad_gsa_and_python_surfaces_still_carry_broad_control() {
+fn inherited_target_gmp_gsad_and_gsa_surfaces_still_carry_broad_control() {
     for required in [
         "copy_target (create_target_data->name,",
         "create_target_data->copy",
@@ -322,21 +320,6 @@ fn inherited_target_gmp_gsad_gsa_and_python_surfaces_still_carry_broad_control()
         assert!(
             GSA_TARGET_COMMAND.contains(required),
             "GSA target command missing {required}"
-        );
-    }
-    for required in [
-        "def create_target(",
-        "def modify_target(",
-        "def clone_target(cls, target_id: EntityID)",
-        "def delete_target(",
-        "XmlCommand(\"create_target\")",
-        "XmlCommand(\"modify_target\")",
-        "XmlCommand(\"delete_target\")",
-        "cmd.add_element(\"copy\", str(target_id))",
-    ] {
-        assert!(
-            PYTHON_GVM_TARGETS.contains(required),
-            "python-gvm target request surface missing {required}"
         );
     }
     for required in [

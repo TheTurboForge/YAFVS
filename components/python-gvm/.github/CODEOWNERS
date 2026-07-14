@@ -1,7 +1,0 @@
-# default reviewers
-*                 @greenbone/gea
-
-# dev ops
-.github/          @greenbone/devops @greenbone/gea
-pyproject.toml    @greenbone/devops @greenbone/gea
-poetry.lock       @greenbone/devops @greenbone/gea

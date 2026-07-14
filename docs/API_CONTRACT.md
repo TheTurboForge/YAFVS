@@ -6,9 +6,9 @@
 TurboVAS is adding typed HTTP/JSON product APIs under `/api/v1` for DB-backed
 operator workflows. Several read-only endpoints are already live through the
 Rust sidecar, the authenticated `gsad` browser proxy, and an opt-in direct
-bearer-token development listener. The inherited GSA, `gsad`, `gvmd`, GMP/XML,
-`python-gvm`, and `gvm-tools` paths remain temporary compatibility and control
-plumbing during the strangler migration.
+bearer-token development listener. `python-gvm` and `gvm-tools` are removed;
+remaining inherited GSA, `gsad`, `gvmd`, and GMP/XML paths are explicit
+workflow-owner tails rather than required automation clients.
 
 The goal is not to wrap GMP/XML in REST. New TurboVAS product reads should be
 sourced from gvmd/PostgreSQL-owned state and should keep GMP/XML contained as a
@@ -524,9 +524,9 @@ positive-severity vulnerability metric rows only.
   explicit host binding.
 - Do not confuse the `gsad` same-origin proxy with the final scriptable API
   boundary; it remains a migration bridge for browser reads.
-- Do not keep `python-gvm` or `gvm-tools` as permanent TurboVAS product
-  dependencies once native replacements exist.
-- Do not retain inherited read-only `gvm-tools` list wrappers after a native
+- Do not reintroduce the removed `python-gvm` or `gvm-tools` dependency;
+  use the native API or a bounded TurboVAS-owned helper.
+- Do not recreate inherited read-only list wrappers after a native
   metadata endpoint covers the retained safe contract; for Alerts, the native
   list/detail contract is redacted metadata only, not method/event/condition
   payload data.

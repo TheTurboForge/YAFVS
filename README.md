@@ -103,8 +103,8 @@ browser, direct API, production-posture, or release-readiness question.
 - `just build-c-services`: build the current C service baseline.
 - `just c-hardening-check --status-only --json`: inspect current final C ELF artifacts and report missing, unsupported, inapplicable, or unknown hardening evidence without changing build flags.
 - `just build-ui`: install and build the web UI.
-- `just build-python`: build/import-check all Python components, including inherited compatibility clients.
-- `just build-baseline`: run the current required build baseline without `python-gvm` or `gvm-tools`.
+- `just build-python`: build/import-check retained runtime Python components.
+- `just build-baseline`: run the complete required build baseline.
 - `just runtime-plan`: show the persistent Docker runtime layout and deferred surfaces.
 - `just up`: start the current Docker infrastructure services.
 - `just down`: stop the current Docker infrastructure services.

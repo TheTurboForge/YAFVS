@@ -2,18 +2,12 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use std::path::Path;
-
 use axum::http::Method;
 
 use crate::direct_api_contract::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed};
 
 const REPORT_ID: &str = "12345678-1234-1234-1234-123456789abc";
 const CANONICAL_PDF_REPORT_FORMAT_ID: &str = "c402cc3e-b531-11e1-9163-406186ea4fc5";
-const LEGACY_PDF_EXPORT_SCRIPT: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../components/gvm-tools/scripts/export-pdf-report.gmp.py"
-);
 const ROUTES: &str = include_str!("read_api_routes.rs");
 const PDF_SOURCE: &str = include_str!("report_pdf.rs");
 const OPENAPI: &str = include_str!("../../../api/openapi/turbovas-v1.yaml");
@@ -28,8 +22,6 @@ fn native_pdf_contract_replaces_the_inherited_script_characterization() {
     assert!(PDF_SOURCE.contains("PDF_REPORT_SQL"));
     assert!(PDF_SOURCE.contains("PDF_EVIDENCE_SQL"));
     assert!(PDF_SOURCE.contains("pdf_writer"));
-    assert!(!PDF_SOURCE.contains("include_str!(\"../../../components/gvm-tools"));
-    assert!(!Path::new(LEGACY_PDF_EXPORT_SCRIPT).exists());
 }
 
 #[test]

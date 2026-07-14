@@ -8,7 +8,6 @@ risk = "Malformed GMP/XML or proxied protocol input can cross trust boundaries."
 paths = [
   "components/gvmd/src/gmp.c",
   "components/gsad/src/gsad_gmp.c",
-  "components/python-gvm/gvm/protocols/",
 ]
 required_checks = [
   "focused parser/protocol tests",

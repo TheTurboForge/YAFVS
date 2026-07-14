@@ -44,7 +44,13 @@ See `docs/SCOPE_BASED_REPORTING.md` for the public model.
 | openvas-smb | `components/openvas-smb` | https://github.com/greenbone/openvas-smb | `488c810` | SMB/WMI support module for authenticated Windows scanning. Its preserved README records Zenoss `wmi-1.3.14` and Samba-derived GPLv2 provenance. |
 | notus-scanner | `components/notus-scanner` | https://github.com/greenbone/notus-scanner | `80681c6` | Python scanner for local security checks based on collected system information and Notus feed data. |
 | greenbone-feed-sync | `components/greenbone-feed-sync` | https://github.com/greenbone/greenbone-feed-sync | `1be4adf` | Tool for downloading Greenbone Community Feed data. |
-| python-gvm | `components/python-gvm` | https://github.com/greenbone/python-gvm | `acf6ccf` | Python API library for GMP and OSP. |
-| gvm-tools | `components/gvm-tools` | https://github.com/greenbone/gvm-tools | `f68027a` | CLI and scripting tools for GMP/OSP remote control. |
 
 The archived standalone `greenbone/ospd` repository is not imported. Current `ospd-openvas` includes its own `ospd` package.
+
+## Removed Imported Components
+
+`python-gvm` (upstream commit `acf6ccf`) and `gvm-tools` (upstream commit
+`f68027a`) were imported during initial shaping, then removed after retained
+product, validation, and operator workflows moved to native HTTP/JSON. Their
+source provenance remains in repository history; neither is a current TurboVAS
+component or required dependency.

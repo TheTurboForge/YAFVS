@@ -230,75 +230,32 @@ describe('UserCommand transformSettingName() function tests', () => {
   });
 });
 
-test('should get capabilities', async () => {
-  const response = createResponse({
-    get_capabilities: {
-      help_response: {
-        schema: {
-          command: [
-            {
-              name: 'get_reports',
-            },
-            {
-              name: 'get_tasks',
-            },
-          ],
-        },
-      },
-    },
-  });
-  const fakeHttp = createHttp(response);
+test('should expose complete operator capabilities without a GMP request', async () => {
+  const fakeHttp = createHttp();
   const cmd = new UserCommand(fakeHttp);
   const {data: caps} = await cmd.currentCapabilities();
-  expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-    args: {
-      cmd: 'get_capabilities',
-    },
-  });
 
-  expect(caps.length).toBe(2);
+  expect(fakeHttp.request).not.toHaveBeenCalled();
+  expect(caps.length).toBe(1);
   expect(caps.mayAccess('report')).toBe(true);
   expect(caps.mayAccess('task')).toBe(true);
-  expect(caps.mayAccess('user')).toBe(false);
-  expect(caps.mayCreate('schedule')).toBe(false);
-  expect(caps.mayEdit('schedule')).toBe(false);
-});
-
-test('should expose native schedule create and modification capabilities', async () => {
-  const response = createResponse({
-    get_capabilities: {
-      help_response: {
-        schema: {
-          command: [
-            {
-              name: 'get_schedules',
-            },
-          ],
-        },
-      },
-    },
-  });
-  const fakeHttp = createNativeHttp(response);
-  const cmd = new UserCommand(fakeHttp);
-  const {data: caps} = await cmd.currentCapabilities();
-
+  expect(caps.mayAccess('user')).toBe(true);
   expect(caps.mayCreate('schedule')).toBe(true);
   expect(caps.mayEdit('schedule')).toBe(true);
+  expect(caps.mayDelete('user')).toBe(true);
 });
 
-test('should expose native alert create and modification capabilities', async () => {
-  const response = createResponse({
-    get_capabilities: {
-      help_response: {
-        schema: {command: [{name: 'get_alerts'}]},
-      },
-    },
-  });
-  const cmd = new UserCommand(createNativeHttp(response));
-  const {data: caps} = await cmd.currentCapabilities();
+test('should disable non-retained optional features without a GMP request', async () => {
+  const fakeHttp = createHttp();
+  const cmd = new UserCommand(fakeHttp);
+  const {data: features} = await cmd.currentFeatures();
 
-  expect(caps.mayCreate('alert')).toBe(true);
-  expect(caps.mayEdit('alert')).toBe(true);
+  expect(fakeHttp.request).not.toHaveBeenCalled();
+  expect(features.length).toBe(0);
+  expect(features.featureEnabled('ENABLE_OPENVASD')).toBe(false);
+  expect(features.featureEnabled('ENABLE_SECURITY_INTELLIGENCE_EXPORT')).toBe(
+    false,
+  );
 });
 
 describe('UserCommand saveTimezone() tests', () => {

@@ -4,11 +4,10 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import Capabilities, {type Capability} from 'gmp/capabilities/capabilities';
-import Features, {type Feature} from 'gmp/capabilities/features';
+import Capabilities from 'gmp/capabilities/capabilities';
+import Features from 'gmp/capabilities/features';
 import EntityCommand from 'gmp/commands/entity';
 import {type HttpCommandOptions} from 'gmp/commands/http';
-import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import {type XmlMeta, type XmlResponseData} from 'gmp/http/transform/fast-xml';
@@ -24,8 +23,8 @@ import User, {
   type UserElement,
 } from 'gmp/models/user';
 import {exportNativeUserMetadata, fetchNativeUser} from 'gmp/native-api/users';
-import {parseBoolean, parseInt} from 'gmp/parser';
-import {filter, forEach, map} from 'gmp/utils/array';
+import {parseInt} from 'gmp/parser';
+import {forEach} from 'gmp/utils/array';
 import {type EntityType} from 'gmp/utils/entity-type';
 import {isArray, isDefined} from 'gmp/utils/identity';
 
@@ -53,30 +52,6 @@ export interface GetSettingsResponse extends XmlResponseData {
   get_settings: {
     get_settings_response: {
       setting: SettingElement | SettingElement[];
-    };
-  };
-}
-
-interface GetFeaturesResponse extends XmlResponseData {
-  get_features: {
-    get_features_response: {
-      feature: {
-        name: string;
-        _enabled: number;
-        description: string;
-      }[];
-    };
-  };
-}
-
-interface GetCapabilitiesResponse extends XmlResponseData {
-  get_capabilities: {
-    help_response: {
-      schema: {
-        command: {
-          name: string;
-        }[];
-      };
     };
   };
 }
@@ -269,40 +244,12 @@ class UserCommand extends EntityCommand<User, PortListElement> {
     return response.setData(settings);
   }
 
-  async currentCapabilities(options: HttpCommandOptions = {}) {
-    const response = await this.httpGetWithTransform(
-      {
-        cmd: 'get_capabilities',
-      },
-      options,
-    );
-    const {data} = response as Response<GetCapabilitiesResponse, XmlMeta>;
-    const {command: commands} = data.get_capabilities.help_response.schema;
-    const caps = map(commands, command => command.name as Capability);
-    if (canUseNativeApi(this.http)) {
-      caps.push(
-        'create_alert',
-        'modify_alert',
-        'create_schedule',
-        'modify_schedule',
-      );
-    }
-    return response.setData(new Capabilities(caps));
+  async currentCapabilities() {
+    return new Response(new Capabilities(['everything']));
   }
 
-  async currentFeatures(options: HttpCommandOptions = {}) {
-    const response = await this.httpGetWithTransform(
-      {
-        cmd: 'get_features',
-      },
-      options,
-    );
-    const {data} = response as Response<GetFeaturesResponse, XmlMeta>;
-    const featuresList = data.get_features.get_features_response.feature;
-    const features = filter(featuresList, feature =>
-      parseBoolean(feature._enabled),
-    ).map(feature => feature.name.toUpperCase() as Feature);
-    return response.setData(new Features(features));
+  async currentFeatures() {
+    return new Response(new Features());
   }
 
   create({
@@ -326,7 +273,11 @@ class UserCommand extends EntityCommand<User, PortListElement> {
       login: name,
       password,
     };
-    log.debug('Creating new user', data);
+    log.debug('Creating new user', {
+      authMethod: auth_method,
+      hasPassword: password.length > 0,
+      name,
+    });
     return this.action(data);
   }
 
@@ -358,7 +309,13 @@ class UserCommand extends EntityCommand<User, PortListElement> {
       old_login: old_name,
       password,
     };
-    log.debug('Saving user', data);
+    log.debug('Saving user', {
+      authMethod: auth_method,
+      hasPassword: password.length > 0,
+      id,
+      name,
+      oldName: old_name,
+    });
     return this.action(data);
   }
 

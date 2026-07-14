@@ -476,24 +476,18 @@ describe('ScanConfigCommand tests', () => {
     });
   });
 
-  test('should create a config', async () => {
+  test('should not create a config through GMP without the native API', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);
     const cmd = new ScanConfigCommand(fakeHttp);
-    await cmd.create({
-      baseScanConfig: 'uuid1',
-      name: 'foo',
-      comment: 'somecomment',
-    });
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'create_config',
-        base: 'uuid1',
-        comment: 'somecomment',
+    await expect(
+      cmd.create({
+        baseScanConfig: 'uuid1',
         name: 'foo',
-        usage_type: 'scan',
-      },
-    });
+        comment: 'somecomment',
+      }),
+    ).rejects.toThrow('Native API scan config creation is unavailable');
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should create a scan config from base through native API when available', async () => {

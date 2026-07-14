@@ -6,7 +6,6 @@
 
 from ...gmpv224 import Gmpv224TestCase
 from .scan_configs import (
-    GmpCreateScanConfigTestMixin,
     GmpDeleteScanConfigTestMixin,
     GmpGetScanConfigsTestMixin,
     GmpGetScanConfigTestMixin,
@@ -18,12 +17,6 @@ from .scan_configs import (
     GmpModifyScanConfigSetNvtSelectionTestMixin,
     GmpModifyScanConfigSetScannerPreferenceTestMixin,
 )
-
-
-class Gmpv224CreateScanConfigTestCase(
-    GmpCreateScanConfigTestMixin, Gmpv224TestCase
-):
-    pass
 
 
 class Gmpv224DeleteScanConfigTestCase(

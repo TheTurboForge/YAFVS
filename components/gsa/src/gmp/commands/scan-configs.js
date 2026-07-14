@@ -222,23 +222,15 @@ export class ScanConfigCommand extends EntityCommand {
   }
 
   async create({baseScanConfig, name, comment}) {
-    if (canUseNativeApi(this.http) && isDefined(baseScanConfig)) {
-      return await createNativeScanConfig(this.http, {
-        base_scan_config_id: baseScanConfig,
-        comment: comment ?? '',
-        name,
-      });
+    if (!canUseNativeApi(this.http)) {
+      throw new Error('Native API scan config creation is unavailable');
     }
 
-    const data = {
-      cmd: 'create_config',
-      base: baseScanConfig,
-      comment,
+    return await createNativeScanConfig(this.http, {
+      base_scan_config_id: baseScanConfig,
+      comment: comment ?? '',
       name,
-      usage_type: 'scan',
-    };
-    log.debug('Creating scanconfig', data);
-    return this.action(data);
+    });
   }
 
   async clone({id}) {

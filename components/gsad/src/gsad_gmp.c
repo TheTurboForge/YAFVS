@@ -4975,92 +4975,6 @@ export_targets_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Create config, get all configs, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-create_config_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  gchar *html, *response;
-  const char *name, *comment, *base, *usage_type, *scanner = NULL;
-  entity_t entity;
-
-  name = params_value (params, "name");
-  comment = params_value (params, "comment");
-  base = params_value (params, "base");
-  usage_type = params_value (params, "usage_type");
-
-  CHECK_VARIABLE_INVALID (name, "New Config");
-  CHECK_VARIABLE_INVALID (comment, "New Config");
-  CHECK_VARIABLE_INVALID (base, "New Config");
-  CHECK_VARIABLE_INVALID (usage_type, "New Config");
-  if (str_equal (base, "0"))
-    {
-      scanner = params_value (params, "scanner_id");
-      CHECK_VARIABLE_INVALID (scanner, "New Config");
-    }
-
-  /* Create the config. */
-  switch (gmpf (connection, credentials, &response, &entity, response_data,
-                "<create_config>"
-                "<name>%s</name>"
-                "<copy>%s</copy>"
-                "<comment>%s</comment>"
-                "<scanner>%s</scanner>"
-                "<usage_type>%s</usage_type>"
-                "</create_config>",
-                name, base, comment, scanner ?: "", usage_type))
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new config. "
-        "No new config was created. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new config. "
-        "It is unclear whether the config has been created or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new config. "
-        "It is unclear whether the config has been created or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  if (entity_attribute (entity, "id"))
-    params_add (params, "config_id", entity_attribute (entity, "id"));
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Create Config", response_data);
-
-  free_entity (entity);
-  g_free (response);
-  return html;
-}
-
-/**
  * @brief Import config, get all configs, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -12434,7 +12348,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (change_password)
   ELSE (clone)
   ELSE (create_asset)
-  ELSE (create_config)
   ELSE (create_credential)
   ELSE (create_filter)
   ELSE (create_host)

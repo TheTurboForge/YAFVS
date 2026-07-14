@@ -4279,9 +4279,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-detail-info-tags-task-backlinks-and-preferences-read
-      x-turbovas-inherited-still-owns: scan-config-import-xml-export-and-blank-create
+      x-turbovas-inherited-still-owns: scan-config-import-and-xml-export
       summary: Read one scan config with effective preferences
-      description: Read-only scan-config detail backed directly by gvmd/PostgreSQL, including active User Tags, shallow task backlinks, scanner preferences, and NVT preferences. Preference values use the config override when present and the current feed default otherwise; configured indicates whether an explicit override row exists. Password and file preference values/defaults are returned as empty strings with redacted set to true. Native direct write-control can create from base, atomically patch metadata, complete family selection, and catalog-validated preference overrides for eligible scan configs, clone operator-owned or predefined scan configs, change individual NVT selection in an eligible family, move eligible live scan configs to trash, restore trash rows, and hard-delete unreferenced trash rows. Import, inherited XML export, scanner control, and blank create remain inherited.
+      description: Read-only scan-config detail backed directly by gvmd/PostgreSQL, including active User Tags, shallow task backlinks, scanner preferences, and NVT preferences. Preference values use the config override when present and the current feed default otherwise; configured indicates whether an explicit override row exists. Password and file preference values/defaults are returned as empty strings with redacted set to true. Native direct write-control can create from base, atomically patch metadata, complete family selection, and catalog-validated preference overrides for eligible scan configs, clone operator-owned or predefined scan configs, change individual NVT selection in an eligible family, move eligible live scan configs to trash, restore trash rows, and hard-delete unreferenced trash rows. Import and inherited XML export remain on temporary compatibility paths.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -4559,9 +4559,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-family-summary-read
-      x-turbovas-inherited-still-owns: scan-config-import-xml-export-and-blank-create
+      x-turbovas-inherited-still-owns: scan-config-import-and-xml-export
       summary: Read scan config NVT family selection summary
-      description: Complete read-only snapshot of every current nonempty, non-Credentials feed family for the NVT Families editor. Complete family-mode selection is written atomically through the scan-config PATCH endpoint and individual NVT selection through the family NVT PATCH endpoint; preference edits, import, inherited XML export, and blank create remain on inherited compatibility paths.
+      description: Complete read-only snapshot of every current nonempty, non-Credentials feed family for the NVT Families editor. Complete family-mode selection is written atomically through the scan-config PATCH endpoint and individual NVT selection through the family NVT PATCH endpoint. Import and inherited XML export remain on temporary compatibility paths.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -4592,9 +4592,9 @@ paths:
       x-turbovas-exposure: direct-read
       x-turbovas-maturity: live-read
       x-turbovas-replaces: scan-config-family-nvt-selection-read
-      x-turbovas-inherited-still-owns: scan-config-import-xml-export-and-blank-create
+      x-turbovas-inherited-still-owns: scan-config-import-and-xml-export
       summary: Read NVT selection for one scan config family
-      description: Returns every currently known NVT in the requested family with numeric severity and effective selected state. Selection follows growing-family exclusion and static-family inclusion selector representations. PATCH changes individual NVT selection for an eligible operator-owned config while preserving the current family mode; preference edits, import, inherited XML export, and blank create remain inherited.
+      description: Returns every currently known NVT in the requested family with numeric severity and effective selected state. Selection follows growing-family exclusion and static-family inclusion selector representations. PATCH changes individual NVT selection for an eligible operator-owned config while preserving the current family mode. Import and inherited XML export remain on temporary compatibility paths.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
         - $ref: '#/components/parameters/ScanConfigFamilyName'

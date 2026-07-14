@@ -4,7 +4,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-from .test_create_scan_config import GmpCreateScanConfigTestMixin
 from .test_delete_scan_config import GmpDeleteScanConfigTestMixin
 from .test_get_scan_config import GmpGetScanConfigTestMixin
 from .test_get_scan_config_preference import GmpGetScanConfigPreferenceTestMixin
@@ -33,7 +32,6 @@ from .test_modify_scan_config_set_scanner_preference import (
 )
 
 __all__ = (
-    "GmpCreateScanConfigTestMixin",
     "GmpDeleteScanConfigTestMixin",
     "GmpGetScanConfigPreferenceTestMixin",
     "GmpGetScanConfigPreferencesTestMixin",

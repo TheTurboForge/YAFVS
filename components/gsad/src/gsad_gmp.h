@@ -276,9 +276,6 @@ char *
 save_config_nvt_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                      gsad_command_response_data_t *);
 char *
-create_config_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                   gsad_command_response_data_t *);
-char *
 import_config_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
 char *

@@ -450,6 +450,11 @@ describe('ScanConfigDetailsPage tests', () => {
     fireEvent.click(cloneIcon);
     expect(gmp.scanconfig.clone).toHaveBeenCalledWith(config);
 
+    const createIcon = screen.getByTitle('Create new Scan Config');
+    fireEvent.click(createIcon);
+    expect(gmp.scanners.getAll).not.toHaveBeenCalled();
+    expect(within(screen.getDialog()).getRadioInputs()).toHaveLength(3);
+
     const editIcon = screen.getByTitle('Edit Scan Config');
     expect(editIcon).toBeInTheDocument();
     fireEvent.click(editIcon);

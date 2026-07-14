@@ -1,4 +1,5 @@
 /* Copyright (C) 2018-2022 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -29,7 +30,8 @@
  */
 #define G_LOG_DOMAIN "md    gmp"
 
-
+
+
 /* Helpers. */
 
 /**
@@ -56,7 +58,8 @@ nvt_selector_new (char *name, char *type, int include, char *family_or_nvt)
   return selector;
 }
 
-
+
+
 /* CREATE_CONFIG. */
 
 /**
@@ -378,7 +381,7 @@ parse_config_entity (entity_t config, const char **config_id, char **name,
 void
 create_config_run (gmp_parser_t *gmp_parser, GError **error)
 {
-  entity_t entity, get_configs_response, config, name, copy;
+  entity_t entity, get_configs_response, config;
 
   entity = (entity_t) create_config_data.context->first->data;
 
@@ -506,80 +509,10 @@ create_config_run (gmp_parser_t *gmp_parser, GError **error)
       return;
     }
 
-  /* Try copy from an existing config. */
-
-  copy = entity_child (entity, "copy");
-  name = entity_child (entity, "name");
-
-  if (((name == NULL) || (strlen (entity_text (name)) == 0))
-      && ((copy == NULL) || (strlen (entity_text (copy)) == 0)))
-    {
-      log_event_fail ("config", "Scan config", NULL, "created");
-      SEND_TO_CLIENT_OR_FAIL
-       (XML_ERROR_SYNTAX ("create_config",
-                          "Name and base config to copy"
-                          " must be at least one character long"));
-    }
-  else if (copy == NULL)
-    {
-      log_event_fail ("config", "Scan config", NULL, "created");
-      SEND_TO_CLIENT_OR_FAIL
-       (XML_ERROR_SYNTAX ("create_config",
-                          "A COPY element is required"));
-    }
-  else
-    {
-      config_t new_config;
-      entity_t comment, usage_type;
-
-      comment = entity_child (entity, "comment");
-      usage_type = entity_child (entity, "usage_type");
-
-      switch (copy_config (entity_text (name),
-                           comment ? entity_text (comment) : "",
-                           entity_text (copy),
-                           usage_type ? entity_text (usage_type) : NULL,
-                           &new_config))
-        {
-          case 0:
-            {
-              char *uuid = config_uuid (new_config);
-              SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_config"),
-                                       uuid);
-              log_event ("config", "Scan config", uuid, "created");
-              free (uuid);
-              break;
-            }
-          case 1:
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_config",
-                                "Config exists already"));
-            log_event_fail ("config", "Scan config", NULL, "created");
-            break;
-          case 2:
-            if (send_find_error_to_client ("create_config", "config",
-                                           entity_text (copy),
-                                           gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            log_event_fail ("config", "Config", NULL, "created");
-            break;
-          case 99:
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_config",
-                                "Permission denied"));
-            log_event_fail ("config", "Scan config", NULL, "created");
-            break;
-          case -1:
-          default:
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_INTERNAL_ERROR ("create_config"));
-            log_event_fail ("config", "Scan config", NULL, "created");
-            break;
-        }
-    }
+  log_event_fail ("config", "Scan config", NULL, "imported");
+  SEND_TO_CLIENT_OR_FAIL
+   (XML_ERROR_SYNTAX ("create_config",
+                      "Only scan config import payloads are supported"));
 
   create_config_reset ();
 }
@@ -618,7 +551,8 @@ create_config_element_text (const gchar *text, gsize text_len)
   xml_handle_text (create_config_data.context, text, text_len);
 }
 
-
+
+
 /* MODIFY_CONFIG. */
 
 /**

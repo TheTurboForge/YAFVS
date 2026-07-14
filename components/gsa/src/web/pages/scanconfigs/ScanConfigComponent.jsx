@@ -359,7 +359,6 @@ const ScanConfigComponent = ({
   };
 
   const openCreateConfigDialog = () => {
-    loadScanners();
     setCreateConfigDialogVisible(true);
   };
 
@@ -535,9 +534,6 @@ const ScanConfigComponent = ({
               })}
               {createConfigDialogVisible && (
                 <ScanConfigDialog
-                  isLoadingScanners={isLoadingScanners}
-                  scannerId={scannerId}
-                  scanners={scanners}
                   onClose={handleCloseCreateConfigDialog}
                   onSave={d => {
                     const promise = isDefined(d.id) ? save(d) : create(d);

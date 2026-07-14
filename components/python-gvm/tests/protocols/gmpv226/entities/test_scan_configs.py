@@ -5,7 +5,6 @@
 #
 
 from ...gmpv224.entities.scan_configs import (
-    GmpCreateScanConfigTestMixin,
     GmpDeleteScanConfigTestMixin,
     GmpGetScanConfigsTestMixin,
     GmpGetScanConfigTestMixin,
@@ -18,10 +17,6 @@ from ...gmpv224.entities.scan_configs import (
     GmpModifyScanConfigSetScannerPreferenceTestMixin,
 )
 from ...gmpv226 import GMPTestCase
-
-
-class GMPCreateScanConfigTestCase(GmpCreateScanConfigTestMixin, GMPTestCase):
-    pass
 
 
 class GMPDeleteScanConfigTestCase(GmpDeleteScanConfigTestMixin, GMPTestCase):

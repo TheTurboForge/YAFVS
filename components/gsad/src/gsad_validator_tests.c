@@ -14,6 +14,15 @@ BeforeEach (gsad_validator)
   gsad_init_validator ();
 }
 
+Ensure (gsad_validator, reject_removed_create_config_command)
+{
+  validator_t validator = gsad_get_validator ();
+  assert_that (gvm_validate (validator, "cmd", "create_config"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "import_config"),
+               is_equal_to (0));
+}
+
 Ensure (gsad_validator, reject_removed_report_alert_command)
 {
   validator_t validator = gsad_get_validator ();
@@ -207,6 +216,8 @@ main (int argc, char **argv)
   add_test_with_context (suite, gsad_validator, validate_comment);
   add_test_with_context (suite, gsad_validator,
                          reject_removed_report_alert_command);
+  add_test_with_context (suite, gsad_validator,
+                         reject_removed_create_config_command);
   add_test_with_context (suite, gsad_validator, validate_kdcs_name_and_value);
   add_test_with_context (suite, gsad_validator, validate_ca_pub);
   add_test_with_context (suite, gsad_validator,

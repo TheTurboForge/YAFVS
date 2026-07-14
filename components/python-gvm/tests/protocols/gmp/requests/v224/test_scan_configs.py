@@ -10,38 +10,6 @@ from gvm.protocols.gmp.requests.v224 import ScanConfigs
 
 
 class ScanConfigsTestCase(unittest.TestCase):
-    def test_create_scan_config(self):
-        request = ScanConfigs.create_scan_config("a1", "foo")
-
-        self.assertEqual(
-            bytes(request),
-            b"<create_config><copy>a1</copy><name>foo</name>"
-            b"<usage_type>scan</usage_type></create_config>",
-        )
-
-    def test_create_scan_config_with_comment(self):
-        request = ScanConfigs.create_scan_config("a1", "foo", comment="comment")
-
-        self.assertEqual(
-            bytes(request),
-            b"<create_config><comment>comment</comment><copy>a1</copy>"
-            b"<name>foo</name><usage_type>scan</usage_type></create_config>",
-        )
-
-    def test_create_scan_config_missing_id(self):
-        with self.assertRaises(RequiredArgument):
-            ScanConfigs.create_scan_config("", "foo")
-
-        with self.assertRaises(RequiredArgument):
-            ScanConfigs.create_scan_config(None, "foo")
-
-    def test_create_scan_config_missing_name(self):
-        with self.assertRaises(RequiredArgument):
-            ScanConfigs.create_scan_config("c1", None)
-
-        with self.assertRaises(RequiredArgument):
-            ScanConfigs.create_scan_config("c1", "")
-
     def test_delete_scan_config(self):
         request = ScanConfigs.delete_scan_config("a1")
 

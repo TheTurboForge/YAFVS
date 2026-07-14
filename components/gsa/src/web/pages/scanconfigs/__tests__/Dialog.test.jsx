@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -31,6 +32,7 @@ describe('CreateScanConfigDialog component tests', () => {
     const radioInputs = within(dialog).getRadioInputs();
     const radioTitles = dialog.querySelectorAll('.mantine-Radio-label');
 
+    expect(radioInputs).toHaveLength(3);
     expect(radioInputs[0]).toHaveAttribute(
       'value',
       'd21f6c81-2b88-4ac1-b7b4-a2a9f2ad4663',
@@ -49,7 +51,7 @@ describe('CreateScanConfigDialog component tests', () => {
       'value',
       'daba56c8-73ec-11df-a475-002264764cea',
     );
-    expect(radioInputs[2].checked).toEqual(false);
+    expect(radioInputs[2]).not.toBeChecked();
     expect(radioTitles[2]).toHaveTextContent('Full and fast');
   });
 
@@ -111,7 +113,6 @@ describe('CreateScanConfigDialog component tests', () => {
       baseScanConfig: 'd21f6c81-2b88-4ac1-b7b4-a2a9f2ad4663',
       comment: 'bar',
       name: 'foo',
-      scannerId: undefined,
     });
   });
 
@@ -136,16 +137,15 @@ describe('CreateScanConfigDialog component tests', () => {
     changeInputValue(commentInput, 'bar');
 
     const radioInputs = dialog.getRadioInputs();
-    fireEvent.click(radioInputs[1]);
+    fireEvent.click(radioInputs[2]);
 
     const saveButton = dialog.getDialogSaveButton();
     fireEvent.click(saveButton);
 
     expect(handleSave).toHaveBeenCalledWith({
-      baseScanConfig: '085569ce-73ed-11df-83c3-002264764cea',
+      baseScanConfig: 'daba56c8-73ec-11df-a475-002264764cea',
       comment: 'bar',
       name: 'foo',
-      scannerId: undefined,
     });
   });
 });

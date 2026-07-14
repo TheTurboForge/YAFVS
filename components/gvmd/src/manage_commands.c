@@ -33,7 +33,7 @@
 command_t gmp_commands[]
  = {{"AUTHENTICATE", "Authenticate with the manager." },
     {"CREATE_ASSET", "Create an asset."},
-    {"CREATE_CONFIG", "Create a config."},
+    {"CREATE_CONFIG", "Import a scan config."},
     {"CREATE_CREDENTIAL", "Create a credential."},
     {"CREATE_FILTER", "Create a filter."},
     {"CREATE_OVERRIDE", "Create an override."},

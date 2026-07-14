@@ -3107,7 +3107,7 @@ class TurboVASCtlTests(unittest.TestCase):
         product_residue = details["product_workflow_residue"]
         residue_count = sum(item["count"] for item in product_residue.values())
         self.assertEqual(residue_count, details["by_category"]["product_workflow"]["count"])
-        self.assertIn("scan-config-import-export-or-blank-create", product_residue)
+        self.assertIn("scan-config-import-or-xml-export", product_residue)
         self.assertNotIn("compatibility-parser-model-or-test", product_residue)
         self.assertIn(
             "components/gsa/src/gmp/locale/date.ts",
@@ -4449,7 +4449,7 @@ class TurboVASCtlTests(unittest.TestCase):
          'report-format-file-import-export-verify-param-writes-and-deletes',
          'retention-mutations',
          'saved-filter-alert-linkage',
-         'scan-config-import-xml-export-and-blank-create',
+         'scan-config-import-and-xml-export',
          'schedule-calendar-edit-and-task-recalculation',
          'target-credential-secrets-create-delete-restore-export',
          'target-credential-secrets-writes-and-deletes',
@@ -5101,9 +5101,9 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/scanners/{scanner_id}": ("getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", None),
             "/api/v1/scanners/{scanner_id}/export": ("getScannersByScannerIdExport", "scanner-metadata-export-read", None),
             "/api/v1/scan-configs": ("getScanConfigs", "scan-config-metadata-list-read", None),
-            "/api/v1/scan-configs/{scan_config_id}": ("getScanConfigsByScanConfigId", "scan-config-detail-info-tags-task-backlinks-and-preferences-read", "scan-config-import-xml-export-and-blank-create"),
-            "/api/v1/scan-configs/{scan_config_id}/families": ("getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-import-xml-export-and-blank-create"),
-            "/api/v1/scan-configs/{scan_config_id}/families/{family}/nvts": ("getScanConfigsByScanConfigIdFamiliesByFamilyNvts", "scan-config-family-nvt-selection-read", "scan-config-import-xml-export-and-blank-create"),
+            "/api/v1/scan-configs/{scan_config_id}": ("getScanConfigsByScanConfigId", "scan-config-detail-info-tags-task-backlinks-and-preferences-read", "scan-config-import-and-xml-export"),
+            "/api/v1/scan-configs/{scan_config_id}/families": ("getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-import-and-xml-export"),
+            "/api/v1/scan-configs/{scan_config_id}/families/{family}/nvts": ("getScanConfigsByScanConfigIdFamiliesByFamilyNvts", "scan-config-family-nvt-selection-read", "scan-config-import-and-xml-export"),
         }
         for endpoint, (operation_id, replaces, inherited_still_owns) in expected_asset_metadata.items():
             row = rows[("get", endpoint)]
@@ -10803,9 +10803,9 @@ class TurboVASCtlTests(unittest.TestCase):
             (scanner_detail, "getScannersByScannerId", "scanner-metadata-detail-info-tags-and-task-backlink-read", None),
             (scanner_export, "getScannersByScannerIdExport", "scanner-metadata-export-read", None),
             (scan_configs, "getScanConfigs", "scan-config-metadata-list-read", None),
-            (scan_config_detail, "getScanConfigsByScanConfigId", "scan-config-detail-info-tags-task-backlinks-and-preferences-read", "scan-config-import-xml-export-and-blank-create"),
-            (scan_config_families, "getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-import-xml-export-and-blank-create"),
-            (scan_config_family_nvts, "getScanConfigsByScanConfigIdFamiliesByFamilyNvts", "scan-config-family-nvt-selection-read", "scan-config-import-xml-export-and-blank-create"),
+            (scan_config_detail, "getScanConfigsByScanConfigId", "scan-config-detail-info-tags-task-backlinks-and-preferences-read", "scan-config-import-and-xml-export"),
+            (scan_config_families, "getScanConfigsByScanConfigIdFamilies", "scan-config-family-summary-read", "scan-config-import-and-xml-export"),
+            (scan_config_family_nvts, "getScanConfigsByScanConfigIdFamiliesByFamilyNvts", "scan-config-family-nvt-selection-read", "scan-config-import-and-xml-export"),
         ]
         for operation, operation_id, replaces, inherited_still_owns in expected_asset_metadata:
             self.assertEqual(operation["operation_id"], operation_id)

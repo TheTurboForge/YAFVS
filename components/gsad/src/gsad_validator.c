@@ -25,7 +25,6 @@ gsad_init_validator ()
                      "|(change_password)"
                      "|(clone)"
                      "|(create_asset)"
-                     "|(create_config)"
                      "|(create_credential)"
                      "|(create_filter)"
                      "|(create_host)"

@@ -410,7 +410,7 @@ describe('ScanConfigComponent', () => {
   });
 
   describe('openCreateConfigDialog / closeCreateConfigDialog', () => {
-    test('should open create dialog and load scanners', async () => {
+    test('should open create dialog without loading scanners', async () => {
       const {gmp, mocks} = createGmp();
       const childFn = renderComponent(gmp);
 
@@ -421,19 +421,9 @@ describe('ScanConfigComponent', () => {
       const create = props.create as (arg: unknown) => void;
       create(undefined);
 
-      await waitFor(() => {
-        expect(mocks.fetchNativeScanners).toHaveBeenCalled();
-      });
-      expect(mocks.getScannersAll).not.toHaveBeenCalled();
-      expect(mocks.buildUrl).toHaveBeenCalledWith('api/v1/scanners', {
-        token: 'test-token',
-        page: 1,
-        page_size: 500,
-        sort: 'name',
-        filter: '',
-      });
-
       await screen.findByText('New Scan Config');
+      expect(mocks.fetchNativeScanners).not.toHaveBeenCalled();
+      expect(mocks.getScannersAll).not.toHaveBeenCalled();
     });
   });
 

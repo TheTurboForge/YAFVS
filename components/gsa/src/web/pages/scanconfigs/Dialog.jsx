@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -12,19 +13,14 @@ import {
 import SaveDialog from 'web/components/dialog/SaveDialog';
 import FormGroup from 'web/components/form/FormGroup';
 import Radio from 'web/components/form/Radio';
-import Select from 'web/components/form/Select';
 import TextField from 'web/components/form/TextField';
-import Row from 'web/components/layout/Row';
 import useTranslation from 'web/hooks/useTranslation';
 import PropTypes from 'web/utils/PropTypes';
-import {renderSelectItems} from 'web/utils/Render';
 
 const CreateScanConfigDialog = ({
   baseScanConfig = BASE_SCAN_CONFIG_ID,
   comment = '',
   name,
-  scannerId,
-  scanners = [],
   title,
   onClose,
   onSave,
@@ -36,7 +32,6 @@ const CreateScanConfigDialog = ({
     baseScanConfig,
     comment,
     name,
-    scannerId,
   };
   return (
     <SaveDialog
@@ -87,23 +82,6 @@ const CreateScanConfigDialog = ({
                 value={FULL_AND_FAST_SCAN_CONFIG_ID}
                 onChange={onValueChange}
               />
-              {scanners.length > 0 && (
-                <Row>
-                  <Radio
-                    checked={state.baseScanConfig === '0'}
-                    name="baseScanConfig"
-                    value="0"
-                    onChange={onValueChange}
-                  />
-                  <Select
-                    grow="1"
-                    items={renderSelectItems(scanners)}
-                    name="scannerId"
-                    value={state.scannerId}
-                    onChange={onValueChange}
-                  />
-                </Row>
-              )}
             </FormGroup>
           </>
         );
@@ -117,12 +95,9 @@ CreateScanConfigDialog.propTypes = {
     FULL_AND_FAST_SCAN_CONFIG_ID,
     EMPTY_SCAN_CONFIG_ID,
     BASE_SCAN_CONFIG_ID,
-    '0',
   ]),
   comment: PropTypes.string,
   name: PropTypes.string,
-  scannerId: PropTypes.id,
-  scanners: PropTypes.array,
   title: PropTypes.string,
   onClose: PropTypes.func.isRequired,
   onSave: PropTypes.func.isRequired,

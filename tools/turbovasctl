@@ -533,7 +533,7 @@ NATIVE_TOOLING_RESIDUE_KINDS = (
     "report-format-config-write-or-export",
     "report-format-file-import-export-verify-param-writes-and-deletes",
     "saved-filter-gsa-filter-actions-or-alert-linkage",
-    "scan-config-import-export-or-blank-create",
+    "scan-config-import-or-xml-export",
     "scanner-control-or-credential",
     "schedule-calendar-edit-and-task-recalculation",
     "tag-write-or-resource-actions",
@@ -858,7 +858,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "report-format-file-import-export-verify-param-writes-and-deletes",
         "retention-mutations",
         "saved-filter-alert-linkage",
-        "scan-config-import-xml-export-and-blank-create",
+        "scan-config-import-and-xml-export",
         "schedule-calendar-edit-and-task-recalculation",
         "remote-scanner-tls-relay-verification",
         "target-file-input-task-control-and-credential-secret-workflows",
@@ -1574,7 +1574,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scan-config-create-from-base",
     },
     ("get", "/scan-configs/{scan_config_id}"): {
-        "x-turbovas-inherited-still-owns": "scan-config-import-xml-export-and-blank-create",
+        "x-turbovas-inherited-still-owns": "scan-config-import-and-xml-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-detail-info-tags-task-backlinks-and-preferences-read",
     },
@@ -1603,12 +1603,12 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-turbovas-replaces": "scan-config-hard-delete",
     },
     ("get", "/scan-configs/{scan_config_id}/families"): {
-        "x-turbovas-inherited-still-owns": "scan-config-import-xml-export-and-blank-create",
+        "x-turbovas-inherited-still-owns": "scan-config-import-and-xml-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-family-summary-read",
     },
     ("get", "/scan-configs/{scan_config_id}/families/{family}/nvts"): {
-        "x-turbovas-inherited-still-owns": "scan-config-import-xml-export-and-blank-create",
+        "x-turbovas-inherited-still-owns": "scan-config-import-and-xml-export",
         "x-turbovas-maturity": "live-read",
         "x-turbovas-replaces": "scan-config-family-nvt-selection-read",
     },
@@ -4593,7 +4593,7 @@ def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str]
     if name == "report-format.ts":
         return "report-format-file-import-export-verify-param-writes-and-deletes", "Report-format file import/export, verification, parameter mutations, deletes, and dialog side effects remain inherited."
     if name == "scan-configs.js":
-        return "scan-config-import-export-or-blank-create", "Scan-config import, inherited XML export, and blank-create compatibility remain after native reads and retained writes."
+        return "scan-config-import-or-xml-export", "Scan-config import and inherited XML export remain after native reads and retained writes."
     if name == "schedules.js":
         return "schedule-calendar-edit-and-task-recalculation", "Existing-schedule calendar edit and linked-task next-time recalculation remain inherited."
     if name == "filter.ts":

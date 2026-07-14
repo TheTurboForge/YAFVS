@@ -14,41 +14,6 @@ from .._entity_id import EntityID
 
 class ScanConfigs:
     @classmethod
-    def create_scan_config(
-        cls,
-        config_id: EntityID,
-        name: str,
-        *,
-        comment: str | None = None,
-    ) -> Request:
-        """Create a new scan config
-
-        Args:
-            config_id: UUID of the existing scan config
-            name: Name of the new scan config
-            comment: A comment on the config
-        """
-        if not name:
-            raise RequiredArgument(
-                function=cls.create_scan_config.__name__, argument="name"
-            )
-
-        if not config_id:
-            raise RequiredArgument(
-                function=cls.create_scan_config.__name__, argument="config_id"
-            )
-
-        cmd = XmlCommand("create_config")
-        if comment is not None:
-            cmd.add_element("comment", comment)
-
-        cmd.add_element("copy", str(config_id))
-        cmd.add_element("name", name)
-        cmd.add_element("usage_type", "scan")
-
-        return cmd
-
-    @classmethod
     def delete_scan_config(
         cls, config_id: EntityID, *, ultimate: bool | None = False
     ) -> Request:

@@ -386,24 +386,6 @@ class GMPv224(GvmProtocol[T]):
             )
         )
 
-    def create_scan_config(
-        self,
-        config_id: EntityID,
-        name: str,
-        *,
-        comment: str | None = None,
-    ) -> T:
-        """Create a new scan config
-
-        Args:
-            config_id: UUID of the existing scan config
-            name: Name of the new scan config
-            comment: A comment on the config
-        """
-        return self._send_request_and_transform_response(
-            ScanConfigs.create_scan_config(config_id, name, comment=comment)
-        )
-
     def delete_scan_config(
         self, config_id: EntityID, *, ultimate: bool | None = False
     ) -> T:

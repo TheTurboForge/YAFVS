@@ -59,6 +59,11 @@ OPENVAS_RESULT_FIELDS = (
     'uri',
 )
 OPENVAS_RESULT_ROW_MAX_BYTES = 4 * 1024 * 1024
+OPENVAS_RESULT_CLAIM_MAX_ITEMS = 1000
+OPENVAS_RESULT_CLAIM_MAX_BYTES = 16 * 1024 * 1024
+OVERSIZED_RESULT_MARKER_PREFIX = (
+    '{"turbovas_internal":"oversized_result","bytes":'
+)
 
 
 def unique_json_object(pairs: List[Tuple[str, Any]]) -> Dict[str, Any]:
@@ -983,7 +988,13 @@ class OSPDopenvas(OSPDaemon):
         """
 
         # Scanner results are bounded version-1 JSON records.
-        all_results = db.get_result()
+        claim_id, all_results = db.claim_results(
+            max_items=OPENVAS_RESULT_CLAIM_MAX_ITEMS,
+            max_bytes=OPENVAS_RESULT_CLAIM_MAX_BYTES,
+            max_item_bytes=OPENVAS_RESULT_ROW_MAX_BYTES,
+        )
+        if not claim_id:
+            return False
         results = []
         quarantined = False
         for res in all_results:
@@ -993,6 +1004,12 @@ class OSPDopenvas(OSPDaemon):
             if not isinstance(res, str):
                 logger.warning(
                     '%s: Ignoring malformed Redis result row.', scan_id
+                )
+                quarantined = True
+                continue
+            if res.startswith(OVERSIZED_RESULT_MARKER_PREFIX):
+                logger.warning(
+                    '%s: Discarded oversized Redis result row.', scan_id
                 )
                 quarantined = True
                 continue
@@ -1017,7 +1034,22 @@ class OSPDopenvas(OSPDaemon):
                 scan_id, 'Malformed scanner result rows were discarded.'
             )
 
-        return self.report_results(results, scan_id)
+        if not self.report_results(results, scan_id, claim_id=claim_id):
+            return False
+        if not db.ack_result_claim(claim_id):
+            logger.warning(
+                '%s: Retaining unacknowledged Redis result claim.', scan_id
+            )
+            return False
+        self.scan_collection.clear_result_claim(scan_id, claim_id)
+        return True
+
+    def drain_openvas_results(self, db: BaseDB, scan_id: str) -> bool:
+        """Drain every replayable claim after the scanner has stopped."""
+        while db.has_pending_results():
+            if not self.report_openvas_results(db, scan_id):
+                return False
+        return True
 
     MAX_OPENVAS_HOST_COUNT = 2**31 - 1
 
@@ -1038,7 +1070,9 @@ class OSPDopenvas(OSPDaemon):
 
         return count
 
-    def report_results(self, results: list, scan_id: str) -> bool:
+    def report_results(
+        self, results: list, scan_id: str, claim_id: Optional[str] = None
+    ) -> bool:
         """Reports all results given in a list.
 
         Arguments:
@@ -1215,12 +1249,15 @@ class OSPDopenvas(OSPDaemon):
                         'Invalid scanner host-count metadata was discarded.'
                     )
 
+        result_batch_args = {
+            'total_dead': total_dead,
+            'count_total': count_total,
+            'count_excluded': count_excluded,
+        }
+        if claim_id:
+            result_batch_args['claim_id'] = claim_id
         self.scan_collection.apply_result_batch(
-            scan_id,
-            res_list,
-            total_dead=total_dead,
-            count_total=count_total,
-            count_excluded=count_excluded,
+            scan_id, res_list, **result_batch_args
         )
         if len(res_list):
             logger.debug(
@@ -1605,11 +1642,23 @@ class OSPDopenvas(OSPDaemon):
                     kbdb, scan_id, kbdb.get_scan_process_id()
                 ):
                     return
+                if not self.drain_openvas_results(kbdb, scan_id):
+                    logger.error(
+                        '%s: Retaining Redis database because stopped-scan '
+                        'results could not be acknowledged.',
+                        scan_id,
+                    )
+                    return
                 self.main_db.release_database(kbdb)
                 return
 
             # Scan end. No kb in use for this scan id
             if target_is_finished:
+                if got_results:
+                    continue
+                if kbdb.has_pending_results():
+                    time.sleep(1)
+                    continue
                 logger.debug('%s: Target is finished', scan_id)
                 break
 

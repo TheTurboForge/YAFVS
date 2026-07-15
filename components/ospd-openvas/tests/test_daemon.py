@@ -392,6 +392,11 @@ def openvas_result_row(
     )
 
 
+def set_result_claim(db, results, claim_id='claim-1'):
+    db.claim_results.return_value = (claim_id, results)
+    db.ack_result_claim.return_value = True
+
+
 class TestOspdOpenvas(TestCase):
     def test_scanner_delivery_failure_is_visible_and_not_duplicated(self):
         daemon = DummyDaemon()
@@ -634,7 +639,7 @@ class TestOspdOpenvas(TestCase):
                 value='Host dead',
             ),
         ]
-        MockDBClass.get_result.return_value = results
+        set_result_claim(MockDBClass, results)
         mock_add_scan_log_to_list.return_value = None
 
         w.report_openvas_results(MockDBClass, '123-456')
@@ -648,6 +653,55 @@ class TestOspdOpenvas(TestCase):
             uri='',
             value='Host dead',
         )
+        MockDBClass.claim_results.assert_called_once_with(
+            max_items=1000,
+            max_bytes=16 * 1024 * 1024,
+            max_item_bytes=4 * 1024 * 1024,
+        )
+        MockDBClass.ack_result_claim.assert_called_once_with('claim-1')
+
+    @patch('ospd_openvas.daemon.BaseDB')
+    def test_result_claim_replays_without_duplicate_application(
+        self, MockDBClass
+    ):
+        w = DummyDaemon()
+        target_element = w.create_xml_target()
+        targets = OspRequest.process_target_element(target_element)
+        w.create_scan('123-456', targets, None, [])
+        results = [
+            openvas_result_row(
+                'HOST_START', host_ip='192.0.2.1', value='started'
+            )
+        ]
+        set_result_claim(MockDBClass, results)
+        MockDBClass.ack_result_claim.side_effect = [False, True]
+
+        self.assertFalse(w.report_openvas_results(MockDBClass, '123-456'))
+        self.assertTrue(w.report_openvas_results(MockDBClass, '123-456'))
+
+        scan = w.scan_collection.scans_table['123-456']
+        self.assertEqual(len(scan['results']), 1)
+        self.assertEqual(scan['last_result_claim_id'], '')
+        self.assertEqual(MockDBClass.ack_result_claim.call_count, 2)
+
+    @patch('ospd_openvas.daemon.BaseDB')
+    def test_stopped_scan_drain_requires_every_claim_acknowledgment(
+        self, MockDBClass
+    ):
+        w = DummyDaemon()
+        MockDBClass.has_pending_results.side_effect = [True, True, False]
+        w.report_openvas_results = MagicMock(side_effect=[True, True])
+
+        self.assertTrue(w.drain_openvas_results(MockDBClass, 'scan-1'))
+        self.assertEqual(w.report_openvas_results.call_count, 2)
+
+        MockDBClass.reset_mock()
+        MockDBClass.has_pending_results.return_value = True
+        MockDBClass.has_pending_results.side_effect = None
+        w.report_openvas_results = MagicMock(return_value=False)
+
+        self.assertFalse(w.drain_openvas_results(MockDBClass, 'scan-1'))
+        w.report_openvas_results.assert_called_once_with(MockDBClass, 'scan-1')
 
     @patch('ospd_openvas.daemon.BaseDB')
     @patch('ospd_openvas.daemon.ResultList.add_scan_error_to_list')
@@ -668,7 +722,7 @@ class TestOspdOpenvas(TestCase):
                 value='Host access denied.',
             ),
         ]
-        MockDBClass.get_result.return_value = results
+        set_result_claim(MockDBClass, results)
         mock_add_scan_error_to_list.return_value = None
 
         w.report_openvas_results(MockDBClass, '123-456')
@@ -690,7 +744,7 @@ class TestOspdOpenvas(TestCase):
         w.create_scan('123-456', targets, None, [])
 
         results = [openvas_result_row('DEADHOST', value='4')]
-        MockDBClass.get_result.return_value = results
+        set_result_claim(MockDBClass, results)
 
         w.report_openvas_results(MockDBClass, '123-456')
         self.assertEqual(
@@ -713,7 +767,7 @@ class TestOspdOpenvas(TestCase):
             ),
         ]
 
-        MockDBClass.get_result.return_value = results
+        set_result_claim(MockDBClass, results)
         mock_add_scan_log_to_list.return_value = None
 
         w.report_openvas_results(MockDBClass, '123-456')
@@ -732,7 +786,7 @@ class TestOspdOpenvas(TestCase):
         w.create_scan('123-456', targets, None, [])
 
         results = [openvas_result_row('HOSTS_COUNT', value='4')]
-        MockDBClass.get_result.return_value = results
+        set_result_claim(MockDBClass, results)
 
         w.report_openvas_results(MockDBClass, '123-456')
         self.assertEqual(
@@ -751,23 +805,27 @@ class TestOspdOpenvas(TestCase):
         w.create_scan('123-456', targets, None, [])
 
         hostile_row = 'HOSTILE-RESULT-PAYLOAD'
-        MockDBClass.get_result.return_value = [
-            hostile_row,
-            b'not-a-text-result-row',
-            'x' * (w.MAX_REDIS_RESULT_ROW_LENGTH + 1),
-            openvas_result_row(
-                'LOG',
-                host_ip='192.168.0.1',
-                host_name='localhost',
-                port='general/Host_Details',
-                value='Host dead',
-            ),
-        ]
+        set_result_claim(
+            MockDBClass,
+            [
+                hostile_row,
+                b'not-a-text-result-row',
+                '{"turbovas_internal":"oversized_result","bytes":4194305}',
+                'x' * (w.MAX_REDIS_RESULT_ROW_LENGTH + 1),
+                openvas_result_row(
+                    'LOG',
+                    host_ip='192.168.0.1',
+                    host_name='localhost',
+                    port='general/Host_Details',
+                    value='Host dead',
+                ),
+            ],
+        )
 
         w.report_openvas_results(MockDBClass, '123-456')
 
         mock_add_scan_log_to_list.assert_called_once()
-        self.assertEqual(mock_warning.call_count, 3)
+        self.assertEqual(mock_warning.call_count, 4)
         self.assertNotIn(hostile_row, str(mock_warning.call_args_list))
         self.assertTrue(
             w.scan_collection.scans_table['123-456']['evidence_incomplete']
@@ -821,16 +879,19 @@ class TestOspdOpenvas(TestCase):
         target_element = w.create_xml_target()
         targets = OspRequest.process_target_element(target_element)
         w.create_scan('123-456', targets, None, [])
-        MockDBClass.get_result.return_value = [
-            openvas_result_row('HOSTS_COUNT', value='NaN'),
-            openvas_result_row('HOSTS_COUNT', value='-1'),
-            openvas_result_row('HOSTS_COUNT', value='2147483648'),
-            openvas_result_row('HOSTS_COUNT', value='4'),
-            openvas_result_row('HOSTS_EXCLUDED', value='Infinity'),
-            openvas_result_row('HOSTS_EXCLUDED', value='2'),
-            openvas_result_row('DEADHOST', value='-1'),
-            openvas_result_row('DEADHOST', value='3'),
-        ]
+        set_result_claim(
+            MockDBClass,
+            [
+                openvas_result_row('HOSTS_COUNT', value='NaN'),
+                openvas_result_row('HOSTS_COUNT', value='-1'),
+                openvas_result_row('HOSTS_COUNT', value='2147483648'),
+                openvas_result_row('HOSTS_COUNT', value='4'),
+                openvas_result_row('HOSTS_EXCLUDED', value='Infinity'),
+                openvas_result_row('HOSTS_EXCLUDED', value='2'),
+                openvas_result_row('DEADHOST', value='-1'),
+                openvas_result_row('DEADHOST', value='3'),
+            ],
+        )
 
         w.report_openvas_results(MockDBClass, '123-456')
 
@@ -850,10 +911,15 @@ class TestOspdOpenvas(TestCase):
         target_element = w.create_xml_target()
         targets = OspRequest.process_target_element(target_element)
         w.create_scan('123-456', targets, None, [])
-        MockDBClass.get_result.return_value = [
-            openvas_result_row('DEADHOST', value=str(w.MAX_OPENVAS_HOST_COUNT)),
-            openvas_result_row('DEADHOST', value='1'),
-        ]
+        set_result_claim(
+            MockDBClass,
+            [
+                openvas_result_row(
+                    'DEADHOST', value=str(w.MAX_OPENVAS_HOST_COUNT)
+                ),
+                openvas_result_row('DEADHOST', value='1'),
+            ],
+        )
 
         w.report_openvas_results(MockDBClass, '123-456')
 
@@ -878,7 +944,7 @@ class TestOspdOpenvas(TestCase):
             openvas_result_row('ALARM', value='some alarm', uri='path'),
             None,
         ]
-        MockDBClass.get_result.return_value = results
+        set_result_claim(MockDBClass, results)
         mock_add_scan_alarm_to_list.return_value = None
 
         w.report_openvas_results(MockDBClass, '123-456')

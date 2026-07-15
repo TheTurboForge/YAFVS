@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 
 """Access management for redis-based OpenVAS Scanner Database."""
+
 import logging
 import sys
 import time
+import uuid
 
 from typing import List, NewType, Optional, Iterable, Iterator, Tuple, Callable
 from urllib import parse
@@ -22,6 +25,73 @@ SOCKET_TIMEOUT = 60  # in seconds
 LIST_FIRST_POS = 0
 LIST_LAST_POS = -1
 LIST_ALL = 0
+
+CLAIM_RESULT_ITEMS_SCRIPT = """
+local claimed = redis.call('LRANGE', KEYS[2], 0, -1)
+local claim_id = redis.call('GET', KEYS[3])
+if #claimed > 0 then
+  if not claim_id then
+    claim_id = ARGV[4]
+    redis.call('SET', KEYS[3], claim_id)
+  end
+  local response = {claim_id}
+  for _, value in ipairs(claimed) do
+    table.insert(response, value)
+  end
+  return response
+end
+
+if claim_id then
+  redis.call('DEL', KEYS[3])
+end
+claim_id = ARGV[4]
+redis.call('SET', KEYS[3], claim_id)
+
+local max_items = tonumber(ARGV[1])
+local max_bytes = tonumber(ARGV[2])
+local max_item_bytes = tonumber(ARGV[3])
+local claimed_bytes = 0
+claimed = {}
+for _ = 1, max_items do
+  local candidate = redis.call('LINDEX', KEYS[1], -1)
+  if not candidate then
+    break
+  end
+  local candidate_bytes = string.len(candidate)
+  if candidate_bytes > max_item_bytes then
+    redis.call('RPOP', KEYS[1])
+    local marker = '{"turbovas_internal":"oversized_result","bytes":'
+      .. tostring(candidate_bytes) .. '}'
+    redis.call('RPUSH', KEYS[2], marker)
+    table.insert(claimed, marker)
+    break
+  end
+  if claimed_bytes + candidate_bytes > max_bytes then
+    break
+  end
+  candidate = redis.call('RPOP', KEYS[1])
+  redis.call('RPUSH', KEYS[2], candidate)
+  table.insert(claimed, candidate)
+  claimed_bytes = claimed_bytes + candidate_bytes
+end
+
+if #claimed == 0 then
+  redis.call('DEL', KEYS[3])
+  return {}
+end
+local response = {claim_id}
+for _, value in ipairs(claimed) do
+  table.insert(response, value)
+end
+return response
+"""
+
+ACK_RESULT_CLAIM_SCRIPT = """
+if redis.call('GET', KEYS[2]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1], KEYS[2])
+end
+return 0
+"""
 
 # Possible positions of nvt values in cache list.
 NVT_META_FIELDS = [
@@ -208,6 +278,73 @@ class OpenvasDB:
             results = []
 
         return results
+
+    @staticmethod
+    def claim_list_items(
+        ctx: RedisCtx,
+        name: str,
+        claim_name: str,
+        claim_id_name: str,
+        *,
+        max_items: int,
+        max_bytes: int,
+        max_item_bytes: int,
+    ) -> Tuple[Optional[str], List[str]]:
+        """Atomically claim one bounded oldest-first replayable batch."""
+        if not ctx:
+            raise RequiredArgument('claim_list_items', 'ctx')
+        if not name:
+            raise RequiredArgument('claim_list_items', 'name')
+        if not claim_name:
+            raise RequiredArgument('claim_list_items', 'claim_name')
+        if not claim_id_name:
+            raise RequiredArgument('claim_list_items', 'claim_id_name')
+        if max_items <= 0:
+            raise RequiredArgument('claim_list_items', 'max_items')
+        if max_bytes <= 0:
+            raise RequiredArgument('claim_list_items', 'max_bytes')
+        if max_item_bytes <= 0 or max_item_bytes > max_bytes:
+            raise RequiredArgument('claim_list_items', 'max_item_bytes')
+
+        response = ctx.eval(
+            CLAIM_RESULT_ITEMS_SCRIPT,
+            3,
+            name,
+            claim_name,
+            claim_id_name,
+            max_items,
+            max_bytes,
+            max_item_bytes,
+            str(uuid.uuid4()),
+        )
+        if not response:
+            return None, []
+        return str(response[0]), list(response[1:])
+
+    @staticmethod
+    def ack_list_claim(
+        ctx: RedisCtx,
+        claim_name: str,
+        claim_id_name: str,
+        claim_id: str,
+    ) -> bool:
+        """Delete only the exact current replayable claim."""
+        if not ctx:
+            raise RequiredArgument('ack_list_claim', 'ctx')
+        if not claim_name:
+            raise RequiredArgument('ack_list_claim', 'claim_name')
+        if not claim_id_name:
+            raise RequiredArgument('ack_list_claim', 'claim_id_name')
+        if not claim_id:
+            raise RequiredArgument('ack_list_claim', 'claim_id')
+        deleted = ctx.eval(
+            ACK_RESULT_CLAIM_SCRIPT,
+            2,
+            claim_name,
+            claim_id_name,
+            claim_id,
+        )
+        return deleted == 2
 
     @staticmethod
     def get_key_count(ctx: RedisCtx, pattern: Optional[str] = None) -> int:
@@ -440,6 +577,10 @@ class BaseDB:
 
 
 class BaseKbDB(BaseDB):
+    RESULT_KEY = 'internal/results'
+    RESULT_CLAIM_KEY = 'internal/results.ospd-claim'
+    RESULT_CLAIM_ID_KEY = 'internal/results.ospd-claim-id'
+
     def _add_single_item(
         self, name: str, values: Iterable, utf8_enc: Optional[bool] = False
     ):
@@ -495,12 +636,33 @@ class BaseKbDB(BaseDB):
         """
         OpenvasDB.remove_list_item(self.ctx, key, value)
 
-    def get_result(self) -> Optional[str]:
-        """Get and remove the oldest result from the list.
+    def claim_results(
+        self, *, max_items: int, max_bytes: int, max_item_bytes: int
+    ) -> Tuple[Optional[str], List[str]]:
+        """Claim a bounded replayable batch of oldest scanner results."""
+        return OpenvasDB.claim_list_items(
+            self.ctx,
+            self.RESULT_KEY,
+            self.RESULT_CLAIM_KEY,
+            self.RESULT_CLAIM_ID_KEY,
+            max_items=max_items,
+            max_bytes=max_bytes,
+            max_item_bytes=max_item_bytes,
+        )
 
-        Return the oldest scan results
-        """
-        return self._pop_list_items("internal/results")
+    def ack_result_claim(self, claim_id: str) -> bool:
+        return OpenvasDB.ack_list_claim(
+            self.ctx,
+            self.RESULT_CLAIM_KEY,
+            self.RESULT_CLAIM_ID_KEY,
+            claim_id,
+        )
+
+    def has_pending_results(self) -> bool:
+        return bool(
+            self.ctx.llen(self.RESULT_KEY)
+            or self.ctx.llen(self.RESULT_CLAIM_KEY)
+        )
 
     def get_status(self, openvas_scan_id: str) -> Optional[str]:
         """Return the status of the host scan"""

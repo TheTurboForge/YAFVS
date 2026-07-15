@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -241,6 +242,89 @@ class TestOpenvasDB(TestCase):
         pipeline.delete.assert_called_once_with('results')
         assert_called(pipeline.execute)
 
+    @patch('ospd_openvas.db.uuid.uuid4', return_value='claim-1')
+    def test_claim_list_items_moves_bounded_oldest_batch(
+        self, _mock_uuid, mock_redis
+    ):
+        ctx = mock_redis.from_url.return_value
+        ctx.eval.return_value = ['claim-1', 'oldest', 'newer']
+
+        claim_id, results = OpenvasDB.claim_list_items(
+            ctx,
+            'results',
+            'claim',
+            'claim-id',
+            max_items=2,
+            max_bytes=1024,
+            max_item_bytes=512,
+        )
+
+        self.assertEqual(claim_id, 'claim-1')
+        self.assertEqual(results, ['oldest', 'newer'])
+        self.assertEqual(
+            ctx.eval.call_args.args[1:],
+            (
+                3,
+                'results',
+                'claim',
+                'claim-id',
+                2,
+                1024,
+                512,
+                'claim-1',
+            ),
+        )
+
+    def test_claim_list_items_replays_existing_batch(self, mock_redis):
+        ctx = mock_redis.from_url.return_value
+        ctx.eval.return_value = ['claim-1', 'oldest', 'newer']
+
+        claim_id, results = OpenvasDB.claim_list_items(
+            ctx,
+            'results',
+            'claim',
+            'claim-id',
+            max_items=2,
+            max_bytes=1024,
+            max_item_bytes=512,
+        )
+
+        self.assertEqual(claim_id, 'claim-1')
+        self.assertEqual(results, ['oldest', 'newer'])
+
+    @patch('ospd_openvas.db.uuid.uuid4', return_value='claim-1')
+    def test_claim_list_items_returns_oversized_quarantine_marker(
+        self, _mock_uuid, mock_redis
+    ):
+        ctx = mock_redis.from_url.return_value
+        marker = '{"turbovas_internal":"oversized_result","bytes":2048}'
+        ctx.eval.return_value = ['claim-1', marker]
+
+        claim_id, results = OpenvasDB.claim_list_items(
+            ctx,
+            'results',
+            'claim',
+            'claim-id',
+            max_items=10,
+            max_bytes=1024,
+            max_item_bytes=512,
+        )
+
+        self.assertEqual(claim_id, 'claim-1')
+        self.assertEqual(results, [marker])
+
+    def test_ack_list_claim_requires_exact_current_id(self, mock_redis):
+        ctx = mock_redis.from_url.return_value
+        ctx.eval.side_effect = [0, 2]
+
+        self.assertFalse(
+            OpenvasDB.ack_list_claim(ctx, 'claim', 'claim-id', 'wrong')
+        )
+        self.assertTrue(
+            OpenvasDB.ack_list_claim(ctx, 'claim', 'claim-id', 'claim-1')
+        )
+        self.assertEqual(ctx.eval.call_count, 2)
+
     def test_set_single_item(self, mock_redis):
         ctx = mock_redis.from_url.return_value
         pipeline = ctx.pipeline.return_value
@@ -378,21 +462,25 @@ class ScanDBTestCase(TestCase):
         self.ctx = mock_redis.from_url.return_value
         self.db = ScanDB(10, self.ctx)
 
-    def test_get_result(self, mock_openvas_db):
-        mock_openvas_db.pop_list_items.return_value = [
-            'some result',
-        ]
-
-        ret = self.db.get_result()
-
-        self.assertEqual(
-            ret,
-            [
-                'some result',
-            ],
+    def test_claim_results(self, mock_openvas_db):
+        mock_openvas_db.claim_list_items.return_value = (
+            'claim-1',
+            ['some result'],
         )
-        mock_openvas_db.pop_list_items.assert_called_with(
-            self.ctx, 'internal/results'
+
+        ret = self.db.claim_results(
+            max_items=10, max_bytes=1024, max_item_bytes=512
+        )
+
+        self.assertEqual(ret, ('claim-1', ['some result']))
+        mock_openvas_db.claim_list_items.assert_called_with(
+            self.ctx,
+            'internal/results',
+            'internal/results.ospd-claim',
+            'internal/results.ospd-claim-id',
+            max_items=10,
+            max_bytes=1024,
+            max_item_bytes=512,
         )
 
     def test_get_status(self, mock_openvas_db):
@@ -426,21 +514,25 @@ class KbDBTestCase(TestCase):
         self.ctx = mock_redis.from_url.return_value
         self.db = KbDB(10, self.ctx)
 
-    def test_get_result(self, mock_openvas_db):
-        mock_openvas_db.pop_list_items.return_value = [
-            'some results',
-        ]
-
-        ret = self.db.get_result()
-
-        self.assertEqual(
-            ret,
-            [
-                'some results',
-            ],
+    def test_claim_results(self, mock_openvas_db):
+        mock_openvas_db.claim_list_items.return_value = (
+            'claim-1',
+            ['some results'],
         )
-        mock_openvas_db.pop_list_items.assert_called_with(
-            self.ctx, 'internal/results'
+
+        ret = self.db.claim_results(
+            max_items=10, max_bytes=1024, max_item_bytes=512
+        )
+
+        self.assertEqual(ret, ('claim-1', ['some results']))
+        mock_openvas_db.claim_list_items.assert_called_with(
+            self.ctx,
+            'internal/results',
+            'internal/results.ospd-claim',
+            'internal/results.ospd-claim-id',
+            max_items=10,
+            max_bytes=1024,
+            max_item_bytes=512,
         )
 
     def test_get_status(self, mock_openvas_db):

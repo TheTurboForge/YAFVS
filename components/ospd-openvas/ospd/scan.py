@@ -116,13 +116,16 @@ class ScanCollection:
         scan_id: str,
         result_list: Iterable[Dict[str, str]],
         *,
+        claim_id: Optional[str] = None,
         total_dead: int = 0,
         count_total: Optional[int] = None,
         count_excluded: Optional[int] = None,
-    ) -> None:
+    ) -> bool:
         """Atomically apply one parsed scanner result batch and its counts."""
         with self.scan_collection_lock:
             scan = self.scans_table[scan_id]
+            if claim_id and scan.get('last_result_claim_id') == claim_id:
+                return False
             results = scan.get('results', [])
             results.extend(result_list)
             scan['results'] = results
@@ -132,6 +135,18 @@ class ScanCollection:
                 scan['count_total'] = count_total
             if count_excluded is not None:
                 scan['count_excluded'] = count_excluded
+            if claim_id:
+                scan['last_result_claim_id'] = claim_id
+            return True
+
+    def clear_result_claim(self, scan_id: str, claim_id: str) -> bool:
+        """Forget only the exact applied Redis claim after durable release."""
+        with self.scan_collection_lock:
+            scan = self.scans_table[scan_id]
+            if scan.get('last_result_claim_id') != claim_id:
+                return False
+            scan['last_result_claim_id'] = ''
+            return True
 
     def add_result_list(
         self, scan_id: str, result_list: Iterable[Dict[str, str]]
@@ -326,6 +341,7 @@ class ScanCollection:
         scan_info['results'] = list()
         scan_info['temp_results'] = list()
         scan_info['result_batch_id'] = ''
+        scan_info['last_result_claim_id'] = ''
         scan_info['progress'] = ScanProgress.INIT.value
         scan_info['target_progress'] = dict()
         scan_info['count_alive'] = 0

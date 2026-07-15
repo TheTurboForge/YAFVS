@@ -16,6 +16,16 @@ from ospd_openvas.messages.result import ResultMessage
 from ospd_openvas.notus import Cache, Notus, NotusResultHandler
 
 
+def notus_result(scan_id: str, value: str) -> ResultMessage:
+    return ResultMessage(
+        scan_id=scan_id,
+        host_ip='1.1.1.1',
+        host_name='host',
+        oid='1.2.3',
+        value=value,
+    )
+
+
 class CacheFake(Cache):
     # pylint: disable=super-init-not-called
     def __init__(self):
@@ -235,11 +245,20 @@ class NotusTestCase(TestCase):
             "AV:N/AC:M/Au:N/C:C/I:C/A:C", nm.get("severity_vector", "")
         )
 
-    def test_notus_fail_cases(self):
-        def start(self):
-            self.function(*self.args, **self.kwargs)
+    def test_notus_failed_reports_are_retried_without_data_loss(self):
+        timers = []
 
-        mock_report_func = mock.MagicMock(return_value=False)
+        class TimerFake:
+            def __init__(self, delay, function, args):
+                self.delay = delay
+                self.function = function
+                self.args = args
+                timers.append(self)
+
+            def start(self):
+                return None
+
+        mock_report_func = mock.MagicMock(side_effect=[False, True])
         notus = NotusResultHandler(mock_report_func)
 
         res_msg = ResultMessage(
@@ -252,15 +271,244 @@ class NotusTestCase(TestCase):
             uri='file://foo/bar',
         )
 
-        with (
-            mock.patch.object(logging.Logger, 'warning') as warning,
-            mock.patch.object(threading.Timer, 'start', start),
-        ):
+        with mock.patch('ospd_openvas.notus.Timer', TimerFake):
             notus.result_handler(res_msg)
+            self.assertEqual(len(timers), 1)
+            timers.pop(0).function('scan_1')
+            self.assertEqual(len(timers), 1)
+            self.assertEqual(timers[0].delay, 1.0)
+            self.assertEqual(notus._result_count, 1)
+            self.assertEqual(len(notus._results['scan_1']), 1)
+            timers.pop(0).function('scan_1')
 
-        warning.assert_called_with(
-            "Unable to report %d notus results for scan id %s.", 1, "scan_1"
+        self.assertEqual(mock_report_func.call_count, 2)
+        self.assertEqual(notus._result_count, 0)
+        self.assertFalse(notus._results)
+        self.assertFalse(notus._timers)
+
+    def test_notus_report_exception_is_retried_without_data_loss(self):
+        timers = []
+
+        class TimerFake:
+            def __init__(self, _, function, args):
+                self.function = function
+                self.args = args
+                timers.append(self)
+
+            def start(self):
+                return None
+
+        report_func = mock.MagicMock(
+            side_effect=[RuntimeError('delivery failed'), True]
         )
+        handler = NotusResultHandler(report_func)
+        result = notus_result('scan_1', 'result')
+
+        with mock.patch('ospd_openvas.notus.Timer', TimerFake):
+            handler.result_handler(result)
+            timers.pop(0).function('scan_1')
+            self.assertEqual(handler._result_count, 1)
+            timers.pop(0).function('scan_1')
+
+        self.assertEqual(report_func.call_count, 2)
+        self.assertEqual(handler._result_count, 0)
+        self.assertFalse(handler._results)
+
+    def test_notus_retry_exhaustion_marks_incomplete_and_releases_buffer(self):
+        timers = []
+
+        class TimerFake:
+            def __init__(self, _, function, args):
+                self.function = function
+                self.args = args
+                self.cancelled = False
+                timers.append(self)
+
+            def start(self):
+                return None
+
+            def cancel(self):
+                self.cancelled = True
+
+        incomplete_func = mock.MagicMock()
+        handler = NotusResultHandler(
+            mock.MagicMock(return_value=False),
+            incomplete_func=incomplete_func,
+        )
+
+        with (
+            mock.patch('ospd_openvas.notus.Timer', TimerFake),
+            mock.patch('ospd_openvas.notus.MAX_NOTUS_RESULT_RETRIES', 2),
+        ):
+            handler.result_handler(notus_result('scan_1', 'result'))
+            timers.pop(0).function('scan_1')
+            timers.pop(0).function('scan_1')
+
+        incomplete_func.assert_called_once_with(
+            'scan_1',
+            'Notus result delivery failed after bounded retries.',
+        )
+        self.assertEqual(handler._result_count, 0)
+        self.assertEqual(handler._result_bytes, 0)
+        self.assertFalse(handler._results)
+        self.assertFalse(handler._result_sizes)
+        self.assertFalse(handler._result_bytes_per_scan)
+        self.assertFalse(handler._report_failures)
+
+    def test_notus_result_arriving_during_delivery_is_not_lost(self):
+        timers = []
+
+        class TimerFake:
+            def __init__(self, _, function, args):
+                self.function = function
+                self.args = args
+                timers.append(self)
+
+            def start(self):
+                return None
+
+        handler = None
+        appended = False
+        batches = []
+
+        def report_func(results, scan_id):
+            nonlocal appended
+            batches.append(list(results))
+            if not appended:
+                appended = True
+                handler.result_handler(notus_result(scan_id, 'second'))
+            return True
+
+        handler = NotusResultHandler(report_func)
+
+        with mock.patch('ospd_openvas.notus.Timer', TimerFake):
+            handler.result_handler(notus_result('scan_1', 'first'))
+            timers.pop(0).function('scan_1')
+            self.assertEqual(handler._result_count, 1)
+            self.assertEqual(len(timers), 1)
+            timers.pop(0).function('scan_1')
+
+        self.assertEqual([len(batch) for batch in batches], [1, 1])
+        self.assertEqual(handler._result_count, 0)
+        self.assertFalse(handler._results)
+
+    def test_notus_concurrent_delivery_does_not_overlap_batches(self):
+        timers = []
+        report_entered = threading.Event()
+        continue_report = threading.Event()
+        batches = []
+
+        class TimerFake:
+            def __init__(self, _, function, args):
+                self.function = function
+                self.args = args
+                timers.append(self)
+
+            def start(self):
+                return None
+
+        def report_func(results, _):
+            batches.append([result['value'] for result in results])
+            if len(batches) == 1:
+                report_entered.set()
+                continue_report.wait(1)
+            return True
+
+        handler = NotusResultHandler(report_func)
+        with mock.patch('ospd_openvas.notus.Timer', TimerFake):
+            handler.result_handler(notus_result('scan_1', 'first'))
+            first_delivery = threading.Thread(
+                target=timers.pop(0).function, args=('scan_1',)
+            )
+            first_delivery.start()
+            self.assertTrue(report_entered.wait(1))
+            handler.result_handler(notus_result('scan_1', 'second'))
+            self.assertFalse(timers)
+            continue_report.set()
+            first_delivery.join(1)
+            self.assertFalse(first_delivery.is_alive())
+            self.assertEqual(len(timers), 1)
+            timers.pop(0).function('scan_1')
+
+        self.assertEqual(batches, [['first'], ['second']])
+        self.assertEqual(handler._result_count, 0)
+        self.assertFalse(handler._results)
+        self.assertFalse(handler._incomplete_scans)
+
+    def test_notus_timer_failure_retains_results_and_marks_incomplete(self):
+        class TimerFake:
+            def __init__(self, _, function, args):
+                self.function = function
+                self.args = args
+
+            def start(self):
+                raise RuntimeError('timer unavailable')
+
+        incomplete_func = mock.MagicMock()
+        handler = NotusResultHandler(
+            mock.MagicMock(return_value=True),
+            incomplete_func=incomplete_func,
+        )
+
+        with mock.patch('ospd_openvas.notus.Timer', TimerFake):
+            handler.result_handler(notus_result('scan_1', 'first'))
+            handler.result_handler(notus_result('scan_1', 'second'))
+
+        self.assertEqual(handler._result_count, 2)
+        self.assertEqual(len(handler._results['scan_1']), 2)
+        self.assertFalse(handler._timers)
+        incomplete_func.assert_called_once_with(
+            'scan_1', 'Notus result delivery could not be scheduled.'
+        )
+
+    def test_notus_capacity_drop_marks_scan_incomplete_once(self):
+        incomplete_func = mock.MagicMock()
+        handler = NotusResultHandler(
+            mock.MagicMock(return_value=True),
+            incomplete_func=incomplete_func,
+        )
+        result = notus_result('scan_1', 'too large')
+
+        with mock.patch('ospd_openvas.notus.MAX_NOTUS_RESULT_BYTES', 1):
+            handler.result_handler(result)
+            handler.result_handler(result)
+
+        incomplete_func.assert_called_once_with(
+            'scan_1', 'A Notus result exceeded the per-result byte limit.'
+        )
+
+    def test_notus_discard_and_shutdown_release_delivery_state(self):
+        timers = []
+
+        class TimerFake:
+            def __init__(self, _, function, args):
+                self.function = function
+                self.args = args
+                self.cancelled = False
+                timers.append(self)
+
+            def start(self):
+                return None
+
+            def cancel(self):
+                self.cancelled = True
+
+        handler = NotusResultHandler(mock.MagicMock(return_value=True))
+        with mock.patch('ospd_openvas.notus.Timer', TimerFake):
+            handler.result_handler(notus_result('scan_1', 'first'))
+            handler.discard_scan('scan_1')
+            self.assertTrue(timers[0].cancelled)
+            self.assertEqual(handler._result_count, 0)
+            self.assertFalse(handler._results)
+
+            handler.result_handler(notus_result('scan_2', 'second'))
+            handler.shutdown()
+
+        self.assertTrue(timers[1].cancelled)
+        self.assertEqual(handler._result_count, 0)
+        self.assertEqual(handler._result_bytes, 0)
+        self.assertFalse(handler._results)
+        self.assertFalse(handler._timers)
 
     def test_notus_success_case(self):
         def start(self):

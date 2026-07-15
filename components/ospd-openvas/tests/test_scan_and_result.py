@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -8,6 +9,7 @@
 """Test module for scan runs"""
 
 import time
+import threading
 import unittest
 
 from unittest.mock import patch, MagicMock, Mock
@@ -1065,6 +1067,90 @@ class ScanTestCase(unittest.TestCase):
         status = response.find('scan').attrib['status']
 
         self.assertEqual(status, ScanStatus.INTERRUPTED.name.lower())
+
+    def test_incomplete_evidence_scan_does_not_finish_successfully(self):
+        scan_id = 'incomplete-scan'
+        self.daemon.scan_collection.scans_table[scan_id] = {
+            'status': ScanStatus.RUNNING,
+            'progress': 0,
+            'end_time': 0,
+        }
+
+        self.assertTrue(
+            self.daemon.scan_collection.mark_evidence_incomplete(
+                scan_id, 'Notus result delivery failed.'
+            )
+        )
+        self.daemon.finish_scan(scan_id)
+
+        self.assertEqual(
+            self.daemon.get_scan_status(scan_id), ScanStatus.INTERRUPTED
+        )
+        self.assertEqual(
+            self.daemon.scan_collection.scans_table[scan_id]['progress'], 100
+        )
+
+    def test_concurrent_result_batches_are_not_lost(self):
+        scan_id = 'concurrent-results'
+        collection = self.daemon.scan_collection
+        collection.scan_collection_lock = threading.RLock()
+        collection.scans_table[scan_id] = {
+            'results': [],
+            'temp_results': [],
+        }
+        workers = [
+            threading.Thread(
+                target=collection.add_result_list,
+                args=(scan_id, [{'value': str(index)}]),
+            )
+            for index in range(50)
+        ]
+
+        for worker in workers:
+            worker.start()
+        for worker in workers:
+            worker.join(1)
+
+        self.assertTrue(all(not worker.is_alive() for worker in workers))
+        values = {
+            result['value'] for result in collection.results_iterator(scan_id)
+        }
+        self.assertEqual(values, {str(index) for index in range(50)})
+
+    def test_mark_and_finish_race_cannot_hide_incomplete_evidence(self):
+        collection = self.daemon.scan_collection
+        collection.scan_collection_lock = threading.RLock()
+
+        for index in range(50):
+            scan_id = f'incomplete-race-{index}'
+            collection.scans_table[scan_id] = {
+                'status': ScanStatus.RUNNING,
+                'progress': 0,
+                'end_time': 0,
+            }
+            barrier = threading.Barrier(2)
+            marker = threading.Thread(
+                target=lambda: (
+                    barrier.wait(),
+                    collection.mark_evidence_incomplete(
+                        scan_id, 'delivery failed'
+                    ),
+                )
+            )
+            finisher = threading.Thread(
+                target=lambda: (
+                    barrier.wait(),
+                    self.daemon.finish_scan(scan_id),
+                )
+            )
+            marker.start()
+            finisher.start()
+            marker.join(1)
+            finisher.join(1)
+
+            self.assertEqual(
+                collection.get_status(scan_id), ScanStatus.INTERRUPTED
+            )
 
     def test_sort_host_finished(self):
         fs = FakeStream()

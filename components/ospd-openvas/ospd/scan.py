@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -7,6 +8,7 @@ import logging
 import multiprocessing
 import time
 import uuid
+from threading import RLock
 
 from pprint import pformat
 from collections import OrderedDict
@@ -64,9 +66,9 @@ class ScanCollection:
         )  # type: Optional[multiprocessing.managers.SyncManager]
         self.scans_table = dict()  # type: Dict
         self.file_storage_dir = file_storage_dir
-        self.scan_collection_lock = (
-            None
-        )  # type: Optional[multiprocessing.managers.Lock]
+        # Keep pre-init/test use synchronized; production replaces this with a
+        # manager-backed lock before worker processes start.
+        self.scan_collection_lock = RLock()
 
     def init(self):
         self.data_manager = multiprocessing.Manager()
@@ -102,11 +104,34 @@ class ScanCollection:
         result['port'] = port
         result['qod'] = qod
         result['uri'] = uri
-        results = self.scans_table[scan_id]['results']
-        results.append(result)
+        with self.scan_collection_lock:
+            results = self.scans_table[scan_id].get('results', [])
+            results.append(result)
 
-        # Set scan_info's results to propagate results to parent process.
-        self.scans_table[scan_id]['results'] = results
+            # Set scan_info's results to propagate results to parent process.
+            self.scans_table[scan_id]['results'] = results
+
+    def apply_result_batch(
+        self,
+        scan_id: str,
+        result_list: Iterable[Dict[str, str]],
+        *,
+        total_dead: int = 0,
+        count_total: Optional[int] = None,
+        count_excluded: Optional[int] = None,
+    ) -> None:
+        """Atomically apply one parsed scanner result batch and its counts."""
+        with self.scan_collection_lock:
+            scan = self.scans_table[scan_id]
+            results = scan.get('results', [])
+            results.extend(result_list)
+            scan['results'] = results
+            if total_dead:
+                scan['count_dead'] = scan.get('count_dead', 0) + total_dead
+            if count_total is not None:
+                scan['count_total'] = count_total
+            if count_excluded is not None:
+                scan['count_excluded'] = count_excluded
 
     def add_result_list(
         self, scan_id: str, result_list: Iterable[Dict[str, str]]
@@ -115,11 +140,12 @@ class ScanCollection:
         Add a batch of results to the result's table for the corresponding
         scan_id
         """
-        results = self.scans_table[scan_id]['results']
-        results.extend(result_list)
+        with self.scan_collection_lock:
+            results = self.scans_table[scan_id].get('results', [])
+            results.extend(result_list)
 
-        # Set scan_info's results to propagate results to parent process.
-        self.scans_table[scan_id]['results'] = results
+            # Set scan_info's results to propagate results to parent process.
+            self.scans_table[scan_id]['results'] = results
 
     def remove_hosts_from_target_progress(
         self, scan_id: str, hosts: List
@@ -175,10 +201,11 @@ class ScanCollection:
             pformat(hosts),
         )
         total_finished = len(hosts)
-        count_alive = (
-            self.scans_table[scan_id].get('count_alive') + total_finished
-        )
-        self.scans_table[scan_id]['count_alive'] = count_alive
+        with self.scan_collection_lock:
+            count_alive = (
+                self.scans_table[scan_id].get('count_alive') + total_finished
+            )
+            self.scans_table[scan_id]['count_alive'] = count_alive
 
     def set_host_dead(self, scan_id: str, hosts: List[str]) -> None:
         """Increase the amount of dead hosts."""
@@ -189,28 +216,38 @@ class ScanCollection:
             pformat(hosts),
         )
         total_dead = len(hosts)
-        count_dead = self.scans_table[scan_id].get('count_dead') + total_dead
-        self.scans_table[scan_id]['count_dead'] = count_dead
+        with self.scan_collection_lock:
+            count_dead = (
+                self.scans_table[scan_id].get('count_dead') + total_dead
+            )
+            self.scans_table[scan_id]['count_dead'] = count_dead
 
     def set_amount_dead_hosts(self, scan_id: str, total_dead: int) -> None:
         """Increase the amount of dead hosts."""
 
-        count_dead = self.scans_table[scan_id].get('count_dead') + total_dead
-        self.scans_table[scan_id]['count_dead'] = count_dead
+        with self.scan_collection_lock:
+            count_dead = (
+                self.scans_table[scan_id].get('count_dead') + total_dead
+            )
+            self.scans_table[scan_id]['count_dead'] = count_dead
 
     def clean_temp_result_list(self, scan_id):
         """Clean the results stored in the temporary list."""
-        self.scans_table[scan_id]['temp_results'] = list()
+        with self.scan_collection_lock:
+            self.scans_table[scan_id]['temp_results'] = list()
 
     def restore_temp_result_list(self, scan_id):
         """Add the results stored in the temporary list into the results
         list again."""
-        result_aux = self.scans_table[scan_id].get('results', list())
-        result_aux.extend(self.scans_table[scan_id].get('temp_results', list()))
+        with self.scan_collection_lock:
+            result_aux = self.scans_table[scan_id].get('results', list())
+            result_aux.extend(
+                self.scans_table[scan_id].get('temp_results', list())
+            )
 
-        # Propagate results
-        self.scans_table[scan_id]['results'] = result_aux
-        self.clean_temp_result_list(scan_id)
+            # Propagate results
+            self.scans_table[scan_id]['results'] = result_aux
+            self.clean_temp_result_list(scan_id)
 
     def results_iterator(
         self, scan_id: str, pop_res: bool = False, max_res: int = None
@@ -223,26 +260,30 @@ class ScanCollection:
 
         max_res works only together with pop_results.
         """
-        if pop_res and max_res:
-            result_aux = self.scans_table[scan_id].get('results', list())
-            self.scans_table[scan_id]['results'] = result_aux[max_res:]
-            self.scans_table[scan_id]['temp_results'] = result_aux[:max_res]
-            return iter(self.scans_table[scan_id]['temp_results'])
-        elif pop_res:
-            self.scans_table[scan_id]['temp_results'] = self.scans_table[
-                scan_id
-            ].get('results', list())
-            self.scans_table[scan_id]['results'] = list()
-            return iter(self.scans_table[scan_id]['temp_results'])
+        with self.scan_collection_lock:
+            if pop_res and max_res:
+                result_aux = self.scans_table[scan_id].get('results', list())
+                self.scans_table[scan_id]['results'] = result_aux[max_res:]
+                temp_results = list(result_aux[:max_res])
+                self.scans_table[scan_id]['temp_results'] = temp_results
+                return iter(temp_results)
+            if pop_res:
+                temp_results = list(
+                    self.scans_table[scan_id].get('results', list())
+                )
+                self.scans_table[scan_id]['temp_results'] = temp_results
+                self.scans_table[scan_id]['results'] = list()
+                return iter(temp_results)
 
-        return iter(self.scans_table[scan_id]['results'])
+            return iter(list(self.scans_table[scan_id]['results']))
 
     def ids_iterator(self) -> Iterator[str]:
         """Returns an iterator over the collection's scan IDS."""
 
         # Do not iterate over the scans_table because it can change
         # during iteration, since it is accessed by multiple processes.
-        scan_id_list = list(self.scans_table)
+        with self.scan_collection_lock:
+            scan_id_list = list(self.scans_table)
         return iter(scan_id_list)
 
     def clean_up_pickled_scan_info(self) -> None:
@@ -281,6 +322,8 @@ class ScanCollection:
         scan_info['count_total'] = None
         scan_info['count_excluded'] = 0
         scan_info['excluded_simplified'] = None
+        scan_info['evidence_incomplete'] = False
+        scan_info['evidence_incomplete_reason'] = ''
         scan_info['target'] = unpickled_scan_info.pop('target')
         scan_info['vts'] = unpickled_scan_info.pop('vts')
         scan_info['options'] = unpickled_scan_info.pop('options')
@@ -343,13 +386,50 @@ class ScanCollection:
 
     def set_status(self, scan_id: str, status: ScanStatus) -> None:
         """Sets scan_id scan's status."""
-        self.scans_table[scan_id]['status'] = status
-        if status == ScanStatus.STOPPED or status == ScanStatus.INTERRUPTED:
-            self.scans_table[scan_id]['end_time'] = int(time.time())
+        with self.scan_collection_lock:
+            self.scans_table[scan_id]['status'] = status
+            if status in (ScanStatus.STOPPED, ScanStatus.INTERRUPTED):
+                self.scans_table[scan_id]['end_time'] = int(time.time())
+
+    def finalize_scan(self, scan_id: str) -> ScanStatus:
+        """Atomically finalize a scan without hiding incomplete evidence."""
+        with self.scan_collection_lock:
+            scan = self.scans_table[scan_id]
+            scan['progress'] = ScanProgress.FINISHED.value
+            scan['end_time'] = int(time.time())
+            status = (
+                ScanStatus.INTERRUPTED
+                if scan.get('evidence_incomplete', False)
+                else ScanStatus.FINISHED
+            )
+            scan['status'] = status
+            return status
+
+    def mark_evidence_incomplete(self, scan_id: str, reason: str) -> bool:
+        """Persist the first reason a scan can no longer provide complete
+        evidence.
+        """
+        with self.scan_collection_lock:
+            scan = self.scans_table[scan_id]
+            if scan.get('evidence_incomplete', False):
+                return False
+            scan['evidence_incomplete'] = True
+            scan['evidence_incomplete_reason'] = reason
+            if scan.get('status') == ScanStatus.FINISHED:
+                scan['status'] = ScanStatus.INTERRUPTED
+                scan['end_time'] = int(time.time())
+            return True
+
+    def evidence_is_incomplete(self, scan_id: str) -> bool:
+        with self.scan_collection_lock:
+            return bool(
+                self.scans_table[scan_id].get('evidence_incomplete', False)
+            )
 
     def get_status(self, scan_id: str) -> ScanStatus:
         """Get scan_id scans's status."""
-        status = self.scans_table.get(scan_id, {}).get('status', None)
+        with self.scan_collection_lock:
+            status = self.scans_table.get(scan_id, {}).get('status', None)
         if not status:
             logger.warning("Scan ID %s not found", scan_id)
         return status
@@ -589,19 +669,19 @@ class ScanCollection:
 
     def id_exists(self, scan_id: str) -> bool:
         """Check whether a scan exists in the table."""
-
-        return self.scans_table.get(scan_id) is not None
+        with self.scan_collection_lock:
+            return self.scans_table.get(scan_id) is not None
 
     def delete_scan(self, scan_id: str) -> bool:
         """Delete a scan if fully finished."""
+        with self.scan_collection_lock:
+            if self.get_status(scan_id) == ScanStatus.RUNNING:
+                return False
 
-        if self.get_status(scan_id) == ScanStatus.RUNNING:
-            return False
-
-        scans_table = self.scans_table
-        try:
-            del scans_table[scan_id]
-            self.scans_table = scans_table
-        except KeyError:
-            return False
-        return True
+            scans_table = self.scans_table
+            try:
+                del scans_table[scan_id]
+                self.scans_table = scans_table
+            except KeyError:
+                return False
+            return True

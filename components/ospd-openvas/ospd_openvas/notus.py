@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 NOTUS_CACHE_NAME = "notuscache"
 NOTUS_RESULT_DELAY_SECONDS = 0.25
+NOTUS_RESULT_RETRY_SECONDS = 1.0
+MAX_NOTUS_RESULT_RETRIES = 10
 MAX_RESULTS_PER_SCAN = 10000
 MAX_BUFFERED_NOTUS_RESULTS = 100000
 MAX_PENDING_NOTUS_SCANS = 128
@@ -248,42 +250,171 @@ class NotusResultHandler:
         self,
         report_func: Callable[[list, str], bool],
         scan_exists: Optional[Callable[[str], bool]] = None,
+        incomplete_func: Optional[Callable[[str, str], None]] = None,
     ) -> None:
         self._results = {}
+        self._result_sizes = {}
         self._timers = {}
+        self._reporting_scans = set()
         self._result_count = 0
         self._result_bytes = 0
         self._result_bytes_per_scan = {}
+        self._report_failures = {}
+        self._incomplete_scans = set()
         self._lock = Lock()
         self._report_func = report_func
         self._scan_exists = scan_exists
+        self._incomplete_func = incomplete_func
+
+    def _mark_incomplete(self, scan_id: str, reason: str) -> None:
+        if self._incomplete_func is None:
+            return
+        with self._lock:
+            if scan_id in self._incomplete_scans:
+                return
+            self._incomplete_scans.add(scan_id)
+        try:
+            self._incomplete_func(scan_id, reason)
+        except Exception:  # pylint: disable=broad-exception-caught
+            with self._lock:
+                self._incomplete_scans.discard(scan_id)
+            logger.exception(
+                "Unable to mark Notus results incomplete for scan id %s.",
+                scan_id,
+            )
+
+    def _schedule_report(
+        self, scan_id: str, delay: float = NOTUS_RESULT_DELAY_SECONDS
+    ) -> bool:
+        with self._lock:
+            if self._timers.get(scan_id) is not None:
+                return True
+            if scan_id in self._reporting_scans:
+                return True
+            if not self._results.get(scan_id):
+                return True
+            timer = Timer(delay, self._report_results, [scan_id])
+            self._timers[scan_id] = timer
+        try:
+            timer.start()
+        except RuntimeError:
+            with self._lock:
+                if self._timers.get(scan_id) is timer:
+                    self._timers.pop(scan_id, None)
+            logger.exception(
+                "Unable to schedule Notus result reporting for scan id %s.",
+                scan_id,
+            )
+            self._mark_incomplete(
+                scan_id, "Notus result delivery could not be scheduled."
+            )
+            return False
+        return True
+
+    def _remove_batch_prefix(self, scan_id: str, results: list) -> bool:
+        with self._lock:
+            current_results = self._results.get(scan_id, [])
+            current_sizes = self._result_sizes.get(scan_id, [])
+            if current_results[: len(results)] != results or len(
+                current_sizes
+            ) < len(results):
+                return False
+
+            batch_bytes = sum(current_sizes[: len(results)])
+            del current_results[: len(results)]
+            del current_sizes[: len(results)]
+            self._result_count -= len(results)
+            self._result_bytes -= batch_bytes
+            if current_results:
+                self._result_bytes_per_scan[scan_id] -= batch_bytes
+            else:
+                self._results.pop(scan_id, None)
+                self._result_sizes.pop(scan_id, None)
+                self._result_bytes_per_scan.pop(scan_id, None)
+            return True
+
+    def _discard_scan_buffer(self, scan_id: str) -> None:
+        with self._lock:
+            results = self._results.pop(scan_id, [])
+            self._result_sizes.pop(scan_id, None)
+            self._result_count -= len(results)
+            self._result_bytes -= self._result_bytes_per_scan.pop(scan_id, 0)
+            self._report_failures.pop(scan_id, None)
+            self._reporting_scans.discard(scan_id)
+            timer = self._timers.pop(scan_id, None)
+        if timer is not None:
+            timer.cancel()
 
     def _report_results(self, scan_id: str) -> None:
         """Reports all results collected for a scan"""
         with self._lock:
-            results = self._results.pop(scan_id, None)
+            if scan_id in self._reporting_scans:
+                return
             self._timers.pop(scan_id, None)
+            results = list(self._results.get(scan_id, []))
             if not results:
                 return
-            self._result_count -= len(results)
-            self._result_bytes -= self._result_bytes_per_scan.pop(scan_id, 0)
+            self._reporting_scans.add(scan_id)
 
         try:
             reported = self._report_func(results, scan_id)
         except Exception:  # pylint: disable=broad-exception-caught
-            # Reporting is external to this buffer and must not kill its timer.
             logger.exception(
                 "Unable to report %d notus results for scan id %s.",
                 len(results),
                 scan_id,
             )
-            return
+            reported = False
         if not reported:
             logger.warning(
                 "Unable to report %d notus results for scan id %s.",
                 len(results),
                 scan_id,
             )
+            if self._scan_exists is not None and not self._scan_exists(scan_id):
+                logger.info(
+                    "Discarding undeliverable Notus results for removed "
+                    "scan id %s.",
+                    scan_id,
+                )
+                self._discard_scan_buffer(scan_id)
+                return
+            with self._lock:
+                failures = self._report_failures.get(scan_id, 0) + 1
+                self._report_failures[scan_id] = failures
+            if failures >= MAX_NOTUS_RESULT_RETRIES:
+                self._mark_incomplete(
+                    scan_id,
+                    "Notus result delivery failed after bounded retries.",
+                )
+                self._discard_scan_buffer(scan_id)
+                return
+        else:
+            if not self._remove_batch_prefix(scan_id, results):
+                logger.error(
+                    "Notus result buffer changed before delivery "
+                    "confirmation for scan id %s.",
+                    scan_id,
+                )
+                self._mark_incomplete(
+                    scan_id,
+                    "Notus result delivery ordering could not be verified.",
+                )
+                self._discard_scan_buffer(scan_id)
+                return
+            with self._lock:
+                self._report_failures.pop(scan_id, None)
+
+        with self._lock:
+            self._reporting_scans.discard(scan_id)
+            pending = bool(self._results.get(scan_id))
+        if pending:
+            delay = (
+                NOTUS_RESULT_DELAY_SECONDS
+                if reported
+                else NOTUS_RESULT_RETRY_SECONDS
+            )
+            self._schedule_report(scan_id, delay)
 
     def result_handler(self, res_msg: ResultMessage) -> None:
         """Handles results generated by the Notus-Scanner.
@@ -317,85 +448,95 @@ class NotusResultHandler:
                 "scan id %s.",
                 scan_id,
             )
+            self._mark_incomplete(
+                scan_id, "A Notus result could not be serialized safely."
+            )
             return
         if result_bytes > MAX_NOTUS_RESULT_BYTES:
             logger.warning(
                 "Notus result is too large for scan id %s; dropping result.",
                 scan_id,
             )
+            self._mark_incomplete(
+                scan_id, "A Notus result exceeded the per-result byte limit."
+            )
             return
 
-        timer = None
+        schedule_report = False
+        drop_reason = None
 
         with self._lock:
             results = self._results.get(scan_id)
             scan_result_bytes = self._result_bytes_per_scan.get(scan_id, 0)
             if results and len(results) >= MAX_RESULTS_PER_SCAN:
-                logger.warning(
-                    "Notus result buffer is full for scan id %s; dropping "
-                    "result.",
-                    scan_id,
-                )
-                return
-            if (
+                drop_reason = "per-scan result-count capacity was exhausted"
+            elif (
                 scan_result_bytes + result_bytes
                 > MAX_NOTUS_RESULT_BYTES_PER_SCAN
             ):
-                logger.warning(
-                    "Notus result byte buffer is full for scan id %s; "
-                    "dropping result.",
-                    scan_id,
-                )
-                return
-            if self._result_count >= MAX_BUFFERED_NOTUS_RESULTS:
-                logger.warning("Notus result buffer is full; dropping result.")
-                return
-            if (
+                drop_reason = "per-scan byte capacity was exhausted"
+            elif self._result_count >= MAX_BUFFERED_NOTUS_RESULTS:
+                drop_reason = "global result-count capacity was exhausted"
+            elif (
                 self._result_bytes + result_bytes
                 > MAX_BUFFERED_NOTUS_RESULT_BYTES
             ):
-                logger.warning(
-                    "Notus result byte buffer is full; dropping result."
-                )
-                return
-            if results is None:
+                drop_reason = "global byte capacity was exhausted"
+            elif results is None:
                 if len(self._results) >= MAX_PENDING_NOTUS_SCANS:
-                    logger.warning(
-                        "Too many pending Notus result scans; dropping result "
-                        "for scan id %s.",
-                        scan_id,
-                    )
-                    return
-                results = []
-                self._results[scan_id] = results
-                timer = Timer(
-                    NOTUS_RESULT_DELAY_SECONDS, self._report_results, [scan_id]
-                )
-                self._timers[scan_id] = timer
+                    drop_reason = "pending-scan capacity was exhausted"
+                else:
+                    results = []
+                    self._results[scan_id] = results
+                    self._result_sizes[scan_id] = []
+                    schedule_report = True
 
-            results.append(result)
-            self._result_count += 1
-            self._result_bytes += result_bytes
-            self._result_bytes_per_scan[scan_id] = (
-                scan_result_bytes + result_bytes
+            if drop_reason is None:
+                results.append(result)
+                self._result_sizes[scan_id].append(result_bytes)
+                self._result_count += 1
+                self._result_bytes += result_bytes
+                self._result_bytes_per_scan[scan_id] = (
+                    scan_result_bytes + result_bytes
+                )
+                schedule_report = (
+                    self._timers.get(scan_id) is None
+                    and scan_id not in self._reporting_scans
+                )
+
+        if drop_reason is not None:
+            logger.warning(
+                "Notus result delivery is incomplete for scan id %s: %s.",
+                scan_id,
+                drop_reason,
             )
+            self._mark_incomplete(scan_id, f"Notus result {drop_reason}.")
+            return
 
-        if timer:
-            try:
-                timer.start()
-            except RuntimeError:
-                with self._lock:
-                    if self._timers.get(scan_id) is timer:
-                        discarded = self._results.pop(scan_id, [])
-                        self._timers.pop(scan_id, None)
-                        self._result_count -= len(discarded)
-                        self._result_bytes -= self._result_bytes_per_scan.pop(
-                            scan_id, 0
-                        )
-                logger.exception(
-                    "Unable to schedule Notus result reporting for scan id %s.",
-                    scan_id,
-                )
+        if schedule_report:
+            self._schedule_report(scan_id)
+
+    def discard_scan(self, scan_id: str) -> None:
+        """Release buffered delivery state after a scan is deleted."""
+        self._discard_scan_buffer(scan_id)
+        with self._lock:
+            self._incomplete_scans.discard(scan_id)
+
+    def shutdown(self) -> None:
+        """Cancel timers and release all buffered delivery state."""
+        with self._lock:
+            timers = list(self._timers.values())
+            self._results.clear()
+            self._result_sizes.clear()
+            self._timers.clear()
+            self._reporting_scans.clear()
+            self._report_failures.clear()
+            self._incomplete_scans.clear()
+            self._result_bytes_per_scan.clear()
+            self._result_count = 0
+            self._result_bytes = 0
+        for timer in timers:
+            timer.cancel()
 
 
 DEFAULT_NOTUS_FEED_DIR = "/var/lib/notus/advisories"

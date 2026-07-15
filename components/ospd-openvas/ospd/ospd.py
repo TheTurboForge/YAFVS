@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -432,9 +433,11 @@ class OSPDaemon:
 
     def finish_scan(self, scan_id: str) -> None:
         """Sets a scan as finished."""
-        self.scan_collection.set_progress(scan_id, ScanProgress.FINISHED.value)
-        self.set_scan_status(scan_id, ScanStatus.FINISHED)
-        logger.info("%s: Scan finished.", scan_id)
+        status = self.scan_collection.finalize_scan(scan_id)
+        if status == ScanStatus.INTERRUPTED:
+            logger.warning("%s: Scan evidence is incomplete.", scan_id)
+        else:
+            logger.info("%s: Scan finished.", scan_id)
 
     def interrupt_scan(self, scan_id: str) -> None:
         """Set scan status as interrupted."""

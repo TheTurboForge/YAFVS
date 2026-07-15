@@ -18,6 +18,7 @@ from unittest import TestCase
 from unittest.mock import patch, Mock, MagicMock
 
 from ospd.protocol import OspRequest
+from ospd.scan import ScanStatus
 
 from tests.dummydaemon import DummyDaemon
 from tests.helper import assert_called_once
@@ -392,6 +393,97 @@ def openvas_result_row(
 
 
 class TestOspdOpenvas(TestCase):
+    def test_scanner_delivery_failure_is_visible_and_not_duplicated(self):
+        daemon = DummyDaemon()
+        daemon.scan_collection = MagicMock()
+        daemon.scan_collection.id_exists.return_value = True
+        daemon.scan_collection.mark_evidence_incomplete.side_effect = [
+            True,
+            False,
+        ]
+        daemon.scan_collection.get_status.return_value = ScanStatus.FINISHED
+        daemon.add_scan_error = MagicMock()
+        daemon.set_scan_status = MagicMock()
+
+        daemon.mark_scanner_evidence_incomplete('scan_1', 'delivery failed')
+        daemon.mark_scanner_evidence_incomplete('scan_1', 'delivery failed')
+
+        daemon.add_scan_error.assert_called_once_with(
+            'scan_1',
+            name='Incomplete scanner result delivery',
+            value='delivery failed',
+        )
+        daemon.set_scan_status.assert_called_once_with(
+            'scan_1', ScanStatus.INTERRUPTED
+        )
+
+    def test_non_result_notus_messages_are_acknowledged(self):
+        daemon = DummyDaemon()
+        daemon.scan_collection = MagicMock()
+        daemon.scan_collection.id_exists.return_value = True
+        daemon.scan_collection.mark_evidence_incomplete.return_value = True
+        daemon.add_scan_error = MagicMock()
+
+        reported = daemon.report_results(
+            [
+                {
+                    'result_type': 'HOSTS_COUNT',
+                    'host_ip': '',
+                    'host_name': '',
+                    'port': '',
+                    'oid': '',
+                    'value': '1',
+                    'uri': '',
+                }
+            ],
+            'scan_1',
+        )
+
+        self.assertTrue(reported)
+        daemon.scan_collection.apply_result_batch.assert_called_once()
+        self.assertEqual(
+            daemon.scan_collection.apply_result_batch.call_args.args[0],
+            'scan_1',
+        )
+        self.assertEqual(
+            daemon.scan_collection.apply_result_batch.call_args.kwargs,
+            {
+                'total_dead': 0,
+                'count_total': 1,
+                'count_excluded': None,
+            },
+        )
+
+    def test_malformed_notus_count_marks_evidence_incomplete(self):
+        daemon = DummyDaemon()
+        daemon.scan_collection = MagicMock()
+        daemon.scan_collection.id_exists.return_value = True
+        daemon.scan_collection.mark_evidence_incomplete.return_value = True
+        daemon.add_scan_error = MagicMock()
+
+        reported = daemon.report_results(
+            [
+                {
+                    'result_type': 'HOSTS_COUNT',
+                    'host_ip': '',
+                    'host_name': '',
+                    'port': '',
+                    'oid': '',
+                    'value': 'not-a-count',
+                    'uri': '',
+                }
+            ],
+            'scan_1',
+        )
+
+        self.assertTrue(reported)
+        daemon.scan_collection.apply_result_batch.assert_called_once()
+        daemon.add_scan_error.assert_called_once_with(
+            'scan_1',
+            name='Incomplete scanner result delivery',
+            value='Invalid scanner host-count metadata was discarded.',
+        )
+
     def test_return_disabled_verifier(self):
         verifier = hashsum_verificator(Path('/tmp'), True)
         self.assertEqual(verifier(Path('/tmp')), True)
@@ -599,12 +691,10 @@ class TestOspdOpenvas(TestCase):
 
         results = [openvas_result_row('DEADHOST', value='4')]
         MockDBClass.get_result.return_value = results
-        w.scan_collection.set_amount_dead_hosts = MagicMock()
 
         w.report_openvas_results(MockDBClass, '123-456')
-        w.scan_collection.set_amount_dead_hosts.assert_called_with(
-            '123-456',
-            total_dead=4,
+        self.assertEqual(
+            w.scan_collection.scans_table['123-456']['count_dead'], 4
         )
 
     @patch('ospd_openvas.daemon.BaseDB')
@@ -643,12 +733,10 @@ class TestOspdOpenvas(TestCase):
 
         results = [openvas_result_row('HOSTS_COUNT', value='4')]
         MockDBClass.get_result.return_value = results
-        w.set_scan_total_hosts = MagicMock()
 
         w.report_openvas_results(MockDBClass, '123-456')
-        w.set_scan_total_hosts.assert_called_with(
-            '123-456',
-            4,
+        self.assertEqual(
+            w.scan_collection.scans_table['123-456']['count_total'], 4
         )
 
     @patch('ospd_openvas.daemon.logger.warning')
@@ -681,6 +769,9 @@ class TestOspdOpenvas(TestCase):
         mock_add_scan_log_to_list.assert_called_once()
         self.assertEqual(mock_warning.call_count, 3)
         self.assertNotIn(hostile_row, str(mock_warning.call_args_list))
+        self.assertTrue(
+            w.scan_collection.scans_table['123-456']['evidence_incomplete']
+        )
 
     def test_versioned_openvas_result_preserves_delimiter_fields(self):
         row = (
@@ -730,10 +821,6 @@ class TestOspdOpenvas(TestCase):
         target_element = w.create_xml_target()
         targets = OspRequest.process_target_element(target_element)
         w.create_scan('123-456', targets, None, [])
-        w.set_scan_total_hosts = MagicMock()
-        w.set_scan_total_excluded_hosts = MagicMock()
-        w.scan_collection.set_amount_dead_hosts = MagicMock()
-
         MockDBClass.get_result.return_value = [
             openvas_result_row('HOSTS_COUNT', value='NaN'),
             openvas_result_row('HOSTS_COUNT', value='-1'),
@@ -747,11 +834,11 @@ class TestOspdOpenvas(TestCase):
 
         w.report_openvas_results(MockDBClass, '123-456')
 
-        w.set_scan_total_hosts.assert_called_once_with('123-456', 4)
-        w.set_scan_total_excluded_hosts.assert_called_once_with('123-456', 2)
-        w.scan_collection.set_amount_dead_hosts.assert_called_once_with(
-            '123-456', total_dead=3
-        )
+        scan = w.scan_collection.scans_table['123-456']
+        self.assertEqual(scan['count_total'], 4)
+        self.assertEqual(scan['count_excluded'], 2)
+        self.assertEqual(scan['count_dead'], 3)
+        self.assertTrue(scan['evidence_incomplete'])
         self.assertEqual(mock_warning.call_count, 5)
 
     @patch('ospd_openvas.daemon.logger.warning')
@@ -763,7 +850,6 @@ class TestOspdOpenvas(TestCase):
         target_element = w.create_xml_target()
         targets = OspRequest.process_target_element(target_element)
         w.create_scan('123-456', targets, None, [])
-        w.scan_collection.set_amount_dead_hosts = MagicMock()
         MockDBClass.get_result.return_value = [
             openvas_result_row('DEADHOST', value=str(w.MAX_OPENVAS_HOST_COUNT)),
             openvas_result_row('DEADHOST', value='1'),
@@ -771,9 +857,9 @@ class TestOspdOpenvas(TestCase):
 
         w.report_openvas_results(MockDBClass, '123-456')
 
-        w.scan_collection.set_amount_dead_hosts.assert_called_once_with(
-            '123-456', total_dead=w.MAX_OPENVAS_HOST_COUNT
-        )
+        scan = w.scan_collection.scans_table['123-456']
+        self.assertEqual(scan['count_dead'], w.MAX_OPENVAS_HOST_COUNT)
+        self.assertTrue(scan['evidence_incomplete'])
         mock_warning.assert_called_once()
 
     @patch('ospd_openvas.daemon.BaseDB')

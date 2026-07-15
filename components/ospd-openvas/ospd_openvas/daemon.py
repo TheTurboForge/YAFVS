@@ -605,6 +605,22 @@ class OSPDopenvas(OSPDaemon):
         self._mqtt_broker_port = mqtt_broker_port
         self._mqtt_broker_username = kwargs.get('mqtt_broker_username')
         self._mqtt_broker_password = mqtt_broker_password
+        self._notus_result_handler = None
+
+    def mark_scanner_evidence_incomplete(
+        self, scan_id: str, reason: str
+    ) -> None:
+        if not self.scan_collection.id_exists(scan_id):
+            return
+        if not self.scan_collection.mark_evidence_incomplete(scan_id, reason):
+            return
+        self.add_scan_error(
+            scan_id,
+            name='Incomplete scanner result delivery',
+            value=reason,
+        )
+        if self.get_scan_status(scan_id) == ScanStatus.FINISHED:
+            self.set_scan_status(scan_id, ScanStatus.INTERRUPTED)
 
     def init(self, server: BaseServer) -> None:
         self.scan_collection.init()
@@ -617,8 +633,10 @@ class OSPDopenvas(OSPDaemon):
 
         # Do not init MQTT daemon if Notus runs via openvasd.
         if not self.scan_only_params.get("openvasd_server"):
-            notus_handler = NotusResultHandler(
-                self.report_results, self.scan_collection.id_exists
+            self._notus_result_handler = NotusResultHandler(
+                self.report_results,
+                self.scan_collection.id_exists,
+                self.mark_scanner_evidence_incomplete,
             )
 
             if self._mqtt_broker_address:
@@ -633,7 +651,7 @@ class OSPDopenvas(OSPDaemon):
                 subscriber = MQTTSubscriber(client)
 
                 subscriber.subscribe(
-                    ResultMessage, notus_handler.result_handler
+                    ResultMessage, self._notus_result_handler.result_handler
                 )
                 daemon.run()
             else:
@@ -651,6 +669,19 @@ class OSPDopenvas(OSPDaemon):
             self.vts.sha256_hash = vthelper.calculate_vts_collection_hash()
 
         self.initialized = True
+
+    def delete_scan(self, scan_id: str) -> int:
+        deleted = super().delete_scan(scan_id)
+        if deleted and self._notus_result_handler is not None:
+            self._notus_result_handler.discard_scan(scan_id)
+        return deleted
+
+    def daemon_exit_cleanup(self) -> None:
+        try:
+            super().daemon_exit_cleanup()
+        finally:
+            if self._notus_result_handler is not None:
+                self._notus_result_handler.shutdown()
 
     def set_params_from_openvas_settings(self):
         """Set OSPD_PARAMS with the params taken from the openvas executable."""
@@ -954,27 +985,37 @@ class OSPDopenvas(OSPDaemon):
         # Scanner results are bounded version-1 JSON records.
         all_results = db.get_result()
         results = []
+        quarantined = False
         for res in all_results:
             if not res:
+                quarantined = True
                 continue
             if not isinstance(res, str):
                 logger.warning(
                     '%s: Ignoring malformed Redis result row.', scan_id
                 )
+                quarantined = True
                 continue
             if len(res) > self.MAX_REDIS_RESULT_ROW_LENGTH:
                 logger.warning(
                     '%s: Ignoring oversized Redis result row.', scan_id
                 )
+                quarantined = True
                 continue
             result = parse_openvas_result_row(res)
             if result is None:
                 logger.warning(
                     '%s: Ignoring malformed Redis result row.', scan_id
                 )
+                quarantined = True
                 continue
 
             results.append(result)
+
+        if quarantined:
+            self.mark_scanner_evidence_incomplete(
+                scan_id, 'Malformed scanner result rows were discarded.'
+            )
 
         return self.report_results(results, scan_id)
 
@@ -1016,6 +1057,9 @@ class OSPDopenvas(OSPDaemon):
 
         res_list = ResultList()
         total_dead = 0
+        count_total = None
+        count_excluded = None
+        incomplete_reason = None
         for res in results:
             if not res:
                 continue
@@ -1131,6 +1175,13 @@ class OSPDopenvas(OSPDaemon):
                             '%s: Ignoring overflowing Redis dead host count.',
                             scan_id,
                         )
+                        incomplete_reason = (
+                            'Invalid scanner host-count metadata was discarded.'
+                        )
+                else:
+                    incomplete_reason = (
+                        'Invalid scanner host-count metadata was discarded.'
+                    )
 
             # To update total host count
             if res["result_type"] == 'HOSTS_COUNT':
@@ -1143,24 +1194,35 @@ class OSPDopenvas(OSPDaemon):
                         scan_id,
                         count_total,
                     )
-                    self.set_scan_total_hosts(scan_id, count_total)
+                else:
+                    incomplete_reason = (
+                        'Invalid scanner host-count metadata was discarded.'
+                    )
 
             # To update total excluded hosts
             if res["result_type"] == 'HOSTS_EXCLUDED':
-                total_excluded = self.parse_openvas_host_count(
+                count_excluded = self.parse_openvas_host_count(
                     res["value"], scan_id, 'excluded host count'
                 )
-                if total_excluded is not None:
+                if count_excluded is not None:
                     logger.debug(
                         '%s: Set total excluded counted by OpenVAS: %d',
                         scan_id,
-                        total_excluded,
+                        count_excluded,
                     )
-                    self.set_scan_total_excluded_hosts(scan_id, total_excluded)
+                else:
+                    incomplete_reason = (
+                        'Invalid scanner host-count metadata was discarded.'
+                    )
 
-        # Insert result batch into the scan collection table.
+        self.scan_collection.apply_result_batch(
+            scan_id,
+            res_list,
+            total_dead=total_dead,
+            count_total=count_total,
+            count_excluded=count_excluded,
+        )
         if len(res_list):
-            self.scan_collection.add_result_list(scan_id, res_list)
             logger.debug(
                 '%s: Inserting %d results into scan collection table',
                 scan_id,
@@ -1172,11 +1234,10 @@ class OSPDopenvas(OSPDaemon):
                 scan_id,
                 total_dead,
             )
-            self.scan_collection.set_amount_dead_hosts(
-                scan_id, total_dead=total_dead
-            )
+        if incomplete_reason is not None:
+            self.mark_scanner_evidence_incomplete(scan_id, incomplete_reason)
 
-        return len(res_list) > 0
+        return True
 
     @staticmethod
     def is_openvas_process_alive(openvas_process: psutil.Popen) -> bool:

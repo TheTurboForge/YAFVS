@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2025 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
@@ -159,9 +160,14 @@ impl SshSession {
         channel.request_exec(cmd)?;
 
         let timeout = Duration::from_millis(15000);
-        let stderr = channel.read_timeout(timeout, true)?;
-        let stdout = channel.read_timeout(timeout, false)?;
-        Ok(Output { stdout, stderr })
+        let mut retained = 0;
+        let stderr = channel.read_timeout(timeout, true, &mut retained)?;
+        let stdout = channel.read_timeout(timeout, false, &mut retained)?;
+        Ok(Output {
+            stdout,
+            stderr,
+            session_id: self.id,
+        })
     }
 
     pub async fn auth_method_allowed(&mut self, method: AuthMethods) -> Result<bool> {

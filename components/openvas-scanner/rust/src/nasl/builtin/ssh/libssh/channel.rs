@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2025 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
@@ -7,7 +8,10 @@ use std::time::Duration;
 use crate::nasl::builtin::ssh::error::SshErrorKind;
 use crate::nasl::utils::error::WithErrorInfo;
 
-use super::{super::error::Result, SessionId};
+use super::{
+    super::{checked_output_len, error::Result},
+    SessionId,
+};
 
 /// Wrapper around a `libssh_rs::Channel`. Exposes the
 /// methods of the inner channel and performs error conversions.
@@ -84,14 +88,21 @@ impl Channel {
         std::str::from_utf8(buf).map_err(|_| SshErrorKind::ReadSsh.with(self.session_id))
     }
 
-    pub fn read_timeout(&self, timeout: Duration, stderr: bool) -> Result<String> {
+    pub fn read_timeout(
+        &self,
+        timeout: Duration,
+        stderr: bool,
+        retained: &mut usize,
+    ) -> Result<String> {
         let mut buf: [u8; 4096] = [0; 4096];
         let mut response = String::new();
         loop {
             match self.channel.read_timeout(&mut buf, stderr, Some(timeout)) {
                 Ok(0) => break,
                 Ok(num_bytes) => {
-                    response.push_str(self.buf_as_str(&buf[..num_bytes])?);
+                    let chunk = self.buf_as_str(&buf[..num_bytes])?;
+                    *retained = checked_output_len(self.session_id, *retained, chunk.len())?;
+                    response.push_str(chunk);
                 }
                 Err(libssh_rs::Error::TryAgain) => {}
                 Err(_) => {
@@ -103,16 +114,19 @@ impl Channel {
     }
 
     pub fn read_ssh_blocking(&self, timeout: Duration) -> Result<String> {
-        let stderr = self.read_timeout(timeout, true)?;
-        let stdout = self.read_timeout(timeout, false)?;
+        let mut retained = 0;
+        let stderr = self.read_timeout(timeout, true, &mut retained)?;
+        let stdout = self.read_timeout(timeout, false, &mut retained)?;
         Ok(format!("{stderr}{stdout}"))
     }
 
-    fn read_nonblocking(&self, stderr: bool) -> Result<String> {
+    fn read_nonblocking(&self, stderr: bool, retained: &mut usize) -> Result<String> {
         let mut buf: [u8; 4096] = [0; 4096];
         match self.channel.read_nonblocking(&mut buf, stderr) {
             Ok(n) => {
-                let response = self.buf_as_str(&buf[..n])?.to_string();
+                let response = self.buf_as_str(&buf[..n])?;
+                *retained = checked_output_len(self.session_id, *retained, response.len())?;
+                let response = response.to_string();
                 Ok(response)
             }
             Err(_) => Err(SshErrorKind::ReadSsh.with(self.session_id)),
@@ -124,8 +138,9 @@ impl Channel {
             return Err(SshErrorKind::ReadSsh.with(self.session_id));
         }
 
-        let stderr = self.read_nonblocking(true)?;
-        let stdout = self.read_nonblocking(false)?;
+        let mut retained = 0;
+        let stderr = self.read_nonblocking(true, &mut retained)?;
+        let stdout = self.read_nonblocking(false, &mut retained)?;
         Ok(format!("{stderr}{stdout}"))
     }
 }

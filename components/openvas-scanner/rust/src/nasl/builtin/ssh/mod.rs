@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2025 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
@@ -45,15 +46,96 @@ use libssh_uses::*;
 type Result<T> = std::result::Result<T, FnError>;
 
 const DEFAULT_SSH_PORT: u16 = 22;
+pub(super) const SSH_OUTPUT_MAX_SIZE: usize = 16 * 1024 * 1024;
+#[cfg(any(feature = "native-rust-ssh", test))]
+const SSH_OUTPUT_MAX_LOSSY_INPUT_SIZE: usize = SSH_OUTPUT_MAX_SIZE / 3;
+
+pub(super) fn checked_output_len(
+    session_id: SessionId,
+    current: usize,
+    additional: usize,
+) -> error::Result<usize> {
+    let total = current
+        .checked_add(additional)
+        .ok_or_else(|| SshErrorKind::OutputLimit(SSH_OUTPUT_MAX_SIZE).with(session_id))?;
+    if total > SSH_OUTPUT_MAX_SIZE {
+        return Err(SshErrorKind::OutputLimit(SSH_OUTPUT_MAX_SIZE).with(session_id));
+    }
+    Ok(total)
+}
+
+#[cfg(any(feature = "native-rust-ssh", test))]
+pub(super) fn check_lossy_output_chunk(
+    session_id: SessionId,
+    raw_length: usize,
+) -> error::Result<()> {
+    if raw_length > SSH_OUTPUT_MAX_LOSSY_INPUT_SIZE {
+        return Err(SshErrorKind::OutputLimit(SSH_OUTPUT_MAX_SIZE).with(session_id));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod output_budget_tests {
+    use super::{
+        SSH_OUTPUT_MAX_LOSSY_INPUT_SIZE, SSH_OUTPUT_MAX_SIZE, check_lossy_output_chunk,
+        checked_output_len,
+    };
+
+    #[test]
+    fn accepts_exact_ssh_output_limit() {
+        assert_eq!(
+            checked_output_len(1, SSH_OUTPUT_MAX_SIZE - 1, 1).unwrap(),
+            SSH_OUTPUT_MAX_SIZE
+        );
+    }
+
+    #[test]
+    fn rejects_one_byte_over_ssh_output_limit() {
+        assert!(checked_output_len(1, SSH_OUTPUT_MAX_SIZE, 1).is_err());
+    }
+
+    #[test]
+    fn rejects_ssh_output_length_overflow() {
+        assert!(checked_output_len(1, usize::MAX, 1).is_err());
+    }
+
+    #[test]
+    fn accepts_exact_lossy_input_limit() {
+        assert!(check_lossy_output_chunk(1, SSH_OUTPUT_MAX_LOSSY_INPUT_SIZE).is_ok());
+    }
+
+    #[test]
+    fn rejects_lossy_input_before_worst_case_expansion() {
+        assert!(check_lossy_output_chunk(1, SSH_OUTPUT_MAX_LOSSY_INPUT_SIZE + 1).is_err());
+    }
+}
 
 pub(crate) struct Output {
     stdout: String,
     stderr: String,
+    session_id: SessionId,
 }
 
 impl Output {
-    fn combine(&self, to_stdout: bool, to_stderr: bool, compat_mode: bool) -> String {
-        let mut response = String::new();
+    fn combine(
+        &self,
+        to_stdout: bool,
+        to_stderr: bool,
+        compat_mode: bool,
+    ) -> error::Result<String> {
+        let mut output_len = 0;
+        if to_stderr {
+            output_len = checked_output_len(self.session_id, output_len, self.stderr.len())?;
+        }
+        if to_stdout {
+            output_len = checked_output_len(self.session_id, output_len, self.stdout.len())?;
+        }
+        if compat_mode {
+            output_len = checked_output_len(self.session_id, output_len, self.stderr.len())?;
+        }
+
+        let mut response = String::with_capacity(output_len);
         if to_stderr {
             response.push_str(self.stderr.as_str());
         }
@@ -63,7 +145,7 @@ impl Output {
         if compat_mode {
             response.push_str(self.stderr.as_str())
         }
-        response
+        Ok(response)
     }
 }
 
@@ -218,7 +300,7 @@ impl Ssh {
             to_stdout,
             to_stderr,
             compat_mode,
-        )))
+        )?))
     }
 
     /// Authenticate a user on an ssh connection

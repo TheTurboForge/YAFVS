@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2025 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
@@ -12,8 +13,8 @@ use russh::keys::Algorithm;
 use russh::*;
 use tracing::{error, warn};
 
-use crate::nasl::builtin::ssh::Output;
 use crate::nasl::builtin::ssh::error::SshErrorKind;
+use crate::nasl::builtin::ssh::{Output, check_lossy_output_chunk, checked_output_len};
 use crate::nasl::utils::error::WithErrorInfo;
 
 use super::super::error::SshError;
@@ -133,21 +134,31 @@ impl SshSession {
     }
 
     pub(crate) async fn exec_ssh_cmd(&self, command: &str) -> Result<Output, SshError> {
-        let (stdout, stderr) = self.call(command).await.map_err(|e| {
-            SshErrorKind::RequestExec(command.to_string())
-                .with(self.id)
-                .with(e)
-        })?;
-        Ok(Output { stdout, stderr })
+        let (stdout, stderr) = self.call(command).await?;
+        Ok(Output {
+            stdout,
+            stderr,
+            session_id: self.id,
+        })
     }
 
-    async fn call(&self, command: &str) -> Result<(String, String), russh::Error> {
-        let mut channel = self.session.channel_open_session().await?;
-        channel.exec(true, command).await?;
+    async fn call(&self, command: &str) -> Result<(String, String), SshError> {
+        let request_error = |error| {
+            SshErrorKind::RequestExec(command.to_string())
+                .with(self.id)
+                .with(error)
+        };
+        let mut channel = self
+            .session
+            .channel_open_session()
+            .await
+            .map_err(request_error)?;
+        channel.exec(true, command).await.map_err(request_error)?;
 
         let mut code = None;
         let mut stdout = String::new();
         let mut stderr = String::new();
+        let mut retained = 0;
 
         loop {
             // There's an event available on the session channel
@@ -157,16 +168,22 @@ impl SshSession {
             match msg {
                 // Write data to the terminal
                 ChannelMsg::Data { ref data } => {
-                    stdout.push_str(&String::from_utf8_lossy(data));
+                    check_lossy_output_chunk(self.id, data.len())?;
+                    let chunk = String::from_utf8_lossy(data);
+                    retained = checked_output_len(self.id, retained, chunk.len())?;
+                    stdout.push_str(&chunk);
                 }
                 ChannelMsg::ExtendedData { ref data, .. } => {
-                    stderr.push_str(&String::from_utf8_lossy(data));
+                    check_lossy_output_chunk(self.id, data.len())?;
+                    let chunk = String::from_utf8_lossy(data);
+                    retained = checked_output_len(self.id, retained, chunk.len())?;
+                    stderr.push_str(&chunk);
                 }
                 // The command has returned an exit code
                 ChannelMsg::ExitStatus { exit_status } => {
                     code = Some(exit_status);
                     // cannot leave the loop immediately, there might still be more data to receive
-                    channel.eof().await?;
+                    channel.eof().await.map_err(request_error)?;
                 }
                 _ => {}
             }

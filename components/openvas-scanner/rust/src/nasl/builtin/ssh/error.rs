@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2025 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
@@ -106,6 +107,8 @@ pub enum SshErrorKind {
     UserAuthPublicKey,
     #[error("Failed to read.")]
     ReadSsh,
+    #[error("SSH output exceeded the {0}-byte limit.")]
+    OutputLimit(usize),
     #[error("Error initiating SFTP.")]
     Sftp,
     #[error("Failed to parse IP address '{0}' with error {1}.")]

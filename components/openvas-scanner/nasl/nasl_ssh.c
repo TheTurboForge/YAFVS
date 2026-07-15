@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -21,6 +22,7 @@
 #include "nasl_func.h"
 #include "nasl_global_ctxt.h"
 #include "nasl_lex_ctxt.h"
+#include "nasl_ssh_output.h"
 #include "nasl_tree.h"
 #include "nasl_var.h"
 
@@ -1262,10 +1264,22 @@ exec_ssh_cmd (ssh_session session, char *cmd, int verbose, int compat_mode,
                                           15000))
           > 0)
         {
-          if (to_stderr)
-            g_string_append_len (response, buffer, rc);
-          if (compat_mode)
-            g_string_append_len (compat_buf, buffer, rc);
+          if (to_stderr
+              && !nasl_ssh_output_append (response, compat_buf, buffer, rc))
+            {
+              g_message ("SSH command output exceeded %u bytes",
+                         SSH_OUTPUT_MAX_SIZE);
+              rc = SSH_ERROR;
+              goto exec_err;
+            }
+          if (compat_mode
+              && !nasl_ssh_output_append (compat_buf, response, buffer, rc))
+            {
+              g_message ("SSH command output exceeded %u bytes",
+                         SSH_OUTPUT_MAX_SIZE);
+              rc = SSH_ERROR;
+              goto exec_err;
+            }
         }
       if (rc == SSH_ERROR)
         goto exec_err;
@@ -1277,8 +1291,14 @@ exec_ssh_cmd (ssh_session session, char *cmd, int verbose, int compat_mode,
                                           15000))
           > 0)
         {
-          if (to_stdout)
-            g_string_append_len (response, buffer, rc);
+          if (to_stdout
+              && !nasl_ssh_output_append (response, compat_buf, buffer, rc))
+            {
+              g_message ("SSH command output exceeded %u bytes",
+                         SSH_OUTPUT_MAX_SIZE);
+              rc = SSH_ERROR;
+              goto exec_err;
+            }
         }
       if (rc == SSH_ERROR)
         goto exec_err;
@@ -1424,7 +1444,12 @@ nasl_ssh_request_exec (lex_ctxt *lexic)
       p = g_string_free (compat_buf, FALSE);
       if (p)
         {
-          g_string_append_len (response, p, len);
+          if (!nasl_ssh_output_append (response, NULL, p, len))
+            {
+              g_free (p);
+              g_string_free (response, TRUE);
+              return NULL;
+            }
           g_free (p);
         }
     }
@@ -1772,7 +1797,15 @@ read_ssh_blocking (ssh_channel channel, GString *response, int timeout)
       if ((rc = ssh_channel_read_timeout (channel, buffer, sizeof (buffer), 1,
                                           timeout))
           > 0)
-        g_string_append_len (response, buffer, rc);
+        {
+          if (!nasl_ssh_output_append (response, NULL, buffer, rc))
+            {
+              g_message ("SSH shell output exceeded %u bytes",
+                         SSH_OUTPUT_MAX_SIZE);
+              rc = SSH_ERROR;
+              goto exec_err;
+            }
+        }
 
       else if (rc == SSH_ERROR)
         goto exec_err;
@@ -1785,7 +1818,15 @@ read_ssh_blocking (ssh_channel channel, GString *response, int timeout)
       if ((rc = ssh_channel_read_timeout (channel, buffer, sizeof (buffer), 0,
                                           timeout))
           > 0)
-        g_string_append_len (response, buffer, rc);
+        {
+          if (!nasl_ssh_output_append (response, NULL, buffer, rc))
+            {
+              g_message ("SSH shell output exceeded %u bytes",
+                         SSH_OUTPUT_MAX_SIZE);
+              rc = SSH_ERROR;
+              goto exec_err;
+            }
+        }
 
       else if (rc == SSH_ERROR)
         goto exec_err;
@@ -1816,12 +1857,24 @@ read_ssh_nonblocking (ssh_channel channel, GString *response)
 
   if ((rc = ssh_channel_read_nonblocking (channel, buffer, sizeof (buffer), 1))
       > 0)
-    g_string_append_len (response, buffer, rc);
+    {
+      if (!nasl_ssh_output_append (response, NULL, buffer, rc))
+        {
+          g_message ("SSH shell output exceeded %u bytes", SSH_OUTPUT_MAX_SIZE);
+          return -1;
+        }
+    }
   if (rc == SSH_ERROR)
     return -1;
   if ((rc = ssh_channel_read_nonblocking (channel, buffer, sizeof (buffer), 0))
       > 0)
-    g_string_append_len (response, buffer, rc);
+    {
+      if (!nasl_ssh_output_append (response, NULL, buffer, rc))
+        {
+          g_message ("SSH shell output exceeded %u bytes", SSH_OUTPUT_MAX_SIZE);
+          return -1;
+        }
+    }
   if (rc == SSH_ERROR)
     return -1;
   return 0;
@@ -1867,12 +1920,18 @@ nasl_ssh_shell_read (lex_ctxt *lexic)
   if (timeout > 0)
     {
       if (read_ssh_blocking (channel, response, timeout))
-        return NULL;
+        {
+          g_string_free (response, TRUE);
+          return NULL;
+        }
     }
   else
     {
       if (read_ssh_nonblocking (channel, response))
-        return NULL;
+        {
+          g_string_free (response, TRUE);
+          return NULL;
+        }
     }
   retc = alloc_typed_cell (CONST_DATA);
   retc->size = response->len;

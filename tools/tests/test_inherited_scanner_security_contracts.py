@@ -45,6 +45,30 @@ class InheritedScannerSecurityContractTests(unittest.TestCase):
             "malformed DCE/RPC packets must not reach request dispatch",
         )
 
+    def test_c_ssh_output_uses_one_aggregate_budget(self):
+        ssh_source = (
+            ROOT / "components/openvas-scanner/nasl/nasl_ssh.c"
+        ).read_text(encoding="utf-8")
+        budget_source = (
+            ROOT / "components/openvas-scanner/nasl/nasl_ssh_output.c"
+        ).read_text(encoding="utf-8")
+        budget_header = (
+            ROOT / "components/openvas-scanner/nasl/nasl_ssh_output.h"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            "#define SSH_OUTPUT_MAX_SIZE (16U * 1024U * 1024U)",
+            budget_header,
+        )
+        self.assertEqual(
+            ssh_source.count("nasl_ssh_output_append"),
+            8,
+            "all SSH output reads and compatibility concatenation must use the budget",
+        )
+        self.assertNotIn("g_string_append_len", ssh_source)
+        self.assertEqual(budget_source.count("g_string_append_len"), 1)
+        self.assertIn("length > limit - retained", budget_source)
+
 
 if __name__ == "__main__":
     unittest.main()

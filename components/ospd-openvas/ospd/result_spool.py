@@ -102,6 +102,7 @@ class SpoolClaim:
 
     scan_id: str
     redis_db: int
+    owner_token: Optional[str]
     source_claim_id: str
     osp_batch_id: str
     state: ClaimState
@@ -134,6 +135,27 @@ class ResultSpool:
     Write transitions use ``BEGIN IMMEDIATE`` and SQLite's busy timeout.
     """
 
+    _REQUIRED_CLAIM_COLUMNS = frozenset(
+        {
+            'sequence',
+            'scan_id',
+            'redis_db',
+            'owner_token',
+            'source_claim_id',
+            'osp_batch_id',
+            'state',
+            'payload_json',
+            'row_count',
+            'payload_bytes',
+            'count_dead',
+            'count_total',
+            'count_excluded',
+            'incomplete_reason',
+            'digest',
+            'acked_sequence',
+        }
+    )
+
     _SCHEMA = """
     CREATE TABLE IF NOT EXISTS scans (
         scan_id TEXT PRIMARY KEY,
@@ -145,6 +167,7 @@ class ResultSpool:
         sequence INTEGER PRIMARY KEY AUTOINCREMENT,
         scan_id TEXT NOT NULL REFERENCES scans(scan_id) ON DELETE CASCADE,
         redis_db INTEGER NOT NULL,
+        owner_token TEXT,
         source_claim_id TEXT NOT NULL,
         osp_batch_id TEXT NOT NULL UNIQUE,
         state TEXT NOT NULL CHECK(state IN ('STAGED', 'EXPOSED', 'ACKING', 'ACKED')),
@@ -200,11 +223,28 @@ class ResultSpool:
             user_version = connection.execute('PRAGMA user_version').fetchone()[
                 0
             ]
-            if user_version == 0:
-                connection.execute('PRAGMA user_version = 1')
-            elif user_version != 1:
+            if user_version in (0, 1):
+                columns = {
+                    row['name']
+                    for row in connection.execute('PRAGMA table_info(claims)')
+                }
+                if 'owner_token' not in columns:
+                    connection.execute(
+                        'ALTER TABLE claims ADD COLUMN owner_token TEXT'
+                    )
+                connection.execute('PRAGMA user_version = 2')
+            elif user_version != 2:
                 raise ResultSpoolCorruptionError(
                     f'unsupported result spool schema version {user_version}'
+                )
+            columns = {
+                row['name']
+                for row in connection.execute('PRAGMA table_info(claims)')
+            }
+            missing_columns = self._REQUIRED_CLAIM_COLUMNS - columns
+            if missing_columns:
+                raise ResultSpoolCorruptionError(
+                    'result spool schema is missing required claim columns'
                 )
             self._secure_database_files()
             self._validate_stored_state(connection)
@@ -232,6 +272,7 @@ class ResultSpool:
         scan_id: str,
         redis_db: int,
         source_claim_id: str,
+        owner_token: str,
         results: Iterable[Mapping[str, Any]],
         *,
         count_dead: int = 0,
@@ -241,6 +282,7 @@ class ResultSpool:
     ) -> SpoolClaim:
         """Stage one Redis source claim, or return its exact durable replay."""
         self._validate_identity(scan_id, redis_db, source_claim_id)
+        self._validate_owner_token(owner_token)
         metadata = self._validate_metadata(
             count_dead, count_total, count_excluded, incomplete_reason
         )
@@ -255,7 +297,11 @@ class ResultSpool:
             ).fetchone()
             if existing is not None:
                 claim = self._claim_from_row(existing)
-                if claim.scan_id != scan_id or claim.digest != digest:
+                if (
+                    claim.scan_id != scan_id
+                    or claim.digest != digest
+                    or claim.owner_token != owner_token
+                ):
                     raise ResultSpoolConflictError(
                         'source claim conflicts with its durable payload'
                     )
@@ -280,13 +326,15 @@ class ResultSpool:
             osp_batch_id = str(uuid.uuid4())
             connection.execute(
                 'INSERT INTO claims '
-                '(scan_id, redis_db, source_claim_id, osp_batch_id, state, '
+                '(scan_id, redis_db, owner_token, source_claim_id, '
+                'osp_batch_id, state, '
                 'payload_json, row_count, payload_bytes, count_dead, '
                 'count_total, count_excluded, incomplete_reason, digest) '
-                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
                 (
                     scan_id,
                     redis_db,
+                    owner_token,
                     source_claim_id,
                     osp_batch_id,
                     ClaimState.STAGED.value,
@@ -304,6 +352,49 @@ class ResultSpool:
                 'SELECT * FROM claims WHERE redis_db = ? AND source_claim_id = ?',
                 (redis_db, source_claim_id),
             ).fetchone()
+            return self._claim_from_row(row)
+
+    def bind_owner_token(
+        self, redis_db: int, source_claim_id: str, owner_token: str
+    ) -> SpoolClaim:
+        """Bind a migrated claim to its verified original Redis owner."""
+        if (
+            not isinstance(redis_db, int)
+            or isinstance(redis_db, bool)
+            or redis_db < 0
+        ):
+            raise ResultSpoolValidationError(
+                'redis_db must be a non-negative integer'
+            )
+        if not isinstance(source_claim_id, str) or not source_claim_id:
+            raise ResultSpoolValidationError(
+                'source_claim_id must be a non-empty string'
+            )
+        self._validate_owner_token(owner_token)
+        with self._transaction() as connection:
+            row = connection.execute(
+                'SELECT * FROM claims WHERE redis_db = ? AND source_claim_id = ?',
+                (redis_db, source_claim_id),
+            ).fetchone()
+            if row is None:
+                raise ResultSpoolStateError('claim identity is not durable')
+            claim = self._claim_from_row(row)
+            if (
+                claim.owner_token is not None
+                and claim.owner_token != owner_token
+            ):
+                raise ResultSpoolConflictError(
+                    'source claim conflicts with its durable owner'
+                )
+            if claim.owner_token is None:
+                connection.execute(
+                    'UPDATE claims SET owner_token = ? WHERE sequence = ?',
+                    (owner_token, row['sequence']),
+                )
+                row = connection.execute(
+                    'SELECT * FROM claims WHERE sequence = ?',
+                    (row['sequence'],),
+                ).fetchone()
             return self._claim_from_row(row)
 
     def expose_next(self, scan_id: str) -> Optional[SpoolClaim]:
@@ -400,12 +491,16 @@ class ResultSpool:
             )
             state = ClaimState(row['state'])
             if state == ClaimState.ACKING:
+                acked_sequence = connection.execute(
+                    'SELECT COALESCE(MAX(acked_sequence), 0) + 1 '
+                    "FROM claims WHERE state = 'ACKED'"
+                ).fetchone()[0]
                 connection.execute(
                     "UPDATE claims SET state = 'ACKED', payload_json = NULL, "
                     "payload_bytes = 0, incomplete_reason = NULL, "
-                    "acked_sequence = sequence "
+                    'acked_sequence = ? '
                     'WHERE sequence = ?',
-                    (row['sequence'],),
+                    (acked_sequence, row['sequence']),
                 )
                 self._prune_acked(connection)
                 row = connection.execute(
@@ -709,6 +804,7 @@ class ResultSpool:
         return SpoolClaim(
             scan_id=row['scan_id'],
             redis_db=row['redis_db'],
+            owner_token=row['owner_token'],
             source_claim_id=row['source_claim_id'],
             osp_batch_id=row['osp_batch_id'],
             state=state,
@@ -851,6 +947,17 @@ class ResultSpool:
             raise ResultSpoolValidationError(
                 'source_claim_id must be a non-empty string'
             )
+
+    @staticmethod
+    def _validate_owner_token(owner_token: str) -> None:
+        if (
+            not isinstance(owner_token, str)
+            or not owner_token
+            or len(owner_token) > 128
+            or ':' in owner_token
+            or '\x00' in owner_token
+        ):
+            raise ResultSpoolValidationError('owner_token is invalid')
 
     @staticmethod
     def _validate_metadata(

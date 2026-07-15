@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -166,6 +167,15 @@ class DummyDaemon(OSPDopenvas):
         )
 
         self.scan_collection.data_manager = FakeDataManager()
+        self.main_db.claim_owned_results.side_effect = (
+            lambda database, **limits: database.claim_results(**limits)
+        )
+        self.main_db.ack_owned_result_claim_state.side_effect = (
+            lambda database, claim_id: database.ack_result_claim_state(claim_id)
+        )
+        self.main_db.current_owned_result_claim_id.side_effect = (
+            lambda database: database.current_result_claim_id()
+        )
 
     def create_xml_target(self) -> et.Element:
         target = et.fromstring(

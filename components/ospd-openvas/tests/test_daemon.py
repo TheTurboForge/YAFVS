@@ -395,6 +395,7 @@ def openvas_result_row(
 
 
 def set_result_claim(db, results, claim_id='claim-1'):
+    db.owner_token = 'owner-token'
     db.claim_results.return_value = (claim_id, results)
     db.ack_result_claim.return_value = True
 

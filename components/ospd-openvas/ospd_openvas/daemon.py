@@ -869,11 +869,25 @@ class OSPDopenvas(OSPDaemon):
 
         self.initialized = True
 
-    @staticmethod
-    def release_spooled_redis_claim(claim) -> ResultClaimAck:
+    def release_spooled_redis_claim(self, claim) -> ResultClaimAck:
         """Release one exact Redis claim after gvmd acknowledged its batch."""
-        outcome = KbDB(claim.redis_db).ack_result_claim_state(
-            claim.source_claim_id
+        if claim.owner_token is None:
+            raise OspdOpenvasError(
+                'Durable result claim has no verified Redis owner.'
+            )
+        try:
+            database = self.main_db.open_owned_parent_database(
+                claim.redis_db, claim.owner_token, claim.scan_id
+            )
+        except OspdOpenvasError:
+            if (
+                self.main_db.reservation_token_if_present(claim.redis_db)
+                is None
+            ):
+                return ResultClaimAck.MISSING
+            raise
+        outcome = self.main_db.ack_owned_result_claim_state(
+            database, claim.source_claim_id
         )
         if outcome not in (ResultClaimAck.RELEASED, ResultClaimAck.MISSING):
             raise OspdOpenvasError(
@@ -882,7 +896,7 @@ class OSPDopenvas(OSPDaemon):
         return outcome
 
     def reconcile_result_spool(self) -> None:
-        """Finish crash-interrupted acknowledgements before serving OSP."""
+        """Recover owned Redis evidence before serving OSP."""
         if self.result_spool is None:
             return
         health = self.result_spool.health()
@@ -890,7 +904,30 @@ class OSPDopenvas(OSPDaemon):
             raise OspdOpenvasError(
                 'Scanner result spool integrity check failed.'
             )
+        recovery_sources = {
+            (database.index, scan_id): database
+            for scan_id, database in self.main_db.reserved_parent_databases()
+        }
         for claim in self.result_spool.recovery_records():
+            if claim.owner_token is None:
+                source = recovery_sources.get((claim.redis_db, claim.scan_id))
+                if source is None:
+                    raise OspdOpenvasError(
+                        'Migrated result claim has no verified Redis owner.'
+                    )
+                if (
+                    self.main_db.current_owned_result_claim_id(source)
+                    != claim.source_claim_id
+                ):
+                    raise OspdOpenvasError(
+                        'Migrated result claim does not match the owned Redis '
+                        'claim identity.'
+                    )
+                claim = self.result_spool.bind_owner_token(
+                    claim.redis_db,
+                    claim.source_claim_id,
+                    source.owner_token,
+                )
             if claim.state != ClaimState.ACKING:
                 continue
             self.release_spooled_redis_claim(claim)
@@ -903,6 +940,81 @@ class OSPDopenvas(OSPDaemon):
             self.scan_collection.clear_result_claim(
                 claim.scan_id, claim.source_claim_id
             )
+        for (_, scan_id), database in recovery_sources.items():
+            self.recover_owned_result_source(database, scan_id)
+
+    def recover_owned_result_source(self, database: KbDB, scan_id: str) -> None:
+        """Expose an interrupted owner-bound Redis source through OSP."""
+        self.scan_collection.restore_interrupted_scan(scan_id)
+        self.mark_scanner_evidence_incomplete(
+            scan_id,
+            'OSPD restarted before all scanner evidence was acknowledged.',
+        )
+        if database.get_status(scan_id) != 'finished':
+            database.stop_scan(scan_id)
+            recorded_pid = database.get_scan_process_id()
+            if not self.stop_scan_process_without_kb(scan_id, recorded_pid):
+                self.mark_scanner_evidence_incomplete(
+                    scan_id,
+                    'Recovered scanner process-tree completion is unconfirmed.',
+                )
+        if (
+            not self.result_spool.has_pending(scan_id)
+            and database.has_pending_results()
+            and not self.report_openvas_results(database, scan_id)
+        ):
+            raise OspdOpenvasError(
+                'Owned Redis evidence could not be staged durably.'
+            )
+        self.finalize_recovered_result_source(database, scan_id)
+
+    def finalize_recovered_result_source(
+        self, database: KbDB, scan_id: str
+    ) -> bool:
+        """Release a recovered namespace only after every terminal proof."""
+        if self.get_scan_status(scan_id) != ScanStatus.INTERRUPTED:
+            return False
+        if (
+            self.result_spool.has_pending(scan_id)
+            or database.has_pending_results()
+        ):
+            return False
+        if database.get_status(scan_id) != 'finished':
+            self.mark_scanner_evidence_incomplete(
+                scan_id,
+                'Recovered scanner process-tree completion is unconfirmed.',
+            )
+            return False
+        for scan_db in database.get_scan_databases():
+            self.main_db.release_database(scan_db)
+            database.remove_scan_database(scan_db)
+        self.main_db.release_database(database)
+        return True
+
+    def continue_spooled_result_source(self, claim) -> None:
+        """Stage the next owner-bound claim after an exact gvmd acknowledgment."""
+        if claim.owner_token is None:
+            raise OspdOpenvasError(
+                'Durable result claim has no verified Redis owner.'
+            )
+        try:
+            database = self.main_db.open_owned_parent_database(
+                claim.redis_db, claim.owner_token, claim.scan_id
+            )
+        except OspdOpenvasError:
+            if (
+                self.main_db.reservation_token_if_present(claim.redis_db)
+                is None
+            ):
+                return
+            raise
+        if database.has_pending_results():
+            if not self.report_openvas_results(database, claim.scan_id):
+                raise OspdOpenvasError(
+                    'Next owned Redis result claim could not be staged.'
+                )
+            return
+        self.finalize_recovered_result_source(database, claim.scan_id)
 
     def ack_result_batch(self, scan_id: str, batch_id: str) -> bool:
         """Cross the durable SQLite and Redis boundaries in exact order."""
@@ -913,6 +1025,14 @@ class OSPDopenvas(OSPDaemon):
             if claim is None:
                 return super().ack_result_batch(scan_id, batch_id)
             if claim.state == ClaimState.ACKED:
+                try:
+                    self.continue_spooled_result_source(claim)
+                except (OspdOpenvasError, ResultSpoolError, redis.RedisError):
+                    logger.exception(
+                        '%s: Durable result continuation remains pending.',
+                        scan_id,
+                    )
+                    return False
                 return True
             claim = self.result_spool.begin_ack(
                 scan_id,
@@ -930,6 +1050,17 @@ class OSPDopenvas(OSPDaemon):
             self.scan_collection.clear_result_claim(
                 scan_id, claim.source_claim_id
             )
+            try:
+                self.continue_spooled_result_source(claim)
+            except (OspdOpenvasError, ResultSpoolError, redis.RedisError):
+                logger.exception(
+                    '%s: Durable result continuation remains pending.', scan_id
+                )
+                self.mark_scanner_evidence_incomplete(
+                    scan_id,
+                    'Recovered scanner evidence continuation is pending.',
+                )
+                return False
             return True
         except (OspdOpenvasError, ResultSpoolError, redis.RedisError):
             logger.exception(
@@ -943,6 +1074,14 @@ class OSPDopenvas(OSPDaemon):
             return False
 
     def delete_scan(self, scan_id: str) -> int:
+        for reserved_scan_id, _ in self.main_db.reserved_parent_databases():
+            if reserved_scan_id == scan_id:
+                logger.warning(
+                    '%s: Refusing deletion while its Redis evidence source '
+                    'remains reserved.',
+                    scan_id,
+                )
+                return 0
         deleted = super().delete_scan(scan_id)
         if deleted and self._notus_result_handler is not None:
             self._notus_result_handler.discard_scan(scan_id)
@@ -1260,7 +1399,8 @@ class OSPDopenvas(OSPDaemon):
             return False
 
         # Scanner results are bounded version-1 JSON records.
-        claim_id, all_results = db.claim_results(
+        claim_id, all_results = self.main_db.claim_owned_results(
+            db,
             max_items=OPENVAS_RESULT_CLAIM_MAX_ITEMS,
             max_bytes=OPENVAS_RESULT_CLAIM_MAX_BYTES,
             max_item_bytes=OPENVAS_RESULT_ROW_MAX_BYTES,
@@ -1311,6 +1451,7 @@ class OSPDopenvas(OSPDaemon):
             scan_id,
             claim_id=claim_id,
             redis_db=db.index,
+            owner_token=db.owner_token,
             delivery_incomplete_reason=quarantine_reason,
         ):
             return False
@@ -1378,6 +1519,7 @@ class OSPDopenvas(OSPDaemon):
         scan_id: str,
         claim_id: Optional[str] = None,
         redis_db: Optional[int] = None,
+        owner_token: Optional[str] = None,
         delivery_incomplete_reason: Optional[str] = None,
     ) -> bool:
         """Reports all results given in a list.
@@ -1564,6 +1706,7 @@ class OSPDopenvas(OSPDaemon):
         if claim_id:
             result_batch_args['claim_id'] = claim_id
             result_batch_args['redis_db'] = redis_db
+            result_batch_args['owner_token'] = owner_token
             result_batch_args['incomplete_reason'] = incomplete_reason
         self.scan_collection.apply_result_batch(
             scan_id, res_list, **result_batch_args
@@ -1831,6 +1974,7 @@ class OSPDopenvas(OSPDaemon):
 
         for scan_db in kbdb.get_scan_databases():
             self.main_db.release_database(scan_db)
+            kbdb.remove_scan_database(scan_db)
         return True
 
     def exec_scan(self, scan_id: str):
@@ -1978,7 +2122,7 @@ class OSPDopenvas(OSPDaemon):
                 self.stop_scan_process_without_kb(
                     scan_id,
                     openvas_process.pid,
-                    process_already_exited=not openvas_process_is_alive,
+                    process_already_exited=exit_code is not None,
                 )
                 return
             if scanner_status != 'new':

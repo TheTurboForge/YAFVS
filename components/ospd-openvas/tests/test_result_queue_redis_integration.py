@@ -22,6 +22,7 @@ from ospd_openvas.db import (
     KbDB,
     MainDB,
     OpenvasDB,
+    ResultClaimAck,
 )
 from ospd_openvas.errors import OspdOpenvasError
 
@@ -180,6 +181,135 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
         maindb.release_database(KbDB(1, child, owner_token=current_token))
         self.assertEqual(child.dbsize(), 0)
         self.assertIsNone(self.ctx.hget(DBINDEX_NAME, 1))
+
+    def test_reserved_parent_discovery_requires_exact_owner_metadata(self):
+        owner_token = str(uuid.uuid4())
+        parent = self.redis_db(1)
+        self.ctx.hset(DBINDEX_NAME, 1, owner_token)
+        parent.rpush('internal/turbovas.owner-token', owner_token)
+        parent.rpush('internal/turbovas.db-kind', 'parent')
+        parent.rpush('internal/scanid', 'scan-recovery')
+        previous_address = (
+            OpenvasDB._db_address
+        )  # pylint: disable=protected-access
+        OpenvasDB._db_address = (
+            self.redis_url
+        )  # pylint: disable=protected-access
+        try:
+            discovered = list(MainDB(self.ctx).reserved_parent_databases())
+            self.assertEqual(len(discovered), 1)
+            self.assertEqual(discovered[0][0], 'scan-recovery')
+            self.assertEqual(discovered[0][1].owner_token, owner_token)
+
+            parent.lset('internal/turbovas.owner-token', 0, str(uuid.uuid4()))
+            with self.assertRaises(OspdOpenvasError):
+                list(MainDB(self.ctx).reserved_parent_databases())
+        finally:
+            OpenvasDB._db_address = (  # pylint: disable=protected-access
+                previous_address
+            )
+
+    def test_recovery_retains_unreserved_child_that_still_has_data(self):
+        child_token = str(uuid.uuid4())
+        parent = self.redis_db(1)
+        child = self.redis_db(2)
+        parent.rpush('internal/scanid', 'scan-recovery')
+        parent.rpush('internal/dbindex', f'2:{child_token}')
+        child.set('retained', 'evidence')
+        previous_address = (
+            OpenvasDB._db_address
+        )  # pylint: disable=protected-access
+        OpenvasDB._db_address = (
+            self.redis_url
+        )  # pylint: disable=protected-access
+        try:
+            recovered_parent = KbDB(1, parent, owner_token='parent')
+            with self.assertRaises(OspdOpenvasError):
+                list(recovered_parent.get_scan_databases())
+            self.assertEqual(
+                parent.lrange('internal/dbindex', 0, -1),
+                [f'2:{child_token}'],
+            )
+            self.assertEqual(child.get('retained'), 'evidence')
+        finally:
+            OpenvasDB._db_address = (  # pylint: disable=protected-access
+                previous_address
+            )
+
+    def test_result_claim_and_ack_are_fenced_by_db_zero_owner(self):
+        owner_token = str(uuid.uuid4())
+        replacement_token = str(uuid.uuid4())
+        parent = self.redis_db(1)
+        self.ctx.hset(DBINDEX_NAME, 1, owner_token)
+        database = KbDB(1, parent, owner_token=owner_token)
+        self.assertEqual(self.admit('evidence', ctx=parent), 1)
+        main = MainDB(self.ctx)
+
+        claim_id, rows = main.claim_owned_results(
+            database,
+            max_items=1000,
+            max_bytes=16 * 1024 * 1024,
+            max_item_bytes=4 * 1024 * 1024,
+        )
+        self.assertEqual(rows, ['evidence'])
+        self.assertEqual(main.current_owned_result_claim_id(database), claim_id)
+
+        self.ctx.hset(DBINDEX_NAME, 1, replacement_token)
+        with self.assertRaises(OspdOpenvasError):
+            main.current_owned_result_claim_id(database)
+        with self.assertRaises(OspdOpenvasError):
+            main.ack_owned_result_claim_state(database, claim_id)
+        self.assertEqual(parent.lrange(self.CLAIM, 0, -1), ['evidence'])
+
+        self.ctx.hset(DBINDEX_NAME, 1, owner_token)
+        self.assertEqual(
+            main.ack_owned_result_claim_state(database, claim_id),
+            ResultClaimAck.RELEASED,
+        )
+        self.assertEqual(parent.llen(self.CLAIM), 0)
+
+        self.assertEqual(self.admit('later', ctx=parent), 1)
+        self.ctx.hset(DBINDEX_NAME, 1, replacement_token)
+        with self.assertRaises(OspdOpenvasError):
+            main.claim_owned_results(
+                database,
+                max_items=1000,
+                max_bytes=16 * 1024 * 1024,
+                max_item_bytes=4 * 1024 * 1024,
+            )
+        self.assertEqual(parent.lrange(self.SOURCE, 0, -1), ['later'])
+
+    def test_recovery_removes_reference_to_already_released_empty_child(self):
+        parent_token = str(uuid.uuid4())
+        child_token = str(uuid.uuid4())
+        parent = self.redis_db(1)
+        child = self.redis_db(2)
+        self.ctx.hset(DBINDEX_NAME, mapping={1: parent_token, 2: child_token})
+        parent.rpush('internal/scanid', 'scan-recovery')
+        parent.rpush('internal/dbindex', f'2:{child_token}')
+        child.rpush('internal/turbovas.owner-token', child_token)
+        child.rpush('internal/turbovas.db-kind', 'child')
+        child.rpush('internal/scan_id', 'scan-recovery')
+        previous_address = (
+            OpenvasDB._db_address
+        )  # pylint: disable=protected-access
+        OpenvasDB._db_address = (
+            self.redis_url
+        )  # pylint: disable=protected-access
+        try:
+            main = MainDB(self.ctx)
+            main.release_database(KbDB(2, child, owner_token=child_token))
+            self.assertEqual(
+                parent.lrange('internal/dbindex', 0, -1), [f'2:{child_token}']
+            )
+
+            recovered_parent = KbDB(1, parent, owner_token=parent_token)
+            self.assertEqual(list(recovered_parent.get_scan_databases()), [])
+            self.assertEqual(parent.lrange('internal/dbindex', 0, -1), [])
+        finally:
+            OpenvasDB._db_address = (  # pylint: disable=protected-access
+                previous_address
+            )
 
     def test_duplicate_cleanup_has_one_atomic_winner(self):
         owner_token = str(uuid.uuid4())

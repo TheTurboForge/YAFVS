@@ -7,18 +7,24 @@
 """Integration tests for durable Redis-to-OSP result delivery."""
 
 import json
+import sqlite3
 import tempfile
 import threading
 import unittest
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
+import redis
 
 from ospd.result_spool import ClaimState, ResultSpool
 from ospd.scan import ScanCollection, ScanStatus
 from ospd_openvas.db import ResultClaimAck
+from ospd_openvas.errors import OspdOpenvasError
 
 from tests.dummydaemon import DummyDaemon, FakeDataManager
+
+OWNER_TOKEN = 'owner-token'
 
 
 def result_row(value='started'):
@@ -118,6 +124,7 @@ class ResultSpoolDeliveryTestCase(unittest.TestCase):
                 [result_row()],
                 claim_id='claim-1',
                 redis_db=7,
+                owner_token=OWNER_TOKEN,
             )
         )
 
@@ -138,6 +145,7 @@ class ResultSpoolDeliveryTestCase(unittest.TestCase):
             [result_row()],
             claim_id='claim-1',
             redis_db=7,
+            owner_token=OWNER_TOKEN,
             total_dead=2,
             count_total=3,
         )
@@ -155,8 +163,7 @@ class ResultSpoolDeliveryTestCase(unittest.TestCase):
         self.assertEqual(recovered.get_count_dead('scan-1'), 2)
         self.assertEqual(recovered.prepare_result_batch('scan-1')[0], batch_id)
 
-    @patch('ospd_openvas.daemon.KbDB')
-    def test_gvmd_ack_releases_redis_then_completes_tombstone(self, kbdb_class):
+    def test_gvmd_ack_releases_redis_then_completes_tombstone(self):
         daemon = DummyDaemon()
         daemon.result_spool = self.spool
         daemon.scan_collection.set_result_spool(self.spool)
@@ -166,40 +173,40 @@ class ResultSpoolDeliveryTestCase(unittest.TestCase):
             [result_row()],
             claim_id='claim-1',
             redis_db=7,
+            owner_token=OWNER_TOKEN,
         )
         batch_id, _ = daemon.scan_collection.prepare_result_batch('scan-1')
-        kbdb_class.return_value.ack_result_claim_state.return_value = (
-            ResultClaimAck.RELEASED
-        )
+        database = daemon.main_db.open_owned_parent_database.return_value
+        database.ack_result_claim_state.return_value = ResultClaimAck.RELEASED
+        database.has_pending_results.return_value = False
 
         self.assertTrue(daemon.ack_result_batch('scan-1', batch_id))
-        kbdb_class.assert_called_once_with(7)
-        kbdb_class.return_value.ack_result_claim_state.assert_called_once_with(
-            'claim-1'
+        daemon.main_db.open_owned_parent_database.assert_called_with(
+            7, OWNER_TOKEN, 'scan-1'
         )
+        database.ack_result_claim_state.assert_called_once_with('claim-1')
         self.assertFalse(self.spool.has_pending('scan-1'))
         self.assertEqual(
             self.spool.get_batch('scan-1', batch_id).state,
             ClaimState.ACKED,
         )
         self.assertTrue(daemon.ack_result_batch('scan-1', batch_id))
-        self.assertEqual(kbdb_class.call_count, 1)
+        self.assertEqual(database.ack_result_claim_state.call_count, 1)
 
-    @patch('ospd_openvas.daemon.KbDB')
-    def test_startup_finishes_crash_interrupted_ack(self, kbdb_class):
+    def test_startup_finishes_crash_interrupted_ack(self):
         collection = self.collection()
         collection.apply_result_batch(
             'scan-1',
             [result_row()],
             claim_id='claim-1',
             redis_db=7,
+            owner_token=OWNER_TOKEN,
         )
         batch_id, _ = collection.prepare_result_batch('scan-1')
         self.spool.begin_ack('scan-1', batch_id, 7, 'claim-1')
-        kbdb_class.return_value.ack_result_claim_state.return_value = (
-            ResultClaimAck.MISSING
-        )
         daemon = DummyDaemon()
+        database = daemon.main_db.open_owned_parent_database.return_value
+        database.ack_result_claim_state.return_value = ResultClaimAck.MISSING
         daemon.result_spool = self.spool
         daemon.scan_collection.set_result_spool(self.spool)
         add_scan(daemon.scan_collection)
@@ -217,8 +224,7 @@ class ResultSpoolDeliveryTestCase(unittest.TestCase):
             '',
         )
 
-    @patch('ospd_openvas.daemon.KbDB')
-    def test_rejected_redis_ack_retains_durable_acking_claim(self, kbdb_class):
+    def test_rejected_redis_ack_retains_durable_acking_claim(self):
         daemon = DummyDaemon()
         daemon.result_spool = self.spool
         daemon.scan_collection.set_result_spool(self.spool)
@@ -234,11 +240,11 @@ class ResultSpoolDeliveryTestCase(unittest.TestCase):
                 [result_row()],
                 claim_id=claim_id,
                 redis_db=sequence,
+                owner_token=OWNER_TOKEN,
             )
             batch_id, _ = daemon.scan_collection.prepare_result_batch(scan_id)
-            kbdb_class.return_value.ack_result_claim_state.return_value = (
-                outcome
-            )
+            database = daemon.main_db.open_owned_parent_database.return_value
+            database.ack_result_claim_state.return_value = outcome
 
             self.assertFalse(daemon.ack_result_batch(scan_id, batch_id))
             self.assertEqual(
@@ -246,13 +252,12 @@ class ResultSpoolDeliveryTestCase(unittest.TestCase):
                 ClaimState.ACKING,
             )
 
-    @patch('ospd_openvas.daemon.KbDB')
-    def test_redis_claim_is_not_released_before_gvmd_ack(self, kbdb_class):
+    def test_redis_claim_is_not_released_before_gvmd_ack(self):
         daemon = DummyDaemon()
         daemon.result_spool = self.spool
         daemon.scan_collection.set_result_spool(self.spool)
         add_scan(daemon.scan_collection)
-        redis_db = MagicMock(index=7)
+        redis_db = MagicMock(index=7, owner_token=OWNER_TOKEN)
         redis_db.claim_results.return_value = (
             'claim-1',
             [redis_result_row()],
@@ -264,14 +269,181 @@ class ResultSpoolDeliveryTestCase(unittest.TestCase):
             'scan-1'
         )
         self.assertEqual(len(results), 1)
-        kbdb_class.return_value.ack_result_claim_state.return_value = (
-            ResultClaimAck.RELEASED
-        )
+        database = daemon.main_db.open_owned_parent_database.return_value
+        database.ack_result_claim_state.return_value = ResultClaimAck.RELEASED
+        database.has_pending_results.return_value = False
 
         self.assertTrue(daemon.ack_result_batch('scan-1', batch_id))
-        kbdb_class.return_value.ack_result_claim_state.assert_called_once_with(
-            'claim-1'
+        database.ack_result_claim_state.assert_called_once_with('claim-1')
+
+    def test_startup_stages_redis_only_claim_before_serving_osp(self):
+        daemon = DummyDaemon()
+        daemon.result_spool = self.spool
+        daemon.scan_collection.set_result_spool(self.spool)
+        database = MagicMock(index=7, owner_token=OWNER_TOKEN)
+        database.get_status.return_value = 'finished'
+        database.has_pending_results.return_value = True
+        database.claim_results.return_value = (
+            'claim-redis-only',
+            [redis_result_row('recovered')],
         )
+        daemon.main_db.reserved_parent_databases.return_value = [
+            ('scan-recovered', database)
+        ]
+
+        daemon.reconcile_result_spool()
+
+        self.assertTrue(daemon.scan_collection.id_exists('scan-recovered'))
+        self.assertEqual(
+            daemon.scan_collection.get_status('scan-recovered'),
+            ScanStatus.INTERRUPTED,
+        )
+        claim = self.spool.pending_records('scan-recovered')[0]
+        self.assertEqual(claim.source_claim_id, 'claim-redis-only')
+        self.assertEqual(claim.owner_token, OWNER_TOKEN)
+        database.ack_result_claim_state.assert_not_called()
+
+    def test_migrated_claim_rejects_replacement_owner_without_exact_claim(self):
+        collection = self.collection()
+        collection.apply_result_batch(
+            'scan-1',
+            [result_row()],
+            claim_id='old-claim',
+            redis_db=7,
+            owner_token=OWNER_TOKEN,
+        )
+        connection = sqlite3.connect(self.path)
+        connection.execute(
+            'UPDATE claims SET owner_token = NULL WHERE source_claim_id = ?',
+            ('old-claim',),
+        )
+        connection.commit()
+        connection.close()
+        daemon = DummyDaemon()
+        daemon.result_spool = self.spool
+        daemon.scan_collection.set_result_spool(self.spool)
+        database = MagicMock(index=7, owner_token='replacement-owner')
+        database.current_result_claim_id.return_value = 'replacement-claim'
+        daemon.main_db.reserved_parent_databases.return_value = [
+            ('scan-1', database)
+        ]
+
+        with self.assertRaises(OspdOpenvasError):
+            daemon.reconcile_result_spool()
+
+        claim = self.spool.pending_records('scan-1')[0]
+        self.assertIsNone(claim.owner_token)
+
+    def test_migrated_claim_binds_only_matching_owned_redis_claim(self):
+        collection = self.collection()
+        collection.apply_result_batch(
+            'scan-1',
+            [result_row()],
+            claim_id='old-claim',
+            redis_db=7,
+            owner_token=OWNER_TOKEN,
+        )
+        connection = sqlite3.connect(self.path)
+        connection.execute(
+            'UPDATE claims SET owner_token = NULL WHERE source_claim_id = ?',
+            ('old-claim',),
+        )
+        connection.commit()
+        connection.close()
+        daemon = DummyDaemon()
+        daemon.result_spool = self.spool
+        daemon.scan_collection.set_result_spool(self.spool)
+        database = MagicMock(index=7, owner_token=OWNER_TOKEN)
+        database.current_result_claim_id.return_value = 'old-claim'
+        database.get_status.return_value = 'finished'
+        database.has_pending_results.return_value = True
+        daemon.main_db.reserved_parent_databases.return_value = [
+            ('scan-1', database)
+        ]
+
+        daemon.reconcile_result_spool()
+
+        claim = self.spool.pending_records('scan-1')[0]
+        self.assertEqual(claim.owner_token, OWNER_TOKEN)
+
+    def test_recovered_ack_stages_next_batch_then_releases_terminal_source(
+        self,
+    ):
+        daemon = DummyDaemon()
+        daemon.result_spool = self.spool
+        daemon.scan_collection.set_result_spool(self.spool)
+        add_scan(daemon.scan_collection)
+        daemon.set_scan_status('scan-1', ScanStatus.INTERRUPTED)
+        database = MagicMock(index=7, owner_token=OWNER_TOKEN)
+        database.claim_results.side_effect = [
+            ('claim-1', [redis_result_row('first')]),
+            ('claim-2', [redis_result_row('second')]),
+        ]
+        database.ack_result_claim_state.return_value = ResultClaimAck.RELEASED
+        database.has_pending_results.side_effect = [True, False, False]
+        database.get_status.return_value = 'finished'
+        database.get_scan_databases.return_value = []
+        daemon.main_db.open_owned_parent_database.return_value = database
+
+        self.assertTrue(daemon.report_openvas_results(database, 'scan-1'))
+        first_batch, first_results = (
+            daemon.scan_collection.prepare_result_batch('scan-1')
+        )
+        self.assertEqual(first_results[0]['value'], 'first')
+
+        self.assertTrue(daemon.ack_result_batch('scan-1', first_batch))
+        second_batch, second_results = (
+            daemon.scan_collection.prepare_result_batch('scan-1')
+        )
+        self.assertNotEqual(second_batch, first_batch)
+        self.assertEqual(second_results[0]['value'], 'second')
+        daemon.main_db.release_database.assert_not_called()
+
+        self.assertTrue(daemon.ack_result_batch('scan-1', second_batch))
+        self.assertFalse(self.spool.has_pending('scan-1'))
+        daemon.main_db.release_database.assert_called_once_with(database)
+
+    def test_delete_refuses_owned_recovery_source(self):
+        daemon = DummyDaemon()
+        add_scan(daemon.scan_collection)
+        database = MagicMock(index=7, owner_token=OWNER_TOKEN)
+        daemon.main_db.reserved_parent_databases.return_value = [
+            ('scan-1', database)
+        ]
+
+        self.assertEqual(daemon.delete_scan('scan-1'), 0)
+        self.assertTrue(daemon.scan_collection.id_exists('scan-1'))
+
+    def test_continuation_failure_retries_ack_but_released_source_settles(self):
+        daemon = DummyDaemon()
+        daemon.result_spool = self.spool
+        daemon.scan_collection.set_result_spool(self.spool)
+        add_scan(daemon.scan_collection)
+        daemon.scan_collection.apply_result_batch(
+            'scan-1',
+            [result_row()],
+            claim_id='claim-1',
+            redis_db=7,
+            owner_token=OWNER_TOKEN,
+        )
+        batch_id, _ = daemon.scan_collection.prepare_result_batch('scan-1')
+        database = MagicMock(index=7, owner_token=OWNER_TOKEN)
+        database.ack_result_claim_state.return_value = ResultClaimAck.RELEASED
+        database.has_pending_results.side_effect = redis.ConnectionError(
+            'temporary outage'
+        )
+        daemon.main_db.open_owned_parent_database.return_value = database
+
+        self.assertFalse(daemon.ack_result_batch('scan-1', batch_id))
+        self.assertEqual(
+            self.spool.get_batch('scan-1', batch_id).state, ClaimState.ACKED
+        )
+
+        daemon.main_db.open_owned_parent_database.side_effect = (
+            OspdOpenvasError('released')
+        )
+        daemon.main_db.reservation_token_if_present.return_value = None
+        self.assertTrue(daemon.ack_result_batch('scan-1', batch_id))
 
 
 if __name__ == '__main__':

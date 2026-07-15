@@ -1163,6 +1163,11 @@ class BaseKbDB(BaseDB):
             or self.ctx.llen(self.RESULT_CLAIM_KEY)
         )
 
+    def current_result_claim_id(self) -> Optional[str]:
+        """Return the exact current Redis claim identity, if one exists."""
+        claim_id = self.ctx.get(self.RESULT_CLAIM_ID_KEY)
+        return str(claim_id) if claim_id else None
+
     def get_result_admission_failure(self) -> Optional[str]:
         """Return a fixed fail-closed result delivery failure code."""
         return OpenvasDB.get_result_queue_failure(
@@ -1266,7 +1271,17 @@ class KbDB(BaseKbDB):
                 kbindex, owner_token = self.parse_database_reference(reference)
                 if kbindex == self.index:
                     continue
-                if MainDB().reservation_token(kbindex) != owner_token:
+                main_db = MainDB()
+                current_owner = main_db.reservation_token_if_present(kbindex)
+                if current_owner is None:
+                    released_child = ScanDB(kbindex, owner_token=owner_token)
+                    if released_child.ctx.dbsize() == 0:
+                        self.remove_scan_database(released_child)
+                        continue
+                    raise OspdOpenvasError(
+                        'Released child Redis database retained data.'
+                    )
+                if current_owner != owner_token:
                     raise OspdOpenvasError(
                         'Child Redis database owner no longer matches its '
                         'parent reference.'
@@ -1302,6 +1317,16 @@ class KbDB(BaseKbDB):
         self._set_single_item('internal/turbovas.db-kind', ['parent'])
         self._add_single_item(f'internal/{scan_id}', ['new'])
         self._add_single_item('internal/scanid', [scan_id])
+
+    def recovery_identity(
+        self,
+    ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        """Return the owner, kind, and scan identity stored in this namespace."""
+        return (
+            self._get_single_item('internal/turbovas.owner-token'),
+            self._get_single_item('internal/turbovas.db-kind'),
+            self._get_single_item('internal/scanid'),
+        )
 
     def add_scan_preferences(self, openvas_scan_id: str, preferences: Iterable):
         self._add_single_item(
@@ -1418,6 +1443,222 @@ class MainDB(BaseDB):
 
         return None
 
+    def open_owned_parent_database(
+        self, index: int, owner_token: str, scan_id: Optional[str] = None
+    ) -> KbDB:
+        """Open one parent database only through its immutable owner identity."""
+        if (
+            not isinstance(index, int)
+            or isinstance(index, bool)
+            or index <= 0
+            or index >= self.max_database_index
+        ):
+            raise OspdOpenvasError('Invalid reserved Redis database index.')
+        owner_token = self.validate_owner_token(owner_token)
+        if self.reservation_token(index) != owner_token:
+            raise OspdOpenvasError(
+                f'Redis database {index} owner changed during recovery.'
+            )
+        database = KbDB(index, owner_token=owner_token)
+        stored_owner_token, database_kind, stored_scan_id = (
+            database.recovery_identity()
+        )
+        if stored_owner_token != owner_token or database_kind != 'parent':
+            raise OspdOpenvasError(
+                f'Redis database {index} is not the expected owned parent.'
+            )
+        if (
+            not isinstance(stored_scan_id, str)
+            or not stored_scan_id
+            or len(stored_scan_id) > 128
+            or '\x00' in stored_scan_id
+            or (scan_id is not None and stored_scan_id != scan_id)
+        ):
+            raise OspdOpenvasError(
+                f'Redis database {index} has invalid recovery scan identity.'
+            )
+        if self.reservation_token(index) != owner_token:
+            raise OspdOpenvasError(
+                f'Redis database {index} owner changed during recovery.'
+            )
+        return database
+
+    def claim_owned_results(
+        self,
+        database: KbDB,
+        *,
+        max_items: int,
+        max_bytes: int,
+        max_item_bytes: int,
+    ) -> Tuple[Optional[str], List[str]]:
+        """Claim results while fencing the parent database owner in DB 0."""
+        if database.owner_token is None:
+            raise OspdOpenvasError(
+                'Owned result claim requires an owner token.'
+            )
+        for _ in range(DATABASE_RELEASE_RETRIES):
+            try:
+                with self.ctx.pipeline() as pipe:
+                    pipe.watch(DBINDEX_NAME)
+                    if (
+                        pipe.hget(DBINDEX_NAME, database.index)
+                        != database.owner_token
+                    ):
+                        pipe.unwatch()
+                        raise OspdOpenvasError(
+                            'Redis result source owner changed before claim.'
+                        )
+                    pipe.multi()
+                    pipe.execute_command('SELECT', database.index)
+                    pipe.eval(
+                        CLAIM_RESULT_ITEMS_SCRIPT,
+                        10,
+                        database.RESULT_KEY,
+                        database.RESULT_CLAIM_KEY,
+                        database.RESULT_CLAIM_ID_KEY,
+                        database.RESULT_PENDING_COUNT_KEY,
+                        database.RESULT_PENDING_BYTES_KEY,
+                        database.RESULT_ADMISSION_FAILURE_KEY,
+                        database.RESULT_ADMISSION_IDS_KEY,
+                        database.RESULT_CLAIM_ADMISSION_IDS_KEY,
+                        database.RESULT_SIZES_KEY,
+                        database.RESULT_CLAIM_SIZES_KEY,
+                        max_items,
+                        max_bytes,
+                        max_item_bytes,
+                        str(uuid.uuid4()),
+                    )
+                    pipe.execute_command('SELECT', self.DEFAULT_INDEX)
+                    response = pipe.execute()[-2]
+                    if not response:
+                        return None, []
+                    return str(response[0]), list(response[1:])
+            except WatchError:
+                continue
+        raise OspdOpenvasError(
+            'Redis result source claim contention did not settle.'
+        )
+
+    def current_owned_result_claim_id(self, database: KbDB) -> Optional[str]:
+        """Read a claim identity while fencing the source owner in DB 0."""
+        if database.owner_token is None:
+            raise OspdOpenvasError(
+                'Owned claim lookup requires an owner token.'
+            )
+        for _ in range(DATABASE_RELEASE_RETRIES):
+            try:
+                with self.ctx.pipeline() as pipe:
+                    pipe.watch(DBINDEX_NAME)
+                    if (
+                        pipe.hget(DBINDEX_NAME, database.index)
+                        != database.owner_token
+                    ):
+                        pipe.unwatch()
+                        raise OspdOpenvasError(
+                            'Redis result source owner changed before lookup.'
+                        )
+                    pipe.multi()
+                    pipe.execute_command('SELECT', database.index)
+                    pipe.get(database.RESULT_CLAIM_ID_KEY)
+                    pipe.execute_command('SELECT', self.DEFAULT_INDEX)
+                    claim_id = pipe.execute()[-2]
+                    return str(claim_id) if claim_id else None
+            except WatchError:
+                continue
+        raise OspdOpenvasError(
+            'Redis result source lookup contention did not settle.'
+        )
+
+    def ack_owned_result_claim_state(
+        self, database: KbDB, claim_id: str
+    ) -> ResultClaimAck:
+        """Acknowledge a result claim under the original DB 0 owner token."""
+        if database.owner_token is None:
+            raise OspdOpenvasError('Owned result ack requires an owner token.')
+        if not claim_id:
+            raise OspdOpenvasError(
+                'Owned result ack requires a claim identity.'
+            )
+        for _ in range(DATABASE_RELEASE_RETRIES):
+            try:
+                with self.ctx.pipeline() as pipe:
+                    pipe.watch(DBINDEX_NAME)
+                    if (
+                        pipe.hget(DBINDEX_NAME, database.index)
+                        != database.owner_token
+                    ):
+                        pipe.unwatch()
+                        raise OspdOpenvasError(
+                            'Redis result source owner changed before ack.'
+                        )
+                    pipe.multi()
+                    pipe.execute_command('SELECT', database.index)
+                    pipe.eval(
+                        ACK_RESULT_CLAIM_SCRIPT,
+                        7,
+                        database.RESULT_CLAIM_KEY,
+                        database.RESULT_CLAIM_ID_KEY,
+                        database.RESULT_PENDING_COUNT_KEY,
+                        database.RESULT_PENDING_BYTES_KEY,
+                        database.RESULT_ADMISSION_FAILURE_KEY,
+                        database.RESULT_CLAIM_ADMISSION_IDS_KEY,
+                        database.RESULT_CLAIM_SIZES_KEY,
+                        claim_id,
+                    )
+                    pipe.execute_command('SELECT', self.DEFAULT_INDEX)
+                    outcome = pipe.execute()[-2]
+                    try:
+                        return ResultClaimAck(int(outcome))
+                    except (TypeError, ValueError) as error:
+                        raise OspdOpenvasError(
+                            'Scanner Redis returned an invalid result-claim '
+                            'outcome.'
+                        ) from error
+            except WatchError:
+                continue
+        raise OspdOpenvasError(
+            'Redis result source acknowledgement contention did not settle.'
+        )
+
+    def reserved_parent_databases(self) -> Iterator[Tuple[str, KbDB]]:
+        """Yield every bounded, owner-verified parent reserved in Redis DB 0."""
+        reservations = self.ctx.hscan_iter(
+            DBINDEX_NAME, count=min(self.max_database_index, 128)
+        )
+        for reservation_count, (
+            raw_index,
+            raw_owner_token,
+        ) in enumerate(reservations, start=1):
+            if reservation_count >= self.max_database_index:
+                raise OspdOpenvasError(
+                    'Redis database reservation state is invalid.'
+                )
+            try:
+                index = int(raw_index)
+            except (TypeError, ValueError) as error:
+                raise OspdOpenvasError(
+                    'Redis database reservation index is invalid.'
+                ) from error
+            if index <= 0 or index >= self.max_database_index:
+                raise OspdOpenvasError(
+                    'Redis database reservation index is out of range.'
+                )
+            owner_token = self.validate_owner_token(raw_owner_token)
+            probe = KbDB(index, owner_token=owner_token)
+            _, kind, scan_id = probe.recovery_identity()
+            if kind == 'child':
+                continue
+            if kind is None and not probe.ctx.dbsize():
+                continue
+            if not isinstance(scan_id, str):
+                raise OspdOpenvasError(
+                    f'Redis database {index} has invalid recovery scan identity.'
+                )
+            database = self.open_owned_parent_database(
+                index, owner_token, scan_id
+            )
+            yield scan_id, database
+
     def find_kb_database_by_scan_id(
         self, scan_id: str
     ) -> Tuple[Optional[str], Optional["KbDB"]]:
@@ -1477,7 +1718,18 @@ class MainDB(BaseDB):
         return owner_token
 
     def reservation_token(self, index: int) -> str:
+        owner_token = self.reservation_token_if_present(index)
+        if owner_token is not None:
+            return owner_token
+        raise OspdOpenvasError(
+            f'Redis database {index} has no valid owner token.'
+        )
+
+    def reservation_token_if_present(self, index: int) -> Optional[str]:
+        """Return a validated owner token, or None for a released namespace."""
         owner_token = self.ctx.hget(DBINDEX_NAME, index)
+        if owner_token is None:
+            return None
         try:
             return self.validate_owner_token(owner_token)
         except OspdOpenvasError:

@@ -28,6 +28,8 @@ from ospd.result_spool import (
     SpoolLimits,
 )
 
+OWNER_TOKEN = 'owner-token'
+
 
 class ResultSpoolTestCase(unittest.TestCase):
     def setUp(self):
@@ -53,6 +55,7 @@ class ResultSpoolTestCase(unittest.TestCase):
             scan_id,
             0,
             claim_id,
+            OWNER_TOKEN,
             self.results(),
             count_dead=count_dead,
             **kwargs,
@@ -105,28 +108,91 @@ class ResultSpoolTestCase(unittest.TestCase):
             )
             self.assertEqual(duplicate.state, ClaimState.ACKED)
 
+    def test_late_ack_does_not_prune_its_own_tombstone(self):
+        limits = SpoolLimits(max_acked_tombstones=2)
+        with self.spool(limits) as spool:
+            oldest = self.stage(spool, scan_id='old', claim_id='old')
+            spool.expose_next('old')
+            spool.begin_ack('old', oldest.osp_batch_id, 0, 'old')
+            newer = []
+            for scan_id in ('new-1', 'new-2'):
+                claim = self.stage(spool, scan_id=scan_id, claim_id=scan_id)
+                newer.append(claim)
+                self.acknowledge(spool, claim)
+
+            completed = spool.complete_ack('old', oldest.osp_batch_id, 0, 'old')
+
+            self.assertEqual(completed.state, ClaimState.ACKED)
+            self.assertIsNotNone(spool.get_batch('old', oldest.osp_batch_id))
+            self.assertIsNone(spool.get_batch('new-1', newer[0].osp_batch_id))
+            self.assertIsNotNone(
+                spool.get_batch('new-2', newer[1].osp_batch_id)
+            )
+
+    def test_concurrent_duplicate_complete_ack_is_idempotent(self):
+        with self.spool() as spool:
+            claim = self.stage(spool)
+            spool.expose_next('scan-1')
+            spool.begin_ack(
+                'scan-1',
+                claim.osp_batch_id,
+                0,
+                claim.source_claim_id,
+            )
+
+            def complete(_):
+                return spool.complete_ack(
+                    'scan-1',
+                    claim.osp_batch_id,
+                    0,
+                    claim.source_claim_id,
+                ).state
+
+            with ThreadPoolExecutor(max_workers=6) as executor:
+                states = list(executor.map(complete, range(12)))
+
+            self.assertEqual(states, [ClaimState.ACKED] * 12)
+
     def test_idempotent_stage_normalizes_mapping_order_and_rejects_conflict(
         self,
     ):
         with self.spool() as spool:
             first = spool.stage_claim(
-                'scan-1', 0, 'claim-1', [{'b': 2, 'a': {'x': True}}]
+                'scan-1',
+                0,
+                'claim-1',
+                OWNER_TOKEN,
+                [{'b': 2, 'a': {'x': True}}],
             )
             same = spool.stage_claim(
-                'scan-1', 0, 'claim-1', [{'a': {'x': True}, 'b': 2}]
+                'scan-1',
+                0,
+                'claim-1',
+                OWNER_TOKEN,
+                [{'a': {'x': True}, 'b': 2}],
             )
             self.assertEqual(first.osp_batch_id, same.osp_batch_id)
             self.assertEqual(same.results, [{'a': {'x': True}, 'b': 2}])
             with self.assertRaises(ResultSpoolConflictError):
-                spool.stage_claim('scan-1', 0, 'claim-1', self.results('other'))
+                spool.stage_claim(
+                    'scan-1', 0, 'claim-1', OWNER_TOKEN, self.results('other')
+                )
             with self.assertRaises(ResultSpoolConflictError):
-                spool.stage_claim('other-scan', 0, 'claim-1', self.results())
+                spool.stage_claim(
+                    'other-scan', 0, 'claim-1', OWNER_TOKEN, self.results()
+                )
+            with self.assertRaises(ResultSpoolConflictError):
+                spool.stage_claim(
+                    'scan-1', 0, 'claim-1', 'other-owner', self.results()
+                )
 
     def test_concurrent_duplicate_stage_gets_one_stable_batch(self):
         with self.spool() as spool:
 
             def stage_once(_):
-                return spool.stage_claim('scan-1', 0, 'claim-1', self.results())
+                return spool.stage_claim(
+                    'scan-1', 0, 'claim-1', OWNER_TOKEN, self.results()
+                )
 
             with ThreadPoolExecutor(max_workers=6) as executor:
                 claims = list(executor.map(stage_once, range(12)))
@@ -140,7 +206,9 @@ class ResultSpoolTestCase(unittest.TestCase):
             child = os.fork()
             if child == 0:
                 try:
-                    spool.stage_claim('scan-1', 0, 'claim-1', self.results())
+                    spool.stage_claim(
+                        'scan-1', 0, 'claim-1', OWNER_TOKEN, self.results()
+                    )
                 except Exception:  # pragma: no cover - child status is proof
                     os._exit(1)
                 os._exit(0)
@@ -148,7 +216,9 @@ class ResultSpoolTestCase(unittest.TestCase):
             _, status = os.waitpid(child, 0)
             self.assertTrue(os.WIFEXITED(status))
             self.assertEqual(os.WEXITSTATUS(status), 0)
-            replay = spool.stage_claim('scan-1', 0, 'claim-1', self.results())
+            replay = spool.stage_claim(
+                'scan-1', 0, 'claim-1', OWNER_TOKEN, self.results()
+            )
             self.assertEqual(replay.state, ClaimState.STAGED)
             self.assertEqual(len(spool.recovery_records()), 1)
 
@@ -197,14 +267,20 @@ class ResultSpoolTestCase(unittest.TestCase):
         )
         with self.spool(limits) as spool:
             exact = [{'name': 'a'}, {'name': 'b'}]
-            claim = spool.stage_claim('scan-1', 0, 'one', exact)
+            claim = spool.stage_claim('scan-1', 0, 'one', OWNER_TOKEN, exact)
             self.assertEqual(len(claim.results), 2)
             with self.assertRaises(ResultSpoolCapacityError):
-                spool.stage_claim('scan-1', 0, 'two', self.results())
+                spool.stage_claim(
+                    'scan-1', 0, 'two', OWNER_TOKEN, self.results()
+                )
             with self.assertRaises(ResultSpoolCapacityError):
-                spool.stage_claim('scan-2', 0, 'three', [{'value': 'x' * 63}])
+                spool.stage_claim(
+                    'scan-2', 0, 'three', OWNER_TOKEN, [{'value': 'x' * 63}]
+                )
             self.acknowledge(spool, claim)
-            accepted = spool.stage_claim('scan-1', 0, 'two', self.results())
+            accepted = spool.stage_claim(
+                'scan-1', 0, 'two', OWNER_TOKEN, self.results()
+            )
             self.assertEqual(accepted.state, ClaimState.STAGED)
 
     def test_count_metadata_and_pending_scan_state(self):
@@ -247,14 +323,14 @@ class ResultSpoolTestCase(unittest.TestCase):
             max_global_pending_claims=2,
         )
         with self.spool(limits) as spool:
-            first = spool.stage_claim('scan-1', 0, 'one', [])
+            first = spool.stage_claim('scan-1', 0, 'one', OWNER_TOKEN, [])
             with self.assertRaises(ResultSpoolCapacityError):
-                spool.stage_claim('scan-1', 0, 'two', [])
-            spool.stage_claim('scan-2', 0, 'three', [])
+                spool.stage_claim('scan-1', 0, 'two', OWNER_TOKEN, [])
+            spool.stage_claim('scan-2', 0, 'three', OWNER_TOKEN, [])
             with self.assertRaises(ResultSpoolCapacityError):
-                spool.stage_claim('scan-3', 0, 'four', [])
+                spool.stage_claim('scan-3', 0, 'four', OWNER_TOKEN, [])
             self.acknowledge(spool, first)
-            accepted = spool.stage_claim('scan-3', 0, 'four', [])
+            accepted = spool.stage_claim('scan-3', 0, 'four', OWNER_TOKEN, [])
             self.assertEqual(accepted.state, ClaimState.STAGED)
 
     def test_delete_requires_no_pending_claims(self):
@@ -269,7 +345,9 @@ class ResultSpoolTestCase(unittest.TestCase):
     def test_rejects_malformed_results_and_corrupt_digest(self):
         with self.spool() as spool:
             with self.assertRaises(ResultSpoolSerializationError):
-                spool.stage_claim('scan-1', 0, 'bad', [{'bad': {1, 2}}])
+                spool.stage_claim(
+                    'scan-1', 0, 'bad', OWNER_TOKEN, [{'bad': {1, 2}}]
+                )
             claim = self.stage(spool)
         connection = sqlite3.connect(str(self.path))
         connection.execute(
@@ -289,7 +367,7 @@ class ResultSpoolTestCase(unittest.TestCase):
             self.assertEqual(health['journal_mode'], 'wal')
             self.assertEqual(health['synchronous'], 2)
             self.assertEqual(health['foreign_keys'], 1)
-            self.assertEqual(health['user_version'], 1)
+            self.assertEqual(health['user_version'], 2)
             for candidate in (self.root, self.path):
                 self.assertEqual(
                     stat.S_IMODE(candidate.stat().st_mode) & 0o077, 0
@@ -306,14 +384,63 @@ class ResultSpoolTestCase(unittest.TestCase):
         with self.assertRaises(ResultSpoolIOError):
             self.spool()
 
+    def test_version_one_schema_migrates_owner_token_column(self):
+        self.root.mkdir(mode=0o700)
+        connection = sqlite3.connect(self.path)
+        connection.executescript(
+            ResultSpool._SCHEMA.replace('        owner_token TEXT,\n', '')
+        )
+        connection.execute('PRAGMA user_version = 1')
+        connection.commit()
+        connection.close()
+        self.path.chmod(0o600)
+
+        with self.spool() as spool:
+            self.assertEqual(spool.health()['user_version'], 2)
+        connection = sqlite3.connect(self.path)
+        columns = {
+            row[1] for row in connection.execute('PRAGMA table_info(claims)')
+        }
+        connection.close()
+        self.assertIn('owner_token', columns)
+
+    def test_crash_created_version_zero_old_schema_migrates(self):
+        self.root.mkdir(mode=0o700)
+        connection = sqlite3.connect(self.path)
+        connection.executescript(
+            ResultSpool._SCHEMA.replace('        owner_token TEXT,\n', '')
+        )
+        connection.commit()
+        connection.close()
+        self.path.chmod(0o600)
+
+        with self.spool() as spool:
+            self.assertEqual(spool.health()['user_version'], 2)
+            claim = self.stage(spool)
+            self.assertEqual(claim.owner_token, OWNER_TOKEN)
+
+    def test_version_two_schema_missing_owner_column_fails_closed(self):
+        self.root.mkdir(mode=0o700)
+        connection = sqlite3.connect(self.path)
+        connection.executescript(
+            ResultSpool._SCHEMA.replace('        owner_token TEXT,\n', '')
+        )
+        connection.execute('PRAGMA user_version = 2')
+        connection.commit()
+        connection.close()
+        self.path.chmod(0o600)
+
+        with self.assertRaises(ResultSpoolCorruptionError):
+            self.spool()
+
     def test_rejects_invalid_state_and_identity_inputs(self):
         with self.spool() as spool:
             with self.assertRaises(ResultSpoolValidationError):
-                spool.stage_claim('', 0, 'claim', [])
+                spool.stage_claim('', 0, 'claim', OWNER_TOKEN, [])
             with self.assertRaises(ResultSpoolValidationError):
-                spool.stage_claim('scan', -1, 'claim', [])
+                spool.stage_claim('scan', -1, 'claim', OWNER_TOKEN, [])
             with self.assertRaises(ResultSpoolValidationError):
-                spool.stage_claim('scan', 0, '', [])
+                spool.stage_claim('scan', 0, '', OWNER_TOKEN, [])
 
 
 if __name__ == '__main__':

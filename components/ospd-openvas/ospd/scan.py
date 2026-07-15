@@ -98,8 +98,31 @@ class ScanCollection:
         for record in records:
             first_claim.setdefault(record.scan_id, record.source_claim_id)
         for scan_id, state in pending.items():
-            if self.id_exists(scan_id):
-                continue
+            self.restore_interrupted_scan(
+                scan_id,
+                first_claim_id=first_claim.get(scan_id, ''),
+                count_dead=state.count_dead,
+                count_total=state.count_total,
+                count_excluded=state.count_excluded,
+            )
+
+    def restore_interrupted_scan(
+        self,
+        scan_id: str,
+        *,
+        first_claim_id: str = '',
+        count_dead: int = 0,
+        count_total: Optional[int] = None,
+        count_excluded: Optional[int] = None,
+    ) -> bool:
+        """Restore one bounded result-only view for owned Redis recovery."""
+        if self.id_exists(scan_id):
+            return False
+        if self.data_manager is None:
+            raise RuntimeError('scan collection is not initialized')
+        with self.scan_collection_lock:
+            if self.scans_table.get(scan_id) is not None:
+                return False
             scan_info = self.data_manager.dict()
             scan_info['scan_id'] = scan_id
             scan_info['status'] = ScanStatus.INTERRUPTED
@@ -109,13 +132,13 @@ class ScanCollection:
             scan_info['results'] = []
             scan_info['temp_results'] = []
             scan_info['result_batch_id'] = ''
-            scan_info['last_result_claim_id'] = first_claim.get(scan_id, '')
+            scan_info['last_result_claim_id'] = first_claim_id
             scan_info['progress'] = ScanProgress.FINISHED.value
             scan_info['target_progress'] = {}
             scan_info['count_alive'] = 0
-            scan_info['count_dead'] = state.count_dead
-            scan_info['count_total'] = state.count_total or 0
-            scan_info['count_excluded'] = state.count_excluded or 0
+            scan_info['count_dead'] = count_dead
+            scan_info['count_total'] = count_total or 0
+            scan_info['count_excluded'] = count_excluded or 0
             scan_info['excluded_simplified'] = None
             scan_info['evidence_incomplete'] = True
             scan_info['evidence_incomplete_reason'] = (
@@ -131,6 +154,7 @@ class ScanCollection:
             scan_info['options'] = {}
             scan_info['vts'] = {}
             self.scans_table[scan_id] = scan_info
+            return True
 
     def add_result(
         self,
@@ -179,6 +203,7 @@ class ScanCollection:
         count_total: Optional[int] = None,
         count_excluded: Optional[int] = None,
         redis_db: Optional[int] = None,
+        owner_token: Optional[str] = None,
         incomplete_reason: Optional[str] = None,
     ) -> bool:
         """Atomically apply one parsed scanner result batch and its counts."""
@@ -186,10 +211,13 @@ class ScanCollection:
         if claim_id and self.result_spool is not None:
             if redis_db is None:
                 raise ValueError('redis_db is required for a durable claim')
+            if owner_token is None:
+                raise ValueError('owner_token is required for a durable claim')
             self.result_spool.stage_claim(
                 scan_id,
                 redis_db,
                 claim_id,
+                owner_token,
                 rows,
                 count_dead=total_dead,
                 count_total=count_total,

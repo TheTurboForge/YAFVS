@@ -1162,6 +1162,39 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertTrue(turbovasctl.compose_app_up_transient_error("removal of container abc123 is already in progress"))
         self.assertFalse(turbovasctl.compose_app_up_transient_error("database migration failed"))
 
+    def test_gvmd_database_version_finding_matches_source_schema(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cmake = root / "components" / "gvmd" / "CMakeLists.txt"
+            cmake.parent.mkdir(parents=True)
+            cmake.write_text("set(GVMD_DATABASE_VERSION 287)\n", encoding="utf-8")
+            with unittest.mock.patch.object(
+                turbovasctl,
+                "psql",
+                return_value=subprocess.CompletedProcess([], 0, "287\n", ""),
+            ):
+                result = turbovasctl.gvmd_database_version_finding(root)
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["details"]["expected"], 287)
+        self.assertEqual(result["details"]["observed"], "287")
+
+    def test_gvmd_database_version_finding_rejects_stale_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cmake = root / "components" / "gvmd" / "CMakeLists.txt"
+            cmake.parent.mkdir(parents=True)
+            cmake.write_text("set(GVMD_DATABASE_VERSION 287)\n", encoding="utf-8")
+            with unittest.mock.patch.object(
+                turbovasctl,
+                "psql",
+                return_value=subprocess.CompletedProcess([], 0, "286\n", ""),
+            ):
+                result = turbovasctl.gvmd_database_version_finding(root)
+
+        self.assertEqual(result["status"], "fail")
+        self.assertIn("without proving", result["message"])
+
     def test_runtime_app_up_validates_mount_graph_before_infrastructure(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         function = source[source.index("def _command_runtime_app_up_unlocked"):source.index("def command_runtime_app_up")]

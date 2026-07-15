@@ -15157,6 +15157,12 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertIn("else mqtt.Client()", script)
         self.assertNotIn("TURBOVAS_MQTT_OSPD_PASSWORD", script)
 
+    def test_mqtt_health_probe_uses_file_backed_credentials(self):
+        self.assertEqual(
+            turbovasctl.mqtt_health_probe_command(),
+            ["mosquitto_pub", "-o", "/tmp/turbovas-mqtt-health.options"],
+        )
+
     @unittest.mock.patch.object(turbovasctl, "container_running", return_value=True)
     @unittest.mock.patch.object(
         turbovasctl,

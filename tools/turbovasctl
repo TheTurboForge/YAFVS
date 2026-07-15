@@ -7920,6 +7920,11 @@ def refresh_mqtt_broker(repo_root: Path) -> dict[str, Any]:
     )
 
 
+def mqtt_health_probe_command() -> list[str]:
+    """Return the broker's file-backed authenticated health probe."""
+    return ["mosquitto_pub", "-o", "/tmp/turbovas-mqtt-health.options"]
+
+
 def log_review_matches(lines: Iterable[str], service: str | None = None) -> list[dict[str, Any]]:
     matches: list[dict[str, Any]] = []
     material = list(lines)
@@ -35466,7 +35471,7 @@ def command_runtime_smoke(repo_root: Path) -> dict[str, Any]:
         findings.append(finding("pass" if result.returncode == 0 and "PONG" in result.stdout else "fail", "redis-openvas.ready", f"scanner Redis Unix socket ping exit code {result.returncode}.", str(scanner_redis_socket_path(repo_root)), {"output_tail": result.stdout.splitlines()[-20:]}))
         findings.append(finding("pass" if scanner_redis_socket_path(repo_root).is_socket() else "fail", "redis-openvas.socket", "scanner Redis Unix socket exists." if scanner_redis_socket_path(repo_root).is_socket() else "scanner Redis Unix socket is missing.", str(scanner_redis_socket_path(repo_root))))
     if container_running(repo_root, "mosquitto"):
-        result = exec_in_service(repo_root, "mosquitto", ["mosquitto_pub", "-h", "127.0.0.1", "-p", "1883", "-t", "turbovas/smoke", "-m", "ok"])
+        result = exec_in_service(repo_root, "mosquitto", mqtt_health_probe_command())
         findings.append(finding("pass" if result.returncode == 0 else "fail", "mosquitto.ready", f"mosquitto_pub broker check exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-20:]}))
     return make_result("runtime-smoke", repo_root, "Runtime smoke checks completed.", findings, [str(runtime_dir(repo_root))])
 

@@ -2,6 +2,7 @@
  * SPDX-FileCopyrightText: Jelmer Vernooij 2004-2005
  * SPDX-FileCopyrightText: Andrew Tridgell 2003-2005
  * SPDX-FileCopyrightText: Tim Potter 2003
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
@@ -609,6 +610,7 @@ static void dcerpc_recv_data(struct dcerpc_connection *conn, DATA_BLOB *blob, NT
 	if (!NT_STATUS_IS_OK(status)) {
 		data_blob_free(blob);
 		dcerpc_connection_dead(conn, status);
+		return;
 	}
 
 	dcerpc_request_recv_data(conn, blob, &pkt);

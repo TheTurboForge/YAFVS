@@ -1,6 +1,7 @@
 /*
  * SPDX-FileCopyrightText: Stefan Metzmacher <metze@samba.org> 2004-2005
  * SPDX-FileCopyrightText: Andrew Bartlett <abartlet@samba.org> 2004-2005
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
@@ -168,9 +169,8 @@ static NTSTATUS gensec_gssapi_start(struct gensec_security *gensec_security)
 	if (lp_parm_bool(-1, "gensec_gssapi", "mutual", True)) {
 		gensec_gssapi_state->want_flags |= GSS_C_MUTUAL_FLAG;
 	}
-	if (lp_parm_bool(-1, "gensec_gssapi", "delegation", True)) {
-		gensec_gssapi_state->want_flags |= GSS_C_DELEG_FLAG;
-	}
+	/* Scanner authentication must never delegate reusable credentials to a
+	 * target. */
 	if (lp_parm_bool(-1, "gensec_gssapi", "replay", True)) {
 		gensec_gssapi_state->want_flags |= GSS_C_REPLAY_FLAG;
 	}

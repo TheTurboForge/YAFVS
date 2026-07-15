@@ -49,7 +49,7 @@ target_openvas_ssh_credential_db (target_t target)
     {
       iterator_t iter, ssh_elevate_iter;
       const char *type;
-      char *ssh_port;
+      char *host_key_pins, *ssh_port;
       scan_credential_t *scan_credential;
 
       init_credential_iterator_one (&iter, credential);
@@ -78,6 +78,16 @@ target_openvas_ssh_credential_db (target_t target)
       scan_credential_set_auth_data (scan_credential,
                                      "password",
                                      credential_iterator_password (&iter));
+      host_key_pins = target_ssh_host_key_pins (target);
+      if (host_key_pins)
+        {
+          gchar *base64 =
+            g_base64_encode ((guchar *) host_key_pins, strlen (host_key_pins));
+          scan_credential_set_auth_data (scan_credential,
+                                         "host_key_pins_b64", base64);
+          g_free (base64);
+          g_free (host_key_pins);
+        }
 
       if (strcmp (type, "usk") == 0)
         {

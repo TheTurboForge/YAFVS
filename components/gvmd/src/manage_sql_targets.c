@@ -264,6 +264,24 @@ target_ssh_port (target_t target)
 }
 
 /**
+ * @brief Return the SSH server host-key pins associated with a target.
+ *
+ * @param[in]  target  Target.
+ *
+ * @return Newly allocated canonical JSON pin data, or NULL.
+ */
+char *
+target_ssh_host_key_pins (target_t target)
+{
+  if (target == 0)
+    return NULL;
+
+  return sql_string ("SELECT host_key_pins FROM targets_login_data"
+                     " WHERE target = %llu AND type = 'ssh';",
+                     target);
+}
+
+/**
  * @brief Get a credential from a target.
  *
  * @param[in]  target         The target.
@@ -395,8 +413,9 @@ copy_target (const char* name, const char* comment, const char *target_id,
   if (ret)
     return ret;
 
-  sql ("INSERT INTO targets_login_data (target, type, credential, port)"
-       " SELECT %llu, type, credential, port"
+  sql ("INSERT INTO targets_login_data"
+       " (target, type, credential, port, host_key_pins)"
+       " SELECT %llu, type, credential, port, host_key_pins"
        "   FROM targets_login_data"
        "  WHERE target = %llu;",
        *new_target, old_target);
@@ -502,9 +521,11 @@ delete_target (const char *target_id, int ultimate)
 
       /* Copy login data */
       sql ("INSERT INTO targets_trash_login_data"
-           " (target, type, credential, port, credential_location)"
+           " (target, type, credential, port, credential_location,"
+           "  host_key_pins)"
            " SELECT %llu, type, credential, port, "
            G_STRINGIFY (LOCATION_TABLE)
+           ", host_key_pins"
            "   FROM targets_login_data WHERE target = %llu;",
            trash_target, target);
 

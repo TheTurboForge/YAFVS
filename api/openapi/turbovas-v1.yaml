@@ -8188,11 +8188,39 @@ components:
           type: string
           format: uuid
           description: Existing credential to assign. The credential must be owned by the direct operator and have a type allowed for the selected target credential use.
+    TargetSshCredentialLinkPatchRequest:
+      type: object
+      additionalProperties: false
+      required: [id, host_key_pins]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Existing SSH credential to assign. The credential must be owned by the direct operator and have type up or usk.
         port:
           type: integer
           minimum: 1
           maximum: 65535
-          description: SSH authentication port. Only supported for credentials.ssh; omitted SSH ports default to 22.
+          description: SSH authentication port; omitted ports default to 22.
+        host_key_pins:
+          type: array
+          minItems: 1
+          maxItems: 4095
+          description: Explicit per-IP SSH server host-key pins. Credentialed SSH scans fail closed when the current target IP has no matching SHA-256 pin.
+          items:
+            $ref: '#/components/schemas/SshHostKeyPin'
+    SshHostKeyPin:
+      type: object
+      additionalProperties: false
+      required: [host, fingerprint]
+      properties:
+        host:
+          type: string
+          description: Canonical IPv4 or IPv6 address of one target endpoint.
+        fingerprint:
+          type: string
+          pattern: '^SHA256:[A-Za-z0-9+/]{43}$'
+          description: Standard unpadded OpenSSH SHA-256 host-key fingerprint.
     TargetCredentialsCreateRequest:
       type: object
       additionalProperties: false
@@ -8200,7 +8228,7 @@ components:
       description: Target credential references to assign during target creation. Each present field sets that credential use to an existing credential reference. Null clear actions and secret material are never accepted.
       properties:
         ssh:
-          $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+          $ref: '#/components/schemas/TargetSshCredentialLinkPatchRequest'
         ssh_elevate:
           $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
         smb:
@@ -8220,7 +8248,7 @@ components:
         ssh:
           nullable: true
           allOf:
-            - $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+            - $ref: '#/components/schemas/TargetSshCredentialLinkPatchRequest'
         ssh_elevate:
           nullable: true
           allOf:
@@ -10574,6 +10602,11 @@ components:
           type: integer
           nullable: true
           description: Credential-use port where relevant, currently mainly SSH.
+        host_key_pins:
+          type: array
+          description: Explicit SSH server host-key pins. Present only on the SSH credential reference.
+          items:
+            $ref: '#/components/schemas/SshHostKeyPin'
     TargetCredentials:
       type: object
       properties:

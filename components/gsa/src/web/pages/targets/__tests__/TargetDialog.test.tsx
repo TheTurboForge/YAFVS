@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -331,6 +332,7 @@ describe('TargetDialog tests', () => {
       excludeHosts: '',
       hosts: '123.455.67.434',
       hostsCount: undefined,
+      hostsFilter: undefined,
       inUse: false,
       name: 'ross',
       port: 22,
@@ -341,6 +343,7 @@ describe('TargetDialog tests', () => {
       snmpCredentialId: undefined,
       sshCredentialId: undefined,
       sshElevateCredentialId: undefined,
+      sshHostKeyPins: '',
       krb5CredentialId: undefined,
       targetExcludeSource: 'manual',
       targetSource: 'manual',
@@ -368,6 +371,7 @@ describe('TargetDialog tests', () => {
         reverseLookupUnify={false}
         smbCredentialId="2345"
         sshCredentialId="2345"
+        sshHostKeyPins="192.0.2.10 SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
         onClose={handleClose}
         onNewCredentialsClick={handleCreate}
         onNewPortListClick={handleCreate}
@@ -377,6 +381,9 @@ describe('TargetDialog tests', () => {
     );
 
     expect(screen.getDialogContent()).toHaveTextContent('Elevate privileges');
+    expect(screen.getByName('sshHostKeyPins')).toHaveValue(
+      '192.0.2.10 SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    );
 
     const selects = screen.queryAllSelectElements();
     expect(selects.length).toEqual(6); // Should have 6 selects (Kerberos is disabled by default)
@@ -670,6 +677,7 @@ describe('TargetDialog tests', () => {
       portListId: DEFAULT_PORT_LIST_ID,
       reverseLookupOnly: false,
       reverseLookupUnify: false,
+      sshHostKeyPins: '',
       smbCredentialId: undefined,
       snmpCredentialId: undefined,
       sshCredentialId: undefined,

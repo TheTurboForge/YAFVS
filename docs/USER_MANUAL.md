@@ -352,6 +352,14 @@ credentials, port lists, alive-test behavior, and scan constraints. A task runs 
 scan against a target with a scan configuration and scanner. Raw task reports
 remain available as technical evidence and provenance.
 
+SSH-authenticated targets require an explicit OpenSSH SHA-256 server host-key
+pin for each target IP. Enter pins as `IP SHA256:<fingerprint>` in the target's
+SSH credential settings. This is a fail-closed trust boundary: missing,
+malformed, or mismatched pins prevent credentialed SSH authentication rather
+than accepting an unverified server. Existing SSH-authenticated targets must be
+updated with verified pins after upgrading to this behavior; multiple pins for
+one IP may be supplied during controlled key rotation.
+
 Task creation is deliberately streamlined. TurboVAS does not expose inherited
 task wizards, import-task creation, task resume semantics, or per-task switches
 for alterability and asset processing. Tasks are always alterable, scan results

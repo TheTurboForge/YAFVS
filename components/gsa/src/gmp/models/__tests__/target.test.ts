@@ -104,7 +104,16 @@ describe('Target model tests', () => {
     const target2 = Target.fromElement({ssh_credential: {_id: ''}});
     const target3 = Target.fromElement({});
     const target4 = Target.fromElement({
-      ssh_credential: {_id: '456', port: 2222},
+      ssh_credential: {
+        _id: '456',
+        port: 2222,
+        host_key_pins: [
+          {
+            host: '192.0.2.10',
+            fingerprint: 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+          },
+        ],
+      },
     });
 
     expect(target1.sshCredential).toBeInstanceOf(Model);
@@ -116,6 +125,12 @@ describe('Target model tests', () => {
     expect(target4.sshCredential?.entityType).toEqual('credential');
     expect(target4.sshCredential?.id).toEqual('456');
     expect(target4.sshCredential?.port).toEqual(2222);
+    expect(target4.sshCredential?.hostKeyPins).toEqual([
+      {
+        host: '192.0.2.10',
+        fingerprint: 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      },
+    ]);
   });
 
   test('should parse ssh elevate credentials', () => {
@@ -265,7 +280,6 @@ describe('Target model tests', () => {
     expect(task?.entityType).toEqual('task');
     expect(task?.id).toEqual('123');
     expect(task?.name).toEqual('task1');
-
   });
 
   test('should parse alive_tests', () => {

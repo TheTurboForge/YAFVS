@@ -159,6 +159,7 @@ const TargetComponent = ({
   const [sshElevateCredentialId, setSshElevateCredentialId] = useState<
     string | undefined
   >(undefined);
+  const [sshHostKeyPins, setSshHostKeyPins] = useState('');
   const [name, setName] = useState<string | undefined>(undefined);
   const [inUse, setInUse] = useState<boolean>(false);
   const [excludeHosts, setExcludeHosts] = useState<string | undefined>(
@@ -299,6 +300,11 @@ const TargetComponent = ({
       setSnmpCredentialId(entity.snmpCredential?.id);
       setSshCredentialId(entity.sshCredential?.id);
       setSshElevateCredentialId(entity.sshElevateCredential?.id);
+      setSshHostKeyPins(
+        (entity.sshCredential?.hostKeyPins ?? [])
+          .map(pin => `${pin.host} ${pin.fingerprint}`)
+          .join('\n'),
+      );
       setPortListId(entity.portList?.id);
       setName(entity.name);
       setInUse(entity.isInUse());
@@ -322,6 +328,7 @@ const TargetComponent = ({
       setSnmpCredentialId(undefined);
       setSshCredentialId(undefined);
       setSshElevateCredentialId(undefined);
+      setSshHostKeyPins('');
       setPortListId(DEFAULT_PORT_LIST_ID);
       setInUse(false);
       setExcludeHosts(undefined);
@@ -506,6 +513,7 @@ const TargetComponent = ({
           snmpCredentialId={snmpCredentialId}
           sshCredentialId={sshCredentialId}
           sshElevateCredentialId={sshElevateCredentialId}
+          sshHostKeyPins={sshHostKeyPins}
           targetExcludeSource={targetExcludeSource}
           targetSource={targetSource}
           title={targetTitle}

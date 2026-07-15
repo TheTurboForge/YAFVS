@@ -4,6 +4,7 @@
 
 use crate::{
     errors::ApiError,
+    ssh_host_key_pins::SshHostKeyPin,
     target_alive_tests::validate_alive_tests,
     target_host_validation::MAX_TARGET_HOSTS,
     target_text_validation::MAX_TARGET_TEXT_BYTES,
@@ -36,6 +37,18 @@ fn credential_link(id: &str, port: Option<i32>) -> TargetCredentialLinkPatchRequ
     TargetCredentialLinkPatchRequest {
         id: id.to_string(),
         port,
+        host_key_pins: Vec::new(),
+    }
+}
+
+fn ssh_credential_link(id: &str, port: Option<i32>) -> TargetCredentialLinkPatchRequest {
+    TargetCredentialLinkPatchRequest {
+        id: id.to_string(),
+        port,
+        host_key_pins: vec![SshHostKeyPin {
+            host: "192.0.2.42".to_string(),
+            fingerprint: "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA".to_string(),
+        }],
     }
 }
 
@@ -77,7 +90,7 @@ fn target_patch_request_validates_credential_link_actions() {
         validate_target_patch_request(credentials_patch_request(TargetCredentialsPatchRequest {
             ssh: Some(
                 crate::target_write_validation::TargetCredentialPatchFieldRequest::Set(
-                    credential_link(ssh_id, None),
+                    ssh_credential_link(ssh_id, None),
                 ),
             ),
             ssh_elevate: Some(
@@ -123,7 +136,7 @@ fn target_patch_request_rejects_unsafe_credential_link_shapes() {
         validate_target_patch_request(credentials_patch_request(TargetCredentialsPatchRequest {
             ssh: Some(
                 crate::target_write_validation::TargetCredentialPatchFieldRequest::Set(
-                    credential_link("12345678-1234-1234-1234-123456789abc", Some(0)),
+                    ssh_credential_link("12345678-1234-1234-1234-123456789abc", Some(0)),
                 )
             ),
             ..Default::default()
@@ -194,7 +207,7 @@ fn target_create_request_accepts_secret_free_credential_references() {
     let snmp_id = "12345678-1234-1234-1234-123456789abd";
     let mut request = create_request();
     request.credentials = Some(TargetCredentialsCreateRequest {
-        ssh: Some(credential_link(ssh_id, Some(2222))),
+        ssh: Some(ssh_credential_link(ssh_id, Some(2222))),
         snmp: Some(credential_link(snmp_id, None)),
         ..Default::default()
     });

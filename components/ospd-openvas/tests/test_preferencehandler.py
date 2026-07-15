@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -21,10 +22,26 @@ from ospd_openvas.preferencehandler import (
     BOREAS_ALIVE_TEST_PORTS,
     PreferenceHandler,
     alive_test_methods_to_bit_field,
+    validate_ssh_host_key_pins_b64,
+)
+
+SSH_HOST_KEY_PINS_B64 = (
+    'W3siaG9zdCI6IjE5Mi4wLjIuNDIiLCJmaW5nZXJwcmludCI6'
+    'IlNIQTI1NjpBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB'
+    'QUFBQUFBQUFBQUFBQUFBIn1d'
 )
 
 
 class PreferenceHandlerTestCase(TestCase):
+    def test_validate_ssh_host_key_pins_b64(self):
+        validate_ssh_host_key_pins_b64(SSH_HOST_KEY_PINS_B64)
+        with self.assertRaisesRegex(ValueError, "Missing SSH host-key pins"):
+            validate_ssh_host_key_pins_b64("")
+        with self.assertRaisesRegex(ValueError, "Invalid SSH host-key pin"):
+            validate_ssh_host_key_pins_b64("not-base64")
+        with self.assertRaisesRegex(ValueError, "too large"):
+            validate_ssh_host_key_pins_b64("A" * (2 * 1024 * 1024 + 1))
+
     @patch('ospd_openvas.db.KbDB')
     def test_process_vts_not_found(self, mock_kb):
         dummy = DummyDaemon()
@@ -134,6 +151,8 @@ class PreferenceHandlerTestCase(TestCase):
 
         cred_out = [
             'auth_port_ssh|||22',
+            'ssh_require_host_key_verification|||1',
+            f'ssh_host_key_pins_b64|||{SSH_HOST_KEY_PINS_B64}',
             '1.3.6.1.4.1.25623.1.0.103591:1:entry:SSH login name:|||username',
             '1.3.6.1.4.1.25623.1.0.103591:3:'
             'password:SSH password (unsafe!):|||pass',
@@ -147,6 +166,7 @@ class PreferenceHandlerTestCase(TestCase):
                 'port': '22',
                 'username': 'username',
                 'password': 'pass',
+                'host_key_pins_b64': SSH_HOST_KEY_PINS_B64,
             }
         }
         p_handler = PreferenceHandler(
@@ -165,6 +185,8 @@ class PreferenceHandlerTestCase(TestCase):
             '1.3.6.1.4.1.25623.1.0.105058:2:password:'
             'ESXi login password:|||pass',
             'auth_port_ssh|||22',
+            'ssh_require_host_key_verification|||1',
+            f'ssh_host_key_pins_b64|||{SSH_HOST_KEY_PINS_B64}',
             '1.3.6.1.4.1.25623.1.0.103591:1:entry:SSH login name:|||username',
             '1.3.6.1.4.1.25623.1.0.103591:2:'
             'password:SSH key passphrase:|||pass',
@@ -195,6 +217,7 @@ class PreferenceHandlerTestCase(TestCase):
                 'private': 'some key',
                 'priv_username': 'su_user',
                 'priv_password': 'su_pass',
+                'host_key_pins_b64': SSH_HOST_KEY_PINS_B64,
             },
             'smb': {'type': 'up', 'username': 'username', 'password': 'pass'},
             'esxi': {
@@ -379,6 +402,7 @@ class PreferenceHandlerTestCase(TestCase):
                 'password': 'pass',
                 'priv_username': "privuser",
                 'priv_password': "privpass",
+                'host_key_pins_b64': SSH_HOST_KEY_PINS_B64,
             },
             'smb': {'type': 'up', 'username': 'username', 'password': 'pass'},
             'esxi': {
@@ -420,6 +444,7 @@ class PreferenceHandlerTestCase(TestCase):
                 'port': '22',
                 'username': 'username',
                 'password': 'pass',
+                'host_key_pins_b64': SSH_HOST_KEY_PINS_B64,
             },
         }
 
@@ -446,6 +471,7 @@ class PreferenceHandlerTestCase(TestCase):
                 'port': 'ab',
                 'username': 'username',
                 'password': 'pass',
+                'host_key_pins_b64': SSH_HOST_KEY_PINS_B64,
             },
         }
 
@@ -471,6 +497,7 @@ class PreferenceHandlerTestCase(TestCase):
                 'type': 'up',
                 'username': 'username',
                 'password': 'pass',
+                'host_key_pins_b64': SSH_HOST_KEY_PINS_B64,
             },
         }
 
@@ -521,6 +548,7 @@ class PreferenceHandlerTestCase(TestCase):
                 'port': '22',
                 'username': 'username',
                 'password': 'pass',
+                'host_key_pins_b64': SSH_HOST_KEY_PINS_B64,
             },
         }
 
@@ -552,6 +580,7 @@ class PreferenceHandlerTestCase(TestCase):
                 'port': '22',
                 'username': 'username',
                 'password': 'pass',
+                'host_key_pins_b64': SSH_HOST_KEY_PINS_B64,
             },
         }
 

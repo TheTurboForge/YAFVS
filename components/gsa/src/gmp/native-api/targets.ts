@@ -9,7 +9,7 @@ import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
 import ActionResult from 'gmp/models/action-result';
 import type Filter from 'gmp/models/filter';
-import Target, {type AliveTest} from 'gmp/models/target';
+import Target, {type AliveTest, type SshHostKeyPin} from 'gmp/models/target';
 
 interface NativeApiSession {
   readonly jwt?: string;
@@ -29,6 +29,7 @@ interface NativeReference {
 interface NativeCredentialReference extends NativeReference {
   credential_type?: string;
   port?: number | null;
+  host_key_pins?: SshHostKeyPin[];
 }
 
 interface NativeTargetCredentials {
@@ -97,6 +98,7 @@ export interface NativeTargetPatchArgs {
 export type NativeTargetCredentialPatchArgs = {
   id: string;
   port?: number;
+  host_key_pins?: SshHostKeyPin[];
 } | null;
 
 export interface NativeTargetCredentialsPatchArgs {
@@ -205,6 +207,7 @@ const credentialElement = (item?: NativeCredentialReference) => {
     _id: item.id,
     name: stringValue(item.name, item.id),
     port: item.port ?? undefined,
+    host_key_pins: item.host_key_pins ?? [],
   };
 };
 

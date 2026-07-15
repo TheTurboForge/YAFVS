@@ -63,6 +63,12 @@ pub enum SshErrorKind {
     PoisonedLock,
     #[error("Failed to connect.")]
     Connect,
+    #[error("SSH host-key verification policy is invalid.")]
+    HostKeyPolicyInvalid,
+    #[error("No SSH host-key pin is configured for this target.")]
+    HostKeyPinMissing,
+    #[error("SSH server host key does not match the configured pin.")]
+    HostKeyPinMismatch,
     #[error("Failed to open a new channel.")]
     OpenChannel,
     #[error("No available channel.")]

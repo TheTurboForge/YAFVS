@@ -227,6 +227,29 @@ replace_preference_names_205_to_206 (const char *table_name)
   cleanup_iterator (&preferences);
 }
 
+static int
+migrate_286_to_287 ()
+{
+  sql_begin_immediate ();
+
+  if (manage_db_version () != 286)
+    {
+      sql_rollback ();
+      return -1;
+    }
+
+  sql ("ALTER TABLE targets_login_data"
+       " ADD COLUMN host_key_pins text NOT NULL DEFAULT '[]';");
+  sql ("ALTER TABLE targets_trash_login_data"
+       " ADD COLUMN host_key_pins text NOT NULL DEFAULT '[]';");
+
+  set_db_version (287);
+
+  sql_commit ();
+
+  return 0;
+}
+
 /**
  * @brief Migrate the database from version 205 to version 206.
  *
@@ -4987,6 +5010,7 @@ static migrator_t database_migrators[] = {
   {284, migrate_283_to_284},
   {285, migrate_284_to_285},
   {286, migrate_285_to_286},
+  {287, migrate_286_to_287},
   /* End marker. */
   {-1, NULL}};
 

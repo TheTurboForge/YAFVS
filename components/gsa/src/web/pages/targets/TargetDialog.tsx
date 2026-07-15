@@ -41,6 +41,7 @@ import NumberField from 'web/components/form/NumberField';
 import Radio from 'web/components/form/Radio';
 import Select from 'web/components/form/Select';
 import TextField from 'web/components/form/TextField';
+import TextArea from 'web/components/form/TextArea';
 import YesNoRadio from 'web/components/form/YesNoRadio';
 import {InfoIcon, NewIcon} from 'web/components/icon';
 import Row from 'web/components/layout/Row';
@@ -95,6 +96,7 @@ interface TargetDialogDefaultValues {
   port: number;
   reverseLookupOnly: boolean;
   reverseLookupUnify: boolean;
+  sshHostKeyPins: string;
   targetExcludeSource: TargetExcludeSource;
   targetSource: TargetSource;
 }
@@ -123,6 +125,7 @@ interface TargetDialogProps {
   snmpCredentialId?: string;
   sshCredentialId?: string;
   sshElevateCredentialId?: string;
+  sshHostKeyPins?: string;
   krb5CredentialId?: string;
   targetSource?: TargetSource;
   targetExcludeSource?: TargetExcludeSource;
@@ -177,6 +180,7 @@ const TargetDialog = ({
   snmpCredentialId,
   sshCredentialId,
   sshElevateCredentialId,
+  sshHostKeyPins = '',
   krb5CredentialId,
   targetSource = 'manual',
   targetExcludeSource = 'manual',
@@ -286,6 +290,7 @@ const TargetDialog = ({
         port,
         reverseLookupOnly,
         reverseLookupUnify,
+        sshHostKeyPins,
         targetExcludeSource,
         targetSource,
       }}
@@ -542,6 +547,20 @@ const TargetDialog = ({
                     />
                   )}
                 </Row>
+                {isDefined(state.sshCredentialId) &&
+                  state.sshCredentialId !== UNSET_VALUE && (
+                    <TextArea
+                      disabled={inUse}
+                      minRows="3"
+                      name="sshHostKeyPins"
+                      placeholder="192.0.2.10 SHA256:..."
+                      title={_(
+                        'Trusted SSH host keys (one IP and SHA-256 fingerprint per line)',
+                      )}
+                      value={state.sshHostKeyPins}
+                      onChange={onValueChange}
+                    />
+                  )}
                 {isDefined(state.sshCredentialId) &&
                   state.sshCredentialId !== UNSET_VALUE && (
                     <Row>

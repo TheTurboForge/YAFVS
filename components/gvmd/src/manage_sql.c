@@ -21719,8 +21719,8 @@ manage_restore (const char *id)
 
       /* Copy login data */
       sql ("INSERT INTO targets_login_data"
-           " (target, type, credential, port)"
-           "  SELECT %llu, type, credential, port"
+           " (target, type, credential, port, host_key_pins)"
+           "  SELECT %llu, type, credential, port, host_key_pins"
            "   FROM targets_trash_login_data WHERE target = %llu;",
            restored_target, resource);
 

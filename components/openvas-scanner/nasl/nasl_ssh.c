@@ -22,6 +22,7 @@
 #include "nasl_func.h"
 #include "nasl_global_ctxt.h"
 #include "nasl_lex_ctxt.h"
+#include "nasl_ssh_host_key_policy.h"
 #include "nasl_ssh_output.h"
 #include "nasl_tree.h"
 #include "nasl_var.h"
@@ -180,6 +181,37 @@ get_ssh_port (lex_ctxt *lexic)
 }
 
 extern int lowest_socket;
+
+static nasl_ssh_host_key_policy_result_t
+verify_server_host_key (ssh_session session, const char *host)
+{
+  const char *pins_b64 = prefs_get ("ssh_host_key_pins_b64");
+  const char *require_value =
+    prefs_get ("ssh_require_host_key_verification");
+  const guchar empty_digest[32] = {0};
+  ssh_key server_key = NULL;
+  unsigned char *digest = NULL;
+  size_t digest_length = 0;
+  nasl_ssh_host_key_policy_result_t result;
+
+  if (pins_b64 == NULL)
+    return nasl_ssh_host_key_policy_verify (
+      require_value, NULL, host, empty_digest, sizeof (empty_digest));
+  if (ssh_get_server_publickey (session, &server_key) != SSH_OK
+      || ssh_get_publickey_hash (server_key, SSH_PUBLICKEY_HASH_SHA256,
+                                 &digest, &digest_length)
+           != SSH_OK)
+    {
+      ssh_key_free (server_key);
+      return NASL_SSH_HOST_KEY_POLICY_INVALID;
+    }
+
+  result = nasl_ssh_host_key_policy_verify (
+    require_value, pins_b64, host, digest, digest_length);
+  ssh_clean_pubkey_hash (&digest);
+  ssh_key_free (server_key);
+  return result;
+}
 
 /**
  * @brief Connect to the target host via TCP and setup an ssh
@@ -429,6 +461,31 @@ nasl_ssh_connect (lex_ctxt *lexic)
 
       /* return 0 to indicate the error.  */
       /* FIXME: Set the last error string.  */
+      retc = alloc_typed_cell (CONST_INT);
+      retc->x.i_val = 0;
+      return retc;
+    }
+
+  nasl_ssh_host_key_policy_result_t host_key_result =
+    verify_server_host_key (session, ip_str);
+  if (host_key_result != NASL_SSH_HOST_KEY_POLICY_DISABLED
+      && host_key_result != NASL_SSH_HOST_KEY_POLICY_MATCH)
+    {
+      g_message ("SSH server host-key verification failed before authentication");
+      if (forced_sock != -1)
+        {
+          /* Preserve ownership of a caller-provided NASL socket.  The table
+           * entry lets nasl_ssh_internal_close release the SSH session when
+           * the caller closes that socket. */
+          session_table[tbl_slot].session_id = next_session_id ();
+          session_table[tbl_slot].sock = forced_sock;
+        }
+      else
+        {
+          ssh_disconnect (session);
+          ssh_free (session);
+          session_table[tbl_slot].session = NULL;
+        }
       retc = alloc_typed_cell (CONST_INT);
       retc->x.i_val = 0;
       return retc;

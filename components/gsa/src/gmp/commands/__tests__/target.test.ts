@@ -53,7 +53,18 @@ describe('TargetCommand tests', () => {
         reverse_lookup_unify: true,
         port_list: {id: 'port-list-id', name: 'All IANA assigned TCP'},
         credentials: {
-          ssh: {id: 'ssh-credential-id', name: 'SSH', port: 2222},
+          ssh: {
+            id: 'ssh-credential-id',
+            name: 'SSH',
+            port: 2222,
+            host_key_pins: [
+              {
+                host: '192.0.2.10',
+                fingerprint:
+                  'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+              },
+            ],
+          },
         },
       }),
       ok: true,
@@ -75,10 +86,9 @@ describe('TargetCommand tests', () => {
     const result = await cmd.get({id: 'target-id'});
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
-      'api/v1/targets/target-id',
-      {token: 'test-token'},
-    );
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/targets/target-id', {
+      token: 'test-token',
+    });
     expect(fetchMock).toHaveBeenCalledWith(
       'https://turbovas.example/api/v1/targets/target-id',
       {
@@ -95,6 +105,12 @@ describe('TargetCommand tests', () => {
     expect(result.data.excludeHosts).toEqual(['192.0.2.11']);
     expect(result.data.sshCredential?.id).toEqual('ssh-credential-id');
     expect(result.data.sshCredential?.port).toEqual(2222);
+    expect(result.data.sshCredential?.hostKeyPins).toEqual([
+      {
+        host: '192.0.2.10',
+        fingerprint: 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      },
+    ]);
   });
 
   test('should not fall back to GMP when native target detail fails', async () => {
@@ -462,6 +478,8 @@ describe('TargetCommand tests', () => {
       port: 2222,
       sshCredentialId: '54b05b45-02be-4123-9b05-b4502be11234',
       sshElevateCredentialId: UNSET_VALUE,
+      sshHostKeyPins:
+        '192.0.2.10 SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
       smbCredentialId: UNSET_VALUE,
       esxiCredentialId: UNSET_VALUE,
       snmpCredentialId: UNSET_VALUE,
@@ -495,12 +513,52 @@ describe('TargetCommand tests', () => {
             ssh: {
               id: '54b05b45-02be-4123-9b05-b4502be11234',
               port: 2222,
+              host_key_pins: [
+                {
+                  host: '192.0.2.10',
+                  fingerprint:
+                    'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                },
+              ],
             },
           },
         }),
       },
     );
     expect(result.data.id).toEqual('native-target-id');
+  });
+
+  test('should reject native SSH target creation without host-key pins instead of falling back to GMP', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://turbovas.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    const cmd = new TargetCommand(fakeHttp);
+
+    await expect(
+      cmd.create({
+        aliveTests: [SCAN_CONFIG_DEFAULT],
+        allowSimultaneousIPs: true,
+        name: 'Pinned SSH target',
+        targetSource: 'manual',
+        targetExcludeSource: 'manual',
+        hosts: '192.0.2.10',
+        excludeHosts: '',
+        reverseLookupOnly: false,
+        reverseLookupUnify: false,
+        portListId: '4f9d2c83-345f-4a91-9d2c-83345f0a9123',
+        port: 22,
+        sshCredentialId: '54b05b45-02be-4123-9b05-b4502be11234',
+      }),
+    ).rejects.toThrow('require valid per-IP OpenSSH SHA-256 host-key pins');
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should create target with non-ssh credential references through native API when default ssh port is present', async () => {
@@ -846,6 +904,8 @@ describe('TargetCommand tests', () => {
       id: 'target_id1',
       name: 'updated',
       comment: 'metadata only',
+      port: 22,
+      sshHostKeyPins: '',
     });
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
@@ -905,6 +965,8 @@ describe('TargetCommand tests', () => {
       port: 22,
       sshCredentialId: '54b05b45-02be-4123-9b05-b4502be11234',
       sshElevateCredentialId: UNSET_VALUE,
+      sshHostKeyPins:
+        '192.0.2.10 SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
       smbCredentialId: UNSET_VALUE,
       esxiCredentialId: UNSET_VALUE,
       snmpCredentialId: UNSET_VALUE,
@@ -938,6 +1000,13 @@ describe('TargetCommand tests', () => {
             ssh: {
               id: '54b05b45-02be-4123-9b05-b4502be11234',
               port: 22,
+              host_key_pins: [
+                {
+                  host: '192.0.2.10',
+                  fingerprint:
+                    'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+                },
+              ],
             },
             ssh_elevate: null,
             smb: null,

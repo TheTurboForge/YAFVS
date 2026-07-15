@@ -2301,7 +2301,8 @@ create_tables ()
        "  target INTEGER REFERENCES targets (id) ON DELETE RESTRICT,"
        "  type TEXT,"
        "  credential INTEGER REFERENCES credentials (id) ON DELETE RESTRICT,"
-       "  port INTEGER);");
+       "  port INTEGER,"
+       "  host_key_pins TEXT NOT NULL DEFAULT '[]');");
 
   sql ("CREATE TABLE IF NOT EXISTS targets_trash_login_data"
        " (id SERIAL PRIMARY KEY,"
@@ -2309,7 +2310,8 @@ create_tables ()
        "  type TEXT,"
        "  credential INTEGER,"//REFERENCES credentials (id) ON DELETE RESTRICT,"
        "  port INTEGER,"
-       "  credential_location INTEGER);");
+       "  credential_location INTEGER,"
+       "  host_key_pins TEXT NOT NULL DEFAULT '[]');");
 
   sql ("CREATE TABLE IF NOT EXISTS tls_certificates"
        " (id SERIAL PRIMARY KEY,"

@@ -8,6 +8,7 @@ use tokio_postgres::Row;
 use crate::{
     formatters::unix_ts_to_rfc3339,
     row_helpers::{alive_test_labels, boolean_int, csv_values, task_has_active_current_report},
+    ssh_host_key_pins::{SshHostKeyPin, parse_stored_ssh_host_key_pins},
     user_tags::ReportUserTag,
 };
 
@@ -29,6 +30,8 @@ struct CredentialReference {
     name: String,
     credential_type: String,
     port: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    host_key_pins: Option<Vec<SshHostKeyPin>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -137,6 +140,7 @@ fn credential_reference(
     name_field: &str,
     type_field: &str,
     port_field: &str,
+    host_key_pins_field: Option<&str>,
 ) -> Option<CredentialReference> {
     let id: Option<String> = row.get(id_field);
     id.map(|id| CredentialReference {
@@ -147,6 +151,12 @@ fn credential_reference(
             .get::<_, Option<String>>(type_field)
             .unwrap_or_else(|| "unknown".to_string()),
         port: row.get(port_field),
+        host_key_pins: host_key_pins_field.map(|field| {
+            parse_stored_ssh_host_key_pins(
+                &row.get::<_, Option<String>>(field)
+                    .unwrap_or_else(|| "[]".to_string()),
+            )
+        }),
         id,
     })
 }
@@ -159,6 +169,7 @@ fn target_credentials(row: &Row) -> TargetCredentials {
             "ssh_credential_name",
             "ssh_credential_type",
             "ssh_credential_port",
+            Some("ssh_host_key_pins"),
         ),
         ssh_elevate: credential_reference(
             row,
@@ -166,6 +177,7 @@ fn target_credentials(row: &Row) -> TargetCredentials {
             "ssh_elevate_credential_name",
             "ssh_elevate_credential_type",
             "ssh_elevate_credential_port",
+            None,
         ),
         smb: credential_reference(
             row,
@@ -173,6 +185,7 @@ fn target_credentials(row: &Row) -> TargetCredentials {
             "smb_credential_name",
             "smb_credential_type",
             "smb_credential_port",
+            None,
         ),
         esxi: credential_reference(
             row,
@@ -180,6 +193,7 @@ fn target_credentials(row: &Row) -> TargetCredentials {
             "esxi_credential_name",
             "esxi_credential_type",
             "esxi_credential_port",
+            None,
         ),
         snmp: credential_reference(
             row,
@@ -187,6 +201,7 @@ fn target_credentials(row: &Row) -> TargetCredentials {
             "snmp_credential_name",
             "snmp_credential_type",
             "snmp_credential_port",
+            None,
         ),
         krb5: credential_reference(
             row,
@@ -194,6 +209,7 @@ fn target_credentials(row: &Row) -> TargetCredentials {
             "krb5_credential_name",
             "krb5_credential_type",
             "krb5_credential_port",
+            None,
         ),
     }
 }

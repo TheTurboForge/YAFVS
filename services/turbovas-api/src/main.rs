@@ -199,6 +199,7 @@ mod scope_write_sql;
 mod scope_write_transactions;
 mod scope_write_validation;
 mod scope_writes;
+mod ssh_host_key_pins;
 mod startup;
 #[cfg(test)]
 mod tag_characterization_tests;

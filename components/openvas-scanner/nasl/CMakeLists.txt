@@ -124,6 +124,7 @@ set (FILES arc4.c capture_packet.c charcnv.c exec.c genrand.c hmacmd5.c
      nasl_builtin_openvas_tcp_scanner.c nasl_builtin_synscan.c
      nasl_cmd_exec.c nasl_crypt_helper.c nasl_crypto2.c nasl_frame_forgery.c nasl_snmp.c nasl_ssh.c
      nasl_ssh_output.c
+     nasl_ssh_host_key_policy.c
      nasl_cert.c nasl_crypto.c nasl_debug.c nasl_func.c nasl_grammar.tab.c nasl_host.c
      nasl_http.c nasl_http2.c nasl_init.c nasl_lex_ctxt.c nasl_misc_funcs.c nasl_scanner_glue.c
      nasl_packet_forgery.c nasl_packet_forgery_v6.c nasl_signature.c nasl_smb.c
@@ -248,6 +249,27 @@ if (ENABLE_NASL_SECURITY_TESTS)
                        -fsanitize=address,undefined)
   target_link_libraries (nasl-socket-resources-test ${GLIB_LDFLAGS})
   set_tests_properties (nasl-socket-resources-test PROPERTIES
+    ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1;UBSAN_OPTIONS=halt_on_error=1:abort_on_error=1:print_stacktrace=1")
+
+  add_executable (nasl-ssh-host-key-policy-test
+                  nasl_ssh_host_key_policy_tests.c
+                  nasl_ssh_host_key_policy.c)
+  add_test (nasl-ssh-host-key-policy-test nasl-ssh-host-key-policy-test)
+  target_compile_options (nasl-ssh-host-key-policy-test PRIVATE
+                          -Wall -Wextra -Werror
+                          -fsanitize=address,undefined
+                          -fno-omit-frame-pointer)
+  target_link_options (nasl-ssh-host-key-policy-test PRIVATE
+                       -fsanitize=address,undefined)
+  target_include_directories (nasl-ssh-host-key-policy-test PRIVATE
+                              ${GLIB_INCLUDE_DIRS}
+                              ${GLIB_JSON_INCLUDE_DIRS}
+                              ${GIO_INCLUDE_DIRS})
+  target_link_libraries (nasl-ssh-host-key-policy-test
+                         ${GLIB_LDFLAGS}
+                         ${GLIB_JSON_LDFLAGS}
+                         ${GIO_LDFLAGS})
+  set_tests_properties (nasl-ssh-host-key-policy-test PROPERTIES
     ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1;UBSAN_OPTIONS=halt_on_error=1:abort_on_error=1:print_stacktrace=1")
 
   add_executable (nasl-ssh-output-test

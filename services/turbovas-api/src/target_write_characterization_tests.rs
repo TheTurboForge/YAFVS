@@ -196,7 +196,8 @@ fn inherited_target_clone_delete_and_restore_preserve_login_data_and_task_links(
         "copy_resource (\"target\", name, comment, target_id",
         "hosts, exclude_hosts, port_list, reverse_lookup_only,",
         "allow_simultaneous_ips",
-        "INSERT INTO targets_login_data (target, type, credential, port)",
+        "INSERT INTO targets_login_data",
+        "(target, type, credential, port, host_key_pins)",
         "FROM targets_login_data",
     ] {
         assert!(copy.contains(required), "copy_target missing {required}");

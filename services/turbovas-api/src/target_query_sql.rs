@@ -26,6 +26,8 @@ pub(crate) fn target_sql(filtered_predicate: &str, sort_sql: &str, limit_clause:
                       WHERE tld.target = t.id AND tld.type = 'ssh' LIMIT 1) AS ssh_credential_type,
                     (SELECT NULLIF(tld.port, 0)::bigint FROM targets_login_data tld
                       WHERE tld.target = t.id AND tld.type = 'ssh' LIMIT 1) AS ssh_credential_port,
+                    (SELECT coalesce(tld.host_key_pins, '[]') FROM targets_login_data tld
+                      WHERE tld.target = t.id AND tld.type = 'ssh' LIMIT 1) AS ssh_host_key_pins,
                     (SELECT c.uuid FROM targets_login_data tld JOIN credentials c ON c.id = tld.credential
                       WHERE tld.target = t.id AND tld.type = 'elevate' LIMIT 1) AS ssh_elevate_credential_id,
                     (SELECT c.name FROM targets_login_data tld JOIN credentials c ON c.id = tld.credential

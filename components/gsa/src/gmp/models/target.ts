@@ -15,8 +15,14 @@ interface AliveTestsElement {
   alive_test?: AliveTest | AliveTest[];
 }
 
+export interface SshHostKeyPin {
+  host: string;
+  fingerprint: string;
+}
+
 interface SSHCredentialElement extends ModelElement {
   port?: number;
+  host_key_pins?: SshHostKeyPin[];
 }
 
 interface TargetTaskElement extends ModelElement {
@@ -45,6 +51,7 @@ interface TargetElement extends ModelElement {
 
 interface SSHCredentialProperties extends ModelProperties {
   port?: number;
+  hostKeyPins?: SshHostKeyPin[];
 }
 
 interface TargetProperties extends ModelProperties {
@@ -84,10 +91,16 @@ class SSHCredential extends Model {
   static readonly entityType = 'credential';
 
   readonly port?: number;
+  readonly hostKeyPins: SshHostKeyPin[];
 
-  constructor({port, ...properties}: SSHCredentialProperties = {}) {
+  constructor({
+    hostKeyPins = [],
+    port,
+    ...properties
+  }: SSHCredentialProperties = {}) {
     super(properties);
     this.port = port;
+    this.hostKeyPins = hostKeyPins;
   }
 
   static fromElement(element: SSHCredentialElement = {}): SSHCredential {
@@ -97,6 +110,10 @@ class SSHCredential extends Model {
   static parseElement(element: SSHCredentialElement): SSHCredentialProperties {
     const ret = super.parseElement(element) as SSHCredentialProperties;
     ret.port = parseInt(element.port);
+    ret.hostKeyPins = (element.host_key_pins ?? []).filter(
+      pin =>
+        typeof pin.host === 'string' && typeof pin.fingerprint === 'string',
+    );
     return ret;
   }
 }

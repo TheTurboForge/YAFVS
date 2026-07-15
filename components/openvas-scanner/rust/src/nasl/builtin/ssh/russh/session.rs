@@ -9,18 +9,21 @@ use std::{net::IpAddr, sync::Arc};
 
 use async_trait::async_trait;
 use client::{DisconnectReason, Session, connect};
-use russh::keys::Algorithm;
+use russh::keys::{Algorithm, HashAlg};
 use russh::*;
 use tracing::{error, warn};
 
 use crate::nasl::builtin::ssh::error::SshErrorKind;
+use crate::nasl::builtin::ssh::host_key_policy::HostKeyPolicy;
 use crate::nasl::builtin::ssh::{Output, check_lossy_output_chunk, checked_output_len};
 use crate::nasl::utils::error::WithErrorInfo;
 
 use super::super::error::SshError;
 use super::{AuthMethods, Port, SessionId, Socket};
 
-struct Client {}
+struct Client {
+    host_key_policy: Option<HostKeyPolicy>,
+}
 
 #[async_trait]
 impl client::Handler for Client {
@@ -29,9 +32,12 @@ impl client::Handler for Client {
     #[allow(clippy::manual_async_fn)]
     fn check_server_key(
         &mut self,
-        _server_public_key: &russh::keys::PublicKey,
+        server_public_key: &russh::keys::PublicKey,
     ) -> impl Future<Output = Result<bool, Self::Error>> + Send {
-        async { Ok(true) }
+        let accepted = self.host_key_policy.as_ref().is_none_or(|policy| {
+            policy.accepts_digest(server_public_key.fingerprint(HashAlg::Sha256).as_bytes())
+        });
+        async move { Ok(accepted) }
     }
 
     #[allow(unused_variables)]
@@ -111,6 +117,7 @@ impl SshSession {
         csciphers: Vec<cipher::Name>,
         scciphers: Vec<cipher::Name>,
         socket: Option<Socket>,
+        host_key_policy: Option<HostKeyPolicy>,
     ) -> Result<Self, SshError> {
         if socket.is_some() {
             error!("Using custom sockets not yet implemented.");
@@ -124,11 +131,18 @@ impl SshSession {
         };
 
         let config = Arc::new(config);
-        let sh = Client {};
+        let verification_required = host_key_policy.is_some();
+        let sh = Client { host_key_policy };
 
         let session = connect(config, (ip_addr, port), sh)
             .await
-            .map_err(|e| SshErrorKind::Connect.with(id).with(e))?;
+            .map_err(|error| {
+                if verification_required && matches!(error, russh::Error::UnknownKey) {
+                    SshErrorKind::HostKeyPinMismatch.with(id)
+                } else {
+                    SshErrorKind::Connect.with(id).with(error)
+                }
+            })?;
 
         Ok(Self { session, id })
     }

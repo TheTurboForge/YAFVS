@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2023 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
@@ -10,14 +11,16 @@ mod session;
 use std::net::{IpAddr, UdpSocket};
 use std::{os::fd::AsRawFd, time::Duration};
 
-use libssh_rs::{LogLevel, SshOption};
+use libssh_rs::{LogLevel, PublicKeyHashType, SshOption};
 use russh::cipher;
 use russh::keys::Algorithm;
 use tokio::sync::{Mutex, MutexGuard};
 use tracing::debug;
 
 use super::Ssh;
-use super::error::Result;
+use super::error::{Result, SshErrorKind};
+use super::host_key_policy::HostKeyPolicy;
+use crate::nasl::utils::error::WithErrorInfo;
 
 pub use libssh_rs::AuthMethods;
 pub use session::SshSession;
@@ -88,6 +91,7 @@ impl Ssh {
         csciphers: Vec<cipher::Name>,
         scciphers: Vec<cipher::Name>,
         timeout: Option<Duration>,
+        host_key_policy: Option<HostKeyPolicy>,
     ) -> Result<SessionId> {
         let id = self.next_session_id()?;
         let session = Mutex::new(SshSession::new(id)?);
@@ -103,6 +107,7 @@ impl Ssh {
                     csciphers,
                     scciphers,
                     timeout,
+                    host_key_policy.as_ref(),
                 )
                 .await
             {
@@ -125,6 +130,7 @@ impl Ssh {
         csciphers: Vec<cipher::Name>,
         scciphers: Vec<cipher::Name>,
         timeout: Option<Duration>,
+        host_key_policy: Option<&HostKeyPolicy>,
     ) -> Result<()> {
         let ip_str = ip.to_string();
         session.set_option(SshOption::LogLevel(get_log_level()))?;
@@ -163,6 +169,19 @@ impl Ssh {
             "Connecting to SSH server",
         );
         session.connect()?;
+        if let Some(host_key_policy) = host_key_policy {
+            let key = session.get_server_public_key()?;
+            let digest = key
+                .get_public_key_hash(PublicKeyHashType::Sha256)
+                .map_err(|error| {
+                    SshErrorKind::GetServerPublicKey
+                        .with(session.id())
+                        .with(error)
+                })?;
+            if !host_key_policy.accepts_digest(&digest) {
+                return Err(SshErrorKind::HostKeyPinMismatch.with(session.id()));
+            }
+        }
         Ok(())
     }
 

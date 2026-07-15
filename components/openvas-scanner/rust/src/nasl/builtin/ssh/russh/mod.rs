@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2025 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
@@ -11,6 +12,7 @@ use tokio::sync::Mutex;
 use std::{net::IpAddr, time::Duration};
 
 use super::error::Result;
+use super::host_key_policy::HostKeyPolicy;
 use russh::cipher;
 
 use super::sessions::SshSessions;
@@ -40,11 +42,20 @@ impl SshSessions {
         csciphers: Vec<cipher::Name>,
         scciphers: Vec<cipher::Name>,
         timeout: Option<Duration>,
+        host_key_policy: Option<HostKeyPolicy>,
     ) -> Result<SessionId> {
         let id = self.next_session_id()?;
         let session = Mutex::new(
             SshSession::new(
-                id, ip_addr, port, timeout, keytype, csciphers, scciphers, socket,
+                id,
+                ip_addr,
+                port,
+                timeout,
+                keytype,
+                csciphers,
+                scciphers,
+                socket,
+                host_key_policy,
             )
             .await?,
         );

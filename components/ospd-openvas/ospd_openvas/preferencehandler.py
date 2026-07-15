@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -11,10 +12,12 @@ OpenVAS."""
 
 import logging
 import binascii
+import ipaddress
+import json
 
 from enum import IntEnum
 from typing import Callable, Optional, Dict, List, Tuple
-from base64 import b64decode
+from base64 import b64decode, b64encode
 
 from ospd.scan import ScanCollection, ScanStatus
 from ospd.ospd import BASE_SCANNER_PARAMS
@@ -37,6 +40,8 @@ OID_KRB5_AUTH = "1.3.6.1.4.1.25623.1.0.102114"
 BOREAS_ALIVE_TEST = "ALIVE_TEST"
 BOREAS_ALIVE_TEST_PORTS = "ALIVE_TEST_PORTS"
 BOREAS_SETTING_NAME = "test_alive_hosts_only"
+MAX_SSH_HOST_KEY_PINS = 4095
+MAX_SSH_HOST_KEY_POLICY_BYTES = 1024 * 1024
 
 
 class AliveTest(IntEnum):
@@ -48,6 +53,56 @@ class AliveTest(IntEnum):
     ALIVE_TEST_ARP = 4
     ALIVE_TEST_CONSIDER_ALIVE = 8
     ALIVE_TEST_TCP_SYN_SERVICE = 16
+
+
+def validate_ssh_host_key_pins_b64(value: str) -> None:
+    """Validate the bounded, non-secret SSH host-key policy envelope."""
+    if not value:
+        raise ValueError("Missing SSH host-key pins.")
+    if len(value) > MAX_SSH_HOST_KEY_POLICY_BYTES * 2:
+        raise ValueError("SSH host-key pin policy is too large.")
+    try:
+        raw = b64decode(value, validate=True)
+        pins = json.loads(raw)
+    except (binascii.Error, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("Invalid SSH host-key pin encoding.") from error
+    if len(raw) > MAX_SSH_HOST_KEY_POLICY_BYTES:
+        raise ValueError("SSH host-key pin policy is too large.")
+    if not isinstance(pins, list) or not pins:
+        raise ValueError("At least one SSH host-key pin is required.")
+    if len(pins) > MAX_SSH_HOST_KEY_PINS:
+        raise ValueError("Too many SSH host-key pins.")
+
+    seen = set()
+    for pin in pins:
+        if not isinstance(pin, dict) or set(pin) != {"host", "fingerprint"}:
+            raise ValueError("Invalid SSH host-key pin object.")
+        host = pin["host"]
+        fingerprint = pin["fingerprint"]
+        if not isinstance(host, str) or not isinstance(fingerprint, str):
+            raise ValueError("Invalid SSH host-key pin value.")
+        try:
+            normalized_host = str(ipaddress.ip_address(host))
+        except ValueError as error:
+            raise ValueError("SSH host-key pin host must be an IP address.") from error
+        if not fingerprint.startswith("SHA256:"):
+            raise ValueError("SSH host-key pin must use SHA256.")
+        encoded_digest = fingerprint[7:]
+        if len(encoded_digest) != 43:
+            raise ValueError("Invalid SSH host-key fingerprint length.")
+        try:
+            digest = b64decode(encoded_digest + "=", validate=True)
+        except binascii.Error as error:
+            raise ValueError("Invalid SSH host-key fingerprint.") from error
+        if (
+            len(digest) != 32
+            or b64encode(digest).decode("ascii").rstrip("=") != encoded_digest
+        ):
+            raise ValueError("Invalid SSH host-key fingerprint length.")
+        identity = (normalized_host, fingerprint)
+        if identity in seen:
+            raise ValueError("Duplicate SSH host-key pin.")
+        seen.add(identity)
 
 
 def alive_test_methods_to_bit_field(
@@ -630,6 +685,12 @@ class PreferenceHandler:
                         f"Port for SSH is out of range (1-65535): {port}"
                     )
                     continue
+                host_key_pins_b64 = cred_params.get('host_key_pins_b64', '')
+                try:
+                    validate_ssh_host_key_pins_b64(host_key_pins_b64)
+                except ValueError as error:
+                    self.errors.append(str(error))
+                    continue
                 # For ssh check the credential type
                 if cred_type == 'up':
                     cred_prefs_list.append(
@@ -660,6 +721,12 @@ class PreferenceHandler:
                     )
                     continue
                 cred_prefs_list.append(f'auth_port_ssh|||{port}')
+                cred_prefs_list.append(
+                    'ssh_require_host_key_verification|||1'
+                )
+                cred_prefs_list.append(
+                    f'ssh_host_key_pins_b64|||{host_key_pins_b64}'
+                )
                 cred_prefs_list.append(
                     f'{OID_SSH_AUTH}:1:entry:SSH login name:|||{username}'
                 )

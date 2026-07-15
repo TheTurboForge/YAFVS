@@ -27,7 +27,11 @@ const KRB5_CREDENTIAL_TYPES: &[&str] = &["krb5"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ResolvedCredentialPatchAction {
-    Set { internal_id: i32, port: i32 },
+    Set {
+        internal_id: i32,
+        port: i32,
+        host_key_pins: String,
+    },
     Clear,
 }
 
@@ -478,6 +482,8 @@ async fn resolve_credential_patch_action(
             Ok(Some(ResolvedCredentialPatchAction::Set {
                 internal_id: credential.internal_id,
                 port: link.port.unwrap_or(0),
+                host_key_pins: serde_json::to_string(&link.host_key_pins)
+                    .map_err(|_| ApiError::Config)?,
             }))
         }
         Some(ValidatedCredentialPatchAction::Clear) => {
@@ -548,11 +554,22 @@ async fn apply_target_credential_patch_action(
         "delete target credential link",
     )
     .await?;
-    if let ResolvedCredentialPatchAction::Set { internal_id, port } = action {
+    if let ResolvedCredentialPatchAction::Set {
+        internal_id,
+        port,
+        host_key_pins,
+    } = action
+    {
         execute_target_write_sql(
             tx,
             target_insert_login_data_sql(),
-            &[&target_internal_id, &credential_use, internal_id, port],
+            &[
+                &target_internal_id,
+                &credential_use,
+                internal_id,
+                port,
+                host_key_pins,
+            ],
             "insert target credential link",
         )
         .await?;

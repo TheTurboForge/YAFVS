@@ -6,6 +6,7 @@ use serde::Deserialize;
 
 use crate::{
     errors::ApiError,
+    ssh_host_key_pins::{SshHostKeyPin, validate_ssh_host_key_pins},
     target_alive_tests::validate_alive_tests,
     target_host_validation::validate_target_host_lists,
     target_id_validation::{validate_optional_uuid, validate_uuid},
@@ -73,6 +74,8 @@ pub(crate) struct TargetCredentialLinkPatchRequest {
     pub(crate) id: String,
     #[serde(default)]
     pub(crate) port: Option<i32>,
+    #[serde(default)]
+    pub(crate) host_key_pins: Vec<SshHostKeyPin>,
 }
 
 #[derive(Debug)]
@@ -153,6 +156,7 @@ pub(crate) struct ValidatedTargetPatch {
 pub(crate) struct ValidatedCredentialLinkPatch {
     pub(crate) id: String,
     pub(crate) port: Option<i32>,
+    pub(crate) host_key_pins: Vec<SshHostKeyPin>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -379,9 +383,19 @@ fn validate_credential_link_request(
             )));
         }
     };
+    let host_key_pins = if allow_port {
+        validate_ssh_host_key_pins(request.host_key_pins, field_name)?
+    } else if request.host_key_pins.is_empty() {
+        Vec::new()
+    } else {
+        return Err(ApiError::BadRequest(format!(
+            "{field_name}.host_key_pins is only supported for ssh"
+        )));
+    };
     Ok(ValidatedCredentialLinkPatch {
         id: validate_uuid(request.id, &format!("{field_name}.id"))?,
         port,
+        host_key_pins,
     })
 }
 

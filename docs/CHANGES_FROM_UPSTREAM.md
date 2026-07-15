@@ -89,5 +89,11 @@ TurboVAS still keeps the scanner fundamentals:
 - Trashcan support for retained resource types;
 - feed validation, immutable generations, and guarded service/database activation.
 
+SSH-authenticated targets use explicit per-IP OpenSSH SHA-256 server host-key
+pins. TurboVAS refuses credentialed SSH authentication when a pin is missing,
+malformed, or does not match, and permits multiple pins for controlled key
+rotation. Existing SSH-authenticated targets therefore require verified pins
+after upgrading.
+
 Future inventory onboarding and vulnerability matching should be designed as
 TurboVAS-native workflows instead of preserving removed inherited subsystems.

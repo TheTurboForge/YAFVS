@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -81,6 +82,9 @@ target_reverse_lookup_unify (target_t);
 
 char*
 target_ssh_port (target_t);
+
+char*
+target_ssh_host_key_pins (target_t);
 
 int
 copy_target (const char *, const char *, const char *, target_t *);

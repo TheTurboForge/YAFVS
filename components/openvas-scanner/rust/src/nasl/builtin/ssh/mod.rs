@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
 mod error;
+mod host_key_policy;
 mod sessions;
 mod utils;
 
@@ -30,6 +31,7 @@ use ::russh::{Preferred, cipher, keys::Algorithm};
 use crate::nasl::prelude::*;
 
 use error::SshErrorKind;
+use host_key_policy::HostKeyPolicy;
 use utils::CommaSeparated;
 
 #[cfg(not(feature = "native-rust-ssh"))]
@@ -244,9 +246,29 @@ impl Ssh {
         let scciphers = scciphers
             .map(|sccipher| sccipher.0)
             .unwrap_or(Preferred::DEFAULT.cipher[..].to_vec());
+        let require_host_key = ctx
+            .scan_preferences
+            .get_preference_string("ssh_require_host_key_verification");
+        let host_key_pins = ctx
+            .scan_preferences
+            .get_preference_string("ssh_host_key_pins_b64");
+        let host_key_policy = HostKeyPolicy::from_preferences(
+            require_host_key.as_deref(),
+            host_key_pins.as_deref(),
+            ip,
+        )?;
 
         Ok(self
-            .connect(socket, ip, port, keytype, csciphers, scciphers, timeout)
+            .connect(
+                socket,
+                ip,
+                port,
+                keytype,
+                csciphers,
+                scciphers,
+                timeout,
+                host_key_policy,
+            )
             .await?)
     }
 

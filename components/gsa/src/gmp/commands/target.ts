@@ -20,6 +20,7 @@ import Target, {
   TCP_ACK,
   TCP_SYN,
   type AliveTest,
+  type SshHostKeyPin,
 } from 'gmp/models/target';
 import {
   cloneNativeTarget,
@@ -60,6 +61,7 @@ interface TargetCommandCreateParams {
   snmpCredentialId?: string;
   sshCredentialId?: string;
   sshElevateCredentialId?: string;
+  sshHostKeyPins?: string;
   targetExcludeSource?: TargetExcludeSource;
   targetSource?: TargetSource;
 }
@@ -84,6 +86,36 @@ const isUnsetCredential = (id?: string) =>
 
 const isValidSshPort = (port?: number): boolean =>
   port === undefined || (Number.isInteger(port) && port >= 1 && port <= 65535);
+
+const SSH_HOST_KEY_FINGERPRINT = /^SHA256:[A-Za-z0-9+/]{43}$/;
+
+const parseSshHostKeyPins = (value?: string): SshHostKeyPin[] | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  const pins: SshHostKeyPin[] = [];
+  const seen = new Set<string>();
+  for (const line of value.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) {
+      continue;
+    }
+    const parts = trimmed.split(/\s+/);
+    if (
+      parts.length !== 2 ||
+      /[\u0000-\u0020\u007F]/.test(parts[0]) ||
+      !SSH_HOST_KEY_FINGERPRINT.test(parts[1])
+    ) {
+      return undefined;
+    }
+    const key = `${parts[0]}\u0000${parts[1]}`;
+    if (!seen.has(key)) {
+      pins.push({host: parts[0], fingerprint: parts[1]});
+      seen.add(key);
+    }
+  }
+  return pins.length > 0 && pins.length <= 4095 ? pins : undefined;
+};
 
 const looksLikeIpv4Range = (value: string) => {
   const [left, right] = value.split('-', 2);
@@ -164,6 +196,7 @@ const nativeTargetCreateArgsFromParams = ({
   snmpCredentialId,
   sshCredentialId,
   sshElevateCredentialId,
+  sshHostKeyPins,
   targetExcludeSource,
   targetSource,
 }: TargetCommandCreateParams): NativeTargetCreateArgs | undefined => {
@@ -199,6 +232,7 @@ const nativeTargetCreateArgsFromParams = ({
     snmpCredentialId,
     sshCredentialId,
     sshElevateCredentialId,
+    sshHostKeyPins,
   });
   if (credentials === undefined && hasCredentialInput) {
     return undefined;
@@ -251,6 +285,7 @@ const nativeTargetCredentialsCreateFromParams = ({
   snmpCredentialId,
   sshCredentialId,
   sshElevateCredentialId,
+  sshHostKeyPins,
 }: Pick<
   TargetCommandCreateParams,
   | 'esxiCredentialId'
@@ -260,6 +295,7 @@ const nativeTargetCredentialsCreateFromParams = ({
   | 'snmpCredentialId'
   | 'sshCredentialId'
   | 'sshElevateCredentialId'
+  | 'sshHostKeyPins'
 >): NativeTargetCredentialsPatchArgs | undefined => {
   if (!isValidSshPort(port)) {
     return undefined;
@@ -267,11 +303,14 @@ const nativeTargetCredentialsCreateFromParams = ({
   if (port !== undefined && port !== 22 && isUnsetCredential(sshCredentialId)) {
     return undefined;
   }
-  if (isUnsetCredential(sshCredentialId) && !isUnsetCredential(sshElevateCredentialId)) {
+  if (
+    isUnsetCredential(sshCredentialId) &&
+    !isUnsetCredential(sshElevateCredentialId)
+  ) {
     return undefined;
   }
   const credentials: NativeTargetCredentialsPatchArgs = {
-    ssh: nativeCredentialCreateFromId(sshCredentialId, port),
+    ssh: nativeSshCredentialCreateFromId(sshCredentialId, port, sshHostKeyPins),
     sshElevate: nativeCredentialCreateFromId(sshElevateCredentialId),
     smb: nativeCredentialCreateFromId(smbCredentialId),
     esxi: nativeCredentialCreateFromId(esxiCredentialId),
@@ -281,6 +320,25 @@ const nativeTargetCredentialsCreateFromParams = ({
   return Object.values(credentials).some(value => value !== undefined)
     ? credentials
     : undefined;
+};
+
+const nativeSshCredentialCreateFromId = (
+  id?: string,
+  port?: number,
+  hostKeyPins?: string,
+): NativeTargetCredentialPatchArgs | undefined => {
+  if (isUnsetCredential(id)) {
+    return undefined;
+  }
+  const pins = parseSshHostKeyPins(hostKeyPins);
+  if (id.trim().length === 0 || pins === undefined) {
+    return undefined;
+  }
+  return {
+    id,
+    ...(port !== undefined ? {port} : {}),
+    host_key_pins: pins,
+  };
 };
 
 const nativeCredentialCreateFromId = (
@@ -296,6 +354,28 @@ const nativeCredentialCreateFromId = (
   return {
     id,
     ...(port !== undefined ? {port} : {}),
+  };
+};
+
+const nativeSshCredentialPatchFromId = (
+  id?: string,
+  port?: number,
+  hostKeyPins?: string,
+): NativeTargetCredentialPatchArgs | undefined => {
+  if (id === undefined) {
+    return undefined;
+  }
+  if (id === UNSET_VALUE) {
+    return null;
+  }
+  const pins = parseSshHostKeyPins(hostKeyPins);
+  if (id.trim().length === 0 || pins === undefined) {
+    return undefined;
+  }
+  return {
+    id,
+    ...(port !== undefined ? {port} : {}),
+    host_key_pins: pins,
   };
 };
 
@@ -326,6 +406,7 @@ const nativeTargetCredentialsPatchFromParams = ({
   snmpCredentialId,
   sshCredentialId,
   sshElevateCredentialId,
+  sshHostKeyPins,
 }: TargetCommandSaveArgs): NativeTargetCredentialsPatchArgs | undefined => {
   if (!isValidSshPort(port)) {
     return undefined;
@@ -344,7 +425,7 @@ const nativeTargetCredentialsPatchFromParams = ({
     return undefined;
   }
   const credentials: NativeTargetCredentialsPatchArgs = {
-    ssh: nativeCredentialPatchFromId(sshCredentialId, port),
+    ssh: nativeSshCredentialPatchFromId(sshCredentialId, port, sshHostKeyPins),
     sshElevate: nativeCredentialPatchFromId(sshElevateCredentialId),
     smb: nativeCredentialPatchFromId(smbCredentialId),
     esxi: nativeCredentialPatchFromId(esxiCredentialId),
@@ -377,6 +458,7 @@ const nativeTargetPatchArgsFromParams = ({
   snmpCredentialId,
   sshCredentialId,
   sshElevateCredentialId,
+  sshHostKeyPins,
   targetExcludeSource,
   targetSource,
 }: TargetCommandSaveArgs): NativeTargetPatchArgs | undefined => {
@@ -429,18 +511,21 @@ const nativeTargetPatchArgsFromParams = ({
     snmpCredentialId,
     sshCredentialId,
     sshElevateCredentialId,
+    sshHostKeyPins,
   });
+  const hasCredentialPatchInput = [
+    esxiCredentialId,
+    krb5CredentialId,
+    smbCredentialId,
+    snmpCredentialId,
+    sshCredentialId,
+    sshElevateCredentialId,
+  ].some(value => value !== undefined);
   if (
     credentials === undefined &&
-    [
-      esxiCredentialId,
-      krb5CredentialId,
-      smbCredentialId,
-      snmpCredentialId,
-      sshCredentialId,
-      sshElevateCredentialId,
-      port,
-    ].some(value => value !== undefined)
+    (hasCredentialPatchInput ||
+      (port !== undefined && port !== 22) ||
+      (sshHostKeyPins?.trim().length ?? 0) > 0)
   ) {
     return undefined;
   }
@@ -507,6 +592,7 @@ class TargetCommand extends EntityCommand<Target> {
     allowSimultaneousIPs,
     sshCredentialId = UNSET_VALUE,
     sshElevateCredentialId = UNSET_VALUE,
+    sshHostKeyPins,
     port,
     smbCredentialId = UNSET_VALUE,
     esxiCredentialId = UNSET_VALUE,
@@ -536,11 +622,17 @@ class TargetCommand extends EntityCommand<Target> {
       snmpCredentialId,
       sshCredentialId,
       sshElevateCredentialId,
+      sshHostKeyPins,
       targetExcludeSource,
       targetSource,
     });
     if (canUseNativeApi(this.http) && nativeCreateArgs !== undefined) {
       return createNativeTarget(this.http, nativeCreateArgs);
+    }
+    if (canUseNativeApi(this.http) && !isUnsetCredential(sshCredentialId)) {
+      throw new Error(
+        'SSH credential targets require valid per-IP OpenSSH SHA-256 host-key pins and the native manual target workflow.',
+      );
     }
 
     try {
@@ -588,6 +680,15 @@ class TargetCommand extends EntityCommand<Target> {
     const nativePatchArgs = nativeTargetPatchArgsFromParams(args);
     if (canUseNativeApi(this.http) && nativePatchArgs !== undefined) {
       return patchNativeTarget(this.http, nativePatchArgs);
+    }
+    if (
+      canUseNativeApi(this.http) &&
+      args.sshCredentialId !== undefined &&
+      args.sshCredentialId !== UNSET_VALUE
+    ) {
+      throw new Error(
+        'SSH credential targets require valid per-IP OpenSSH SHA-256 host-key pins and the native manual target workflow.',
+      );
     }
 
     const {

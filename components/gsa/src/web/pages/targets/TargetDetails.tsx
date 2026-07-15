@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -152,6 +153,19 @@ const TargetDetails = ({entity}: TargetDetailsProps) => {
                       {_(' on Port {{port}}', {
                         port: String(sshCredential.port ?? ''),
                       })}
+                    </TableData>
+                  </TableRow>
+                )}
+
+                {isDefined(sshCredential) && (
+                  <TableRow>
+                    <TableData>{_('Trusted SSH host keys')}</TableData>
+                    <TableData>
+                      {sshCredential.hostKeyPins.map(pin => (
+                        <div key={`${pin.host}-${pin.fingerprint}`}>
+                          {pin.host} {pin.fingerprint}
+                        </div>
+                      ))}
                     </TableData>
                   </TableRow>
                 )}

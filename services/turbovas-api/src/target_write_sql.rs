@@ -170,8 +170,8 @@ pub(crate) fn target_clone_metadata_sql() -> &'static str {
 }
 
 pub(crate) fn target_clone_login_data_sql() -> &'static str {
-    "INSERT INTO targets_login_data (target, type, credential, port)
-     SELECT $2, type, credential, port
+    "INSERT INTO targets_login_data (target, type, credential, port, host_key_pins)
+     SELECT $2, type, credential, port, host_key_pins
        FROM targets_login_data
       WHERE target = $1;"
 }
@@ -183,8 +183,8 @@ pub(crate) fn target_delete_login_data_by_type_sql() -> &'static str {
 }
 
 pub(crate) fn target_insert_login_data_sql() -> &'static str {
-    "INSERT INTO targets_login_data (target, type, credential, port)
-     VALUES ($1, $2, $3, $4);"
+    "INSERT INTO targets_login_data (target, type, credential, port, host_key_pins)
+     VALUES ($1, $2, $3, $4, $5);"
 }
 
 pub(crate) fn target_clone_tags_sql() -> &'static str {
@@ -210,8 +210,9 @@ pub(crate) fn target_trash_insert_sql() -> &'static str {
 }
 
 pub(crate) fn target_trash_login_data_insert_sql() -> &'static str {
-    "INSERT INTO targets_trash_login_data (target, type, credential, port, credential_location)
-     SELECT $1, type, credential, port, 0
+    "INSERT INTO targets_trash_login_data
+        (target, type, credential, port, credential_location, host_key_pins)
+     SELECT $1, type, credential, port, 0, host_key_pins
        FROM targets_login_data
       WHERE target = $2;"
 }
@@ -264,8 +265,8 @@ pub(crate) fn target_restore_metadata_sql() -> &'static str {
 }
 
 pub(crate) fn target_restore_login_data_sql() -> &'static str {
-    "INSERT INTO targets_login_data (target, type, credential, port)
-     SELECT $2, type, credential, port
+    "INSERT INTO targets_login_data (target, type, credential, port, host_key_pins)
+     SELECT $2, type, credential, port, host_key_pins
        FROM targets_trash_login_data
       WHERE target = $1;"
 }

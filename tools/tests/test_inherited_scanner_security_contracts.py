@@ -69,6 +69,45 @@ class InheritedScannerSecurityContractTests(unittest.TestCase):
         self.assertEqual(budget_source.count("g_string_append_len"), 1)
         self.assertIn("length > limit - retained", budget_source)
 
+    def test_scanner_results_use_typed_framing(self):
+        expected_producers = (
+            "misc/network.c",
+            "misc/plugutils.c",
+            "misc/table_driven_lsc.c",
+            "nasl/nasl_scanner_glue.c",
+            "src/attack.c",
+            "src/hosts.c",
+            "src/openvas.c",
+            "src/pluginlaunch.c",
+        )
+        scanner = ROOT / "components/openvas-scanner"
+        producers = []
+        for path in scanner.rglob("*.c"):
+            source = path.read_text(encoding="utf-8")
+            if '"internal/results"' in source:
+                producers.append(str(path.relative_to(scanner)))
+        self.assertEqual(sorted(producers), sorted(expected_producers))
+
+        for relative_path in producers:
+            with self.subTest(path=relative_path):
+                source = (scanner / relative_path).read_text(encoding="utf-8")
+                self.assertIn(
+                    "openvas_result_message_new",
+                    source,
+                    "every retained scanner-result producer must use typed framing",
+                )
+
+        ospd = (
+            ROOT / "components/ospd-openvas/ospd_openvas/daemon.py"
+        ).read_text(encoding="utf-8")
+        rust = (
+            scanner / "rust/src/openvas/result_collector.rs"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("split('|||'", ospd)
+        self.assertNotIn('split("|||")', rust)
+        self.assertIn("result.get('version') != 1", ospd)
+        self.assertIn("record.version == 1", rust)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -10,6 +10,7 @@
 """Unit Test for ospd-openvas"""
 
 import io
+import json
 import logging
 from pathlib import Path
 
@@ -24,6 +25,7 @@ from tests.helper import assert_called_once
 from ospd_openvas.daemon import (
     OSPD_PARAMS,
     OpenVasVtsFilter,
+    parse_openvas_result_row,
 )
 from ospd_openvas.openvas import Openvas
 from ospd_openvas.notus import Notus, hashsum_verificator
@@ -365,6 +367,30 @@ OSPD_PARAMS_OUT = {
 }
 
 
+def openvas_result_row(
+    result_type,
+    host_ip='',
+    host_name='',
+    port='',
+    oid='',
+    value='',
+    uri='',
+):
+    return json.dumps(
+        {
+            'version': 1,
+            'result_type': result_type,
+            'host_ip': host_ip,
+            'host_name': host_name,
+            'port': port,
+            'oid': oid,
+            'value': value,
+            'uri': uri,
+        },
+        separators=(',', ':'),
+    )
+
+
 class TestOspdOpenvas(TestCase):
     def test_return_disabled_verifier(self):
         verifier = hashsum_verificator(Path('/tmp'), True)
@@ -508,8 +534,13 @@ class TestOspdOpenvas(TestCase):
         w.create_scan('123-456', targets, None, [])
 
         results = [
-            "LOG|||192.168.0.1|||localhost|||general/Host_Details||||||Host"
-            " dead",
+            openvas_result_row(
+                'LOG',
+                host_ip='192.168.0.1',
+                host_name='localhost',
+                port='general/Host_Details',
+                value='Host dead',
+            ),
         ]
         MockDBClass.get_result.return_value = results
         mock_add_scan_log_to_list.return_value = None
@@ -538,7 +569,12 @@ class TestOspdOpenvas(TestCase):
         w.create_scan('123-456', targets, None, [])
 
         results = [
-            "ERRMSG|||127.0.0.1|||localhost|||||||||Host access denied.",
+            openvas_result_row(
+                'ERRMSG',
+                host_ip='127.0.0.1',
+                host_name='localhost',
+                value='Host access denied.',
+            ),
         ]
         MockDBClass.get_result.return_value = results
         mock_add_scan_error_to_list.return_value = None
@@ -561,9 +597,7 @@ class TestOspdOpenvas(TestCase):
         targets = OspRequest.process_target_element(target_element)
         w.create_scan('123-456', targets, None, [])
 
-        results = [
-            "DEADHOST||| ||| ||| ||| |||4",
-        ]
+        results = [openvas_result_row('DEADHOST', value='4')]
         MockDBClass.get_result.return_value = results
         w.scan_collection.set_amount_dead_hosts = MagicMock()
 
@@ -584,7 +618,9 @@ class TestOspdOpenvas(TestCase):
         w.create_scan('123-456', targets, None, [])
 
         results = [
-            "HOST_START|||192.168.10.124||| ||| ||||||today 1",
+            openvas_result_row(
+                'HOST_START', host_ip='192.168.10.124', value='today 1'
+            ),
         ]
 
         MockDBClass.get_result.return_value = results
@@ -605,9 +641,7 @@ class TestOspdOpenvas(TestCase):
         targets = OspRequest.process_target_element(target_element)
         w.create_scan('123-456', targets, None, [])
 
-        results = [
-            "HOSTS_COUNT||| ||| ||| ||| |||4",
-        ]
+        results = [openvas_result_row('HOSTS_COUNT', value='4')]
         MockDBClass.get_result.return_value = results
         w.set_scan_total_hosts = MagicMock()
 
@@ -633,7 +667,13 @@ class TestOspdOpenvas(TestCase):
             hostile_row,
             b'not-a-text-result-row',
             'x' * (w.MAX_REDIS_RESULT_ROW_LENGTH + 1),
-            'LOG|||192.168.0.1|||localhost|||general/Host_Details||||||Host dead',
+            openvas_result_row(
+                'LOG',
+                host_ip='192.168.0.1',
+                host_name='localhost',
+                port='general/Host_Details',
+                value='Host dead',
+            ),
         ]
 
         w.report_openvas_results(MockDBClass, '123-456')
@@ -641,6 +681,45 @@ class TestOspdOpenvas(TestCase):
         mock_add_scan_log_to_list.assert_called_once()
         self.assertEqual(mock_warning.call_count, 3)
         self.assertNotIn(hostile_row, str(mock_warning.call_args_list))
+
+    def test_versioned_openvas_result_preserves_delimiter_fields(self):
+        row = (
+            '{"version":1,"result_type":"ALARM","host_ip":"192.0.2.1",'
+            '"host_name":"host|||name.example","port":"443/tcp",'
+            '"oid":"1.3.6.1","value":"line ||| two","uri":"/a|||b"}'
+        )
+
+        result = parse_openvas_result_row(row)
+
+        self.assertEqual(result['host_name'], 'host|||name.example')
+        self.assertEqual(result['value'], 'line ||| two')
+        self.assertEqual(result['uri'], '/a|||b')
+
+    def test_openvas_result_rejects_shifted_or_invalid_rows(self):
+        self.assertIsNone(
+            parse_openvas_result_row(
+                'ALARM|||192.0.2.1|||host|||shift|||443/tcp|||1.3.6.1|||value'
+            )
+        )
+        self.assertIsNone(parse_openvas_result_row('LOG|||too|||short'))
+        self.assertIsNone(
+            parse_openvas_result_row(
+                '{"version":true,"result_type":"LOG","host_ip":"",'
+                '"host_name":"","port":"","oid":"","value":"","uri":""}'
+            )
+        )
+        self.assertIsNone(
+            parse_openvas_result_row(
+                '{"version":1,"version":1,"result_type":"LOG","host_ip":"",'
+                '"host_name":"","port":"","oid":"","value":"","uri":""}'
+            )
+        )
+        self.assertIsNone(
+            parse_openvas_result_row(
+                '{"version":2,"result_type":"LOG","host_ip":"","host_name":"",'
+                '"port":"","oid":"","value":"","uri":""}'
+            )
+        )
 
     @patch('ospd_openvas.daemon.logger.warning')
     @patch('ospd_openvas.daemon.BaseDB')
@@ -656,14 +735,14 @@ class TestOspdOpenvas(TestCase):
         w.scan_collection.set_amount_dead_hosts = MagicMock()
 
         MockDBClass.get_result.return_value = [
-            'HOSTS_COUNT||| ||| ||| ||| |||NaN',
-            'HOSTS_COUNT||| ||| ||| ||| |||-1',
-            'HOSTS_COUNT||| ||| ||| ||| |||2147483648',
-            'HOSTS_COUNT||| ||| ||| ||| |||4',
-            'HOSTS_EXCLUDED||| ||| ||| ||| |||Infinity',
-            'HOSTS_EXCLUDED||| ||| ||| ||| |||2',
-            'DEADHOST||| ||| ||| ||| |||-1',
-            'DEADHOST||| ||| ||| ||| |||3',
+            openvas_result_row('HOSTS_COUNT', value='NaN'),
+            openvas_result_row('HOSTS_COUNT', value='-1'),
+            openvas_result_row('HOSTS_COUNT', value='2147483648'),
+            openvas_result_row('HOSTS_COUNT', value='4'),
+            openvas_result_row('HOSTS_EXCLUDED', value='Infinity'),
+            openvas_result_row('HOSTS_EXCLUDED', value='2'),
+            openvas_result_row('DEADHOST', value='-1'),
+            openvas_result_row('DEADHOST', value='3'),
         ]
 
         w.report_openvas_results(MockDBClass, '123-456')
@@ -674,6 +753,28 @@ class TestOspdOpenvas(TestCase):
             '123-456', total_dead=3
         )
         self.assertEqual(mock_warning.call_count, 5)
+
+    @patch('ospd_openvas.daemon.logger.warning')
+    @patch('ospd_openvas.daemon.BaseDB')
+    def test_get_openvas_result_bounds_accumulated_dead_hosts(
+        self, MockDBClass, mock_warning
+    ):
+        w = DummyDaemon()
+        target_element = w.create_xml_target()
+        targets = OspRequest.process_target_element(target_element)
+        w.create_scan('123-456', targets, None, [])
+        w.scan_collection.set_amount_dead_hosts = MagicMock()
+        MockDBClass.get_result.return_value = [
+            openvas_result_row('DEADHOST', value=str(w.MAX_OPENVAS_HOST_COUNT)),
+            openvas_result_row('DEADHOST', value='1'),
+        ]
+
+        w.report_openvas_results(MockDBClass, '123-456')
+
+        w.scan_collection.set_amount_dead_hosts.assert_called_once_with(
+            '123-456', total_dead=w.MAX_OPENVAS_HOST_COUNT
+        )
+        mock_warning.assert_called_once()
 
     @patch('ospd_openvas.daemon.BaseDB')
     @patch('ospd_openvas.daemon.ResultList.add_scan_alarm_to_list')
@@ -687,7 +788,10 @@ class TestOspdOpenvas(TestCase):
         targets = OspRequest.process_target_element(target_element)
         w.create_scan('123-456', targets, None, [])
         w.scan_collection.scans_table['123-456']['results'] = list()
-        results = ["ALARM||| ||| ||| ||| |||some alarm|||path", None]
+        results = [
+            openvas_result_row('ALARM', value='some alarm', uri='path'),
+            None,
+        ]
         MockDBClass.get_result.return_value = results
         mock_add_scan_alarm_to_list.return_value = None
 

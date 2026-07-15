@@ -1,6 +1,7 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
  * SPDX-FileCopyrightText: 2006 Software in the Public Interest, Inc.
  * SPDX-FileCopyrightText: 1998-2006 Tenable Network Security, Inc.
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-only
  */
@@ -18,6 +19,7 @@
 #include "../misc/nvt_categories.h" /* for ACT_INIT */
 #include "../misc/pcap_openvas.h"   /* for v6_is_local_ip */
 #include "../misc/plugutils.h"
+#include "../misc/result_message.h"
 #include "../misc/table_driven_lsc.h" /*for run_table_driven_lsc */
 #include "../misc/user_agent.h"       /* for user_agent_set */
 #include "../nasl/nasl_debug.h"       /* for nasl_*_filename */
@@ -226,9 +228,9 @@ message_to_client (kb_t kb, const char *msg, const char *ip_str,
 {
   char *buf;
 
-  buf = g_strdup_printf ("%s|||%s|||%s|||%s||| |||%s", type,
-                         ip_str ? ip_str : "", ip_str ? ip_str : "",
-                         port ? port : " ", msg ? msg : "No error.");
+  buf = openvas_result_message_new (
+    type, ip_str ? ip_str : "", ip_str ? ip_str : "", port ? port : " ", " ",
+    msg ? msg : "No error.", "");
   kb_item_push_str_with_main_kb_check (kb, "internal/results", buf);
   g_free (buf);
 }
@@ -332,13 +334,12 @@ call_lsc (struct attack_start_args *args, const char *ip_str)
                             os_release)
       < 0)
     {
-      char buffer[2048];
-      snprintf (buffer, sizeof (buffer),
-                "ERRMSG|||%s||| ||| ||| ||| Unable to "
-                "launch table driven lsc",
-                ip_str);
+      char *buffer = openvas_result_message_new (
+        "ERRMSG", ip_str, " ", " ", " ", "Unable to launch table driven lsc",
+        "");
       kb_item_push_str_with_main_kb_check (get_main_kb (), "internal/results",
                                            buffer);
+      g_free (buffer);
       g_warning ("%s: Unable to launch table driven LSC", __func__);
     }
   g_free (package_list);
@@ -613,16 +614,15 @@ attack_host (struct scan_globals *globals, struct in6_addr *ip,
                */
               if (e == ERR_HOST_DEAD)
                 {
-                  char buffer[2048];
-
-                  snprintf (
-                    buffer, sizeof (buffer),
-                    "LOG|||%s||| |||general/Host_Details||| |||<host><detail>"
-                    "<name>Host dead</name><value>1</value><source>"
-                    "<description/><type/><name/></source></detail></host>",
-                    ip_str);
+                  char *buffer = openvas_result_message_new (
+                    "LOG", ip_str, " ", "general/Host_Details", " ",
+                    "<host><detail><name>Host dead</name><value>1</value>"
+                    "<source><description/><type/><name/></source></detail>"
+                    "</host>",
+                    "");
                   kb_item_push_str_with_main_kb_check (
                     get_main_kb (), "internal/results", buffer);
+                  g_free (buffer);
 
                   comm_send_status_host_dead (get_main_kb (), ip_str);
                   goto host_died;

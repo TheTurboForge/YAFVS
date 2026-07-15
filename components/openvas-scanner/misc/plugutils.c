@@ -1,5 +1,6 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
  * SPDX-FileCopyrightText: 1998-2003 Renaud Deraison
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -13,6 +14,7 @@
 
 #include "kb_cache.h" // for get_main_kb
 #include "network.h"  // for OPENVAS_ENCAPS_IP
+#include "result_message.h"
 #include "scan_id.h"
 #include "support.h" // for g_memdup2 workaround
 
@@ -711,11 +713,12 @@ proto_post_wrapped (const char *oid, struct script_infos *desc, int port,
                     const char *uri)
 {
   const char *hostname = "";
-  char *buffer, *data, port_s[16] = "general";
+  char *action_utf8, *buffer, port_s[16] = "general", port_with_proto[32],
+       *uri_utf8;
   char ip_str[INET6_ADDRSTRLEN];
   GError *err = NULL;
   GString *action_str;
-  gsize length;
+  gboolean source_is_utf8;
 
   /* Should not happen, just to avoid trouble stop here if no NVTI found */
   if (!oid)
@@ -731,34 +734,47 @@ proto_post_wrapped (const char *oid, struct script_infos *desc, int port,
 
   if (port > 0)
     snprintf (port_s, sizeof (port_s), "%d", port);
+  snprintf (port_with_proto, sizeof (port_with_proto), "%s/%s", port_s,
+            proto);
   if (current_vhost)
     hostname = current_vhost->value;
   else if (desc->vhosts)
     hostname = ((gvm_vhost_t *) desc->vhosts->data)->value;
   addr6_to_str (plug_get_host_ip (desc), ip_str);
-  buffer = g_strdup_printf ("%s|||%s|||%s|||%s/%s|||%s|||%s|||%s",
-                            msg_type_to_str (msg_type), ip_str,
-                            hostname ? hostname : " ", port_s, proto, oid,
-                            action_str->str, uri ? uri : "");
-
-  /* Convert to UTF-8 before sending to Manager only if necessary. */
-  if (is_utf8_encoded (desc->name) > 0)
-    data = g_strdup (buffer);
-  else
-    data = g_convert (buffer, -1, "UTF-8", "ISO_8859-1", NULL, &length, &err);
-
-  if (!data)
+  source_is_utf8 = is_utf8_encoded (desc->name) > 0;
+  if (source_is_utf8)
     {
-      g_warning ("%s: Error converting to UTF-8: %s\nOriginal string: %s",
-                 __func__, err ? err->message: "", buffer);
-      g_free (buffer);
+      action_utf8 = g_strdup (action_str->str);
+      uri_utf8 = g_strdup (uri ? uri : "");
+    }
+  else
+    {
+      action_utf8 = g_convert (action_str->str, -1, "UTF-8", "ISO_8859-1",
+                               NULL, NULL, &err);
+      uri_utf8 = action_utf8
+                   ? g_convert (uri ? uri : "", -1, "UTF-8", "ISO_8859-1",
+                                NULL, NULL, &err)
+                   : NULL;
+    }
+
+  if (!action_utf8 || !uri_utf8)
+    {
+      g_warning ("%s: Error converting result fields to UTF-8: %s", __func__,
+                 err ? err->message : "");
+      g_clear_error (&err);
+      g_free (action_utf8);
+      g_free (uri_utf8);
       g_string_free (action_str, TRUE);
       return;
     }
 
+  buffer = openvas_result_message_new (
+    msg_type_to_str (msg_type), ip_str, hostname ? hostname : " ",
+    port_with_proto, oid, action_utf8, uri_utf8);
   kb_item_push_str_with_main_kb_check (get_main_kb (), "internal/results",
-                                       data);
-  g_free (data);
+                                       buffer);
+  g_free (action_utf8);
+  g_free (uri_utf8);
   g_free (buffer);
   g_string_free (action_str, TRUE);
 }

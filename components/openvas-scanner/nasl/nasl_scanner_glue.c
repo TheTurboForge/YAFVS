@@ -1,5 +1,6 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
  * SPDX-FileCopyrightText: 2002-2004 Tenable Network Security
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-only
  */
@@ -19,6 +20,7 @@
 #include "../misc/kb_cache.h"
 #include "../misc/network.h"          /* for getpts */
 #include "../misc/plugutils.h"        /* for plug_set_id */
+#include "../misc/result_message.h"
 #include "../misc/support.h"          /* for the g_memdup2 workaround */
 #include "../misc/table_driven_lsc.h" /* for lsc */
 #include "../misc/vendorversion.h"    /* for vendor_version_get */
@@ -1138,9 +1140,9 @@ security_notus (lex_ctxt *lexic)
 
   gchar ip_str[INET6_ADDRSTRLEN];
   addr6_to_str (lexic->script_infos->ip, ip_str);
-  // type|||IP|||HOSTNAME|||package|||OID|||the result message|||URI
-  kb_result = g_strdup_printf ("%s|||%s|||%s|||%s|||%s|||%s|||%s", "ALARM",
-                               ip_str, " ", "package", oid, result_string, "");
+  kb_result = openvas_result_message_new ("ALARM", ip_str, " ", "package",
+                                          (const char *) oid,
+                                          (const char *) result_string, "");
 
   // Only free result_string for notus type, as skiron uses a reference to a
   // nasl var

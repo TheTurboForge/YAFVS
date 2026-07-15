@@ -1,6 +1,7 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
  * SPDX-FileCopyrightText: 2006 Software in the Public Interest, Inc.
  * SPDX-FileCopyrightText: 1998-2006 Tenable Network Security, Inc.
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-only
  */
@@ -14,6 +15,7 @@
 
 #include "../misc/network.h" /* for internal_recv */
 #include "../misc/plugutils.h"
+#include "../misc/result_message.h"
 #include "utils.h" /* for data_left() */
 
 #include <errno.h>               /* for errno() */
@@ -64,7 +66,7 @@ void
 host_set_time (kb_t kb, char *ip, char *type)
 {
   char *timestr;
-  char log_msg[1024];
+  char *log_msg;
   time_t t;
   int len;
 
@@ -77,11 +79,11 @@ host_set_time (kb_t kb, char *ip, char *type)
   if (timestr[len - 1] == '\n')
     timestr[len - 1] = '\0';
 
-  snprintf (log_msg, sizeof (log_msg), "%s|||%s||||||||| |||%s", type, ip,
-            timestr);
+  log_msg = openvas_result_message_new (type, ip, "", "", "", timestr, "");
   g_free (timestr);
 
   kb_item_push_str_with_main_kb_check (kb, "internal/results", log_msg);
+  g_free (log_msg);
 }
 
 static void

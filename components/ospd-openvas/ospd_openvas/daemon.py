@@ -9,6 +9,7 @@
 """Setup for the OSP OpenVAS Server."""
 
 import logging
+import json
 import math
 import os
 import select
@@ -47,6 +48,54 @@ from ospd_openvas.messaging.mqtt import MQTTClient, MQTTDaemon, MQTTSubscriber
 from ospd_openvas.secretfile import resolve_mqtt_broker_password
 
 logger = logging.getLogger(__name__)
+
+OPENVAS_RESULT_FIELDS = (
+    'result_type',
+    'host_ip',
+    'host_name',
+    'port',
+    'oid',
+    'value',
+    'uri',
+)
+OPENVAS_RESULT_ROW_MAX_BYTES = 4 * 1024 * 1024
+
+
+def unique_json_object(pairs: List[Tuple[str, Any]]) -> Dict[str, Any]:
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('duplicate JSON object member')
+        result[key] = value
+    return result
+
+
+def parse_openvas_result_row(row: Any) -> Optional[Dict[str, str]]:
+    """Parse one bounded, versioned scanner-result row."""
+    if not isinstance(row, str):
+        return None
+
+    if not row.lstrip().startswith('{'):
+        return None
+    try:
+        if len(row.encode('utf-8')) > OPENVAS_RESULT_ROW_MAX_BYTES:
+            return None
+        result = json.loads(row, object_pairs_hook=unique_json_object)
+    except (UnicodeEncodeError, json.JSONDecodeError, TypeError, ValueError):
+        return None
+    if (
+        not isinstance(result, dict)
+        or type(result.get('version')) is not int
+        or result.get('version') != 1
+        or set(result) != {'version', *OPENVAS_RESULT_FIELDS}
+        or any(
+            not isinstance(result.get(field), str)
+            for field in OPENVAS_RESULT_FIELDS
+        )
+    ):
+        return None
+    return {field: result[field] for field in OPENVAS_RESULT_FIELDS}
+
 
 # TurboVAS defaults scanner plugin execution to 180 seconds because it is
 # preferable for things to fail quickly.
@@ -820,7 +869,7 @@ class OSPDopenvas(OSPDaemon):
         return has_openvas
 
     MAX_REDIS_PROGRESS_ROW_LENGTH = 4 * 1024
-    MAX_REDIS_RESULT_ROW_LENGTH = 4 * 1024 * 1024
+    MAX_REDIS_RESULT_ROW_LENGTH = OPENVAS_RESULT_ROW_MAX_BYTES
 
     def report_openvas_scan_status(self, kbdb: BaseDB, scan_id: str):
         """Get all status entries from redis kb.
@@ -902,39 +951,28 @@ class OSPDopenvas(OSPDaemon):
             scan_id: Scan ID to identify the current scan.
         """
 
-        # result_type|||host ip|||hostname|||port|||OID|||value[|||uri]
+        # Scanner results are bounded version-1 JSON records.
         all_results = db.get_result()
         results = []
         for res in all_results:
             if not res:
                 continue
-            try:
-                if len(res) > self.MAX_REDIS_RESULT_ROW_LENGTH:
-                    logger.warning(
-                        '%s: Ignoring oversized Redis result row.', scan_id
-                    )
-                    continue
-                msg = res.split('|||', maxsplit=6)
-            except (AttributeError, TypeError, ValueError):
+            if not isinstance(res, str):
                 logger.warning(
                     '%s: Ignoring malformed Redis result row.', scan_id
                 )
                 continue
-            if len(msg) < 6:
+            if len(res) > self.MAX_REDIS_RESULT_ROW_LENGTH:
+                logger.warning(
+                    '%s: Ignoring oversized Redis result row.', scan_id
+                )
+                continue
+            result = parse_openvas_result_row(res)
+            if result is None:
                 logger.warning(
                     '%s: Ignoring malformed Redis result row.', scan_id
                 )
                 continue
-            result = {
-                "result_type": msg[0],
-                "host_ip": msg[1],
-                "host_name": msg[2],
-                "port": msg[3],
-                "oid": msg[4],
-                "value": msg[5],
-            }
-            if len(msg) > 6:
-                result["uri"] = msg[6]
 
             results.append(result)
 
@@ -1086,7 +1124,13 @@ class OSPDopenvas(OSPDaemon):
                     res["value"], scan_id, 'dead host count'
                 )
                 if dead_hosts is not None:
-                    total_dead = total_dead + dead_hosts
+                    if dead_hosts <= self.MAX_OPENVAS_HOST_COUNT - total_dead:
+                        total_dead += dead_hosts
+                    else:
+                        logger.warning(
+                            '%s: Ignoring overflowing Redis dead host count.',
+                            scan_id,
+                        )
 
             # To update total host count
             if res["result_type"] == 'HOSTS_COUNT':

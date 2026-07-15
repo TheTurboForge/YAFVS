@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2024 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
@@ -9,6 +10,10 @@ use std::{collections::HashMap, str::FromStr};
 use crate::openvas::openvas_redis::{KbAccess, VtHelper};
 use crate::osp::{OspResultType, OspScanResult};
 use crate::storage::redis::RedisStorageResult;
+use serde::Deserialize;
+
+const MAX_REDIS_RESULT_ROW_LENGTH: usize = 4 * 1024 * 1024;
+const MAX_OPENVAS_HOST_COUNT: i64 = i32::MAX as i64;
 
 /// Structure to hold the results retrieve from redis main kb
 #[derive(Default, Debug, Clone)]
@@ -29,6 +34,39 @@ pub struct Results {
     pub host_status: HashMap<String, i32>,
     /// The scan status
     pub scan_status: String,
+}
+
+fn parse_openvas_host_count(value: &str, kind: &str) -> Option<i64> {
+    match i64::from_str(value) {
+        Ok(count) if (0..=MAX_OPENVAS_HOST_COUNT).contains(&count) => Some(count),
+        _ => {
+            tracing::warn!(kind, "Ignoring malformed Redis host count");
+            None
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ScannerResultRecord {
+    version: u8,
+    result_type: String,
+    host_ip: String,
+    host_name: String,
+    port: String,
+    oid: String,
+    value: String,
+    uri: String,
+}
+
+impl ScannerResultRecord {
+    fn parse(input: &str) -> Option<Self> {
+        if !input.trim_start().starts_with('{') {
+            return None;
+        }
+        let record: Self = serde_json::from_str(input).ok()?;
+        (record.version == 1).then_some(record)
+    }
 }
 
 impl Results {
@@ -58,28 +96,27 @@ where
     }
 
     fn process_results(&mut self, ov_results: Vec<String>) -> RedisStorageResult<Results> {
-        let mut new_dead = 0;
-        let mut count_total = 0;
-        let mut count_excluded = 0;
+        let mut new_dead: i64 = 0;
+        let mut count_total: i64 = 0;
+        let mut count_excluded: i64 = 0;
 
         let mut scan_results: Vec<OspScanResult> = Vec::new();
         for result in ov_results.iter() {
-            //result_type|||host ip|||hostname|||port|||OID|||value[|||uri]
-            let res_fields: Vec<&str> = result.split("|||").collect();
-
-            let result_type = res_fields[0].trim().to_owned();
-            let host_ip = res_fields[1].trim().to_owned();
-            let host_name = res_fields[2].trim().to_owned();
-            let port = res_fields[3].trim().to_owned();
-            let oid = res_fields[4].trim().to_owned();
-            let value = res_fields[5].trim().to_owned();
-            let uri = {
-                if res_fields.len() > 6 {
-                    Some(res_fields[6].trim().to_owned())
-                } else {
-                    None
-                }
+            if result.len() > MAX_REDIS_RESULT_ROW_LENGTH {
+                tracing::warn!("Ignoring oversized Redis result row");
+                continue;
+            }
+            let Some(record) = ScannerResultRecord::parse(result) else {
+                tracing::warn!("Ignoring malformed Redis result row");
+                continue;
             };
+            let result_type = record.result_type.trim().to_owned();
+            let host_ip = record.host_ip.trim().to_owned();
+            let host_name = record.host_name.trim().to_owned();
+            let port = record.port.trim().to_owned();
+            let oid = record.oid.trim().to_owned();
+            let value = record.value.trim().to_owned();
+            let uri = record.uri.trim().to_owned();
 
             let roid = oid.trim();
 
@@ -97,11 +134,7 @@ where
             let excluded_hosts = result_type == "HOSTS_EXCLUDED";
 
             // TODO: do we need the URI?
-            let _uri = if let Some(uri) = uri {
-                uri
-            } else {
-                "".to_string()
-            };
+            let _uri = uri;
 
             let mut rname = String::new();
             if !host_is_dead && !host_deny && !start_end_msg && !host_count && !excluded_hosts {
@@ -141,11 +174,20 @@ where
             } else if result_type == "ALARM" {
                 push_result(OspResultType::Alarm);
             } else if result_type == "DEADHOST" {
-                new_dead += i64::from_str(&value).expect("Valid amount of dead hosts");
+                if let Some(count) = parse_openvas_host_count(&value, "dead hosts") {
+                    match new_dead.checked_add(count) {
+                        Some(total) if total <= MAX_OPENVAS_HOST_COUNT => new_dead = total,
+                        _ => tracing::warn!("Ignoring overflowing Redis dead-host count"),
+                    }
+                }
             } else if host_count {
-                count_total = i64::from_str(&value).expect("Valid amount of dead hosts");
+                if let Some(count) = parse_openvas_host_count(&value, "total hosts") {
+                    count_total = count;
+                }
             } else if excluded_hosts {
-                count_excluded = i64::from_str(&value).expect("Valid amount of excluded hosts");
+                if let Some(count) = parse_openvas_host_count(&value, "excluded hosts") {
+                    count_excluded = count;
+                }
             }
         }
 
@@ -224,18 +266,56 @@ mod tests {
 
     use crate::openvas::openvas_redis::test::FakeRedis;
 
-    use super::ResultHelper;
+    use super::{MAX_REDIS_RESULT_ROW_LENGTH, ResultHelper};
+
+    fn result_row(
+        result_type: &str,
+        host_ip: &str,
+        host_name: &str,
+        port: &str,
+        oid: &str,
+        value: &str,
+        uri: &str,
+    ) -> String {
+        serde_json::json!({
+            "version": 1,
+            "result_type": result_type,
+            "host_ip": host_ip,
+            "host_name": host_name,
+            "port": port,
+            "oid": oid,
+            "value": value,
+            "uri": uri,
+        })
+        .to_string()
+    }
+
     #[test]
     fn test_results() {
         let results = vec![
-            "LOG|||127.0.0.1||| localhost ||||||||| HOST_START".to_string(),
-            "ERRMSG|||127.0.0.1||| localhost ||||||1.2.3.4.5.6||| NVT timeout".to_string(),
-            "ALARM|||127.0.0.1||| example.com |||22/tcp|||12.11.10.9.8.7||| Something wrong|||/var/lib/lib1.jar".to_string(),
-            "DEADHOST||| ||| ||| ||| |||3".to_string(),
-            "HOSTS_COUNT||| ||| ||| ||| |||12".to_string(),
-            "DEADHOST||| ||| ||| ||| |||1".to_string(),
-            "HOSTS_EXCLUDED||| ||| ||| ||| |||4".to_string(),
-
+            result_row("LOG", "127.0.0.1", "localhost", "", "", "HOST_START", ""),
+            result_row(
+                "ERRMSG",
+                "127.0.0.1",
+                "localhost",
+                "",
+                "1.2.3.4.5.6",
+                "NVT timeout",
+                "",
+            ),
+            result_row(
+                "ALARM",
+                "127.0.0.1",
+                "example.com",
+                "22/tcp",
+                "12.11.10.9.8.7",
+                "Something wrong",
+                "/var/lib/lib1.jar",
+            ),
+            result_row("DEADHOST", "", "", "", "", "3", ""),
+            result_row("HOSTS_COUNT", "", "", "", "", "12", ""),
+            result_row("DEADHOST", "", "", "", "", "1", ""),
+            result_row("HOSTS_EXCLUDED", "", "", "", "", "4", ""),
         ];
 
         let mut rc = FakeRedis {
@@ -296,6 +376,68 @@ mod tests {
 
         assert_eq!(results.count_dead, 4);
         assert_eq!(results.count_total, 12);
+    }
+
+    #[test]
+    fn versioned_result_preserves_delimiter_fields() {
+        let results = vec![result_row(
+            "ALARM",
+            "127.0.0.1",
+            "host|||name.example",
+            "22/tcp",
+            "12.11.10.9.8.7",
+            "line ||| two",
+            "/a|||b",
+        )];
+        let mut rc = FakeRedis {
+            data: HashMap::new(),
+        };
+
+        let parsed = ResultHelper::init(&mut rc)
+            .process_results(results)
+            .unwrap();
+        let result = parsed.results.first().unwrap();
+
+        assert_eq!(result.hostname.as_deref(), Some("host|||name.example"));
+        assert_eq!(result.description, "line ||| two");
+    }
+
+    #[test]
+    fn malformed_result_rows_are_ignored_without_panicking() {
+        let results = vec![
+            "LOG|||too|||short".to_string(),
+            "ALARM|||127.0.0.1|||host|||shift|||22/tcp|||1.2.3|||value".to_string(),
+            r#"{"version":2,"result_type":"LOG","host_ip":"","host_name":"","port":"","oid":"","value":"","uri":""}"#.to_string(),
+            result_row("DEADHOST", "", "", "", "", "NaN", ""),
+            result_row("HOSTS_COUNT", "", "", "", "", "-1", ""),
+            result_row("HOSTS_EXCLUDED", "", "", "", "", "2147483648", ""),
+        ];
+        let mut rc = FakeRedis {
+            data: HashMap::new(),
+        };
+
+        let parsed = ResultHelper::init(&mut rc)
+            .process_results(results)
+            .unwrap();
+
+        assert!(parsed.results.is_empty());
+        assert_eq!(parsed.count_dead, 0);
+        assert_eq!(parsed.count_total, 0);
+        assert_eq!(parsed.count_excluded, 0);
+    }
+
+    #[test]
+    fn oversized_result_row_is_ignored_before_json_parsing() {
+        let results = vec!["x".repeat(MAX_REDIS_RESULT_ROW_LENGTH + 1)];
+        let mut rc = FakeRedis {
+            data: HashMap::new(),
+        };
+
+        let parsed = ResultHelper::init(&mut rc)
+            .process_results(results)
+            .unwrap();
+
+        assert!(parsed.results.is_empty());
     }
 
     #[test]

@@ -28,6 +28,7 @@
 
 #include "../misc/kb_cache.h"
 #include "../misc/plugutils.h"     /* nvticache_free */
+#include "../misc/result_message.h"
 #include "../misc/scan_id.h"       /* to manage global scan_id */
 #include "../misc/vendorversion.h" /* for vendor_version_set */
 #include "attack.h"                /* for attack_network */
@@ -612,15 +613,19 @@ stop_single_task_scan (void)
  * @param msg Message to send to the client.
  */
 static void
-send_message_to_client_and_finish_scan (const char *msg)
+send_message_to_client_and_finish_scan (const char *value)
 {
   char key[1024];
+  char *message;
   kb_t kb;
 
   // We get the main kb. It is still not set as global at this point.
   snprintf (key, sizeof (key), "internal/%s/scanprefs", get_scan_id ());
   kb = kb_find (prefs_get ("db_address"), key);
-  kb_item_push_str (kb, "internal/results", msg);
+  message = openvas_result_message_new ("ERRMSG", "", " ", " ", " ", value,
+                                        "");
+  kb_item_push_str (kb, "internal/results", message);
+  g_free (message);
   snprintf (key, sizeof (key), "internal/%s", get_scan_id ());
   kb_item_set_str (kb, key, "finished", 0);
   kb_lnk_reset (kb);
@@ -653,7 +658,7 @@ attack_network_init (struct scan_globals *globals, const gchar *config_file)
     {
       g_message ("Failed to initialize nvti cache.");
       send_message_to_client_and_finish_scan (
-        "ERRMSG||| ||| ||| ||| |||NVTI cache initialization failed");
+        "NVTI cache initialization failed");
       nvticache_reset ();
       return 1;
     }
@@ -681,7 +686,7 @@ attack_network_init (struct scan_globals *globals, const gchar *config_file)
             {
               g_message ("%s: INIT MQTT: FAIL", __func__);
               send_message_to_client_and_finish_scan (
-                "ERRMSG||| ||| ||| ||| |||MQTT initialization failed");
+                "MQTT initialization failed");
             }
           else
             {

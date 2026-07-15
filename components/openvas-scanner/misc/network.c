@@ -41,6 +41,7 @@
 
 #include "network.h" /* for socket_close() */
 #include "plugutils.h"
+#include "result_message.h"
 #include "support.h"
 
 #define TIMEOUT 20
@@ -1982,15 +1983,17 @@ open_sock_tcp (struct script_infos *args, unsigned int port, int timeout)
                          host_port_ip_str, port);
               kb_item_set_int_with_main_kb_check (kb, buffer, 0);
 
-              snprintf (
-                buffer, sizeof (buffer),
-                "ERRMSG|||%s|||%s|||%d/tcp||| |||Too many timeouts. The port"
-                " was set to closed.",
-                host_port_ip_str,
-                plug_current_vhost () ? plug_current_vhost () : " ", port);
-
+              char port_string[16];
+              char *result;
+              g_snprintf (port_string, sizeof (port_string), "%d/tcp", port);
+              result = openvas_result_message_new (
+                "ERRMSG", host_port_ip_str,
+                plug_current_vhost () ? plug_current_vhost () : " ",
+                port_string, " ", "Too many timeouts. The port was set to closed.",
+                "");
               kb_item_push_str_with_main_kb_check (get_main_kb (),
-                                                   "internal/results", buffer);
+                                                   "internal/results", result);
+              g_free (result);
             }
         }
       g_free (ip_str);

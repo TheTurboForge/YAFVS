@@ -1,6 +1,7 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
  * SPDX-FileCopyrightText: 2006 Software in the Public Interest, Inc.
  * SPDX-FileCopyrightText: 1998-2006 Tenable Network Security, Inc.
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-only
  */
@@ -16,6 +17,7 @@
 #include "../misc/network.h"
 #include "../misc/nvt_categories.h" /* for ACT_SCANNER */
 #include "../misc/plugutils.h"      /* for get_plugin_preference */
+#include "../misc/result_message.h"
 #include "pluginload.h"
 #include "pluginscheduler.h"
 #include "plugs_req.h"
@@ -133,17 +135,21 @@ update_running_processes (kb_t main_kb, kb_t kb)
 
               if (is_alive) // Alive and timed out
                 {
-                  char msg[2048];
+                  char *msg;
+                  char *value;
                   if (log_whole)
                     g_message ("%s (pid %d) is slow to finish - killing it",
                                oid, processes[i].pid);
 
-                  g_snprintf (msg, sizeof (msg),
-                              "ERRMSG|||%s||| |||general/tcp|||%s|||"
-                              "NVT timed out after %d seconds.",
-                              hostname, oid ? oid : " ", processes[i].timeout);
+                  value = g_strdup_printf ("NVT timed out after %d seconds.",
+                                           processes[i].timeout);
+                  msg = openvas_result_message_new (
+                    "ERRMSG", hostname, " ", "general/tcp", oid ? oid : " ",
+                    value, "");
                   kb_item_push_str_with_main_kb_check (main_kb,
                                                        "internal/results", msg);
+                  g_free (value);
+                  g_free (msg);
 
                   /* Check for max VTs timeouts */
                   if (max_nvt_timeouts_reached ())
@@ -152,13 +158,13 @@ update_running_processes (kb_t main_kb, kb_t kb)
                          if it is dead. */
                       if (check_host_still_alive (kb, hostname) == 0)
                         {
-                          g_snprintf (msg, sizeof (msg),
-                                      "ERRMSG|||%s||| |||general/tcp||| |||"
-                                      "Host has been marked as dead. Too many "
-                                      "NVT_TIMEOUTs.",
-                                      hostname);
+                          msg = openvas_result_message_new (
+                            "ERRMSG", hostname, " ", "general/tcp", " ",
+                            "Host has been marked as dead. Too many NVT_TIMEOUTs.",
+                            "");
                           kb_item_push_str_with_main_kb_check (
                             main_kb, "internal/results", msg);
+                          g_free (msg);
                         }
                     }
 

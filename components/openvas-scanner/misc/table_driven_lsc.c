@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -13,6 +14,7 @@
 #include "base/networking.h"
 #include "kb_cache.h"
 #include "plugutils.h"
+#include "result_message.h"
 
 #include <ctype.h> // for tolower()
 #include <curl/curl.h>
@@ -1131,10 +1133,9 @@ call_rs_notus (const char *ip_str, const char *hostname, const char *pkg_list,
           g_string_free (res, TRUE);
         }
 
-      // type|||IP|||HOSTNAME|||package|||OID|||the result message|||URI
-      buffer = g_strdup_printf ("%s|||%s|||%s|||%s|||%s|||%s|||%s", "ALARM",
-                                ip_str, hostname ? hostname : " ", "package",
-                                notus_advisory->oid, result->str, "");
+      buffer = openvas_result_message_new (
+        "ALARM", ip_str, hostname ? hostname : " ", "package",
+        notus_advisory->oid, result->str, "");
       g_string_free (result, TRUE);
       kb_item_push_str_with_main_kb_check (get_main_kb (), "internal/results",
                                            buffer);

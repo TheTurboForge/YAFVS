@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -87,7 +88,8 @@ include_directories (${GLIB_INCLUDE_DIRS} ${GLIB_JSON_INCLUDE_DIRS}
 
 set (FILES bpf_share.c ftp_funcs.c vendorversion.c network.c plugutils.c pcap.c
      scan_id.c strutils.c table_driven_lsc.c ipc.c ipc_openvas.c ipc_pipe.c
-     user_agent.c scanneraux.c kb_cache.c heartbeat.c openvas-krb5.c)
+     user_agent.c scanneraux.c kb_cache.c heartbeat.c openvas-krb5.c
+     result_message.c)
 
 # On windows we are always PIC and stack-protector is replaces by DEP
 # Also stack protection needs a shared library to work
@@ -143,6 +145,23 @@ install (DIRECTORY
 ## Tests
 
 enable_testing ()
+
+add_executable (result-message-test result_message_tests.c result_message.c)
+add_test (result-message-test result-message-test)
+target_compile_options (result-message-test PRIVATE
+                        -Wall -Wextra -Werror
+                        -fsanitize=address,undefined
+                        -fno-omit-frame-pointer)
+target_link_options (result-message-test PRIVATE
+                     -fsanitize=address,undefined)
+target_include_directories (result-message-test PRIVATE
+                            ${GLIB_INCLUDE_DIRS}
+                            ${GLIB_JSON_INCLUDE_DIRS})
+target_link_libraries (result-message-test
+                       ${GLIB_LDFLAGS}
+                       ${GLIB_JSON_LDFLAGS})
+set_tests_properties (result-message-test PROPERTIES
+  ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1;UBSAN_OPTIONS=halt_on_error=1:abort_on_error=1:print_stacktrace=1")
 
 set (LINK_LIBS_FOR_TESTS cgreen
                        ${LIBGVM_BASE_LDFLAGS}

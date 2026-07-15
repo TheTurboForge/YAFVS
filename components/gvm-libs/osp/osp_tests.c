@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2009-2023 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -11,6 +12,86 @@
 Describe (osp);
 BeforeEach (osp)
 {
+}
+
+Ensure (osp, canonical_uuid_validation_rejects_command_injection)
+{
+  assert_that (osp_uuid_is_canonical (
+                 "00000000-0000-4000-8000-000000000000"),
+               is_true);
+  assert_that (osp_uuid_is_canonical (
+                 "00000000-0000-4000-8000-000000000000'/>"),
+               is_false);
+  assert_that (osp_uuid_is_canonical ("not-a-uuid"), is_false);
+  assert_that (osp_uuid_is_canonical (NULL), is_false);
+}
+
+Ensure (osp, result_batch_id_is_required_for_nonempty_pop_response)
+{
+  entity_t scan;
+  char *batch_id = NULL;
+  char *error = NULL;
+
+  assert_that (parse_entity (
+                 "<scan><results><result/></results></scan>", &scan),
+               is_equal_to (0));
+  assert_that (osp_extract_result_batch_id (scan, 1, &batch_id, &error),
+               is_equal_to (1));
+  assert_that (batch_id, is_null);
+  assert_that (error, is_not_null);
+  g_free (error);
+  free_entity (scan);
+}
+
+Ensure (osp, scan_progress_is_validated)
+{
+  entity_t scan;
+  char *error = NULL;
+  int progress = -1;
+
+  assert_that (parse_entity ("<scan progress='100'/>", &scan),
+               is_equal_to (0));
+  assert_that (osp_extract_scan_progress (scan, &progress, &error),
+               is_equal_to (0));
+  assert_that (progress, is_equal_to (100));
+  assert_that (error, is_null);
+  free_entity (scan);
+
+  assert_that (parse_entity ("<scan progress='done'/>", &scan),
+               is_equal_to (0));
+  assert_that (osp_extract_scan_progress (scan, &progress, &error),
+               is_equal_to (1));
+  assert_that (error, is_not_null);
+  g_clear_pointer (&error, g_free);
+  free_entity (scan);
+
+  assert_that (parse_entity ("<scan/>", &scan), is_equal_to (0));
+  assert_that (osp_extract_scan_progress (scan, &progress, &error),
+               is_equal_to (1));
+  assert_that (error, is_not_null);
+  g_free (error);
+  free_entity (scan);
+}
+
+Ensure (osp, result_batch_id_is_extracted_from_pop_response)
+{
+  entity_t scan;
+  char *batch_id = NULL;
+  char *error = NULL;
+  const char *expected = "00000000-0000-4000-8000-000000000000";
+
+  assert_that (parse_entity (
+                 "<scan><results batch_id='"
+                 "00000000-0000-4000-8000-000000000000'>"
+                 "<result/></results></scan>",
+                 &scan),
+               is_equal_to (0));
+  assert_that (osp_extract_result_batch_id (scan, 1, &batch_id, &error),
+               is_equal_to (0));
+  assert_that (batch_id, is_equal_to_string (expected));
+  assert_that (error, is_null);
+  g_free (batch_id);
+  free_entity (scan);
 }
 AfterEach (osp)
 {
@@ -106,6 +187,13 @@ main (int argc, char **argv)
   add_test_with_context (suite, osp, osp_new_conn_ret_null);
   add_test_with_context (suite, osp, osp_target_add_alive_test_methods);
   add_test_with_context (suite, osp, target_append_as_xml);
+  add_test_with_context (suite, osp,
+                         canonical_uuid_validation_rejects_command_injection);
+  add_test_with_context (
+    suite, osp, result_batch_id_is_required_for_nonempty_pop_response);
+  add_test_with_context (suite, osp,
+                         result_batch_id_is_extracted_from_pop_response);
+  add_test_with_context (suite, osp, scan_progress_is_validated);
 
   if (argc > 1)
     ret = run_single_test (suite, argv[1], create_text_reporter ());

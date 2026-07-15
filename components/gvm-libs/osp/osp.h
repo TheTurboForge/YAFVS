@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -134,6 +135,13 @@ osp_get_scan (osp_connection_t *, const char *, char **, int, char **);
 
 int
 osp_get_scan_pop (osp_connection_t *, const char *, char **, int, int, char **);
+
+int
+osp_get_scan_pop_ext (osp_connection_t *, const char *, char **, int, int,
+                      char **, char **);
+
+int
+osp_ack_results (osp_connection_t *, const char *, const char *, char **);
 
 osp_scan_status_t
 osp_get_scan_status_ext (osp_connection_t *, osp_get_scan_status_opts_t,

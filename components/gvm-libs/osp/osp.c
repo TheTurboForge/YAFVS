@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -14,6 +15,7 @@
 #include "../util/serverutils.h" /* for gvm_server_close, gvm_server_open_w... */
 
 #include <assert.h>        /* for assert */
+#include <errno.h>         /* for errno */
 #include <gnutls/gnutls.h> /* for gnutls_session_int, gnutls_session_t */
 #include <stdarg.h>        /* for va_list */
 #include <stdio.h>         /* for FILE, fprintf and related functions */
@@ -39,6 +41,28 @@ struct osp_connection
   char *host;               /**< Host. */
   int port;                 /**< Port. */
 };
+
+#define OSP_RESULT_BATCH_MAX_RESULTS 1000
+
+static gboolean
+osp_uuid_is_canonical (const char *value)
+{
+  size_t index;
+
+  if (value == NULL || strlen (value) != 36)
+    return FALSE;
+  for (index = 0; index < 36; index++)
+    {
+      if (index == 8 || index == 13 || index == 18 || index == 23)
+        {
+          if (value[index] != '-')
+            return FALSE;
+        }
+      else if (!g_ascii_isxdigit (value[index]))
+        return FALSE;
+    }
+  return TRUE;
+}
 
 /**
  * @brief Struct holding options for OSP parameters.
@@ -380,6 +404,27 @@ osp_check_feed (osp_connection_t *connection, int *lockfile_in_use,
     }
 
   free_entity (entity);
+  return 0;
+}
+
+static int
+osp_extract_scan_progress (entity_t scan, int *progress, char **error)
+{
+  const char *value;
+  char *end = NULL;
+  gint64 parsed;
+
+  value = entity_attribute (scan, "progress");
+  errno = 0;
+  parsed = value ? g_ascii_strtoll (value, &end, 10) : -1;
+  if (!value || errno || end == value || *end != '\0' || parsed < 0
+      || parsed > 100)
+    {
+      if (error)
+        *error = g_strdup ("Invalid progress in OSP get_scans response");
+      return 1;
+    }
+  *progress = (int) parsed;
   return 0;
 }
 
@@ -876,14 +921,61 @@ osp_get_scan_status_ext (osp_connection_t *connection,
  *
  * @return Scan progress if success, -1 if error.
  */
+static int
+osp_extract_result_batch_id (entity_t scan, int pop_results, char **batch_id,
+                             char **error)
+{
+  entity_t results;
+  const char *value;
+
+  if (batch_id)
+    *batch_id = NULL;
+  if (!pop_results)
+    return 0;
+  results = entity_child (scan, "results");
+  if (!results)
+    {
+      if (error)
+        *error = g_strdup ("Missing results in OSP pop response");
+      return 1;
+    }
+  value = entity_attribute (results, "batch_id");
+  if (!value)
+    {
+      if (entity_child (results, "result"))
+        {
+          if (error)
+            *error = g_strdup ("Missing batch ID in OSP pop response");
+          return 1;
+        }
+      return 0;
+    }
+  if (!osp_uuid_is_canonical (value))
+    {
+      if (error)
+        *error = g_strdup ("Invalid batch ID in OSP pop response");
+      return 1;
+    }
+  if (batch_id)
+    *batch_id = g_strdup (value);
+  return 0;
+}
+
 int
-osp_get_scan_pop (osp_connection_t *connection, const char *scan_id,
-                  char **report_xml, int details, int pop_results, char **error)
+osp_get_scan_pop_ext (osp_connection_t *connection, const char *scan_id,
+                      char **report_xml, int details, int pop_results,
+                      char **batch_id, char **error)
 {
   entity_t entity, child;
   int progress;
   int rc;
 
+  if (report_xml)
+    *report_xml = NULL;
+  if (batch_id)
+    *batch_id = NULL;
+  if (error)
+    *error = NULL;
   if (!connection)
     {
       if (error)
@@ -891,12 +983,19 @@ osp_get_scan_pop (osp_connection_t *connection, const char *scan_id,
                            "to scanner. Not valid connection");
       return -1;
     }
-  assert (scan_id);
+  if (!osp_uuid_is_canonical (scan_id))
+    {
+      if (error)
+        *error = g_strdup ("Invalid scan ID for get_scans command");
+      return -1;
+    }
   rc = osp_send_command (connection, &entity,
                          "<get_scans scan_id='%s'"
                          " details='%d'"
-                         " pop_results='%d'/>",
-                         scan_id, pop_results ? 1 : 0, details ? 1 : 0);
+                         " pop_results='%d'"
+                         " max_results='%d'/>",
+                         scan_id, details ? 1 : 0, pop_results ? 1 : 0,
+                         pop_results ? OSP_RESULT_BATCH_MAX_RESULTS : 0);
   if (rc)
     {
       if (error)
@@ -909,13 +1008,21 @@ osp_get_scan_pop (osp_connection_t *connection, const char *scan_id,
     {
       const char *text = entity_attribute (entity, "status_text");
 
-      assert (text);
       if (error)
-        *error = g_strdup (text);
+        *error = g_strdup (text ? text : "Malformed OSP get_scans response");
       free_entity (entity);
       return -1;
     }
-  progress = atoi (entity_attribute (child, "progress"));
+  if (osp_extract_scan_progress (child, &progress, error))
+    {
+      free_entity (entity);
+      return -1;
+    }
+  if (osp_extract_result_batch_id (child, pop_results, batch_id, error))
+    {
+      free_entity (entity);
+      return -1;
+    }
   if (report_xml)
     {
       GString *string;
@@ -926,6 +1033,51 @@ osp_get_scan_pop (osp_connection_t *connection, const char *scan_id,
     }
   free_entity (entity);
   return progress;
+}
+
+int
+osp_get_scan_pop (osp_connection_t *connection, const char *scan_id,
+                  char **report_xml, int details, int pop_results, char **error)
+{
+  return osp_get_scan_pop_ext (connection, scan_id, report_xml, details,
+                               pop_results, NULL, error);
+}
+
+int
+osp_ack_results (osp_connection_t *connection, const char *scan_id,
+                 const char *batch_id, char **error)
+{
+  entity_t entity;
+  const char *status;
+
+  if (error)
+    *error = NULL;
+  if (!connection || !osp_uuid_is_canonical (scan_id)
+      || !osp_uuid_is_canonical (batch_id))
+    {
+      if (error)
+        *error = g_strdup ("Invalid OSP result acknowledgement");
+      return -1;
+    }
+  if (osp_send_command (connection, &entity,
+                        "<ack_results scan_id='%s' batch_id='%s'/>", scan_id,
+                        batch_id))
+    {
+      if (error)
+        *error = g_strdup ("Couldn't send ack_results command to scanner");
+      return -1;
+    }
+  status = entity_attribute (entity, "status");
+  if (!status || strcmp (status, "200"))
+    {
+      const char *text = entity_attribute (entity, "status_text");
+      if (error)
+        *error = g_strdup (text ? text : "Scanner rejected result batch");
+      free_entity (entity);
+      return -1;
+    }
+  free_entity (entity);
+  return 0;
 }
 
 /**

@@ -52,6 +52,32 @@ Ensure (manage_sql, validate_results_port_validates)
   FAIL ("udp");
 }
 
+Ensure (manage_sql, osp_report_structure_validation_is_strict)
+{
+  entity_t entity;
+
+  assert_that (parse_entity (
+                 "<scan><results><result type='Log' name='name' severity='0.0'"
+                 " host='192.0.2.1' hostname='' test_id='id' port='' qod='0'"
+                 " uri=''>value</result></results></scan>",
+                 &entity),
+               is_equal_to (0));
+  assert_that (validate_osp_report_entity (entity), is_equal_to (0));
+  free_entity (entity);
+
+  assert_that (parse_entity (
+                 "<scan><results><result type='Log' name='name'"
+                 " host='192.0.2.1'>value</result></results></scan>",
+                 &entity),
+               is_equal_to (0));
+  assert_that (validate_osp_report_entity (entity), is_equal_to (1));
+  free_entity (entity);
+
+  assert_that (parse_entity ("<scan/>", &entity), is_equal_to (0));
+  assert_that (validate_osp_report_entity (entity), is_equal_to (1));
+  free_entity (entity);
+}
+
 Ensure (manage_sql, auth_settings_certificate_metadata_is_bounded)
 {
   gchar *oversized_issuer =
@@ -260,6 +286,8 @@ main (int argc, char **argv)
                          ensure_term_has_qod_and_overrides_adds_defaults);
   add_test_with_context (suite, manage_sql,
                          print_report_clean_filter_handles_null_term);
+  add_test_with_context (suite, manage_sql,
+                         osp_report_structure_validation_is_strict);
   add_test_with_context (
     suite, manage_sql,
     auth_settings_text_validation_is_strict_and_bounded);

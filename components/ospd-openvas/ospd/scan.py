@@ -13,7 +13,7 @@ from threading import RLock
 from pprint import pformat
 from collections import OrderedDict
 from enum import Enum, IntEnum
-from typing import List, Any, Dict, Iterator, Optional, Iterable, Union
+from typing import List, Any, Dict, Iterator, Optional, Iterable, Tuple, Union
 
 from ospd.network import target_str_to_list
 from ospd.datapickler import DataPickler
@@ -231,23 +231,43 @@ class ScanCollection:
             )
             self.scans_table[scan_id]['count_dead'] = count_dead
 
-    def clean_temp_result_list(self, scan_id):
-        """Clean the results stored in the temporary list."""
+    def prepare_result_batch(
+        self, scan_id: str, max_res: Optional[int] = None
+    ) -> Tuple[Optional[str], List[Dict[str, Any]]]:
+        """Return one stable result batch until its exact ID is acknowledged."""
         with self.scan_collection_lock:
-            self.scans_table[scan_id]['temp_results'] = list()
+            scan = self.scans_table[scan_id]
+            batch = scan.get('temp_results', [])
+            batch_id = scan.get('result_batch_id', '')
+            if batch:
+                if not batch_id:
+                    batch_id = str(uuid.uuid4())
+                    scan['result_batch_id'] = batch_id
+                return batch_id, list(batch)
 
-    def restore_temp_result_list(self, scan_id):
-        """Add the results stored in the temporary list into the results
-        list again."""
+            results = scan.get('results', [])
+            if not results:
+                return None, []
+            if max_res and max_res > 0:
+                batch = list(results[:max_res])
+                scan['results'] = results[max_res:]
+            else:
+                batch = list(results)
+                scan['results'] = []
+            batch_id = str(uuid.uuid4())
+            scan['temp_results'] = batch
+            scan['result_batch_id'] = batch_id
+            return batch_id, list(batch)
+
+    def ack_result_batch(self, scan_id: str, batch_id: str) -> bool:
+        """Acknowledge and release only the current exact result batch."""
         with self.scan_collection_lock:
-            result_aux = self.scans_table[scan_id].get('results', list())
-            result_aux.extend(
-                self.scans_table[scan_id].get('temp_results', list())
-            )
-
-            # Propagate results
-            self.scans_table[scan_id]['results'] = result_aux
-            self.clean_temp_result_list(scan_id)
+            scan = self.scans_table[scan_id]
+            if not batch_id or scan.get('result_batch_id') != batch_id:
+                return False
+            scan['temp_results'] = []
+            scan['result_batch_id'] = ''
+            return True
 
     def results_iterator(
         self, scan_id: str, pop_res: bool = False, max_res: int = None
@@ -260,21 +280,11 @@ class ScanCollection:
 
         max_res works only together with pop_results.
         """
-        with self.scan_collection_lock:
-            if pop_res and max_res:
-                result_aux = self.scans_table[scan_id].get('results', list())
-                self.scans_table[scan_id]['results'] = result_aux[max_res:]
-                temp_results = list(result_aux[:max_res])
-                self.scans_table[scan_id]['temp_results'] = temp_results
-                return iter(temp_results)
-            if pop_res:
-                temp_results = list(
-                    self.scans_table[scan_id].get('results', list())
-                )
-                self.scans_table[scan_id]['temp_results'] = temp_results
-                self.scans_table[scan_id]['results'] = list()
-                return iter(temp_results)
+        if pop_res:
+            _, results = self.prepare_result_batch(scan_id, max_res)
+            return iter(results)
 
+        with self.scan_collection_lock:
             return iter(list(self.scans_table[scan_id]['results']))
 
     def ids_iterator(self) -> Iterator[str]:
@@ -315,6 +325,7 @@ class ScanCollection:
 
         scan_info['results'] = list()
         scan_info['temp_results'] = list()
+        scan_info['result_batch_id'] = ''
         scan_info['progress'] = ScanProgress.INIT.value
         scan_info['target_progress'] = dict()
         scan_info['count_alive'] = 0

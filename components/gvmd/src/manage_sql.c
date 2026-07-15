@@ -14028,6 +14028,37 @@ check_osp_result_exists (report_t report, task_t task,
   return return_value;
 }
 
+static int
+validate_osp_report_entity (entity_t entity)
+{
+  entity_t results_entity;
+  entities_t results;
+
+  if (!entity || strcmp (entity_name (entity), "scan"))
+    return 1;
+  results_entity = entity_child (entity, "results");
+  if (!results_entity)
+    return 1;
+  results = results_entity->entities;
+  while (results)
+    {
+      entity_t result = results->data;
+      if (strcmp (entity_name (result), "result")
+          || !entity_attribute (result, "type")
+          || !entity_attribute (result, "name")
+          || !entity_attribute (result, "severity")
+          || !entity_attribute (result, "host")
+          || !entity_attribute (result, "hostname")
+          || !entity_attribute (result, "test_id")
+          || !entity_attribute (result, "port")
+          || !entity_attribute (result, "qod")
+          || !entity_attribute (result, "uri"))
+        return 1;
+      results = next_entities (results);
+    }
+  return 0;
+}
+
 /**
  * @brief Check if host detail exists.
  *
@@ -14118,13 +14149,13 @@ check_host_detail_exists (report_t report, const char *host, const char *s_type,
 }
 
 /**
- * @brief Parse an OSP report.
+ * @brief Parse and transactionally import an OSP report.
  *
  * @param[in]  task        Task.
  * @param[in]  report      Report.
  * @param[in]  report_xml  Report XML.
  */
-void
+int
 parse_osp_report (task_t task, report_t report, const char *report_xml)
 {
   entity_t entity, child;
@@ -14143,8 +14174,14 @@ parse_osp_report (task_t task, report_t report, const char *report_xml)
 
   if (parse_entity (report_xml, &entity))
     {
-      g_warning ("Couldn't parse %s OSP scan report", report_xml);
-      return;
+      g_warning ("Couldn't parse OSP scan report");
+      return -1;
+    }
+  if (validate_osp_report_entity (entity))
+    {
+      g_warning ("Invalid OSP scan report structure");
+      free_entity (entity);
+      return -1;
     }
 
   hashed_osp_results = g_hash_table_new_full (g_str_hash,
@@ -14180,8 +14217,8 @@ parse_osp_report (task_t task, report_t report, const char *report_xml)
   child = entity_child (entity, "results");
   if (!child)
     {
-      g_warning ("Missing results element in OSP report %s", report_xml);
-      goto end_parse_osp_report;
+      g_warning ("Missing results element in OSP report");
+      goto fail_parse_osp_report;
     }
   results = child->entities;
   if (results)
@@ -14201,8 +14238,7 @@ parse_osp_report (task_t task, report_t report, const char *report_xml)
         {
           g_warning ("Erroneous entry in OSP results %s",
                      entity_name (r_entity));
-          results = next_entities (results);
-          continue;
+          goto fail_parse_osp_report;
         }
       type = entity_attribute (r_entity, "type");
       name = entity_attribute (r_entity, "name");
@@ -14221,8 +14257,7 @@ parse_osp_report (task_t task, report_t report, const char *report_xml)
           print_entity_to_string (r_entity, string);
           g_warning ("Erroneous attribute in OSP result %s", string->str);
           g_string_free (string, TRUE);
-          results = next_entities (results);
-          continue;
+          goto fail_parse_osp_report;
         }
 
       /* Add report host if it doesn't exist. */
@@ -14263,8 +14298,14 @@ parse_osp_report (task_t task, report_t report, const char *report_xml)
            *        result type with extra source info in OSP.
            */
           if (manage_report_host_detail (report, host, desc, hashed_host_details))
-            g_warning ("%s: Failed to add report detail for host '%s': %s",
-                       __func__, host, desc);
+            {
+              g_warning ("%s: Failed to add report detail for host '%s': %s",
+                         __func__, host, desc);
+              g_free (nvt_id);
+              g_free (desc);
+              g_free (severity_str);
+              goto fail_parse_osp_report;
+            }
         }
       else if (host && nvt_id && desc && (strcmp (nvt_id, "HOST_START") == 0))
         {
@@ -14292,6 +14333,14 @@ parse_osp_report (task_t task, report_t report, const char *report_xml)
                                         qod_int,
                                         path,
                                         hash_value);
+              if (result == 0)
+                {
+                  g_free (hash_value);
+                  g_free (nvt_id);
+                  g_free (desc);
+                  g_free (severity_str);
+                  goto fail_parse_osp_report;
+                }
               g_array_append_val (results_array, result);
             }
           g_free (hash_value);
@@ -14310,13 +14359,22 @@ parse_osp_report (task_t task, report_t report, const char *report_xml)
     }
 
 
- end_parse_osp_report:
   sql_commit ();
   g_array_free (results_array, TRUE);
   g_hash_table_destroy (hashed_osp_results);
   g_hash_table_destroy (hashed_host_details);
   g_free (defs_file);
   free_entity (entity);
+  return 0;
+
+ fail_parse_osp_report:
+  sql_rollback ();
+  g_array_free (results_array, TRUE);
+  g_hash_table_destroy (hashed_osp_results);
+  g_hash_table_destroy (hashed_host_details);
+  g_free (defs_file);
+  free_entity (entity);
+  return -1;
 }
 
 

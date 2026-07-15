@@ -668,6 +668,8 @@ class ScanTestCase(unittest.TestCase):
         self.assertEqual(
             response.findtext('scan/results/result'), 'Some Host Detail'
         )
+        batch_id = response.find('scan/results').get('batch_id')
+        self.assertIsNotNone(batch_id)
 
         fs = FakeStream()
         self.daemon.handle_command(
@@ -677,6 +679,12 @@ class ScanTestCase(unittest.TestCase):
         response = fs.get_response()
 
         self.assertEqual(response.findtext('scan/results/result'), None)
+        fs = FakeStream()
+        self.daemon.handle_command(
+            f'<ack_results scan_id="{scan_id}" batch_id="{batch_id}"/>',
+            fs,
+        )
+        self.assertEqual(fs.get_response().get('status'), '200')
 
     def test_get_scan_pop_max_res(self):
         fs = FakeStream()
@@ -702,6 +710,24 @@ class ScanTestCase(unittest.TestCase):
         response = fs.get_response()
 
         self.assertEqual(len(response.findall('scan/results/result')), 1)
+        batch_id = response.find('scan/results').get('batch_id')
+
+        fs = FakeStream()
+        self.daemon.handle_command(
+            f'<get_scans scan_id="{scan_id}" pop_results="1"/>', fs
+        )
+        response = fs.get_response()
+        self.assertEqual(
+            response.find('scan/results').get('batch_id'), batch_id
+        )
+        self.assertEqual(len(response.findall('scan/results/result')), 1)
+
+        fs = FakeStream()
+        self.daemon.handle_command(
+            f'<ack_results scan_id="{scan_id}" batch_id="{batch_id}"/>',
+            fs,
+        )
+        self.assertEqual(fs.get_response().get('status'), '200')
 
         fs = FakeStream()
         self.daemon.handle_command(
@@ -710,7 +736,7 @@ class ScanTestCase(unittest.TestCase):
         response = fs.get_response()
         self.assertEqual(len(response.findall('scan/results/result')), 2)
 
-    def test_get_scan_results_clean(self):
+    def test_get_scan_results_require_exact_ack(self):
         fs = FakeStream()
         self.daemon.handle_command(
             '<start_scan target="localhost" ports="80, 443">'
@@ -739,9 +765,73 @@ class ScanTestCase(unittest.TestCase):
         res_len = len(
             self.daemon.scan_collection.scans_table[scan_id]['temp_results']
         )
-        self.assertEqual(res_len, 0)
+        self.assertEqual(res_len, 3)
+        batch_id = fs.get_response().find('scan/results').get('batch_id')
 
-    def test_get_scan_results_restore(self):
+        fs = FakeStream()
+        self.daemon.handle_command(
+            f'<ack_results scan_id="{scan_id}" '
+            'batch_id="00000000-0000-4000-8000-000000000000"/>',
+            fs,
+        )
+        self.assertEqual(fs.get_response().get('status'), '409')
+        self.assertEqual(
+            len(
+                self.daemon.scan_collection.scans_table[scan_id]['temp_results']
+            ),
+            3,
+        )
+        self.daemon.add_scan_log(scan_id, host='d', name='d')
+        self.assertEqual(
+            len(self.daemon.scan_collection.scans_table[scan_id]['results']),
+            1,
+        )
+
+        fs = FakeStream()
+        self.daemon.handle_command(
+            f'<ack_results scan_id="{scan_id}" batch_id="{batch_id}"/>',
+            fs,
+        )
+        self.assertEqual(fs.get_response().get('status'), '200')
+        self.assertFalse(
+            self.daemon.scan_collection.scans_table[scan_id]['temp_results']
+        )
+        self.assertEqual(
+            len(self.daemon.scan_collection.scans_table[scan_id]['results']),
+            1,
+        )
+
+        fs = FakeStream()
+        self.daemon.handle_command(
+            f'<get_scans scan_id="{scan_id}" pop_results="1"/>', fs
+        )
+        next_response = fs.get_response()
+        next_batch_id = next_response.find('scan/results').get('batch_id')
+        self.assertNotEqual(next_batch_id, batch_id)
+        self.assertEqual(
+            next_response.find('scan/results/result').get('name'), 'd'
+        )
+
+        fs = FakeStream()
+        self.daemon.handle_command(
+            f'<ack_results scan_id="{scan_id}" batch_id="{batch_id}"/>', fs
+        )
+        self.assertEqual(fs.get_response().get('status'), '409')
+        self.assertEqual(
+            len(
+                self.daemon.scan_collection.scans_table[scan_id]['temp_results']
+            ),
+            1,
+        )
+
+        fs = FakeStream()
+        self.daemon.handle_command(
+            f'<ack_results scan_id="{scan_id}" batch_id="{next_batch_id}"/>',
+            fs,
+        )
+        self.assertEqual(fs.get_response().get('status'), '200')
+
+    def test_failed_result_write_replays_same_batch(self):
         fs = FakeStream()
         self.daemon.handle_command(
             '<start_scan target="localhost" ports="80, 443">'
@@ -761,16 +851,33 @@ class ScanTestCase(unittest.TestCase):
             f'<get_scans scan_id="{scan_id}" pop_results="1"/>',
             fs,
         )
+        failed_response = fs.get_response()
+        batch_id = failed_response.find('scan/results').get('batch_id')
 
         res_len = len(
             self.daemon.scan_collection.scans_table[scan_id]['results']
         )
-        self.assertEqual(res_len, 3)
+        self.assertEqual(res_len, 0)
 
         res_len = len(
             self.daemon.scan_collection.scans_table[scan_id]['temp_results']
         )
-        self.assertEqual(res_len, 0)
+        self.assertEqual(res_len, 3)
+
+        fs = FakeStream()
+        self.daemon.handle_command(
+            f'<get_scans scan_id="{scan_id}" pop_results="1"/>', fs
+        )
+        replay = fs.get_response()
+        self.assertEqual(replay.find('scan/results').get('batch_id'), batch_id)
+        self.assertEqual(len(replay.findall('scan/results/result')), 3)
+
+    def test_ack_results_rejects_invalid_batch_id(self):
+        fs = FakeStream()
+        with self.assertRaises(OspdCommandError):
+            self.daemon.handle_command(
+                '<ack_results scan_id="scan" batch_id="not-a-uuid"/>', fs
+            )
 
     def test_billon_laughs(self):
         lol = (

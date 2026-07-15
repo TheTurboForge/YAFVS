@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 from unittest import TestCase
 
 from ospd.command.registry import get_commands, register_command, remove_command
-
 
 COMMAND_NAMES = [
     "help",
@@ -18,6 +18,7 @@ COMMAND_NAMES = [
     "get_vts",
     "stop_scan",
     "get_scans",
+    "ack_results",
     "start_scan",
     "get_memory_usage",
 ]

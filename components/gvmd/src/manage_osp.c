@@ -273,6 +273,7 @@ delete_osp_scan (const char *report_id, osp_connect_data_t *conn_data)
  * @param[in]   details     1 for detailed report, 0 otherwise.
  * @param[in]   pop_results 1 to pop results, 0 to leave results intact.
  * @param[out]  report_xml  Scan report.
+ * @param[out]  batch_id    Stable result batch ID when results were popped.
  *
  * @return -1 on connection error, -2 on fail to find scan,
  *         progress value between 0 and 100 on success.
@@ -280,7 +281,7 @@ delete_osp_scan (const char *report_id, osp_connect_data_t *conn_data)
 static int
 get_osp_scan_report (const char *scan_id, osp_connect_data_t *conn_data,
                      int details, int pop_results,
-                     char **report_xml)
+                     char **report_xml, char **batch_id)
 {
   osp_connection_t *connection;
   int progress;
@@ -291,21 +292,44 @@ get_osp_scan_report (const char *scan_id, osp_connect_data_t *conn_data,
     {
       return -1;
     }
-  progress = osp_get_scan_pop (connection, scan_id, report_xml, details,
-                               pop_results, &error);
+  progress = osp_get_scan_pop_ext (connection, scan_id, report_xml, details,
+                                   pop_results, batch_id, &error);
   if (progress > 100 || progress < 0)
     {
-      if (g_strrstr (error, "Failed to find scan") != NULL)
+      if (error && g_strrstr (error, "Failed to find scan") != NULL)
         progress = -2; // Scan already deleted
       else
         progress = -1; // connection error. Should retry.
-      g_warning ("OSP get_scan %s: %s", scan_id, error);
+      g_warning ("OSP get_scan %s: %s", scan_id,
+                 error ? error : "unknown scanner error");
       g_free (error);
 
     }
 
   osp_connection_close (connection);
   return progress;
+}
+
+/**
+ * @brief Acknowledge one durably imported OSP result batch.
+ */
+static int
+ack_osp_scan_results (const char *scan_id, const char *batch_id,
+                      osp_connect_data_t *conn_data, char **error)
+{
+  osp_connection_t *connection;
+  int ret;
+
+  connection = osp_connect_with_data (conn_data);
+  if (!connection)
+    {
+      if (error)
+        *error = g_strdup ("Could not connect to acknowledge scanner results");
+      return -1;
+    }
+  ret = osp_ack_results (connection, scan_id, batch_id, error);
+  osp_connection_close (connection);
+  return ret;
 }
 
 
@@ -767,6 +791,32 @@ launch_osp_openvas_task (task_t task, target_t target, const char *scan_id,
 }
 
 /**
+ * @brief Preserve a replayable OSP result batch after import or ack failure.
+ */
+static int
+handle_osp_result_batch_failure (task_t task, report_t report, int *retry_ptr,
+                                 const char *message)
+{
+  result_t result;
+
+  if (*retry_ptr > 0)
+    {
+      (*retry_ptr)--;
+      g_warning ("%s Trying again in 1 second.", message);
+      if (scan_semaphore_update_end (TRUE, task, report))
+        return -3;
+      gvm_sleep (1);
+      return 1;
+    }
+
+  result = make_osp_result (task, "", "", "", threat_message_type ("Error"),
+                            message, "", "", QOD_DEFAULT, NULL, NULL);
+  report_add_result (report, result);
+  scan_semaphore_update_end (FALSE, task, report);
+  return -1;
+}
+
+/**
  * @brief Create a new report for an OSP scan.
  *
  * @param[in]   task      The task.
@@ -847,7 +897,7 @@ update_osp_scan (task_t task, report_t report, const char *scan_id,
   osp_scan_status_t osp_scan_status;
 
   /* Get only the progress, without results and details. */
-  progress = get_osp_scan_report (scan_id, conn_data, 0, 0, NULL);
+  progress = get_osp_scan_report (scan_id, conn_data, 0, 0, NULL, NULL);
 
   if (progress < 0 || progress > 100)
     {
@@ -882,9 +932,10 @@ update_osp_scan (task_t task, report_t report, const char *scan_id,
   else
     {
       /* Get the full OSP report. */
+      char *batch_id = NULL;
       char *report_xml = NULL;
       progress = get_osp_scan_report (scan_id, conn_data,
-                                      1, 1, &report_xml);
+                                      1, 1, &report_xml, &batch_id);
       if (progress < 0 || progress > 100)
         {
           if ((*retry_ptr) > 0 && progress == -1)
@@ -906,6 +957,7 @@ update_osp_scan (task_t task, report_t report, const char *scan_id,
               return -2;
             }
           g_free (report_xml);
+          g_free (batch_id);
           result_t result = make_osp_result
                               (task, "", "", "",
                               threat_message_type ("Error"),
@@ -917,9 +969,33 @@ update_osp_scan (task_t task, report_t report, const char *scan_id,
         }
       else
         {
+          char *ack_error = NULL;
+
           set_report_slave_progress (report, progress);
-          parse_osp_report (task, report, report_xml);
+          if (parse_osp_report (task, report, report_xml))
+            {
+              g_free (report_xml);
+              g_free (batch_id);
+              return handle_osp_result_batch_failure (
+                task, report, retry_ptr,
+                "Scanner result batch could not be imported atomically.");
+            }
           g_free (report_xml);
+          if (batch_id
+              && ack_osp_scan_results (scan_id, batch_id, conn_data,
+                                       &ack_error))
+            {
+              char *message = g_strdup_printf (
+                "Imported scanner result batch could not be acknowledged: %s",
+                ack_error ? ack_error : "unknown scanner error");
+              g_free (ack_error);
+              g_free (batch_id);
+              progress = handle_osp_result_batch_failure (
+                task, report, retry_ptr, message);
+              g_free (message);
+              return progress;
+            }
+          g_free (batch_id);
 
           osp_scan_status = get_osp_scan_status (scan_id, conn_data);
 

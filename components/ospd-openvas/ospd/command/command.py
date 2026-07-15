@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -494,6 +495,33 @@ class GetScans(BaseCommand):
             return simple_response_str('get_scans', 404, text)
 
         return simple_response_str('get_scans', 200, 'OK', responses)
+
+
+class AckResults(BaseCommand):
+    name = 'ack_results'
+    description = 'Acknowledge one exact delivered result batch.'
+    attributes = {
+        'scan_id': 'Mandatory ID of the scan.',
+        'batch_id': 'Mandatory ID of the delivered result batch.',
+    }
+    must_be_initialized = False
+
+    def handle_xml(self, xml: Element) -> bytes:
+        scan_id = xml.get('scan_id')
+        batch_id = xml.get('batch_id')
+        if not scan_id:
+            raise OspdCommandError('No scan_id attribute', 'ack_results')
+        if not batch_id or not valid_uuid(batch_id):
+            raise OspdCommandError('Invalid batch_id attribute', 'ack_results')
+        if not self._daemon.scan_collection.id_exists(scan_id):
+            return simple_response_str(
+                'ack_results', 404, f"Failed to find scan '{scan_id}'"
+            )
+        if not self._daemon.scan_collection.ack_result_batch(scan_id, batch_id):
+            return simple_response_str(
+                'ack_results', 409, 'Result batch is not current'
+            )
+        return simple_response_str('ack_results', 200, 'OK')
 
 
 class StartScan(BaseCommand):

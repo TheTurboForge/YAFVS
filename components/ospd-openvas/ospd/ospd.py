@@ -797,9 +797,15 @@ class OSPDaemon:
             String of scan results in xml.
         """
         results = Element('results')
-        for result in self.scan_collection.results_iterator(
-            scan_id, pop_res, max_res
-        ):
+        if pop_res:
+            batch_id, result_batch = self.scan_collection.prepare_result_batch(
+                scan_id, max_res
+            )
+            if batch_id:
+                results.set('batch_id', batch_id)
+        else:
+            result_batch = self.scan_collection.results_iterator(scan_id)
+        for result in result_batch:
             results.append(get_result_xml(result))
 
         logger.debug('Returning %d results', len(results))
@@ -1074,23 +1080,6 @@ class OSPDaemon:
                 write_success = stream.write(data)
                 if not write_success:
                     break
-
-        scan_id = tree.get('scan_id')
-        if self.scan_exists(scan_id) and command_name == "get_scans":
-            if write_success:
-                logger.debug(
-                    '%s: Results sent successfully to the client. Cleaning '
-                    'temporary result list.',
-                    scan_id,
-                )
-                self.scan_collection.clean_temp_result_list(scan_id)
-            else:
-                logger.debug(
-                    '%s: Failed sending results to the client. Restoring '
-                    'result list into the cache.',
-                    scan_id,
-                )
-                self.scan_collection.restore_temp_result_list(scan_id)
 
     def check(self):
         """Asserts to False. Should be implemented by subclass."""

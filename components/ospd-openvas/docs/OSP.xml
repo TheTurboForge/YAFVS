@@ -2,6 +2,7 @@
 
 <!--
 SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 
 SPDX-License-Identifier: GPL-2.0-or-later
 -->
@@ -575,12 +576,19 @@ SPDX-License-Identifier: GPL-2.0-or-later
               <scan_id>Mandatory ID of a specific scan to get</scan_id>
               <details>Whether to return the full scan report</details>
               <progress>Whether to return a detailed progress information</progress>
-              <pop_results>Whether to remove the fetched results</pop_results>
+              <pop_results>Whether to stage the fetched results as a replayable batch pending acknowledgement</pop_results>
               <max_results>Maximum number of results to fetch. Only considered if pop_results is enabled. Default = None, which means that all available results are returned</max_results>
             </attributes>
             <elements></elements>
             <description>List the scans in buffer</description>
           </get_scans>
+          <ack_results>
+            <attributes>
+              <scan_id>Mandatory ID of the scan</scan_id>
+              <batch_id>Mandatory ID of the exact delivered result batch</batch_id>
+            </attributes>
+            <description>Acknowledge one durably imported result batch</description>
+          </ack_results>
           <get_performance>
             <description>Return system report</description>
             <elements/>
@@ -663,7 +671,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
       </attrib>
       <attrib>
         <name>pop_results</name>
-        <summary>Whether to remove the fetched results</summary>
+        <summary>Whether to stage the fetched results as a replayable batch pending acknowledgement</summary>
         <type>boolean</type>
       </attrib>
       <attrib>
@@ -717,6 +725,13 @@ SPDX-License-Identifier: GPL-2.0-or-later
           </attrib>
           <ele>
             <name>results</name>
+            <pattern>
+              <attrib>
+                <name>batch_id</name>
+                <summary>Stable batch UUID returned for staged nonempty results</summary>
+                <type>uuid</type>
+              </attrib>
+            </pattern>
           </ele>
         </pattern>
       </ele>
@@ -749,7 +764,7 @@ SPDX-License-Identifier: GPL-2.0-or-later
       <response>
         <get_scans_response status_text="OK" status="200">
           <scan id="9750f1f8-07aa-49cc-9c31-2f9e469c8f65" target="192.168.1.252" end_time="1432824234" progress="100" status="finished" start_time="1432824206">
-            <results>
+            <results batch_id="35bc1e5f-7931-4f80-9608-c9b2c4cfd3b1">
               <result host="192.168.1.252" hostname="" severity="2.5" port="443/tcp" test_id="" name="Path disclosure vulnerability" type="Alarm">
                  The URL: &quot;https://192.168.1.252/&quot; has a path
                  disclosure vulnerability which discloses "/var/www/phpinfo.php"
@@ -779,6 +794,44 @@ SPDX-License-Identifier: GPL-2.0-or-later
             </progress>
           </scan>
         </get_scans_response>
+      </response>
+    </example>
+  </command>
+  <command>
+    <name>ack_results</name>
+    <summary>Acknowledge one durably imported result batch</summary>
+    <pattern>
+      <attrib>
+        <name>scan_id</name>
+        <summary>Scan UUID</summary>
+        <type>uuid</type>
+      </attrib>
+      <attrib>
+        <name>batch_id</name>
+        <summary>Exact batch UUID returned by get_scans</summary>
+        <type>uuid</type>
+      </attrib>
+    </pattern>
+    <response>
+      <pattern>
+        <attrib>
+          <name>status</name>
+          <type>status</type>
+          <required>1</required>
+        </attrib>
+        <attrib>
+          <name>status_text</name>
+          <type>text</type>
+          <required>1</required>
+        </attrib>
+      </pattern>
+    </response>
+    <example>
+      <request>
+        <ack_results scan_id="f14747d3-a4d7-4e79-99bb-a0a1276cb78c" batch_id="35bc1e5f-7931-4f80-9608-c9b2c4cfd3b1"/>
+      </request>
+      <response>
+        <ack_results_response status="200" status_text="OK"/>
       </response>
     </example>
   </command>

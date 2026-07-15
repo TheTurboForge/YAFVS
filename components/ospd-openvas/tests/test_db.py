@@ -15,6 +15,7 @@ from unittest import TestCase
 from unittest.mock import call, patch, MagicMock
 
 from redis.exceptions import ConnectionError as RCE
+from redis.exceptions import WatchError
 
 from ospd.errors import RequiredArgument
 from ospd_openvas.db import (
@@ -29,6 +30,9 @@ from ospd_openvas.db import (
 from ospd_openvas.errors import OspdOpenvasError
 
 from tests.helper import assert_called
+
+OWNER_TOKEN = '11111111-1111-4111-8111-111111111111'
+OTHER_OWNER_TOKEN = '22222222-2222-4222-8222-222222222222'
 
 
 @patch('ospd_openvas.db.redis.Redis')
@@ -662,10 +666,11 @@ class ScanDBTestCase(TestCase):
         )
 
     def test_select(self, mock_openvas_db):
-        ret = self.db.select(11)
+        ret = self.db.select(11, OWNER_TOKEN)
 
         self.assertIs(ret, self.db)
         self.assertEqual(self.db.index, 11)
+        self.assertEqual(self.db.owner_token, OWNER_TOKEN)
 
         mock_openvas_db.select_database.assert_called_with(self.ctx, 11)
 
@@ -680,7 +685,7 @@ class KbDBTestCase(TestCase):
     @patch('ospd_openvas.db.redis.Redis')
     def setUp(self, mock_redis):  # pylint: disable=arguments-differ
         self.ctx = mock_redis.from_url.return_value
-        self.db = KbDB(10, self.ctx)
+        self.db = KbDB(10, self.ctx, owner_token=OWNER_TOKEN)
 
     def test_claim_results(self, mock_openvas_db):
         mock_openvas_db.claim_list_items.return_value = (
@@ -763,6 +768,16 @@ class KbDBTestCase(TestCase):
     def test_add_scan_id(self, mock_openvas_db):
         self.db.add_scan_id('bar')
 
+        set_calls = mock_openvas_db.set_single_item.call_args_list
+        self.assertEqual(
+            set_calls[0].args,
+            (self.ctx, 'internal/turbovas.owner-token', [OWNER_TOKEN]),
+        )
+        self.assertEqual(
+            set_calls[1].args,
+            (self.ctx, 'internal/turbovas.db-kind', ['parent']),
+        )
+
         calls = mock_openvas_db.add_single_item.call_args_list
 
         call = calls[0]
@@ -825,11 +840,16 @@ class KbDBTestCase(TestCase):
     def test_remove_scan_database(self, mock_openvas_db):
         scan_db = MagicMock(spec=ScanDB)
         scan_db.index = 123
+        scan_db.owner_reference = f'123:{OWNER_TOKEN}'
 
         self.db.remove_scan_database(scan_db)
 
-        mock_openvas_db.remove_list_item.assert_called_with(
-            self.ctx, 'internal/dbindex', 123
+        self.assertEqual(
+            mock_openvas_db.remove_list_item.call_args_list,
+            [
+                call(self.ctx, 'internal/dbindex', f'123:{OWNER_TOKEN}'),
+                call(self.ctx, 'internal/dbindex', '123'),
+            ],
         )
 
     def test_target_is_finished_false(self, mock_openvas_db):
@@ -889,25 +909,93 @@ class KbDBTestCase(TestCase):
 
     def test_get_scan_databases(self, mock_openvas_db):
         mock_openvas_db.get_list_item.return_value = [
-            '4',
-            self.db.index,
-            '7',
-            '11',
+            f'4:{OWNER_TOKEN}',
+            f'{self.db.index}:{OTHER_OWNER_TOKEN}',
+            f'7:{OTHER_OWNER_TOKEN}',
+            f'11:{OWNER_TOKEN}',
+        ]
+        mock_openvas_db.create_context.return_value.hget.side_effect = [
+            OWNER_TOKEN,
+            OTHER_OWNER_TOKEN,
+            OWNER_TOKEN,
+        ]
+        mock_openvas_db.get_single_item.side_effect = [
+            'scan-1',
+            OWNER_TOKEN,
+            OTHER_OWNER_TOKEN,
+            OWNER_TOKEN,
         ]
 
         scan_dbs = self.db.get_scan_databases()
 
         scan_db = next(scan_dbs)
-        self.assertEqual(scan_db.index, '4')
+        self.assertEqual(scan_db.index, 4)
+        self.assertEqual(scan_db.owner_token, OWNER_TOKEN)
 
         scan_db = next(scan_dbs)
-        self.assertEqual(scan_db.index, '7')
+        self.assertEqual(scan_db.index, 7)
+        self.assertEqual(scan_db.owner_token, OTHER_OWNER_TOKEN)
 
         scan_db = next(scan_dbs)
-        self.assertEqual(scan_db.index, '11')
+        self.assertEqual(scan_db.index, 11)
+        self.assertEqual(scan_db.owner_token, OWNER_TOKEN)
 
         with self.assertRaises(StopIteration):
             next(scan_dbs)
+
+    def test_get_scan_databases_rejects_stale_tokenized_reference(
+        self, mock_openvas_db
+    ):
+        mock_openvas_db.get_list_item.return_value = [f'4:{OWNER_TOKEN}']
+        mock_openvas_db.create_context.return_value.hget.return_value = (
+            OTHER_OWNER_TOKEN
+        )
+
+        with self.assertRaisesRegex(OspdOpenvasError, 'no longer matches'):
+            next(self.db.get_scan_databases())
+
+    def test_get_scan_databases_rejects_child_owner_metadata_mismatch(
+        self, mock_openvas_db
+    ):
+        mock_openvas_db.get_list_item.return_value = [f'4:{OWNER_TOKEN}']
+        mock_openvas_db.create_context.return_value.hget.return_value = (
+            OWNER_TOKEN
+        )
+        mock_openvas_db.get_single_item.side_effect = [
+            'scan-1',
+            OTHER_OWNER_TOKEN,
+        ]
+
+        with self.assertRaisesRegex(
+            OspdOpenvasError, 'metadata does not match'
+        ):
+            next(self.db.get_scan_databases())
+
+    def test_get_scan_databases_accepts_verified_legacy_reference(
+        self, mock_openvas_db
+    ):
+        mock_openvas_db.get_list_item.return_value = ['4']
+        mock_openvas_db.get_single_item.side_effect = ['scan-1', 'scan-1']
+        main_ctx = mock_openvas_db.create_context.return_value
+        main_ctx.hget.side_effect = ['1', '1']
+
+        scan_db = next(self.db.get_scan_databases())
+
+        self.assertEqual(scan_db.index, 4)
+        self.assertEqual(scan_db.owner_token, '1')
+        self.assertEqual(main_ctx.hget.call_count, 2)
+
+    def test_get_scan_databases_rejects_mismatched_legacy_reference(
+        self, mock_openvas_db
+    ):
+        mock_openvas_db.get_list_item.return_value = ['4']
+        mock_openvas_db.get_single_item.side_effect = ['scan-1', 'scan-2']
+        mock_openvas_db.create_context.return_value.hget.return_value = '1'
+
+        with self.assertRaisesRegex(
+            OspdOpenvasError, 'does not belong to this scan'
+        ):
+            next(self.db.get_scan_databases())
 
 
 @patch('ospd_openvas.db.redis.Redis')
@@ -942,10 +1030,10 @@ class MainDBTestCase(TestCase):
 
         maindb = MainDB(ctx)
 
-        ret = maindb.try_database(1)
+        ret = maindb.try_database(1, OWNER_TOKEN)
 
         self.assertEqual(ret, True)
-        ctx.hsetnx.assert_called_with(DBINDEX_NAME, 1, 1)
+        ctx.hsetnx.assert_called_with(DBINDEX_NAME, 1, OWNER_TOKEN)
 
     def test_try_database_false(self, mock_redis):
         ctx = mock_redis.from_url.return_value
@@ -953,57 +1041,128 @@ class MainDBTestCase(TestCase):
 
         maindb = MainDB(ctx)
 
-        ret = maindb.try_database(1)
+        ret = maindb.try_database(1, OWNER_TOKEN)
 
         self.assertEqual(ret, False)
-        ctx.hsetnx.assert_called_with(DBINDEX_NAME, 1, 1)
+        ctx.hsetnx.assert_called_with(DBINDEX_NAME, 1, OWNER_TOKEN)
 
     def test_try_db_index_error(self, mock_redis):
         ctx = mock_redis.from_url.return_value
-        ctx.hsetnx.side_effect = Exception
+        ctx.hsetnx.side_effect = RCE
 
         maindb = MainDB(ctx)
 
         with self.assertRaises(OspdOpenvasError):
-            maindb.try_database(1)
+            maindb.try_database(1, OWNER_TOKEN)
 
     def test_release_database_by_index(self, mock_redis):
         ctx = mock_redis.from_url.return_value
-        ctx.hdel.return_value = 1
+        pipe = ctx.pipeline.return_value.__enter__.return_value
+        pipe.hget.return_value = OWNER_TOKEN
+        pipe.execute.return_value = ['OK', True, 'OK', 1]
 
         maindb = MainDB(ctx)
 
-        maindb.release_database_by_index(3)
+        released = maindb.release_database_by_index(3, OWNER_TOKEN)
 
-        ctx.hdel.assert_called_once_with(DBINDEX_NAME, 3)
+        self.assertTrue(released)
+        pipe.watch.assert_called_once_with(DBINDEX_NAME)
+        pipe.execute_command.assert_has_calls(
+            [call('SELECT', 3), call('SELECT', 0)]
+        )
+        pipe.flushdb.assert_called_once_with()
+        pipe.hdel.assert_called_once_with(DBINDEX_NAME, 3)
+
+    def test_release_database_by_index_rejects_stale_owner(self, mock_redis):
+        ctx = mock_redis.from_url.return_value
+        pipe = ctx.pipeline.return_value.__enter__.return_value
+        pipe.hget.return_value = OTHER_OWNER_TOKEN
+
+        maindb = MainDB(ctx)
+
+        self.assertFalse(maindb.release_database_by_index(3, OWNER_TOKEN))
+        pipe.unwatch.assert_called_once_with()
+        pipe.flushdb.assert_not_called()
+        pipe.execute.assert_not_called()
+
+    def test_release_database_by_index_retries_watch_abort(self, mock_redis):
+        ctx = mock_redis.from_url.return_value
+        pipe = ctx.pipeline.return_value.__enter__.return_value
+        pipe.hget.return_value = OWNER_TOKEN
+        pipe.execute.side_effect = [
+            WatchError(),
+            ['OK', True, 'OK', 1],
+        ]
+
+        maindb = MainDB(ctx)
+
+        self.assertTrue(maindb.release_database_by_index(3, OWNER_TOKEN))
+        self.assertEqual(ctx.pipeline.call_count, 2)
+        self.assertEqual(pipe.watch.call_count, 2)
+
+    def test_release_database_by_index_preserves_redis_error(self, mock_redis):
+        ctx = mock_redis.from_url.return_value
+        pipe = ctx.pipeline.return_value.__enter__.return_value
+        pipe.hget.return_value = OWNER_TOKEN
+        pipe.execute.side_effect = RCE('release failed')
+
+        with self.assertRaises(RCE):
+            MainDB(ctx).release_database_by_index(3, OWNER_TOKEN)
 
     def test_release_database(self, mock_redis):
         ctx = mock_redis.from_url.return_value
-        ctx.hdel.return_value = 1
+        pipe = ctx.pipeline.return_value.__enter__.return_value
+        pipe.hget.return_value = OWNER_TOKEN
+        pipe.execute.return_value = ['OK', True, 'OK', 1]
 
         db = MagicMock()
         db.index = 3
+        db.owner_token = OWNER_TOKEN
         maindb = MainDB(ctx)
-        release_order = MagicMock()
-        release_order.attach_mock(db.flush, 'flush')
-        release_order.attach_mock(ctx.hdel, 'release_index')
         maindb.release_database(db)
 
-        ctx.hdel.assert_called_once_with(DBINDEX_NAME, 3)
-        db.flush.assert_called_with()
-        self.assertEqual(
-            release_order.mock_calls,
-            [call.flush(), call.release_index(DBINDEX_NAME, 3)],
-        )
+        db.flush.assert_not_called()
+        pipe.execute.assert_called_once_with()
+
+    def test_release_database_refuses_stale_owner_before_flush(
+        self, mock_redis
+    ):
+        ctx = mock_redis.from_url.return_value
+        pipe = ctx.pipeline.return_value.__enter__.return_value
+        pipe.hget.return_value = OTHER_OWNER_TOKEN
+        db = MagicMock()
+        db.index = 3
+        db.owner_token = OWNER_TOKEN
+        maindb = MainDB(ctx)
+
+        with self.assertRaises(OspdOpenvasError):
+            maindb.release_database(db)
+
+        db.flush.assert_not_called()
+        pipe.flushdb.assert_not_called()
+        pipe.execute.assert_not_called()
+
+    def test_reservation_token_accepts_legacy_owner_marker(self, mock_redis):
+        ctx = mock_redis.from_url.return_value
+        ctx.hget.return_value = '1'
+
+        self.assertEqual(MainDB(ctx).reservation_token(3), '1')
+
+    def test_reservation_token_rejects_reference_delimiter(self, mock_redis):
+        ctx = mock_redis.from_url.return_value
+        ctx.hget.return_value = 'owner:other'
+
+        with self.assertRaises(OspdOpenvasError):
+            MainDB(ctx).reservation_token(3)
 
     def test_release(self, mock_redis):
         ctx = mock_redis.from_url.return_value
-
         maindb = MainDB(ctx)
-        maindb.release()
 
-        ctx.hdel.assert_called_with(DBINDEX_NAME, maindb.index)
-        ctx.flushdb.assert_called_with()
+        with self.assertRaises(OspdOpenvasError):
+            maindb.release()
+
+        ctx.flushdb.assert_not_called()
 
     @patch('ospd_openvas.db.Openvas')
     def test_get_new_kb_database(self, mock_openvas: MagicMock, mock_redis):
@@ -1024,6 +1183,7 @@ class MainDBTestCase(TestCase):
         kbdb = maindb.get_new_kb_database()
 
         self.assertEqual(kbdb.index, 3)
+        self.assertEqual(kbdb.owner_token, ctx.hsetnx.call_args_list[2].args[2])
         ctx.flushdb.assert_called_once_with()
 
     def test_get_new_kb_database_none(self, mock_redis):
@@ -1067,6 +1227,7 @@ class MainDBTestCase(TestCase):
         new_ctx = 'foo'  # just some object to compare
         mock_openvas_db.create_context.return_value = new_ctx
         mock_openvas_db.get_key_count.side_effect = [0, 1]
+        ctx.hget.return_value = OWNER_TOKEN
 
         maindb = MainDB(ctx)
         maindb._max_dbindex = 3  # pylint: disable=protected-access
@@ -1078,3 +1239,4 @@ class MainDBTestCase(TestCase):
         )
         self.assertEqual(kbdb.index, 2)
         self.assertIs(kbdb.ctx, new_ctx)
+        self.assertEqual(kbdb.owner_token, OWNER_TOKEN)

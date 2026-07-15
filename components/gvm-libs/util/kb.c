@@ -45,6 +45,7 @@
  * @brief Name of the namespace usage bitmap in redis.
  */
 #define GLOBAL_DBINDEX_NAME "GVM.__GlobalDBIndex"
+#define DATABASE_RELEASE_MAX_ATTEMPTS 3
 
 #define SCANNER_RESULT_KEY "internal/results"
 #define SCANNER_RESULT_CLAIM_KEY "internal/results.ospd-claim"
@@ -140,6 +141,7 @@ struct kb_redis
   unsigned int db;     /**< Namespace ID number, 0 if uninitialized. */
   redisContext *rctx;  /**< Redis client context. */
   char *path;          /**< Path to the server socket. */
+  char *owner_token;   /**< Unique namespace owner/fencing token. */
 };
 #define redis_kb(__kb) ((struct kb_redis *) (__kb))
 
@@ -163,7 +165,13 @@ try_database_index (struct kb_redis *kbr, int index)
   redisReply *rep;
   int rc = 0;
 
-  rep = redisCommand (ctx, "HSETNX %s %d 1", GLOBAL_DBINDEX_NAME, index);
+  if (kbr->owner_token == NULL)
+    kbr->owner_token = gvm_uuid_make ();
+  if (kbr->owner_token == NULL)
+    return -ENOMEM;
+
+  rep = redisCommand (ctx, "HSETNX %s %d %s", GLOBAL_DBINDEX_NAME, index,
+                      kbr->owner_token);
   if (rep == NULL)
     return -ENOMEM;
 
@@ -176,6 +184,134 @@ try_database_index (struct kb_redis *kbr, int index)
 
   freeReplyObject (rep);
 
+  return rc;
+}
+
+/**
+ * @brief Flush and release a DB only while its exact owner token remains set.
+ *
+ * The watched index is always in DB 0.  The flush and index deletion are
+ * executed by one Redis transaction so a replaced owner cannot be flushed.
+ *
+ * @return 0 on success, negative integer otherwise.
+ */
+static int
+redis_flush_and_release_db (struct kb_redis *kbr)
+{
+  redisReply *rep = NULL;
+  redisContext *ctx;
+  size_t owner_token_len;
+  unsigned int attempt;
+  int rc = -EIO;
+
+  if (kbr == NULL || kbr->rctx == NULL || kbr->db == 0
+      || kbr->owner_token == NULL)
+    return -EINVAL;
+
+  ctx = kbr->rctx;
+  owner_token_len = strlen (kbr->owner_token);
+  for (attempt = 0; attempt < DATABASE_RELEASE_MAX_ATTEMPTS; attempt++)
+    {
+      rep = redisCommand (ctx, "SELECT 0");
+      if (rep == NULL || rep->type != REDIS_REPLY_STATUS)
+        goto cleanup;
+      freeReplyObject (rep);
+      rep = NULL;
+
+      rep = redisCommand (ctx, "WATCH %s", GLOBAL_DBINDEX_NAME);
+      if (rep == NULL || rep->type != REDIS_REPLY_STATUS)
+        goto cleanup;
+      freeReplyObject (rep);
+      rep = NULL;
+
+      rep = redisCommand (ctx, "HGET %s %u", GLOBAL_DBINDEX_NAME, kbr->db);
+      if (rep == NULL)
+        goto unwatch;
+      if (rep->type != REDIS_REPLY_STRING || rep->len != owner_token_len
+          || memcmp (rep->str, kbr->owner_token, owner_token_len) != 0)
+        {
+          rc = -EPERM;
+          goto unwatch;
+        }
+      freeReplyObject (rep);
+      rep = NULL;
+
+      rep = redisCommand (ctx, "MULTI");
+      if (rep == NULL || rep->type != REDIS_REPLY_STATUS)
+        goto unwatch;
+      freeReplyObject (rep);
+      rep = NULL;
+
+      rep = redisCommand (ctx, "SELECT %u", kbr->db);
+      if (rep == NULL || rep->type != REDIS_REPLY_STATUS
+          || strcmp (rep->str, "QUEUED") != 0)
+        goto discard;
+      freeReplyObject (rep);
+      rep = redisCommand (ctx, "FLUSHDB");
+      if (rep == NULL || rep->type != REDIS_REPLY_STATUS
+          || strcmp (rep->str, "QUEUED") != 0)
+        goto discard;
+      freeReplyObject (rep);
+      rep = redisCommand (ctx, "SELECT 0");
+      if (rep == NULL || rep->type != REDIS_REPLY_STATUS
+          || strcmp (rep->str, "QUEUED") != 0)
+        goto discard;
+      freeReplyObject (rep);
+      rep = redisCommand (ctx, "HDEL %s %u", GLOBAL_DBINDEX_NAME, kbr->db);
+      if (rep == NULL || rep->type != REDIS_REPLY_STATUS
+          || strcmp (rep->str, "QUEUED") != 0)
+        goto discard;
+      freeReplyObject (rep);
+      rep = redisCommand (ctx, "EXEC");
+      if (rep == NULL)
+        goto cleanup;
+      if (rep->type == REDIS_REPLY_NIL)
+        {
+          freeReplyObject (rep);
+          rep = NULL;
+          continue;
+        }
+      if (rep->type != REDIS_REPLY_ARRAY || rep->elements != 4
+          || rep->element[0]->type != REDIS_REPLY_STATUS
+          || rep->element[1]->type != REDIS_REPLY_STATUS
+          || rep->element[2]->type != REDIS_REPLY_STATUS
+          || rep->element[3]->type != REDIS_REPLY_INTEGER
+          || rep->element[3]->integer != 1)
+        goto cleanup;
+
+      rc = 0;
+      goto cleanup;
+
+    discard:
+      if (rep != NULL)
+        {
+          freeReplyObject (rep);
+          rep = NULL;
+        }
+      rep = redisCommand (ctx, "DISCARD");
+      if (rep == NULL || rep->type != REDIS_REPLY_STATUS)
+        goto cleanup;
+      freeReplyObject (rep);
+      rep = NULL;
+      return -EIO;
+
+    unwatch:
+      if (rep != NULL)
+        {
+          freeReplyObject (rep);
+          rep = NULL;
+        }
+      rep = redisCommand (ctx, "UNWATCH");
+      if (rep != NULL)
+        freeReplyObject (rep);
+      return rc;
+    }
+
+  rc = -EAGAIN;
+
+cleanup:
+  if (rep != NULL)
+    freeReplyObject (rep);
   return rc;
 }
 
@@ -246,9 +382,11 @@ static int
 select_database (struct kb_redis *kbr)
 {
   int rc;
+  bool reconnecting;
   redisContext *ctx = kbr->rctx;
   redisReply *rep = NULL;
 
+  reconnecting = kbr->db > 0;
   if (kbr->db == 0)
     {
       unsigned i;
@@ -271,49 +409,34 @@ select_database (struct kb_redis *kbr)
       goto err_cleanup;
     }
 
+  if (reconnecting)
+    {
+      size_t owner_token_len;
+
+      if (kbr->owner_token == NULL)
+        {
+          rc = -EPERM;
+          goto err_cleanup;
+        }
+
+      owner_token_len = strlen (kbr->owner_token);
+      rep = redisCommand (ctx, "HGET %s %u", GLOBAL_DBINDEX_NAME, kbr->db);
+      if (rep == NULL || rep->type != REDIS_REPLY_STRING
+          || rep->len != owner_token_len
+          || memcmp (rep->str, kbr->owner_token, owner_token_len) != 0)
+        {
+          g_warning ("%s: refusing to reconnect to Redis DB %u without its "
+                     "exact owner token",
+                     __func__, kbr->db);
+          rc = -EPERM;
+          goto err_cleanup;
+        }
+      freeReplyObject (rep);
+      rep = NULL;
+    }
+
   rep = redisCommand (ctx, "SELECT %u", kbr->db);
   if (rep == NULL || rep->type != REDIS_REPLY_STATUS)
-    {
-      rc = -1;
-      goto err_cleanup;
-    }
-
-  rc = 0;
-
-err_cleanup:
-  if (rep != NULL)
-    freeReplyObject (rep);
-
-  return rc;
-}
-
-/**
- * @brief Release DB.
- *
- * @param[in] kbr Subclass of struct kb.
- *
- * @return 0 on success, -1 on error.
- */
-static int
-redis_release_db (struct kb_redis *kbr)
-{
-  int rc;
-  redisContext *ctx = kbr->rctx;
-  redisReply *rep;
-
-  if (ctx == NULL)
-    return -EINVAL;
-
-  rep = redisCommand (ctx, "SELECT 0"); /* Management database*/
-  if (rep == NULL || rep->type != REDIS_REPLY_STATUS)
-    {
-      rc = -1;
-      goto err_cleanup;
-    }
-  freeReplyObject (rep);
-
-  rep = redisCommand (ctx, "HDEL %s %d", GLOBAL_DBINDEX_NAME, kbr->db);
-  if (rep == NULL || rep->type != REDIS_REPLY_INTEGER)
     {
       rc = -1;
       goto err_cleanup;
@@ -477,21 +600,35 @@ static int
 redis_delete (kb_t kb)
 {
   struct kb_redis *kbr;
+  int rc = 0;
 
   kbr = redis_kb (kb);
 
-  redis_delete_all (kbr);
-  redis_release_db (kbr);
+  if (kbr->db > 0 && kbr->owner_token != NULL)
+    {
+      rc = redis_flush_and_release_db (kbr);
+      if (rc != 0)
+        g_warning (
+          "%s: refusing to delete Redis DB %u without its exact owner token",
+          __func__, kbr->db);
+    }
+  else if (kbr->db > 0)
+    {
+      rc = -EPERM;
+      g_warning ("%s: refusing to delete unowned Redis DB %u", __func__,
+                 kbr->db);
+    }
 
   if (kbr->rctx != NULL)
     {
-      g_free (kbr->path);
       redisFree (kbr->rctx);
       kbr->rctx = NULL;
     }
 
+  g_free (kbr->path);
+  g_free (kbr->owner_token);
   g_free (kb);
-  return 0;
+  return rc;
 }
 
 /**
@@ -509,6 +646,15 @@ redis_get_kb_index (kb_t kb)
   if (i > 0)
     return i;
   return -1;
+}
+
+/**
+ * @brief Return the immutable owner token for an allocated KB.
+ */
+static const char *
+redis_get_owner_token (kb_t kb)
+{
+  return redis_kb (kb)->owner_token;
 }
 
 /**
@@ -571,12 +717,17 @@ redis_new (kb_t *kb, const char *kb_path)
       g_log (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
              "%s: cannot access redis at '%s'", __func__, kb_path);
       redis_delete ((kb_t) kbr);
-      kbr = NULL;
-      rc = -1;
+      return -1;
     }
 
-  /* Ensure that the new kb is clean */
-  redis_delete_all (kbr);
+  /* Ensure that the new kb is clean before exposing it to callers. */
+  if (redis_delete_all (kbr))
+    {
+      g_warning ("%s: refusing to use Redis DB %u after cleanup failed",
+                 __func__, kbr->db);
+      redis_delete ((kb_t) kbr);
+      return -1;
+    }
 
   *kb = (kb_t) kbr;
 
@@ -596,12 +747,18 @@ redis_new (kb_t *kb, const char *kb_path)
  * @return Knowledge Base object, NULL otherwise.
  */
 static kb_t
-redis_direct_conn (const char *kb_path, const int kb_index)
+redis_direct_conn (const char *kb_path, const int kb_index,
+                   const char *owner_token)
 {
   struct kb_redis *kbr;
   redisReply *rep;
+  size_t owner_token_len;
 
-  if (kb_path == NULL)
+  if (kb_path == NULL || kb_index <= 0 || owner_token == NULL
+      || owner_token[0] == '\0')
+    return NULL;
+  owner_token_len = strlen (owner_token);
+  if (owner_token_len > 128)
     return NULL;
 
   kbr = g_malloc0 (sizeof (struct kb_redis));
@@ -620,6 +777,21 @@ redis_direct_conn (const char *kb_path, const int kb_index)
       return NULL;
     }
   kbr->db = kb_index;
+  rep =
+    redisCommand (kbr->rctx, "HGET %s %d", GLOBAL_DBINDEX_NAME, kb_index);
+  if (rep == NULL || rep->type != REDIS_REPLY_STRING
+      || rep->len != owner_token_len
+      || memcmp (rep->str, owner_token, owner_token_len) != 0)
+    {
+      if (rep != NULL)
+        freeReplyObject (rep);
+      redisFree (kbr->rctx);
+      g_free (kbr->path);
+      g_free (kbr);
+      return NULL;
+    }
+  kbr->owner_token = g_strdup (owner_token);
+  freeReplyObject (rep);
   rep = redisCommand (kbr->rctx, "SELECT %d", kb_index);
   if (rep == NULL || rep->type != REDIS_REPLY_STATUS)
     {
@@ -628,6 +800,7 @@ redis_direct_conn (const char *kb_path, const int kb_index)
       redisFree (kbr->rctx);
       kbr->rctx = NULL;
       g_free (kbr->path);
+      g_free (kbr->owner_token);
       g_free (kbr);
       return NULL;
     }
@@ -668,6 +841,7 @@ redis_find (const char *kb_path, const char *key)
                  kbr->rctx ? kbr->rctx->errstr : strerror (ENOMEM));
           redisFree (kbr->rctx);
           g_free (kbr->path);
+          g_free (kbr->owner_token);
           g_free (kbr);
           return NULL;
         }
@@ -676,8 +850,8 @@ redis_find (const char *kb_path, const char *key)
         fetch_max_db_index (kbr);
 
       kbr->db = i;
-      rep = redisCommand (kbr->rctx, "HEXISTS %s %d", GLOBAL_DBINDEX_NAME, i);
-      if (rep == NULL || rep->type != REDIS_REPLY_INTEGER || rep->integer != 1)
+      rep = redisCommand (kbr->rctx, "HGET %s %d", GLOBAL_DBINDEX_NAME, i);
+      if (rep == NULL || rep->type != REDIS_REPLY_STRING)
         {
           if (rep != NULL)
             freeReplyObject (rep);
@@ -686,10 +860,14 @@ redis_find (const char *kb_path, const char *key)
           kbr->rctx = NULL;
           continue;
         }
+      g_free (kbr->owner_token);
+      kbr->owner_token = g_strdup (rep->str);
       freeReplyObject (rep);
       rep = redisCommand (kbr->rctx, "SELECT %u", i);
       if (rep == NULL || rep->type != REDIS_REPLY_STATUS)
         {
+          if (rep != NULL)
+            freeReplyObject (rep);
           redisFree (kbr->rctx);
           kbr->rctx = NULL;
         }
@@ -712,6 +890,7 @@ redis_find (const char *kb_path, const char *key)
   while (i < kbr->max_db);
 
   g_free (kbr->path);
+  g_free (kbr->owner_token);
   g_free (kbr);
   return NULL;
 }
@@ -1855,11 +2034,15 @@ static int
 redis_flush_all (kb_t kb, const char *except)
 {
   unsigned int i = 1;
+  int rc = 0;
   struct kb_redis *kbr;
 
   kbr = redis_kb (kb);
   if (kbr->rctx)
-    redisFree (kbr->rctx);
+    {
+      redisFree (kbr->rctx);
+      kbr->rctx = NULL;
+    }
 
   g_debug ("%s: deleting all DBs at %s except %s", __func__, kbr->path, except);
   do
@@ -1874,18 +2057,22 @@ redis_flush_all (kb_t kb, const char *except)
                  kbr->rctx ? kbr->rctx->errstr : strerror (ENOMEM));
           redisFree (kbr->rctx);
           kbr->rctx = NULL;
-          return -1;
+          rc = -1;
+          goto cleanup;
         }
 
       kbr->db = i;
-      rep = redisCommand (kbr->rctx, "HEXISTS %s %d", GLOBAL_DBINDEX_NAME, i);
-      if (rep == NULL || rep->type != REDIS_REPLY_INTEGER || rep->integer != 1)
+      rep = redisCommand (kbr->rctx, "HGET %s %d", GLOBAL_DBINDEX_NAME, i);
+      if (rep == NULL || rep->type != REDIS_REPLY_STRING)
         {
           freeReplyObject (rep);
           redisFree (kbr->rctx);
+          kbr->rctx = NULL;
           i++;
           continue;
         }
+      g_free (kbr->owner_token);
+      kbr->owner_token = g_strdup (rep->str);
       freeReplyObject (rep);
       rep = redisCommand (kbr->rctx, "SELECT %u", i);
       if (rep == NULL || rep->type != REDIS_REPLY_STATUS)
@@ -1893,6 +2080,8 @@ redis_flush_all (kb_t kb, const char *except)
           freeReplyObject (rep);
           redisFree (kbr->rctx);
           kbr->rctx = NULL;
+          rc = -1;
+          goto cleanup;
         }
       else
         {
@@ -1906,20 +2095,37 @@ redis_flush_all (kb_t kb, const char *except)
                   g_free (tmp);
                   i++;
                   redisFree (kbr->rctx);
+                  kbr->rctx = NULL;
                   continue;
                 }
             }
-          redis_delete_all (kbr);
-          redis_release_db (kbr);
+          rc = redis_flush_and_release_db (kbr);
+          if (rc != 0)
+            {
+              g_warning (
+                "%s: refusing to delete Redis DB %u without its exact owner "
+                "token",
+                __func__, kbr->db);
+              goto cleanup;
+            }
+          g_clear_pointer (&kbr->owner_token, g_free);
           redisFree (kbr->rctx);
+          kbr->rctx = NULL;
         }
       i++;
     }
   while (i < kbr->max_db);
 
+cleanup:
+  if (kbr->rctx != NULL)
+    {
+      redisFree (kbr->rctx);
+      kbr->rctx = NULL;
+    }
   g_free (kbr->path);
+  g_free (kbr->owner_token);
   g_free (kb);
-  return 0;
+  return rc;
 }
 
 /**
@@ -2031,6 +2237,7 @@ static const struct kb_operations KBRedisOperations = {
   .kb_save = redis_save,
   .kb_flush = redis_flush_all,
   .kb_direct_conn = redis_direct_conn,
-  .kb_get_kb_index = redis_get_kb_index};
+  .kb_get_kb_index = redis_get_kb_index,
+  .kb_get_owner_token = redis_get_owner_token};
 
 const struct kb_operations *KBDefaultOperations = &KBRedisOperations;

@@ -1,5 +1,7 @@
 # Redis Data Model for OpenVAS
 
+<!-- TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. -->
+
 - [Redis Data Model for OpenVAS](#redis-data-model-for-openvas)
   - [DB 0: In-Use List](#db-0-in-use-list)
   - [DB 1: NVTI Cache](#db-1-nvti-cache)
@@ -25,10 +27,17 @@ are never deleted or flushed by OpenVAS.
 
 ## DB 0: In-Use List
 
-In DB 0 there is only one hash type entry called `GVM.__GlobalDBIndex`. In this
-hash is stored a list of in-use DBs. As this is the initial DB, OpenVAS
-never tries to take it for another purpose. Each time in which OpenVAS
-needs to set a new KB, it will start to search from DB 1.
+In DB 0 there is only one hash type entry called `GVM.__GlobalDBIndex`. The
+hash maps each in-use DB index to an opaque unique owner token. The token fences
+cleanup: a stale process may neither flush nor release an index after ownership
+has changed. Cleanup verifies the token and queues the target FLUSHDB plus the
+DB 0 index removal in one Redis WATCH/MULTI/EXEC transaction. FLUSHDB is queued
+before HDEL, so an execution-time error may retain an empty reserved namespace
+but cannot expose an unflushed namespace for reuse. Direct clients must retain
+the original owner token, and scan namespaces are released only after the
+scanner process tree has exited. As DB 0 is the management DB, OpenVAS never
+takes it for another purpose. Each time OpenVAS needs a new KB, it starts
+searching from DB 1.
 
 We can see this with the command line client redis-cli:
 
@@ -43,19 +52,19 @@ redis /run/redis-openvas/redis.sock> KEYS *
 
 redis /run/redis-openvas/redis.sock> HGETALL GVM.__GlobalDBIndex
 1) "1"
-2) "1"
+2) "5c267ee8-e057-4b97-8594-3eb7c3b8d2e9"
 ```
 
 With the last command `HGETALL` we get the key-value tuples saved into the
-hash. In this case we can see that there is a key named “1” (item 1) and the
-value for this key is also “1” (item 2). All this means that the DB 1 is in
-use. Another way to see the same is using the command
+hash. In this case key “1” is the database index and item 2 is its owner token.
+Together they mean that DB 1 is in use by that exact owner. Another way to see
+the same is using the command
  `HGET GVM.__GlobalDBIndex 1` to check directly if there is a key named “1” in
 the hash. If the key exist, we will get the value stored there.
 
 ```
 redis /run/redis-openvas/redis.sock> HGET GVM.__GlobalDBIndex 1
-"1"
+"5c267ee8-e057-4b97-8594-3eb7c3b8d2e9"
 
 redis /run/redis-openvas/redis.sock> HGET GVM.__GlobalDBIndex 2
 (nil)
@@ -116,9 +125,15 @@ Each host to be scanned takes a new DB for the KB. The host KB is used to
 store some scan preferences and results for this specific host. When the host
 scan finished, the KB and thus the DB is deleted with all its content and
 freed. Then, the in-use DB list inside the hash `GVM.__GlobalDBIndex` is
-updated.
+updated. The task KB's `internal/dbindex` list records each child as
+`<db-index>:<owner-token>` so stale child references cannot release a reused
+index.
 
 ## Data Content Examples
+
+The historical snapshots below abbreviate owner-token values as `"1"` to keep
+the examples readable. Current allocations store unique UUID owner tokens
+instead.
 
 ### Before starting a task
 

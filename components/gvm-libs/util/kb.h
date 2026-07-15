@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -109,7 +110,8 @@ struct kb_operations
   int (*kb_new) (kb_t *, const char *);             /**< New KB. */
   int (*kb_delete) (kb_t);                          /**< Delete KB. */
   kb_t (*kb_find) (const char *, const char *);     /**< Find KB. */
-  kb_t (*kb_direct_conn) (const char *, const int); /**< Connect to a KB. */
+  kb_t (*kb_direct_conn) (const char *, const int,
+                          const char *); /**< Connect to an owned KB. */
 
   /* Actual kb operations */
   /**
@@ -216,6 +218,7 @@ struct kb_operations
   int (*kb_lnk_reset) (kb_t);           /**< Reset connection to KB. */
   int (*kb_flush) (kb_t, const char *); /**< Flush redis DB. */
   int (*kb_get_kb_index) (kb_t);        /**< Get kb index. */
+  const char *(*kb_get_owner_token) (kb_t); /**< Get immutable owner token. */
 };
 
 /**
@@ -256,16 +259,18 @@ kb_new (kb_t *kb, const char *kb_path)
  *
  * @param[in] kb_path   Path to KB.
  * @param[in] kb_index       DB index
+ * @param[in] owner_token    Exact owner token expected in DB 0.
  *
  * @return Knowledge Base object, NULL otherwise.
  */
 static inline kb_t
-kb_direct_conn (const char *kb_path, const int kb_index)
+kb_direct_conn (const char *kb_path, const int kb_index,
+                const char *owner_token)
 {
   assert (KBDefaultOperations);
   assert (KBDefaultOperations->kb_direct_conn);
 
-  return KBDefaultOperations->kb_direct_conn (kb_path, kb_index);
+  return KBDefaultOperations->kb_direct_conn (kb_path, kb_index, owner_token);
 }
 
 /**
@@ -794,6 +799,23 @@ kb_get_kb_index (kb_t kb)
   assert (kb->kb_ops->kb_get_kb_index);
 
   return kb->kb_ops->kb_get_kb_index (kb);
+}
+
+/**
+ * @brief Return the immutable owner/fencing token for an allocated KB.
+ *
+ * @param[in] kb KB handle.
+ *
+ * @return Borrowed owner-token string, or NULL for an unowned direct context.
+ */
+static inline const char *
+kb_get_owner_token (kb_t kb)
+{
+  assert (kb);
+  assert (kb->kb_ops);
+  assert (kb->kb_ops->kb_get_owner_token);
+
+  return kb->kb_ops->kb_get_owner_token (kb);
 }
 
 #endif

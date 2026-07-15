@@ -98,10 +98,21 @@ struct attack_start_args
 static int
 connect_main_kb (kb_t *main_kb)
 {
-  int i = atoi (prefs_get ("ov_maindbid"));
+  const char *db_index = prefs_get ("ov_maindbid");
+  const char *owner_token = prefs_get ("ov_mainowner");
+  int i;
 
-  *main_kb = kb_direct_conn (prefs_get ("db_address"), i);
-  if (main_kb)
+  if (db_index == NULL || owner_token == NULL)
+    {
+      g_warning ("Missing main Redis KB ownership preferences.");
+      *main_kb = NULL;
+      return -1;
+    }
+  i = atoi (db_index);
+
+  *main_kb =
+    kb_direct_conn (prefs_get ("db_address"), i, owner_token);
+  if (*main_kb)
     {
       return 0;
     }
@@ -114,18 +125,58 @@ connect_main_kb (kb_t *main_kb)
  * @brief Add the Host KB index to the list of readable KBs
  * used by ospd-openvas.
  *
- * @param host_kb_index The Kb index used for the host, to be stored
- *        in a list key in the main_kb.
+ * @param host_kb Host KB whose exact index and owner token are stored.
  */
-static void
-set_kb_readable (int host_kb_index)
+static int
+set_kb_readable (kb_t host_kb)
 {
   kb_t main_kb = NULL;
+  const char *host_owner_token;
+  const char *parent_owner_token;
+  char *reference;
 
-  connect_main_kb (&main_kb);
-  kb_item_add_int_unique_with_main_kb_check (main_kb, "internal/dbindex",
-                                             host_kb_index);
+  if (connect_main_kb (&main_kb))
+    return -1;
+  host_owner_token = kb_get_owner_token (host_kb);
+  parent_owner_token = kb_get_owner_token (main_kb);
+  if (host_owner_token == NULL || parent_owner_token == NULL)
+    {
+      g_warning (
+        "Refusing to publish a host Redis DB without exact owner tokens.");
+      kb_lnk_reset (main_kb);
+      return -1;
+    }
+
+  if (kb_item_set_str_with_main_kb_check (
+        host_kb, "internal/turbovas.owner-token", host_owner_token, 0)
+      || kb_item_set_str_with_main_kb_check (
+        host_kb, "internal/turbovas.db-kind", "child", 0)
+      || kb_item_set_str_with_main_kb_check (
+        host_kb, "internal/turbovas.parent-owner-token", parent_owner_token, 0)
+      || kb_item_set_int_with_main_kb_check (
+        host_kb, "internal/turbovas.parent-db-index",
+        kb_get_kb_index (main_kb)))
+    {
+      g_warning ("Refusing to publish incomplete host Redis DB ownership "
+                 "metadata.");
+      kb_lnk_reset (main_kb);
+      return -1;
+    }
+  reference =
+    g_strdup_printf ("%d:%s", kb_get_kb_index (host_kb), host_owner_token);
+  if (reference == NULL
+      || kb_item_add_str_unique_with_main_kb_check (
+        main_kb, "internal/dbindex", reference, strlen (reference), 0))
+    {
+      g_warning ("Refusing to publish host Redis DB without an exact owner "
+                 "reference.");
+      g_free (reference);
+      kb_lnk_reset (main_kb);
+      return -1;
+    }
+  g_free (reference);
   kb_lnk_reset (main_kb);
+  return 0;
 }
 
 /**
@@ -141,7 +192,8 @@ set_scan_status (char *status)
   char buffer[96];
   char *scan_id = NULL;
 
-  connect_main_kb (&main_kb);
+  if (connect_main_kb (&main_kb))
+    return;
 
   if (check_kb_inconsistency (main_kb) != 0)
     {
@@ -760,9 +812,11 @@ check_deprecated_prefs (void)
         sys_ifaces_deny ? "sys_ifaces_deny (scanner only setting)" : "");
       g_warning ("%s: %s", __func__, msg);
 
-      connect_main_kb (&main_kb);
-      message_to_client (main_kb, msg, NULL, NULL, "ERRMSG");
-      kb_lnk_reset (main_kb);
+      if (connect_main_kb (&main_kb) == 0)
+        {
+          message_to_client (main_kb, msg, NULL, NULL, "ERRMSG");
+          kb_lnk_reset (main_kb);
+        }
       g_free (msg);
     }
 }
@@ -850,9 +904,13 @@ attack_start (struct ipc_context *ipcc, struct attack_start_args *args)
   kb_lnk_reset (main_kb);
   gettimeofday (&then, NULL);
 
-  kb_item_set_str_with_main_kb_check (kb, "internal/scan_id", globals->scan_id,
-                                      0);
-  set_kb_readable (kb_get_kb_index (kb));
+  if (kb_item_set_str_with_main_kb_check (
+        kb, "internal/scan_id", globals->scan_id, 0)
+      || set_kb_readable (kb))
+    {
+      set_scan_status ("stop_all");
+      return;
+    }
 
   /* The reverse lookup is delayed to this step in order to not slow down the
    * main scan process eg. case of target with big range of IP addresses. */
@@ -938,17 +996,19 @@ print_host_access_denied (gpointer data, gpointer systemwide)
 {
   kb_t kb = NULL;
   int *sw = systemwide;
-  connect_main_kb (&kb);
-  if (*sw == 0)
-    message_to_client ((kb_t) kb, "Host access denied.", (gchar *) data, NULL,
-                       "ERRMSG");
-  else if (*sw == 1)
-    message_to_client ((kb_t) kb,
-                       "Host access denied (system-wide restriction).",
-                       (gchar *) data, NULL, "ERRMSG");
-  kb_item_set_str_with_main_kb_check ((kb_t) kb, "internal/host_deny", "True",
-                                      0);
-  kb_lnk_reset (kb);
+  if (connect_main_kb (&kb) == 0)
+    {
+      if (*sw == 0)
+        message_to_client ((kb_t) kb, "Host access denied.", (gchar *) data,
+                           NULL, "ERRMSG");
+      else if (*sw == 1)
+        message_to_client ((kb_t) kb,
+                           "Host access denied (system-wide restriction).",
+                           (gchar *) data, NULL, "ERRMSG");
+      kb_item_set_str_with_main_kb_check ((kb_t) kb, "internal/host_deny",
+                                          "True", 0);
+      kb_lnk_reset (kb);
+    }
   g_warning ("Host %s access denied.", (gchar *) data);
 }
 
@@ -1121,7 +1181,11 @@ scan_stop_cleanup ()
   if (already_called == 1)
     return;
 
-  connect_main_kb (&main_kb);
+  if (connect_main_kb (&main_kb))
+    {
+      pluginlaunch_stop ();
+      return;
+    }
   pid = kb_item_get_str (main_kb, ("internal/ovas_pid"));
   kb_lnk_reset (main_kb);
 
@@ -1187,8 +1251,8 @@ attack_network (struct scan_globals *globals)
   gboolean test_alive_hosts_only = prefs_get_bool ("test_alive_hosts_only");
   gvm_hosts_t *alive_hosts_list = NULL;
   kb_t alive_hosts_kb = NULL;
-  if (test_alive_hosts_only)
-    connect_main_kb (&alive_hosts_kb);
+  if (test_alive_hosts_only && connect_main_kb (&alive_hosts_kb))
+    return -1;
 
   gettimeofday (&then, NULL);
 
@@ -1228,11 +1292,13 @@ attack_network (struct scan_globals *globals)
   port_range = prefs_get ("port_range");
   if (validate_port_range (port_range))
     {
-      connect_main_kb (&main_kb);
-      message_to_client (
-        main_kb, "Invalid port list. Ports must be in the range [1-65535]",
-        NULL, NULL, "ERRMSG");
-      kb_lnk_reset (main_kb);
+      if (connect_main_kb (&main_kb) == 0)
+        {
+          message_to_client (
+            main_kb, "Invalid port list. Ports must be in the range [1-65535]",
+            NULL, NULL, "ERRMSG");
+          kb_lnk_reset (main_kb);
+        }
       g_warning ("Invalid port list. Ports must be in the range [1-65535]. "
                  "Scan terminated.");
       set_scan_status ("finished");
@@ -1261,9 +1327,11 @@ attack_network (struct scan_globals *globals)
                "Some plugins have not been launched.",
                plugins_init_error);
 
-      connect_main_kb (&main_kb);
-      message_to_client (main_kb, buf, NULL, NULL, "ERRMSG");
-      kb_lnk_reset (main_kb);
+      if (connect_main_kb (&main_kb) == 0)
+        {
+          message_to_client (main_kb, buf, NULL, NULL, "ERRMSG");
+          kb_lnk_reset (main_kb);
+        }
     }
 
   max_hosts = get_max_hosts_number ();
@@ -1274,14 +1342,16 @@ attack_network (struct scan_globals *globals)
     {
       char *buffer;
       buffer = g_strdup_printf ("Invalid target list: %s.", hostlist);
-      connect_main_kb (&main_kb);
-      message_to_client (main_kb, buffer, NULL, NULL, "ERRMSG");
+      if (connect_main_kb (&main_kb) == 0)
+        {
+          message_to_client (main_kb, buffer, NULL, NULL, "ERRMSG");
+          /* Send the hosts count to the client as -1,
+           * because the invalid target list.*/
+          message_to_client (main_kb, INVALID_TARGET_LIST, NULL, NULL,
+                             "HOSTS_COUNT");
+          kb_lnk_reset (main_kb);
+        }
       g_free (buffer);
-      /* Send the hosts count to the client as -1,
-       * because the invalid target list.*/
-      message_to_client (main_kb, INVALID_TARGET_LIST, NULL, NULL,
-                         "HOSTS_COUNT");
-      kb_lnk_reset (main_kb);
       g_warning ("Invalid target list. Scan terminated.");
 
       error = -1;
@@ -1315,16 +1385,20 @@ attack_network (struct scan_globals *globals)
   /* Send the excluded hosts count to the client, after removing duplicated and
    * unresolved hosts.*/
   sprintf (buf, "%d", exc + already_excluded);
-  connect_main_kb (&main_kb);
-  message_to_client (main_kb, buf, NULL, NULL, "HOSTS_EXCLUDED");
-  kb_lnk_reset (main_kb);
+  if (connect_main_kb (&main_kb) == 0)
+    {
+      message_to_client (main_kb, buf, NULL, NULL, "HOSTS_EXCLUDED");
+      kb_lnk_reset (main_kb);
+    }
 
   /* Send the hosts count to the client, after removing duplicated and
    * unresolved hosts.*/
   sprintf (buf, "%d", gvm_hosts_count (hosts));
-  connect_main_kb (&main_kb);
-  message_to_client (main_kb, buf, NULL, NULL, "HOSTS_COUNT");
-  kb_lnk_reset (main_kb);
+  if (connect_main_kb (&main_kb) == 0)
+    {
+      message_to_client (main_kb, buf, NULL, NULL, "HOSTS_COUNT");
+      kb_lnk_reset (main_kb);
+    }
 
   host = gvm_hosts_next (hosts);
   if (host == NULL)
@@ -1421,7 +1495,13 @@ attack_network (struct scan_globals *globals)
       while (1);
 
       host_str = gvm_host_value_str (host);
-      connect_main_kb (&main_kb);
+      if (connect_main_kb (&main_kb))
+        {
+          kb_delete (arg_host_kb);
+          g_free (host_str);
+          error = -1;
+          goto stop;
+        }
       if (hosts_new (host_str, arg_host_kb, main_kb) < 0)
         {
           kb_delete (arg_host_kb);

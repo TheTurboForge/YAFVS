@@ -15,6 +15,7 @@ from tests.dummydaemon import DummyDaemon
 from tests.helper import assert_called_once
 
 from ospd_openvas.openvas import Openvas
+from ospd_openvas.errors import OspdOpenvasError
 from ospd_openvas.preferencehandler import (
     AliveTest,
     BOREAS_SETTING_NAME,
@@ -24,6 +25,8 @@ from ospd_openvas.preferencehandler import (
     alive_test_methods_to_bit_field,
     validate_ssh_host_key_pins_b64,
 )
+
+OWNER_TOKEN = '11111111-1111-4111-8111-111111111111'
 
 SSH_HOST_KEY_PINS_B64 = (
     'W3siaG9zdCI6IjE5Mi4wLjIuNDIiLCJmaW5nZXJwcmludCI6'
@@ -383,12 +386,27 @@ class PreferenceHandlerTestCase(TestCase):
         )
         p_handler.kbdb.add_scan_preferences = Mock()
         p_handler.kbdb.index = 2
+        p_handler.kbdb.owner_token = OWNER_TOKEN
         p_handler.prepare_main_kbindex_for_openvas()
 
         p_handler.kbdb.add_scan_preferences.assert_called_with(
             p_handler.scan_id,
-            ['ov_maindbid|||2'],
+            ['ov_maindbid|||2', f'ov_mainowner|||{OWNER_TOKEN}'],
         )
+
+    @patch('ospd_openvas.db.KbDB')
+    def test_set_main_kbindex_requires_owner_token(self, mock_kb):
+        dummy = DummyDaemon()
+        p_handler = PreferenceHandler(
+            '1234-1234', mock_kb, dummy.scan_collection, None, None
+        )
+        p_handler.kbdb.index = 2
+        p_handler.kbdb.owner_token = None
+
+        with self.assertRaisesRegex(
+            OspdOpenvasError, 'without a main KB owner token'
+        ):
+            p_handler.prepare_main_kbindex_for_openvas()
 
     @patch('ospd_openvas.db.KbDB')
     def test_set_credentials(self, mock_kb):

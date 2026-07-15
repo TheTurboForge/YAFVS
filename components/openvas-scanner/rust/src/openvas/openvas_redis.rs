@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2024 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
@@ -54,6 +55,7 @@ pub trait KbAccess {
         Ok(String::new())
     }
     fn kb_id(&self) -> RedisStorageResult<u32>;
+    fn kb_owner_token(&self) -> RedisStorageResult<String>;
     fn results(&mut self) -> RedisStorageResult<Vec<String>> {
         Ok(Vec::new())
     }
@@ -72,6 +74,13 @@ impl KbAccess for RedisHelper<RedisCtx> {
         // like it should be self.lock_cache, but I'm keeping it as it
         // was for now.
         Ok(self.lock_task_kb()?.db)
+    }
+
+    fn kb_owner_token(&self) -> RedisStorageResult<String> {
+        self.lock_task_kb()?
+            .owner_token()
+            .map(str::to_owned)
+            .ok_or_else(|| DbError::LibraryError("Redis KB has no owner token".to_string()))
     }
 
     /// Release the redis namespace and make it available again for other tasks
@@ -189,6 +198,9 @@ pub mod test {
         }
         fn kb_id(&self) -> RedisStorageResult<u32> {
             Ok(3)
+        }
+        fn kb_owner_token(&self) -> RedisStorageResult<String> {
+            Ok("owner-token".to_string())
         }
     }
 }

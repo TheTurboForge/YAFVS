@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2020-2023 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -87,6 +88,7 @@ send_limit_msg (int num_not_scanned_hosts)
 {
   int err;
   int dbid;
+  const char *dbid_pref;
   kb_t main_kb = NULL;
 
   err = 0;
@@ -94,8 +96,12 @@ send_limit_msg (int num_not_scanned_hosts)
   if (num_not_scanned_hosts < 0)
     return -1;
 
-  dbid = atoi (prefs_get ("ov_maindbid"));
-  main_kb = kb_direct_conn (prefs_get ("db_address"), dbid);
+  dbid_pref = prefs_get ("ov_maindbid");
+  if (dbid_pref == NULL || prefs_get ("ov_mainowner") == NULL)
+    return -3;
+  dbid = atoi (dbid_pref);
+  main_kb = kb_direct_conn (prefs_get ("db_address"), dbid,
+                            prefs_get ("ov_mainowner"));
   if (main_kb)
     {
       char buf[256];
@@ -311,26 +317,43 @@ put_finish_signal_on_queue (void *error)
     {
       kb_t main_kb;
       int scandb_id;
+      const char *scandb_id_pref;
 
-      scandb_id = atoi (prefs_get ("ov_maindbid"));
-      main_kb = kb_direct_conn (prefs_get ("db_address"), scandb_id);
-
-      kb_item_push_str_err = kb_item_push_str (main_kb, ALIVE_DETECTION_QUEUE,
-                                               ALIVE_DETECTION_FINISHED);
-      if (kb_item_push_str_err)
+      scandb_id_pref = prefs_get ("ov_maindbid");
+      if (scandb_id_pref == NULL || prefs_get ("ov_mainowner") == NULL)
+        main_kb = NULL;
+      else
         {
-          g_debug ("%s: Could not push the Boreas finish signal on the alive "
-                   "detection Queue.",
-                   __func__);
-          error_out = -2;
+          scandb_id = atoi (scandb_id_pref);
+          main_kb = kb_direct_conn (prefs_get ("db_address"), scandb_id,
+                                    prefs_get ("ov_mainowner"));
+        }
+      if (main_kb == NULL)
+        {
+          g_warning ("%s: refusing to use an unowned main Redis KB", __func__);
+          error_out = -3;
         }
       else
-        fin_msg_already_on_queue = TRUE;
-
-      if ((kb_lnk_reset (main_kb)) != 0)
         {
-          g_warning ("%s: error in kb_lnk_reset()", __func__);
-          error_out = -3;
+          kb_item_push_str_err =
+            kb_item_push_str (main_kb, ALIVE_DETECTION_QUEUE,
+                              ALIVE_DETECTION_FINISHED);
+          if (kb_item_push_str_err)
+            {
+              g_debug (
+                "%s: Could not push the Boreas finish signal on the alive "
+                "detection Queue.",
+                __func__);
+              error_out = -2;
+            }
+          else
+            fin_msg_already_on_queue = TRUE;
+
+          if ((kb_lnk_reset (main_kb)) != 0)
+            {
+              g_warning ("%s: error in kb_lnk_reset()", __func__);
+              error_out = -3;
+            }
         }
     }
   /* Set error. */
@@ -411,16 +434,22 @@ send_dead_hosts_to_ospd_openvas (int count_dead_hosts)
 {
   kb_t main_kb;
   int maindbid;
+  const char *maindbid_pref;
   char dead_host_msg_to_ospd_openvas[2048];
 
-  maindbid = atoi (prefs_get ("ov_maindbid"));
-  main_kb = kb_direct_conn (prefs_get ("db_address"), maindbid);
+  maindbid_pref = prefs_get ("ov_maindbid");
+  if (maindbid_pref == NULL || prefs_get ("ov_mainowner") == NULL)
+    return;
+  maindbid = atoi (maindbid_pref);
+  main_kb = kb_direct_conn (prefs_get ("db_address"), maindbid,
+                            prefs_get ("ov_mainowner"));
 
   if (!main_kb)
     {
       g_debug ("%s: Could not connect to main_kb for sending dead hosts to "
                "ospd-openvas.",
                __func__);
+      return;
     }
 
   snprintf (dead_host_msg_to_ospd_openvas,
@@ -436,16 +465,18 @@ send_dead_hosts_to_ospd_openvas (int count_dead_hosts)
  *
  * @param  db_address  Address of the Redis db.
  * @param  db_id       ID of the scan main db.
+ * @param  owner_token Exact owner token for the scan main db.
  *
  * @return Scan id of current task or NULL on error.
  */
 gchar *
-get_openvas_scan_id (const gchar *db_address, int db_id)
+get_openvas_scan_id (const gchar *db_address, int db_id,
+                     const gchar *owner_token)
 {
   kb_t main_kb;
   gchar *scan_id;
 
-  main_kb = kb_direct_conn (db_address, db_id);
+  main_kb = kb_direct_conn (db_address, db_id, owner_token);
   if (main_kb)
     {
       scan_id = kb_item_get_str (main_kb, ("internal/scanid"));

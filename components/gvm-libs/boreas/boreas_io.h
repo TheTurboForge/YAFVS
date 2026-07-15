@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2020-2023 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -34,7 +35,7 @@ void
 handle_scan_restrictions (scanner_t *, gchar *);
 
 gchar *
-get_openvas_scan_id (const gchar *, int);
+get_openvas_scan_id (const gchar *, int, const gchar *);
 
 boreas_error_t
 get_alive_test_methods (alive_test_t *);

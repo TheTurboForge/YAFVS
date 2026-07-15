@@ -17,6 +17,7 @@ from typing import List, NewType, Optional, Iterable, Iterator, Tuple, Callable
 from urllib import parse
 
 import redis
+from redis.exceptions import WatchError
 
 from ospd.errors import RequiredArgument
 from ospd_openvas.errors import OspdOpenvasError
@@ -416,6 +417,8 @@ NVT_META_FIELDS = [
 
 # Name of the namespace usage bitmap in redis.
 DBINDEX_NAME = "GVM.__GlobalDBIndex"
+DATABASE_RELEASE_RETRIES = 8
+MAX_OWNER_TOKEN_LENGTH = 128
 
 logger = logging.getLogger(__name__)
 
@@ -1021,13 +1024,28 @@ class OpenvasDB:
 
 
 class BaseDB:
-    def __init__(self, kbindex: int, ctx: Optional[RedisCtx] = None):
+    def __init__(
+        self,
+        kbindex: int,
+        ctx: Optional[RedisCtx] = None,
+        *,
+        owner_token: Optional[str] = None,
+    ):
         if ctx is None:
             self.ctx = OpenvasDB.create_context(kbindex)
         else:
             self.ctx = ctx
 
         self.index = kbindex
+        self.owner_token = owner_token
+
+    @property
+    def owner_reference(self) -> str:
+        if not self.owner_token:
+            raise OspdOpenvasError(
+                f'Redis database {self.index} has no durable owner token.'
+            )
+        return f'{self.index}:{self.owner_token}'
 
     def flush(self):
         """Flush the database"""
@@ -1172,7 +1190,7 @@ class BaseKbDB(BaseDB):
 class ScanDB(BaseKbDB):
     """Database for a scanning a single host"""
 
-    def select(self, kbindex: int) -> "ScanDB":
+    def select(self, kbindex: int, owner_token: str) -> "ScanDB":
         """Select a redis kb.
 
         Arguments:
@@ -1180,10 +1198,58 @@ class ScanDB(BaseKbDB):
         """
         OpenvasDB.select_database(self.ctx, kbindex)
         self.index = kbindex
+        self.owner_token = owner_token
         return self
 
 
 class KbDB(BaseKbDB):
+    @staticmethod
+    def parse_database_reference(reference: str) -> Tuple[int, str]:
+        """Parse one exact child-database index and owner-token reference."""
+        if not isinstance(reference, str):
+            raise OspdOpenvasError('Malformed child Redis database reference.')
+        index_text, separator, owner_token = reference.partition(':')
+        try:
+            index = int(index_text)
+        except ValueError:
+            raise OspdOpenvasError(
+                'Malformed child Redis database owner reference.'
+            ) from None
+        if not separator or index <= 0:
+            raise OspdOpenvasError(
+                'Malformed child Redis database owner reference.'
+            )
+        return index, MainDB.validate_owner_token(owner_token)
+
+    def _legacy_database_reference(
+        self, reference: str, parent_scan_id: Optional[str]
+    ) -> Tuple[int, str]:
+        """Resolve a pre-token child reference without trusting its DB index."""
+        try:
+            index = int(reference)
+        except (TypeError, ValueError):
+            raise OspdOpenvasError(
+                'Malformed child Redis database reference.'
+            ) from None
+        if index <= 0 or not parent_scan_id:
+            raise OspdOpenvasError(
+                'Unverifiable legacy child Redis database reference.'
+            )
+
+        main_db = MainDB()
+        owner_token = main_db.reservation_token(index)
+        child = ScanDB(index, owner_token=owner_token)
+        child_scan_id = child._get_single_item('internal/scan_id')
+        if child_scan_id != parent_scan_id:
+            raise OspdOpenvasError(
+                'Legacy child Redis database does not belong to this scan.'
+            )
+        if main_db.reservation_token(index) != owner_token:
+            raise OspdOpenvasError(
+                'Legacy child Redis database owner changed during validation.'
+            )
+        return index, owner_token
+
     def get_scan_databases(self) -> Iterator[ScanDB]:
         """Returns an iterator yielding corresponding ScanDBs
 
@@ -1194,13 +1260,46 @@ class KbDB(BaseKbDB):
         """
         dbs = self._get_list_item('internal/dbindex')
         scan_db = ScanDB(self.index)
-        for kbindex in dbs:
+        parent_scan_id = self._get_single_item('internal/scanid')
+        for reference in dbs:
+            if isinstance(reference, str) and ':' in reference:
+                kbindex, owner_token = self.parse_database_reference(reference)
+                if kbindex == self.index:
+                    continue
+                if MainDB().reservation_token(kbindex) != owner_token:
+                    raise OspdOpenvasError(
+                        'Child Redis database owner no longer matches its '
+                        'parent reference.'
+                    )
+                tokenized_reference = True
+            else:
+                kbindex, owner_token = self._legacy_database_reference(
+                    reference, parent_scan_id
+                )
+                tokenized_reference = False
             if kbindex == self.index:
                 continue
 
-            yield scan_db.select(kbindex)
+            scan_db.select(kbindex, owner_token)
+            if (
+                tokenized_reference
+                and scan_db._get_single_item('internal/turbovas.owner-token')
+                != owner_token
+            ):
+                raise OspdOpenvasError(
+                    'Child Redis database metadata does not match its owner.'
+                )
+            yield scan_db
 
     def add_scan_id(self, scan_id: str):
+        if not self.owner_token:
+            raise OspdOpenvasError(
+                'Refusing to initialize a scan in an unowned Redis database.'
+            )
+        self._set_single_item(
+            'internal/turbovas.owner-token', [self.owner_token]
+        )
+        self._set_single_item('internal/turbovas.db-kind', ['parent'])
         self._add_single_item(f'internal/{scan_id}', ['new'])
         self._add_single_item('internal/scanid', [scan_id])
 
@@ -1227,7 +1326,10 @@ class KbDB(BaseKbDB):
         return self._get_single_item('internal/ovas_pid')
 
     def remove_scan_database(self, scan_db: ScanDB):
-        self._remove_list_item('internal/dbindex', scan_db.index)
+        self._remove_list_item('internal/dbindex', scan_db.owner_reference)
+        # Remove the pre-token form as well so scans started before an upgrade
+        # do not retain a stale database pointer after safe owner validation.
+        self._remove_list_item('internal/dbindex', str(scan_db.index))
 
     def target_is_finished(self, scan_id: str) -> bool:
         """Check if a target has finished."""
@@ -1284,7 +1386,7 @@ class MainDB(BaseDB):
 
         return self._max_dbindex
 
-    def try_database(self, index: int) -> bool:
+    def try_database(self, index: int, owner_token: str) -> bool:
         """Check if a redis db is already in use. If not, set it
         as in use and return.
 
@@ -1296,10 +1398,9 @@ class MainDB(BaseDB):
         Return True if it is possible to use the db. False if the given db
             number is already in use.
         """
-        _in_use = 1
         try:
-            resp = self.ctx.hsetnx(DBINDEX_NAME, index, _in_use)
-        except:
+            resp = self.ctx.hsetnx(DBINDEX_NAME, index, owner_token)
+        except redis.RedisError:
             raise OspdOpenvasError(
                 f'Redis Error: Not possible to set {DBINDEX_NAME}.'
             ) from None
@@ -1309,8 +1410,9 @@ class MainDB(BaseDB):
     def get_new_kb_database(self) -> Optional[KbDB]:
         """Return a new kb db to an empty kb."""
         for index in range(1, self.max_database_index):
-            if self.try_database(index):
-                kbdb = KbDB(index)
+            owner_token = str(uuid.uuid4())
+            if self.try_database(index, owner_token):
+                kbdb = KbDB(index, owner_token=owner_token)
                 kbdb.flush()
                 return kbdb
 
@@ -1323,7 +1425,8 @@ class MainDB(BaseDB):
         for index in range(1, self.max_database_index):
             ctx = OpenvasDB.create_context(index)
             if OpenvasDB.get_key_count(ctx, f'internal/{scan_id}'):
-                return KbDB(index, ctx)
+                owner_token = self.reservation_token(index)
+                return KbDB(index, ctx, owner_token=owner_token)
 
         return None
 
@@ -1347,13 +1450,65 @@ class MainDB(BaseDB):
         return (kb, err)
 
     def release_database(self, database: BaseDB):
-        # Keep the index reserved until its old contents are gone.  Returning
-        # it first allows another scan to reuse it before flush completes.
-        database.flush()
-        self.release_database_by_index(database.index)
+        if not database.owner_token:
+            raise OspdOpenvasError(
+                f'Refusing to release Redis database {database.index} without '
+                'its exact owner token.'
+            )
+        if not self.release_database_by_index(
+            database.index, database.owner_token
+        ):
+            raise OspdOpenvasError(
+                f'Refusing duplicate or stale cleanup of Redis database '
+                f'{database.index}.'
+            )
 
-    def release_database_by_index(self, index: int):
-        self.ctx.hdel(DBINDEX_NAME, index)
+    @staticmethod
+    def validate_owner_token(owner_token: str) -> str:
+        """Validate an opaque owner token, including legacy marker 1."""
+        if (
+            not isinstance(owner_token, str)
+            or not owner_token
+            or len(owner_token) > MAX_OWNER_TOKEN_LENGTH
+            or ':' in owner_token
+            or '\x00' in owner_token
+        ):
+            raise OspdOpenvasError('Invalid Redis database owner token.')
+        return owner_token
+
+    def reservation_token(self, index: int) -> str:
+        owner_token = self.ctx.hget(DBINDEX_NAME, index)
+        try:
+            return self.validate_owner_token(owner_token)
+        except OspdOpenvasError:
+            raise OspdOpenvasError(
+                f'Redis database {index} has no valid owner token.'
+            ) from None
+
+    def release_database_by_index(self, index: int, owner_token: str) -> bool:
+        """Atomically flush and release one database owned by this token."""
+        owner_token = self.validate_owner_token(owner_token)
+        for _ in range(DATABASE_RELEASE_RETRIES):
+            try:
+                with self.ctx.pipeline() as pipe:
+                    pipe.watch(DBINDEX_NAME)
+                    if pipe.hget(DBINDEX_NAME, index) != owner_token:
+                        pipe.unwatch()
+                        return False
+                    pipe.multi()
+                    pipe.execute_command('SELECT', index)
+                    pipe.flushdb()
+                    pipe.execute_command('SELECT', self.DEFAULT_INDEX)
+                    pipe.hdel(DBINDEX_NAME, index)
+                    results = pipe.execute()
+                    return bool(results and results[-1] == 1)
+            except WatchError:
+                continue
+        raise OspdOpenvasError(
+            f'Redis database {index} release contention did not settle.'
+        )
 
     def release(self):
-        self.release_database(self)
+        raise OspdOpenvasError(
+            'The Redis management database cannot be released.'
+        )

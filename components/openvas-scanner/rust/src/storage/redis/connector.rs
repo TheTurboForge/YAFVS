@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2023 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
@@ -69,6 +70,7 @@ impl TryFrom<NvtKey> for KbNvtPos {
 pub struct RedisCtx {
     kb: Option<Connection>, //a redis connection
     pub db: u32,            // the name space
+    owner_token: Option<String>,
 }
 
 impl Debug for RedisCtx {
@@ -97,8 +99,8 @@ impl FromRedisValue for RedisValueHandler {
 #[derive(Debug, PartialEq, Eq)]
 /// Defines how the RedixCtx should select the namespace
 pub enum NameSpaceSelector {
-    /// Defines to use a fix DB
-    Fix(u32),
+    /// Selects an exact DB only while its original owner token still matches.
+    Owned(u32, String),
     /// Next free
     Free,
     /// Uses a DB that contains this key
@@ -108,6 +110,13 @@ pub enum NameSpaceSelector {
 pub const CACHE_KEY: &str = "nvticache";
 pub const NOTUS_KEY: &str = "notuscache";
 const DB_INDEX: &str = "GVM.__GlobalDBIndex";
+const NAMESPACE_RELEASE_ATTEMPTS: usize = 3;
+
+enum NamespaceReleaseOutcome {
+    Released,
+    Retry,
+    OwnerMismatch,
+}
 
 impl NameSpaceSelector {
     fn max_db(kb: &mut redis::Connection) -> RedisStorageResult<u32> {
@@ -128,20 +137,61 @@ impl NameSpaceSelector {
             .map_err(|e| e.into())
     }
 
-    fn select(&self, kb: &mut redis::Connection) -> RedisStorageResult<u32> {
+    fn owner_token(kb: &mut redis::Connection, dbi: u32) -> RedisStorageResult<Option<String>> {
+        Self::select_namespace(kb, 0)?;
+        let owner_token = redis::Commands::hget(kb, DB_INDEX, dbi)?;
+        Self::select_namespace(kb, dbi)?;
+        Ok(owner_token)
+    }
+
+    fn select_owned_namespace(
+        kb: &mut redis::Connection,
+        dbi: u32,
+        expected_owner: &str,
+    ) -> RedisStorageResult<()> {
+        for _ in 0..NAMESPACE_RELEASE_ATTEMPTS {
+            Self::select_namespace(kb, 0)?;
+            Cmd::new().arg("WATCH").arg(DB_INDEX).query::<()>(kb)?;
+            let indexed_owner: Option<String> = match redis::Commands::hget(kb, DB_INDEX, dbi) {
+                Ok(owner) => owner,
+                Err(error) => {
+                    let _ = Cmd::new().arg("UNWATCH").query::<()>(kb);
+                    return Err(error.into());
+                }
+            };
+            if indexed_owner.as_deref() != Some(expected_owner) {
+                Cmd::new().arg("UNWATCH").query::<()>(kb)?;
+                return Err(DbError::LibraryError(format!(
+                    "Redis DB {dbi} owner changed before reconnect"
+                )));
+            }
+
+            let result: Value = redis::pipe().atomic().cmd("SELECT").arg(dbi).query(kb)?;
+            if !matches!(result, Value::Nil) {
+                return Ok(());
+            }
+        }
+
+        Err(DbError::Retry(format!(
+            "Redis DB {dbi} reconnect transaction aborted too many times"
+        )))
+    }
+
+    fn select(&self, kb: &mut redis::Connection) -> RedisStorageResult<(u32, Option<String>)> {
         let max_db = Self::max_db(kb)?;
         match self {
-            NameSpaceSelector::Fix(dbi) => {
-                Self::select_namespace(kb, *dbi)?;
-                Ok(*dbi)
+            NameSpaceSelector::Owned(dbi, expected_owner) => {
+                Self::select_owned_namespace(kb, *dbi, expected_owner)?;
+                Ok((*dbi, Some(expected_owner.clone())))
             }
             NameSpaceSelector::Free => {
                 Self::select_namespace(kb, 0)?;
+                let owner_token = uuid::Uuid::new_v4().to_string();
                 for dbi in 1..max_db {
-                    match redis::Commands::hset_nx(kb, DB_INDEX, dbi, 1) {
+                    match redis::Commands::hset_nx(kb, DB_INDEX, dbi, &owner_token) {
                         Ok(1) => {
                             Self::select_namespace(kb, dbi)?;
-                            return Ok(dbi);
+                            return Ok((dbi, Some(owner_token)));
                         }
                         Ok(_) => {}
                         Err(err) => return Err(err.into()),
@@ -153,7 +203,7 @@ impl NameSpaceSelector {
                 for dbi in 1..max_db {
                     Self::select_namespace(kb, dbi)?;
                     match redis::Commands::exists(kb, key) {
-                        Ok(1) => return Ok(dbi),
+                        Ok(1) => return Ok((dbi, Self::owner_token(kb, dbi)?)),
                         Ok(_) => {}
                         Err(err) => return Err(err.into()),
                     }
@@ -560,16 +610,69 @@ pub trait RedisAddNvt: RedisWrapper {
 impl RedisAddNvt for RedisCtx {}
 
 impl RedisCtx {
+    pub fn owner_token(&self) -> Option<&str> {
+        self.owner_token.as_deref()
+    }
+
+    fn invalidate_namespace(&mut self) {
+        self.db = 0;
+        self.owner_token = None;
+    }
+
+    fn release_namespace_attempt(
+        kb: &mut Connection,
+        db: u32,
+        owner_token: &str,
+    ) -> RedisStorageResult<NamespaceReleaseOutcome> {
+        NameSpaceSelector::select_namespace(kb, 0)?;
+        Cmd::new().arg("WATCH").arg(DB_INDEX).query::<()>(kb)?;
+
+        let indexed_owner: Option<String> = match redis::Commands::hget(kb, DB_INDEX, db) {
+            Ok(owner) => owner,
+            Err(error) => {
+                let _ = Cmd::new().arg("UNWATCH").query::<()>(kb);
+                return Err(error.into());
+            }
+        };
+        if indexed_owner.as_deref() != Some(owner_token) {
+            Cmd::new().arg("UNWATCH").query::<()>(kb)?;
+            return Ok(NamespaceReleaseOutcome::OwnerMismatch);
+        }
+
+        let result: Value = redis::pipe()
+            .atomic()
+            .cmd("SELECT")
+            .arg(db)
+            .ignore()
+            .cmd("FLUSHDB")
+            .ignore()
+            .cmd("SELECT")
+            .arg(0)
+            .ignore()
+            .cmd("HDEL")
+            .arg(DB_INDEX)
+            .arg(db)
+            .ignore()
+            .query(kb)?;
+
+        if matches!(result, Value::Nil) {
+            Ok(NamespaceReleaseOutcome::Retry)
+        } else {
+            Ok(NamespaceReleaseOutcome::Released)
+        }
+    }
+
     pub fn open(address: &str, selector: &[NameSpaceSelector]) -> RedisStorageResult<Self> {
         let client = redis::Client::open(address)?;
 
         let mut kb = client.get_connection()?;
         for s in selector {
             match s.select(&mut kb) {
-                Ok(x) => {
+                Ok((db, owner_token)) => {
                     return Ok(RedisCtx {
                         kb: Some(kb),
-                        db: x,
+                        db,
+                        owner_token,
                     });
                 }
                 Err(DbError::NoAvailDbErr) => {}
@@ -579,28 +682,143 @@ impl RedisCtx {
         Err(DbError::NoAvailDbErr)
     }
 
-    /// Delete an entry from the in-use namespace's list
-    fn release_namespace(&mut self) -> RedisStorageResult<()> {
-        // Remove the entry from the in-use list and return to the original namespace
-        redis::pipe()
-            .cmd("SELECT")
-            .arg("0")
-            .cmd("HDEL")
-            .arg(DB_INDEX)
-            .arg(self.db)
-            .cmd("SELECT")
-            .arg(self.db)
-            .ignore()
-            .query::<()>(&mut self.kb.as_mut().expect("Valid redis connection"))?;
-        Ok(())
+    /// Delete all keys in the namespace, release it, and fence this context in DB 0.
+    pub fn delete_namespace(&mut self) -> RedisStorageResult<()> {
+        let owner_token = self.owner_token.clone().ok_or_else(|| {
+            DbError::LibraryError(format!(
+                "Redis DB {} has no owner token and cannot be released",
+                self.db
+            ))
+        })?;
+        let db = self.db;
+
+        for _ in 0..NAMESPACE_RELEASE_ATTEMPTS {
+            let outcome = {
+                let kb = self.kb.as_mut().expect("Valid redis connection");
+                Self::release_namespace_attempt(kb, db, &owner_token)
+            };
+            match outcome {
+                Ok(NamespaceReleaseOutcome::Released) => {
+                    self.invalidate_namespace();
+                    return Ok(());
+                }
+                Ok(NamespaceReleaseOutcome::Retry) => {}
+                Ok(NamespaceReleaseOutcome::OwnerMismatch) => {
+                    self.invalidate_namespace();
+                    return Err(DbError::LibraryError(format!(
+                        "Redis DB {db} owner changed before cleanup"
+                    )));
+                }
+                Err(error) => {
+                    self.kb = None;
+                    self.invalidate_namespace();
+                    return Err(error);
+                }
+            }
+        }
+
+        self.kb = None;
+        self.invalidate_namespace();
+        Err(DbError::Retry(format!(
+            "Redis DB {db} cleanup transaction aborted too many times"
+        )))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DB_INDEX, NameSpaceSelector, RedisCtx};
+
+    #[test]
+    fn invalidating_namespace_fences_the_connection_in_db_zero() {
+        let mut ctx = RedisCtx {
+            kb: None,
+            db: 3,
+            owner_token: Some("owner".to_string()),
+        };
+
+        ctx.invalidate_namespace();
+
+        assert_eq!(ctx.db, 0);
+        assert_eq!(ctx.owner_token, None);
     }
 
-    /// Delete all keys in the namespace and release the it
-    pub fn delete_namespace(&mut self) -> RedisStorageResult<()> {
-        Cmd::new()
-            .arg("FLUSHDB")
-            .query::<()>(&mut self.kb.as_mut().expect("Valid redis connection"))?;
-        self.release_namespace()?;
-        Ok(())
+    #[test]
+    #[ignore = "requires TURBOVAS_TEST_REDIS_URL pointing to a disposable Redis"]
+    fn stale_owned_selector_cannot_adopt_replacement_namespace() {
+        assert_eq!(
+            std::env::var("TURBOVAS_TEST_REDIS_DEDICATED").as_deref(),
+            Ok("1"),
+            "refusing to modify a Redis instance not marked disposable"
+        );
+        let address = std::env::var("TURBOVAS_TEST_REDIS_URL")
+            .expect("TURBOVAS_TEST_REDIS_URL must name the disposable Redis");
+        let client = redis::Client::open(address.as_str()).expect("valid Redis URL");
+        let mut connection = client
+            .get_connection()
+            .expect("connect to disposable Redis");
+        redis::cmd("FLUSHALL")
+            .query::<()>(&mut connection)
+            .expect("reset disposable Redis");
+
+        let owner_a = "11111111-1111-4111-8111-111111111111";
+        let owner_b = "22222222-2222-4222-8222-222222222222";
+        redis::cmd("HSET")
+            .arg(DB_INDEX)
+            .arg(3)
+            .arg(owner_a)
+            .query::<()>(&mut connection)
+            .expect("reserve owner A");
+        redis::cmd("SELECT")
+            .arg(3)
+            .query::<()>(&mut connection)
+            .expect("select test namespace");
+        redis::cmd("SET")
+            .arg("sentinel")
+            .arg("replacement-owner-data")
+            .query::<()>(&mut connection)
+            .expect("seed replacement data");
+        redis::cmd("SELECT")
+            .arg(0)
+            .query::<()>(&mut connection)
+            .expect("select management namespace");
+        redis::cmd("HSET")
+            .arg(DB_INDEX)
+            .arg(3)
+            .arg(owner_b)
+            .query::<()>(&mut connection)
+            .expect("replace owner token");
+
+        assert!(
+            RedisCtx::open(
+                address.as_str(),
+                &[NameSpaceSelector::Owned(3, owner_a.to_string())]
+            )
+            .is_err(),
+            "stale owner unexpectedly reconnected"
+        );
+        redis::cmd("SELECT")
+            .arg(3)
+            .query::<()>(&mut connection)
+            .expect("reselect test namespace");
+        let sentinel: String = redis::cmd("GET")
+            .arg("sentinel")
+            .query(&mut connection)
+            .expect("read replacement data");
+        assert_eq!(sentinel, "replacement-owner-data");
+        redis::cmd("SELECT")
+            .arg(0)
+            .query::<()>(&mut connection)
+            .expect("reselect management namespace");
+        let indexed_owner: String = redis::cmd("HGET")
+            .arg(DB_INDEX)
+            .arg(3)
+            .query(&mut connection)
+            .expect("read replacement owner");
+        assert_eq!(indexed_owner, owner_b);
+
+        redis::cmd("FLUSHALL")
+            .query::<()>(&mut connection)
+            .expect("clean disposable Redis");
     }
 }

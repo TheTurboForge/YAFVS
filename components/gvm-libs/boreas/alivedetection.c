@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2020-2023 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -62,6 +63,7 @@ scan (alive_test_t alive_test)
   gpointer key, value;
   struct timeval start_time, end_time;
   int scandb_id;
+  const char *scandb_id_pref;
   gchar *scan_id;
   /* Following variables are only relevant if only ICMP was chosen. */
   int remaining_batch = 0;
@@ -71,8 +73,15 @@ scan (alive_test_t alive_test)
   gettimeofday (&start_time, NULL);
   number_of_targets = g_hash_table_size (scanner.hosts_data->targethosts);
 
-  scandb_id = atoi (prefs_get ("ov_maindbid"));
-  scan_id = get_openvas_scan_id (prefs_get ("db_address"), scandb_id);
+  scandb_id_pref = prefs_get ("ov_maindbid");
+  if (scandb_id_pref == NULL || prefs_get ("ov_mainowner") == NULL)
+    return -1;
+  scandb_id = atoi (scandb_id_pref);
+  scan_id =
+    get_openvas_scan_id (prefs_get ("db_address"), scandb_id,
+                          prefs_get ("ov_mainowner"));
+  if (scan_id == NULL)
+    return -1;
   g_message ("Alive scan %s started: Target has %d hosts", scan_id,
              number_of_targets);
 
@@ -339,8 +348,14 @@ alive_detection_init (gvm_hosts_t *hosts, alive_test_t alive_test)
   scanner.print_results = 0;
 
   /* kb_t redis connection */
-  int scandb_id = atoi (prefs_get ("ov_maindbid"));
-  scanner.main_kb = kb_direct_conn (prefs_get ("db_address"), scandb_id);
+  const char *scandb_id_pref = prefs_get ("ov_maindbid");
+  int scandb_id;
+  if (scandb_id_pref == NULL || prefs_get ("ov_mainowner") == NULL)
+    return -7;
+  scandb_id = atoi (scandb_id_pref);
+  scanner.main_kb =
+    kb_direct_conn (prefs_get ("db_address"), scandb_id,
+                    prefs_get ("ov_mainowner"));
   if (scanner.main_kb == NULL)
     return -7;
   /* TODO: pcap handle */

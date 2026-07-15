@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2024 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
@@ -76,9 +77,13 @@ where
     }
 
     async fn prepare_main_kbindex_for_openvas(&mut self) -> RedisStorageResult<()> {
+        let owner_token = self.redis_connector.kb_owner_token()?;
         self.redis_connector.push_kb_item(
             format!("internal/{}/scanprefs", &self.scan_config.scan_id.clone()).as_str(),
-            format!("ov_maindbid|||{}", &self.redis_connector.kb_id()?),
+            (
+                format!("ov_maindbid|||{}", &self.redis_connector.kb_id()?),
+                format!("ov_mainowner|||{owner_token}"),
+            ),
         )?;
         Ok(())
     }
@@ -720,6 +725,11 @@ mod tests {
             prefh
                 .redis_connector
                 .item_exists("internal/123-456/scanprefs", "ov_maindbid|||3")
+        );
+        assert!(
+            prefh
+                .redis_connector
+                .item_exists("internal/123-456/scanprefs", "ov_mainowner|||owner-token")
         );
 
         // Prepare and test Host Options

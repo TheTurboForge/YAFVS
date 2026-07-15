@@ -24,6 +24,7 @@ from ospd.ospd import BASE_SCANNER_PARAMS
 from ospd.network import valid_port_list
 from ospd_openvas.openvas import Openvas
 from ospd_openvas.db import KbDB
+from ospd_openvas.errors import OspdOpenvasError
 from ospd_openvas.nvticache import NVTICache
 from ospd_openvas.vthelper import VtHelper
 
@@ -84,7 +85,9 @@ def validate_ssh_host_key_pins_b64(value: str) -> None:
         try:
             normalized_host = str(ipaddress.ip_address(host))
         except ValueError as error:
-            raise ValueError("SSH host-key pin host must be an IP address.") from error
+            raise ValueError(
+                "SSH host-key pin host must be an IP address."
+            ) from error
         if not fingerprint.startswith("SHA256:"):
             raise ValueError("SSH host-key pin must use SHA256.")
         encoded_digest = fingerprint[7:]
@@ -721,9 +724,7 @@ class PreferenceHandler:
                     )
                     continue
                 cred_prefs_list.append(f'auth_port_ssh|||{port}')
-                cred_prefs_list.append(
-                    'ssh_require_host_key_verification|||1'
-                )
+                cred_prefs_list.append('ssh_require_host_key_verification|||1')
                 cred_prefs_list.append(
                     f'ssh_host_key_pins_b64|||{host_key_pins_b64}'
                 )
@@ -890,7 +891,13 @@ class PreferenceHandler:
         return True
 
     def prepare_main_kbindex_for_openvas(self):
-        """Store main_kbindex as global preference in the
-        kb, used by OpenVAS"""
+        """Store the exact main KB index and owner token for OpenVAS."""
+        if not self.kbdb.owner_token:
+            raise OspdOpenvasError(
+                'Refusing to start OpenVAS without a main KB owner token.'
+            )
         ov_maindbid = f'ov_maindbid|||{self.kbdb.index}'
-        self.kbdb.add_scan_preferences(self.scan_id, [ov_maindbid])
+        ov_mainowner = f'ov_mainowner|||{self.kbdb.owner_token}'
+        self.kbdb.add_scan_preferences(
+            self.scan_id, [ov_maindbid, ov_mainowner]
+        )

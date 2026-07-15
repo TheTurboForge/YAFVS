@@ -18,6 +18,9 @@ import redis
 from ospd_openvas.db import (
     ACK_RESULT_CLAIM_SCRIPT,
     CLAIM_RESULT_ITEMS_SCRIPT,
+    DBINDEX_NAME,
+    KbDB,
+    MainDB,
     OpenvasDB,
 )
 from ospd_openvas.errors import OspdOpenvasError
@@ -61,8 +64,8 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
         cls.redis_directory = tempfile.TemporaryDirectory(
             prefix='turbovas-result-queue-redis-'
         )
-        socket_path = Path(cls.redis_directory.name) / 'redis.sock'
-        cls.redis_url = f'unix://{socket_path}'
+        cls.socket_path = Path(cls.redis_directory.name) / 'redis.sock'
+        cls.redis_url = f'unix://{cls.socket_path}'
         cls.redis_process = subprocess.Popen(
             [
                 REDIS_SERVER,
@@ -71,7 +74,7 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
                 '--protected-mode',
                 'yes',
                 '--unixsocket',
-                str(socket_path),
+                str(cls.socket_path),
                 '--unixsocketperm',
                 '700',
                 '--save',
@@ -115,10 +118,19 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
 
     def setUp(self):
         self.ctx = redis.Redis.from_url(self.redis_url, decode_responses=True)
-        self.ctx.flushdb()
+        for index in range(3):
+            self.redis_db(index).flushdb()
 
     def tearDown(self):
-        self.ctx.flushdb()
+        for index in range(3):
+            self.redis_db(index).flushdb()
+
+    def redis_db(self, index: int):
+        return redis.Redis(
+            unix_socket_path=str(self.socket_path),
+            db=index,
+            decode_responses=True,
+        )
 
     def admit(
         self,
@@ -150,6 +162,56 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
             max_items,
             max_bytes,
         )
+
+    def test_owner_token_prevents_stale_flush_and_release(self):
+        stale_token = str(uuid.uuid4())
+        current_token = str(uuid.uuid4())
+        child = self.redis_db(1)
+        child.set('sentinel', 'current-owner-data')
+        self.ctx.hset(DBINDEX_NAME, 1, current_token)
+        maindb = MainDB(self.ctx)
+
+        with self.assertRaises(OspdOpenvasError):
+            maindb.release_database(KbDB(1, child, owner_token=stale_token))
+
+        self.assertEqual(child.get('sentinel'), 'current-owner-data')
+        self.assertEqual(self.ctx.hget(DBINDEX_NAME, 1), current_token)
+
+        maindb.release_database(KbDB(1, child, owner_token=current_token))
+        self.assertEqual(child.dbsize(), 0)
+        self.assertIsNone(self.ctx.hget(DBINDEX_NAME, 1))
+
+    def test_duplicate_cleanup_has_one_atomic_winner(self):
+        owner_token = str(uuid.uuid4())
+        child = self.redis_db(1)
+        child.set('sentinel', 'owned-data')
+        self.ctx.hset(DBINDEX_NAME, 1, owner_token)
+
+        def release():
+            main = MainDB(self.redis_db(0))
+            database = KbDB(1, self.redis_db(1), owner_token=owner_token)
+            try:
+                main.release_database(database)
+                return 'released'
+            except OspdOpenvasError:
+                return 'rejected'
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            outcomes = sorted(executor.map(lambda _: release(), range(2)))
+
+        self.assertEqual(outcomes, ['rejected', 'released'])
+        self.assertEqual(child.dbsize(), 0)
+        self.assertIsNone(self.ctx.hget(DBINDEX_NAME, 1))
+
+    def test_legacy_owner_marker_is_released_atomically(self):
+        child = self.redis_db(1)
+        child.set('sentinel', 'legacy-owner-data')
+        self.ctx.hset(DBINDEX_NAME, 1, '1')
+
+        MainDB(self.ctx).release_database(KbDB(1, child, owner_token='1'))
+
+        self.assertEqual(child.dbsize(), 0)
+        self.assertIsNone(self.ctx.hget(DBINDEX_NAME, 1))
 
     def test_exact_row_and_total_payload_boundaries(self):
         row = 'x' * (4 * 1024 * 1024)

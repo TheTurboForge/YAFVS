@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2024 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
@@ -25,11 +26,18 @@ use std::{
 
 #[derive(Debug)]
 pub struct Scanner {
-    running: Mutex<HashMap<String, (Child, u32)>>,
+    running: Mutex<HashMap<String, RunningScan>>,
     sudo: bool,
     redis_socket: String,
     resource_checker: Option<Checker>,
     default_scanner_preferences: Vec<models::ScanPreferenceInformation>,
+}
+
+#[derive(Debug)]
+struct RunningScan {
+    process: Child,
+    db_id: u32,
+    owner_token: String,
 }
 use crate::scanner::{
     Error as ScanError, ScanDeleter, ScanResultFetcher, ScanResultKind, ScanResults, ScanStarter,
@@ -108,23 +116,35 @@ impl Scanner {
     }
 
     /// Removes a scan from init and add it to the list of running scans
-    fn add_running(&self, id: String, dbid: u32) -> Result<bool, OpenvasError> {
+    fn add_running(
+        &self,
+        id: String,
+        db_id: u32,
+        owner_token: String,
+    ) -> Result<bool, OpenvasError> {
         let openvas = cmd::start(&id, self.sudo, None).map_err(OpenvasError::CmdError)?;
-        self.running.lock().unwrap().insert(id, (openvas, dbid));
+        self.running.lock().unwrap().insert(
+            id,
+            RunningScan {
+                process: openvas,
+                db_id,
+                owner_token,
+            },
+        );
         Ok(true)
     }
 
     /// Remove a scan from the list of running scans and returns the process to able to tidy up
-    fn remove_running(&self, id: &str) -> Option<(Child, u32)> {
+    fn remove_running(&self, id: &str) -> Option<RunningScan> {
         self.running.lock().unwrap().remove(id)
     }
 
     fn create_redis_connector(
         &self,
-        dbid: Option<u32>,
+        owned_namespace: Option<(u32, String)>,
     ) -> Result<RedisHelper<RedisCtx>, ScanError> {
-        let namespace = match dbid {
-            Some(id) => [NameSpaceSelector::Fix(id)],
+        let namespace = match owned_namespace {
+            Some((db_id, owner_token)) => [NameSpaceSelector::Owned(db_id, owner_token)],
             None => [NameSpaceSelector::Free],
         };
 
@@ -175,10 +195,13 @@ impl ScanStarter for Scanner {
             }
         }
 
-        self.add_running(
-            scan.scan_id,
-            redis_help.kb_id().expect("Valid Redis context"),
-        )?;
+        let db_id = redis_help
+            .kb_id()
+            .map_err(|error| ScanError::Unexpected(error.to_string()))?;
+        let owner_token = redis_help
+            .kb_owner_token()
+            .map_err(|error| ScanError::Unexpected(error.to_string()))?;
+        self.add_running(scan.scan_id, db_id, owner_token)?;
 
         return Ok(());
     }
@@ -201,10 +224,11 @@ impl ScanStopper for Scanner {
     {
         let scan_id = id.as_ref();
 
-        let (mut scan, dbid) = match self.remove_running(scan_id) {
-            Some(scan) => (scan.0, scan.1),
+        let running_scan = match self.remove_running(scan_id) {
+            Some(scan) => scan,
             None => return Err(OpenvasError::ScanNotFound(scan_id.to_string()).into()),
         };
+        let mut scan = running_scan.process;
 
         cmd::stop(scan_id, self.sudo)
             .map_err(OpenvasError::CmdError)?
@@ -214,7 +238,8 @@ impl ScanStopper for Scanner {
         scan.wait().map_err(OpenvasError::CmdError)?;
 
         // Release the task kb
-        let mut redis_help = self.create_redis_connector(Some(dbid))?;
+        let mut redis_help =
+            self.create_redis_connector(Some((running_scan.db_id, running_scan.owner_token)))?;
         redis_help
             .release()
             .map_err(|e| ScanError::Unexpected(e.to_string()))?;
@@ -232,17 +257,18 @@ impl ScanDeleter for Scanner {
     {
         let scan_id = id.as_ref();
 
-        let dbid = match self
-            .running
-            .lock()
-            .map_err(|e| ScanError::Unexpected(e.to_string()))?
-            .get(scan_id)
-        {
-            Some(scan) => scan.1,
-            None => return Err(OpenvasError::ScanNotFound(scan_id.to_string()).into()),
+        let owned_namespace = {
+            let running = self
+                .running
+                .lock()
+                .map_err(|e| ScanError::Unexpected(e.to_string()))?;
+            match running.get(scan_id) {
+                Some(scan) => (scan.db_id, scan.owner_token.clone()),
+                None => return Err(OpenvasError::ScanNotFound(scan_id.to_string()).into()),
+            }
         };
 
-        let mut redis_help = self.create_redis_connector(Some(dbid))?;
+        let mut redis_help = self.create_redis_connector(Some(owned_namespace))?;
         let mut ov_results = ResultHelper::init(&mut redis_help);
         let status = ov_results
             .collect_scan_status(scan_id.to_string())
@@ -281,17 +307,18 @@ impl ScanResultFetcher for Scanner {
     {
         let scan_id = id.as_ref();
 
-        let dbid = match self
-            .running
-            .lock()
-            .map_err(|e| ScanError::Unexpected(e.to_string()))?
-            .get(scan_id)
-        {
-            Some(scan) => scan.1,
-            None => return Err(OpenvasError::ScanNotFound(scan_id.to_string()).into()),
+        let owned_namespace = {
+            let running = self
+                .running
+                .lock()
+                .map_err(|e| ScanError::Unexpected(e.to_string()))?;
+            match running.get(scan_id) {
+                Some(scan) => (scan.db_id, scan.owner_token.clone()),
+                None => return Err(OpenvasError::ScanNotFound(scan_id.to_string()).into()),
+            }
         };
 
-        let mut redis_help = self.create_redis_connector(Some(dbid))?;
+        let mut redis_help = self.create_redis_connector(Some(owned_namespace))?;
         let mut ov_results = ResultHelper::init(&mut redis_help);
 
         //TODO: error handling
@@ -364,7 +391,7 @@ impl ScanResultFetcher for Scanner {
         // Succeeded. It is necessary to read the exit code to know if it failed.
         if status == Phase::Succeeded {
             let mut scan = match self.remove_running(scan_id) {
-                Some(scan) => scan.0,
+                Some(scan) => scan.process,
                 None => return Err(OpenvasError::ScanNotFound(scan_id.to_string()).into()),
             };
 
@@ -381,7 +408,6 @@ impl ScanResultFetcher for Scanner {
             redis_help
                 .release()
                 .map_err(|e| ScanError::Unexpected(e.to_string()))?;
-            self.running.lock().unwrap().remove(scan_id);
         }
 
         return Ok(scan_res);

@@ -132,6 +132,77 @@ set_default_openvas_prefs ()
     prefs_set (openvas_defaults[i].option, openvas_defaults[i].value);
 }
 
+static int open_process_handle (int pid);
+static int signal_process_handle (int process_handle, int signal_number);
+static gboolean wait_for_process_exit (int process_handle,
+                                       int timeout_seconds);
+static gboolean process_matches_scan (int pid, const char *scan_id);
+
+/**
+ * @brief Stop an exact scanner process without consulting Redis.
+ *
+ * This is the fail-closed path for a scanner whose Redis queue is unreadable.
+ * The pidfd and scan command line are both validated before signalling.
+ */
+static int
+stop_scan_process_by_pid (const char *scan_id, int pid)
+{
+  int process_handle;
+  int signal_result;
+
+  if (!scan_id || pid <= 0)
+    return 1;
+  process_handle = open_process_handle (pid);
+  if (process_handle < 0)
+    return errno == ESRCH ? 0 : 1;
+  if (!process_matches_scan (pid, scan_id))
+    {
+      g_warning ("Refusing to signal PID %d because it does not match scan %s",
+                 pid, scan_id);
+      close (process_handle);
+      return 1;
+    }
+
+  signal_result = signal_process_handle (process_handle, SIGUSR1);
+  if (signal_result < 0)
+    {
+      close (process_handle);
+      return errno == ESRCH ? 0 : 1;
+    }
+  if (wait_for_process_exit (process_handle, 15))
+    {
+      close (process_handle);
+      return 0;
+    }
+
+  signal_result = signal_process_handle (process_handle, SIGTERM);
+  if (signal_result < 0 && errno != ESRCH)
+    {
+      close (process_handle);
+      return 1;
+    }
+  if (signal_result < 0 || wait_for_process_exit (process_handle, 5))
+    {
+      close (process_handle);
+      return 0;
+    }
+
+  signal_result = signal_process_handle (process_handle, SIGKILL);
+  if (signal_result < 0 && errno != ESRCH)
+    {
+      close (process_handle);
+      return 1;
+    }
+  if (signal_result == 0 && !wait_for_process_exit (process_handle, 5))
+    {
+      close (process_handle);
+      return 1;
+    }
+
+  close (process_handle);
+  return 0;
+}
+
 static int
 open_process_handle (int pid)
 {
@@ -734,6 +805,7 @@ openvas (int argc, char *argv[], char *env[])
   static gchar *config_file = NULL;
   static gchar *scan_id = NULL;
   static gchar *stop_scan_id = NULL;
+  static gint stop_scan_pid = 0;
   static gboolean print_specs = FALSE;
   static gboolean print_sysconfdir = FALSE;
   static gboolean update_vt_info = FALSE;
@@ -756,6 +828,8 @@ openvas (int argc, char *argv[], char *env[])
      "<string>"},
     {"scan-stop", '\0', 0, G_OPTION_ARG_STRING, &stop_scan_id,
      "ID of scan to stop", "<string>"},
+    {"scan-stop-pid", '\0', 0, G_OPTION_ARG_INT, &stop_scan_pid,
+     "Pinned scanner PID for Redis-independent emergency stop", "<integer>"},
 
     {NULL, 0, 0, 0, NULL, NULL, NULL}};
 
@@ -766,6 +840,11 @@ openvas (int argc, char *argv[], char *env[])
     {
       g_print ("%s\n\n", error->message);
       return EXIT_SUCCESS;
+    }
+  if (stop_scan_pid && !stop_scan_id)
+    {
+      g_print ("--scan-stop-pid requires --scan-stop\n");
+      return EXIT_FAILURE;
     }
   g_option_context_free (option_context);
 
@@ -836,7 +915,9 @@ openvas (int argc, char *argv[], char *env[])
     {
       set_default_openvas_prefs ();
       prefs_config (config_file);
-      if (plugins_cache_init ())
+      if (stop_scan_pid > 0)
+        err = stop_scan_process_by_pid (stop_scan_id, stop_scan_pid);
+      else if (plugins_cache_init ())
         {
           g_message ("Failed to initialize nvti cache. Not possible to "
                      "stop the scan");
@@ -844,10 +925,12 @@ openvas (int argc, char *argv[], char *env[])
           gvm_close_sentry ();
           return EXIT_FAILURE;
         }
-      nvticache_reset ();
-
-      set_scan_id (g_strdup (stop_scan_id));
-      err = stop_single_task_scan ();
+      else
+        {
+          nvticache_reset ();
+          set_scan_id (g_strdup (stop_scan_id));
+          err = stop_single_task_scan ();
+        }
       gvm_close_sentry ();
 #ifdef LOG_REFERENCES_AVAILABLE
       free_log_reference ();

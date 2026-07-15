@@ -175,12 +175,16 @@ class Openvas:
     @staticmethod
     def stop_scan_as_root(
         scan_id: str,
+        scanner_pid: Optional[int] = None,
         timeout: float = STOP_SCAN_COMMAND_TIMEOUT_SECONDS,
     ) -> bool:
         """Run the pidfd-hardened scanner stop helper through sudo."""
+        command = ['sudo', '-n', 'openvas', '--scan-stop', scan_id]
+        if scanner_pid is not None:
+            command.extend(['--scan-stop-pid', str(scanner_pid)])
         try:
             subprocess.run(
-                ['sudo', '-n', 'openvas', '--scan-stop', scan_id],
+                command,
                 check=True,
                 timeout=timeout,
             )

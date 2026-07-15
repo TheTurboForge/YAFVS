@@ -14,6 +14,8 @@ import json
 import logging
 from pathlib import Path
 
+import redis
+
 from unittest import TestCase
 from unittest.mock import patch, Mock, MagicMock
 
@@ -420,6 +422,204 @@ class TestOspdOpenvas(TestCase):
         )
         daemon.set_scan_status.assert_called_once_with(
             'scan_1', ScanStatus.INTERRUPTED
+        )
+
+    def test_result_admission_failure_stops_scan_and_drains_evidence(self):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        kbdb.get_result_admission_failure.return_value = 'pending-capacity'
+        kbdb.get_scan_process_id.return_value = '42'
+        daemon.mark_scanner_evidence_incomplete = MagicMock()
+        daemon.stop_scan_cleanup = MagicMock(return_value=True)
+        daemon.drain_openvas_results = MagicMock(return_value=True)
+        daemon.main_db.release_database = MagicMock()
+
+        self.assertTrue(
+            daemon.handle_result_admission_failure(
+                kbdb, 'scan-1', scanner_pid=42
+            )
+        )
+
+        daemon.mark_scanner_evidence_incomplete.assert_called_once_with(
+            'scan-1',
+            'Pending scanner evidence exceeded its bounded delivery capacity.',
+        )
+        daemon.stop_scan_cleanup.assert_called_once_with(
+            kbdb, 'scan-1', '42', False
+        )
+        daemon.drain_openvas_results.assert_called_once_with(kbdb, 'scan-1')
+        daemon.main_db.release_database.assert_called_once_with(kbdb)
+
+    def test_semantic_admission_failure_switches_to_no_redis_stop_on_loss(self):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        kbdb.get_result_admission_failure.return_value = 'pending-capacity'
+        daemon.mark_scanner_evidence_incomplete = MagicMock()
+        daemon.stop_scan_cleanup = MagicMock(
+            side_effect=redis.RedisError('lost during cleanup')
+        )
+        daemon.handle_unreadable_result_queue = MagicMock(return_value=True)
+
+        self.assertTrue(
+            daemon.handle_result_admission_failure(
+                kbdb, 'scan-1', scanner_pid=42
+            )
+        )
+
+        daemon.handle_unreadable_result_queue.assert_called_once_with(
+            'scan-1', 42, process_already_exited=False
+        )
+
+    def test_startup_abort_uses_pinned_pid_when_redis_is_lost(self):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        kbdb.get_scan_process_id.side_effect = AssertionError(
+            'known scanner PID must not be reread from Redis'
+        )
+        daemon.stop_scan_cleanup = MagicMock(
+            side_effect=redis.RedisError('lost during cleanup')
+        )
+        daemon.recover_unreadable_result_queue = MagicMock()
+        daemon.add_scan_error = MagicMock()
+
+        daemon.abort_scan_startup(
+            kbdb,
+            'scan-1',
+            'startup failed',
+            scanner_pid=42,
+        )
+
+        daemon.stop_scan_cleanup.assert_called_once_with(
+            kbdb, 'scan-1', '42', False
+        )
+        daemon.recover_unreadable_result_queue.assert_called_once_with(
+            'scan-1', 42, process_already_exited=False
+        )
+
+    def test_corrupt_result_queue_is_stopped_and_retained(self):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        kbdb.get_result_admission_failure.return_value = 'counter-state'
+        kbdb.get_scan_process_id.return_value = '42'
+        daemon.mark_scanner_evidence_incomplete = MagicMock()
+        daemon.stop_scan_cleanup = MagicMock(return_value=True)
+        daemon.drain_openvas_results = MagicMock()
+        daemon.main_db.release_database = MagicMock()
+
+        self.assertTrue(
+            daemon.handle_result_admission_failure(
+                kbdb, 'scan-1', scanner_pid=42
+            )
+        )
+
+        daemon.stop_scan_cleanup.assert_called_once_with(
+            kbdb, 'scan-1', '42', False
+        )
+        daemon.drain_openvas_results.assert_not_called()
+        daemon.main_db.release_database.assert_not_called()
+
+    def test_unreadable_result_queue_stops_from_pinned_pid_without_redis(self):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        kbdb.get_result_admission_failure.return_value = (
+            'queue-state-unreadable'
+        )
+        kbdb.get_scan_process_id.side_effect = AssertionError(
+            'unreadable Redis must not be queried for the scanner PID'
+        )
+        daemon.mark_scanner_evidence_incomplete = MagicMock()
+        daemon.stop_scan_process_without_kb = MagicMock(return_value=True)
+        daemon.stop_scan_cleanup = MagicMock()
+        daemon.drain_openvas_results = MagicMock()
+
+        self.assertTrue(
+            daemon.handle_result_admission_failure(
+                kbdb, 'scan-1', scanner_pid=42
+            )
+        )
+
+        daemon.stop_scan_process_without_kb.assert_called_once_with(
+            'scan-1', 42, process_already_exited=False
+        )
+        daemon.stop_scan_cleanup.assert_not_called()
+        daemon.drain_openvas_results.assert_not_called()
+        daemon.main_db.release_database.assert_not_called()
+
+    def test_result_admission_cleanup_retries_then_drains(self):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        kbdb.get_result_admission_failure.return_value = 'pending-capacity'
+        kbdb.get_scan_process_id.return_value = '42'
+        daemon.mark_scanner_evidence_incomplete = MagicMock()
+        daemon.stop_scan_cleanup = MagicMock(side_effect=[False, True])
+        daemon.drain_openvas_results = MagicMock(return_value=True)
+        daemon.main_db.release_database = MagicMock()
+
+        self.assertFalse(
+            daemon.handle_result_admission_failure(
+                kbdb, 'scan-1', scanner_pid=42
+            )
+        )
+        self.assertTrue(
+            daemon.handle_result_admission_failure(
+                kbdb, 'scan-1', scanner_pid=42
+            )
+        )
+
+        self.assertEqual(daemon.stop_scan_cleanup.call_count, 2)
+        daemon.drain_openvas_results.assert_called_once_with(kbdb, 'scan-1')
+        daemon.main_db.release_database.assert_called_once_with(kbdb)
+
+    @patch('ospd_openvas.daemon.time.monotonic', side_effect=[100.0, 281.0])
+    def test_result_admission_recovery_timeout_is_interrupted(
+        self, _mock_monotonic
+    ):
+        daemon = DummyDaemon()
+        daemon.set_scan_status = MagicMock()
+
+        keep_recovering, started_at = (
+            daemon.should_continue_result_admission_recovery('scan-1', None)
+        )
+        self.assertTrue(keep_recovering)
+        self.assertEqual(started_at, 100.0)
+
+        keep_recovering, _ = daemon.should_continue_result_admission_recovery(
+            'scan-1', started_at
+        )
+        self.assertFalse(keep_recovering)
+        daemon.set_scan_status.assert_called_once_with(
+            'scan-1', ScanStatus.INTERRUPTED
+        )
+
+    def test_unknown_result_admission_code_is_not_logged_as_raw_input(self):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        kbdb.get_result_admission_failure.return_value = 'host-controlled'
+        kbdb.get_scan_process_id.return_value = '42'
+        daemon.mark_scanner_evidence_incomplete = MagicMock()
+        daemon.stop_scan_cleanup = MagicMock(return_value=False)
+        daemon.drain_openvas_results = MagicMock()
+
+        self.assertFalse(
+            daemon.handle_result_admission_failure(
+                kbdb, 'scan-1', scanner_pid=42
+            )
+        )
+
+        daemon.mark_scanner_evidence_incomplete.assert_called_once_with(
+            'scan-1',
+            'Scanner result admission failed with an unknown bounded code.',
+        )
+        daemon.drain_openvas_results.assert_not_called()
+        daemon.main_db.release_database.assert_not_called()
+
+    def test_absent_result_admission_failure_does_nothing(self):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        kbdb.get_result_admission_failure.return_value = None
+
+        self.assertIsNone(
+            daemon.handle_result_admission_failure(kbdb, 'scan-1')
         )
 
     def test_non_result_notus_messages_are_acknowledged(self):
@@ -976,6 +1176,89 @@ class TestOspdOpenvas(TestCase):
         daemon.get_scan_status = MagicMock(return_value=None)
         daemon.add_scan_error = MagicMock()
         kbdb.scan_is_stopped.return_value = False
+        kbdb.get_result_admission_failure.return_value = None
+
+    @patch('ospd_openvas.daemon.PreferenceHandler')
+    @patch('ospd_openvas.daemon.Openvas.start_scan')
+    def test_exec_scan_handles_admission_failure_during_startup(
+        self, mock_start_scan, mock_preference_handler
+    ):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        self.configure_exec_scan(daemon, kbdb)
+        preferences = mock_preference_handler.return_value
+        preferences.prepare_ports_for_openvas.return_value = True
+        preferences.prepare_credentials_for_openvas.return_value = True
+        preferences.get_error_messages.return_value = []
+        preferences.prepare_plugins_for_openvas.return_value = True
+        process = MagicMock(pid=42)
+        process.poll.return_value = None
+        mock_start_scan.return_value = process
+        kbdb.get_status.return_value = 'new'
+        daemon.handle_result_admission_failure = MagicMock(return_value=True)
+
+        daemon.exec_scan('scan-1')
+
+        daemon.handle_result_admission_failure.assert_called_once_with(
+            kbdb,
+            'scan-1',
+            scanner_pid=42,
+            process_already_exited=False,
+        )
+
+    @patch('ospd_openvas.daemon.PreferenceHandler')
+    @patch('ospd_openvas.daemon.Openvas.start_scan')
+    def test_exec_scan_stops_pinned_process_on_startup_redis_loss(
+        self, mock_start_scan, mock_preference_handler
+    ):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        self.configure_exec_scan(daemon, kbdb)
+        preferences = mock_preference_handler.return_value
+        preferences.prepare_ports_for_openvas.return_value = True
+        preferences.prepare_credentials_for_openvas.return_value = True
+        preferences.get_error_messages.return_value = []
+        preferences.prepare_plugins_for_openvas.return_value = True
+        process = MagicMock(pid=42)
+        process.poll.return_value = None
+        mock_start_scan.return_value = process
+        daemon.handle_result_admission_failure = MagicMock(return_value=None)
+        daemon.recover_unreadable_result_queue = MagicMock()
+        kbdb.get_status.side_effect = redis.RedisError('lost')
+
+        daemon.exec_scan('scan-1')
+
+        daemon.recover_unreadable_result_queue.assert_called_once_with(
+            'scan-1', 42, process_already_exited=False
+        )
+
+    @patch('ospd_openvas.daemon.PreferenceHandler')
+    @patch('ospd_openvas.daemon.Openvas.start_scan')
+    def test_exec_scan_stops_pinned_process_on_monitor_redis_loss(
+        self, mock_start_scan, mock_preference_handler
+    ):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        self.configure_exec_scan(daemon, kbdb)
+        preferences = mock_preference_handler.return_value
+        preferences.prepare_ports_for_openvas.return_value = True
+        preferences.prepare_credentials_for_openvas.return_value = True
+        preferences.get_error_messages.return_value = []
+        preferences.prepare_plugins_for_openvas.return_value = True
+        process = MagicMock(pid=42)
+        process.poll.return_value = None
+        mock_start_scan.return_value = process
+        daemon.handle_result_admission_failure = MagicMock(return_value=None)
+        daemon.is_openvas_process_alive = MagicMock(return_value=True)
+        daemon.recover_unreadable_result_queue = MagicMock()
+        kbdb.get_status.return_value = 'ready'
+        kbdb.target_is_finished.side_effect = redis.RedisError('lost')
+
+        daemon.exec_scan('scan-1')
+
+        daemon.recover_unreadable_result_queue.assert_called_once_with(
+            'scan-1', 42, process_already_exited=False
+        )
 
     @patch('ospd_openvas.daemon.PreferenceHandler')
     @patch('ospd_openvas.daemon.Openvas.start_scan')

@@ -27,8 +27,114 @@ LIST_LAST_POS = -1
 LIST_ALL = 0
 
 CLAIM_RESULT_ITEMS_SCRIPT = """
-local claimed = redis.call('LRANGE', KEYS[2], 0, -1)
+local function key_type(index)
+  return redis.call('TYPE', KEYS[index]).ok
+end
+
+local function memory_within(index, limit)
+  local usage = redis.call('MEMORY', 'USAGE', KEYS[index])
+  return not usage or usage <= limit
+end
+
+local max_items = tonumber(ARGV[1])
+local max_bytes = tonumber(ARGV[2])
+local max_item_bytes = tonumber(ARGV[3])
+local max_pending_items = 10000
+local max_pending_bytes = 67108864
+local source_memory_limit = max_pending_bytes * 2 + max_pending_items * 256
+local claim_memory_limit = max_bytes * 2 + max_items * 256
+local source_sidecar_memory_limit = max_pending_items * 256
+local claim_sidecar_memory_limit = max_items * 256
+
+local function list_or_none(index)
+  local kind = key_type(index)
+  return kind == 'none' or kind == 'list'
+end
+
+local function string_or_none(index)
+  local kind = key_type(index)
+  return kind == 'none' or kind == 'string'
+end
+
+local function mark_failure(code)
+  if key_type(6) == 'none' then
+    redis.call('RPUSH', KEYS[6], code)
+  elseif key_type(6) == 'list' and redis.call('LLEN', KEYS[6]) == 0 then
+    redis.call('RPUSH', KEYS[6], code)
+  end
+end
+
+if not list_or_none(1) or not list_or_none(2)
+  or not string_or_none(3) or not string_or_none(4)
+  or not string_or_none(5) or not list_or_none(6)
+  or not list_or_none(7) or not list_or_none(8)
+  or not list_or_none(9) or not list_or_none(10) then
+  mark_failure('counter-state')
+  return {}
+end
+local source_count = redis.call('LLEN', KEYS[1])
+local claim_count = redis.call('LLEN', KEYS[2])
+if source_count ~= redis.call('LLEN', KEYS[7])
+  or source_count ~= redis.call('LLEN', KEYS[9])
+  or claim_count ~= redis.call('LLEN', KEYS[8])
+  or claim_count ~= redis.call('LLEN', KEYS[10])
+  or source_count > max_pending_items or claim_count > max_items
+  or not memory_within(1, source_memory_limit)
+  or not memory_within(2, claim_memory_limit)
+  or not memory_within(7, source_sidecar_memory_limit)
+  or not memory_within(8, claim_sidecar_memory_limit)
+  or not memory_within(9, source_sidecar_memory_limit)
+  or not memory_within(10, claim_sidecar_memory_limit) then
+  mark_failure('counter-state')
+  return {}
+end
+local claimed = redis.call('LRANGE', KEYS[2], 0, claim_count - 1)
+local claimed_ids = redis.call('LRANGE', KEYS[8], 0, claim_count - 1)
+local claimed_sizes = redis.call('LRANGE', KEYS[10], 0, claim_count - 1)
 local claim_id = redis.call('GET', KEYS[3])
+
+local pending_count = tonumber(redis.call('GET', KEYS[4]))
+local pending_bytes = tonumber(redis.call('GET', KEYS[5]))
+if not pending_count or not pending_bytes then
+  if source_count + claim_count ~= 0 then
+    mark_failure('counter-state')
+    return {}
+  end
+  pending_count = 0
+  pending_bytes = 0
+end
+if pending_count ~= source_count + claim_count
+  or pending_count < 0 or pending_bytes < 0
+  or pending_count > max_pending_items
+  or pending_bytes > max_pending_bytes then
+  mark_failure('counter-state')
+  return {}
+end
+
+local measured_bytes = 0
+local source_sizes = redis.call('LRANGE', KEYS[9], 0, -1)
+for _, value in ipairs(source_sizes) do
+  local size = tonumber(value)
+  if not size or size < 0 then
+    mark_failure('counter-state')
+    return {}
+  end
+  measured_bytes = measured_bytes + size
+end
+for index, value in ipairs(claimed_sizes) do
+  local size = tonumber(value)
+  if not size or size < 0 or size > max_item_bytes
+    or string.len(claimed[index]) ~= size then
+    mark_failure('counter-state')
+    return {}
+  end
+  measured_bytes = measured_bytes + size
+end
+if measured_bytes ~= pending_bytes then
+  mark_failure('counter-state')
+  return {}
+end
+
 if #claimed > 0 then
   if not claim_id then
     claim_id = ARGV[4]
@@ -47,22 +153,36 @@ end
 claim_id = ARGV[4]
 redis.call('SET', KEYS[3], claim_id)
 
-local max_items = tonumber(ARGV[1])
-local max_bytes = tonumber(ARGV[2])
-local max_item_bytes = tonumber(ARGV[3])
 local claimed_bytes = 0
 claimed = {}
 for _ = 1, max_items do
   local candidate = redis.call('LINDEX', KEYS[1], -1)
+  local candidate_id = redis.call('LINDEX', KEYS[7], -1)
+  local candidate_size = tonumber(redis.call('LINDEX', KEYS[9], -1))
   if not candidate then
     break
   end
-  local candidate_bytes = string.len(candidate)
+  if not candidate_id or not candidate_size
+    or candidate_size < 0 or string.len(candidate) ~= candidate_size then
+    mark_failure('counter-state')
+    return {}
+  end
+  local candidate_bytes = candidate_size
   if candidate_bytes > max_item_bytes then
     redis.call('RPOP', KEYS[1])
+    redis.call('RPOP', KEYS[7])
+    redis.call('RPOP', KEYS[9])
     local marker = '{"turbovas_internal":"oversized_result","bytes":'
       .. tostring(candidate_bytes) .. '}'
     redis.call('RPUSH', KEYS[2], marker)
+    redis.call('RPUSH', KEYS[8], candidate_id)
+    redis.call('RPUSH', KEYS[10], string.len(marker))
+    pending_bytes = pending_bytes - candidate_bytes + string.len(marker)
+    if pending_bytes < 0 then
+      mark_failure('counter-state')
+      return {}
+    end
+    redis.call('SET', KEYS[5], pending_bytes)
     table.insert(claimed, marker)
     break
   end
@@ -70,7 +190,11 @@ for _ = 1, max_items do
     break
   end
   candidate = redis.call('RPOP', KEYS[1])
+  candidate_id = redis.call('RPOP', KEYS[7])
+  candidate_size = redis.call('RPOP', KEYS[9])
   redis.call('RPUSH', KEYS[2], candidate)
+  redis.call('RPUSH', KEYS[8], candidate_id)
+  redis.call('RPUSH', KEYS[10], candidate_size)
   table.insert(claimed, candidate)
   claimed_bytes = claimed_bytes + candidate_bytes
 end
@@ -87,10 +211,167 @@ return response
 """
 
 ACK_RESULT_CLAIM_SCRIPT = """
+local function key_type(index)
+  return redis.call('TYPE', KEYS[index]).ok
+end
+
+local function list_or_none(index)
+  local kind = key_type(index)
+  return kind == 'none' or kind == 'list'
+end
+
+local function string_or_none(index)
+  local kind = key_type(index)
+  return kind == 'none' or kind == 'string'
+end
+
+local function memory_within(index, limit)
+  local usage = redis.call('MEMORY', 'USAGE', KEYS[index])
+  return not usage or usage <= limit
+end
+
+local function mark_failure(code)
+  if key_type(5) == 'none' then
+    redis.call('RPUSH', KEYS[5], code)
+  elseif key_type(5) == 'list' and redis.call('LLEN', KEYS[5]) == 0 then
+    redis.call('RPUSH', KEYS[5], code)
+  end
+end
+
+if not list_or_none(1) or not string_or_none(2)
+  or not string_or_none(3) or not string_or_none(4)
+  or not list_or_none(5) or not list_or_none(6)
+  or not list_or_none(7) then
+  mark_failure('counter-state')
+  return -1
+end
+
 if redis.call('GET', KEYS[2]) == ARGV[1] then
-  return redis.call('DEL', KEYS[1], KEYS[2])
+  local max_items = 1000
+  local max_bytes = 16777216
+  local max_item_bytes = 4194304
+  local released_count = redis.call('LLEN', KEYS[1])
+  if released_count > max_items
+    or released_count ~= redis.call('LLEN', KEYS[6])
+    or released_count ~= redis.call('LLEN', KEYS[7])
+    or not memory_within(1, max_bytes * 2 + max_items * 256)
+    or not memory_within(6, max_items * 256)
+    or not memory_within(7, max_items * 256) then
+    mark_failure('counter-state')
+    return -1
+  end
+  local rows = redis.call('LRANGE', KEYS[1], 0, released_count - 1)
+  local row_ids = redis.call('LRANGE', KEYS[6], 0, released_count - 1)
+  local row_sizes = redis.call('LRANGE', KEYS[7], 0, released_count - 1)
+  local released_bytes = 0
+  for index, value in ipairs(row_sizes) do
+    local size = tonumber(value)
+    if not size or size < 0 or size > max_item_bytes
+      or string.len(rows[index]) ~= size then
+      mark_failure('counter-state')
+      return -1
+    end
+    released_bytes = released_bytes + size
+  end
+  if released_bytes > max_bytes then
+    mark_failure('counter-state')
+    return -1
+  end
+  local pending_count = tonumber(redis.call('GET', KEYS[3]))
+  local pending_bytes = tonumber(redis.call('GET', KEYS[4]))
+  if not pending_count or not pending_bytes
+    or pending_count < released_count
+    or pending_bytes < released_bytes then
+    mark_failure('counter-state')
+    return -1
+  end
+  redis.call('DEL', KEYS[1], KEYS[2], KEYS[6], KEYS[7])
+  pending_count = pending_count - released_count
+  pending_bytes = pending_bytes - released_bytes
+  if pending_count == 0 then
+    redis.call('DEL', KEYS[3], KEYS[4])
+  else
+    redis.call('SET', KEYS[3], pending_count)
+    redis.call('SET', KEYS[4], pending_bytes)
+  end
+  return 2
 end
 return 0
+"""
+
+RESULT_QUEUE_FAILURE_SCRIPT = """
+local function key_type(index)
+  return redis.call('TYPE', KEYS[index]).ok
+end
+
+local function list_or_none(index)
+  local kind = key_type(index)
+  return kind == 'none' or kind == 'list'
+end
+
+local function string_or_none(index)
+  local kind = key_type(index)
+  return kind == 'none' or kind == 'string'
+end
+
+local function memory_within(index, limit)
+  local usage = redis.call('MEMORY', 'USAGE', KEYS[index])
+  return not usage or usage <= limit
+end
+
+if key_type(6) ~= 'none' and key_type(6) ~= 'list' then
+  return 'queue-state-unreadable'
+end
+if key_type(6) == 'list' and redis.call('LLEN', KEYS[6]) > 0 then
+  return redis.call('LINDEX', KEYS[6], 0)
+end
+if not list_or_none(1) or not list_or_none(2)
+  or not string_or_none(3) or not string_or_none(4)
+  or not string_or_none(5) or not list_or_none(7)
+  or not list_or_none(8) or not list_or_none(9)
+  or not list_or_none(10) then
+  return 'counter-state'
+end
+
+local source_count = redis.call('LLEN', KEYS[1])
+local claim_count = redis.call('LLEN', KEYS[2])
+if source_count ~= redis.call('LLEN', KEYS[7])
+  or source_count ~= redis.call('LLEN', KEYS[9])
+  or claim_count ~= redis.call('LLEN', KEYS[8])
+  or claim_count ~= redis.call('LLEN', KEYS[10])
+  or source_count > 10000 or claim_count > 1000
+  or not memory_within(9, 2560000)
+  or not memory_within(10, 256000) then
+  return 'counter-state'
+end
+
+local pending_count = tonumber(redis.call('GET', KEYS[4]))
+local pending_bytes = tonumber(redis.call('GET', KEYS[5]))
+if not pending_count or not pending_bytes then
+  if source_count + claim_count == 0 then
+    return ''
+  end
+  return 'counter-state'
+end
+if pending_count ~= source_count + claim_count
+  or pending_count < 0 or pending_bytes < 0
+  or pending_count > 10000 or pending_bytes > 67108864 then
+  return 'counter-state'
+end
+
+local measured_bytes = 0
+for _, value in ipairs(redis.call('LRANGE', KEYS[9], 0, -1)) do
+  local size = tonumber(value)
+  if not size or size < 0 then return 'counter-state' end
+  measured_bytes = measured_bytes + size
+end
+for _, value in ipairs(redis.call('LRANGE', KEYS[10], 0, -1)) do
+  local size = tonumber(value)
+  if not size or size < 0 then return 'counter-state' end
+  measured_bytes = measured_bytes + size
+end
+if measured_bytes ~= pending_bytes then return 'counter-state' end
+return ''
 """
 
 # Possible positions of nvt values in cache list.
@@ -125,6 +406,35 @@ class OpenvasDB:
     from a KB to another."""
 
     _db_address = None
+
+    RESULT_ADMISSION_REDIS_KEYS = (
+        'internal/results',
+        'internal/results.ospd-claim',
+        'internal/results.ospd-claim-id',
+        'internal/results.pending-count',
+        'internal/results.pending-bytes',
+        'internal/results.admission-failure',
+        'internal/results.admission-ids',
+        'internal/results.ospd-claim-admission-ids',
+        'internal/results.sizes',
+        'internal/results.ospd-claim-sizes',
+    )
+    RESULT_ADMISSION_REDIS_COMMANDS = (
+        ('EVAL', 'return 1', '10', *RESULT_ADMISSION_REDIS_KEYS),
+        ('GET', 'internal/results.pending-count'),
+        ('SET', 'internal/results.pending-count', '1'),
+        ('EXISTS', 'internal/results.admission-failure'),
+        ('TYPE', 'internal/results'),
+        ('LLEN', 'internal/results'),
+        ('LPUSH', 'internal/results', '1'),
+        ('RPUSH', 'internal/results.ospd-claim', '1'),
+        ('LRANGE', 'internal/results.sizes', '0', '-1'),
+        ('LINDEX', 'internal/results', '0'),
+        ('RPOP', 'internal/results'),
+        ('LPOS', 'internal/results.admission-ids', 'admission-id'),
+        ('MEMORY', 'USAGE', 'internal/results'),
+        ('DEL', 'internal/results.ospd-claim'),
+    )
 
     @classmethod
     def get_database_address(cls) -> Optional[str]:
@@ -192,6 +502,41 @@ class OpenvasDB:
             sys.exit(1)
 
         return ctx
+
+    @classmethod
+    def validate_result_admission_backend(cls) -> None:
+        """Fail before scans if Redis cannot uphold the result-queue contract."""
+        ctx = cls.create_context()
+        try:
+            version = str(ctx.info('server').get('redis_version', ''))
+            major_version = int(version.split('.', maxsplit=1)[0])
+            maxmemory = int(ctx.config_get('maxmemory').get('maxmemory', -1))
+            username = str(ctx.execute_command('ACL', 'WHOAMI'))
+            dry_runs = [
+                ctx.execute_command('ACL', 'DRYRUN', username, *command)
+                for command in cls.RESULT_ADMISSION_REDIS_COMMANDS
+            ]
+        except (
+            AttributeError,
+            TypeError,
+            ValueError,
+            redis.RedisError,
+        ) as error:
+            raise OspdOpenvasError(
+                'Scanner Redis cannot prove the result admission contract.'
+            ) from error
+
+        if (
+            username != 'default'
+            or major_version < 7
+            or maxmemory != 0
+            or any(str(result).upper() != 'OK' for result in dry_runs)
+        ):
+            raise OspdOpenvasError(
+                'Scanner Redis must use the default scanner identity, be '
+                'version 7 or newer, use maxmemory=0, and permit the exact '
+                'bounded result-delivery keys and command set.'
+            )
 
     @classmethod
     def find_database_by_pattern(
@@ -285,6 +630,13 @@ class OpenvasDB:
         name: str,
         claim_name: str,
         claim_id_name: str,
+        pending_count_name: str,
+        pending_bytes_name: str,
+        admission_failure_name: str,
+        admission_ids_name: str,
+        claim_admission_ids_name: str,
+        result_sizes_name: str,
+        claim_result_sizes_name: str,
         *,
         max_items: int,
         max_bytes: int,
@@ -299,6 +651,24 @@ class OpenvasDB:
             raise RequiredArgument('claim_list_items', 'claim_name')
         if not claim_id_name:
             raise RequiredArgument('claim_list_items', 'claim_id_name')
+        if not pending_count_name:
+            raise RequiredArgument('claim_list_items', 'pending_count_name')
+        if not pending_bytes_name:
+            raise RequiredArgument('claim_list_items', 'pending_bytes_name')
+        if not admission_failure_name:
+            raise RequiredArgument('claim_list_items', 'admission_failure_name')
+        if not admission_ids_name:
+            raise RequiredArgument('claim_list_items', 'admission_ids_name')
+        if not claim_admission_ids_name:
+            raise RequiredArgument(
+                'claim_list_items', 'claim_admission_ids_name'
+            )
+        if not result_sizes_name:
+            raise RequiredArgument('claim_list_items', 'result_sizes_name')
+        if not claim_result_sizes_name:
+            raise RequiredArgument(
+                'claim_list_items', 'claim_result_sizes_name'
+            )
         if max_items <= 0:
             raise RequiredArgument('claim_list_items', 'max_items')
         if max_bytes <= 0:
@@ -308,10 +678,17 @@ class OpenvasDB:
 
         response = ctx.eval(
             CLAIM_RESULT_ITEMS_SCRIPT,
-            3,
+            10,
             name,
             claim_name,
             claim_id_name,
+            pending_count_name,
+            pending_bytes_name,
+            admission_failure_name,
+            admission_ids_name,
+            claim_admission_ids_name,
+            result_sizes_name,
+            claim_result_sizes_name,
             max_items,
             max_bytes,
             max_item_bytes,
@@ -326,6 +703,11 @@ class OpenvasDB:
         ctx: RedisCtx,
         claim_name: str,
         claim_id_name: str,
+        pending_count_name: str,
+        pending_bytes_name: str,
+        admission_failure_name: str,
+        claim_admission_ids_name: str,
+        claim_result_sizes_name: str,
         claim_id: str,
     ) -> bool:
         """Delete only the exact current replayable claim."""
@@ -335,16 +717,65 @@ class OpenvasDB:
             raise RequiredArgument('ack_list_claim', 'claim_name')
         if not claim_id_name:
             raise RequiredArgument('ack_list_claim', 'claim_id_name')
+        if not pending_count_name:
+            raise RequiredArgument('ack_list_claim', 'pending_count_name')
+        if not pending_bytes_name:
+            raise RequiredArgument('ack_list_claim', 'pending_bytes_name')
+        if not admission_failure_name:
+            raise RequiredArgument('ack_list_claim', 'admission_failure_name')
+        if not claim_admission_ids_name:
+            raise RequiredArgument('ack_list_claim', 'claim_admission_ids_name')
+        if not claim_result_sizes_name:
+            raise RequiredArgument('ack_list_claim', 'claim_result_sizes_name')
         if not claim_id:
             raise RequiredArgument('ack_list_claim', 'claim_id')
         deleted = ctx.eval(
             ACK_RESULT_CLAIM_SCRIPT,
-            2,
+            7,
             claim_name,
             claim_id_name,
+            pending_count_name,
+            pending_bytes_name,
+            admission_failure_name,
+            claim_admission_ids_name,
+            claim_result_sizes_name,
             claim_id,
         )
         return deleted == 2
+
+    @staticmethod
+    def get_result_queue_failure(
+        ctx: RedisCtx,
+        name: str,
+        claim_name: str,
+        claim_id_name: str,
+        pending_count_name: str,
+        pending_bytes_name: str,
+        admission_failure_name: str,
+        admission_ids_name: str,
+        claim_admission_ids_name: str,
+        result_sizes_name: str,
+        claim_result_sizes_name: str,
+    ) -> Optional[str]:
+        """Return a fixed fail-closed result queue health code."""
+        try:
+            failure = ctx.eval(
+                RESULT_QUEUE_FAILURE_SCRIPT,
+                10,
+                name,
+                claim_name,
+                claim_id_name,
+                pending_count_name,
+                pending_bytes_name,
+                admission_failure_name,
+                admission_ids_name,
+                claim_admission_ids_name,
+                result_sizes_name,
+                claim_result_sizes_name,
+            )
+        except redis.RedisError:
+            return 'queue-state-unreadable'
+        return str(failure) if failure else None
 
     @staticmethod
     def get_key_count(ctx: RedisCtx, pattern: Optional[str] = None) -> int:
@@ -580,6 +1011,13 @@ class BaseKbDB(BaseDB):
     RESULT_KEY = 'internal/results'
     RESULT_CLAIM_KEY = 'internal/results.ospd-claim'
     RESULT_CLAIM_ID_KEY = 'internal/results.ospd-claim-id'
+    RESULT_ADMISSION_FAILURE_KEY = 'internal/results.admission-failure'
+    RESULT_PENDING_COUNT_KEY = 'internal/results.pending-count'
+    RESULT_PENDING_BYTES_KEY = 'internal/results.pending-bytes'
+    RESULT_ADMISSION_IDS_KEY = 'internal/results.admission-ids'
+    RESULT_CLAIM_ADMISSION_IDS_KEY = 'internal/results.ospd-claim-admission-ids'
+    RESULT_SIZES_KEY = 'internal/results.sizes'
+    RESULT_CLAIM_SIZES_KEY = 'internal/results.ospd-claim-sizes'
 
     def _add_single_item(
         self, name: str, values: Iterable, utf8_enc: Optional[bool] = False
@@ -645,6 +1083,13 @@ class BaseKbDB(BaseDB):
             self.RESULT_KEY,
             self.RESULT_CLAIM_KEY,
             self.RESULT_CLAIM_ID_KEY,
+            self.RESULT_PENDING_COUNT_KEY,
+            self.RESULT_PENDING_BYTES_KEY,
+            self.RESULT_ADMISSION_FAILURE_KEY,
+            self.RESULT_ADMISSION_IDS_KEY,
+            self.RESULT_CLAIM_ADMISSION_IDS_KEY,
+            self.RESULT_SIZES_KEY,
+            self.RESULT_CLAIM_SIZES_KEY,
             max_items=max_items,
             max_bytes=max_bytes,
             max_item_bytes=max_item_bytes,
@@ -655,6 +1100,11 @@ class BaseKbDB(BaseDB):
             self.ctx,
             self.RESULT_CLAIM_KEY,
             self.RESULT_CLAIM_ID_KEY,
+            self.RESULT_PENDING_COUNT_KEY,
+            self.RESULT_PENDING_BYTES_KEY,
+            self.RESULT_ADMISSION_FAILURE_KEY,
+            self.RESULT_CLAIM_ADMISSION_IDS_KEY,
+            self.RESULT_CLAIM_SIZES_KEY,
             claim_id,
         )
 
@@ -662,6 +1112,22 @@ class BaseKbDB(BaseDB):
         return bool(
             self.ctx.llen(self.RESULT_KEY)
             or self.ctx.llen(self.RESULT_CLAIM_KEY)
+        )
+
+    def get_result_admission_failure(self) -> Optional[str]:
+        """Return a fixed fail-closed result delivery failure code."""
+        return OpenvasDB.get_result_queue_failure(
+            self.ctx,
+            self.RESULT_KEY,
+            self.RESULT_CLAIM_KEY,
+            self.RESULT_CLAIM_ID_KEY,
+            self.RESULT_PENDING_COUNT_KEY,
+            self.RESULT_PENDING_BYTES_KEY,
+            self.RESULT_ADMISSION_FAILURE_KEY,
+            self.RESULT_ADMISSION_IDS_KEY,
+            self.RESULT_CLAIM_ADMISSION_IDS_KEY,
+            self.RESULT_SIZES_KEY,
+            self.RESULT_CLAIM_SIZES_KEY,
         )
 
     def get_status(self, openvas_scan_id: str) -> Optional[str]:

@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2014-2023 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -11,6 +12,7 @@
 #define _GNU_SOURCE
 
 #include "kb.h"
+#include "uuidutils.h"
 
 #include <errno.h> /* for ENOMEM, EINVAL, EPROTO, EALREADY, ECONN... */
 #include <glib.h>  /* for g_log, g_free */
@@ -43,6 +45,86 @@
  * @brief Name of the namespace usage bitmap in redis.
  */
 #define GLOBAL_DBINDEX_NAME "GVM.__GlobalDBIndex"
+
+#define SCANNER_RESULT_KEY "internal/results"
+#define SCANNER_RESULT_CLAIM_KEY "internal/results.ospd-claim"
+#define SCANNER_RESULT_ADMISSION_FAILURE_KEY \
+  "internal/results.admission-failure"
+#define SCANNER_RESULT_PENDING_COUNT_KEY "internal/results.pending-count"
+#define SCANNER_RESULT_PENDING_BYTES_KEY "internal/results.pending-bytes"
+#define SCANNER_RESULT_ADMISSION_IDS_KEY "internal/results.admission-ids"
+#define SCANNER_RESULT_CLAIM_ADMISSION_IDS_KEY "internal/results.ospd-claim-admission-ids"
+#define SCANNER_RESULT_SIZES_KEY "internal/results.sizes"
+#define SCANNER_RESULT_CLAIM_SIZES_KEY "internal/results.ospd-claim-sizes"
+#define SCANNER_RESULT_MAX_ITEM_BYTES (4ULL * 1024ULL * 1024ULL)
+#define SCANNER_RESULT_MAX_PENDING_ITEMS 10000ULL
+#define SCANNER_RESULT_MAX_PENDING_BYTES (64ULL * 1024ULL * 1024ULL)
+
+static const char *SCANNER_RESULT_ADMISSION_SCRIPT =
+  "local function key_type(index) "
+  "return redis.call('TYPE', KEYS[index]).ok end "
+  "local function list_or_none(index) "
+  "local kind = key_type(index); "
+  "return kind == 'none' or kind == 'list' end "
+  "local function string_or_none(index) "
+  "local kind = key_type(index); "
+  "return kind == 'none' or kind == 'string' end "
+  "local function memory_within(index, limit) "
+  "local usage = redis.call('MEMORY', 'USAGE', KEYS[index]); "
+  "return not usage or usage <= limit end "
+  "local function mark_failure(code) "
+  "if key_type(3) == 'none' then "
+  "redis.call('RPUSH', KEYS[3], code) "
+  "elseif key_type(3) == 'list' and redis.call('LLEN', KEYS[3]) == 0 then "
+  "redis.call('RPUSH', KEYS[3], code) end end "
+  "if redis.call('EXISTS', KEYS[3]) == 1 then return -3 end "
+  "if not list_or_none(1) or not list_or_none(2) "
+  "or not list_or_none(3) or not string_or_none(4) "
+  "or not string_or_none(5) or not list_or_none(6) "
+  "or not list_or_none(7) or not list_or_none(8) "
+  "or not list_or_none(9) then "
+  "mark_failure('counter-state'); return -4 end "
+  "local max_items = tonumber(ARGV[4]); "
+  "local max_bytes = tonumber(ARGV[5]); "
+  "local payload_memory_limit = max_bytes * 2 + max_items * 256; "
+  "local sidecar_memory_limit = max_items * 256; "
+  "if not memory_within(1, payload_memory_limit) "
+  "or not memory_within(2, payload_memory_limit) "
+  "or not memory_within(6, sidecar_memory_limit) "
+  "or not memory_within(7, sidecar_memory_limit) "
+  "or not memory_within(8, sidecar_memory_limit) "
+  "or not memory_within(9, sidecar_memory_limit) then "
+  "mark_failure('counter-state'); return -4 end "
+  "local source_count = redis.call('LLEN', KEYS[1]); "
+  "local claim_count = redis.call('LLEN', KEYS[2]); "
+  "if source_count ~= redis.call('LLEN', KEYS[6]) "
+  "or source_count ~= redis.call('LLEN', KEYS[8]) "
+  "or claim_count ~= redis.call('LLEN', KEYS[7]) "
+  "or claim_count ~= redis.call('LLEN', KEYS[9]) then "
+  "mark_failure('counter-state'); return -4 end "
+  "local row_bytes = string.len(ARGV[2]); "
+  "if row_bytes > tonumber(ARGV[3]) then "
+  "redis.call('RPUSH', KEYS[3], 'row-too-large'); return -1 end "
+  "local count = tonumber(redis.call('GET', KEYS[4])); "
+  "local bytes = tonumber(redis.call('GET', KEYS[5])); "
+  "local queued = source_count + claim_count; "
+  "if not count or not bytes then "
+  "if queued ~= 0 then "
+  "mark_failure('counter-state'); return -4 end "
+  "count = 0; bytes = 0 end "
+  "if count ~= queued or count < 0 or bytes < 0 "
+  "or count > max_items or bytes > max_bytes then "
+  "mark_failure('counter-state'); return -4 end "
+  "if redis.call('LPOS', KEYS[6], ARGV[1]) "
+  "or redis.call('LPOS', KEYS[7], ARGV[1]) then return 1 end "
+  "if count + 1 > max_items or bytes + row_bytes > max_bytes then "
+  "redis.call('RPUSH', KEYS[3], 'pending-capacity'); return -2 end "
+  "redis.call('LPUSH', KEYS[1], ARGV[2]); "
+  "redis.call('LPUSH', KEYS[6], ARGV[1]); "
+  "redis.call('LPUSH', KEYS[8], tostring(row_bytes)); "
+  "redis.call('SET', KEYS[4], count + 1); "
+  "redis.call('SET', KEYS[5], bytes + row_bytes); "
+  "return 1";
 
 static const struct kb_operations KBRedisOperations;
 
@@ -863,6 +945,76 @@ redis_get_str (kb_t kb, const char *name)
 }
 
 /**
+ * @brief Atomically admit one bounded scanner result into Redis.
+ *
+ * The pending budget covers both the producer list and OSPD's replayable
+ * claim. A rejected write leaves only a bounded fixed failure marker for OSPD
+ * to turn into an interrupted, incomplete scan.
+ *
+ * @return 0 on success, non-zero when the result was rejected or Redis failed.
+ */
+static int
+redis_push_scanner_result (kb_t kb, const char *value)
+{
+  struct kb_redis *kbr;
+  char *admission_id;
+  gboolean retry_warning_logged = FALSE;
+  redisReply *rep = NULL;
+  int rc = -1;
+
+  if (!value)
+    return -1;
+
+  admission_id = gvm_uuid_make ();
+  if (!admission_id)
+    return -1;
+
+  kbr = redis_kb (kb);
+  while (1)
+    {
+      rep = redis_cmd (
+        kbr,
+        "EVAL %s 9 %s %s %s %s %s %s %s %s %s %s %b %llu %llu %llu",
+        SCANNER_RESULT_ADMISSION_SCRIPT, SCANNER_RESULT_KEY,
+        SCANNER_RESULT_CLAIM_KEY, SCANNER_RESULT_ADMISSION_FAILURE_KEY,
+        SCANNER_RESULT_PENDING_COUNT_KEY, SCANNER_RESULT_PENDING_BYTES_KEY,
+        SCANNER_RESULT_ADMISSION_IDS_KEY,
+        SCANNER_RESULT_CLAIM_ADMISSION_IDS_KEY, SCANNER_RESULT_SIZES_KEY,
+        SCANNER_RESULT_CLAIM_SIZES_KEY, admission_id, value, strlen (value),
+        SCANNER_RESULT_MAX_ITEM_BYTES, SCANNER_RESULT_MAX_PENDING_ITEMS,
+        SCANNER_RESULT_MAX_PENDING_BYTES);
+      if (rep && rep->type == REDIS_REPLY_INTEGER)
+        {
+          if (rep->integer == 1)
+            rc = 0;
+          break;
+        }
+
+      if (rep)
+        freeReplyObject (rep);
+      rep = NULL;
+      if (!retry_warning_logged)
+        {
+          g_warning ("Scanner result delivery lost its Redis connection; "
+                     "retrying until Redis recovers or the scanner is "
+                     "stopped.");
+          retry_warning_logged = TRUE;
+        }
+
+      /* Result callers historically ignore this return value. Returning on a
+       * transport failure could therefore let a scan complete without the
+       * missing evidence. The idempotent admission ID makes retries safe. */
+      g_usleep (G_USEC_PER_SEC);
+    }
+
+  if (rep)
+    freeReplyObject (rep);
+  g_free (admission_id);
+
+  return rc;
+}
+
+/**
  * @brief Push a new entry under a given key.
  *
  * @param[in] kb  KB handle where to store the item.
@@ -880,6 +1032,9 @@ redis_push_str (kb_t kb, const char *name, const char *value)
 
   if (!value)
     return -1;
+
+  if (strcmp (name, SCANNER_RESULT_KEY) == 0)
+    return redis_push_scanner_result (kb, value);
 
   kbr = redis_kb (kb);
   rep = redis_cmd (kbr, "LPUSH %s %s", name, value);

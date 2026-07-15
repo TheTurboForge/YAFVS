@@ -28,6 +28,25 @@ class OpenvasCommandTestCase(TestCase):
         self.assertTrue(success)
 
     @patch('ospd_openvas.openvas.subprocess.run')
+    def test_stop_scan_as_root_can_use_pinned_pid_without_redis(self, mock_run):
+        success = Openvas.stop_scan_as_root('scan_1', 42)
+
+        mock_run.assert_called_once_with(
+            [
+                'sudo',
+                '-n',
+                'openvas',
+                '--scan-stop',
+                'scan_1',
+                '--scan-stop-pid',
+                '42',
+            ],
+            check=True,
+            timeout=STOP_SCAN_COMMAND_TIMEOUT_SECONDS,
+        )
+        self.assertTrue(success)
+
+    @patch('ospd_openvas.openvas.subprocess.run')
     def test_stop_scan_as_root_reports_timeout(self, mock_run):
         mock_run.side_effect = subprocess.TimeoutExpired(
             'openvas', STOP_SCAN_COMMAND_TIMEOUT_SECONDS

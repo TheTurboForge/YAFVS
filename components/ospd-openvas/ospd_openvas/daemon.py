@@ -24,6 +24,7 @@ from pathlib import Path
 from os import geteuid
 
 import psutil
+import redis
 
 from ospd.ospd import OSPDaemon
 from ospd.scan import ScanProgress, ScanStatus
@@ -39,7 +40,7 @@ from ospd_openvas.notus import Cache, Notus, NotusParser, NotusResultHandler
 from ospd_openvas.dryrun import DryRun
 from ospd_openvas.messages.result import ResultMessage
 from ospd_openvas.nvticache import NVTICache
-from ospd_openvas.db import MainDB, BaseDB
+from ospd_openvas.db import MainDB, BaseDB, OpenvasDB
 from ospd_openvas.lock import LockFile
 from ospd_openvas.preferencehandler import PreferenceHandler
 from ospd_openvas.openvas import NASLCli, Openvas
@@ -61,6 +62,21 @@ OPENVAS_RESULT_FIELDS = (
 OPENVAS_RESULT_ROW_MAX_BYTES = 4 * 1024 * 1024
 OPENVAS_RESULT_CLAIM_MAX_ITEMS = 1000
 OPENVAS_RESULT_CLAIM_MAX_BYTES = 16 * 1024 * 1024
+OPENVAS_RESULT_RECOVERY_TIMEOUT_SECONDS = 180
+OPENVAS_RESULT_ADMISSION_FAILURES = {
+    'row-too-large': 'A scanner result exceeded the per-result evidence limit.',
+    'pending-capacity': (
+        'Pending scanner evidence exceeded its bounded delivery capacity.'
+    ),
+    'counter-state': ('Scanner result delivery counters became inconsistent.'),
+    'redis-write-failed': 'Scanner result storage rejected an evidence row.',
+    'queue-state-unreadable': (
+        'Scanner result delivery state could not be read safely.'
+    ),
+}
+OPENVAS_RESULT_UNRECOVERABLE_FAILURES = frozenset(
+    ('counter-state', 'queue-state-unreadable')
+)
 OVERSIZED_RESULT_MARKER_PREFIX = (
     '{"turbovas_internal":"oversized_result","bytes":'
 )
@@ -627,7 +643,168 @@ class OSPDopenvas(OSPDaemon):
         if self.get_scan_status(scan_id) == ScanStatus.FINISHED:
             self.set_scan_status(scan_id, ScanStatus.INTERRUPTED)
 
+    def handle_result_admission_failure(
+        self,
+        kbdb: BaseDB,
+        scan_id: str,
+        *,
+        scanner_pid: Optional[int] = None,
+        process_already_exited: bool = False,
+    ) -> Optional[bool]:
+        """Stop and drain after rejection, or return False to retry recovery."""
+        failure = kbdb.get_result_admission_failure()
+        if not failure:
+            return None
+
+        if failure == 'queue-state-unreadable':
+            return self.handle_unreadable_result_queue(
+                scan_id,
+                scanner_pid,
+                process_already_exited=process_already_exited,
+            )
+
+        reason = OPENVAS_RESULT_ADMISSION_FAILURES.get(
+            failure,
+            'Scanner result admission failed with an unknown bounded code.',
+        )
+        self.mark_scanner_evidence_incomplete(scan_id, reason)
+        try:
+            recorded_pid = (
+                str(scanner_pid)
+                if scanner_pid is not None
+                else kbdb.get_scan_process_id()
+            )
+            if not self.stop_scan_cleanup(
+                kbdb,
+                scan_id,
+                recorded_pid,
+                process_already_exited,
+            ):
+                logger.error(
+                    '%s: Retaining rejected-result state and retrying scanner '
+                    'cleanup.',
+                    scan_id,
+                )
+                return False
+            if failure in OPENVAS_RESULT_UNRECOVERABLE_FAILURES:
+                logger.error(
+                    '%s: Retaining malformed scanner result state for '
+                    'explicit reconciliation.',
+                    scan_id,
+                )
+                return True
+            if not self.drain_openvas_results(kbdb, scan_id):
+                logger.error(
+                    '%s: Retaining Redis database because rejected-result '
+                    'evidence could not be acknowledged; recovery will retry.',
+                    scan_id,
+                )
+                return False
+            self.main_db.release_database(kbdb)
+            return True
+        except redis.RedisError:
+            return self.handle_unreadable_result_queue(
+                scan_id,
+                scanner_pid,
+                process_already_exited=process_already_exited,
+            )
+
+    def handle_unreadable_result_queue(
+        self,
+        scan_id: str,
+        scanner_pid: Optional[int],
+        *,
+        process_already_exited: bool = False,
+    ) -> bool:
+        """Interrupt and stop a scanner without another Redis operation."""
+        self.mark_scanner_evidence_incomplete(
+            scan_id,
+            OPENVAS_RESULT_ADMISSION_FAILURES['queue-state-unreadable'],
+        )
+        if not self.stop_scan_process_without_kb(
+            scan_id,
+            scanner_pid,
+            process_already_exited=process_already_exited,
+        ):
+            logger.error(
+                '%s: Retrying fail-closed scanner stop while its Redis queue '
+                'is unreadable.',
+                scan_id,
+            )
+            return False
+        logger.error(
+            '%s: Retaining unreadable scanner result state for explicit '
+            'reconciliation.',
+            scan_id,
+        )
+        return True
+
+    def recover_unreadable_result_queue(
+        self,
+        scan_id: str,
+        scanner_pid: Optional[int],
+        *,
+        process_already_exited: bool = False,
+    ) -> None:
+        """Bound retries of the Redis-independent emergency stop path."""
+        recovery_started_at = None
+        while not self.handle_unreadable_result_queue(
+            scan_id,
+            scanner_pid,
+            process_already_exited=process_already_exited,
+        ):
+            keep_recovering, recovery_started_at = (
+                self.should_continue_result_admission_recovery(
+                    scan_id, recovery_started_at
+                )
+            )
+            if not keep_recovering:
+                return
+            time.sleep(1)
+
+    def stop_scan_process_without_kb(
+        self,
+        scan_id: str,
+        scanner_pid: Optional[int],
+        *,
+        process_already_exited: bool = False,
+    ) -> bool:
+        """Stop a scanner from its pinned identity without touching Redis."""
+        if process_already_exited:
+            return True
+        if scanner_pid is None:
+            logger.error(
+                '%s: Cannot stop a scanner with unreadable Redis because its '
+                'pinned process ID is unavailable.',
+                scan_id,
+            )
+            return False
+        if not self.is_running_as_root and self.sudo_available:
+            return Openvas.stop_scan_as_root(scan_id, scanner_pid)
+        return self.stop_openvas_process_by_pid(
+            scan_id, str(scanner_pid), missing_is_stopped=True
+        )
+
+    def should_continue_result_admission_recovery(
+        self, scan_id: str, started_at: Optional[float]
+    ) -> Tuple[bool, float]:
+        """Bound foreground recovery while preserving Redis evidence."""
+        now = time.monotonic()
+        if started_at is None:
+            started_at = now
+        if now - started_at < OPENVAS_RESULT_RECOVERY_TIMEOUT_SECONDS:
+            return True, started_at
+
+        self.set_scan_status(scan_id, ScanStatus.INTERRUPTED)
+        logger.error(
+            '%s: Scanner result recovery timed out; retaining Redis evidence '
+            'for explicit reconciliation.',
+            scan_id,
+        )
+        return False, started_at
+
     def init(self, server: BaseServer) -> None:
+        OpenvasDB.validate_result_admission_backend()
         self.scan_collection.init()
 
         server.start(self.handle_client_stream)
@@ -1392,7 +1569,11 @@ class OSPDopenvas(OSPDaemon):
         return False
 
     def stop_openvas_process_by_pid(
-        self, scan_id: str, recorded_pid: str
+        self,
+        scan_id: str,
+        recorded_pid: str,
+        *,
+        missing_is_stopped: bool = False,
     ) -> bool:
         """Validate and stop a same-user scanner through a pinned pidfd."""
         try:
@@ -1400,6 +1581,14 @@ class OSPDopenvas(OSPDaemon):
             if pid <= 0:
                 raise ValueError('PID must be positive')
             process_handle = self.open_openvas_process_handle(pid)
+        except ProcessLookupError as error:
+            logger.warning(
+                '%s: Scanner PID %s no longer exists: %s',
+                scan_id,
+                recorded_pid,
+                error,
+            )
+            return missing_is_stopped
         except (OSError, TypeError, ValueError) as error:
             logger.warning(
                 '%s: Refusing to signal recorded OpenVAS PID %s because an '
@@ -1418,18 +1607,17 @@ class OSPDopenvas(OSPDaemon):
                     scan_id,
                     recorded_pid,
                 )
-                return False
+                return missing_is_stopped
 
             try:
                 openvas_process = psutil.Process(pid)
             except psutil.NoSuchProcess:
                 openvas_process = None
 
-            if (
-                not openvas_process
-                or not self.is_matching_openvas_scan_process(
-                    openvas_process, scan_id
-                )
+            if not openvas_process:
+                return missing_is_stopped
+            if not self.is_matching_openvas_scan_process(
+                openvas_process, scan_id
             ):
                 logger.warning(
                     '%s: Refusing to signal PID %s because it does not match '
@@ -1450,18 +1638,31 @@ class OSPDopenvas(OSPDaemon):
         kbdb: BaseDB,
         scan_id: str,
         error: str,
+        scanner_pid: Optional[int] = None,
         process_already_exited: bool = False,
     ) -> None:
         """Record a startup failure and release the allocated scanner state."""
         self.add_scan_error(scan_id, name='', host='', value=error)
         logger.error('%s: %s', scan_id, error)
-        if self.stop_scan_cleanup(
-            kbdb,
-            scan_id,
-            kbdb.get_scan_process_id(),
-            process_already_exited,
-        ):
-            self.main_db.release_database(kbdb)
+        try:
+            recorded_pid = (
+                str(scanner_pid)
+                if scanner_pid is not None
+                else kbdb.get_scan_process_id()
+            )
+            if self.stop_scan_cleanup(
+                kbdb,
+                scan_id,
+                recorded_pid,
+                process_already_exited,
+            ):
+                self.main_db.release_database(kbdb)
+        except redis.RedisError:
+            self.recover_unreadable_result_queue(
+                scan_id,
+                scanner_pid,
+                process_already_exited=process_already_exited,
+            )
 
     def stop_scan_cleanup(
         self,
@@ -1594,19 +1795,56 @@ class OSPDopenvas(OSPDaemon):
             self.main_db.release_database(kbdb)
             return
 
-        kbdb.add_scan_process_id(openvas_process.pid)
+        try:
+            kbdb.add_scan_process_id(openvas_process.pid)
+        except redis.RedisError:
+            self.recover_unreadable_result_queue(scan_id, openvas_process.pid)
+            return
         logger.debug('pid = %s', openvas_process.pid)
 
         # Wait until the scanner starts and loads all the preferences.
         startup_deadline = time.monotonic() + OPENVAS_STARTUP_TIMEOUT_SECONDS
-        while kbdb.get_status(scan_id) == 'new':
+        admission_recovery_started_at = None
+        while True:
             exit_code = openvas_process.poll()
+            admission_handled = self.handle_result_admission_failure(
+                kbdb,
+                scan_id,
+                scanner_pid=openvas_process.pid,
+                process_already_exited=exit_code is not None,
+            )
+            if admission_handled is True:
+                return
+            if admission_handled is False:
+                (
+                    keep_recovering,
+                    admission_recovery_started_at,
+                ) = self.should_continue_result_admission_recovery(
+                    scan_id, admission_recovery_started_at
+                )
+                if not keep_recovering:
+                    return
+                time.sleep(1)
+                continue
+            admission_recovery_started_at = None
+            try:
+                scanner_status = kbdb.get_status(scan_id)
+            except redis.RedisError:
+                self.recover_unreadable_result_queue(
+                    scan_id,
+                    openvas_process.pid,
+                    process_already_exited=exit_code is not None,
+                )
+                return
+            if scanner_status != 'new':
+                break
             if exit_code is not None:
                 self.abort_scan_startup(
                     kbdb,
                     scan_id,
                     'OpenVAS scanner exited before reporting startup readiness '
                     f'(exit code {exit_code}).',
+                    scanner_pid=openvas_process.pid,
                     process_already_exited=True,
                 )
                 return
@@ -1618,6 +1856,7 @@ class OSPDopenvas(OSPDaemon):
                     scan_id,
                     'OpenVAS scanner did not report startup readiness within '
                     f'{OPENVAS_STARTUP_TIMEOUT_SECONDS} seconds.',
+                    scanner_pid=openvas_process.pid,
                 )
                 return
             time.sleep(min(1, remaining))
@@ -1627,36 +1866,119 @@ class OSPDopenvas(OSPDaemon):
             openvas_process_is_alive = self.is_openvas_process_alive(
                 openvas_process
             )
-            target_is_finished = kbdb.target_is_finished(scan_id)
+            admission_handled = self.handle_result_admission_failure(
+                kbdb,
+                scan_id,
+                scanner_pid=openvas_process.pid,
+                process_already_exited=not openvas_process_is_alive,
+            )
+            if admission_handled is True:
+                return
+            if admission_handled is False:
+                (
+                    keep_recovering,
+                    admission_recovery_started_at,
+                ) = self.should_continue_result_admission_recovery(
+                    scan_id, admission_recovery_started_at
+                )
+                if not keep_recovering:
+                    return
+                time.sleep(1)
+                continue
+            admission_recovery_started_at = None
+            try:
+                target_is_finished = kbdb.target_is_finished(scan_id)
+            except redis.RedisError:
+                self.recover_unreadable_result_queue(
+                    scan_id,
+                    openvas_process.pid,
+                    process_already_exited=not openvas_process_is_alive,
+                )
+                return
             scan_stopped = self.get_scan_status(scan_id) == ScanStatus.STOPPED
 
             # Report new Results and update status
-            got_results = self.report_openvas_results(kbdb, scan_id)
-            self.report_openvas_scan_status(kbdb, scan_id)
+            try:
+                got_results = self.report_openvas_results(kbdb, scan_id)
+            except redis.RedisError:
+                self.recover_unreadable_result_queue(
+                    scan_id,
+                    openvas_process.pid,
+                    process_already_exited=not openvas_process_is_alive,
+                )
+                return
+            admission_handled = self.handle_result_admission_failure(
+                kbdb,
+                scan_id,
+                scanner_pid=openvas_process.pid,
+                process_already_exited=not openvas_process_is_alive,
+            )
+            if admission_handled is True:
+                return
+            if admission_handled is False:
+                (
+                    keep_recovering,
+                    admission_recovery_started_at,
+                ) = self.should_continue_result_admission_recovery(
+                    scan_id, admission_recovery_started_at
+                )
+                if not keep_recovering:
+                    return
+                time.sleep(1)
+                continue
+            try:
+                self.report_openvas_scan_status(kbdb, scan_id)
+            except redis.RedisError:
+                self.recover_unreadable_result_queue(
+                    scan_id,
+                    openvas_process.pid,
+                    process_already_exited=not openvas_process_is_alive,
+                )
+                return
 
             # Check if the client stopped the whole scan
             if scan_stopped:
                 logger.debug('%s: Scan stopped by the client', scan_id)
-
-                if not self.stop_scan_cleanup(
-                    kbdb, scan_id, kbdb.get_scan_process_id()
-                ):
-                    return
-                if not self.drain_openvas_results(kbdb, scan_id):
-                    logger.error(
-                        '%s: Retaining Redis database because stopped-scan '
-                        'results could not be acknowledged.',
+                try:
+                    if not self.stop_scan_cleanup(
+                        kbdb, scan_id, str(openvas_process.pid)
+                    ):
+                        return
+                    if not self.drain_openvas_results(kbdb, scan_id):
+                        logger.error(
+                            '%s: Retaining Redis database because '
+                            'stopped-scan results could not be acknowledged.',
+                            scan_id,
+                        )
+                        return
+                    self.main_db.release_database(kbdb)
+                except redis.RedisError:
+                    self.recover_unreadable_result_queue(
                         scan_id,
+                        openvas_process.pid,
+                        process_already_exited=(
+                            not self.is_openvas_process_alive(openvas_process)
+                        ),
                     )
                     return
-                self.main_db.release_database(kbdb)
                 return
 
             # Scan end. No kb in use for this scan id
             if target_is_finished:
                 if got_results:
                     continue
-                if kbdb.has_pending_results():
+                try:
+                    has_pending_results = kbdb.has_pending_results()
+                except redis.RedisError:
+                    self.recover_unreadable_result_queue(
+                        scan_id,
+                        openvas_process.pid,
+                        process_already_exited=(
+                            not self.is_openvas_process_alive(openvas_process)
+                        ),
+                    )
+                    return
+                if has_pending_results:
                     time.sleep(1)
                     continue
                 logger.debug('%s: Target is finished', scan_id)
@@ -1675,9 +1997,16 @@ class OSPDopenvas(OSPDaemon):
                 )
 
                 # check for scanner error messages before leaving.
-                self.report_openvas_results(kbdb, scan_id)
-
-                kbdb.stop_scan(scan_id)
+                try:
+                    self.report_openvas_results(kbdb, scan_id)
+                    kbdb.stop_scan(scan_id)
+                except redis.RedisError:
+                    self.recover_unreadable_result_queue(
+                        scan_id,
+                        openvas_process.pid,
+                        process_already_exited=True,
+                    )
+                    return
                 logger.error(
                     '%s: Retaining Redis databases after an unexpected scanner '
                     'exit because descendant cleanup is unconfirmed.',
@@ -1698,7 +2027,16 @@ class OSPDopenvas(OSPDaemon):
         time.sleep(1)
         # Delete keys from KB related to this scan task.
         logger.debug('%s: End Target. Release main database', scan_id)
-        self.main_db.release_database(kbdb)
+        try:
+            self.main_db.release_database(kbdb)
+        except redis.RedisError:
+            self.recover_unreadable_result_queue(
+                scan_id,
+                openvas_process.pid,
+                process_already_exited=(
+                    not self.is_openvas_process_alive(openvas_process)
+                ),
+            )
 
 
 def main():

@@ -63,6 +63,16 @@ class ProcessControlTestCase(TestCase):
         self.assertTrue(stopped)
 
     @patch('ospd_openvas.daemon.Openvas.stop_scan_as_root')
+    def test_unreadable_queue_uses_pinned_pid_for_sudo_stop(self, mock_stop):
+        daemon = PrivilegedProcessDaemon()
+        mock_stop.return_value = True
+
+        stopped = daemon.stop_scan_process_without_kb('scan-1', 42)
+
+        mock_stop.assert_called_once_with('scan-1', 42)
+        self.assertTrue(stopped)
+
+    @patch('ospd_openvas.daemon.Openvas.stop_scan_as_root')
     def test_cleanup_retains_redis_when_privileged_stop_fails(self, mock_stop):
         daemon = PrivilegedProcessDaemon()
         kbdb = MagicMock()

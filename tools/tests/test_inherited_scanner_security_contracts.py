@@ -108,6 +108,41 @@ class InheritedScannerSecurityContractTests(unittest.TestCase):
         self.assertIn("result.get('version') != 1", ospd)
         self.assertIn("record.version == 1", rust)
 
+    def test_scanner_result_queue_has_atomic_producer_admission(self):
+        kb_source = (
+            ROOT / "components/gvm-libs/util/kb.c"
+        ).read_text(encoding="utf-8")
+        ospd_source = (
+            ROOT / "components/ospd-openvas/ospd_openvas/daemon.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("SCANNER_RESULT_ADMISSION_SCRIPT", kb_source)
+        self.assertIn("SCANNER_RESULT_MAX_ITEM_BYTES", kb_source)
+        self.assertIn("SCANNER_RESULT_MAX_PENDING_ITEMS", kb_source)
+        self.assertIn("SCANNER_RESULT_MAX_PENDING_BYTES", kb_source)
+        self.assertIn("SCANNER_RESULT_PENDING_COUNT_KEY", kb_source)
+        self.assertIn("SCANNER_RESULT_PENDING_BYTES_KEY", kb_source)
+        self.assertIn("SCANNER_RESULT_ADMISSION_IDS_KEY", kb_source)
+        self.assertIn("SCANNER_RESULT_SIZES_KEY", kb_source)
+        self.assertIn("gvm_uuid_make ()", kb_source)
+        self.assertIn("redis.call('LPOS', KEYS[6], ARGV[1])", kb_source)
+        self.assertIn("redis.call('LPUSH', KEYS[1], ARGV[2])", kb_source)
+        self.assertIn("retry_warning_logged", kb_source)
+        self.assertIn(
+            "The idempotent admission ID makes retries safe", kb_source
+        )
+        self.assertIn("g_usleep (G_USEC_PER_SEC)", kb_source)
+        self.assertIn("strcmp (name, SCANNER_RESULT_KEY) == 0", kb_source)
+        self.assertIn("handle_result_admission_failure", ospd_source)
+        self.assertIn("stop_scan_cleanup", ospd_source)
+
+        scanner_control = (
+            ROOT / "components/openvas-scanner/src/openvas.c"
+        ).read_text(encoding="utf-8")
+        self.assertIn('"scan-stop-pid"', scanner_control)
+        self.assertIn("stop_scan_process_by_pid", scanner_control)
+        self.assertIn("process_matches_scan (pid, scan_id)", scanner_control)
+
     def test_http2_requests_pin_the_authorized_scan_target(self):
         source = (
             ROOT / "components/openvas-scanner/nasl/nasl_http2.c"

@@ -25,6 +25,59 @@ from tests.helper import assert_called
 
 @patch('ospd_openvas.db.redis.Redis')
 class TestOpenvasDB(TestCase):
+    @patch.object(OpenvasDB, 'create_context')
+    def test_validate_result_admission_backend(
+        self, mock_create_context: MagicMock, mock_redis: MagicMock
+    ):
+        ctx = mock_create_context.return_value
+        ctx.info.return_value = {'redis_version': '7.2.4'}
+        ctx.config_get.return_value = {'maxmemory': '0'}
+        ctx.execute_command.side_effect = [
+            'default',
+            *['OK'] * len(OpenvasDB.RESULT_ADMISSION_REDIS_COMMANDS),
+        ]
+
+        OpenvasDB.validate_result_admission_backend()
+
+        ctx.info.assert_called_once_with('server')
+        ctx.config_get.assert_called_once_with('maxmemory')
+        self.assertEqual(
+            ctx.execute_command.call_count,
+            len(OpenvasDB.RESULT_ADMISSION_REDIS_COMMANDS) + 1,
+        )
+
+    @patch.object(OpenvasDB, 'create_context')
+    def test_validate_result_admission_backend_rejects_bounded_redis(
+        self, mock_create_context: MagicMock, mock_redis: MagicMock
+    ):
+        ctx = mock_create_context.return_value
+        ctx.info.return_value = {'redis_version': '7.2.4'}
+        ctx.config_get.return_value = {'maxmemory': '1048576'}
+        ctx.execute_command.side_effect = [
+            'default',
+            *['OK'] * len(OpenvasDB.RESULT_ADMISSION_REDIS_COMMANDS),
+        ]
+
+        with self.assertRaisesRegex(OspdOpenvasError, 'maxmemory=0'):
+            OpenvasDB.validate_result_admission_backend()
+
+    @patch.object(OpenvasDB, 'create_context')
+    def test_validate_result_admission_backend_rejects_denied_command(
+        self, mock_create_context: MagicMock, mock_redis: MagicMock
+    ):
+        ctx = mock_create_context.return_value
+        ctx.info.return_value = {'redis_version': '7.2.4'}
+        ctx.config_get.return_value = {'maxmemory': '0'}
+        ctx.execute_command.side_effect = [
+            'scanner',
+            'OK',
+            "This user has no permissions to run the 'get' command",
+            *['OK'] * (len(OpenvasDB.RESULT_ADMISSION_REDIS_COMMANDS) - 2),
+        ]
+
+        with self.assertRaisesRegex(OspdOpenvasError, 'command set'):
+            OpenvasDB.validate_result_admission_backend()
+
     @patch('ospd_openvas.db.Openvas')
     def test_get_db_connection(
         self, mock_openvas: MagicMock, mock_redis: MagicMock
@@ -254,6 +307,13 @@ class TestOpenvasDB(TestCase):
             'results',
             'claim',
             'claim-id',
+            'pending-count',
+            'pending-bytes',
+            'admission-failure',
+            'admission-ids',
+            'claim-admission-ids',
+            'result-sizes',
+            'claim-result-sizes',
             max_items=2,
             max_bytes=1024,
             max_item_bytes=512,
@@ -264,10 +324,17 @@ class TestOpenvasDB(TestCase):
         self.assertEqual(
             ctx.eval.call_args.args[1:],
             (
-                3,
+                10,
                 'results',
                 'claim',
                 'claim-id',
+                'pending-count',
+                'pending-bytes',
+                'admission-failure',
+                'admission-ids',
+                'claim-admission-ids',
+                'result-sizes',
+                'claim-result-sizes',
                 2,
                 1024,
                 512,
@@ -284,6 +351,13 @@ class TestOpenvasDB(TestCase):
             'results',
             'claim',
             'claim-id',
+            'pending-count',
+            'pending-bytes',
+            'admission-failure',
+            'admission-ids',
+            'claim-admission-ids',
+            'result-sizes',
+            'claim-result-sizes',
             max_items=2,
             max_bytes=1024,
             max_item_bytes=512,
@@ -305,6 +379,13 @@ class TestOpenvasDB(TestCase):
             'results',
             'claim',
             'claim-id',
+            'pending-count',
+            'pending-bytes',
+            'admission-failure',
+            'admission-ids',
+            'claim-admission-ids',
+            'result-sizes',
+            'claim-result-sizes',
             max_items=10,
             max_bytes=1024,
             max_item_bytes=512,
@@ -318,10 +399,30 @@ class TestOpenvasDB(TestCase):
         ctx.eval.side_effect = [0, 2]
 
         self.assertFalse(
-            OpenvasDB.ack_list_claim(ctx, 'claim', 'claim-id', 'wrong')
+            OpenvasDB.ack_list_claim(
+                ctx,
+                'claim',
+                'claim-id',
+                'pending-count',
+                'pending-bytes',
+                'admission-failure',
+                'claim-admission-ids',
+                'claim-result-sizes',
+                'wrong',
+            )
         )
         self.assertTrue(
-            OpenvasDB.ack_list_claim(ctx, 'claim', 'claim-id', 'claim-1')
+            OpenvasDB.ack_list_claim(
+                ctx,
+                'claim',
+                'claim-id',
+                'pending-count',
+                'pending-bytes',
+                'admission-failure',
+                'claim-admission-ids',
+                'claim-result-sizes',
+                'claim-1',
+            )
         )
         self.assertEqual(ctx.eval.call_count, 2)
 
@@ -478,6 +579,13 @@ class ScanDBTestCase(TestCase):
             'internal/results',
             'internal/results.ospd-claim',
             'internal/results.ospd-claim-id',
+            'internal/results.pending-count',
+            'internal/results.pending-bytes',
+            'internal/results.admission-failure',
+            'internal/results.admission-ids',
+            'internal/results.ospd-claim-admission-ids',
+            'internal/results.sizes',
+            'internal/results.ospd-claim-sizes',
             max_items=10,
             max_bytes=1024,
             max_item_bytes=512,
@@ -491,6 +599,28 @@ class ScanDBTestCase(TestCase):
         self.assertEqual(ret, 'some status')
         mock_openvas_db.get_single_item.assert_called_with(
             self.ctx, 'internal/foo'
+        )
+
+    def test_get_result_admission_failure(self, mock_openvas_db):
+        mock_openvas_db.get_result_queue_failure.return_value = (
+            'pending-capacity'
+        )
+
+        ret = self.db.get_result_admission_failure()
+
+        self.assertEqual(ret, 'pending-capacity')
+        mock_openvas_db.get_result_queue_failure.assert_called_with(
+            self.ctx,
+            'internal/results',
+            'internal/results.ospd-claim',
+            'internal/results.ospd-claim-id',
+            'internal/results.pending-count',
+            'internal/results.pending-bytes',
+            'internal/results.admission-failure',
+            'internal/results.admission-ids',
+            'internal/results.ospd-claim-admission-ids',
+            'internal/results.sizes',
+            'internal/results.ospd-claim-sizes',
         )
 
     def test_select(self, mock_openvas_db):
@@ -530,6 +660,13 @@ class KbDBTestCase(TestCase):
             'internal/results',
             'internal/results.ospd-claim',
             'internal/results.ospd-claim-id',
+            'internal/results.pending-count',
+            'internal/results.pending-bytes',
+            'internal/results.admission-failure',
+            'internal/results.admission-ids',
+            'internal/results.ospd-claim-admission-ids',
+            'internal/results.sizes',
+            'internal/results.ospd-claim-sizes',
             max_items=10,
             max_bytes=1024,
             max_item_bytes=512,
@@ -543,6 +680,26 @@ class KbDBTestCase(TestCase):
         self.assertEqual(ret, 'some status')
         mock_openvas_db.get_single_item.assert_called_with(
             self.ctx, 'internal/foo'
+        )
+
+    def test_get_result_admission_failure(self, mock_openvas_db):
+        mock_openvas_db.get_result_queue_failure.return_value = 'row-too-large'
+
+        ret = self.db.get_result_admission_failure()
+
+        self.assertEqual(ret, 'row-too-large')
+        mock_openvas_db.get_result_queue_failure.assert_called_with(
+            self.ctx,
+            'internal/results',
+            'internal/results.ospd-claim',
+            'internal/results.ospd-claim-id',
+            'internal/results.pending-count',
+            'internal/results.pending-bytes',
+            'internal/results.admission-failure',
+            'internal/results.admission-ids',
+            'internal/results.ospd-claim-admission-ids',
+            'internal/results.sizes',
+            'internal/results.ospd-claim-sizes',
         )
 
     def test_get_scan_status(self, mock_openvas_db):

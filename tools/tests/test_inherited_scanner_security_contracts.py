@@ -108,6 +108,20 @@ class InheritedScannerSecurityContractTests(unittest.TestCase):
         self.assertIn("result.get('version') != 1", ospd)
         self.assertIn("record.version == 1", rust)
 
+    def test_http2_requests_pin_the_authorized_scan_target(self):
+        source = (
+            ROOT / "components/openvas-scanner/nasl/nasl_http2.c"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("plug_get_host_ip (script_infos)", source)
+        self.assertIn("CURLOPT_CONNECT_TO", source)
+        self.assertIn('CURLOPT_PROXY, ""', source)
+        self.assertIn('CURLOPT_NOPROXY, "*"', source)
+        self.assertIn("CURLOPT_FOLLOWLOCATION, 0L", source)
+        self.assertIn("configure_scoped_http2_transport", source)
+        self.assertIn("http2_item_is_safe_path", source)
+        self.assertIn("normalize_http2_hostname", source)
+
 
 if __name__ == "__main__":
     unittest.main()

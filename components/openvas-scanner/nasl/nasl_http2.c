@@ -18,13 +18,15 @@
 #include "nasl_tree.h"
 #include "nasl_var.h"
 
+#include <arpa/inet.h>
 #include <ctype.h> /* for isspace */
 #include <curl/curl.h>
 #include <gnutls/gnutls.h>
-#include <gvm/base/prefs.h> /* for prefs_get */
-#include <gvm/util/kb.h>    /* for kb_item_get_str */
-#include <stdint.h>         /* for SIZE_MAX */
-#include <string.h>         /* for strlen */
+#include <gvm/base/networking.h> /* for addr6_to_str */
+#include <gvm/base/prefs.h>      /* for prefs_get */
+#include <gvm/util/kb.h>         /* for kb_item_get_str */
+#include <stdint.h>              /* for SIZE_MAX */
+#include <string.h>              /* for strlen */
 
 #undef G_LOG_DOMAIN
 /**
@@ -57,6 +59,190 @@ struct handle_table_s
 
 #define MAX_HANDLES 10
 #define HTTP2_RESPONSE_MAX_SIZE (16U * 1024U * 1024U)
+
+struct scoped_http2_target
+{
+  GString *url;
+  struct curl_slist *connect_to;
+};
+
+static void
+scoped_http2_target_clear (struct scoped_http2_target *target)
+{
+  if (!target)
+    return;
+
+  if (target->url)
+    g_string_free (target->url, TRUE);
+  curl_slist_free_all (target->connect_to);
+  target->url = NULL;
+  target->connect_to = NULL;
+}
+
+static char *
+normalize_http2_hostname (const char *hostname, gboolean *is_ipv6)
+{
+  const unsigned char *cursor;
+  char *normalized;
+  size_t length;
+  struct in6_addr ipv6;
+
+  if (!hostname || !*hostname || !is_ipv6)
+    return NULL;
+
+  *is_ipv6 = FALSE;
+  length = strlen (hostname);
+  if (hostname[0] == '[')
+    {
+      if (length < 3 || hostname[length - 1] != ']')
+        return NULL;
+      normalized = g_strndup (hostname + 1, length - 2);
+      if (inet_pton (AF_INET6, normalized, &ipv6) != 1)
+        {
+          g_free (normalized);
+          return NULL;
+        }
+      *is_ipv6 = TRUE;
+      return normalized;
+    }
+
+  if (strchr (hostname, ':'))
+    {
+      if (inet_pton (AF_INET6, hostname, &ipv6) != 1)
+        return NULL;
+      *is_ipv6 = TRUE;
+      return g_strdup (hostname);
+    }
+
+  if (length > 253)
+    return NULL;
+  for (cursor = (const unsigned char *) hostname; *cursor; cursor++)
+    if (!g_ascii_isalnum (*cursor) && *cursor != '.' && *cursor != '-'
+        && *cursor != '_')
+      return NULL;
+
+  return g_strdup (hostname);
+}
+
+static gboolean
+http2_item_is_safe_path (const char *item)
+{
+  const unsigned char *cursor;
+
+  if (!item || item[0] != '/')
+    return FALSE;
+  for (cursor = (const unsigned char *) item; *cursor; cursor++)
+    if (*cursor < 0x20 || *cursor == 0x7f || *cursor == '\\')
+      return FALSE;
+  return TRUE;
+}
+
+/**
+ * @brief Build a URL whose authority is kept for Host/SNI while libcurl's
+ *        network connection is pinned to the authorized scan target.
+ */
+static gboolean
+build_scoped_http2_target (const char *schema, const char *hostname,
+                           const char *target_ip, int port, const char *item,
+                           struct scoped_http2_target *target)
+{
+  const char *normalized_schema;
+  char *connect_entry = NULL;
+  char *curl_hostname = NULL;
+  char *curl_target = NULL;
+  char *normalized_hostname = NULL;
+  gboolean hostname_is_ipv6;
+  gboolean target_is_ipv6 = FALSE;
+  struct in_addr ipv4;
+  struct in6_addr ipv6;
+
+  if (!target || target->url || target->connect_to || !target_ip || port <= 0
+      || port > 65535 || !http2_item_is_safe_path (item))
+    return FALSE;
+
+  if (!schema || g_ascii_strcasecmp (schema, "https") == 0)
+    normalized_schema = "https";
+  else if (g_ascii_strcasecmp (schema, "http") == 0)
+    normalized_schema = "http";
+  else
+    return FALSE;
+
+  normalized_hostname = normalize_http2_hostname (hostname, &hostname_is_ipv6);
+  if (!normalized_hostname)
+    return FALSE;
+
+  if (inet_pton (AF_INET, target_ip, &ipv4) != 1)
+    {
+      if (inet_pton (AF_INET6, target_ip, &ipv6) != 1)
+        goto fail;
+      target_is_ipv6 = TRUE;
+    }
+
+  curl_hostname = hostname_is_ipv6
+                    ? g_strdup_printf ("[%s]", normalized_hostname)
+                    : g_strdup (normalized_hostname);
+  curl_target =
+    target_is_ipv6 ? g_strdup_printf ("[%s]", target_ip) : g_strdup (target_ip);
+
+  target->url = g_string_new (normalized_schema);
+  g_string_append_printf (target->url, "://%s", curl_hostname);
+  if (!((g_str_equal (normalized_schema, "http") && port == 80)
+        || (g_str_equal (normalized_schema, "https") && port == 443)))
+    g_string_append_printf (target->url, ":%d", port);
+  g_string_append (target->url, item);
+
+  connect_entry =
+    g_strdup_printf ("%s:%d:%s:%d", curl_hostname, port, curl_target, port);
+  target->connect_to = curl_slist_append (NULL, connect_entry);
+  if (!target->connect_to)
+    goto fail;
+
+  g_free (connect_entry);
+  g_free (curl_target);
+  g_free (curl_hostname);
+  g_free (normalized_hostname);
+  return TRUE;
+
+fail:
+  g_free (connect_entry);
+  g_free (curl_target);
+  g_free (curl_hostname);
+  g_free (normalized_hostname);
+  scoped_http2_target_clear (target);
+  return FALSE;
+}
+
+static CURLcode
+configure_scoped_http2_transport (CURL *handle,
+                                  const struct scoped_http2_target *target)
+{
+  CURLcode result;
+
+  if (!handle || !target || !target->url || !target->connect_to)
+    return CURLE_BAD_FUNCTION_ARGUMENT;
+
+#define SET_SCOPED_OPTION(option, value)                 \
+  do                                                     \
+    {                                                    \
+      result = curl_easy_setopt (handle, option, value); \
+      if (result != CURLE_OK)                            \
+        return result;                                   \
+    }                                                    \
+  while (0)
+
+  SET_SCOPED_OPTION (CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
+  SET_SCOPED_OPTION (CURLOPT_URL, target->url->str);
+  SET_SCOPED_OPTION (CURLOPT_CONNECT_TO, target->connect_to);
+  SET_SCOPED_OPTION (CURLOPT_PROXY, "");
+  SET_SCOPED_OPTION (CURLOPT_NOPROXY, "*");
+  SET_SCOPED_OPTION (CURLOPT_FOLLOWLOCATION, 0L);
+  SET_SCOPED_OPTION (CURLOPT_MAXREDIRS, 0L);
+  SET_SCOPED_OPTION (CURLOPT_PROTOCOLS_STR, "http,https");
+
+#undef SET_SCOPED_OPTION
+
+  return CURLE_OK;
+}
 
 /** @brief Handle Table
  **/
@@ -364,9 +550,11 @@ _http2_req (lex_ctxt *lexic, KEYWORD keyword)
   int port = get_int_var_by_name (lexic, "port", -1);
   char *schema = get_str_var_by_name (lexic, "schema");
   struct script_infos *script_infos = lexic->script_infos;
+  struct in6_addr *scan_target;
   char *hostname = NULL;
+  char target_ip[INET6_ADDRSTRLEN] = {0};
   char *ua = NULL;
-  GString *url = NULL;
+  struct scoped_http2_target target = {0};
   int handle_id = get_int_var_by_name (lexic, "handle", -1);
   struct handle_table_s *entry;
   struct response_budget budget = {1, HTTP2_RESPONSE_MAX_SIZE};
@@ -411,40 +599,33 @@ _http2_req (lex_ctxt *lexic, KEYWORD keyword)
       return NULL;
     }
 
+  curl_easy_reset (entry->handle);
+  entry->http_code = 0;
+
   // Fork here for every vhost
   hostname = plug_get_host_fqdn (script_infos);
   if (hostname == NULL)
     return NULL;
 
-  curl_easy_reset (entry->handle);
-  entry->http_code = 0;
-
-  // force http2
-  SET_HTTP2_OPTION (CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_2_0);
-
-  // Build URL
-  url = schema ? g_string_new (schema) : g_string_new ("https");
-  g_string_append (url, "://");
-  g_string_append (url, hostname);
-
-  /* Servers should not have a problem with port 80 or 443 appended.
-   * RFC2616 allows to omit the port in which case the default port for
-   * that service is assumed.
-   * However, some servers like IIS/OWA wrongly respond with a "404"
-   * instead of a "200" in case the port is appended. Because of this,
-   * ports 80 and 443 are not appended.
-   */
-  if (port != 80 && port != 443)
+  scan_target = plug_get_host_ip (script_infos);
+  if (!scan_target)
+    goto cleanup;
+  addr6_to_str (scan_target, target_ip);
+  if (!build_scoped_http2_target (schema, hostname, target_ip, port, item,
+                                  &target))
     {
-      char buf[12];
-      snprintf (buf, sizeof (buf), ":%d", port);
-      g_string_append (url, buf);
+      nasl_perror (lexic, "http2_req: unsafe or invalid destination\n");
+      goto cleanup;
     }
-  g_string_append (url, item);
 
-  g_message ("%s: URL: %s", __func__, url->str);
-  // Set URL
-  SET_HTTP2_OPTION (CURLOPT_URL, url->str);
+  g_message ("%s: URL: %s", __func__, target.url->str);
+  curl_ret = configure_scoped_http2_transport (entry->handle, &target);
+  if (curl_ret != CURLE_OK)
+    {
+      g_warning ("%s: Failed to configure scoped HTTP transport: %s", __func__,
+                 curl_easy_strerror (curl_ret));
+      goto cleanup;
+    }
 
   // Accept an insecure connection. Don't verify the server certificate
   SET_HTTP2_OPTION (CURLOPT_SSL_VERIFYPEER, 0L);
@@ -548,8 +729,7 @@ cleanup:
   g_free (response.ptr);
   g_free (header_data.ptr);
   g_free (ua);
-  if (url)
-    g_string_free (url, TRUE);
+  scoped_http2_target_clear (&target);
   g_free (hostname);
   return retc;
 

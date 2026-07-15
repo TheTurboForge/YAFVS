@@ -44,6 +44,7 @@ from ospd_openvas.nvticache import NVTICache
 from ospd_openvas.db import (
     BaseDB,
     KbDB,
+    LEGACY_OWNER_TOKEN,
     MainDB,
     OpenvasDB,
     ResultClaimAck,
@@ -904,12 +905,13 @@ class OSPDopenvas(OSPDaemon):
             raise OspdOpenvasError(
                 'Scanner result spool integrity check failed.'
             )
+        self.main_db.migrate_verified_legacy_reservations()
         recovery_sources = {
             (database.index, scan_id): database
             for scan_id, database in self.main_db.reserved_parent_databases()
         }
         for claim in self.result_spool.recovery_records():
-            if claim.owner_token is None:
+            if claim.owner_token in (None, LEGACY_OWNER_TOKEN):
                 source = recovery_sources.get((claim.redis_db, claim.scan_id))
                 if source is None:
                     raise OspdOpenvasError(

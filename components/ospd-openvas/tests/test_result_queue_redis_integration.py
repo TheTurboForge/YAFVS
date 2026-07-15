@@ -12,6 +12,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest import TestCase, skipUnless
+from unittest.mock import patch
 
 import redis
 
@@ -119,11 +120,11 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
 
     def setUp(self):
         self.ctx = redis.Redis.from_url(self.redis_url, decode_responses=True)
-        for index in range(3):
+        for index in range(16):
             self.redis_db(index).flushdb()
 
     def tearDown(self):
-        for index in range(3):
+        for index in range(16):
             self.redis_db(index).flushdb()
 
     def redis_db(self, index: int):
@@ -131,6 +132,13 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
             unix_socket_path=str(self.socket_path),
             db=index,
             decode_responses=True,
+        )
+
+    def redis_db_raw(self, index: int):
+        return redis.Redis(
+            unix_socket_path=str(self.socket_path),
+            db=index,
+            decode_responses=False,
         )
 
     def admit(
@@ -204,6 +212,292 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
             parent.lset('internal/turbovas.owner-token', 0, str(uuid.uuid4()))
             with self.assertRaises(OspdOpenvasError):
                 list(MainDB(self.ctx).reserved_parent_databases())
+        finally:
+            OpenvasDB._db_address = (  # pylint: disable=protected-access
+                previous_address
+            )
+
+    def test_legacy_migration_preserves_concurrent_reference_change(self):
+        self.ctx.hset(DBINDEX_NAME, mapping={3: '1', 4: '1'})
+        parent = self.redis_db(3)
+        child = self.redis_db(4)
+        parent.rpush('internal/scanid', 'scan-recovery')
+        parent.rpush('internal/dbindex', '4')
+        child.rpush('internal/scan_id', 'scan-recovery')
+        previous_address = (
+            OpenvasDB._db_address
+        )  # pylint: disable=protected-access
+        OpenvasDB._db_address = (
+            self.redis_url
+        )  # pylint: disable=protected-access
+        main = MainDB(self.ctx)
+        original_plan = main._legacy_reservation_migration_plan
+        plan_calls = 0
+
+        def race_after_planning(reservations):
+            nonlocal plan_calls
+            plan = original_plan(reservations)
+            plan_calls += 1
+            if plan_calls == 1:
+                parent.rpush('internal/dbindex', '4')
+            return plan
+
+        try:
+            with patch.object(
+                main,
+                '_legacy_reservation_migration_plan',
+                side_effect=race_after_planning,
+            ):
+                with self.assertRaisesRegex(
+                    OspdOpenvasError, 'duplicate legacy children'
+                ):
+                    main.migrate_verified_legacy_reservations()
+
+            self.assertEqual(self.ctx.hgetall(DBINDEX_NAME), {'3': '1', '4': '1'})
+            self.assertEqual(
+                parent.lrange('internal/dbindex', 0, -1), ['4', '4']
+            )
+            for index in (3, 4):
+                self.assertEqual(
+                    self.redis_db(index).type(
+                        'internal/turbovas.owner-token'
+                    ),
+                    'none',
+                )
+                self.assertEqual(
+                    self.redis_db(index).type('internal/turbovas.db-kind'),
+                    'none',
+                )
+        finally:
+            OpenvasDB._db_address = (  # pylint: disable=protected-access
+                previous_address
+            )
+
+    def test_legacy_reservation_graph_migrates_atomically_and_idempotently(
+        self,
+    ):
+        first_scan = 'scan-recovery-one'
+        second_scan = 'scan-recovery-two'
+        self.ctx.hset(
+            DBINDEX_NAME,
+            mapping={index: '1' for index in range(1, 16)},
+        )
+        self.redis_db(1).rpush('notuscache', 'notus-cache-evidence')
+        self.redis_db(1).rpush('internal/notus/advisories/oid', 'advisory')
+        self.redis_db(2).rpush('nvticache', 'nvt-cache-evidence')
+        self.redis_db(2).rpush('nvt:oid', 'metadata')
+        self.redis_db(3).rpush('internal/scanid', first_scan)
+        self.redis_db(3).rpush(
+            'internal/dbindex', *[str(index) for index in range(4, 13)]
+        )
+        for index in range(4, 13):
+            self.redis_db(index).rpush('internal/scan_id', first_scan)
+            self.redis_db(index).set('retained-evidence', f'child-{index}')
+        self.redis_db(13).rpush('internal/scanid', second_scan)
+        self.redis_db(13).rpush('internal/dbindex', '14', '15')
+        for index in (14, 15):
+            self.redis_db(index).rpush('internal/scan_id', second_scan)
+            self.redis_db(index).set('retained-evidence', f'child-{index}')
+        cache_dumps = {
+            index: {
+                key: self.redis_db_raw(index).dump(key)
+                for key in self.redis_db_raw(index).scan_iter()
+            }
+            for index in (1, 2)
+        }
+        previous_address = (
+            OpenvasDB._db_address
+        )  # pylint: disable=protected-access
+        OpenvasDB._db_address = (
+            self.redis_url
+        )  # pylint: disable=protected-access
+        try:
+            main = MainDB(self.ctx)
+            self.assertEqual(main.migrate_verified_legacy_reservations(), 13)
+
+            reservations = self.ctx.hgetall(DBINDEX_NAME)
+            self.assertEqual(reservations['1'], '1')
+            self.assertEqual(reservations['2'], '1')
+            migrated_tokens = {
+                index: reservations[str(index)] for index in range(3, 16)
+            }
+            self.assertEqual(len(set(migrated_tokens.values())), 13)
+            for token in migrated_tokens.values():
+                self.assertEqual(str(uuid.UUID(token)), token)
+            for index in (3, 13):
+                self.assertEqual(
+                    self.redis_db(index).lindex(
+                        'internal/turbovas.owner-token', 0
+                    ),
+                    migrated_tokens[index],
+                )
+                self.assertEqual(
+                    self.redis_db(index).lindex(
+                        'internal/turbovas.db-kind', 0
+                    ),
+                    'parent',
+                )
+            expected_first_refs = [
+                f'{index}:{migrated_tokens[index]}'
+                for index in range(4, 13)
+            ]
+            self.assertEqual(
+                self.redis_db(3).lrange('internal/dbindex', 0, -1),
+                expected_first_refs,
+            )
+            self.assertEqual(
+                self.redis_db(13).lrange('internal/dbindex', 0, -1),
+                [
+                    f'14:{migrated_tokens[14]}',
+                    f'15:{migrated_tokens[15]}',
+                ],
+            )
+            for index in list(range(4, 13)) + [14, 15]:
+                self.assertEqual(
+                    self.redis_db(index).lindex(
+                        'internal/turbovas.owner-token', 0
+                    ),
+                    migrated_tokens[index],
+                )
+                self.assertEqual(
+                    self.redis_db(index).lindex(
+                        'internal/turbovas.db-kind', 0
+                    ),
+                    'child',
+                )
+                self.assertEqual(
+                    self.redis_db(index).get('retained-evidence'),
+                    f'child-{index}',
+                )
+            self.assertEqual(
+                {
+                    index: {
+                        key: self.redis_db_raw(index).dump(key)
+                        for key in self.redis_db_raw(index).scan_iter()
+                    }
+                    for index in (1, 2)
+                },
+                cache_dumps,
+            )
+            self.assertEqual(main.migrate_verified_legacy_reservations(), 0)
+            self.assertEqual(self.ctx.hgetall(DBINDEX_NAME), reservations)
+            self.assertFalse(main.release_database_by_index(3, '1'))
+            self.assertEqual(
+                self.redis_db(3).lindex('internal/scanid', 0), first_scan
+            )
+            discovered = list(main.reserved_parent_databases())
+            self.assertEqual(
+                [(scan_id, database.index) for scan_id, database in discovered],
+                [(first_scan, 3), (second_scan, 13)],
+            )
+        finally:
+            OpenvasDB._db_address = (  # pylint: disable=protected-access
+                previous_address
+            )
+
+    def test_legacy_reservation_migration_rejects_invalid_graphs(self):
+        previous_address = (
+            OpenvasDB._db_address
+        )  # pylint: disable=protected-access
+        OpenvasDB._db_address = (
+            self.redis_url
+        )  # pylint: disable=protected-access
+        invalid_graphs = (
+            (
+                'orphan child',
+                lambda: (
+                    self.ctx.hset(DBINDEX_NAME, 3, '1'),
+                    self.redis_db(3).rpush(
+                        'internal/scan_id', 'scan-recovery'
+                    ),
+                ),
+            ),
+            (
+                'duplicate child',
+                lambda: (
+                    self.ctx.hset(DBINDEX_NAME, mapping={3: '1', 4: '1'}),
+                    self.redis_db(3).rpush(
+                        'internal/scanid', 'scan-recovery'
+                    ),
+                    self.redis_db(3).rpush('internal/dbindex', '4', '4'),
+                    self.redis_db(4).rpush(
+                        'internal/scan_id', 'scan-recovery'
+                    ),
+                ),
+            ),
+            (
+                'mismatched child',
+                lambda: (
+                    self.ctx.hset(DBINDEX_NAME, mapping={3: '1', 4: '1'}),
+                    self.redis_db(3).rpush(
+                        'internal/scanid', 'scan-recovery'
+                    ),
+                    self.redis_db(3).rpush('internal/dbindex', '4'),
+                    self.redis_db(4).rpush('internal/scan_id', 'other-scan'),
+                ),
+            ),
+            (
+                'cache conflict',
+                lambda: (
+                    self.ctx.hset(DBINDEX_NAME, 1, '1'),
+                    self.redis_db(1).rpush('notuscache', 'cache'),
+                    self.redis_db(1).rpush(
+                        'internal/scanid', 'scan-recovery'
+                    ),
+                ),
+            ),
+            (
+                'mixed metadata',
+                lambda: (
+                    self.ctx.hset(DBINDEX_NAME, 3, '1'),
+                    self.redis_db(3).rpush(
+                        'internal/scanid', 'scan-recovery'
+                    ),
+                    self.redis_db(3).rpush(
+                        'internal/turbovas.owner-token', '1'
+                    ),
+                ),
+            ),
+            (
+                'malformed references',
+                lambda: (
+                    self.ctx.hset(DBINDEX_NAME, 3, '1'),
+                    self.redis_db(3).rpush(
+                        'internal/scanid', 'scan-recovery'
+                    ),
+                    self.redis_db(3).set('internal/dbindex', 'not-a-list'),
+                ),
+            ),
+        )
+        try:
+            for label, configure in invalid_graphs:
+                with self.subTest(label=label):
+                    for index in range(16):
+                        self.redis_db(index).flushdb()
+                    configure()
+                    reservations = self.ctx.hgetall(DBINDEX_NAME)
+                    database_dumps = {
+                        index: {
+                            key: self.redis_db_raw(index).dump(key)
+                            for key in self.redis_db_raw(index).scan_iter()
+                        }
+                        for index in range(1, 16)
+                    }
+                    with self.assertRaises(OspdOpenvasError):
+                        MainDB(self.ctx).migrate_verified_legacy_reservations()
+                    self.assertEqual(
+                        self.ctx.hgetall(DBINDEX_NAME), reservations
+                    )
+                    self.assertEqual(
+                        {
+                            index: {
+                                key: self.redis_db_raw(index).dump(key)
+                                for key in self.redis_db_raw(index).scan_iter()
+                            }
+                            for index in range(1, 16)
+                        },
+                        database_dumps,
+                    )
         finally:
             OpenvasDB._db_address = (  # pylint: disable=protected-access
                 previous_address

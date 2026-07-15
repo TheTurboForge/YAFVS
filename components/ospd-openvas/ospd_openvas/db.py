@@ -419,6 +419,16 @@ NVT_META_FIELDS = [
 DBINDEX_NAME = "GVM.__GlobalDBIndex"
 DATABASE_RELEASE_RETRIES = 8
 MAX_OWNER_TOKEN_LENGTH = 128
+LEGACY_OWNER_TOKEN = '1'
+PERMANENT_CACHE_MARKERS = ('nvticache', 'notuscache')
+LEGACY_MIGRATION_IDENTITY_KEYS = (
+    'internal/turbovas.owner-token',
+    'internal/turbovas.db-kind',
+    'internal/scanid',
+    'internal/scan_id',
+    'internal/dbindex',
+    *PERMANENT_CACHE_MARKERS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1328,6 +1338,29 @@ class KbDB(BaseKbDB):
             self._get_single_item('internal/scanid'),
         )
 
+    def legacy_child_scan_id(self) -> Optional[str]:
+        """Return the scan identity stored by a pre-owner-token child."""
+        return self._get_single_item('internal/scan_id')
+
+    def has_permanent_cache_marker(self) -> bool:
+        """Return whether this namespace is one exact permanent feed cache."""
+        marker_types = {
+            marker: self.ctx.type(marker)
+            for marker in PERMANENT_CACHE_MARKERS
+        }
+        active_markers = [
+            marker
+            for marker, marker_type in marker_types.items()
+            if marker_type != 'none'
+        ]
+        if not active_markers:
+            return False
+        if len(active_markers) != 1 or marker_types[active_markers[0]] != 'list':
+            raise OspdOpenvasError(
+                f'Redis database {self.index} has invalid permanent cache state.'
+            )
+        return True
+
     def add_scan_preferences(self, openvas_scan_id: str, preferences: Iterable):
         self._add_single_item(
             f'internal/{openvas_scan_id}/scanprefs', preferences
@@ -1410,6 +1443,235 @@ class MainDB(BaseDB):
                 ) from None
 
         return self._max_dbindex
+
+    @staticmethod
+    def _validate_recovery_scan_id(scan_id: str) -> str:
+        if (
+            not isinstance(scan_id, str)
+            or not scan_id
+            or len(scan_id) > 128
+            or '\x00' in scan_id
+        ):
+            raise OspdOpenvasError('Invalid Redis recovery scan identity.')
+        return scan_id
+
+    @staticmethod
+    def _strict_optional_list_value(ctx, index: int, key: str) -> Optional[str]:
+        key_type = ctx.type(key)
+        if key_type == 'none':
+            return None
+        if key_type != 'list' or ctx.llen(key) != 1:
+            raise OspdOpenvasError(
+                f'Redis database {index} has invalid {key} identity state.'
+            )
+        return ctx.lindex(key, 0)
+
+    def _reservation_snapshot(self) -> dict:
+        reservations = {}
+        for count, (raw_index, raw_owner_token) in enumerate(
+            self.ctx.hscan_iter(
+                DBINDEX_NAME, count=min(self.max_database_index, 128)
+            ),
+            start=1,
+        ):
+            if count >= self.max_database_index:
+                raise OspdOpenvasError(
+                    'Redis database reservation state is invalid.'
+                )
+            try:
+                index = int(raw_index)
+            except (TypeError, ValueError) as error:
+                raise OspdOpenvasError(
+                    'Redis database reservation index is invalid.'
+                ) from error
+            if index <= 0 or index >= self.max_database_index:
+                raise OspdOpenvasError(
+                    'Redis database reservation index is out of range.'
+                )
+            reservations[index] = self.validate_owner_token(raw_owner_token)
+        return reservations
+
+    def _legacy_reservation_migration_plan(self, reservations: dict) -> dict:
+        parents = {}
+        children = {}
+        caches = set()
+        for index, owner_token in reservations.items():
+            if owner_token != LEGACY_OWNER_TOKEN:
+                continue
+            ctx = OpenvasDB.create_context(index)
+            database = KbDB(index, ctx, owner_token=owner_token)
+            stored_owner = self._strict_optional_list_value(
+                ctx, index, 'internal/turbovas.owner-token'
+            )
+            database_kind = self._strict_optional_list_value(
+                ctx, index, 'internal/turbovas.db-kind'
+            )
+            parent_scan_id = self._strict_optional_list_value(
+                ctx, index, 'internal/scanid'
+            )
+            child_scan_id = self._strict_optional_list_value(
+                ctx, index, 'internal/scan_id'
+            )
+            refs_type = ctx.type('internal/dbindex')
+            if refs_type == 'none':
+                references = []
+            elif refs_type == 'list':
+                references = ctx.lrange('internal/dbindex', 0, -1)
+            else:
+                raise OspdOpenvasError(
+                    f'Redis database {index} has invalid child references.'
+                )
+
+            if database.has_permanent_cache_marker():
+                if any(
+                    (
+                        stored_owner,
+                        database_kind,
+                        parent_scan_id,
+                        child_scan_id,
+                        references,
+                    )
+                ):
+                    raise OspdOpenvasError(
+                        f'Redis database {index} has conflicting cache identity.'
+                    )
+                caches.add(index)
+                continue
+            if stored_owner is not None or database_kind is not None:
+                raise OspdOpenvasError(
+                    f'Redis database {index} mixes legacy and owner metadata.'
+                )
+            if (parent_scan_id is None) == (child_scan_id is None):
+                raise OspdOpenvasError(
+                    f'Redis database {index} has ambiguous legacy identity.'
+                )
+            if parent_scan_id is not None:
+                scan_id = self._validate_recovery_scan_id(parent_scan_id)
+                child_indexes = []
+                for reference in references:
+                    if not isinstance(reference, str) or not reference.isdigit():
+                        raise OspdOpenvasError(
+                            f'Redis database {index} has invalid legacy child '
+                            'reference.'
+                        )
+                    child_index = int(reference)
+                    if (
+                        child_index <= 0
+                        or child_index >= self.max_database_index
+                        or child_index == index
+                    ):
+                        raise OspdOpenvasError(
+                            f'Redis database {index} has invalid legacy child '
+                            'reference.'
+                        )
+                    child_indexes.append(child_index)
+                if len(child_indexes) != len(set(child_indexes)):
+                    raise OspdOpenvasError(
+                        f'Redis database {index} has duplicate legacy children.'
+                    )
+                parents[index] = (scan_id, child_indexes)
+                continue
+            if references:
+                raise OspdOpenvasError(
+                    f'Redis database {index} child has nested references.'
+                )
+            children[index] = self._validate_recovery_scan_id(child_scan_id)
+
+        referenced_children = {}
+        for parent_index, (scan_id, child_indexes) in parents.items():
+            for child_index in child_indexes:
+                if child_index not in children:
+                    raise OspdOpenvasError(
+                        f'Redis database {parent_index} references a non-legacy '
+                        'child.'
+                    )
+                if child_index in referenced_children:
+                    raise OspdOpenvasError(
+                        f'Redis database {child_index} has multiple parents.'
+                    )
+                if children[child_index] != scan_id:
+                    raise OspdOpenvasError(
+                        f'Redis database {child_index} belongs to another scan.'
+                    )
+                referenced_children[child_index] = parent_index
+        orphaned_children = set(children) - set(referenced_children)
+        if orphaned_children:
+            raise OspdOpenvasError(
+                'Legacy Redis child database has no verified parent.'
+            )
+
+        migrated_indexes = set(parents) | set(children)
+        tokens = {
+            index: str(uuid.uuid4()) for index in sorted(migrated_indexes)
+        }
+        return {
+            'caches': caches,
+            'parents': parents,
+            'children': children,
+            'tokens': tokens,
+        }
+
+    def migrate_verified_legacy_reservations(self) -> int:
+        """Atomically convert one fully verified legacy reservation graph."""
+        for _ in range(DATABASE_RELEASE_RETRIES):
+            reservations = self._reservation_snapshot()
+            try:
+                with self.ctx.pipeline() as pipe:
+                    pipe.watch(DBINDEX_NAME)
+                    for index, owner_token in sorted(reservations.items()):
+                        if owner_token != LEGACY_OWNER_TOKEN:
+                            continue
+                        pipe.execute_command('SELECT', index)
+                        pipe.watch(*LEGACY_MIGRATION_IDENTITY_KEYS)
+                    pipe.execute_command('SELECT', self.DEFAULT_INDEX)
+                    if pipe.hlen(DBINDEX_NAME) != len(reservations) or any(
+                        pipe.hget(DBINDEX_NAME, index) != owner_token
+                        for index, owner_token in reservations.items()
+                    ):
+                        pipe.unwatch()
+                        continue
+                    plan = self._legacy_reservation_migration_plan(reservations)
+                    tokens = plan['tokens']
+                    if not tokens:
+                        pipe.unwatch()
+                        return 0
+                    pipe.multi()
+                    for index, (_, child_indexes) in sorted(
+                        plan['parents'].items()
+                    ):
+                        pipe.execute_command('SELECT', index)
+                        pipe.rpush(
+                            'internal/turbovas.owner-token', tokens[index]
+                        )
+                        pipe.rpush('internal/turbovas.db-kind', 'parent')
+                        pipe.delete('internal/dbindex')
+                        if child_indexes:
+                            pipe.rpush(
+                                'internal/dbindex',
+                                *[
+                                    f'{child_index}:{tokens[child_index]}'
+                                    for child_index in child_indexes
+                                ],
+                            )
+                    for index in sorted(plan['children']):
+                        pipe.execute_command('SELECT', index)
+                        pipe.rpush(
+                            'internal/turbovas.owner-token', tokens[index]
+                        )
+                        pipe.rpush('internal/turbovas.db-kind', 'child')
+                    pipe.execute_command('SELECT', self.DEFAULT_INDEX)
+                    pipe.hset(DBINDEX_NAME, mapping=tokens)
+                    pipe.execute()
+                    return len(tokens)
+            except WatchError:
+                continue
+            except redis.RedisError as error:
+                raise OspdOpenvasError(
+                    'Redis legacy owner migration failed.'
+                ) from error
+        raise OspdOpenvasError(
+            'Redis legacy owner migration contention did not settle.'
+        )
 
     def try_database(self, index: int, owner_token: str) -> bool:
         """Check if a redis db is already in use. If not, set it
@@ -1645,9 +1907,25 @@ class MainDB(BaseDB):
                 )
             owner_token = self.validate_owner_token(raw_owner_token)
             probe = KbDB(index, owner_token=owner_token)
-            _, kind, scan_id = probe.recovery_identity()
-            if kind == 'child':
+            stored_owner, kind, scan_id = probe.recovery_identity()
+            child_scan_id = probe.legacy_child_scan_id()
+            if probe.has_permanent_cache_marker():
+                if any((stored_owner, kind, scan_id, child_scan_id)):
+                    raise OspdOpenvasError(
+                        f'Redis database {index} has conflicting cache identity.'
+                    )
                 continue
+            if kind == 'child':
+                self._validate_recovery_scan_id(child_scan_id)
+                if stored_owner != owner_token or scan_id is not None:
+                    raise OspdOpenvasError(
+                        f'Redis database {index} has conflicting child identity.'
+                    )
+                continue
+            if child_scan_id is not None:
+                raise OspdOpenvasError(
+                    f'Redis database {index} has unmigrated child identity.'
+                )
             if kind is None and not probe.ctx.dbsize():
                 continue
             if not isinstance(scan_id, str):

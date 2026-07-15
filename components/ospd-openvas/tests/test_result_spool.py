@@ -359,6 +359,31 @@ class ResultSpoolTestCase(unittest.TestCase):
         with self.assertRaises(ResultSpoolCorruptionError):
             self.spool()
 
+    def test_verified_migration_rebinds_only_null_or_legacy_owner(self):
+        with self.spool() as spool:
+            claim = self.stage(spool)
+            with sqlite3.connect(self.path) as connection:
+                connection.execute(
+                    'UPDATE claims SET owner_token = ? '
+                    'WHERE source_claim_id = ?',
+                    ('1', claim.source_claim_id),
+                )
+            migrated_owner = 'verified-unique-owner'
+            rebound = spool.bind_owner_token(
+                claim.redis_db, claim.source_claim_id, migrated_owner
+            )
+            self.assertEqual(rebound.owner_token, migrated_owner)
+            with self.assertRaises(ResultSpoolValidationError):
+                spool.bind_owner_token(
+                    claim.redis_db, claim.source_claim_id, '1'
+                )
+            with self.assertRaises(ResultSpoolConflictError):
+                spool.bind_owner_token(
+                    claim.redis_db,
+                    claim.source_claim_id,
+                    'different-owner',
+                )
+
     def test_wal_full_durability_and_owner_only_permissions(self):
         with self.spool() as spool:
             self.stage(spool)

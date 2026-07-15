@@ -357,7 +357,7 @@ class ResultSpool:
     def bind_owner_token(
         self, redis_db: int, source_claim_id: str, owner_token: str
     ) -> SpoolClaim:
-        """Bind a migrated claim to its verified original Redis owner."""
+        """Bind a migrated claim to its verified unique Redis owner."""
         if (
             not isinstance(redis_db, int)
             or isinstance(redis_db, bool)
@@ -371,6 +371,10 @@ class ResultSpool:
                 'source_claim_id must be a non-empty string'
             )
         self._validate_owner_token(owner_token)
+        if owner_token == '1':
+            raise ResultSpoolValidationError(
+                'owner_token must not be the reusable legacy marker'
+            )
         with self._transaction() as connection:
             row = connection.execute(
                 'SELECT * FROM claims WHERE redis_db = ? AND source_claim_id = ?',
@@ -379,14 +383,11 @@ class ResultSpool:
             if row is None:
                 raise ResultSpoolStateError('claim identity is not durable')
             claim = self._claim_from_row(row)
-            if (
-                claim.owner_token is not None
-                and claim.owner_token != owner_token
-            ):
+            if claim.owner_token not in (None, '1', owner_token):
                 raise ResultSpoolConflictError(
                     'source claim conflicts with its durable owner'
                 )
-            if claim.owner_token is None:
+            if claim.owner_token != owner_token:
                 connection.execute(
                     'UPDATE claims SET owner_token = ? WHERE sequence = ?',
                     (owner_token, row['sequence']),

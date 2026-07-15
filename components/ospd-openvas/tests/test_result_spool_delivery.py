@@ -366,6 +366,32 @@ class ResultSpoolDeliveryTestCase(unittest.TestCase):
         claim = self.spool.pending_records('scan-1')[0]
         self.assertEqual(claim.owner_token, OWNER_TOKEN)
 
+    def test_legacy_owner_claim_rebinds_after_exact_redis_migration(self):
+        collection = self.collection()
+        collection.apply_result_batch(
+            'scan-1',
+            [result_row()],
+            claim_id='old-claim',
+            redis_db=7,
+            owner_token='1',
+        )
+        daemon = DummyDaemon()
+        daemon.result_spool = self.spool
+        daemon.scan_collection.set_result_spool(self.spool)
+        database = MagicMock(index=7, owner_token=OWNER_TOKEN)
+        database.current_result_claim_id.return_value = 'old-claim'
+        database.get_status.return_value = 'finished'
+        database.has_pending_results.return_value = True
+        daemon.main_db.reserved_parent_databases.return_value = [
+            ('scan-1', database)
+        ]
+
+        daemon.reconcile_result_spool()
+
+        daemon.main_db.migrate_verified_legacy_reservations.assert_called_once()
+        claim = self.spool.pending_records('scan-1')[0]
+        self.assertEqual(claim.owner_token, OWNER_TOKEN)
+
     def test_recovered_ack_stages_next_batch_then_releases_terminal_source(
         self,
     ):

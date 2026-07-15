@@ -1000,6 +1000,31 @@ class KbDBTestCase(TestCase):
 
 @patch('ospd_openvas.db.redis.Redis')
 class MainDBTestCase(TestCase):
+    @patch.object(MainDB, '_legacy_reservation_migration_plan')
+    @patch.object(MainDB, '_reservation_snapshot')
+    def test_legacy_migration_retries_watch_abort(
+        self, mock_snapshot, mock_plan, mock_redis
+    ):
+        ctx = mock_redis.from_url.return_value
+        pipe = ctx.pipeline.return_value.__enter__.return_value
+        mock_snapshot.return_value = {3: '1'}
+        mock_plan.return_value = {
+            'caches': set(),
+            'parents': {3: ('scan-recovery', [])},
+            'children': {},
+            'tokens': {3: OWNER_TOKEN},
+        }
+        pipe.hlen.return_value = 1
+        pipe.hget.return_value = '1'
+        pipe.execute.side_effect = [WatchError(), ['OK']]
+
+        migrated = MainDB(ctx).migrate_verified_legacy_reservations()
+
+        self.assertEqual(migrated, 1)
+        self.assertEqual(pipe.execute.call_count, 2)
+        self.assertEqual(pipe.watch.call_count, 4)
+        pipe.hset.assert_called_with(DBINDEX_NAME, mapping={3: OWNER_TOKEN})
+
     def test_max_database_index_fail(self, mock_redis):
         ctx = mock_redis.from_url.return_value
         ctx.config_get.return_value = {}

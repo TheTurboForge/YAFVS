@@ -334,11 +334,56 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
             restarted.eval(ACK_RESULT_CLAIM_SCRIPT, 7, *ack_keys, 'claim-1'),
             2,
         )
+        self.assertEqual(
+            restarted.eval(ACK_RESULT_CLAIM_SCRIPT, 7, *ack_keys, 'claim-1'),
+            1,
+        )
         self.assertFalse(restarted.exists(self.CLAIM))
         self.assertFalse(restarted.exists(self.PENDING_COUNT))
         self.assertFalse(restarted.exists(self.PENDING_BYTES))
         self.assertFalse(restarted.exists(self.CLAIM_ADMISSION_IDS))
         self.assertFalse(restarted.exists(self.CLAIM_RESULT_SIZES))
+
+    def test_missing_claim_id_with_retained_rows_fails_closed(self):
+        self.assertEqual(self.admit('retained'), 1)
+        keys = (
+            self.SOURCE,
+            self.CLAIM,
+            self.CLAIM_ID,
+            self.PENDING_COUNT,
+            self.PENDING_BYTES,
+            self.FAILURE,
+            self.ADMISSION_IDS,
+            self.CLAIM_ADMISSION_IDS,
+            self.RESULT_SIZES,
+            self.CLAIM_RESULT_SIZES,
+        )
+        self.ctx.eval(
+            CLAIM_RESULT_ITEMS_SCRIPT,
+            10,
+            *keys,
+            1000,
+            16 * 1024 * 1024,
+            4 * 1024 * 1024,
+            'claim-1',
+        )
+        self.ctx.delete(self.CLAIM_ID)
+        ack_keys = (
+            self.CLAIM,
+            self.CLAIM_ID,
+            self.PENDING_COUNT,
+            self.PENDING_BYTES,
+            self.FAILURE,
+            self.CLAIM_ADMISSION_IDS,
+            self.CLAIM_RESULT_SIZES,
+        )
+
+        self.assertEqual(
+            self.ctx.eval(ACK_RESULT_CLAIM_SCRIPT, 7, *ack_keys, 'claim-1'),
+            -1,
+        )
+        self.assertTrue(self.ctx.exists(self.CLAIM))
+        self.assertEqual(self.ctx.lindex(self.FAILURE, 0), 'counter-state')
 
     def test_missing_counters_fail_closed(self):
         self.ctx.lpush(self.SOURCE, 'legacy')

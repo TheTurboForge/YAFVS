@@ -811,6 +811,14 @@ class OSPDaemon:
         logger.debug('Returning %d results', len(results))
         return results
 
+    def ack_result_batch(self, scan_id: str, batch_id: str) -> bool:
+        """Acknowledge one exact OSP result batch.
+
+        Scanner-specific daemons may override this hook when acknowledgment
+        must cross an additional durable boundary.
+        """
+        return self.scan_collection.ack_result_batch(scan_id, batch_id)
+
     def _get_scan_progress_raw(self, scan_id: str) -> Dict:
         """Returns a dictionary with scan_id scan's progress information."""
         current_progress = dict()

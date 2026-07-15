@@ -325,6 +325,11 @@ services:
         target: /workspace/build/prefix/etc/openvas/openvas.conf
         read_only: true
       - type: bind
+        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/state/ospd/result-spool
+        target: /runtime/state/ospd/result-spool
+        bind:
+          create_host_path: false
+      - type: bind
         source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets/mqtt-ospd-password
         target: /run/secrets/turbovas-mqtt-ospd-password
         read_only: true
@@ -334,6 +339,7 @@ services:
       - >
         install -d -m 0770 -o "$${TURBOVAS_UID:-1000}" -g "$${TURBOVAS_GID:-1000}" /runtime/run/ospd /runtime/logs/ospd &&
         install -d -m 0700 -o "$${TURBOVAS_UID:-1000}" -g "$${TURBOVAS_GID:-1000}" /runtime/state/feed-gnupg &&
+        install -d -m 0700 -o "$${TURBOVAS_UID:-1000}" -g "$${TURBOVAS_GID:-1000}" /runtime/state/ospd/result-spool &&
         mkdir -p /runtime/feeds/notus/advisories &&
         if command -v setcap >/dev/null 2>&1; then
           setcap cap_net_raw,cap_net_admin+eip /usr/bin/nmap ||
@@ -352,6 +358,7 @@ services:
         --unix-socket=/runtime/run/ospd/ospd-openvas.sock
         --pid-file=/runtime/run/ospd/ospd-openvas.pid
         --lock-file-dir=/runtime/run/ospd
+        --result-spool-dir=/runtime/state/ospd/result-spool
         --socket-mode=0o770
         --key-file=/runtime/certs/private/CA/serverkey.pem
         --cert-file=/runtime/certs/CA/servercert.pem

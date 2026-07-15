@@ -295,6 +295,7 @@ RUNTIME_DIRS = (
     "state",
     "state/gvmd-bind-files",
     "state/ospd",
+    "state/ospd/result-spool",
     "state/feed-gnupg",
     "redis-openvas",
     "run/gvmd-gmp",
@@ -333,6 +334,7 @@ PRIVATE_RUNTIME_DIRS = frozenset(
         "certs/private/CA",
         "secrets",
         "state/ospd",
+        "state/ospd/result-spool",
         "state/feed-gnupg",
     }
 )

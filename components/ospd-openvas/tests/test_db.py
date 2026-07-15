@@ -12,12 +12,20 @@
 import logging
 
 from unittest import TestCase
-from unittest.mock import patch, MagicMock
+from unittest.mock import call, patch, MagicMock
 
 from redis.exceptions import ConnectionError as RCE
 
 from ospd.errors import RequiredArgument
-from ospd_openvas.db import OpenvasDB, MainDB, ScanDB, KbDB, DBINDEX_NAME, time
+from ospd_openvas.db import (
+    DBINDEX_NAME,
+    KbDB,
+    MainDB,
+    OpenvasDB,
+    ResultClaimAck,
+    ScanDB,
+    time,
+)
 from ospd_openvas.errors import OspdOpenvasError
 
 from tests.helper import assert_called
@@ -396,9 +404,9 @@ class TestOpenvasDB(TestCase):
 
     def test_ack_list_claim_requires_exact_current_id(self, mock_redis):
         ctx = mock_redis.from_url.return_value
-        ctx.eval.side_effect = [0, 2]
+        ctx.eval.side_effect = [0, 1, 2, -1]
 
-        self.assertFalse(
+        self.assertEqual(
             OpenvasDB.ack_list_claim(
                 ctx,
                 'claim',
@@ -409,9 +417,10 @@ class TestOpenvasDB(TestCase):
                 'claim-admission-ids',
                 'claim-result-sizes',
                 'wrong',
-            )
+            ),
+            ResultClaimAck.MISMATCH,
         )
-        self.assertTrue(
+        self.assertEqual(
             OpenvasDB.ack_list_claim(
                 ctx,
                 'claim',
@@ -422,9 +431,38 @@ class TestOpenvasDB(TestCase):
                 'claim-admission-ids',
                 'claim-result-sizes',
                 'claim-1',
-            )
+            ),
+            ResultClaimAck.MISSING,
         )
-        self.assertEqual(ctx.eval.call_count, 2)
+        self.assertEqual(
+            OpenvasDB.ack_list_claim(
+                ctx,
+                'claim',
+                'claim-id',
+                'pending-count',
+                'pending-bytes',
+                'admission-failure',
+                'claim-admission-ids',
+                'claim-result-sizes',
+                'claim-1',
+            ),
+            ResultClaimAck.RELEASED,
+        )
+        self.assertEqual(
+            OpenvasDB.ack_list_claim(
+                ctx,
+                'claim',
+                'claim-id',
+                'pending-count',
+                'pending-bytes',
+                'admission-failure',
+                'claim-admission-ids',
+                'claim-result-sizes',
+                'claim-1',
+            ),
+            ResultClaimAck.CORRUPT,
+        )
+        self.assertEqual(ctx.eval.call_count, 4)
 
     def test_set_single_item(self, mock_redis):
         ctx = mock_redis.from_url.return_value
@@ -946,10 +984,17 @@ class MainDBTestCase(TestCase):
         db = MagicMock()
         db.index = 3
         maindb = MainDB(ctx)
+        release_order = MagicMock()
+        release_order.attach_mock(db.flush, 'flush')
+        release_order.attach_mock(ctx.hdel, 'release_index')
         maindb.release_database(db)
 
         ctx.hdel.assert_called_once_with(DBINDEX_NAME, 3)
         db.flush.assert_called_with()
+        self.assertEqual(
+            release_order.mock_calls,
+            [call.flush(), call.release_index(DBINDEX_NAME, 3)],
+        )
 
     def test_release(self, mock_redis):
         ctx = mock_redis.from_url.return_value

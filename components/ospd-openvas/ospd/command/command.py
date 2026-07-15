@@ -517,7 +517,7 @@ class AckResults(BaseCommand):
             return simple_response_str(
                 'ack_results', 404, f"Failed to find scan '{scan_id}'"
             )
-        if not self._daemon.scan_collection.ack_result_batch(scan_id, batch_id):
+        if not self._daemon.ack_result_batch(scan_id, batch_id):
             return simple_response_str(
                 'ack_results', 409, 'Result batch is not current'
             )

@@ -540,6 +540,7 @@ class NotusResultHandler:
 
 
 DEFAULT_NOTUS_FEED_DIR = "/var/lib/notus/advisories"
+DEFAULT_RESULT_SPOOL_DIR = "/var/lib/openvas/result-spool"
 
 
 class NotusParser(CliParser):
@@ -549,6 +550,14 @@ class NotusParser(CliParser):
             '--notus-feed-dir',
             default=DEFAULT_NOTUS_FEED_DIR,
             help='Directory where notus feed is placed. Default: %(default)s',
+        )
+        self.parser.add_argument(
+            '--result-spool-dir',
+            default=DEFAULT_RESULT_SPOOL_DIR,
+            help=(
+                'Private durable scanner-result spool directory. '
+                'Default: %(default)s'
+            ),
         )
         self.parser.add_argument(
             '--disable-notus-hashsum-verification',

@@ -32,6 +32,7 @@ from ospd.server import BaseServer
 from ospd.main import main as daemon_main
 from ospd.vtfilter import VtsFilter
 from ospd.resultlist import ResultList
+from ospd.result_spool import ClaimState, ResultSpool, ResultSpoolError
 
 from ospd_openvas import __version__
 from ospd_openvas.errors import OspdOpenvasError
@@ -40,7 +41,13 @@ from ospd_openvas.notus import Cache, Notus, NotusParser, NotusResultHandler
 from ospd_openvas.dryrun import DryRun
 from ospd_openvas.messages.result import ResultMessage
 from ospd_openvas.nvticache import NVTICache
-from ospd_openvas.db import MainDB, BaseDB, OpenvasDB
+from ospd_openvas.db import (
+    BaseDB,
+    KbDB,
+    MainDB,
+    OpenvasDB,
+    ResultClaimAck,
+)
 from ospd_openvas.lock import LockFile
 from ospd_openvas.preferencehandler import PreferenceHandler
 from ospd_openvas.openvas import NASLCli, Openvas
@@ -570,6 +577,7 @@ class OSPDopenvas(OSPDaemon):
         *,
         niceness=None,
         lock_file_dir='/var/lib/openvas',
+        result_spool_dir=None,
         mqtt_broker_address="localhost",
         mqtt_broker_port=1883,
         feed_updater="openvas",
@@ -582,6 +590,12 @@ class OSPDopenvas(OSPDaemon):
             kwargs.pop('mqtt_broker_password', None),
             kwargs.pop('mqtt_broker_password_file', None),
         )
+
+        self.result_spool = None
+        if result_spool_dir:
+            self.result_spool = ResultSpool(
+                str(Path(result_spool_dir) / 'results.sqlite3')
+            )
         self.main_db = MainDB()
         notus_dir = kwargs.get('notus_feed_dir')
         self.notus = None
@@ -603,6 +617,8 @@ class OSPDopenvas(OSPDaemon):
             file_storage_dir=lock_file_dir,
             **kwargs,
         )
+        if self.result_spool is not None:
+            self.scan_collection.set_result_spool(self.result_spool)
 
         self.server_version = __version__
 
@@ -806,6 +822,7 @@ class OSPDopenvas(OSPDaemon):
     def init(self, server: BaseServer) -> None:
         OpenvasDB.validate_result_admission_backend()
         self.scan_collection.init()
+        self.reconcile_result_spool()
 
         server.start(self.handle_client_stream)
 
@@ -851,6 +868,79 @@ class OSPDopenvas(OSPDaemon):
             self.vts.sha256_hash = vthelper.calculate_vts_collection_hash()
 
         self.initialized = True
+
+    @staticmethod
+    def release_spooled_redis_claim(claim) -> ResultClaimAck:
+        """Release one exact Redis claim after gvmd acknowledged its batch."""
+        outcome = KbDB(claim.redis_db).ack_result_claim_state(
+            claim.source_claim_id
+        )
+        if outcome not in (ResultClaimAck.RELEASED, ResultClaimAck.MISSING):
+            raise OspdOpenvasError(
+                'Scanner Redis refused the exact acknowledged result claim.'
+            )
+        return outcome
+
+    def reconcile_result_spool(self) -> None:
+        """Finish crash-interrupted acknowledgements before serving OSP."""
+        if self.result_spool is None:
+            return
+        health = self.result_spool.health()
+        if health.get('quick_check') != 'ok':
+            raise OspdOpenvasError(
+                'Scanner result spool integrity check failed.'
+            )
+        for claim in self.result_spool.recovery_records():
+            if claim.state != ClaimState.ACKING:
+                continue
+            self.release_spooled_redis_claim(claim)
+            self.result_spool.complete_ack(
+                claim.scan_id,
+                claim.osp_batch_id,
+                claim.redis_db,
+                claim.source_claim_id,
+            )
+            self.scan_collection.clear_result_claim(
+                claim.scan_id, claim.source_claim_id
+            )
+
+    def ack_result_batch(self, scan_id: str, batch_id: str) -> bool:
+        """Cross the durable SQLite and Redis boundaries in exact order."""
+        if self.result_spool is None:
+            return super().ack_result_batch(scan_id, batch_id)
+        try:
+            claim = self.result_spool.get_batch(scan_id, batch_id)
+            if claim is None:
+                return super().ack_result_batch(scan_id, batch_id)
+            if claim.state == ClaimState.ACKED:
+                return True
+            claim = self.result_spool.begin_ack(
+                scan_id,
+                batch_id,
+                claim.redis_db,
+                claim.source_claim_id,
+            )
+            self.release_spooled_redis_claim(claim)
+            self.result_spool.complete_ack(
+                scan_id,
+                batch_id,
+                claim.redis_db,
+                claim.source_claim_id,
+            )
+            self.scan_collection.clear_result_claim(
+                scan_id, claim.source_claim_id
+            )
+            return True
+        except (OspdOpenvasError, ResultSpoolError, redis.RedisError):
+            logger.exception(
+                '%s: Exact scanner result batch acknowledgement failed.',
+                scan_id,
+            )
+            self.mark_scanner_evidence_incomplete(
+                scan_id,
+                'Acknowledged scanner evidence could not be released safely.',
+            )
+            return False
 
     def delete_scan(self, scan_id: str) -> int:
         deleted = super().delete_scan(scan_id)
@@ -1164,6 +1254,11 @@ class OSPDopenvas(OSPDaemon):
             scan_id: Scan ID to identify the current scan.
         """
 
+        if self.result_spool is not None and self.result_spool.has_pending(
+            scan_id
+        ):
+            return False
+
         # Scanner results are bounded version-1 JSON records.
         claim_id, all_results = db.claim_results(
             max_items=OPENVAS_RESULT_CLAIM_MAX_ITEMS,
@@ -1206,13 +1301,21 @@ class OSPDopenvas(OSPDaemon):
 
             results.append(result)
 
+        quarantine_reason = None
         if quarantined:
-            self.mark_scanner_evidence_incomplete(
-                scan_id, 'Malformed scanner result rows were discarded.'
-            )
+            quarantine_reason = 'Malformed scanner result rows were discarded.'
+            self.mark_scanner_evidence_incomplete(scan_id, quarantine_reason)
 
-        if not self.report_results(results, scan_id, claim_id=claim_id):
+        if not self.report_results(
+            results,
+            scan_id,
+            claim_id=claim_id,
+            redis_db=db.index,
+            delivery_incomplete_reason=quarantine_reason,
+        ):
             return False
+        if self.result_spool is not None:
+            return True
         if not db.ack_result_claim(claim_id):
             logger.warning(
                 '%s: Retaining unacknowledged Redis result claim.', scan_id
@@ -1223,9 +1326,31 @@ class OSPDopenvas(OSPDaemon):
 
     def drain_openvas_results(self, db: BaseDB, scan_id: str) -> bool:
         """Drain every replayable claim after the scanner has stopped."""
+        deadline = time.monotonic() + OPENVAS_RESULT_RECOVERY_TIMEOUT_SECONDS
         while db.has_pending_results():
-            if not self.report_openvas_results(db, scan_id):
+            try:
+                reported = self.report_openvas_results(db, scan_id)
+            except ResultSpoolError:
+                logger.exception(
+                    '%s: Durable scanner result staging failed.', scan_id
+                )
+                self.mark_scanner_evidence_incomplete(
+                    scan_id, 'Durable scanner result staging failed.'
+                )
                 return False
+            if reported:
+                continue
+            if self.result_spool is None or not self.result_spool.has_pending(
+                scan_id
+            ):
+                return False
+            if time.monotonic() >= deadline:
+                self.mark_scanner_evidence_incomplete(
+                    scan_id,
+                    'Scanner result acknowledgement timed out during drain.',
+                )
+                return False
+            time.sleep(0.1)
         return True
 
     MAX_OPENVAS_HOST_COUNT = 2**31 - 1
@@ -1248,7 +1373,12 @@ class OSPDopenvas(OSPDaemon):
         return count
 
     def report_results(
-        self, results: list, scan_id: str, claim_id: Optional[str] = None
+        self,
+        results: list,
+        scan_id: str,
+        claim_id: Optional[str] = None,
+        redis_db: Optional[int] = None,
+        delivery_incomplete_reason: Optional[str] = None,
     ) -> bool:
         """Reports all results given in a list.
 
@@ -1270,7 +1400,7 @@ class OSPDopenvas(OSPDaemon):
         total_dead = 0
         count_total = None
         count_excluded = None
-        incomplete_reason = None
+        incomplete_reason = delivery_incomplete_reason
         for res in results:
             if not res:
                 continue
@@ -1433,6 +1563,8 @@ class OSPDopenvas(OSPDaemon):
         }
         if claim_id:
             result_batch_args['claim_id'] = claim_id
+            result_batch_args['redis_db'] = redis_db
+            result_batch_args['incomplete_reason'] = incomplete_reason
         self.scan_collection.apply_result_batch(
             scan_id, res_list, **result_batch_args
         )
@@ -1836,6 +1968,19 @@ class OSPDopenvas(OSPDaemon):
                     process_already_exited=exit_code is not None,
                 )
                 return
+            except ResultSpoolError:
+                logger.exception(
+                    '%s: Durable scanner result staging failed.', scan_id
+                )
+                self.mark_scanner_evidence_incomplete(
+                    scan_id, 'Durable scanner result staging failed.'
+                )
+                self.stop_scan_process_without_kb(
+                    scan_id,
+                    openvas_process.pid,
+                    process_already_exited=not openvas_process_is_alive,
+                )
+                return
             if scanner_status != 'new':
                 break
             if exit_code is not None:
@@ -1959,6 +2104,14 @@ class OSPDopenvas(OSPDaemon):
                         process_already_exited=(
                             not self.is_openvas_process_alive(openvas_process)
                         ),
+                    )
+                    return
+                except ResultSpoolError:
+                    logger.exception(
+                        '%s: Final durable result staging failed.', scan_id
+                    )
+                    self.mark_scanner_evidence_incomplete(
+                        scan_id, 'Final durable scanner result staging failed.'
                     )
                     return
                 return

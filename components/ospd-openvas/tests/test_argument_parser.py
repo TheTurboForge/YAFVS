@@ -27,7 +27,7 @@ from ospd.parser import (
     DEFAULT_PID_PATH,
     DEFAULT_LOCKFILE_DIR_PATH,
 )
-from ospd_openvas.notus import NotusParser
+from ospd_openvas.notus import DEFAULT_RESULT_SPOOL_DIR, NotusParser
 
 here = Path(__file__).absolute().parent
 
@@ -91,6 +91,7 @@ class ArgumentParserTestCase(unittest.TestCase):
             '--disable-notus-hashsum-verification false'.split()
         )
         self.assertEqual(args.disable_notus_hashsum_verification, False)
+        self.assertEqual(args.result_spool_dir, DEFAULT_RESULT_SPOOL_DIR)
 
     def test_defaults(self):
         args = self.parse_args([])
@@ -160,6 +161,7 @@ class ArgumentParserConfigTestCase(unittest.TestCase):
         self.assertIsNone(args.mqtt_broker_password)
         self.assertEqual(args.mqtt_broker_password_file, '/foo/mqtt-password')
         self.assertEqual(args.notus_feed_dir, '/foo/advisories')
+        self.assertEqual(args.result_spool_dir, '/foo/result-spool')
         self.assertEqual(args.foreground, True)
         self.assertEqual(args.socket_mode, '0o700')
         self.assertEqual(args.stream_timeout, 20)

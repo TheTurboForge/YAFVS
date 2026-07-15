@@ -12,6 +12,7 @@ import sys
 import time
 import uuid
 
+from enum import IntEnum
 from typing import List, NewType, Optional, Iterable, Iterator, Tuple, Callable
 from urllib import parse
 
@@ -25,6 +26,16 @@ SOCKET_TIMEOUT = 60  # in seconds
 LIST_FIRST_POS = 0
 LIST_LAST_POS = -1
 LIST_ALL = 0
+
+
+class ResultClaimAck(IntEnum):
+    """Exact outcomes from releasing one replayable Redis result claim."""
+
+    CORRUPT = -1
+    MISMATCH = 0
+    MISSING = 1
+    RELEASED = 2
+
 
 CLAIM_RESULT_ITEMS_SCRIPT = """
 local function key_type(index)
@@ -246,7 +257,18 @@ if not list_or_none(1) or not string_or_none(2)
   return -1
 end
 
-if redis.call('GET', KEYS[2]) == ARGV[1] then
+local current_claim = redis.call('GET', KEYS[2])
+if not current_claim then
+  if redis.call('LLEN', KEYS[1]) == 0
+    and redis.call('LLEN', KEYS[6]) == 0
+    and redis.call('LLEN', KEYS[7]) == 0 then
+    return 1
+  end
+  mark_failure('counter-state')
+  return -1
+end
+
+if current_claim == ARGV[1] then
   local max_items = 1000
   local max_bytes = 16777216
   local max_item_bytes = 4194304
@@ -709,8 +731,8 @@ class OpenvasDB:
         claim_admission_ids_name: str,
         claim_result_sizes_name: str,
         claim_id: str,
-    ) -> bool:
-        """Delete only the exact current replayable claim."""
+    ) -> ResultClaimAck:
+        """Return the exact outcome of releasing a replayable claim."""
         if not ctx:
             raise RequiredArgument('ack_list_claim', 'ctx')
         if not claim_name:
@@ -729,7 +751,7 @@ class OpenvasDB:
             raise RequiredArgument('ack_list_claim', 'claim_result_sizes_name')
         if not claim_id:
             raise RequiredArgument('ack_list_claim', 'claim_id')
-        deleted = ctx.eval(
+        outcome = ctx.eval(
             ACK_RESULT_CLAIM_SCRIPT,
             7,
             claim_name,
@@ -741,7 +763,12 @@ class OpenvasDB:
             claim_result_sizes_name,
             claim_id,
         )
-        return deleted == 2
+        try:
+            return ResultClaimAck(int(outcome))
+        except (TypeError, ValueError) as error:
+            raise OspdOpenvasError(
+                'Scanner Redis returned an invalid result-claim outcome.'
+            ) from error
 
     @staticmethod
     def get_result_queue_failure(
@@ -1096,6 +1123,10 @@ class BaseKbDB(BaseDB):
         )
 
     def ack_result_claim(self, claim_id: str) -> bool:
+        return self.ack_result_claim_state(claim_id) == ResultClaimAck.RELEASED
+
+    def ack_result_claim_state(self, claim_id: str) -> ResultClaimAck:
+        """Return the exact release outcome for one result claim."""
         return OpenvasDB.ack_list_claim(
             self.ctx,
             self.RESULT_CLAIM_KEY,
@@ -1316,8 +1347,10 @@ class MainDB(BaseDB):
         return (kb, err)
 
     def release_database(self, database: BaseDB):
-        self.release_database_by_index(database.index)
+        # Keep the index reserved until its old contents are gone.  Returning
+        # it first allows another scan to reuse it before flush completes.
         database.flush()
+        self.release_database_by_index(database.index)
 
     def release_database_by_index(self, index: int):
         self.ctx.hdel(DBINDEX_NAME, index)

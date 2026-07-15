@@ -12628,6 +12628,7 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertIn("state/gvmd-bind-files", turbovasctl.RUNTIME_DIRS)
         self.assertNotIn("state/gvmd", turbovasctl.RUNTIME_DIRS)
         self.assertIn("state/ospd", turbovasctl.RUNTIME_DIRS)
+        self.assertIn("state/ospd/result-spool", turbovasctl.RUNTIME_DIRS)
         self.assertIn("redis-openvas", turbovasctl.RUNTIME_DIRS)
         self.assertIn("run/gvmd-gmp", turbovasctl.RUNTIME_DIRS)
         self.assertIn("run/gvmd-control", turbovasctl.RUNTIME_DIRS)
@@ -16380,6 +16381,13 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertIn("/feed-store/current", app_services["ospd-openvas"])
         self.assertIn("target: /runtime/feeds", app_services["ospd-openvas"])
         self.assertIn("/state/ospd/openvas.conf", app_services["ospd-openvas"])
+        self.assertIn(
+            "/state/ospd/result-spool", app_services["ospd-openvas"]
+        )
+        self.assertIn(
+            "--result-spool-dir=/runtime/state/ospd/result-spool",
+            app_services["ospd-openvas"],
+        )
         self.assertIn("/feed-store/current", app_services["notus-scanner"])
         self.assertIn("target: /runtime/feeds", app_services["notus-scanner"])
         self.assertIn("allow_anonymous false", broker)

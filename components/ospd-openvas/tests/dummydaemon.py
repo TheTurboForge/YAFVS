@@ -78,7 +78,10 @@ class DummyDaemon(OSPDopenvas):
     @patch('ospd_openvas.daemon.NVTICache')
     @patch('ospd_openvas.daemon.MainDB')
     def __init__(
-        self, _MainDBClass: MagicMock = None, NvtiClass: MagicMock = None
+        self,
+        _MainDBClass: MagicMock = None,
+        NvtiClass: MagicMock = None,
+        result_spool_dir=None,
     ):
         assert _MainDBClass
         assert NvtiClass
@@ -156,7 +159,10 @@ class DummyDaemon(OSPDopenvas):
         nvti.get_feed_version.return_value = '123'
 
         super().__init__(
-            niceness=10, lock_file_dir='/tmp', mqtt_broker_address=""
+            niceness=10,
+            lock_file_dir='/tmp',
+            mqtt_broker_address="",
+            result_spool_dir=result_spool_dir,
         )
 
         self.scan_collection.data_manager = FakeDataManager()

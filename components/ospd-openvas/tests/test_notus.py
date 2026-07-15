@@ -6,8 +6,10 @@
 
 import logging
 import threading
+from datetime import datetime
 from unittest import TestCase, mock
 from typing import Dict, Optional, Iterator
+from uuid import UUID
 
 # These tests assert internal buffer cleanup and lock-release invariants.
 # pylint: disable=protected-access
@@ -693,6 +695,9 @@ class NotusTestCase(TestCase):
                 value='x' * 100,
                 port='42',
                 uri='file://result',
+                message_id=UUID(int=1),
+                group_id=UUID(int=2),
+                created=datetime(2026, 1, 1),
             )
 
         with mock.patch('ospd_openvas.notus.Timer', TimerFake):

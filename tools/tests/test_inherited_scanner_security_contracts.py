@@ -143,6 +143,49 @@ class InheritedScannerSecurityContractTests(unittest.TestCase):
         self.assertIn("stop_scan_process_by_pid", scanner_control)
         self.assertIn("process_matches_scan (pid, scan_id)", scanner_control)
 
+    def test_scanner_results_remain_durable_until_gvmd_acknowledges(self):
+        spool_source = (
+            ROOT / "components/ospd-openvas/ospd/result_spool.py"
+        ).read_text(encoding="utf-8")
+        daemon_source = (
+            ROOT / "components/ospd-openvas/ospd_openvas/daemon.py"
+        ).read_text(encoding="utf-8")
+        compose_source = (ROOT / "compose/dev.yaml").read_text(
+            encoding="utf-8"
+        )
+        report_function = daemon_source[
+            daemon_source.index("    def report_openvas_results(") :
+            daemon_source.index("    def drain_openvas_results(")
+        ]
+        ack_function = daemon_source[
+            daemon_source.index("    def ack_result_batch(") :
+            daemon_source.index("    def delete_scan(")
+        ]
+
+        self.assertIn("PRAGMA journal_mode = WAL", spool_source)
+        self.assertIn("PRAGMA synchronous = FULL", spool_source)
+        self.assertIn("STAGED = 'STAGED'", spool_source)
+        self.assertIn("EXPOSED = 'EXPOSED'", spool_source)
+        self.assertIn("ACKING = 'ACKING'", spool_source)
+        self.assertIn("ACKED = 'ACKED'", spool_source)
+        self.assertIn("claims_one_pending_per_scan", spool_source)
+        self.assertLess(
+            ack_function.index("begin_ack("),
+            ack_function.index("release_spooled_redis_claim("),
+        )
+        self.assertLess(
+            ack_function.index("release_spooled_redis_claim("),
+            ack_function.index("complete_ack("),
+        )
+        self.assertLess(
+            report_function.index("if self.result_spool is not None:"),
+            report_function.index("db.ack_result_claim(claim_id)"),
+        )
+        self.assertIn(
+            "--result-spool-dir=/runtime/state/ospd/result-spool",
+            compose_source,
+        )
+
     def test_http2_requests_pin_the_authorized_scan_target(self):
         source = (
             ROOT / "components/openvas-scanner/nasl/nasl_http2.c"

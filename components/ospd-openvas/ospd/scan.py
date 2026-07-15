@@ -18,6 +18,7 @@ from typing import List, Any, Dict, Iterator, Optional, Iterable, Tuple, Union
 from ospd.network import target_str_to_list
 from ospd.datapickler import DataPickler
 from ospd.errors import OspdCommandError
+from ospd.result_spool import ResultSpool
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,11 @@ class ScanCollection:
 
     """
 
-    def __init__(self, file_storage_dir: str) -> None:
+    def __init__(
+        self,
+        file_storage_dir: str,
+        result_spool: Optional[ResultSpool] = None,
+    ) -> None:
         """Initialize the Scan Collection."""
 
         self.data_manager = (
@@ -66,6 +71,7 @@ class ScanCollection:
         )  # type: Optional[multiprocessing.managers.SyncManager]
         self.scans_table = dict()  # type: Dict
         self.file_storage_dir = file_storage_dir
+        self.result_spool = result_spool
         # Keep pre-init/test use synchronized; production replaces this with a
         # manager-backed lock before worker processes start.
         self.scan_collection_lock = RLock()
@@ -73,6 +79,58 @@ class ScanCollection:
     def init(self):
         self.data_manager = multiprocessing.Manager()
         self.scan_collection_lock = self.data_manager.RLock()
+        self.restore_spooled_scans()
+
+    def set_result_spool(self, result_spool: ResultSpool) -> None:
+        """Attach the durable result source before worker processes start."""
+        self.result_spool = result_spool
+
+    def restore_spooled_scans(self) -> None:
+        """Restore result-only interrupted scan views after an OSPD restart."""
+        if self.result_spool is None:
+            return
+        pending = {
+            state.scan_id: state
+            for state in self.result_spool.pending_scan_states()
+        }
+        records = self.result_spool.recovery_records()
+        first_claim = {}
+        for record in records:
+            first_claim.setdefault(record.scan_id, record.source_claim_id)
+        for scan_id, state in pending.items():
+            if self.id_exists(scan_id):
+                continue
+            scan_info = self.data_manager.dict()
+            scan_info['scan_id'] = scan_id
+            scan_info['status'] = ScanStatus.INTERRUPTED
+            scan_info['credentials'] = {}
+            scan_info['start_time'] = 0
+            scan_info['end_time'] = int(time.time())
+            scan_info['results'] = []
+            scan_info['temp_results'] = []
+            scan_info['result_batch_id'] = ''
+            scan_info['last_result_claim_id'] = first_claim.get(scan_id, '')
+            scan_info['progress'] = ScanProgress.FINISHED.value
+            scan_info['target_progress'] = {}
+            scan_info['count_alive'] = 0
+            scan_info['count_dead'] = state.count_dead
+            scan_info['count_total'] = state.count_total or 0
+            scan_info['count_excluded'] = state.count_excluded or 0
+            scan_info['excluded_simplified'] = None
+            scan_info['evidence_incomplete'] = True
+            scan_info['evidence_incomplete_reason'] = (
+                'OSPD restarted before all scanner evidence was acknowledged.'
+            )
+            scan_info['target'] = {
+                'hosts': '',
+                'ports': '',
+                'exclude_hosts': '',
+                'finished_hosts': '',
+                'options': {},
+            }
+            scan_info['options'] = {}
+            scan_info['vts'] = {}
+            self.scans_table[scan_id] = scan_info
 
     def add_result(
         self,
@@ -120,14 +178,31 @@ class ScanCollection:
         total_dead: int = 0,
         count_total: Optional[int] = None,
         count_excluded: Optional[int] = None,
+        redis_db: Optional[int] = None,
+        incomplete_reason: Optional[str] = None,
     ) -> bool:
         """Atomically apply one parsed scanner result batch and its counts."""
+        rows = list(result_list)
+        if claim_id and self.result_spool is not None:
+            if redis_db is None:
+                raise ValueError('redis_db is required for a durable claim')
+            self.result_spool.stage_claim(
+                scan_id,
+                redis_db,
+                claim_id,
+                rows,
+                count_dead=total_dead,
+                count_total=count_total,
+                count_excluded=count_excluded,
+                incomplete_reason=incomplete_reason,
+            )
+            rows = []
         with self.scan_collection_lock:
             scan = self.scans_table[scan_id]
             if claim_id and scan.get('last_result_claim_id') == claim_id:
                 return False
             results = scan.get('results', [])
-            results.extend(result_list)
+            results.extend(rows)
             scan['results'] = results
             if total_dead:
                 scan['count_dead'] = scan.get('count_dead', 0) + total_dead
@@ -250,6 +325,10 @@ class ScanCollection:
         self, scan_id: str, max_res: Optional[int] = None
     ) -> Tuple[Optional[str], List[Dict[str, Any]]]:
         """Return one stable result batch until its exact ID is acknowledged."""
+        if self.result_spool is not None:
+            claim = self.result_spool.expose_next(scan_id)
+            if claim is not None:
+                return claim.osp_batch_id, claim.results
         with self.scan_collection_lock:
             scan = self.scans_table[scan_id]
             batch = scan.get('temp_results', [])
@@ -276,6 +355,11 @@ class ScanCollection:
 
     def ack_result_batch(self, scan_id: str, batch_id: str) -> bool:
         """Acknowledge and release only the current exact result batch."""
+        if (
+            self.result_spool is not None
+            and self.result_spool.get_batch(scan_id, batch_id) is not None
+        ):
+            return False
         with self.scan_collection_lock:
             scan = self.scans_table[scan_id]
             if not batch_id or scan.get('result_batch_id') != batch_id:
@@ -299,8 +383,14 @@ class ScanCollection:
             _, results = self.prepare_result_batch(scan_id, max_res)
             return iter(results)
 
+        durable_results = []
+        if self.result_spool is not None:
+            for claim in self.result_spool.pending_records(scan_id):
+                durable_results.extend(claim.results)
         with self.scan_collection_lock:
-            return iter(list(self.scans_table[scan_id]['results']))
+            return iter(
+                durable_results + list(self.scans_table[scan_id]['results'])
+            )
 
     def ids_iterator(self) -> Iterator[str]:
         """Returns an iterator over the collection's scan IDS."""
@@ -704,6 +794,10 @@ class ScanCollection:
         with self.scan_collection_lock:
             if self.get_status(scan_id) == ScanStatus.RUNNING:
                 return False
+            if self.result_spool is not None and self.result_spool.has_pending(
+                scan_id
+            ):
+                return False
 
             scans_table = self.scans_table
             try:
@@ -711,4 +805,6 @@ class ScanCollection:
                 self.scans_table = scans_table
             except KeyError:
                 return False
+            if self.result_spool is not None:
+                self.result_spool.delete_scan(scan_id)
             return True

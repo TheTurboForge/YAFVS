@@ -37,6 +37,70 @@ impl DBLocation {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(default)]
+pub struct SqliteConfiguration {
+    #[serde(
+        deserialize_with = "DBLocation::config_deserialize",
+        serialize_with = "DBLocation::config_serialize"
+    )]
+    pub location: DBLocation,
+    #[serde(
+        deserialize_with = "scannerlib::utils::duration::deserialize",
+        serialize_with = "scannerlib::utils::duration::serialize"
+    )]
+    pub busy_timeout: Duration,
+    pub max_connections: u32,
+    pub credential_key: Option<String>,
+}
+
+impl Default for SqliteConfiguration {
+    fn default() -> Self {
+        Self {
+            location: Default::default(),
+            busy_timeout: Duration::from_secs(10),
+            max_connections: 1,
+            credential_key: None,
+        }
+    }
+}
+
+impl SqliteConfiguration {
+    pub async fn create_pool(&self, name: &str) -> Result<sqlx::Pool<sqlx::Sqlite>, sqlx::Error> {
+        use sqlx::{
+            Sqlite,
+            pool::PoolOptions,
+            sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteSynchronous},
+        };
+
+        if let DBLocation::File(path) = &self.location
+            && !path.exists()
+        {
+            std::fs::create_dir_all(path)
+                .unwrap_or_else(|error| panic!("Failed to create dir at {path:?}: {error}"));
+        }
+
+        let options = SqliteConnectOptions::from_str(&self.location.sqlite_address(name))?
+            .journal_mode(SqliteJournalMode::Wal)
+            .busy_timeout(self.busy_timeout)
+            .synchronous(SqliteSynchronous::Off)
+            .create_if_missing(true);
+        PoolOptions::<Sqlite>::new()
+            .max_lifetime(None)
+            .idle_timeout(None)
+            .max_connections(self.max_connections)
+            .connect_with(options)
+            .await
+    }
+
+    pub fn default_file_location(name: &str) -> Self {
+        Self {
+            location: DBLocation::default_file_location(name),
+            ..Default::default()
+        }
+    }
+}
+
 impl From<&str> for DBLocation {
     fn from(value: &str) -> Self {
         match value {

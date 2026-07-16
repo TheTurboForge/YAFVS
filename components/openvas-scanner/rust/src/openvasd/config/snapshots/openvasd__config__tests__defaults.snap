@@ -2,8 +2,6 @@
 source: src/openvasd/config/mod.rs
 expression: config
 ---
-mode = 'service'
-
 [feed]
 path = '/var/lib/openvas/plugins'
 check_interval = '3600s'

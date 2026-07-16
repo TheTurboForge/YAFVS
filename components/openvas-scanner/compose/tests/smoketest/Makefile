@@ -32,15 +32,11 @@ SCANS_USER_FLOW := $(addprefix scans-user-flow-,$(SCANS_USER_FLOW))
 
 
 
-all: up-and-running notus scans-user-flow-victim-simple-auth-ssh
+all: up-and-running scans-user-flow-victim-simple-auth-ssh
 
 .PHONY: up-and-running
 up-and-running:
 	${HURL_BASE} ${MAKEFILE_PATH}/up-and-running/*.hurl
-
-.PHONY: notus
-notus:
-	${HURL_BASE} ${MAKEFILE_PATH}/notus/*.hurl
 
 .PHONY: scans
 scans:

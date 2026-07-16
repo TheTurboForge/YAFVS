@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2024 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
@@ -21,7 +22,7 @@ use scannerlib::scheduling::Scheduler;
 use scannerlib::storage::inmemory::InMemoryStorage;
 use tracing::{info, warn, warn_span};
 
-use crate::utils::{ArgOrStdin, NotusArgs};
+use crate::utils::ArgOrStdin;
 use crate::{CliError, CliErrorKind, Db, interpret};
 
 #[derive(clap::Parser)]
@@ -58,11 +59,9 @@ struct ScriptArgs {
     timeout: Option<u32>,
     #[clap(long = "vendor")]
     vendor_version: Option<String>,
-    /// Notus configuration. Use "<IP:PORT>" to connect to a running Notus
-    /// instance or "<PATH>" to product files to use the internal
-    /// implementation. If not given Notus will be disabled.
+    /// Path to Notus product files. If not given Notus will be disabled.
     #[clap(short, long = "notus")]
-    notus: Option<NotusArgs>,
+    notus: Option<PathBuf>,
 }
 
 #[derive(clap::Parser)]
@@ -77,11 +76,9 @@ struct ScanArgs {
     /// Target to scan.
     #[clap(short, long)]
     target: Option<String>,
-    /// Notus configuration. Use "<IP:PORT>" to connect to a running Notus
-    /// instance or "<PATH>" to product files to use the internal
-    /// implementation. If not given Notus will be disabled.
+    /// Path to Notus product files. If not given Notus will be disabled.
     #[clap(short, long = "notus")]
-    notus: Option<NotusArgs>,
+    notus: Option<PathBuf>,
 }
 
 pub async fn run(args: ExecuteArgs) -> Result<(), CliError> {
@@ -130,12 +127,11 @@ async fn scan(args: ScanArgs) -> Result<(), CliError> {
     } else {
         let executor = nasl_std_functions();
         let scan = Scan::default_to_localhost(scan);
-        let notus = args.notus.map(|x| match x {
-            NotusArgs::Address(addr) => NotusCtx::Address(addr),
-            NotusArgs::Internal(path) => NotusCtx::Direct(Arc::new(Mutex::new(Notus::new(
+        let notus = args.notus.map(|path| {
+            NotusCtx::Direct(Arc::new(Mutex::new(Notus::new(
                 // we don't require a correctly setup feed for scannerctl
                 ProductLoader::new(false, Loader::from_feed_path(path)),
-            )))),
+            ))))
         });
         let runner: ScanRunner<Arc<InMemoryStorage>> =
             ScanRunner::new(&storage, &loader, &executor, schedule, &scan, &notus).unwrap();
@@ -163,12 +159,11 @@ async fn scan(args: ScanArgs) -> Result<(), CliError> {
 }
 
 async fn script(args: ScriptArgs) -> Result<(), CliError> {
-    let notus = args.notus.map(|x| match x {
-        NotusArgs::Address(addr) => NotusCtx::Address(addr),
-        NotusArgs::Internal(path) => NotusCtx::Direct(Arc::new(Mutex::new(Notus::new(
+    let notus = args.notus.map(|path| {
+        NotusCtx::Direct(Arc::new(Mutex::new(Notus::new(
             // scannerctl doesn't require a proper feed
             ProductLoader::new(false, Loader::from_feed_path(path)),
-        )))),
+        ))))
     });
     let scan_preferences = ScanPrefs::new()
         .set_default_recv_timeout(args.timeout)

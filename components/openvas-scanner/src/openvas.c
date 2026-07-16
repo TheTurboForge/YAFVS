@@ -27,7 +27,7 @@
 #include "openvas.h"
 
 #include "../misc/kb_cache.h"
-#include "../misc/plugutils.h"     /* nvticache_free */
+#include "../misc/plugutils.h" /* nvticache_free */
 #include "../misc/result_message.h"
 #include "../misc/scan_id.h"       /* to manage global scan_id */
 #include "../misc/vendorversion.h" /* for vendor_version_set */
@@ -132,11 +132,14 @@ set_default_openvas_prefs ()
     prefs_set (openvas_defaults[i].option, openvas_defaults[i].value);
 }
 
-static int open_process_handle (int pid);
-static int signal_process_handle (int process_handle, int signal_number);
-static gboolean wait_for_process_exit (int process_handle,
-                                       int timeout_seconds);
-static gboolean process_matches_scan (int pid, const char *scan_id);
+static int
+open_process_handle (int pid);
+static int
+signal_process_handle (int process_handle, int signal_number);
+static gboolean
+wait_for_process_exit (int process_handle, int timeout_seconds);
+static gboolean
+process_matches_scan (int pid, const char *scan_id);
 
 /**
  * @brief Stop an exact scanner process without consulting Redis.
@@ -693,8 +696,7 @@ send_message_to_client_and_finish_scan (const char *value)
   // We get the main kb. It is still not set as global at this point.
   snprintf (key, sizeof (key), "internal/%s/scanprefs", get_scan_id ());
   kb = kb_find (prefs_get ("db_address"), key);
-  message = openvas_result_message_new ("ERRMSG", "", " ", " ", " ", value,
-                                        "");
+  message = openvas_result_message_new ("ERRMSG", "", " ", " ", " ", value, "");
   kb_item_push_str (kb, "internal/results", message);
   g_free (message);
   snprintf (key, sizeof (key), "internal/%s", get_scan_id ());
@@ -714,7 +716,6 @@ static int
 attack_network_init (struct scan_globals *globals, const gchar *config_file)
 {
   const char *mqtt_server_uri;
-  const char *openvasd_server_uri;
 
   set_default_openvas_prefs ();
   prefs_config (config_file);
@@ -736,42 +737,28 @@ attack_network_init (struct scan_globals *globals, const gchar *config_file)
   nvticache_reset ();
 
   /* Init Notus communication */
-  openvasd_server_uri = prefs_get ("openvasd_server");
-  if (openvasd_server_uri)
+  mqtt_server_uri = prefs_get ("mqtt_server_uri");
+  if (mqtt_server_uri)
     {
-      g_message ("%s: LSC via openvasd", __func__);
-      prefs_set ("openvasd_lsc_enabled", "yes");
-    }
-  else
-    {
-      mqtt_server_uri = prefs_get ("mqtt_server_uri");
-      if (mqtt_server_uri)
-        {
 #ifdef AUTH_MQTT
-          const char *mqtt_user = prefs_get ("mqtt_user");
-          const char *mqtt_pass = prefs_get ("mqtt_pass");
-          if ((mqtt_init_auth (mqtt_server_uri, mqtt_user, mqtt_pass)) != 0)
+      const char *mqtt_user = prefs_get ("mqtt_user");
+      const char *mqtt_pass = prefs_get ("mqtt_pass");
+      if ((mqtt_init_auth (mqtt_server_uri, mqtt_user, mqtt_pass)) != 0)
 #else
-          if ((mqtt_init (mqtt_server_uri)) != 0)
+      if ((mqtt_init (mqtt_server_uri)) != 0)
 #endif
-            {
-              g_message ("%s: INIT MQTT: FAIL", __func__);
-              send_message_to_client_and_finish_scan (
-                "MQTT initialization failed");
-            }
-          else
-            {
-              g_message ("%s: INIT MQTT: SUCCESS", __func__);
-              prefs_set ("mqtt_enabled", "yes");
-            }
+        {
+          g_message ("%s: INIT MQTT: FAIL", __func__);
+          send_message_to_client_and_finish_scan ("MQTT initialization failed");
         }
       else
         {
-          g_message ("%s: Neither openvasd_server nor mqtt_server_uri given, "
-                     "LSC disabled",
-                     __func__);
+          g_message ("%s: INIT MQTT: SUCCESS", __func__);
+          prefs_set ("mqtt_enabled", "yes");
         }
     }
+  else
+    g_message ("%s: mqtt_server_uri not set, LSC disabled", __func__);
 
   init_signal_handlers ();
 

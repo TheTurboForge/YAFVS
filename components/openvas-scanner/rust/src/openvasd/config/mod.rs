@@ -41,7 +41,6 @@ pub struct Feed {
 pub struct Notus {
     pub products_path: PathBuf,
     pub advisories_path: PathBuf,
-    pub address: Option<SocketAddr>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -145,7 +144,6 @@ impl Default for Notus {
         Notus {
             products_path: PathBuf::from("/var/lib/notus/products"),
             advisories_path: PathBuf::from("/var/lib/notus/advisories"),
-            address: None,
         }
     }
 }
@@ -160,45 +158,6 @@ impl Default for Listener {
         Self {
             address: ([127, 0, 0, 1], 3000).into(),
         }
-    }
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq, Eq)]
-/// Describes different modes openvasd can be run as.
-///
-/// `Service` prefix means that openvasd is a http service used by others.
-/// `Client` prefix means that openvasd is run as a client and  calls other services.
-pub enum Mode {
-    #[default]
-    #[serde(rename = "service")]
-    /// Enables all endpoints and monitors feed and active scans.
-    Service,
-    /// Disables everything but the notus endpoints
-    #[serde(rename = "service_notus")]
-    ServiceNotus,
-}
-
-impl TypedValueParser for Mode {
-    type Value = Self;
-
-    fn parse_ref(
-        &self,
-        cmd: &clap::Command,
-        _arg: Option<&clap::Arg>,
-        value: &std::ffi::OsStr,
-    ) -> Result<Self::Value, clap::Error> {
-        Ok(match value.to_str().unwrap_or_default() {
-            "service" => Self::Service,
-            "service_notus" => Self::ServiceNotus,
-            _ => {
-                let mut cmd = cmd.clone();
-                let err = cmd.error(
-                    clap::error::ErrorKind::InvalidValue,
-                    "`{}` is not a scanner type.",
-                );
-                return Err(err);
-            }
-        })
     }
 }
 
@@ -321,7 +280,6 @@ pub struct StorageV1 {
 #[derive(Deserialize, Serialize, Debug, Clone, Default)]
 #[serde(default)]
 pub struct Config {
-    pub mode: Mode,
     pub feed: Feed,
     pub notus: Notus,
     pub endpoints: Endpoints,
@@ -443,14 +401,6 @@ impl Config {
                     .value_parser(clap::builder::PathBufValueParser::new())
                     .action(ArgAction::Set)
                     .help("Path containing the Notus products directory"))
-            .arg(
-                clap::Arg::new("notus-address")
-                    .env("NOTUS_ADDRESS")
-                    .long("notus-address")
-                    .value_name("IP:PORT")
-                    .value_parser(clap::value_parser!(SocketAddr))
-                    .action(ArgAction::Set)
-                    .help("the address to reach notus on"))
             .arg(
                 clap::Arg::new("redis-url")
                     .long("redis-url")
@@ -612,14 +562,6 @@ impl Config {
                     .long("version")
                     .action(ArgAction::SetTrue)
                     .help("Show openvasd version and exit."),
-            )
-            .arg(
-                clap::Arg::new("mode")
-                    .env("OPENVASD_MODE")
-                    .long("mode")
-                    .value_name("service,service_notus")
-                    .value_parser(Mode::Service)
-                    .help("Sets the openvasd mode"),
             );
 
         for pref in PREFERENCES {
@@ -678,9 +620,6 @@ impl Config {
         if let Some(path) = cmds.get_one::<PathBuf>("notus-advisories") {
             config.notus.advisories_path.clone_from(path);
         }
-        if let Some(address) = cmds.get_one::<SocketAddr>("notus-address") {
-            config.notus.address = Some(*address);
-        }
         if let Some(_path) = cmds.get_one::<String>("redis-url") {
             // is actually ignored as on scanner openvas the redis-url of openvas is used
         }
@@ -723,9 +662,6 @@ impl Config {
                 location: DBLocation::File(path.clone()),
                 ..Default::default()
             });
-        }
-        if let Some(mode) = cmds.get_one::<Mode>("mode") {
-            config.mode = mode.clone();
         }
         if let Some(key) = cmds.get_one::<String>("storage_key")
             && !key.is_empty()

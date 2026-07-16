@@ -73,8 +73,6 @@ class InheritedScannerSecurityContractTests(unittest.TestCase):
         expected_producers = (
             "misc/network.c",
             "misc/plugutils.c",
-            "misc/table_driven_lsc.c",
-            "nasl/nasl_scanner_glue.c",
             "src/attack.c",
             "src/hosts.c",
             "src/openvas.c",
@@ -184,6 +182,93 @@ class InheritedScannerSecurityContractTests(unittest.TestCase):
         self.assertIn(
             "--result-spool-dir=/runtime/state/ospd/result-spool",
             compose_source,
+        )
+
+    def test_notus_uses_only_the_authenticated_mqtt_scanner_path(self):
+        scanner = ROOT / "components/openvas-scanner"
+        nasl_init = (scanner / "nasl/nasl_init.c").read_text(encoding="utf-8")
+        nasl_glue = (scanner / "nasl/nasl_scanner_glue.c").read_text(
+            encoding="utf-8"
+        )
+        lsc_source = (scanner / "misc/table_driven_lsc.c").read_text(
+            encoding="utf-8"
+        )
+        scanner_source = (scanner / "src/openvas.c").read_text(encoding="utf-8")
+        attack_source = (scanner / "src/attack.c").read_text(encoding="utf-8")
+        ospd_source = (
+            ROOT / "components/ospd-openvas/ospd_openvas/daemon.py"
+        ).read_text(encoding="utf-8")
+        spool_source = (
+            ROOT / "components/ospd-openvas/ospd/result_spool.py"
+        ).read_text(encoding="utf-8")
+        ospd_db_source = (
+            ROOT / "components/ospd-openvas/ospd_openvas/db.py"
+        ).read_text(encoding="utf-8")
+        rust_notus = (
+            scanner / "rust/src/nasl/builtin/notus/mod.rs"
+        ).read_text(encoding="utf-8")
+        rust_reporting = (
+            scanner / "rust/src/nasl/builtin/report_functions/mod.rs"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('"update_table_driven_lsc_data"', nasl_init)
+        for removed_builtin in ('"notus"', '"notus_type"', '"notus_error"'):
+            self.assertNotIn(removed_builtin, nasl_init)
+        self.assertNotIn('"security_notus"', nasl_init)
+        self.assertNotIn("nasl_notus (", nasl_glue)
+        self.assertNotIn("security_notus (", nasl_glue)
+
+        for source in (lsc_source, scanner_source, attack_source, ospd_source):
+            self.assertNotIn("openvasd_lsc_enabled", source)
+            self.assertNotIn("openvasd_server", source)
+        self.assertNotIn("CURLOPT_SSL_VERIFYPEER", lsc_source)
+        self.assertNotIn("CURLOPT_SSL_VERIFYHOST", lsc_source)
+        self.assertIn('prefs_get ("mqtt_server_uri")', scanner_source)
+        self.assertIn("mqtt_init_auth", scanner_source)
+        self.assertIn('prefs_get_bool ("mqtt_enabled")', attack_source)
+        self.assertNotIn("OPENVASD = 'openvasd'", spool_source)
+        self.assertNotIn("'mqtt', 'openvasd', 'none'", ospd_db_source)
+        for retained_builtin in (
+            'fn notus_type()',
+            'fn notus_error(',
+            'async fn notus(',
+        ):
+            self.assertIn(retained_builtin, rust_notus)
+        self.assertIn("async fn security_notus(", rust_reporting)
+
+        standalone_manifests = (
+            scanner / "compose/base.yaml",
+            scanner / "compose/tls.yaml",
+            scanner / "compose/mtls.yaml",
+            scanner / "charts/openvasd/templates/deployment.yaml",
+        )
+        for manifest in standalone_manifests:
+            source = manifest.read_text(encoding="utf-8")
+            self.assertIn("table_driven_lsc = no", source)
+            self.assertNotIn("openvasd_server =", source)
+
+        rust_root = scanner / "rust"
+        rust_sources = {
+            "context": rust_root / "src/nasl/utils/scan_ctx.rs",
+            "notus": rust_root / "src/nasl/builtin/notus/mod.rs",
+            "config": rust_root / "src/openvasd/config/mod.rs",
+            "main": rust_root / "src/openvasd/main.rs",
+            "scannerctl": rust_root / "src/scannerctl/execute/mod.rs",
+            "openapi": rust_root / "api/openapi.yml",
+        }
+        rust_text = {
+            name: path.read_text(encoding="utf-8")
+            for name, path in rust_sources.items()
+        }
+        self.assertNotIn("NotusCtx::Address", "\n".join(rust_text.values()))
+        self.assertNotIn("notus_extern", rust_text["notus"])
+        self.assertNotIn("notus-address", rust_text["config"])
+        self.assertNotIn("mod notus;", rust_text["main"])
+        self.assertNotIn("/notus:", rust_text["openapi"])
+        self.assertFalse((rust_root / "src/openvasd/notus/mod.rs").exists())
+        self.assertEqual(
+            list((scanner / "compose/tests/smoketest/notus").glob("*.hurl")),
+            [],
         )
 
     def test_http2_requests_pin_the_authorized_scan_target(self):

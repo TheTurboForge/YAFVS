@@ -1,6 +1,7 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
  * SPDX-FileCopyrightText: 2002-2003 Michel Arboi
  * SPDX-FileCopyrightText: 2002-2003 Renaud Deraison
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-only
  */
@@ -117,17 +118,5 @@ nasl_vendor_version (lex_ctxt *);
 
 tree_cell *
 nasl_update_table_driven_lsc_data (lex_ctxt *);
-
-tree_cell *
-nasl_notus (lex_ctxt *);
-
-tree_cell *
-nasl_notus_type (lex_ctxt *);
-
-tree_cell *
-nasl_notus_error (lex_ctxt *);
-
-tree_cell *
-security_notus (lex_ctxt *lexic);
 
 #endif

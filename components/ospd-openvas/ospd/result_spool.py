@@ -109,7 +109,6 @@ class NotusManifestMode(str, Enum):
     """The authoritative table-driven LSC transport selected by OpenVAS."""
 
     MQTT = 'mqtt'
-    OPENVASD = 'openvasd'
     NONE = 'none'
 
 
@@ -271,7 +270,7 @@ class ResultSpool:
         count_excluded INTEGER,
         incomplete_reason TEXT,
         notus_manifest_mode TEXT CHECK(notus_manifest_mode IN (
-            'mqtt', 'openvasd', 'none'
+            'mqtt', 'none'
         )),
         notus_manifest_json TEXT,
         notus_manifest_digest TEXT

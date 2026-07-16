@@ -104,7 +104,6 @@ Ensure (lsc, rejects_oversized_notus_start_input_before_json)
                  message_id, group_id, "scan-1", "192.0.2.1", "host",
                  "Example Linux", packages),
                is_null);
-  assert_that (make_package_list_as_json_str (packages), is_null);
   g_free (packages);
 
   for (i = 0; i <= TABLE_DRIVEN_LSC_PACKAGE_MAX_COUNT; i++)
@@ -116,89 +115,6 @@ AfterEach (lsc)
 {
 }
 
-static char *resp_str = "{"
-                        "\"1.3.6.1.4.1.25623.1.1.7.2.2023.0988598199100\": ["
-                        "{"
-                        "\"name\": \"grafana8\","
-                        "\"installed_version\": \"8.5.23\","
-                        "\"fixed_version\": {"
-                        "\"version\": \"8.5.24\","
-                        "\"specifier\": \">=\""
-                        "}"
-                        "},"
-                        "{"
-                        "\"name\": \"grafana9\","
-                        "\"installed_version\": \"9.4.7\","
-                        "\"fixed_version\": {"
-                        "\"start\": \"9.4.0\","
-                        "\"end\": \"9.4.9\""
-                        "}"
-                        "}"
-                        "],"
-                        "\"1.3.6.1.4.1.25623.1.1.7.2.2023.10089729899100\": ["
-                        "{"
-                        "\"name\": \"gitlab-ce\","
-                        "\"installed_version\": \"16.0.1\","
-                        "\"fixed_version\": {"
-                        "\"start\": \"16.0.0\","
-                        "\"end\": \"16.0.7\""
-                        "}"
-                        "}"
-                        "]"
-                        "}";
-
-Ensure (lsc, make_pkg_in_json)
-{
-  char *pkglist = "pkg1.2.3\npkg4.5.6\nfoo-24\nbar-35\n";
-  char *json = "[\"pkg1.2.3\",\"pkg4.5.6\",\"foo-24\",\"bar-35\"]";
-
-  assert_that (strcmp (make_package_list_as_json_str (pkglist), json),
-               is_equal_to (0));
-}
-
-Ensure (lsc, bounds_openvasd_response_before_reallocation)
-{
-  struct string response = {
-    .ptr = g_malloc0 (1),
-    .len = TABLE_DRIVEN_LSC_RESPONSE_MAX_BYTES,
-  };
-
-  assert_that (response_callback_fn ("x", 1, 1, &response), is_equal_to (0));
-  assert_that (response.len, is_equal_to (TABLE_DRIVEN_LSC_RESPONSE_MAX_BYTES));
-  g_free (response.ptr);
-}
-
-Ensure (lsc, process_resp)
-{
-  advisories_t *advisories = NULL;
-
-  advisories = lsc_process_response (resp_str, strlen (resp_str));
-  assert_that ((*advisories).count, is_equal_to (2));
-
-  assert_that ((*advisories).advisories[0]->count, is_equal_to (2));
-  assert_that ((*advisories).advisories[0]->pkgs[0]->type,
-               is_equal_to (SINGLE));
-  assert_that (
-    strcmp ((*advisories).advisories[0]->pkgs[0]->pkg_name, "grafana8"),
-    is_equal_to (0));
-  assert_that (
-    strcmp ((*advisories).advisories[0]->pkgs[0]->install_version, "8.5.23"),
-    is_equal_to (0));
-  assert_that (
-    strcmp ((*advisories).advisories[0]->pkgs[1]->pkg_name, "grafana9"),
-    is_equal_to (0));
-  assert_that (
-    strcmp ((*advisories).advisories[0]->pkgs[1]->install_version, "9.4.7"),
-    is_equal_to (0));
-
-  assert_that ((*advisories).advisories[0]->pkgs[1]->type, is_equal_to (RANGE));
-
-  assert_that ((*advisories).advisories[1]->count, is_equal_to (1));
-  assert_that ((*advisories).advisories[0]->pkgs[1]->type, is_equal_to (RANGE));
-
-  advisories_free (advisories);
-}
-
 int
 main (int argc, char **argv)
 {
@@ -207,10 +123,6 @@ main (int argc, char **argv)
 
   suite = create_test_suite ();
 
-  add_test_with_context (suite, lsc, process_resp);
-  add_test_with_context (suite, lsc, make_pkg_in_json);
-  add_test_with_context (suite, lsc,
-                         bounds_openvasd_response_before_reallocation);
   add_test_with_context (suite, lsc, makes_distinct_bounded_start_ids);
   add_test_with_context (suite, lsc, serializes_exact_bounded_manifest);
   add_test_with_context (suite, lsc, start_payload_uses_explicit_ids);

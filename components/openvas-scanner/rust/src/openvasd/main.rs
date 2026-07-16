@@ -11,7 +11,6 @@ mod config;
 mod crypt;
 mod database;
 mod json_stream;
-mod notus;
 mod scans;
 mod vts;
 
@@ -23,7 +22,6 @@ use std::{
 
 use config::{Config, DBLocation, SqliteConfiguration, StorageType};
 use greenbone_scanner_framework::{RuntimeBuilder, ServerCertificate};
-use notus::config_to_products;
 use scannerlib::models::FeedState;
 use scannerlib::utils::version::show_version;
 use sqlx::SqlitePool;
@@ -68,13 +66,11 @@ async fn _main() -> Result<i32> {
         return Ok(0);
     }
 
-    let products = config_to_products(&config);
     let pool = setup_sqlite(&config).await?;
     let feed_snapshot = Arc::new(std::sync::RwLock::new(FeedState::Unknown));
     let (sender, vts) = vts::init(pool.clone(), &config, feed_snapshot.clone()).await;
     let vts = Arc::new(vts);
     let scan = scans::init(pool.clone(), &config, sender).await?;
-    let (get_notus, post_notus) = notus::init(products.clone());
 
     let mut rb = RuntimeBuilder::<greenbone_scanner_framework::End>::new(config.listener.address)
         .feed_version(feed_snapshot.clone());
@@ -103,8 +99,6 @@ async fn _main() -> Result<i32> {
     rb.insert_scans(Arc::new(scan))
         .insert_get_vts(vts.clone())
         .max_concurrent_connections(config.storage.max_connections() * 10)
-        .add_request_handler(get_notus)
-        .add_request_handler(post_notus)
         .run_blocking()
         .await
 }

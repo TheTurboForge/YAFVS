@@ -10,7 +10,6 @@ Some scanner preferences are found in the scanner code but are not documented in
 - exclude_hosts: excluded host from the TARGET list. Internally used and set by the client.
 - hosts_ordering: intended to be used by the client. If Boreas is active, this option is ignored, since the host order changes in the mean the host are detected as alive
 - mqtt_enabled: internally used for selection of python implementation of Notus
-- openvasd_lsc_enabled: internally used for selection of rust implementation of Notus
 - ov_maindbid: internally used Redis database index for the scan's main KB.
 - ov_mainowner: internally used owner token that fences access to ov_maindbid.
 - plugin_set: List of plugin OIDs to be run against the target. This is set by the client and used to initialize the plugin scheduler.

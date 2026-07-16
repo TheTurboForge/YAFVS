@@ -15,7 +15,6 @@ Currently it is utilizing ospd-openvas.
       - [How does mTLS works?](#how-does-mtls-works)
       - [Certificate Authority for pki](#certificate-authority-for-pki-mtls-method)
       - [mTLS with self-signed client certificates.](#mtls-with-self-signed-client-certificates)
-  - [Mode](#mode)
 - [Usage](#usage)
   - [Feed signature check.](#feed-signature-check)
 - [Options](#options)
@@ -139,10 +138,6 @@ On the client side, you use the client key and the client certificate. An exampl
 
 As can be seen, no CA certificate is used, since instead the client certificate is used on the server side.
 
-## Mode
-
-Openvasd currently supports two operation modes. The `service` mode supports all available endpoints, where the `service_notus` mode only supports the notus related endpoints.
-
 # Usage
 
 ```
@@ -199,8 +194,6 @@ Options:
           the password to use for encryption when type is set to fs. If not set the files are not encrypted. [env: STORAGE_KEY=]
   -L, --log-level <log-level>
           Level of log messages to be shown. TRACE > DEBUG > INFO > WARN > ERROR [env: OPENVASD_LOG=]
-      --mode <service,service_notus>
-          Sets the openvasd mode [env: OPENVASD_MODE=]
   -h, --help
           Print help
 ```
@@ -237,7 +230,6 @@ If the signature check is enabled, it is also required to set the the `GNUPGHOME
 | Storage type             | --storage-type          |               | storage                            | type              | STORAGE_TYPE             | Information can either be stored in memory or on the filesystem                                                                                                           | inmemory                      |
 | Storage path             | --storage-path          |               | storage.fs                         | path              | STORAGE_PATH             | the path that contains the files when type is set to fs                                                                                                                   | /var/lib/openvasd/storage     |
 | Log Level                | --log-level             | -L            | log                                | level             | OPENVASD_LOG             | Level of log messages to be shown. TRACE > DEBUG > INFO > WARN > ERROR                                                                                                    | INFO                          |
-| Service mode             | --mode                  |               |                                    | mode              | OPENVASD_MODE            | Sets the openvasd mode, can be either `service` or `service_notus`                                                                                                        | service                       |
 | Help                     | --help                  | -h            |                                    |                   |                          | Print help                                                                                                                                                                |                               |
 
 # Migration from previous OSP commands

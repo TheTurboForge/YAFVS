@@ -1409,7 +1409,7 @@ class KbDB(BaseKbDB):
                 'OpenVAS reported a Notus manifest publication failure.'
             )
         mode = self._get_single_item(self.NOTUS_MANIFEST_SEAL_KEY)
-        if mode not in ('mqtt', 'openvasd', 'none'):
+        if mode not in ('mqtt', 'none'):
             raise OspdOpenvasError(
                 'OpenVAS did not seal a valid Notus expectation manifest.'
             )

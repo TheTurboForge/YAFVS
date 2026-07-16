@@ -1,5 +1,6 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
  * SPDX-FileCopyrightText: 2002-2004 Tenable Network Security
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-only
  */
@@ -80,9 +81,6 @@ static init_func libfuncs[] = {
   {"script_tag", script_tag},
   {"vendor_version", nasl_vendor_version},
   {"update_table_driven_lsc_data", nasl_update_table_driven_lsc_data},
-  {"notus", nasl_notus},
-  {"notus_type", nasl_notus_type},
-  {"notus_error", nasl_notus_error},
   {"get_preference", nasl_get_preference},
   {"safe_checks", safe_checks},
   {"get_script_oid", get_script_oid},
@@ -92,7 +90,6 @@ static init_func libfuncs[] = {
   {"get_kb_list", get_kb_list},
   {"get_host_kb_index", get_host_kb_index},
   {"security_message", security_message},
-  {"security_notus", security_notus},
   {"log_message", log_message},
   {"error_message", error_message2},
   {"open_sock_tcp", nasl_open_sock_tcp},

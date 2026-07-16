@@ -839,6 +839,14 @@ class ResultSpoolTestCase(unittest.TestCase):
             )
             self.assertFalse(spool.notus_completion_ready('missed-scan'))
 
+    def test_notus_manifest_rejects_removed_openvasd_transport(self):
+        with self.spool() as spool:
+            spool.register_scan('scan-1')
+            with self.assertRaisesRegex(
+                ResultSpoolValidationError, 'unsupported Notus manifest mode'
+            ):
+                spool.seal_notus_manifest('scan-1', 'openvasd', [])
+
     def test_notus_manifest_rejects_wrong_observed_identity(self):
         with self.spool() as spool:
             spool.register_scan('scan-1')

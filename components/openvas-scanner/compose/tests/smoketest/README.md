@@ -1,3 +1,5 @@
+<!-- TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. -->
+
 # OpenVASD Smoketest
 
 This directory contains smoketests for validating a running OpenVASD
@@ -33,7 +35,6 @@ This runs:
 
 ```bash
 make up-and-running
-make notus
 make scans-user-flow-victim-simple-auth-ssh
 ```
 
@@ -43,7 +44,6 @@ make scans-user-flow-victim-simple-auth-ssh
 
 # Basic checks
 make up-and-running
-make notus
 make scans
 # User flow targets are derived from JSON files in scans-user-flows/.
 make scans-user-flow-victim-simple-auth-ssh

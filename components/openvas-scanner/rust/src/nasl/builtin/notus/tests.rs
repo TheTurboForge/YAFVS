@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2026 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
@@ -8,9 +9,22 @@ use std::{
 };
 
 use crate::{
-    nasl::{Loader, test_utils::TestBuilder},
+    nasl::{Loader, NaslValue, test_utils::TestBuilder},
     notus::{Notus, ProductLoader},
 };
+
+use super::parse_package_list;
+
+#[test]
+fn parses_newline_delimited_package_list() {
+    assert_eq!(
+        parse_package_list(NaslValue::String(
+            "gitlab-ce-16.0.1\ngrafana-8.5.23\r\ngrafana8-8.5.23".to_string(),
+        ))
+        .unwrap(),
+        ["gitlab-ce-16.0.1", "grafana-8.5.23", "grafana8-8.5.23",]
+    );
+}
 
 fn make_test_path(sub_components: &[&str]) -> std::path::PathBuf {
     let mut path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).to_owned();

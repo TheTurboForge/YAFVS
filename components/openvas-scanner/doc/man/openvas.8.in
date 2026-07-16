@@ -1,4 +1,5 @@
 .TH OpenVAS 8 "February 2021" "Greenbone Vulnerability Management" "User Manuals"
+.\" TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 .SH NAME
 openvas \- The Scanner of the Greenbone Vulnerability Management
 .SH SYNOPSIS
@@ -217,19 +218,13 @@ Defaults to true.
 
 .IP mqtt_server_uri
 URI to the MQTT server used for internal communication with Notus (table driven LSC).
-This implementation of Notus is in python and it is deprecated, being replaced with a Rust implementation of Notus.
+TurboVAS uses authenticated MQTT as the scanner-to-Notus transport.
 
 .IP mqtt_user
 Username for authenticated MQTT communication.
 
 .IP mqtt_pass
 Password for authenticated MQTT communication.
-
-.IP openvasd_server
-Openvasd server URI to Rust implementation of Notus. It has priority over MQTT settings.
-
-.IP x-apikey
-API Key for authenticate against openvasd when Notus Rust implementation is enabled.
 
 .IP nasl_no_signature_check
 Enable/disable the Feed signacture check. Pay attention to the negative logic of this setting.

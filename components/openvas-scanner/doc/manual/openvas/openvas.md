@@ -1,5 +1,7 @@
 # openvas
 
+<!-- TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. -->
+
 ## NAME
 
 openvas - The Scanner of the Greenbone Vulnerability Management
@@ -361,9 +363,8 @@ table_driven_lsc
 mqtt_server_uri
 
 :   URI to the MQTT server used for internal communication with Notus
-    (table driven LSC). This implementation of Notus is in python and
-    it is deprecated, being replaced with a Rust implementation of
-    Notus.
+    (table driven LSC). TurboVAS uses authenticated MQTT as the
+    scanner-to-Notus transport.
 
 mqtt_user
 
@@ -373,16 +374,6 @@ mqtt_pass
 
 :   Password for authenticated MQTT communication The other options in
     this file can usually be redefined by the client.
-
-openvasd_server
-
-:   Openvasd server URI to Rust implementation of Notus. It has
-    priority over MQTT settings.
-
-x-apikey
-
-:   API Key for authenticate against openvasd when Notus Rust
-    implementation is enabled.
 
 nasl_no_signature_check
 

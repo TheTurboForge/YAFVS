@@ -947,11 +947,7 @@ class OSPDopenvas(OSPDaemon):
 
         self.set_params_from_openvas_settings()
 
-        # Do not init MQTT daemon if Notus runs via openvasd.
-        if (
-            not self.scan_only_params.get("openvasd_server")
-            and self._mqtt_broker_address
-        ):
+        if self._mqtt_broker_address:
             if self.result_spool is None:
                 raise OspdOpenvasError(
                     'Durable result spool is required for Notus MQTT results.'
@@ -991,7 +987,7 @@ class OSPDopenvas(OSPDaemon):
                 self.handle_malformed_notus_result,
             )
             daemon.run()
-        elif not self.scan_only_params.get("openvasd_server"):
+        else:
             logger.info(
                 "MQTT Broker Address empty. MQTT disabled. "
                 "Unable to get Notus results."

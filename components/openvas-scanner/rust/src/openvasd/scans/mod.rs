@@ -1,3 +1,5 @@
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+
 use std::{pin::Pin, sync::Arc};
 
 use crate::database::{
@@ -511,7 +513,6 @@ pub mod tests {
         let notus = crate::config::Notus {
             advisories_path,
             products_path,
-            address: None,
         };
         let scanner = crate::config::Scanner {
             scanner_type: crate::config::ScannerType::Openvasd,

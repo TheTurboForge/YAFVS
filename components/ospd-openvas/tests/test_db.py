@@ -895,6 +895,14 @@ class KbDBTestCase(TestCase):
         with self.assertRaisesRegex(OspdOpenvasError, 'did not seal'):
             self.db.get_notus_manifest()
 
+    def test_get_notus_manifest_rejects_removed_openvasd_transport(
+        self, mock_openvas_db
+    ):
+        mock_openvas_db.get_single_item.side_effect = [None, 'openvasd']
+
+        with self.assertRaisesRegex(OspdOpenvasError, 'did not seal'):
+            self.db.get_notus_manifest()
+
     def test_get_notus_manifest_rejects_failure_marker(self, mock_openvas_db):
         mock_openvas_db.get_single_item.return_value = 'failed'
 

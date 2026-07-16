@@ -1,3 +1,5 @@
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+
 name: openvasd-community-edition-tls
 
 services:
@@ -6,15 +8,13 @@ services:
     image: ghcr.io/greenbone/openvas-scanner:stable
     volumes:
       - openvas_data_vol:/mnt
-    environment:
-      OPENVASD_PROTOCOL: https
-      # we stick to port 3000 as the rebound of ports has issues within podman-compose
-      OPENVASD_PORT: 3000
     command:
       - /bin/sh
       - -c
       - |
-        printf "table_driven_lsc = yes\nopenvasd_server = $OPENVASD_PROTOCOL://openvasd:$OPENVASD_PORT\n" > /mnt/openvas.conf
+        # This standalone openvasd fixture has no authenticated MQTT/Notus
+        # pipeline, so table-driven LSC remains disabled.
+        printf "table_driven_lsc = no\n" > /mnt/openvas.conf
         chmod 644 /mnt/openvas.conf
 
   openvasd:

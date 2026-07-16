@@ -1,8 +1,8 @@
+<!-- TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. -->
+
 # update_table_driven_lsc_data
 
 ## NAME
-
-DEPRECATED
 
 **update_table_driven_lsc_data** - Set information, so that openvas can start a table driven lsc
 
@@ -21,9 +21,8 @@ os_release: identifier for the operating system of the target system
 After the KB items are set, these information is also transferred to the main process and a notus scan is triggered. The
 results of the notus scan are then directly published.
 
-## DEPRECATED
-
-This function is deprecated and **[notus(3)](notus.md)** and **[security_notus(3)](security_notus.md)** should be used instead.
+TurboVAS passes this bounded package data through the authenticated MQTT Notus
+pipeline. It does not invoke the removed direct Notus HTTP transport.
 
 ## RETURN VALUE
 
@@ -32,5 +31,4 @@ This function returns nothing.
 ## SEE ALSO
 
 **[log_message(3)](log_message.md)**,
-**[notus(3)](notus.md)**,
-**[security_notus(3)](security_notus.md)**
+None.

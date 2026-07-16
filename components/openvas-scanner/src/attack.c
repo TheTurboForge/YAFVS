@@ -110,8 +110,7 @@ connect_main_kb (kb_t *main_kb)
     }
   i = atoi (db_index);
 
-  *main_kb =
-    kb_direct_conn (prefs_get ("db_address"), i, owner_token);
+  *main_kb = kb_direct_conn (prefs_get ("db_address"), i, owner_token);
   if (*main_kb)
     {
       return 0;
@@ -304,9 +303,9 @@ message_to_client (kb_t kb, const char *msg, const char *ip_str,
 {
   char *buf;
 
-  buf = openvas_result_message_new (
-    type, ip_str ? ip_str : "", ip_str ? ip_str : "", port ? port : " ", " ",
-    msg ? msg : "No error.", "");
+  buf = openvas_result_message_new (type, ip_str ? ip_str : "",
+                                    ip_str ? ip_str : "", port ? port : " ",
+                                    " ", msg ? msg : "No error.", "");
   kb_item_push_str_with_main_kb_check (kb, "internal/results", buf);
   g_free (buf);
 }
@@ -410,9 +409,9 @@ call_lsc (struct attack_start_args *args, const char *ip_str)
                             os_release)
       < 0)
     {
-      char *buffer = openvas_result_message_new (
-        "ERRMSG", ip_str, " ", " ", " ", "Unable to launch table driven lsc",
-        "");
+      char *buffer =
+        openvas_result_message_new ("ERRMSG", ip_str, " ", " ", " ",
+                                    "Unable to launch table driven lsc", "");
       kb_item_push_str_with_main_kb_check (get_main_kb (), "internal/results",
                                            buffer);
       g_free (buffer);
@@ -464,8 +463,7 @@ process_ipc_data (struct attack_start_args *args, const gchar *result)
           ipc_msg_flag |= IPC_DT_LSC;
           set_lsc_flag ();
           if (!scan_is_stopped () && prefs_get_bool ("table_driven_lsc")
-              && (prefs_get_bool ("mqtt_enabled")
-                  || prefs_get_bool ("openvasd_lsc_enabled")))
+              && prefs_get_bool ("mqtt_enabled"))
             {
               struct in6_addr hostip;
               gchar ip_str[INET6_ADDRSTRLEN];
@@ -754,9 +752,7 @@ attack_host (struct scan_globals *globals, struct in6_addr *ip,
     }
 
   if (!scan_is_stopped () && prefs_get_bool ("table_driven_lsc")
-      && !lsc_has_run ()
-      && (prefs_get_bool ("mqtt_enabled")
-          || prefs_get_bool ("openvasd_lsc_enabled")))
+      && !lsc_has_run () && prefs_get_bool ("mqtt_enabled"))
     {
       call_lsc (args, ip_str);
     }
@@ -928,8 +924,8 @@ attack_start (struct ipc_context *ipcc, struct attack_start_args *args)
   kb_lnk_reset (main_kb);
   gettimeofday (&then, NULL);
 
-  if (kb_item_set_str_with_main_kb_check (
-        kb, "internal/scan_id", globals->scan_id, 0)
+  if (kb_item_set_str_with_main_kb_check (kb, "internal/scan_id",
+                                          globals->scan_id, 0)
       || set_kb_readable (kb))
     {
       set_scan_status ("stop_all");
@@ -1286,7 +1282,7 @@ attack_network (struct scan_globals *globals)
       error = -1;
       return error;
     }
-  /* Init and check Target List */
+    /* Init and check Target List */
 #ifdef FEATURE_HOST_DISCOVERY_IPV6
   alive_test_t alive_test;
   const char *target_aux = prefs_get ("TARGET");
@@ -1299,7 +1295,7 @@ attack_network (struct scan_globals *globals)
       run_cli_for_ipv6_network (target_aux, &host_found, print_results);
       hostlist = host_found;
       // Consider alive the found hosts, to avoid double check later
-      prefs_set("ALIVE_TEST", "8");
+      prefs_set ("ALIVE_TEST", "8");
     }
   else
 #endif /* FEATURE_HOST_DISCOVERY_IPV6 */

@@ -707,6 +707,47 @@ class TestOspdOpenvas(TestCase):
         self.assertEqual(OSPD_PARAMS, OSPD_PARAMS_OUT)
         self.assertEqual(w.scan_only_params.get('plugins_folder'), '/foo/bar')
 
+    def test_init_starts_mqtt_with_stale_openvasd_server(self):
+        daemon = DummyDaemon()
+        daemon._mqtt_broker_address = 'localhost'
+        daemon.scan_only_params['openvasd_server'] = 'https://openvasd:443'
+        daemon.result_spool = MagicMock()
+        daemon.result_spool.pending_notus_scan_ids.return_value = []
+        daemon.scan_collection = MagicMock()
+        daemon.reconcile_result_spool = MagicMock()
+        daemon.feed_lock = MagicMock()
+        daemon.update_vts = MagicMock()
+        daemon.set_feed_info = MagicMock()
+        daemon.vts = MagicMock()
+
+        with (
+            patch('ospd_openvas.daemon.OpenvasDB') as mock_openvas_db,
+            patch('ospd_openvas.daemon.Openvas') as mock_openvas,
+            patch(
+                'ospd_openvas.daemon.OSPDopenvas.set_params_from_openvas_settings'
+            ),
+            patch('ospd_openvas.daemon.MQTTClient') as mock_mqtt_client,
+            patch('ospd_openvas.daemon.MQTTDaemon') as mock_mqtt_daemon,
+            patch('ospd_openvas.daemon.MQTTSubscriber') as mock_mqtt_subscriber,
+            patch('ospd_openvas.daemon.VtHelper') as mock_vt_helper,
+        ):
+            mock_openvas.get_version.return_value = 'test-version'
+            mock_vt_helper.return_value.calculate_vts_collection_hash.return_value = (
+                'test-hash'
+            )
+
+            daemon.init(Mock())
+
+        mock_openvas_db.validate_result_admission_backend.assert_called_once_with()
+        mock_mqtt_client.assert_called_once_with(
+            'localhost', 1883, 'ospd', None, None
+        )
+        mock_mqtt_daemon.return_value.run.assert_called_once_with()
+        self.assertEqual(
+            mock_mqtt_subscriber.return_value.subscribe.call_count, 3
+        )
+        self.assertTrue(daemon.initialized)
+
     @patch('ospd_openvas.daemon.Openvas')
     def test_sudo_available(self, mock_openvas):
         mock_openvas.check_sudo.return_value = True

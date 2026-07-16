@@ -1,4 +1,5 @@
 // SPDX-FileCopyrightText: 2024 Greenbone AG
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 //
 // SPDX-License-Identifier: GPL-2.0-or-later WITH x11vnc-openssl-exception
 
@@ -31,7 +32,7 @@ use super::error::ReturnBehavior;
 use super::executor::Executor;
 use super::hosts::{LOCALHOST, resolve_hostname};
 use super::{FnError, Register};
-use std::net::{IpAddr, SocketAddr};
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
@@ -274,7 +275,6 @@ impl<T> ContextStorage for T where
 #[derive(Clone)]
 pub enum NotusCtx {
     Direct(Arc<Mutex<Notus>>),
-    Address(SocketAddr),
 }
 
 /// NASL execution context.

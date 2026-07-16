@@ -1,10 +1,13 @@
-use std::sync::Arc;
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+
+use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
 
 use greenbone_scanner_framework::models::{self, Scan};
 use scannerlib::{
     models::FeedType,
-    nasl::{builtin::nasl_std_functions, syntax::Loader},
+    nasl::{builtin::nasl_std_functions, syntax::Loader, utils::scan_ctx::NotusCtx},
+    notus::{Notus, ProductLoader},
     openvas::{self, cmd},
     osp,
     scanner::{
@@ -519,10 +522,7 @@ where
 {
     match config.scanner.scanner_type {
         crate::config::ScannerType::Ospd => {
-            //TODO: when in notus don't start scheduler at all
-            if !config.scanner.ospd.socket.exists()
-                && config.mode != crate::config::Mode::ServiceNotus
-            {
+            if !config.scanner.ospd.socket.exists() {
                 tracing::warn!(
                     "OSPD socket {} does not exist. Some commands will not work until the socket is created!",
                     config.scanner.ospd.socket.display()
@@ -550,10 +550,12 @@ where
         crate::config::ScannerType::Openvasd => {
             let loader = Loader::from_feed_path(&config.feed.path);
             let executor = nasl_std_functions();
-            let notus = config
-                .notus
-                .address
-                .map(scannerlib::nasl::utils::scan_ctx::NotusCtx::Address);
+            let notus = Some(NotusCtx::Direct(Arc::new(Mutex::new(Notus::new(
+                ProductLoader::new(
+                    config.feed.signature_check,
+                    Loader::from_feed_path(&config.notus.products_path),
+                ),
+            )))));
             let storage = ScanStorage::new(pool.clone());
             let scanner = OpenvasdScanner::new(storage, loader, executor, notus);
             init_with_scanner(pool, crypter, config, scanner, feed_status).await

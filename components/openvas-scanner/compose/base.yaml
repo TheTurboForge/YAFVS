@@ -1,3 +1,5 @@
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+
 name: greenbone-community-edition
 
 services:
@@ -61,14 +63,14 @@ services:
     image: ${OPENVAS_IMAGE:-ghcr.io/greenbone/openvas-scanner:stable}
     volumes:
       - openvas_data_vol:/mnt
-    environment:
-      OPENVASD_PROTOCOL: http
-      OPENVASD_PORT: 3000
     command:
       - /bin/sh
       - -c
       - |
-        printf "table_driven_lsc = yes\nopenvasd_server = $OPENVASD_PROTOCOL://openvasd:$OPENVASD_PORT\n" > /mnt/openvas.conf
+        # This standalone openvasd fixture does not provision the authenticated
+        # MQTT/Notus pipeline used by TurboVAS. Fail closed instead of restoring
+        # the removed direct OpenVAS-to-openvasd HTTP transport.
+        printf "table_driven_lsc = no\n" > /mnt/openvas.conf
         chmod 644 /mnt/openvas.conf
 
 

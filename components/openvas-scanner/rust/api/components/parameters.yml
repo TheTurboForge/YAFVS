@@ -1,3 +1,5 @@
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+
 ScanID:
   - in: path
     name: id
@@ -10,14 +12,6 @@ ResultID:
   - in: path
     name: rid
     description: "ID of a Result"
-    required: true
-    schema:
-      type: "string"
-
-NotusOS:
-  - name: os
-    in: path
-    description: "Operating System"
     required: true
     schema:
       type: "string"

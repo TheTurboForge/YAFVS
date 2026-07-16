@@ -1,6 +1,12 @@
+<!-- TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. -->
+
 # Helm Chart for `openvasd` deployment 
 
 This helm chart is only providing the scanner API. It does not include any vulnerability management services.
+
+It also does not provision TurboVAS's authenticated MQTT/Notus pipeline, so
+table-driven LSC is disabled in this standalone chart. Use the TurboVAS product
+runtime when retained Notus result delivery is required.
 
 If you want to utilize the whole stack please use: https://greenbone.github.io/docs/latest/22.4/container/index.html#docker-compose-file.
 

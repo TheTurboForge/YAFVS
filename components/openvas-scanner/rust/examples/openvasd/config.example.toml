@@ -1,10 +1,4 @@
 # TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
-# Openvasd contains several modes to control the behavior of it.
-# Service enables nasl and notus feed observations all endpoints.
-mode = "service"
-# Notus disables /scan endpoints and just observes the notus feed.
-# mode = "service_notus"
-
 [feed]
 # Path to the openvas feed. This is required for the /vts endpoint.
 path = "/var/lib/openvas/plugins"
@@ -15,12 +9,10 @@ signature_check = true
 check_interval = "3600s"
 
 [notus]
-# Path to the notus feed. This is required for the /notus endpoint
+# Path to the Notus products used by the local scanner implementation.
 products_path = "/var/lib/notus/products/"
 # path to the notus advisories feed. This is required for the /vts endpoint
 advisories_path = "/var/lib/notus/advisories/"
-# Address to reach notus on. If not set, internal notus implementation is used.
-# address = "127.0.0.1:3001"
 
 [endpoints]
 # Enables GET /scans endpoint

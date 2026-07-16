@@ -1,3 +1,5 @@
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -111,18 +113,15 @@ spec:
         command: ['sh', '-c']
         args: ["touch /mnt/ovc/openvas.log"]
       {{ end }} 
-      - name: mqtt-broker-openvas-fix
+      - name: configure-openvas
         image: "{{ .Values.ospd.repository }}:{{ .Values.ospd.tag }}"
         imagePullPolicy: Always
         volumeMounts:
           - name: openvas-config
             mountPath: /mnt/ovc
         command: ['sh', '-c']
-        {{- if eq .Values.openvasd.tls.certificates.deploy_server true }}
-        args: ["sed 's/mqtt_server_uri = .*/openvasd_server = https:\\/\\/localhost:443/' /etc/openvas/openvas.conf > /mnt/ovc/openvas.conf; cp /etc/openvas/openvas_log.conf /mnt/ovc/"]          
-        {{ else }}
-        args: ["sed 's/mqtt_server_uri = .*/openvasd_server = http:\\/\\/localhost:80/' /etc/openvas/openvas.conf > /mnt/ovc/openvas.conf; cp /etc/openvas/openvas_log.conf /mnt/ovc/"]          
-        {{ end }}
+        # This standalone chart has no authenticated MQTT/Notus pipeline.
+        args: ["printf 'table_driven_lsc = no\\n' > /mnt/ovc/openvas.conf; cp /etc/openvas/openvas_log.conf /mnt/ovc/"]
       containers:
       - name: redis
         image: "{{ .Values.redis.repository }}:{{ .Values.redis.tag }}"
@@ -253,8 +252,6 @@ spec:
           #   value: "TBD"
           # - name: RESULT_CHECK_INTERVAL
           #   value: "TBD"
-          - name: OPENVASD_MODE
-            value: "service"
       {{ end }}
      # openvas log replicate end
       - name: openvasd
@@ -361,8 +358,6 @@ spec:
           #   value: "TBD"
           # - name: RESULT_CHECK_INTERVAL
           #   value: "TBD"
-          - name: OPENVASD_MODE
-            value: "service"
       {{- if eq .Values.openvasd.scanner_type "ospd" }}
       - name: ospd
         image: "{{ .Values.ospd.repository }}:{{ .Values.ospd.tag }}"

@@ -4,8 +4,11 @@
 # TurboVAS User Manual
 
 TurboVAS is an independent OpenVAS-derived scanner for vulnerability management
-operators. It is not affiliated with, sponsored by, or endorsed by Greenbone AG.
-Greenbone remains the upstream source for the imported OpenVAS/Greenbone
+operators. OpenVAS-derived describes its source lineage, not product
+compatibility. TurboVAS is intentionally not OpenVAS-compatible and is not a
+drop-in replacement. That is a strategic product decision, not accidental
+drift. TurboVAS is not affiliated with, sponsored by, or endorsed by Greenbone
+AG. Greenbone remains the upstream source for the imported OpenVAS/Greenbone
 components recorded in `../UPSTREAMS.md`; organizations looking for official
 Greenbone/OpenVAS products, support, or services should contact Greenbone
 directly at https://www.greenbone.net/.
@@ -16,17 +19,19 @@ deployment guidance.
 
 ## Operator Access And Security Boundary
 
-TurboVAS is designed as an operator-only scanner console, not as a general
-vulnerability-management collaboration portal. Every person who can log in to
-TurboVAS is expected to be a trusted scanner operator who may administer scanner
-workflows, targets, schedules, reports, credentials, and related scanner
-configuration.
+TurboVAS deliberately removed inherited product RBAC to simplify scanner
+administration and support an operator-only console. Every person who can log in
+is expected to be a trusted person who administers or actively operates
+TurboVAS, such as vulnerability-scanning and IT-security staff. A logged-in
+operator may administer scanner workflows, targets, schedules, reports,
+credentials, and related scanner configuration.
 
-People who should not administer the scanner should not receive TurboVAS
-console accounts. System owners, IT operations teams, application teams,
-service owners, remediation teams, and ticket handlers should normally receive
-findings through controlled outbound workflows such as reports, exports,
-notifications, ticket-system integrations, or future delivery integrations.
+People who only consume findings for compliance, remediation, management, or
+reporting should not receive TurboVAS console accounts. Their required
+information is intended to reach them automatically through controlled outbound
+reports, exports, notifications, and appliance delivery workflows—for example,
+email routed into a ticket system or files written to an approved network share.
+TurboVAS is not a vulnerability-management collaboration platform.
 
 This keeps the scanner administration boundary simple and explicit:
 
@@ -531,9 +536,10 @@ See `SCOPE_BASED_REPORTING.md` for the detailed scope model and
 
 ## Intentional Changes From Upstream Behavior
 
-TurboVAS intentionally diverges from inherited OpenVAS behavior when that makes
-the product clearer for scanner operators. Upstream compatibility is not a
-default goal.
+TurboVAS is intentionally not OpenVAS-compatible. This is a strategic decision,
+not accidental drift: TurboVAS changes or removes inherited behavior when doing
+so makes the product simpler, safer, or clearer for scanner operators. It is not
+a drop-in replacement, and upstream compatibility is not a project goal.
 
 Scope-based reporting augments inherited raw scan reports instead of hiding
 them. Technical targets remain evidence-collection units, raw reports remain
@@ -544,9 +550,10 @@ reporting population requires several technical targets.
 The operator-only console model replaces inherited product RBAC. A TurboVAS
 account is an operator account: anyone who can log in can administer the
 scanner. This is a deliberate simplification of the scanner administration
-boundary, not a statement that enterprise controls are unnecessary. Stakeholder
-delivery belongs in reports, exports, notifications, ticket integrations, or
-future delivery workflows rather than in broad console accounts.
+boundary that supports the operator-only product concept, not a statement that
+enterprise controls are unnecessary. Findings for compliance, remediation,
+management, and reporting belong in automated reports, exports, notifications,
+and delivery workflows rather than in broad console accounts.
 
 Dedicated OCI/container-image scanning was removed. TurboVAS is moving toward
 inventory-based vulnerability matching, where scanner-collected and future

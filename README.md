@@ -3,20 +3,35 @@
 
 # TurboVAS
 
-TurboVAS is an OpenVAS-derived monorepo for vulnerability scanner operators. It is intentionally organized around the components required to run TurboVAS as one coherent scanner system.
+TurboVAS is an OpenVAS-derived monorepo for vulnerability scanner operators.
+It preserves upstream provenance and useful scanner foundations, but it is
+intentionally not OpenVAS-compatible. This is a strategic product decision,
+not accidental drift or a compatibility backlog. TurboVAS is not a drop-in
+replacement for OpenVAS and may remove or replace inherited APIs, data models,
+workflows, and features when doing so makes the scanner simpler, safer, or more
+useful for its operators.
 
-TurboVAS uses an operator-only console model. A TurboVAS login is for trusted
-scanner operators who may administer the scanner; remediation stakeholders
-should receive findings through reports, exports, notifications, or future
-delivery integrations rather than through broad in-product accounts. This is an
-intentional product/security boundary, not an attempt to model every
-organization's internal workflow as roles inside the scanner console.
+TurboVAS deliberately removed inherited product RBAC to simplify scanner
+administration and support an operator-only console. Login access is for trusted
+people who administer or actively operate TurboVAS, such as vulnerability
+scanning and IT-security staff. People who only consume findings for compliance,
+remediation, management, or reporting should not receive console accounts. The
+required information is intended to reach them automatically through reports,
+exports, notifications, and controlled appliance delivery workflows—for example,
+email routed into a ticket system or files written to an approved network share.
+TurboVAS is not a vulnerability-management collaboration platform.
 
 This repository is currently in an early development phase. The initial source snapshot preserves upstream component boundaries and provenance so future changes can be made with clear licensing and attribution context. Public source visibility, if enabled, is for source transparency only and is not a binary release, container release, hosted service, production deployment, feed mirror, or feed redistribution.
 
 ## Relationship To Greenbone
 
-TurboVAS is an independent OpenVAS-derived project. It is not affiliated with, sponsored by, or endorsed by Greenbone AG. Greenbone remains the upstream source for the imported Greenbone/OpenVAS components listed in `UPSTREAMS.md`; organizations looking for official Greenbone/OpenVAS vulnerability-management products, support, or services should contact Greenbone directly at https://www.greenbone.net/.
+TurboVAS is an independent OpenVAS-derived project. "OpenVAS-derived" describes
+source lineage and provenance; it does not promise OpenVAS compatibility.
+TurboVAS is not affiliated with, sponsored by, or endorsed by Greenbone AG.
+Greenbone remains the upstream source for the imported Greenbone/OpenVAS
+components listed in `UPSTREAMS.md`; organizations looking for official
+Greenbone/OpenVAS vulnerability-management products, support, or services
+should contact Greenbone directly at https://www.greenbone.net/.
 
 TurboVAS supports the Greenbone Community Feed only. It does not support
 Greenbone Enterprise Feed subscription keys or Enterprise Feed synchronization.

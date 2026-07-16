@@ -14,8 +14,14 @@ TurboVAS is an independent project and is not affiliated with, sponsored by, or 
 
 ## Intentional Product Divergence
 
-TurboVAS intentionally diverges from inherited OpenVAS behavior where doing so
-supports a clearer operator workflow. One major planned divergence is
+OpenVAS-derived describes TurboVAS source lineage and provenance; it does not
+promise product compatibility. TurboVAS is intentionally not OpenVAS-compatible
+and is not a drop-in replacement. This is a strategic product decision, not
+accidental drift or a compatibility backlog. TurboVAS changes or removes
+inherited APIs, data models, workflows, and features when doing so makes the
+scanner simpler, safer, or clearer for its operators.
+
+One major planned divergence is
 scope-based reporting: technical targets remain evidence-collection units,
 while scopes become the operator-facing accountability, policy, and reporting
 boundaries. This is intended to avoid tying reports directly to technical target

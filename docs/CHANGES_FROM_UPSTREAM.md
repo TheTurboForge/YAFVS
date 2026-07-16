@@ -5,8 +5,10 @@
 
 TurboVAS is an independent OpenVAS-derived project. It preserves upstream
 component provenance, license records, and useful scanner behavior, but it is
-not an upstream-compatible product shell. TurboVAS changes inherited behavior
-where doing so creates a clearer operator workflow.
+intentionally not OpenVAS-compatible and is not a drop-in replacement. This is
+a strategic product decision, not accidental drift or a compatibility backlog.
+TurboVAS changes or removes inherited APIs, data models, workflows, and features
+when doing so makes the scanner simpler, safer, or clearer for its operators.
 
 TurboVAS is not affiliated with, sponsored by, or endorsed by Greenbone AG. For
 official Greenbone/OpenVAS vulnerability-management products, support, or
@@ -45,17 +47,21 @@ and provide report-like drill-down under `/scopes/reports` and
 
 ## Operator-Only Console Model
 
-TurboVAS removed the inherited product RBAC model because the TurboVAS console
-is an operator-only scanner administration surface, not a general stakeholder
-collaboration portal. Anyone who can authenticate to the console is a trusted
-scanner operator with scanner administration rights.
+TurboVAS deliberately removed the inherited product RBAC model to simplify
+scanner administration and support an operator-only console. Anyone who can
+authenticate is expected to be a trusted person who administers or actively
+operates TurboVAS, such as vulnerability-scanning and IT-security staff, and has
+scanner administration rights. TurboVAS is not a vulnerability-management
+collaboration platform.
 
-People who should not administer scans, targets, credentials, schedules,
-reports, and scanner configuration should not receive TurboVAS console accounts.
-Their findings should be delivered through reports, exports, notifications,
-ticket-system integrations, or future delivery workflows. User accounts remain
-for login identity, authentication source, preferences, and attribution, not for
-modeling every organization's internal workflow as product roles.
+People who only consume findings for compliance, remediation, management, or
+reporting should not receive TurboVAS console accounts. Their required
+information should be delivered automatically through reports, exports,
+notifications, and controlled appliance delivery workflows—for example, email
+routed into a ticket system or files written to an approved network share. User
+accounts remain for login identity, authentication source, preferences, and
+attribution, not for modeling every organization's internal workflow as product
+roles.
 
 The administration boundary is therefore explicit: restrict console login,
 network exposure, TLS, host access, backups, deployment controls, auditability,

@@ -18,6 +18,7 @@ from typing import List, Any, Dict, Iterator, Optional, Iterable, Tuple, Union
 from ospd.network import target_str_to_list
 from ospd.datapickler import DataPickler
 from ospd.errors import OspdCommandError
+from ospd.misc import ResultType
 from ospd.result_spool import ResultSpool
 
 logger = logging.getLogger(__name__)
@@ -104,6 +105,7 @@ class ScanCollection:
                 count_dead=state.count_dead,
                 count_total=state.count_total,
                 count_excluded=state.count_excluded,
+                incomplete_reason=state.incomplete_reason,
             )
 
     def restore_interrupted_scan(
@@ -114,6 +116,7 @@ class ScanCollection:
         count_dead: int = 0,
         count_total: Optional[int] = None,
         count_excluded: Optional[int] = None,
+        incomplete_reason: Optional[str] = None,
     ) -> bool:
         """Restore one bounded result-only view for owned Redis recovery."""
         if self.id_exists(scan_id):
@@ -141,7 +144,7 @@ class ScanCollection:
             scan_info['count_excluded'] = count_excluded or 0
             scan_info['excluded_simplified'] = None
             scan_info['evidence_incomplete'] = True
-            scan_info['evidence_incomplete_reason'] = (
+            scan_info['evidence_incomplete_reason'] = incomplete_reason or (
                 'OSPD restarted before all scanner evidence was acknowledged.'
             )
             scan_info['target'] = {
@@ -154,6 +157,13 @@ class ScanCollection:
             scan_info['options'] = {}
             scan_info['vts'] = {}
             self.scans_table[scan_id] = scan_info
+            if incomplete_reason:
+                self.add_result(
+                    scan_id,
+                    ResultType.ERROR,
+                    name='Incomplete scanner result delivery',
+                    value=incomplete_reason,
+                )
             return True
 
     def add_result(
@@ -205,29 +215,50 @@ class ScanCollection:
         redis_db: Optional[int] = None,
         owner_token: Optional[str] = None,
         incomplete_reason: Optional[str] = None,
+        notus_batch_id: Optional[str] = None,
     ) -> bool:
         """Atomically apply one parsed scanner result batch and its counts."""
         rows = list(result_list)
-        if claim_id and self.result_spool is not None:
-            if redis_db is None:
-                raise ValueError('redis_db is required for a durable claim')
-            if owner_token is None:
-                raise ValueError('owner_token is required for a durable claim')
-            self.result_spool.stage_claim(
-                scan_id,
-                redis_db,
-                claim_id,
-                owner_token,
-                rows,
-                count_dead=total_dead,
-                count_total=count_total,
-                count_excluded=count_excluded,
-                incomplete_reason=incomplete_reason,
+        if claim_id and notus_batch_id:
+            raise ValueError(
+                'a result batch cannot have both Redis and Notus identities'
             )
-            rows = []
+        durable_claim_id = claim_id or notus_batch_id
         with self.scan_collection_lock:
             scan = self.scans_table[scan_id]
-            if claim_id and scan.get('last_result_claim_id') == claim_id:
+            if claim_id and self.result_spool is not None:
+                if redis_db is None:
+                    raise ValueError('redis_db is required for a durable claim')
+                if owner_token is None:
+                    raise ValueError(
+                        'owner_token is required for a durable claim'
+                    )
+                self.result_spool.stage_claim(
+                    scan_id,
+                    redis_db,
+                    claim_id,
+                    owner_token,
+                    rows,
+                    count_dead=total_dead,
+                    count_total=count_total,
+                    count_excluded=count_excluded,
+                    incomplete_reason=incomplete_reason,
+                )
+                rows = []
+            elif notus_batch_id and self.result_spool is not None:
+                self.result_spool.stage_notus_claim(
+                    scan_id,
+                    notus_batch_id,
+                    rows,
+                    incomplete_reason=incomplete_reason,
+                )
+                rows = []
+            elif notus_batch_id:
+                raise ValueError('result spool is required for a durable claim')
+            if (
+                durable_claim_id
+                and scan.get('last_result_claim_id') == durable_claim_id
+            ):
                 return False
             results = scan.get('results', [])
             results.extend(rows)
@@ -238,9 +269,94 @@ class ScanCollection:
                 scan['count_total'] = count_total
             if count_excluded is not None:
                 scan['count_excluded'] = count_excluded
-            if claim_id:
-                scan['last_result_claim_id'] = claim_id
+            if durable_claim_id:
+                scan['last_result_claim_id'] = durable_claim_id
             return True
+
+    def admit_notus_result(
+        self, scan_id: str, message_id: str, result: Dict[str, Any]
+    ) -> Optional[bool]:
+        """Admit Notus evidence under the same lock used for scan deletion."""
+        with self.scan_collection_lock:
+            if self.scans_table.get(scan_id) is None:
+                return None
+            if self.result_spool is None:
+                raise RuntimeError(
+                    'durable result spool is required for Notus admission'
+                )
+            return self.result_spool.admit_notus_result(
+                scan_id, message_id, result
+            )
+
+    def admit_notus_start(
+        self,
+        scan_id: str,
+        run_id: str,
+        message_id: str,
+        host_ip: str,
+    ) -> Optional[bool]:
+        """Admit a Notus run start under the scan deletion lock."""
+        with self.scan_collection_lock:
+            if self.scans_table.get(scan_id) is None:
+                return None
+            if self.result_spool is None:
+                raise RuntimeError(
+                    'durable result spool is required for Notus admission'
+                )
+            return self.result_spool.admit_notus_start(
+                scan_id, run_id, message_id, host_ip
+            )
+
+    def admit_notus_status(
+        self,
+        scan_id: str,
+        run_id: str,
+        message_id: str,
+        host_ip: str,
+        status: str,
+        result_count: Optional[int] = None,
+    ) -> Optional[bool]:
+        """Admit a Notus run status under the scan deletion lock."""
+        with self.scan_collection_lock:
+            if self.scans_table.get(scan_id) is None:
+                return None
+            if self.result_spool is None:
+                raise RuntimeError(
+                    'durable result spool is required for Notus admission'
+                )
+            return self.result_spool.admit_notus_status(
+                scan_id,
+                run_id,
+                message_id,
+                host_ip,
+                status,
+                result_count,
+            )
+
+    def notus_completion_ready(self, scan_id: str) -> bool:
+        """Check the exact Notus completion fence under deletion lock."""
+        with self.scan_collection_lock:
+            if self.scans_table.get(scan_id) is None:
+                return False
+            if self.result_spool is None:
+                return True
+            return self.result_spool.notus_completion_ready(scan_id)
+
+    def seal_notus_manifest(
+        self,
+        scan_id: str,
+        mode: str,
+        entries: Iterable[Dict[str, str]],
+    ) -> Optional[bool]:
+        """Seal OpenVAS's exact Notus expectations under deletion lock."""
+        with self.scan_collection_lock:
+            if self.scans_table.get(scan_id) is None:
+                return None
+            if self.result_spool is None:
+                raise RuntimeError(
+                    'durable result spool is required for Notus admission'
+                )
+            return self.result_spool.seal_notus_manifest(scan_id, mode, entries)
 
     def clear_result_claim(self, scan_id: str, claim_id: str) -> bool:
         """Forget only the exact applied Redis claim after durable release."""
@@ -475,7 +591,10 @@ class ScanCollection:
         scan_info['start_time'] = int(time.time())
         scan_info['end_time'] = 0
 
-        self.scans_table[scan_id] = scan_info
+        with self.scan_collection_lock:
+            if self.result_spool is not None:
+                self.result_spool.register_scan(scan_id)
+            self.scans_table[scan_id] = scan_info
 
         pickler.remove_file(scan_id)
 
@@ -526,7 +645,10 @@ class ScanCollection:
         scan_info['scan_id'] = scan_id
         scan_info['scan_info_hash'] = scan_info_hash
 
-        self.scans_table[scan_id] = scan_info
+        with self.scan_collection_lock:
+            if self.result_spool is not None:
+                self.result_spool.register_scan(scan_id)
+            self.scans_table[scan_id] = scan_info
         return scan_id
 
     def set_status(self, scan_id: str, status: ScanStatus) -> None:
@@ -558,6 +680,8 @@ class ScanCollection:
             scan = self.scans_table[scan_id]
             if scan.get('evidence_incomplete', False):
                 return False
+            if self.result_spool is not None:
+                self.result_spool.mark_scan_incomplete(scan_id, reason)
             scan['evidence_incomplete'] = True
             scan['evidence_incomplete_reason'] = reason
             if scan.get('status') == ScanStatus.FINISHED:
@@ -822,17 +946,14 @@ class ScanCollection:
         with self.scan_collection_lock:
             if self.get_status(scan_id) == ScanStatus.RUNNING:
                 return False
-            if self.result_spool is not None and self.result_spool.has_pending(
-                scan_id
-            ):
-                return False
-
             scans_table = self.scans_table
-            try:
+            scan_present = scan_id in scans_table
+            if self.result_spool is not None:
+                if not self.result_spool.delete_scan(scan_id):
+                    return False
+            elif not scan_present:
+                return False
+            if scan_present:
                 del scans_table[scan_id]
                 self.scans_table = scans_table
-            except KeyError:
-                return False
-            if self.result_spool is not None:
-                self.result_spool.delete_scan(scan_id)
             return True

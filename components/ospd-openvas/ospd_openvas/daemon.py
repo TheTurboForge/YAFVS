@@ -32,7 +32,12 @@ from ospd.server import BaseServer
 from ospd.main import main as daemon_main
 from ospd.vtfilter import VtsFilter
 from ospd.resultlist import ResultList
-from ospd.result_spool import ClaimState, ResultSpool, ResultSpoolError
+from ospd.result_spool import (
+    ClaimState,
+    ResultSpool,
+    ResultSpoolError,
+    SourceKind,
+)
 
 from ospd_openvas import __version__
 from ospd_openvas.errors import OspdOpenvasError
@@ -40,6 +45,11 @@ from ospd_openvas.errors import OspdOpenvasError
 from ospd_openvas.notus import Cache, Notus, NotusParser, NotusResultHandler
 from ospd_openvas.dryrun import DryRun
 from ospd_openvas.messages.result import ResultMessage
+from ospd_openvas.messages.start import ScanStartMessage
+from ospd_openvas.messages.status import (
+    ScanStatus as NotusScanStatus,
+    ScanStatusMessage,
+)
 from ospd_openvas.nvticache import NVTICache
 from ospd_openvas.db import (
     BaseDB,
@@ -71,6 +81,8 @@ OPENVAS_RESULT_ROW_MAX_BYTES = 4 * 1024 * 1024
 OPENVAS_RESULT_CLAIM_MAX_ITEMS = 1000
 OPENVAS_RESULT_CLAIM_MAX_BYTES = 16 * 1024 * 1024
 OPENVAS_RESULT_RECOVERY_TIMEOUT_SECONDS = 180
+NOTUS_COMPLETION_TIMEOUT_SECONDS = 180
+NOTUS_COMPLETION_POLL_SECONDS = 0.05
 OPENVAS_RESULT_ADMISSION_FAILURES = {
     'row-too-large': 'A scanner result exceeded the per-result evidence limit.',
     'pending-capacity': (
@@ -647,11 +659,11 @@ class OSPDopenvas(OSPDaemon):
 
     def mark_scanner_evidence_incomplete(
         self, scan_id: str, reason: str
-    ) -> None:
+    ) -> bool:
         if not self.scan_collection.id_exists(scan_id):
-            return
+            return False
         if not self.scan_collection.mark_evidence_incomplete(scan_id, reason):
-            return
+            return self.scan_collection.evidence_is_incomplete(scan_id)
         self.add_scan_error(
             scan_id,
             name='Incomplete scanner result delivery',
@@ -659,6 +671,110 @@ class OSPDopenvas(OSPDaemon):
         )
         if self.get_scan_status(scan_id) == ScanStatus.FINISHED:
             self.set_scan_status(scan_id, ScanStatus.INTERRUPTED)
+        return True
+
+    def handle_malformed_notus_result(self, scan_id: str, reason: str) -> bool:
+        """Fail closed for malformed Notus envelopes attributable to a scan."""
+        if not self.scan_collection.id_exists(scan_id):
+            logger.warning(
+                '%s: Ignoring malformed Notus result for unknown scan.', scan_id
+            )
+            return True
+        return self.mark_scanner_evidence_incomplete(scan_id, reason)
+
+    def handle_notus_start(self, message: ScanStartMessage) -> bool:
+        """Durably admit a Notus run start before acknowledging MQTT."""
+        scan_id = message.scan_id
+        if not self.scan_collection.id_exists(scan_id):
+            logger.warning(
+                '%s: Ignoring Notus start for unknown scan.', scan_id
+            )
+            return True
+        try:
+            admitted = self.scan_collection.admit_notus_start(
+                scan_id,
+                str(message.group_id),
+                str(message.message_id),
+                message.host_ip,
+            )
+        except ResultSpoolError as error:
+            logger.warning(
+                '%s: Rejecting conflicting Notus run start.', scan_id
+            )
+            return self.mark_scanner_evidence_incomplete(scan_id, str(error))
+        return admitted is not None
+
+    def handle_notus_status(self, message: ScanStatusMessage) -> bool:
+        """Durably admit a Notus run status before acknowledging MQTT."""
+        scan_id = message.scan_id
+        if not self.scan_collection.id_exists(scan_id):
+            logger.warning(
+                '%s: Ignoring Notus status for unknown scan.', scan_id
+            )
+            return True
+        try:
+            admitted = self.scan_collection.admit_notus_status(
+                scan_id,
+                str(message.group_id),
+                str(message.message_id),
+                message.host_ip,
+                message.status.value,
+                message.result_count,
+            )
+        except ResultSpoolError as error:
+            logger.warning(
+                '%s: Rejecting conflicting Notus run status.', scan_id
+            )
+            return self.mark_scanner_evidence_incomplete(scan_id, str(error))
+        if (
+            message.status == NotusScanStatus.FINISHED
+            and self._notus_result_handler is not None
+        ):
+            self._notus_result_handler.resume_scan(scan_id)
+        return admitted is not None
+
+    def wait_for_notus_completion(self, kbdb: BaseDB, scan_id: str) -> bool:
+        """Bound waiting on the durable Notus terminal/count fence."""
+        if self.result_spool is None:
+            return True
+        try:
+            mode, entries = kbdb.get_notus_manifest()
+            sealed = self.scan_collection.seal_notus_manifest(
+                scan_id, mode, entries
+            )
+            if sealed is None:
+                return False
+        except (OspdOpenvasError, ResultSpoolError, redis.RedisError) as error:
+            logger.warning(
+                '%s: Notus expectation manifest could not be verified.',
+                scan_id,
+            )
+            self.mark_scanner_evidence_incomplete(scan_id, str(error))
+            return False
+        deadline = time.monotonic() + NOTUS_COMPLETION_TIMEOUT_SECONDS
+        while time.monotonic() < deadline:
+            issue = self.result_spool.notus_completion_issue(scan_id)
+            if issue is not None:
+                self.mark_scanner_evidence_incomplete(scan_id, issue)
+                return False
+            try:
+                if not self.report_pending_notus_results(scan_id):
+                    time.sleep(NOTUS_COMPLETION_POLL_SECONDS)
+                    continue
+                if self.scan_collection.notus_completion_ready(scan_id):
+                    return True
+            except ResultSpoolError:
+                logger.exception(
+                    '%s: Notus completion reconciliation failed.', scan_id
+                )
+                break
+            time.sleep(NOTUS_COMPLETION_POLL_SECONDS)
+        self.mark_scanner_evidence_incomplete(
+            scan_id,
+            'Notus result completion could not be proven before the bounded '
+            'delivery deadline.',
+        )
+        return False
 
     def handle_result_admission_failure(
         self,
@@ -832,33 +948,54 @@ class OSPDopenvas(OSPDaemon):
         self.set_params_from_openvas_settings()
 
         # Do not init MQTT daemon if Notus runs via openvasd.
-        if not self.scan_only_params.get("openvasd_server"):
+        if (
+            not self.scan_only_params.get("openvasd_server")
+            and self._mqtt_broker_address
+        ):
+            if self.result_spool is None:
+                raise OspdOpenvasError(
+                    'Durable result spool is required for Notus MQTT results.'
+                )
             self._notus_result_handler = NotusResultHandler(
-                self.report_results,
-                self.scan_collection.id_exists,
+                self.scan_collection.admit_notus_result,
+                self.report_pending_notus_results,
+                self.result_spool.has_materializable_notus,
                 self.mark_scanner_evidence_incomplete,
             )
+            for scan_id in self.result_spool.pending_notus_scan_ids():
+                self._notus_result_handler.resume_scan(scan_id)
 
-            if self._mqtt_broker_address:
-                client = MQTTClient(
-                    self._mqtt_broker_address,
-                    self._mqtt_broker_port,
-                    "ospd",
-                    self._mqtt_broker_username,
-                    self._mqtt_broker_password,
-                )
-                daemon = MQTTDaemon(client)
-                subscriber = MQTTSubscriber(client)
+            client = MQTTClient(
+                self._mqtt_broker_address,
+                self._mqtt_broker_port,
+                "ospd",
+                self._mqtt_broker_username,
+                self._mqtt_broker_password,
+            )
+            daemon = MQTTDaemon(client)
+            subscriber = MQTTSubscriber(client)
 
-                subscriber.subscribe(
-                    ResultMessage, self._notus_result_handler.result_handler
-                )
-                daemon.run()
-            else:
-                logger.info(
-                    "MQTT Broker Address empty. MQTT disabled. "
-                    "Unable to get Notus results."
-                )
+            subscriber.subscribe(
+                ScanStartMessage,
+                self.handle_notus_start,
+                self.handle_malformed_notus_result,
+            )
+            subscriber.subscribe(
+                ResultMessage,
+                self._notus_result_handler.result_handler,
+                self.handle_malformed_notus_result,
+            )
+            subscriber.subscribe(
+                ScanStatusMessage,
+                self.handle_notus_status,
+                self.handle_malformed_notus_result,
+            )
+            daemon.run()
+        elif not self.scan_only_params.get("openvasd_server"):
+            logger.info(
+                "MQTT Broker Address empty. MQTT disabled. "
+                "Unable to get Notus results."
+            )
 
         with self.feed_lock.wait_for_lock():
             self.update_vts()
@@ -872,6 +1009,10 @@ class OSPDopenvas(OSPDaemon):
 
     def release_spooled_redis_claim(self, claim) -> ResultClaimAck:
         """Release one exact Redis claim after gvmd acknowledged its batch."""
+        if claim.source_kind != SourceKind.REDIS:
+            raise OspdOpenvasError(
+                'Non-Redis result claim reached the Redis release path.'
+            )
         if claim.owner_token is None:
             raise OspdOpenvasError(
                 'Durable result claim has no verified Redis owner.'
@@ -911,6 +1052,21 @@ class OSPDopenvas(OSPDaemon):
             for scan_id, database in self.main_db.reserved_parent_databases()
         }
         for claim in self.result_spool.recovery_records():
+            if claim.source_kind == SourceKind.NOTUS:
+                if claim.state == ClaimState.ACKING:
+                    self.result_spool.complete_ack(
+                        claim.scan_id,
+                        claim.osp_batch_id,
+                        claim.redis_db,
+                        claim.source_claim_id,
+                    )
+                    self.result_spool.complete_notus_batch(
+                        claim.scan_id, claim.source_claim_id
+                    )
+                    self.scan_collection.clear_result_claim(
+                        claim.scan_id, claim.source_claim_id
+                    )
+                continue
             if claim.owner_token in (None, LEGACY_OWNER_TOKEN):
                 source = recovery_sources.get((claim.redis_db, claim.scan_id))
                 if source is None:
@@ -944,6 +1100,19 @@ class OSPDopenvas(OSPDaemon):
             )
         for (_, scan_id), database in recovery_sources.items():
             self.recover_owned_result_source(database, scan_id)
+        for scan_id in self.result_spool.pending_notus_scan_ids():
+            try:
+                self.report_pending_notus_results(scan_id)
+            except (ResultSpoolError, KeyError, TypeError, ValueError):
+                logger.exception(
+                    '%s: Durable Notus result materialization remains pending.',
+                    scan_id,
+                )
+                self.mark_scanner_evidence_incomplete(
+                    scan_id,
+                    'Durable Notus result materialization remains pending.',
+                )
+        self.result_spool.prune_clean_scan_rows()
 
     def recover_owned_result_source(self, database: KbDB, scan_id: str) -> None:
         """Expose an interrupted owner-bound Redis source through OSP."""
@@ -961,7 +1130,7 @@ class OSPDopenvas(OSPDaemon):
                     'Recovered scanner process-tree completion is unconfirmed.',
                 )
         if (
-            not self.result_spool.has_pending(scan_id)
+            not self.result_spool.has_pending_claim(scan_id)
             and database.has_pending_results()
             and not self.report_openvas_results(database, scan_id)
         ):
@@ -977,7 +1146,7 @@ class OSPDopenvas(OSPDaemon):
         if self.get_scan_status(scan_id) != ScanStatus.INTERRUPTED:
             return False
         if (
-            self.result_spool.has_pending(scan_id)
+            self.result_spool.has_pending_redis(scan_id)
             or database.has_pending_results()
         ):
             return False
@@ -994,29 +1163,40 @@ class OSPDopenvas(OSPDaemon):
         return True
 
     def continue_spooled_result_source(self, claim) -> None:
-        """Stage the next owner-bound claim after an exact gvmd acknowledgment."""
-        if claim.owner_token is None:
-            raise OspdOpenvasError(
-                'Durable result claim has no verified Redis owner.'
-            )
-        try:
-            database = self.main_db.open_owned_parent_database(
-                claim.redis_db, claim.owner_token, claim.scan_id
-            )
-        except OspdOpenvasError:
-            if (
-                self.main_db.reservation_token_if_present(claim.redis_db)
-                is None
-            ):
-                return
-            raise
-        if database.has_pending_results():
+        """Stage the next source batch after an exact gvmd acknowledgment."""
+        database = None
+        if claim.source_kind == SourceKind.REDIS:
+            if claim.owner_token is None:
+                raise OspdOpenvasError(
+                    'Durable result claim has no verified Redis owner.'
+                )
+            try:
+                database = self.main_db.open_owned_parent_database(
+                    claim.redis_db, claim.owner_token, claim.scan_id
+                )
+            except OspdOpenvasError:
+                if (
+                    self.main_db.reservation_token_if_present(claim.redis_db)
+                    is not None
+                ):
+                    raise
+        else:
+            for scan_id, candidate in self.main_db.reserved_parent_databases():
+                if scan_id == claim.scan_id:
+                    database = candidate
+                    break
+        if database is not None and database.has_pending_results():
             if not self.report_openvas_results(database, claim.scan_id):
                 raise OspdOpenvasError(
                     'Next owned Redis result claim could not be staged.'
                 )
             return
-        self.finalize_recovered_result_source(database, claim.scan_id)
+        if database is not None:
+            self.finalize_recovered_result_source(database, claim.scan_id)
+        if not self.report_pending_notus_results(claim.scan_id):
+            raise OspdOpenvasError(
+                'Next durable Notus result batch could not be staged.'
+            )
 
     def ack_result_batch(self, scan_id: str, batch_id: str) -> bool:
         """Cross the durable SQLite and Redis boundaries in exact order."""
@@ -1028,6 +1208,10 @@ class OSPDopenvas(OSPDaemon):
                 return super().ack_result_batch(scan_id, batch_id)
             if claim.state == ClaimState.ACKED:
                 try:
+                    if claim.source_kind == SourceKind.NOTUS:
+                        self.result_spool.complete_notus_batch(
+                            scan_id, claim.source_claim_id
+                        )
                     self.continue_spooled_result_source(claim)
                 except (OspdOpenvasError, ResultSpoolError, redis.RedisError):
                     logger.exception(
@@ -1042,13 +1226,18 @@ class OSPDopenvas(OSPDaemon):
                 claim.redis_db,
                 claim.source_claim_id,
             )
-            self.release_spooled_redis_claim(claim)
+            if claim.source_kind == SourceKind.REDIS:
+                self.release_spooled_redis_claim(claim)
             self.result_spool.complete_ack(
                 scan_id,
                 batch_id,
                 claim.redis_db,
                 claim.source_claim_id,
             )
+            if claim.source_kind == SourceKind.NOTUS:
+                self.result_spool.complete_notus_batch(
+                    scan_id, claim.source_claim_id
+                )
             self.scan_collection.clear_result_claim(
                 scan_id, claim.source_claim_id
             )
@@ -1395,8 +1584,9 @@ class OSPDopenvas(OSPDaemon):
             scan_id: Scan ID to identify the current scan.
         """
 
-        if self.result_spool is not None and self.result_spool.has_pending(
-            scan_id
+        if (
+            self.result_spool is not None
+            and self.result_spool.has_pending_claim(scan_id)
         ):
             return False
 
@@ -1523,6 +1713,7 @@ class OSPDopenvas(OSPDaemon):
         redis_db: Optional[int] = None,
         owner_token: Optional[str] = None,
         delivery_incomplete_reason: Optional[str] = None,
+        notus_batch_id: Optional[str] = None,
     ) -> bool:
         """Reports all results given in a list.
 
@@ -1710,6 +1901,9 @@ class OSPDopenvas(OSPDaemon):
             result_batch_args['redis_db'] = redis_db
             result_batch_args['owner_token'] = owner_token
             result_batch_args['incomplete_reason'] = incomplete_reason
+        elif notus_batch_id:
+            result_batch_args['notus_batch_id'] = notus_batch_id
+            result_batch_args['incomplete_reason'] = incomplete_reason
         self.scan_collection.apply_result_batch(
             scan_id, res_list, **result_batch_args
         )
@@ -1729,6 +1923,19 @@ class OSPDopenvas(OSPDaemon):
             self.mark_scanner_evidence_incomplete(scan_id, incomplete_reason)
 
         return True
+
+    def report_pending_notus_results(self, scan_id: str) -> bool:
+        """Normalize and stage the next exact durable Notus source batch."""
+        if self.result_spool is None:
+            return False
+        batch = self.result_spool.prepare_next_notus_batch(scan_id)
+        if batch is None:
+            return True
+        return self.report_results(
+            batch.results,
+            scan_id,
+            notus_batch_id=batch.batch_id,
+        )
 
     @staticmethod
     def is_openvas_process_alive(openvas_process: psutil.Popen) -> bool:
@@ -2322,8 +2529,13 @@ class OSPDopenvas(OSPDaemon):
                 time.sleep(0.05)
             got_results = False
 
-        # Sleep a second to be sure to get all notus results
-        time.sleep(1)
+        if not self.wait_for_notus_completion(kbdb, scan_id):
+            logger.error(
+                '%s: Retaining Redis databases because exact Notus '
+                'completion could not be proven.',
+                scan_id,
+            )
+            return
         # Delete keys from KB related to this scan task.
         logger.debug('%s: End Target. Release main database', scan_id)
         try:

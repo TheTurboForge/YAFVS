@@ -20,9 +20,11 @@ from .loader.gpg_sha_verifier import (
 )
 from .messages.start import ScanStartMessage
 from .messaging.mqtt import (
+    NOTUS_MQTT_PUBLISHER_CLIENT_ID,
     MQTTClient,
     MQTTDaemon,
     MQTTPublisher,
+    MQTTPublisherDaemon,
     MQTTSubscriber,
 )
 from .scanner import NotusScanner
@@ -89,9 +91,20 @@ def run_daemon(
     client = MQTTClient(
         mqtt_broker_address=mqtt_broker_address,
         mqtt_broker_port=mqtt_broker_port,
+        preserve_session=True,
     )
     if mqtt_broker_username and mqtt_broker_password:
         client.username_pw_set(mqtt_broker_username, mqtt_broker_password)
+
+    publisher_client = MQTTClient(
+        mqtt_broker_address=mqtt_broker_address,
+        mqtt_broker_port=mqtt_broker_port,
+        client_id=NOTUS_MQTT_PUBLISHER_CLIENT_ID,
+    )
+    if mqtt_broker_username and mqtt_broker_password:
+        publisher_client.username_pw_set(
+            mqtt_broker_username, mqtt_broker_password
+        )
 
     daemon: MQTTDaemon
     try:
@@ -103,13 +116,26 @@ def run_daemon(
         )
         sys.exit(1)
 
-    publisher = MQTTPublisher(client)
-    scanner = NotusScanner(loader=loader, publisher=publisher)
+    try:
+        publisher_daemon = MQTTPublisherDaemon(publisher_client)
+    except ConnectionRefusedError:
+        logger.error(
+            "Could not connect publisher to MQTT broker at %s. Connection refused.",
+            mqtt_broker_address,
+        )
+        sys.exit(1)
 
-    subscriber = MQTTSubscriber(client)
-    subscriber.subscribe(ScanStartMessage, scanner.run_scan)
+    try:
+        publisher_daemon.start()
+        publisher = MQTTPublisher(publisher_client)
+        scanner = NotusScanner(loader=loader, publisher=publisher)
 
-    daemon.run()
+        subscriber = MQTTSubscriber(client)
+        subscriber.subscribe(ScanStartMessage, scanner.run_scan)
+
+        daemon.run()
+    finally:
+        publisher_daemon.stop()
 
 
 def main():

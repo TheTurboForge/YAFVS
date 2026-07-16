@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2021-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -60,6 +61,10 @@ class MessageTestCase(TestCase):
 
         Message.message_type = None
 
+    def test_load_rejects_oversized_payload_before_json_parsing(self):
+        with self.assertRaisesRegex(MessageParsingError, "byte limit"):
+            Message.load(b"{" * (Message.max_payload_bytes + 1))
+
     def test_deserialize_no_message_type(self):
         data = {
             "message_id": "63026767-029d-417e-9148-77f4da49f49a",
@@ -69,8 +74,7 @@ class MessageTestCase(TestCase):
 
         with self.assertRaisesRegex(
             MessageParsingError,
-            "error while parsing 'message_type', None is not a valid"
-            " MessageType",
+            "message_type is unsupported",
         ):
             Message.deserialize(data)
 
@@ -84,8 +88,7 @@ class MessageTestCase(TestCase):
 
         with self.assertRaisesRegex(
             MessageParsingError,
-            "error while parsing 'message_type', 'foo' is not a valid"
-            " MessageType",
+            "message_type is unsupported",
         ):
             Message.deserialize(data)
 
@@ -127,6 +130,24 @@ class MessageTestCase(TestCase):
             datetime.fromtimestamp(1628512774.0, tz=timezone.utc),
         )
 
+        Message.message_type = None
+
+    def test_deserialize_rejects_non_object_and_unbounded_fields(self):
+        Message.message_type = MessageType.SCAN_START
+        with self.assertRaisesRegex(MessageParsingError, "JSON object"):
+            Message.deserialize([])
+        data = {
+            "message_id": "63026767-029d-417e-9148-77f4da49f49a",
+            "group_id": "x" * 129,
+            "created": 1628512774.0,
+            "message_type": "scan.start",
+        }
+        with self.assertRaisesRegex(MessageParsingError, "group_id"):
+            Message.deserialize(data)
+        data["group_id"] = "run-1"
+        data["created"] = 10**100
+        with self.assertRaisesRegex(MessageParsingError, "valid timestamp"):
+            Message.deserialize(data)
         Message.message_type = None
 
     def test_load_message_id_unvalid(self):

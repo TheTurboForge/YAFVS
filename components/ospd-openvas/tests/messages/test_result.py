@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2021-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -13,6 +14,16 @@ from ospd_openvas.messages.result import ResultMessage, ResultType
 
 
 class ResultMessageTestCase(TestCase):
+    def test_constructor_rejects_oversized_result_before_admission(self):
+        with self.assertRaisesRegex(ValueError, 'byte limit'):
+            ResultMessage(
+                scan_id='scan_1',
+                host_ip='1.1.1.1',
+                host_name='foo',
+                oid='1.2.3.4.5',
+                value='x' * ((64 * 1024) + 1),
+            )
+
     def test_constructor(self):
         message = ResultMessage(
             scan_id='scan_1',

@@ -12,8 +12,10 @@ topic read scanner/package/cmd/notus
 topic write scanner/status
 topic write scanner/scan/info
 
-# OSPD consumes Notus package findings.
+# OSPD consumes Notus package findings and their completion fences.
 user ospd
+topic read scanner/package/cmd/notus
+topic read scanner/status
 topic read scanner/scan/info
 
 # Compose health verification is unable to affect scanner topics.

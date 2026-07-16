@@ -184,6 +184,7 @@ describe('TargetComponent tests', () => {
       snmpCredentialId: undefined,
       sshCredentialId: undefined,
       sshElevateCredentialId: undefined,
+      sshHostKeyPins: '',
       targetExcludeSource: 'manual',
       targetSource: 'manual',
     });
@@ -247,6 +248,7 @@ describe('TargetComponent tests', () => {
       snmpCredentialId: undefined,
       sshCredentialId: undefined,
       sshElevateCredentialId: undefined,
+      sshHostKeyPins: '',
       targetExcludeSource: 'manual',
       targetSource: 'manual',
     });

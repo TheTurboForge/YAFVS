@@ -1,9 +1,11 @@
 # SPDX-FileCopyrightText: 2021-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import logging
-from typing import Iterable, List, Optional, Set
+from typing import Iterable, List, Optional, Set, Tuple
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from .errors import AdvisoriesLoadingError
 from .loader import AdvisoriesLoader
@@ -11,12 +13,14 @@ from .messages.message import Message
 from .messages.result import ResultMessage
 from .messages.start import ScanStartMessage
 from .messages.status import ScanStatus, ScanStatusMessage
-from .messaging.publisher import Publisher
+from .messaging.publisher import Publisher, PublishError
 from .models.packages import package_class_by_type
 from .models.packages.package import Package, PackageAdvisories, PackageAdvisory
 from .models.vulnerability import Vulnerabilities, Vulnerability
 
 logger = logging.getLogger(__name__)
+
+RESULT_PUBLISH_ACK_TIMEOUT = 10.0
 
 
 class NotusScanner:
@@ -28,42 +32,81 @@ class NotusScanner:
         self._loader = loader
         self._publisher = publisher
 
-    def _publish(self, message: Message):
-        """Try to publish a message
+    @staticmethod
+    def _message_id(group_id: str, kind: str, identity: str = "") -> UUID:
+        """Derive stable identities so broker redelivery is idempotent."""
+        return uuid5(
+            NAMESPACE_URL,
+            f"https://turbovas.local/notus/{group_id}/{kind}/{identity}",
+        )
 
-        Ensures that a failure during publishing doesn't stop the scan or daemon
-        """
+    def _publish(self, message: Message) -> Optional[PublishError]:
+        """Publish a non-result message without logging its payload."""
         try:
             self._publisher.publish(message)
-        except Exception as e:  # pylint: disable=broad-except
+        except PublishError as error:
             logger.error(
-                "An error occurred while publishing a %s message. Reason %s",
-                type(message),
-                str(e),
+                "Could not publish %s: %s",
+                type(message).__name__,
+                error,
             )
+            return error
+        except Exception:  # pylint: disable=broad-except
+            logger.error("Could not publish %s", type(message).__name__)
+            return PublishError(
+                "unexpected publication failure", safe_to_interrupt=False
+            )
+        return None
 
-    def _finish_host(self, scan_id: str, host_ip: str):
+    def _finish_host(
+        self, scan_id: str, host_ip: str, group_id: str, result_count: int
+    ) -> Optional[PublishError]:
         """Send a message to the broker to inform a host is done."""
 
         scan_status_message = ScanStatusMessage(
-            scan_id=scan_id, host_ip=host_ip, status=ScanStatus.FINISHED
+            scan_id=scan_id,
+            host_ip=host_ip,
+            group_id=group_id,
+            message_id=self._message_id(group_id, "status", "finished"),
+            status=ScanStatus.FINISHED,
+            result_count=result_count,
         )
-        self._publish(scan_status_message)
+        return self._publish(scan_status_message)
 
-    def _start_host(self, scan_id: str, host_ip: str):
+    def _start_host(
+        self, scan_id: str, host_ip: str, group_id: str
+    ) -> Optional[PublishError]:
         """Send a message to the broker to inform a host scan has started."""
         scan_status_message = ScanStatusMessage(
-            scan_id=scan_id, host_ip=host_ip, status=ScanStatus.RUNNING
+            scan_id=scan_id,
+            host_ip=host_ip,
+            group_id=group_id,
+            message_id=self._message_id(group_id, "status", "running"),
+            status=ScanStatus.RUNNING,
         )
-        self._publish(scan_status_message)
+        return self._publish(scan_status_message)
+
+    def _interrupt_host(
+        self, scan_id: str, host_ip: str, group_id: str
+    ) -> Optional[PublishError]:
+        scan_status_message = ScanStatusMessage(
+            scan_id=scan_id,
+            host_ip=host_ip,
+            group_id=group_id,
+            message_id=self._message_id(group_id, "status", "interrupted"),
+            status=ScanStatus.INTERRUPTED,
+        )
+        return self._publish(scan_status_message)
 
     def _publish_results(
         self,
         scan_id: str,
         host_ip: str,
         host_name: str,
+        group_id: str,
         vulnerabilities: Vulnerabilities,
-    ) -> None:
+    ) -> Tuple[int, Optional[PublishError]]:
+        result_count = 0
         for oid, vulnerability in vulnerabilities.get().items():
             report = ""
             fixed_packages: List[PackageAdvisory]
@@ -85,10 +128,45 @@ class NotusScanner:
                 scan_id=scan_id,
                 host_ip=host_ip,
                 host_name=host_name,
+                group_id=group_id,
+                message_id=self._message_id(group_id, "result", oid),
                 oid=oid,
                 value=report,
             )
-            self._publish(message)
+            try:
+                self._publisher.publish_result(
+                    message, timeout=RESULT_PUBLISH_ACK_TIMEOUT
+                )
+            except PublishError as error:
+                logger.error(
+                    "Could not confirm ResultMessage PUBACK: %s", error
+                )
+                return result_count, error
+            except Exception:  # pylint: disable=broad-except
+                logger.error("Could not confirm ResultMessage PUBACK")
+                return result_count, PublishError(
+                    "unexpected result publication failure",
+                    safe_to_interrupt=False,
+                )
+            result_count += 1
+        return result_count, None
+
+    def _handle_publication_failure(
+        self, message: ScanStartMessage, error: PublishError
+    ) -> bool:
+        if not error.safe_to_interrupt:
+            logger.error(
+                "Terminal status withheld after an ambiguous publication failure"
+            )
+            return False
+
+        interrupted_error = self._interrupt_host(
+            message.scan_id, message.host_ip, message.group_id
+        )
+        if interrupted_error:
+            logger.error("Could not publish safe INTERRUPTED status")
+            return False
+        return True
 
     @staticmethod
     def _check_package(
@@ -134,29 +212,36 @@ class NotusScanner:
     def run_scan(
         self,
         message: ScanStartMessage,
-    ) -> None:
+    ) -> bool:
         """Handle the data necessary to start a scan,
         received via mqtt and run the scan."""
 
         # Check if all necessary information to run a scan are given
         if not message:
-            logger.error(
-                "Unable to start scan for %s: The message seems to be empty",
-                message.host_ip,
-            )
-            return
+            logger.error("Unable to start scan: The message seems to be empty")
+            return True
         if not message.os_release:
             logger.error(
                 "Unable to start scan for %s: The field os_release is empty",
                 message.host_ip,
             )
-            return
+            return (
+                self._interrupt_host(
+                    message.scan_id, message.host_ip, message.group_id
+                )
+                is None
+            )
         if not message.package_list:
             logger.error(
                 "Unable to start scan for %s: The field package_list is empty",
                 message.host_ip,
             )
-            return
+            return (
+                self._interrupt_host(
+                    message.scan_id, message.host_ip, message.group_id
+                )
+                is None
+            )
 
         # Get advisory information from disk
         try:
@@ -165,7 +250,12 @@ class NotusScanner:
             )
         except AdvisoriesLoadingError as e:
             logger.error("Unable to load package advisories. Error was %s", e)
-            return
+            return (
+                self._interrupt_host(
+                    message.scan_id, message.host_ip, message.group_id
+                )
+                is None
+            )
 
         if not package_advisories:
             # Probably a wrong or not supported OS-release
@@ -176,7 +266,12 @@ class NotusScanner:
                 message.host_ip,
                 message.os_release,
             )
-            return
+            return (
+                self._interrupt_host(
+                    message.scan_id, message.host_ip, message.group_id
+                )
+                is None
+            )
 
         logger.debug(
             "Loaded advisories for %i packages", len(package_advisories)
@@ -193,7 +288,12 @@ class NotusScanner:
                 message.host_ip,
                 message.os_release,
             )
-            return
+            return (
+                self._interrupt_host(
+                    message.scan_id, message.host_ip, message.group_id
+                )
+                is None
+            )
 
         may_installed = [
             package_class.from_full_name(name) for name in message.package_list
@@ -205,7 +305,11 @@ class NotusScanner:
             package for package in may_installed if package is not None
         )
 
-        self._start_host(message.scan_id, message.host_ip)
+        publication_error = self._start_host(
+            message.scan_id, message.host_ip, message.group_id
+        )
+        if publication_error:
+            return self._handle_publication_failure(message, publication_error)
 
         logger.info(
             "Start to identify vulnerable packages for %s (%s)",
@@ -217,19 +321,35 @@ class NotusScanner:
                 installed_packages=installed_packages,
                 package_advisories=package_advisories,
             )
-            self._publish_results(
+            result_count, publication_error = self._publish_results(
                 message.scan_id,
                 message.host_ip,
                 message.host_name,
+                message.group_id,
                 vulnerabilities,
             )
+
+            if publication_error:
+                return self._handle_publication_failure(
+                    message, publication_error
+                )
 
             logger.info(
                 "Total number of vulnerable packages -> %d",
                 len(vulnerabilities),
             )
 
-            self._finish_host(message.scan_id, message.host_ip)
+            publication_error = self._finish_host(
+                message.scan_id,
+                message.host_ip,
+                message.group_id,
+                result_count,
+            )
+            if publication_error:
+                return self._handle_publication_failure(
+                    message, publication_error
+                )
+            return True
 
         except AdvisoriesLoadingError as e:
             logger.error(
@@ -238,4 +358,10 @@ class NotusScanner:
                 message.host_name or "",
                 message.os_release,
                 e,
+            )
+            return (
+                self._interrupt_host(
+                    message.scan_id, message.host_ip, message.group_id
+                )
+                is None
             )

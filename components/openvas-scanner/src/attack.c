@@ -121,6 +121,30 @@ connect_main_kb (kb_t *main_kb)
   return -1;
 }
 
+static int
+seal_notus_manifest (void)
+{
+  kb_t main_kb = NULL;
+  const char *transport = table_driven_lsc_transport_name ();
+
+  if (connect_main_kb (&main_kb))
+    return -1;
+
+  if (kb_item_set_str_with_main_kb_check (
+        main_kb, TABLE_DRIVEN_LSC_MANIFEST_SEAL_KEY, transport, 0))
+    {
+      g_warning ("Unable to persist the Notus expectation manifest seal.");
+      if (kb_item_set_str_with_main_kb_check (
+            main_kb, TABLE_DRIVEN_LSC_MANIFEST_FAILURE_KEY, "manifest", 0))
+        g_warning ("Unable to persist the Notus manifest failure marker.");
+      kb_lnk_reset (main_kb);
+      return -1;
+    }
+
+  kb_lnk_reset (main_kb);
+  return 0;
+}
+
 /**
  * @brief Add the Host KB index to the list of readable KBs
  * used by ospd-openvas.
@@ -1245,6 +1269,7 @@ attack_network (struct scan_globals *globals)
   GSList *unresolved;
   char buf[96];
   int error = 0;
+  gboolean host_workers_joined = FALSE;
 
   check_deprecated_prefs ();
 
@@ -1402,7 +1427,10 @@ attack_network (struct scan_globals *globals)
 
   host = gvm_hosts_next (hosts);
   if (host == NULL)
-    goto stop;
+    {
+      host_workers_joined = TRUE;
+      goto stop;
+    }
 
   hosts_init (max_hosts);
 
@@ -1616,6 +1644,7 @@ attack_network (struct scan_globals *globals)
   while (hosts_read () == 0)
     if (scan_is_stopped () == 1)
       killpg (getpid (), SIGUSR1);
+  host_workers_joined = TRUE;
 
   g_debug ("Test complete");
 
@@ -1680,6 +1709,10 @@ stop:
   gvm_hosts_free (hosts);
   if (alive_hosts_list)
     gvm_hosts_free (alive_hosts_list);
+
+  if (host_workers_joined && !scan_is_stopped () && error == 0
+      && seal_notus_manifest ())
+    error = -1;
 
   set_scan_status ("finished");
 

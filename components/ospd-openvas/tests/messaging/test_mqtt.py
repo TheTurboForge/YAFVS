@@ -12,6 +12,7 @@ from unittest import TestCase, mock
 
 from ospd_openvas.messages.result import ResultMessage
 from ospd_openvas.messaging.mqtt import (
+    MQTT_SESSION_EXPIRY_SECONDS,
     MQTTDaemon,
     MQTTClient,
     MQTTPublisher,
@@ -62,15 +63,43 @@ class MQTTPublisherTestCase(TestCase):
 
 class MQTTClientTestCase(TestCase):
     def test_configures_credentials_when_present(self):
-        with mock.patch.object(
-            MQTTClient, 'username_pw_set'
-        ) as set_credentials:
+        with (
+            mock.patch.object(MQTTClient, 'username_pw_set') as set_credentials,
+            mock.patch.object(MQTTClient, 'manual_ack_set') as manual_ack,
+        ):
             MQTTClient('broker', 1883, 'ospd', 'ospd', 'secret')
 
+        manual_ack.assert_called_once_with(True)
         set_credentials.assert_called_once_with('ospd', 'secret')
+
+    def test_connect_preserves_unacknowledged_broker_session(self):
+        client = MQTTClient('broker', 1883, 'ospd')
+
+        with mock.patch(
+            'paho.mqtt.client.Client.connect', return_value=0
+        ) as connect:
+            client.connect()
+
+        connect.assert_called_once()
+        self.assertFalse(connect.call_args.kwargs['clean_start'])
+        properties = connect.call_args.kwargs['properties']
+        self.assertEqual(
+            properties.SessionExpiryInterval, MQTT_SESSION_EXPIRY_SECONDS
+        )
 
 
 class MQTTSubscriberTestCase(TestCase):
+    @staticmethod
+    def message():
+        return ResultMessage(
+            scan_id='scan_1',
+            host_ip='1.1.1.1',
+            host_name='foo',
+            oid='1.2.3.4.5',
+            value='A Vulnerability has been found',
+            uri='file://foo/bar',
+        )
+
     def test_subscribe(self):
         client = mock.MagicMock()
         callback = mock.MagicMock()
@@ -90,6 +119,120 @@ class MQTTSubscriberTestCase(TestCase):
         subscriber.subscribe(message, callback)
 
         client.subscribe.assert_called_with('scanner/scan/info', qos=1)
+
+    def test_acknowledges_only_after_callback_accepts_durable_message(self):
+        client = mock.MagicMock()
+        client.ack.return_value = 0
+        callback = mock.MagicMock(return_value=True)
+        mqtt_message = mock.MagicMock(
+            payload=self.message().dump().encode(),
+            topic='scanner/scan/info',
+            qos=1,
+            mid=42,
+        )
+
+        MQTTSubscriber._handle_message(
+            ResultMessage, callback, client, None, mqtt_message
+        )
+
+        callback.assert_called_once()
+        client.ack.assert_called_once_with(42, 1)
+
+    def test_leaves_message_unacknowledged_after_transient_callback_failure(
+        self,
+    ):
+        client = mock.MagicMock()
+        callback = mock.MagicMock(return_value=False)
+        mqtt_message = mock.MagicMock(
+            payload=self.message().dump().encode(),
+            topic='scanner/scan/info',
+            qos=1,
+            mid=42,
+        )
+
+        MQTTSubscriber._handle_message(
+            ResultMessage, callback, client, None, mqtt_message
+        )
+
+        callback.assert_called_once()
+        client.ack.assert_not_called()
+
+    def test_rejects_and_acknowledges_malformed_poison_message(self):
+        client = mock.MagicMock()
+        client.ack.return_value = 0
+        callback = mock.MagicMock()
+        mqtt_message = mock.MagicMock(
+            payload=b'{"message_id": null}',
+            topic='scanner/scan/info',
+            qos=1,
+            mid=42,
+        )
+
+        MQTTSubscriber._handle_message(
+            ResultMessage, callback, client, None, mqtt_message
+        )
+
+        callback.assert_not_called()
+        client.ack.assert_called_once_with(42, 1)
+
+    def test_rejects_oversized_result_before_json_parsing(self):
+        client = mock.MagicMock()
+        client.ack.return_value = 0
+        callback = mock.MagicMock()
+        mqtt_message = mock.MagicMock(
+            payload=b'{' * (ResultMessage.max_payload_bytes + 1),
+            topic='scanner/scan/info',
+            qos=1,
+            mid=43,
+        )
+
+        MQTTSubscriber._handle_message(
+            ResultMessage, callback, client, None, mqtt_message
+        )
+
+        callback.assert_not_called()
+        client.ack.assert_called_once_with(43, 1)
+
+    def test_attributable_malformed_message_requires_durable_handling(self):
+        client = mock.MagicMock()
+        client.ack.return_value = 0
+        callback = mock.MagicMock()
+        malformed = mock.MagicMock(side_effect=[False, True])
+        mqtt_message = mock.MagicMock(
+            payload=b'{"scan_id":"scan_1","message_id":null}',
+            topic='scanner/scan/info',
+            qos=1,
+            mid=42,
+        )
+
+        MQTTSubscriber._handle_message(
+            ResultMessage,
+            callback,
+            client,
+            None,
+            mqtt_message,
+            malformed_callback=malformed,
+        )
+        client.ack.assert_not_called()
+
+        MQTTSubscriber._handle_message(
+            ResultMessage,
+            callback,
+            client,
+            None,
+            mqtt_message,
+            malformed_callback=malformed,
+        )
+
+        callback.assert_not_called()
+        self.assertEqual(
+            malformed.call_args_list,
+            [
+                mock.call('scan_1', 'Malformed Notus MQTT envelope.'),
+                mock.call('scan_1', 'Malformed Notus MQTT envelope.'),
+            ],
+        )
+        client.ack.assert_called_once_with(42, 1)
 
 
 class MQTTDaemonTestCase(TestCase):

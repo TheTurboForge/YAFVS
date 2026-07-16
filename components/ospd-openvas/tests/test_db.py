@@ -837,6 +837,70 @@ class KbDBTestCase(TestCase):
             self.ctx, 'internal/ovas_pid'
         )
 
+    def test_get_notus_manifest_validates_exact_sealed_entries(
+        self, mock_openvas_db
+    ):
+        mock_openvas_db.get_single_item.side_effect = [None, 'mqtt']
+        raw_entry = (
+            '{"run_id":"11111111-1111-4111-8111-111111111111",'
+            '"start_message_id":"22222222-2222-4222-8222-222222222222",'
+            '"host_ip":"2001:db8::1"}'
+        )
+        entry = {
+            'run_id': '11111111-1111-4111-8111-111111111111',
+            'start_message_id': '22222222-2222-4222-8222-222222222222',
+            'host_ip': '2001:db8::1',
+        }
+        mock_openvas_db.get_list_item.return_value = [raw_entry]
+
+        self.assertEqual(self.db.get_notus_manifest(), ('mqtt', [entry]))
+
+    def test_get_notus_manifest_rejects_redis_bytes_and_non_strings(
+        self, mock_openvas_db
+    ):
+        raw_entry = (
+            b'{"run_id":"11111111-1111-4111-8111-111111111111",'
+            b'"start_message_id":"22222222-2222-4222-8222-222222222222",'
+            b'"host_ip":"2001:db8::1"}'
+        )
+        for candidate in (raw_entry, b'\xff', 7):
+            with self.subTest(candidate=candidate):
+                mock_openvas_db.get_single_item.side_effect = [None, 'mqtt']
+                mock_openvas_db.get_list_item.return_value = [candidate]
+
+                with self.assertRaisesRegex(
+                    OspdOpenvasError, 'entry is invalid'
+                ):
+                    self.db.get_notus_manifest()
+
+    def test_get_notus_manifest_rejects_duplicate_c_entries(
+        self, mock_openvas_db
+    ):
+        raw_entry = (
+            '{"run_id":"11111111-1111-4111-8111-111111111111",'
+            '"start_message_id":"22222222-2222-4222-8222-222222222222",'
+            '"host_ip":"2001:db8::1"}'
+        )
+        mock_openvas_db.get_single_item.side_effect = [None, 'mqtt']
+        mock_openvas_db.get_list_item.return_value = [raw_entry, raw_entry]
+
+        with self.assertRaisesRegex(
+            OspdOpenvasError, 'identities are duplicated'
+        ):
+            self.db.get_notus_manifest()
+
+    def test_get_notus_manifest_rejects_missing_seal(self, mock_openvas_db):
+        mock_openvas_db.get_single_item.side_effect = [None, None]
+
+        with self.assertRaisesRegex(OspdOpenvasError, 'did not seal'):
+            self.db.get_notus_manifest()
+
+    def test_get_notus_manifest_rejects_failure_marker(self, mock_openvas_db):
+        mock_openvas_db.get_single_item.return_value = 'failed'
+
+        with self.assertRaisesRegex(OspdOpenvasError, 'publication failure'):
+            self.db.get_notus_manifest()
+
     def test_remove_scan_database(self, mock_openvas_db):
         scan_db = MagicMock(spec=ScanDB)
         scan_db.index = 123

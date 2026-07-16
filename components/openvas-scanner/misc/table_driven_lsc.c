@@ -24,6 +24,7 @@
 #include <gvm/util/uuidutils.h> // for gvm_uuid_make
 #include <json-glib/json-glib.h>
 #include <stddef.h>
+#include <string.h>
 
 #undef G_LOG_DOMAIN
 /**
@@ -35,6 +36,110 @@
  * 0 didn't run. 1 ran.
  */
 static int lsc_flag = 0;
+
+static gboolean
+bounded_notus_field (const char *value, size_t max_length,
+                     gboolean require_exact_length)
+{
+  size_t length;
+
+  if (value == NULL || value[0] == '\0')
+    return FALSE;
+
+  length = strnlen (value, max_length + 1);
+  if (length > max_length)
+    return FALSE;
+
+  return require_exact_length == FALSE || length == max_length;
+}
+
+static gboolean
+bounded_notus_optional_field (const char *value, size_t max_length)
+{
+  return value == NULL || strnlen (value, max_length + 1) <= max_length;
+}
+
+static gboolean
+bounded_notus_package_list (const char *packages)
+{
+  const gchar *cursor;
+  size_t length;
+  size_t line_bytes = 0;
+  size_t package_count = 0;
+  size_t separator_count = 0;
+
+  if (packages == NULL)
+    return FALSE;
+  length = strnlen (packages, TABLE_DRIVEN_LSC_PACKAGE_LIST_MAX_BYTES + 1);
+  if (length == 0 || length > TABLE_DRIVEN_LSC_PACKAGE_LIST_MAX_BYTES
+      || !g_utf8_validate (packages, length, NULL))
+    return FALSE;
+
+  cursor = packages;
+  while (*cursor)
+    {
+      const gchar *next;
+
+      if (*cursor == '\n')
+        {
+          separator_count++;
+          if (separator_count > TABLE_DRIVEN_LSC_PACKAGE_MAX_COUNT)
+            return FALSE;
+          if (line_bytes > 0)
+            package_count++;
+          line_bytes = 0;
+          cursor++;
+          continue;
+        }
+
+      if (!g_unichar_isprint (g_utf8_get_char (cursor)))
+        return FALSE;
+      next = g_utf8_next_char (cursor);
+      line_bytes += (size_t) (next - cursor);
+      if (line_bytes > TABLE_DRIVEN_LSC_PACKAGE_MAX_BYTES)
+        return FALSE;
+      cursor = next;
+    }
+
+  if (line_bytes > 0)
+    package_count++;
+  return package_count > 0
+         && package_count <= TABLE_DRIVEN_LSC_PACKAGE_MAX_COUNT;
+}
+
+static gboolean
+make_notus_start_ids (gchar **message_id, gchar **group_id)
+{
+  if (message_id == NULL || group_id == NULL)
+    return FALSE;
+
+  *message_id = gvm_uuid_make ();
+  *group_id = gvm_uuid_make ();
+  if (!bounded_notus_field (*message_id, TABLE_DRIVEN_LSC_ID_LENGTH, TRUE)
+      || !bounded_notus_field (*group_id, TABLE_DRIVEN_LSC_ID_LENGTH, TRUE)
+      || g_strcmp0 (*message_id, *group_id) == 0)
+    {
+      g_clear_pointer (message_id, g_free);
+      g_clear_pointer (group_id, g_free);
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
+const char *
+table_driven_lsc_transport_name (void)
+{
+  if (!prefs_get_bool ("table_driven_lsc")
+      || (!prefs_get_bool ("mqtt_enabled")
+          && !prefs_get_bool ("openvasd_lsc_enabled")))
+    return "none";
+
+  if (prefs_get ("openvasd_server"))
+    return "openvasd";
+
+  return "mqtt";
+}
 
 /** @brief Set lsc_flag to 1
  */
@@ -76,7 +181,8 @@ add_packages_str_to_list (JsonBuilder *builder, const gchar *packages)
     {
       int i;
       for (i = 0; package_list[i]; i++)
-        json_builder_add_string_value (builder, package_list[i]);
+        if (package_list[i][0] != '\0')
+          json_builder_add_string_value (builder, package_list[i]);
     }
 
   json_builder_end_array (builder);
@@ -101,15 +207,32 @@ add_packages_str_to_list (JsonBuilder *builder, const gchar *packages)
  * @return JSON string on success. Must be freed by caller. NULL on error.
  */
 static gchar *
-make_table_driven_lsc_info_json_str (const char *scan_id, const char *ip_str,
-                                     const char *hostname,
+make_table_driven_lsc_info_json_str (const char *message_id,
+                                     const char *group_id, const char *scan_id,
+                                     const char *ip_str, const char *hostname,
                                      const char *os_release,
                                      const char *package_list)
 {
   JsonBuilder *builder;
   JsonGenerator *gen;
   JsonNode *root;
+  gsize json_length = 0;
   gchar *json_str;
+  const char *safe_hostname;
+
+  if (!bounded_notus_field (message_id, TABLE_DRIVEN_LSC_ID_LENGTH, TRUE)
+      || !bounded_notus_field (group_id, TABLE_DRIVEN_LSC_ID_LENGTH, TRUE)
+      || !bounded_notus_field (scan_id, TABLE_DRIVEN_LSC_SCAN_ID_MAX_LENGTH,
+                               FALSE)
+      || !bounded_notus_field (ip_str, TABLE_DRIVEN_LSC_HOST_IP_MAX_LENGTH,
+                               FALSE)
+      || !bounded_notus_optional_field (hostname,
+                                        TABLE_DRIVEN_LSC_START_FIELD_MAX_LENGTH)
+      || !bounded_notus_field (os_release,
+                               TABLE_DRIVEN_LSC_START_FIELD_MAX_LENGTH, FALSE)
+      || !bounded_notus_package_list (package_list))
+    return NULL;
+  safe_hostname = hostname == NULL ? "" : hostname;
 
   /* Build the message in json format to be published. */
   builder = json_builder_new ();
@@ -117,10 +240,10 @@ make_table_driven_lsc_info_json_str (const char *scan_id, const char *ip_str,
   json_builder_begin_object (builder);
 
   json_builder_set_member_name (builder, "message_id");
-  builder = json_builder_add_string_value (builder, gvm_uuid_make ());
+  builder = json_builder_add_string_value (builder, message_id);
 
   json_builder_set_member_name (builder, "group_id");
-  builder = json_builder_add_string_value (builder, gvm_uuid_make ());
+  builder = json_builder_add_string_value (builder, group_id);
 
   json_builder_set_member_name (builder, "message_type");
   builder = json_builder_add_string_value (builder, "scan.start");
@@ -135,7 +258,7 @@ make_table_driven_lsc_info_json_str (const char *scan_id, const char *ip_str,
   json_builder_add_string_value (builder, ip_str);
 
   json_builder_set_member_name (builder, "host_name");
-  json_builder_add_string_value (builder, hostname);
+  json_builder_add_string_value (builder, safe_hostname);
 
   json_builder_set_member_name (builder, "os_release");
   json_builder_add_string_value (builder, os_release);
@@ -147,16 +270,67 @@ make_table_driven_lsc_info_json_str (const char *scan_id, const char *ip_str,
   gen = json_generator_new ();
   root = json_builder_get_root (builder);
   json_generator_set_root (gen, root);
-  json_str = json_generator_to_data (gen, NULL);
+  json_str = json_generator_to_data (gen, &json_length);
 
   json_node_free (root);
   g_object_unref (gen);
   g_object_unref (builder);
 
+  if (json_str != NULL
+      && json_length > TABLE_DRIVEN_LSC_START_PAYLOAD_MAX_BYTES)
+    g_clear_pointer (&json_str, g_free);
+
   if (json_str == NULL)
     g_warning ("%s: Error while creating JSON.", __func__);
 
   return json_str;
+}
+
+static gchar *
+make_notus_manifest_json_str (const char *group_id, const char *message_id,
+                              const char *ip_str)
+{
+  JsonBuilder *builder;
+  JsonGenerator *generator;
+  JsonNode *root;
+  gchar *json_str;
+
+  if (!bounded_notus_field (group_id, TABLE_DRIVEN_LSC_ID_LENGTH, TRUE)
+      || !bounded_notus_field (message_id, TABLE_DRIVEN_LSC_ID_LENGTH, TRUE)
+      || !bounded_notus_field (ip_str, TABLE_DRIVEN_LSC_HOST_IP_MAX_LENGTH,
+                               FALSE))
+    return NULL;
+
+  builder = json_builder_new ();
+  json_builder_begin_object (builder);
+  json_builder_set_member_name (builder, "run_id");
+  json_builder_add_string_value (builder, group_id);
+  json_builder_set_member_name (builder, "start_message_id");
+  json_builder_add_string_value (builder, message_id);
+  json_builder_set_member_name (builder, "host_ip");
+  json_builder_add_string_value (builder, ip_str);
+  json_builder_end_object (builder);
+
+  generator = json_generator_new ();
+  root = json_builder_get_root (builder);
+  json_generator_set_root (generator, root);
+  json_str = json_generator_to_data (generator, NULL);
+
+  json_node_free (root);
+  g_object_unref (generator);
+  g_object_unref (builder);
+
+  return json_str;
+}
+
+static void
+record_notus_manifest_failure (kb_t main_kb, const char *failure)
+{
+  if (main_kb == NULL
+      || kb_item_set_str_with_main_kb_check (
+        main_kb, TABLE_DRIVEN_LSC_MANIFEST_FAILURE_KEY, failure, 0))
+    g_warning ("%s: Unable to persist the Notus manifest failure marker.",
+               __func__);
 }
 
 /**
@@ -316,8 +490,12 @@ make_package_list_as_json_str (const char *packages)
   JsonBuilder *builder;
   JsonGenerator *gen;
   JsonNode *root;
+  gsize json_length = 0;
   gchar *json_str = NULL;
   gchar **package_list = NULL;
+
+  if (!bounded_notus_package_list (packages))
+    return NULL;
   builder = json_builder_new ();
 
   json_builder_begin_array (builder);
@@ -327,7 +505,8 @@ make_package_list_as_json_str (const char *packages)
     {
       int i;
       for (i = 0; package_list[i]; i++)
-        json_builder_add_string_value (builder, package_list[i]);
+        if (package_list[i][0] != '\0')
+          json_builder_add_string_value (builder, package_list[i]);
     }
 
   json_builder_end_array (builder);
@@ -336,11 +515,15 @@ make_package_list_as_json_str (const char *packages)
   gen = json_generator_new ();
   root = json_builder_get_root (builder);
   json_generator_set_root (gen, root);
-  json_str = json_generator_to_data (gen, NULL);
+  json_str = json_generator_to_data (gen, &json_length);
 
   json_node_free (root);
   g_object_unref (gen);
   g_object_unref (builder);
+
+  if (json_str != NULL
+      && json_length > TABLE_DRIVEN_LSC_START_PAYLOAD_MAX_BYTES)
+    g_clear_pointer (&json_str, g_free);
 
   if (json_str == NULL)
     g_warning ("%s: Error while creating JSON.", __func__);
@@ -868,17 +1051,17 @@ struct string
  *
  *  @param s[in/out] The string struct to be initialized
  */
-static void
+static gboolean
 init_string (struct string *s)
 {
   s->len = 0;
-  s->ptr = g_malloc0 (s->len + 1);
+  s->ptr = g_try_malloc0 (1);
   if (s->ptr == NULL)
     {
       g_warning ("%s: Error allocating memory for response", __func__);
-      return;
+      return FALSE;
     }
-  s->ptr[0] = '\0';
+  return TRUE;
 }
 
 /** @brief Call back function to stored the response.
@@ -890,19 +1073,29 @@ static size_t
 response_callback_fn (void *ptr, size_t size, size_t nmemb, void *struct_string)
 {
   struct string *s = struct_string;
-  size_t new_len = s->len + size * nmemb;
-  char *ptr_aux = g_realloc (s->ptr, new_len + 1);
-  s->ptr = ptr_aux;
-  if (s->ptr == NULL)
+  size_t chunk_bytes;
+  size_t new_len;
+  char *ptr_aux;
+
+  if (size != 0 && nmemb > TABLE_DRIVEN_LSC_RESPONSE_MAX_BYTES / size)
+    return 0;
+  chunk_bytes = size * nmemb;
+  if (s->len > TABLE_DRIVEN_LSC_RESPONSE_MAX_BYTES
+      || chunk_bytes > TABLE_DRIVEN_LSC_RESPONSE_MAX_BYTES - s->len)
+    return 0;
+  new_len = s->len + chunk_bytes;
+  ptr_aux = g_try_realloc (s->ptr, new_len + 1);
+  if (ptr_aux == NULL)
     {
       g_warning ("%s: Error allocating memory for response", __func__);
       return 0; // no memory left
     }
+  s->ptr = ptr_aux;
   memcpy (s->ptr + s->len, ptr, size * nmemb);
   s->ptr[new_len] = '\0';
   s->len = new_len;
 
-  return size * nmemb;
+  return chunk_bytes;
 }
 
 /** @brief Send a request to the server
@@ -924,8 +1117,15 @@ send_request (notus_info_t notusdata, const char *os, const char *pkg_list,
   long http_code = -1;
   struct string resp;
   struct curl_slist *customheader = NULL;
+  char *escaped_os = NULL;
   char *os_aux;
   GString *xapikey = NULL;
+
+  if (!bounded_notus_field (os, TABLE_DRIVEN_LSC_START_FIELD_MAX_LENGTH, FALSE)
+      || pkg_list == NULL
+      || strnlen (pkg_list, TABLE_DRIVEN_LSC_START_PAYLOAD_MAX_BYTES + 1)
+           > TABLE_DRIVEN_LSC_START_PAYLOAD_MAX_BYTES)
+    return http_code;
 
   if ((curl = curl_easy_init ()) == NULL)
     {
@@ -944,12 +1144,20 @@ send_request (notus_info_t notusdata, const char *os, const char *pkg_list,
         os_aux[i] = '_';
     }
 
-  g_string_append (url, os_aux);
+  escaped_os = curl_easy_escape (curl, os_aux, 0);
   g_free (os_aux);
+  if (escaped_os == NULL)
+    {
+      g_string_free (url, TRUE);
+      curl_easy_cleanup (curl);
+      return http_code;
+    }
+  g_string_append (url, escaped_os);
+  curl_free (escaped_os);
 
   g_debug ("%s: URL: %s", __func__, url->str);
   // Set URL
-  if (curl_easy_setopt (curl, CURLOPT_URL, g_strdup (url->str)) != CURLE_OK)
+  if (curl_easy_setopt (curl, CURLOPT_URL, url->str) != CURLE_OK)
     {
       g_warning ("Not possible to set the URL");
       curl_easy_cleanup (curl);
@@ -978,7 +1186,12 @@ send_request (notus_info_t notusdata, const char *os, const char *pkg_list,
   curl_easy_setopt (curl, CURLOPT_POSTFIELDSIZE, strlen (pkg_list));
 
   // Init the struct where the response is stored and set the callback function
-  init_string (&resp);
+  if (!init_string (&resp))
+    {
+      curl_slist_free_all (customheader);
+      curl_easy_cleanup (curl);
+      return http_code;
+    }
   curl_easy_setopt (curl, CURLOPT_WRITEFUNCTION, response_callback_fn);
   curl_easy_setopt (curl, CURLOPT_WRITEDATA, &resp);
 
@@ -986,6 +1199,7 @@ send_request (notus_info_t notusdata, const char *os, const char *pkg_list,
   if ((ret = curl_easy_perform (curl)) != CURLE_OK)
     {
       g_warning ("%s: Error sending request: %d", __func__, ret);
+      curl_slist_free_all (customheader);
       curl_easy_cleanup (curl);
       g_free (resp.ptr);
       return http_code;
@@ -993,8 +1207,9 @@ send_request (notus_info_t notusdata, const char *os, const char *pkg_list,
 
   curl_easy_getinfo (curl, CURLINFO_RESPONSE_CODE, &http_code);
 
+  curl_slist_free_all (customheader);
   curl_easy_cleanup (curl);
-  g_debug ("Server response %s", resp.ptr);
+  g_debug ("%s: Server response bytes: %zu", __func__, resp.len);
   *response = g_strdup (resp.ptr);
   g_free (resp.ptr);
   // already free()'ed with curl_easy_cleanup().
@@ -1040,7 +1255,8 @@ lsc_get_response (const char *pkg_list, const char *os)
 
   ret = send_request (notusdata, os, json_pkglist, &response);
   if (ret != 200)
-    g_warning ("%ld: Error sending request to openvasd: %s", ret, response);
+    g_warning ("%ld: Error sending request to openvasd (response bytes: %zu)",
+               ret, response == NULL ? 0 : strlen (response));
 
   free_notus_info (notusdata);
   g_free (json_pkglist);
@@ -1172,6 +1388,15 @@ run_table_driven_lsc (const char *scan_id, const char *ip_str,
   int err = 0;
   if (!os_release || !package_list)
     return 0;
+  if (!bounded_notus_field (scan_id, TABLE_DRIVEN_LSC_SCAN_ID_MAX_LENGTH, FALSE)
+      || !bounded_notus_field (ip_str, TABLE_DRIVEN_LSC_HOST_IP_MAX_LENGTH,
+                               FALSE)
+      || !bounded_notus_optional_field (hostname,
+                                        TABLE_DRIVEN_LSC_START_FIELD_MAX_LENGTH)
+      || !bounded_notus_field (os_release,
+                               TABLE_DRIVEN_LSC_START_FIELD_MAX_LENGTH, FALSE)
+      || !bounded_notus_package_list (package_list))
+    return -1;
 
   if (prefs_get ("openvasd_server"))
     {
@@ -1182,7 +1407,11 @@ run_table_driven_lsc (const char *scan_id, const char *ip_str,
     }
   else
     {
+      gchar *group_id = NULL;
       gchar *json_str;
+      kb_t main_kb;
+      gchar *manifest_str = NULL;
+      gchar *message_id = NULL;
       gchar *topic;
       gchar *payload;
       gchar *status = NULL;
@@ -1196,25 +1425,65 @@ run_table_driven_lsc (const char *scan_id, const char *ip_str,
           g_warning ("%s: Error starting lsc. Unable to subscribe", __func__);
           return -1;
         }
-      /* Get the OS release. TODO: have a list with supported OS. */
 
-      json_str = make_table_driven_lsc_info_json_str (scan_id, ip_str, hostname,
+      main_kb = get_main_kb ();
+      if (!make_notus_start_ids (&message_id, &group_id))
+        {
+          record_notus_manifest_failure (main_kb, "manifest");
+          g_warning ("%s: Unable to generate Notus start identifiers.",
+                     __func__);
+          return -1;
+        }
+
+      json_str = make_table_driven_lsc_info_json_str (message_id, group_id,
+                                                      scan_id, ip_str, hostname,
                                                       os_release, package_list);
+      manifest_str =
+        make_notus_manifest_json_str (group_id, message_id, ip_str);
 
       // Run table driven lsc
-      if (json_str == NULL)
-        return -1;
+      if (json_str == NULL || manifest_str == NULL)
+        {
+          record_notus_manifest_failure (main_kb, "manifest");
+          g_warning ("%s: Unable to serialize the bounded Notus start.",
+                     __func__);
+          g_free (manifest_str);
+          g_free (json_str);
+          g_free (group_id);
+          g_free (message_id);
+          return -1;
+        }
+
+      if (main_kb == NULL
+          || kb_item_push_str_with_main_kb_check (
+            main_kb, TABLE_DRIVEN_LSC_MANIFEST_KEY, manifest_str))
+        {
+          record_notus_manifest_failure (main_kb, "manifest");
+          g_warning ("%s: Refusing to publish an unrecorded Notus start.",
+                     __func__);
+          g_free (manifest_str);
+          g_free (json_str);
+          g_free (group_id);
+          g_free (message_id);
+          return -1;
+        }
+      g_free (manifest_str);
 
       g_message ("Running Notus for %s", ip_str);
       err = mqtt_publish ("scanner/package/cmd/notus", json_str);
       if (err)
         {
+          record_notus_manifest_failure (main_kb, "publish");
           g_warning ("%s: Error publishing message for Notus.", __func__);
           g_free (json_str);
+          g_free (group_id);
+          g_free (message_id);
           return -1;
         }
 
       g_free (json_str);
+      g_free (group_id);
+      g_free (message_id);
 
       // Wait for Notus scanner to start or interrupt
       while (!status)

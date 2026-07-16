@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2021-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -12,6 +13,27 @@ from notus.scanner.messages.start import ScanStartMessage
 
 
 class ScanStartMessageTestCase(TestCase):
+    def test_constructor_rejects_oversized_package_list_before_publish(self):
+        with self.assertRaisesRegex(MessageParsingError, "within limits"):
+            ScanStartMessage(
+                scan_id="scan_1",
+                host_ip="1.1.1.1",
+                host_name="",
+                os_release="BarOS 1.0",
+                package_list=["package=1"] * 10_001,
+            )
+
+    def test_constructor_accepts_empty_hostname(self):
+        message = ScanStartMessage(
+            scan_id="scan_1",
+            host_ip="1.1.1.1",
+            host_name="",
+            os_release="BarOS 1.0",
+            package_list=["package=1"],
+        )
+
+        self.assertEqual(message.host_name, "")
+
     def test_constructor(self):
         message = ScanStartMessage(
             scan_id="scan_1",
@@ -115,6 +137,23 @@ class ScanStartMessageTestCase(TestCase):
             MessageParsingError,
             "Invalid message type MessageType.SCAN_STATUS for ScanStartMessage."
             " Must be MessageType.SCAN_START.",
+        ):
+            ScanStartMessage.deserialize(data)
+
+    def test_deserialize_rejects_invalid_package_entries(self):
+        data = {
+            "message_id": "63026767-029d-417e-9148-77f4da49f49a",
+            "group_id": "run-1",
+            "created": 1628512774.0,
+            "message_type": "scan.start",
+            "scan_id": "scan_1",
+            "host_ip": "1.1.1.1",
+            "host_name": "foo",
+            "os_release": "BarOS 1.0",
+            "package_list": [123],
+        }
+        with self.assertRaisesRegex(
+            MessageParsingError, "package_list entries"
         ):
             ScanStartMessage.deserialize(data)
 

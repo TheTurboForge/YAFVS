@@ -52,7 +52,7 @@ packaging = ">=20.4,<27.0"
 lxml = ">=4.5.2,<7.0.0"
 defusedxml = ">=0.6,<0.8"
 deprecated = "^1.2.10"
-paho-mqtt = ">=1.6,<3"
+paho-mqtt = ">=2,<3"
 python-gnupg = ">=0.4.8,<0.6.0"
 
 [tool.poetry.group.dev.dependencies]

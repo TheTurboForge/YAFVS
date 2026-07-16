@@ -7,13 +7,24 @@
 
 """Access management for redis-based OpenVAS Scanner Database."""
 
+import json
 import logging
 import sys
 import time
 import uuid
 
 from enum import IntEnum
-from typing import List, NewType, Optional, Iterable, Iterator, Tuple, Callable
+from typing import (
+    Any,
+    Dict,
+    List,
+    NewType,
+    Optional,
+    Iterable,
+    Iterator,
+    Tuple,
+    Callable,
+)
 from urllib import parse
 
 import redis
@@ -1073,6 +1084,11 @@ class BaseKbDB(BaseDB):
     RESULT_CLAIM_ADMISSION_IDS_KEY = 'internal/results.ospd-claim-admission-ids'
     RESULT_SIZES_KEY = 'internal/results.sizes'
     RESULT_CLAIM_SIZES_KEY = 'internal/results.ospd-claim-sizes'
+    NOTUS_MANIFEST_KEY = 'internal/turbovas.notus-manifest'
+    NOTUS_MANIFEST_SEAL_KEY = 'internal/turbovas.notus-manifest-seal'
+    NOTUS_MANIFEST_FAILURE_KEY = 'internal/turbovas.notus-manifest-failure'
+    MAX_NOTUS_MANIFEST_RUNS = 10_000
+    MAX_NOTUS_MANIFEST_ENTRY_BYTES = 1024
 
     def _add_single_item(
         self, name: str, values: Iterable, utf8_enc: Optional[bool] = False
@@ -1345,8 +1361,7 @@ class KbDB(BaseKbDB):
     def has_permanent_cache_marker(self) -> bool:
         """Return whether this namespace is one exact permanent feed cache."""
         marker_types = {
-            marker: self.ctx.type(marker)
-            for marker in PERMANENT_CACHE_MARKERS
+            marker: self.ctx.type(marker) for marker in PERMANENT_CACHE_MARKERS
         }
         active_markers = [
             marker
@@ -1355,7 +1370,10 @@ class KbDB(BaseKbDB):
         ]
         if not active_markers:
             return False
-        if len(active_markers) != 1 or marker_types[active_markers[0]] != 'list':
+        if (
+            len(active_markers) != 1
+            or marker_types[active_markers[0]] != 'list'
+        ):
             raise OspdOpenvasError(
                 f'Redis database {self.index} has invalid permanent cache state.'
             )
@@ -1382,6 +1400,79 @@ class KbDB(BaseKbDB):
 
     def get_scan_process_id(self) -> Optional[str]:
         return self._get_single_item('internal/ovas_pid')
+
+    def get_notus_manifest(self) -> Tuple[str, List[Dict[str, str]]]:
+        """Read and validate OpenVAS's sealed Notus expectation manifest."""
+        failure = self._get_single_item(self.NOTUS_MANIFEST_FAILURE_KEY)
+        if failure is not None:
+            raise OspdOpenvasError(
+                'OpenVAS reported a Notus manifest publication failure.'
+            )
+        mode = self._get_single_item(self.NOTUS_MANIFEST_SEAL_KEY)
+        if mode not in ('mqtt', 'openvasd', 'none'):
+            raise OspdOpenvasError(
+                'OpenVAS did not seal a valid Notus expectation manifest.'
+            )
+        raw_entries = self._get_list_item(self.NOTUS_MANIFEST_KEY)
+        if len(raw_entries) > self.MAX_NOTUS_MANIFEST_RUNS:
+            raise OspdOpenvasError('Notus expectation manifest is too large.')
+        entries: List[Dict[str, str]] = []
+        run_ids = set()
+        message_ids = set()
+        for raw_entry in raw_entries:
+            if (
+                not isinstance(raw_entry, str)
+                or len(raw_entry.encode('utf-8'))
+                > self.MAX_NOTUS_MANIFEST_ENTRY_BYTES
+            ):
+                raise OspdOpenvasError(
+                    'Notus expectation manifest entry is invalid.'
+                )
+            try:
+                entry: Any = json.loads(raw_entry)
+            except (TypeError, ValueError) as exc:
+                raise OspdOpenvasError(
+                    'Notus expectation manifest entry is not JSON.'
+                ) from exc
+            if not isinstance(entry, dict) or set(entry) != {
+                'run_id',
+                'start_message_id',
+                'host_ip',
+            }:
+                raise OspdOpenvasError(
+                    'Notus expectation manifest entry has an invalid shape.'
+                )
+            for field, limit in (
+                ('run_id', 128),
+                ('start_message_id', 128),
+                ('host_ip', 255),
+            ):
+                value = entry[field]
+                if (
+                    not isinstance(value, str)
+                    or not value
+                    or len(value) > limit
+                    or not value.isprintable()
+                    or '\x00' in value
+                ):
+                    raise OspdOpenvasError(
+                        'Notus expectation manifest identity is invalid.'
+                    )
+            if (
+                entry['run_id'] in run_ids
+                or entry['start_message_id'] in message_ids
+            ):
+                raise OspdOpenvasError(
+                    'Notus expectation manifest identities are duplicated.'
+                )
+            run_ids.add(entry['run_id'])
+            message_ids.add(entry['start_message_id'])
+            entries.append(entry)
+        if mode != 'mqtt' and entries:
+            raise OspdOpenvasError(
+                'Non-MQTT Notus manifest unexpectedly contains runs.'
+            )
+        return mode, entries
 
     def remove_scan_database(self, scan_db: ScanDB):
         self._remove_list_item('internal/dbindex', scan_db.owner_reference)
@@ -1549,7 +1640,10 @@ class MainDB(BaseDB):
                 scan_id = self._validate_recovery_scan_id(parent_scan_id)
                 child_indexes = []
                 for reference in references:
-                    if not isinstance(reference, str) or not reference.isdigit():
+                    if (
+                        not isinstance(reference, str)
+                        or not reference.isdigit()
+                    ):
                         raise OspdOpenvasError(
                             f'Redis database {index} has invalid legacy child '
                             'reference.'

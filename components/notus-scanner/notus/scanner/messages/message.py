@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2021-2024 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -9,6 +10,9 @@ from typing import Any, Dict, Optional, Union
 from uuid import UUID, uuid4
 
 from ..errors import MessageParsingError
+
+MAX_GROUP_ID_LENGTH = 128
+DEFAULT_MAX_MQTT_PAYLOAD_BYTES = 128 * 1024
 
 
 class MessageType(Enum):
@@ -23,6 +27,7 @@ class Message:
     message_id: UUID = None
     group_id: str = None
     created: datetime = None
+    max_payload_bytes = DEFAULT_MAX_MQTT_PAYLOAD_BYTES
 
     def __init__(
         self,
@@ -33,16 +38,16 @@ class Message:
     ):
         self.message_id = message_id if message_id else uuid4()
         self.group_id = group_id if group_id else str(uuid4())
-        self.created = created if created else datetime.utcnow()
+        self.created = created if created else datetime.now(timezone.utc)
 
     @classmethod
     def _parse(cls, data: Dict[str, Union[int, str]]) -> Dict[str, Any]:
+        if not isinstance(data, dict):
+            raise MessageParsingError("message payload must be a JSON object")
         try:
             message_type = MessageType(data.get("message_type"))
-        except ValueError as e:
-            raise MessageParsingError(
-                f"error while parsing 'message_type', {e}"
-            ) from e
+        except (TypeError, ValueError) as e:
+            raise MessageParsingError("message_type is unsupported") from e
         if message_type != cls.message_type:
             raise MessageParsingError(
                 f"Invalid message type {message_type} for {cls.__name__}. "
@@ -52,17 +57,24 @@ class Message:
         try:
             message_id = UUID(data.get("message_id"))
         except (TypeError, ValueError) as e:
-            raise MessageParsingError(
-                f"error while parsing 'message_id', {e}"
-            ) from e
+            raise MessageParsingError("message_id must be a UUID") from e
         group_id = data.get("group_id")
+        if (
+            not isinstance(group_id, str)
+            or not group_id
+            or len(group_id) > MAX_GROUP_ID_LENGTH
+            or not group_id.isprintable()
+        ):
+            raise MessageParsingError(
+                "group_id must be a bounded printable string"
+            )
         try:
             created = datetime.fromtimestamp(
                 float(data.get("created")), timezone.utc
             )
-        except (TypeError, ValueError) as e:
+        except (OSError, OverflowError, TypeError, ValueError) as e:
             raise MessageParsingError(
-                f"error while parsing 'created', {e}"
+                "created must be a valid timestamp"
             ) from e
 
         return {
@@ -88,6 +100,15 @@ class Message:
 
     @classmethod
     def load(cls, payload: Union[str, bytes]) -> "Message":
+        if not isinstance(payload, (str, bytes)):
+            raise MessageParsingError("message payload must be text or bytes")
+        if len(payload) > cls.max_payload_bytes:
+            raise MessageParsingError("message payload exceeds the byte limit")
+        if (
+            isinstance(payload, str)
+            and len(payload.encode("utf-8")) > cls.max_payload_bytes
+        ):
+            raise MessageParsingError("message payload exceeds the byte limit")
         data = json.loads(payload)
         return cls.deserialize(data)
 

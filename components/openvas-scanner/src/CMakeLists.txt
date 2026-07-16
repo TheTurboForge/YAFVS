@@ -1,4 +1,5 @@
 # SPDX-FileCopyrightText: 2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -156,7 +157,8 @@ add_executable (attack-test
 
 set_target_properties (attack-test PROPERTIES LINKER_LANGUAGE C)
 
-target_compile_options(attack-test PRIVATE "-fsanitize=address")
+# Cgreen's zero-argument expectation macros use a GNU variadic extension.
+target_compile_options(attack-test PRIVATE "-fsanitize=address" "-Wno-pedantic")
 target_link_options(attack-test PRIVATE "-fsanitize=address")
 
 add_test (attack-test attack-test)

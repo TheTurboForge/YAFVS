@@ -15,7 +15,7 @@ from typing import Callable, Optional, Type
 import paho.mqtt.client as mqtt
 from paho.mqtt import __version__ as paho_mqtt_version
 
-from ..messages.message import Message
+from ..messages.message import Message, MessagePayloadTooLarge
 from .publisher import Publisher
 from .subscriber import Subscriber
 
@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 OSPD_OPENVAS_MQTT_CLIENT_ID = "ospd-openvas"
 
 QOS_AT_LEAST_ONCE = 1
+MQTT_SESSION_EXPIRY_SECONDS = 24 * 60 * 60
 
 
 def is_paho_mqtt_version_2() -> bool:
@@ -57,6 +58,11 @@ class MQTTClient(mqtt.Client):
             logger.debug("Using Paho MQTT version 1")
 
         super().__init__(**mqtt_client_args)
+        if not hasattr(self, 'manual_ack_set') or not hasattr(self, 'ack'):
+            raise RuntimeError(
+                'Paho MQTT manual acknowledgement support is required'
+            )
+        self.manual_ack_set(True)
         if username and password:
             self.username_pw_set(username, password)
 
@@ -69,13 +75,21 @@ class MQTTClient(mqtt.Client):
         keepalive=60,
         bind_address="",
         bind_port=0,
-        clean_start=mqtt.MQTT_CLEAN_START_FIRST_ONLY,
+        clean_start=False,
         properties=None,
     ):
         if not host:
             host = self._mqtt_broker_address
         if not port:
             port = self._mqtt_broker_port
+        if properties is None:
+            properties = mqtt.Properties(mqtt.PacketTypes.CONNECT)
+        if getattr(properties, 'SessionExpiryInterval', None) is None:
+            properties.SessionExpiryInterval = MQTT_SESSION_EXPIRY_SECONDS
+        if properties.SessionExpiryInterval <= 0:
+            raise ValueError(
+                'MQTT session expiry must preserve unacknowledged results'
+            )
 
         return super().connect(
             host,
@@ -108,9 +122,17 @@ class MQTTSubscriber(Subscriber):
         self.client.user_data_set(self.subscriptions)
 
     def subscribe(
-        self, message_class: Type[Message], callback: Callable[[Message], None]
+        self,
+        message_class: Type[Message],
+        callback: Callable[[Message], bool],
+        malformed_callback: Optional[Callable[[str, str], bool]] = None,
     ) -> None:
-        func = partial(self._handle_message, message_class, callback)
+        func = partial(
+            self._handle_message,
+            message_class,
+            callback,
+            malformed_callback=malformed_callback,
+        )
         func.__name__ = callback.__name__
 
         logger.debug("Subscribing to topic %s", message_class.topic)
@@ -134,32 +156,92 @@ class MQTTSubscriber(Subscriber):
     @staticmethod
     def _handle_message(
         message_class: Type[Message],
-        callback: Callable[[Message], None],
-        _client,
+        callback: Callable[[Message], bool],
+        client,
         _userdata,
         msg: mqtt.MQTTMessage,
+        *,
+        malformed_callback: Optional[Callable[[str, str], bool]] = None,
     ) -> None:
         logger.debug("Incoming message for topic %s", msg.topic)
 
         try:
             # Load message from payload
             message = message_class.load(msg.payload)
+        except MessagePayloadTooLarge:
+            logger.error(
+                "Rejecting oversized MQTT message for topic %s.", msg.topic
+            )
+            MQTTSubscriber._ack_message(client, msg)
+            return
         except json.JSONDecodeError:
             logger.error(
                 "Got MQTT message in non-json format for topic %s.", msg.topic
             )
-            logger.debug("Got: %s", msg.payload)
+            MQTTSubscriber._ack_message(client, msg)
             return
-        except ValueError as e:
+        except (AttributeError, OverflowError, TypeError, ValueError):
             logger.error(
-                "Could not parse message for topic %s. Error was %s",
+                "Could not parse malformed message for topic %s.",
                 msg.topic,
-                e,
             )
-            logger.debug("Got: %s", msg.payload)
+            scan_id = MQTTSubscriber._safe_scan_id(msg.payload)
+            if scan_id is not None and malformed_callback is not None:
+                try:
+                    handled = malformed_callback(
+                        scan_id, 'Malformed Notus MQTT envelope.'
+                    )
+                except Exception:  # pylint: disable=broad-exception-caught
+                    logger.exception(
+                        "Malformed MQTT message handling failed for topic %s; "
+                        "message remains unacknowledged.",
+                        msg.topic,
+                    )
+                    return
+                if not handled:
+                    return
+            MQTTSubscriber._ack_message(client, msg)
             return
 
-        callback(message)
+        try:
+            admitted = callback(message)
+        except Exception:  # pylint: disable=broad-exception-caught
+            logger.exception(
+                "MQTT callback failed for topic %s; message remains "
+                "unacknowledged.",
+                msg.topic,
+            )
+            return
+        if admitted:
+            MQTTSubscriber._ack_message(client, msg)
+
+    @staticmethod
+    def _safe_scan_id(payload) -> Optional[str]:
+        try:
+            data = json.loads(payload)
+        except (json.JSONDecodeError, TypeError, UnicodeDecodeError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        scan_id = data.get('scan_id')
+        if (
+            not isinstance(scan_id, str)
+            or not scan_id
+            or len(scan_id) > 128
+            or not scan_id.isprintable()
+        ):
+            return None
+        return scan_id
+
+    @staticmethod
+    def _ack_message(client, msg: mqtt.MQTTMessage) -> None:
+        if msg.qos == 0:
+            return
+        outcome = client.ack(msg.mid, msg.qos)
+        if outcome != mqtt.MQTT_ERR_SUCCESS:
+            logger.warning(
+                "MQTT broker acknowledgement failed for topic %s.", msg.topic
+            )
 
 
 class MQTTDaemon:

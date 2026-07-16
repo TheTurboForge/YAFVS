@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # SPDX-FileCopyrightText: 2021-2023 Greenbone AG
+# TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -8,10 +9,18 @@ from uuid import UUID
 
 from unittest import TestCase
 
-from ospd_openvas.messages.message import Message, MessageType
+from ospd_openvas.messages.message import (
+    Message,
+    MessagePayloadTooLarge,
+    MessageType,
+)
 
 
 class MessageTestCase(TestCase):
+    def test_load_rejects_oversized_payload_before_json_parsing(self):
+        with self.assertRaises(MessagePayloadTooLarge):
+            Message.load(b'{' * (Message.max_payload_bytes + 1))
+
     def test_default_constructor(self):
         message = Message()
 

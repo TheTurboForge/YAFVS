@@ -1,3 +1,5 @@
+// TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+
 use std::sync::{Arc, RwLock};
 
 use futures::StreamExt;

@@ -2772,7 +2772,7 @@ def run_git(repo_root: Path, args: list[str]) -> str | None:
 
 
 def git_name_status(repo_root: Path, base: str, pathspecs: tuple[str, ...] = ()) -> list[tuple[str, str]] | None:
-    args = ["diff", "--name-status", f"{base}..HEAD"]
+    args = ["diff", "--find-renames", "--find-copies-harder", "-l0", "--name-status", f"{base}..HEAD"]
     if pathspecs:
         args.append("--")
         args.extend(pathspecs)
@@ -2792,9 +2792,9 @@ def git_name_status_for_diff_scope(repo_root: Path, diff_scope: str, pathspecs: 
     if diff_scope == "baseline":
         return git_name_status(repo_root, IMPORT_BASELINE_COMMIT, pathspecs)
     if diff_scope == "staged":
-        args = ["diff", "--cached", "--name-status"]
+        args = ["diff", "--find-renames", "--find-copies-harder", "-l0", "--cached", "--name-status"]
     elif diff_scope == "worktree":
-        args = ["diff", "--name-status"]
+        args = ["diff", "--find-renames", "--find-copies-harder", "-l0", "--name-status"]
     else:
         return None
     if pathspecs:
@@ -15115,6 +15115,16 @@ def turbovas_added_paths(rows: list[tuple[str, str]] | None) -> set[str]:
     }
 
 
+def modified_imported_notice_exempt_paths(rows: list[tuple[str, str]] | None) -> set[str]:
+    if rows is None:
+        return set()
+    return turbovas_added_paths(rows) | {
+        relative_path
+        for status, relative_path in rows
+        if status.startswith(("R", "C")) and imported_added_path(relative_path)
+    }
+
+
 def modified_imported_notice_gaps(
     repo_root: Path,
     rows: list[tuple[str, str]],
@@ -15125,7 +15135,7 @@ def modified_imported_notice_gaps(
     review: list[str] = []
     added_paths = turbovas_added or set()
     for status, relative_path in rows:
-        if status != "M":
+        if not status.startswith(("M", "R", "C")):
             continue
         if relative_path in added_paths:
             continue
@@ -15420,7 +15430,7 @@ def command_license_report(
                 rows,
                 diff_scope=diff_scope,
                 check_manifest_stale=diff_scope == "baseline",
-                turbovas_added=turbovas_added_paths(baseline_rows),
+                turbovas_added=modified_imported_notice_exempt_paths(baseline_rows),
             )
         )
         result = make_result("license-report", repo_root, "Modified imported file license/provenance checks completed.", findings)
@@ -15451,11 +15461,18 @@ def command_license_report(
 
     all_rows = git_name_status(repo_root, IMPORT_BASELINE_COMMIT)
     rows = git_name_status(repo_root, IMPORT_BASELINE_COMMIT, ("components",))
-    native_added = turbovas_added_paths(rows)
+    notice_exempt = modified_imported_notice_exempt_paths(rows)
     if rows is None:
         findings.append(finding("fail", "license.git-history", f"Could not compare against import baseline {IMPORT_BASELINE_COMMIT}."))
     else:
-        findings.extend(modified_imported_license_findings(repo_root, rows, diff_scope="baseline"))
+        findings.extend(
+            modified_imported_license_findings(
+                repo_root,
+                rows,
+                diff_scope="baseline",
+                turbovas_added=notice_exempt,
+            )
+        )
     for transient_scope in ("staged", "worktree"):
         transient_rows = git_name_status_for_diff_scope(repo_root, transient_scope, ("components",))
         findings.extend(
@@ -15464,7 +15481,7 @@ def command_license_report(
                 transient_rows,
                 diff_scope=transient_scope,
                 check_manifest_stale=False,
-                turbovas_added=native_added,
+                turbovas_added=notice_exempt,
             )
         )
 

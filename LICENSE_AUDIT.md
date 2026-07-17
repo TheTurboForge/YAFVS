@@ -65,7 +65,7 @@ the change introduces no third-party dependency or new distribution boundary.
   Greenbone Enterprise Feed subscription-key support without a separate explicit
   product/legal decision.
 - Mark ambiguous cases for human/legal review before public release or distribution.
-- Run `just license-report` during license-sensitive work. The report checks expected component license files, TurboVAS modification notices on modified imported source files, SPDX headers on new TurboVAS-created files, explicit handling for modified imported files that cannot carry comments, accidental tracking of runtime feed/cache content, and public-release review gate state.
+- Run `just license-report` during license-sensitive work. The report checks expected component license files, TurboVAS modification notices on modified, renamed, and copied imported source files, SPDX headers on new TurboVAS-created files, explicit handling for modified imported files that cannot carry comments, accidental tracking of runtime feed/cache content, and public-release review gate state.
 - Run `just license-public-release-gate --mode source-public` before changing
   repository visibility for public source read access. This mode is limited to
   source visibility and does not authorize binaries, containers, hosted

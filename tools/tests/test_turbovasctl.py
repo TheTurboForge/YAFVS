@@ -12038,6 +12038,73 @@ db2:keys=5,expires=0,avg_ttl=0
             self.assertEqual(missing, [])
             self.assertEqual(review, ["components/gsa/package.json"])
 
+    def test_license_helpers_review_rename_and_copy_destinations(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            renamed = root / "components" / "gvmd" / "src" / "renamed.c"
+            copied = root / "components" / "gsa" / "src" / "copied.jsx"
+            data = root / "components" / "gsa" / "copied.json"
+            for path in (renamed, copied, data):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("upstream content\n", encoding="utf-8")
+
+            missing, review = turbovasctl.modified_imported_notice_gaps(
+                root,
+                [
+                    ("R100", "components/gvmd/src/renamed.c"),
+                    ("C075", "components/gsa/src/copied.jsx"),
+                    ("C100", "components/gsa/copied.json"),
+                ],
+            )
+
+        self.assertEqual(
+            missing,
+            [
+                "components/gvmd/src/renamed.c",
+                "components/gsa/src/copied.jsx",
+            ],
+        )
+        self.assertEqual(review, ["components/gsa/copied.json"])
+
+    def test_git_name_status_detects_delete_add_rename_and_modified_copy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            original = root / "components" / "gvmd" / "src" / "original.c"
+            copy_source = root / "components" / "gsa" / "src" / "copy-source.jsx"
+            original.parent.mkdir(parents=True)
+            copy_source.parent.mkdir(parents=True)
+            original.write_text("".join(f"original line {line}\\n" for line in range(20)), encoding="utf-8")
+            copy_source.write_text("".join(f"shared line {line}\\n" for line in range(20)), encoding="utf-8")
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "TurboVAS Test"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True)
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "baseline"], cwd=root, check=True)
+            base = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=root,
+                check=True,
+                text=True,
+                stdout=subprocess.PIPE,
+            ).stdout.strip()
+
+            renamed = original.with_name("renamed.c")
+            original.rename(renamed)
+            copied = copy_source.with_name("copied.jsx")
+            copied.write_text(copy_source.read_text(encoding="utf-8") + "TurboVAS change\\n", encoding="utf-8")
+            subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-qm", "move and copy"], cwd=root, check=True)
+
+            rows = turbovasctl.git_name_status(root, base, ("components",))
+
+        self.assertIn(("R100", "components/gvmd/src/renamed.c"), rows)
+        self.assertTrue(
+            any(
+                status.startswith("C") and path == "components/gsa/src/copied.jsx"
+                for status, path in rows
+            )
+        )
+
     def test_modified_imported_notice_gaps_can_use_staged_content(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -12070,7 +12137,19 @@ db2:keys=5,expires=0,avg_ttl=0
             )
 
         self.assertEqual(rows, [("M", "components/gvmd/src/example.c")])
-        self.assertEqual(calls, [["diff", "--cached", "--name-status", "--", "components"]])
+        self.assertEqual(
+            calls,
+            [[
+                "diff",
+                "--find-renames",
+                "--find-copies-harder",
+                "-l0",
+                "--cached",
+                "--name-status",
+                "--",
+                "components",
+            ]],
+        )
 
     def test_license_report_modified_imported_only_uses_diff_scope(self):
         with tempfile.TemporaryDirectory() as tmp:

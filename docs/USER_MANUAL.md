@@ -20,12 +20,28 @@ surface and command-specific safety notes.
 
 ## Operator Access And Security Boundary
 
-TurboVAS deliberately removed inherited product RBAC to simplify scanner
-administration and support an operator-only console. Every person who can log in
-is expected to be a trusted person who administers or actively operates
-TurboVAS, such as vulnerability-scanning and IT-security staff. A logged-in
-operator may administer scanner workflows, targets, schedules, reports,
-credentials, and related scanner configuration.
+TurboVAS deliberately removed inherited product role-based access control
+(RBAC). This is not an accidental omission, a temporary limitation, or a
+compatibility feature waiting to be restored. It follows from the intended
+operating model: one TurboVAS installation belongs to one trusted
+vulnerability-management or scanner-operations team and one administrative
+trust domain.
+
+The number of scanned assets does not determine the number of trust domains. A
+small operator team may administer tens of thousands of assets in one shared
+scanner estate. Within that team, every authenticated human console user is a
+scanner operator who can see and administer shared targets, tasks, schedules,
+reports, findings, scanner state, and operational history.
+This shared authority lets colleagues understand and continue one another's
+work, respond to incidents, and cover for one another during leave or other
+absences. Resource ownership remains useful attribution metadata; it is not a
+visibility or authorization boundary between teammates.
+
+Operators still use individual accounts. Those accounts provide personal
+authentication, action attribution, preferences, account lifecycle and
+revocation, and the identity needed for auditing. Shared login credentials are
+not part of the operator model. Shared product authority does not automatically
+grant operating-system, database, network, or deployment access.
 
 People who only consume findings for compliance, remediation, management, or
 reporting should not receive TurboVAS console accounts. Their required
@@ -34,9 +50,11 @@ reports, exports, notifications, and appliance delivery workflows—for example,
 email routed into a ticket system or files written to an approved network share.
 TurboVAS is not a vulnerability-management collaboration platform.
 
-This keeps the scanner administration boundary simple and explicit:
+This makes the scanner administration boundary explicit:
 
 - TurboVAS console access is restricted to trusted scanner operators.
+- All operators in one installation work in the same product-level trust
+  domain and intentionally share scanner-resource visibility and authority.
 - Remediation work is delivered outward to the systems where operational teams
   already work.
 - TurboVAS does not try to model every organization's internal workflow as
@@ -45,11 +63,38 @@ This keeps the scanner administration boundary simple and explicit:
   auditability, and credential handling are the enterprise controls around
   scanner administration.
 
-User accounts remain useful for login identity, authentication source,
-preferences, and attribution, but TurboVAS does not expose a product-level
-distinction between admin and super admin accounts. If a person should not be
-allowed to administer the scanner, that person should not be able to log in to
-TurboVAS.
+TurboVAS does not expose a product-level distinction between admin and super
+admin accounts. If a person should not be allowed to administer the scanner,
+that person should not be able to log in to TurboVAS.
+
+### Tenant Isolation
+
+Product-level RBAC is not hard tenant isolation. Row or UI permissions inside
+one application can hide resources while the same processes, database,
+privileged service identities, scanner workers, runtime secrets, network reach,
+and failure domain remain shared. TurboVAS therefore does not market one
+installation as a multi-tenant vulnerability-management platform.
+
+When customers, legal entities, security domains, administrative authorities,
+confidentiality boundaries, or target-network trust zones must not share
+scanner control or data, deploy separate, independently operated TurboVAS
+stacks. The stacks must separately own the database, reports and evidence,
+target and scanner credentials, tasks and queues, API and authentication
+configuration, runtime state and secrets, logs, exports, backups, scanner
+execution, and relevant network reachability. If the threat model requires
+host-compromise isolation, use separate host or virtual-machine boundaries;
+multiple logical Compose projects on one shared host do not provide that
+guarantee.
+
+This is a stronger isolation model, not a weakening caused by removing RBAC:
+the trust boundary moves from resource-visibility rules inside one privileged
+application to independently controlled deployments. Separate stacks add
+deployment, upgrade, monitoring, backup, recovery, and capacity work. That
+overhead is intentional when a real trust boundary exists.
+
+> One installation represents one trusted scanner-operator team and one
+> administrative trust domain. Where hard tenant isolation is required, deploy
+> separate stacks.
 
 The current local development runtime uses the development credentials
 `admin` / `admin`. Treat those credentials as a private development convenience
@@ -549,12 +594,14 @@ population being reported on. This supports environments where one meaningful
 reporting population requires several technical targets.
 
 The operator-only console model replaces inherited product RBAC. A TurboVAS
-account is an operator account: anyone who can log in can administer the
-scanner. This is a deliberate simplification of the scanner administration
-boundary that supports the operator-only product concept, not a statement that
-enterprise controls are unnecessary. Findings for compliance, remediation,
-management, and reporting belong in automated reports, exports, notifications,
-and delivery workflows rather than in broad console accounts.
+account is an operator account: anyone who can log in can administer the shared
+scanner estate. This is a deliberate trust-boundary decision, not an accidental
+simplification or a future compatibility goal. Individual accounts preserve
+identity and attribution within one trusted team; separate stacks provide
+tenant isolation between teams that must not share control or data. Findings
+for compliance, remediation, management, and reporting belong in automated
+reports, exports, notifications, and delivery workflows rather than in broad
+console accounts.
 
 Dedicated OCI/container-image scanning was removed. TurboVAS is moving toward
 inventory-based vulnerability matching, where scanner-collected and future

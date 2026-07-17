@@ -47,12 +47,15 @@ and provide report-like drill-down under `/scopes/reports` and
 
 ## Operator-Only Console Model
 
-TurboVAS deliberately removed the inherited product RBAC model to simplify
-scanner administration and support an operator-only console. Anyone who can
-authenticate is expected to be a trusted person who administers or actively
-operates TurboVAS, such as vulnerability-scanning and IT-security staff, and has
-scanner administration rights. TurboVAS is not a vulnerability-management
-collaboration platform.
+TurboVAS deliberately removed the inherited product RBAC model. This is an
+intentional operating and trust-boundary decision, not an accidental omission,
+a temporary simplification, or a compatibility feature planned for restoration.
+One installation represents one trusted vulnerability-management or
+scanner-operations team. Its individually authenticated operators intentionally
+share visibility and authority over the scanner estate so they can understand
+and continue one another's work and cover for one another during leave or other
+absences. The number of scanned assets does not determine whether an
+installation is multi-tenant.
 
 People who only consume findings for compliance, remediation, management, or
 reporting should not receive TurboVAS console accounts. Their required
@@ -63,9 +66,18 @@ accounts remain for login identity, authentication source, preferences, and
 attribution, not for modeling every organization's internal workflow as product
 roles.
 
-The administration boundary is therefore explicit: restrict console login,
-network exposure, TLS, host access, backups, deployment controls, auditability,
-and credential handling to trusted scanner operators.
+When groups require a real administrative or confidentiality boundary, they
+must use separate, independently operated stacks. That deployment boundary can
+isolate databases, reports, scanner execution, runtime secrets, networks, logs,
+exports, and backups; row or UI permissions inside one shared application and
+failure domain cannot provide the same tenant isolation. TurboVAS is not a
+multi-tenant vulnerability-management collaboration platform.
+
+The administration boundary is therefore explicit: use individual operator
+accounts, restrict console login and operator API access, and retain appropriate
+network, TLS, host, backup, deployment, audit, and credential controls. Shared
+product authority does not imply shared login credentials or automatic
+infrastructure access.
 Development credentials are `admin` / `admin` and are not production guidance.
 
 ## Removed Inherited Product Surfaces

@@ -99,12 +99,21 @@ authenticated account -> full scanner operator rights -> per-user identity, attr
 ```
 
 There is no product-level distinction between admin and super admin because the
-console is intentionally operator-only. People who should not administer the
-scanner should receive findings through reports, exports, notifications, ticket
-integrations, or future delivery workflows rather than console accounts. Login,
-network exposure, TLS, deployment controls, auditability, and credential
-handling define the scanner administration boundary. Development credentials
-are `admin` / `admin`; they are not production guidance.
+console intentionally serves one trusted scanner-operator team. Individual
+accounts provide identity, attribution, preferences, revocation, and auditing;
+operators share resource visibility and authority so they can continue one
+another's work and cover for one another during leave or other absences. Owner
+metadata does not partition resources between teammates.
+
+People who should not administer the scanner should receive findings through
+reports, exports, notifications, ticket integrations, or future delivery
+workflows rather than console accounts. Distinct administrative trust domains
+require independently operated stacks: tenant isolation belongs at the
+database, runtime, secret, scanner, network, backup, and failure-domain
+boundaries, not in row or UI permissions inside one application. Login, network
+exposure, TLS, deployment controls, auditability, and credential handling remain
+required. Development credentials are `admin` / `admin`; they are not
+production guidance.
 
 ## Deletion, Retention, And Provenance Flow
 

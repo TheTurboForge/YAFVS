@@ -89,12 +89,21 @@ take longer and have meaningful state and security boundaries. Continue with
 
 ## Operator And Security Boundary
 
-TurboVAS deliberately removed inherited product RBAC. Every authenticated
-console user is a trusted scanner operator who may administer targets, tasks,
-credentials, reports, and scanner configuration. People who only consume
-findings for remediation, compliance, management, or reporting should receive
-controlled reports, exports, notifications, or delivery artifacts rather than
-console accounts.
+TurboVAS deliberately removed inherited product RBAC. This is an intentional
+trust-boundary decision, not a missing feature: one installation represents one
+trusted scanner-operator team, whose individually authenticated members share
+visibility and authority so they can continue one another's work and provide
+cover during leave or other absences. Asset count does not make an installation
+multi-tenant. People who only consume findings for remediation, compliance,
+management, or reporting should receive controlled reports, exports,
+notifications, or delivery artifacts rather than console accounts.
+
+Where administrative or confidentiality boundaries require hard tenant
+isolation, deploy separate, independently operated stacks with separate data,
+secrets, scanner execution, network reachability, and operational state.
+In-application resource permissions are not a substitute for that deployment
+boundary. See the [operator access model](docs/USER_MANUAL.md#operator-access-and-security-boundary)
+and [trust boundaries](docs/TRUST_BOUNDARIES.md#operator-console-access).
 
 The local development credentials are `admin` / `admin`; they are not
 production guidance. Login exposure, TLS, host access, backups, auditability,

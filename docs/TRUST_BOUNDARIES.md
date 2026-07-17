@@ -16,16 +16,48 @@ This document is descriptive, not a production security claim. See
 
 ### Operator Console Access
 
-TurboVAS uses an operator-only console model. Any authenticated console account
-is expected to be trusted to administer scanner workflows and retained scanner
-resources. People who should not administer the scanner should receive findings
-through outbound reporting or integration workflows instead of console accounts.
+TurboVAS deliberately uses an operator-only console model instead of inherited
+product RBAC. One installation represents one trusted scanner-operator team and
+one administrative trust domain. Asset count is independent of that boundary:
+one small team may operate a very large scanner estate.
 
-This simplifies product authorization, but it raises the importance of the
-surrounding access controls: authentication source, credential handling, TLS,
-host binding, network exposure, backups, deployment controls, and auditability
-must be reviewed before production-like use. Development credentials and
-development bindings are not production guidance.
+Every authenticated human console account intentionally has shared visibility
+and authority over retained scanner resources. Operators need to understand and
+continue one another's work, respond to incidents, and cover for one another
+during leave or other absences. Individual accounts remain mandatory for
+authentication, attribution, preferences, revocation, and auditing; shared
+credentials are not the model. Owner fields identify who created or performed
+work but do not partition resources between teammates.
+
+People who should not administer the scanner should receive findings through
+outbound reporting or integration workflows instead of console accounts.
+Console authority does not grant host, database, network, or deployment access.
+
+Removing product RBAC does not remove the surrounding security controls.
+Authentication source, credential handling, TLS, host binding, network
+exposure, backups, deployment controls, and auditability must be reviewed before
+production-like use. Development credentials and development bindings are not
+production guidance.
+
+### Tenant Isolation Between Stacks
+
+TurboVAS does not treat row-level or UI-level authorization inside one
+privileged scanner application as hard tenant isolation. Such rules can leave
+the database, scanner workers, service identities, runtime secrets, network
+reachability, backups, and failure domain shared even when users see different
+objects.
+
+Administrative or confidentiality boundaries therefore belong between
+independently operated stacks. Separate stacks must isolate the database,
+reports and evidence, credentials, scanner execution, runtime state and
+secrets, authentication configuration, logs, exports, backups, and relevant
+network reachability. The infrastructure boundary must match the threat model:
+two logical stacks on a shared host are not host-compromise isolation.
+
+This deployment boundary is intentionally stronger than the inherited product
+RBAC model. It also keeps collaboration inside one trusted team practical,
+because teammates share scanner state instead of being blocked by resource
+ownership when covering for an absent colleague.
 
 ### Browser To `gsad`
 

@@ -113,9 +113,10 @@ just runtime-gmp-smoke
 just runtime-scanner-register
 just runtime-scanner-capability-check
 just runtime-feed-keyring-init
-just runtime-full-test-scan-preflight
-just runtime-full-test-scan-start --confirm-authorized-lan
-just runtime-full-test-scan-status
+TARGET_CIDR='replace-with-an-authorized-cidr'
+just runtime-full-test-scan-preflight --target-cidr "$TARGET_CIDR"
+just runtime-full-test-scan-start --target-cidr "$TARGET_CIDR" --confirm-authorized-target "$TARGET_CIDR"
+just runtime-full-test-scan-status --target-cidr "$TARGET_CIDR"
 just feed-state
 just feed-cache-sync
 just feed-generation-stage
@@ -168,10 +169,11 @@ The first activation requires an explicit acknowledgement. If a
 verified activation needs to be undone, `feed-generation-rollback` performs
 service-coordinated, verified compensating recovery to a prior generation; it
 accepts only the journaled known-good predecessor and does not claim a
-transactional database rollback. The full-test scan commands are fixed to the authorized
-`192.168.178.0/24` target, the `Full and fast` scan config, and the `All IANA
-assigned TCP and UDP` port list; starting the scan requires the explicit
-`--confirm-authorized-lan` flag.
+transactional database rollback. Full-test scan commands require an explicit
+canonical `--target-cidr`, retain the `Full and fast` scan config and `All IANA
+assigned TCP and UDP` port list, and reject targets larger than 256 addresses.
+Starting a scan also requires `--confirm-authorized-target` with the exact same
+CIDR. TurboVAS does not ship a real network target or infer authorization.
 
 `build-ui` stages the GSA production bundle under
 `build/prefix/share/gvm/gsad/web` and writes a development `config.js` for the

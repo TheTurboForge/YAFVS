@@ -44,10 +44,12 @@ checks reach it from inside the Docker network. Direct development access is an
 explicit opt-in mode that publishes a separate bearer-auth listener, defaulting
 to `127.0.0.1:19080`. Source,
 `build/`, and `build/prefix` are bind-mounted for fast development feedback
-instead of forcing container rebuilds after small source changes. App containers
-also mount the checkout at
-`/home/turboforge/Projects/TurboVAS` because the current CMake build baseline
-embeds inherited development paths under that location.
+instead of forcing container rebuilds after small source changes. App
+containers also mount the checkout at the absolute path supplied through
+`TURBOVAS_REPO_MOUNT_PATH` because the current CMake build baseline embeds its
+development checkout path. `tools/turbovasctl` supplies the current repository
+root automatically. Direct `docker compose` use must set the variable
+explicitly; there is no machine-specific fallback.
 
 ## Commands
 
@@ -96,9 +98,10 @@ numbers, database size and largest relations, artifact paths, and build-size
 facts for future instrumentation work; it writes a latest JSON artifact plus
 retained timestamped history and does not optimize or mutate runtime state.
 `quality-gate-state` reports retained quality-gate history.
-`quality-gate-schedule` manages the development user-level systemd timer on
-`turboforge-server`; it does not fall back to cron if user systemd is
-unavailable.
+`quality-gate-schedule` manages a development user-level systemd timer only
+when the operator explicitly sets `TURBOVAS_ENABLE_QUALITY_GATE_SCHEDULE=1`.
+It does not assume a hostname or account and does not fall back to cron if user
+systemd is unavailable.
 
 The GitHub Actions quality-gate workflow is deliberately source-only. It shares
 the same `tools/turbovasctl quality-gate --json` contract, but does not start

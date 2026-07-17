@@ -168,6 +168,7 @@ runtime_full_test_scan = importlib.util.module_from_spec(FULL_TEST_SCAN_SPEC)
 assert FULL_TEST_SCAN_SPEC.loader is not None
 sys.modules["runtime_full_test_scan"] = runtime_full_test_scan
 FULL_TEST_SCAN_SPEC.loader.exec_module(runtime_full_test_scan)
+TEST_FULL_TEST_TARGET = runtime_full_test_scan.parse_full_test_target("192.0.2.0/24")
 
 RUNTIME_SCOPE_PATH = Path(__file__).resolve().parents[1] / "runtime_scope.py"
 RUNTIME_SCOPE_SPEC = importlib.util.spec_from_loader("runtime_scope", SourceFileLoader("runtime_scope", str(RUNTIME_SCOPE_PATH)))
@@ -1687,8 +1688,8 @@ class TurboVASCtlTests(unittest.TestCase):
             "/api/v1/scan-configs?page_size=500": {"items": [{"id": runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID, "name": "Full and fast"}]},
             "/api/v1/port-lists?page_size=500": {"items": [{"id": runtime_full_test_scan.IANA_TCP_UDP_PORT_LIST_ID, "name": "All IANA assigned TCP and UDP"}]},
             "/api/v1/scanners?page_size=500": {"items": [{"id": "scanner-1", "name": runtime_full_test_scan.OPENVAS_SCANNER_NAME}]},
-            "/api/v1/targets?page_size=500": {"items": [{"id": "target-1", "name": runtime_full_test_scan.FULL_TEST_TARGET_NAME}]},
-            "/api/v1/tasks?page_size=500": {"items": [{"id": "task-1", "name": runtime_full_test_scan.FULL_TEST_TASK_NAME, "status": "Done", "progress": 100, "target": {"id": "target-1"}, "scanner": {"id": "scanner-1"}, "config": {"id": runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID}, "last_report": {"id": "report-1"}}]},
+            "/api/v1/targets?page_size=500": {"items": [{"id": "target-1", "name": TEST_FULL_TEST_TARGET.target_name}]},
+            "/api/v1/tasks?page_size=500": {"items": [{"id": "task-1", "name": TEST_FULL_TEST_TARGET.task_name, "status": "Done", "progress": 100, "target": {"id": "target-1"}, "scanner": {"id": "scanner-1"}, "config": {"id": runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID}, "last_report": {"id": "report-1"}}]},
         }
 
         with unittest.mock.patch.object(runtime_full_test_scan, "native_api_json", side_effect=lambda _root, path: payloads[path]):
@@ -1697,7 +1698,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(state["scan_configs"][0]["id"], runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID)
         self.assertEqual(state["port_lists"][0]["id"], runtime_full_test_scan.IANA_TCP_UDP_PORT_LIST_ID)
         self.assertEqual(state["scanners"][0]["name"], runtime_full_test_scan.OPENVAS_SCANNER_NAME)
-        self.assertEqual(state["targets"][0]["name"], runtime_full_test_scan.FULL_TEST_TARGET_NAME)
+        self.assertEqual(state["targets"][0]["name"], TEST_FULL_TEST_TARGET.target_name)
         self.assertEqual(state["tasks"][0]["report_id"], "report-1")
         self.assertEqual(state["tasks"][0]["progress"], "100")
 
@@ -1708,11 +1709,12 @@ class TurboVASCtlTests(unittest.TestCase):
         with unittest.mock.patch.object(
             runtime_full_test_scan,
             "native_api_browser_proxy_json",
-            return_value={"id": "target-1", "name": runtime_full_test_scan.FULL_TEST_TARGET_NAME},
+            return_value={"id": "target-1", "name": TEST_FULL_TEST_TARGET.target_name},
         ) as native_create:
             target_id, error = runtime_full_test_scan.ensure_target(
                 object(),
                 state,
+                TEST_FULL_TEST_TARGET,
                 repo_root=root,
                 operator_name="admin",
             )
@@ -1723,7 +1725,7 @@ class TurboVASCtlTests(unittest.TestCase):
         _repo_root, path = native_create.call_args.args
         payload = native_create.call_args.kwargs["payload"]
         self.assertEqual(path, "/api/v1/targets")
-        self.assertEqual(payload["hosts"], [runtime_full_test_scan.AUTHORIZED_TARGET_CIDR])
+        self.assertEqual(payload["hosts"], [TEST_FULL_TEST_TARGET.cidr])
         self.assertEqual(payload["port_list_id"], runtime_full_test_scan.IANA_TCP_UDP_PORT_LIST_ID)
         self.assertEqual(payload["alive_tests"], ["Scan Config Default"])
         self.assertNotIn("credentials", payload)
@@ -1735,11 +1737,12 @@ class TurboVASCtlTests(unittest.TestCase):
         with unittest.mock.patch.object(
             runtime_full_test_scan,
             "native_api_browser_proxy_json",
-            return_value={"id": "task-1", "name": runtime_full_test_scan.FULL_TEST_TASK_NAME},
+            return_value={"id": "task-1", "name": TEST_FULL_TEST_TARGET.task_name},
         ) as native_create:
             task_id, error = runtime_full_test_scan.ensure_task(
                 object(),
                 state,
+                TEST_FULL_TEST_TARGET,
                 "target-1",
                 "scanner-1",
                 repo_root=root,
@@ -3103,8 +3106,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(turbovasctl.path_coupling_category("docker/runtime/README.md"), "documentation")
         self.assertEqual(turbovasctl.path_coupling_category("compose/dev.yaml"), "runtime_tooling")
         self.assertEqual(turbovasctl.path_coupling_category("tools/tests/test_turbovasctl.py"), "diagnostic_tooling")
-        markers = turbovasctl.path_coupling_markers("/home/turboforge/Projects/TurboVAS build/prefix /runtime/state")
-        self.assertIn("dev_checkout_path", markers)
+        markers = turbovasctl.path_coupling_markers("/home/example/Projects/TurboVAS build/prefix /runtime/state")
+        self.assertIn("absolute_home_checkout_path", markers)
         self.assertIn("build_prefix_path", markers)
         self.assertIn("container_runtime_path", markers)
 
@@ -3114,12 +3117,12 @@ class TurboVASCtlTests(unittest.TestCase):
                 {
                     "path": "components/example.c",
                     "category": "component_source",
-                    "markers": ["dev_checkout_path"],
+                    "markers": ["absolute_home_checkout_path"],
                 },
                 {
                     "path": "tools/turbovasctl",
                     "category": "runtime_tooling",
-                    "markers": ["dev_checkout_path"],
+                    "markers": ["absolute_home_checkout_path"],
                 },
                 {
                     "path": "tools/tests/test_turbovasctl.py",
@@ -3130,6 +3133,17 @@ class TurboVASCtlTests(unittest.TestCase):
         )
 
         self.assertEqual(summary["non_documentation_dev_checkout_paths"], ["components/example.c"])
+
+    def test_quality_gate_schedule_install_requires_explicit_machine_opt_in(self):
+        root = Path(__file__).resolve().parents[2]
+        with unittest.mock.patch.dict(os.environ, {}, clear=True):
+            with unittest.mock.patch.object(turbovasctl, "systemctl_user") as systemctl:
+                result = turbovasctl.command_quality_gate_schedule(root, "install")
+
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["findings"][0]["check"], "quality-gate-schedule.opt-in")
+        self.assertIn(turbovasctl.QUALITY_GATE_SCHEDULE_ENABLE_ENV, result["findings"][0]["message"])
+        systemctl.assert_not_called()
 
     def test_path_coupling_status_only_is_chat_safe(self):
         root = Path(__file__).resolve().parents[2]
@@ -16914,6 +16928,8 @@ db2:keys=5,expires=0,avg_ttl=0
                             str(Path(tmp) / "password"),
                             "--artifact-dir",
                             str(Path(tmp) / "artifacts"),
+                            "--target-cidr",
+                            TEST_FULL_TEST_TARGET.cidr,
                             "--repo-root",
                             tmp,
                         ]
@@ -18060,26 +18076,75 @@ db2:keys=5,expires=0,avg_ttl=0
         self.assertEqual(stopped.call_count, 2)
         cleared.assert_not_called()
 
-    def test_full_test_scan_constants_are_fixed_to_authorized_lan(self):
-        self.assertEqual(runtime_full_test_scan.AUTHORIZED_TARGET_CIDR, "192.168.178.0/24")
+    def test_full_test_scan_target_is_explicit_canonical_and_bounded(self):
+        self.assertEqual(TEST_FULL_TEST_TARGET.cidr, "192.0.2.0/24")
+        self.assertEqual(TEST_FULL_TEST_TARGET.target_name, "TurboVAS full test target 192.0.2.0/24")
+        self.assertEqual(TEST_FULL_TEST_TARGET.task_name, "TurboVAS full test scan 192.0.2.0/24")
+        with self.assertRaisesRegex(ValueError, "canonical CIDR"):
+            runtime_full_test_scan.parse_full_test_target("192.0.2.1/24")
+        with self.assertRaisesRegex(ValueError, "at most 256"):
+            runtime_full_test_scan.parse_full_test_target("10.0.0.0/16")
+        with self.assertRaisesRegex(ValueError, "at most 256"):
+            runtime_full_test_scan.parse_full_test_target("2001:db8::/64")
+        with self.assertRaisesRegex(ValueError, "unspecified or multicast"):
+            runtime_full_test_scan.parse_full_test_target("0.0.0.0/32")
+        with self.assertRaisesRegex(ValueError, "unspecified or multicast"):
+            runtime_full_test_scan.parse_full_test_target("ff02::1/128")
         self.assertEqual(runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID, turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID)
         self.assertEqual(runtime_full_test_scan.IANA_TCP_UDP_PORT_LIST_ID, turbovasctl.IANA_TCP_UDP_PORT_LIST_ID)
 
     def test_full_test_scan_detects_active_duplicate_task(self):
         rows = [
-            {"name": runtime_full_test_scan.FULL_TEST_TASK_NAME, "status": "Running", "id": "active"},
-            {"name": runtime_full_test_scan.FULL_TEST_TASK_NAME, "status": "New", "id": "created-not-started"},
-            {"name": runtime_full_test_scan.FULL_TEST_TASK_NAME, "status": "Done", "id": "done"},
+            {"name": TEST_FULL_TEST_TARGET.task_name, "status": "Running", "id": "active"},
+            {"name": TEST_FULL_TEST_TARGET.task_name, "status": "New", "id": "created-not-started"},
+            {"name": TEST_FULL_TEST_TARGET.task_name, "status": "Done", "id": "done"},
         ]
-        active = runtime_full_test_scan.active_full_test_tasks(rows)
+        active = runtime_full_test_scan.active_full_test_tasks(rows, TEST_FULL_TEST_TARGET)
         self.assertEqual([row["id"] for row in active], ["active"])
 
-    def test_full_test_scan_start_requires_authorization_flag(self):
+    def test_full_test_scan_start_requires_exact_target_confirmation(self):
         with tempfile.TemporaryDirectory() as tmp:
-            payload = runtime_full_test_scan.command_start(object(), Path(tmp), confirm_authorized_lan=False)
+            payload = runtime_full_test_scan.command_start(
+                object(),
+                Path(tmp),
+                TEST_FULL_TEST_TARGET,
+                confirm_authorized_target=None,
+            )
             self.assertEqual(payload["status"], "fail")
-            self.assertIn("--confirm-authorized-lan", payload["summary"])
+            self.assertIn("--confirm-authorized-target", payload["summary"])
             self.assertTrue((Path(tmp) / "start-refused.json").is_file())
+
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = runtime_full_test_scan.command_start(
+                object(),
+                Path(tmp),
+                TEST_FULL_TEST_TARGET,
+                confirm_authorized_target="192.0.2.1/32",
+            )
+        self.assertEqual(payload["status"], "fail")
+        self.assertIn("does not match", payload["summary"])
+
+    def test_full_test_scan_wrapper_rejects_target_before_runtime_checks(self):
+        root = Path(__file__).resolve().parents[2]
+        with unittest.mock.patch.object(turbovasctl, "command_runtime_scanner_capability_check") as capability:
+            invalid = turbovasctl.command_runtime_full_test_scan(
+                root,
+                "start",
+                target_cidr="10.0.0.0/16",
+                confirm_authorized_target="10.0.0.0/16",
+            )
+            mismatch = turbovasctl.command_runtime_full_test_scan(
+                root,
+                "start",
+                target_cidr=TEST_FULL_TEST_TARGET.cidr,
+                confirm_authorized_target="192.0.2.1/32",
+            )
+
+        self.assertEqual(invalid["status"], "fail")
+        self.assertEqual(invalid["findings"][0]["check"], "full-test-scan.target")
+        self.assertEqual(mismatch["status"], "fail")
+        self.assertEqual(mismatch["findings"][0]["check"], "full-test-scan.confirmation")
+        capability.assert_not_called()
 
     def test_full_test_scan_start_records_broken_pipe_during_poll(self):
         class FakeGMP:
@@ -18117,7 +18182,7 @@ db2:keys=5,expires=0,avg_ttl=0
                 self._raise_if_broken()
                 return (
                     "<get_targets_response>"
-                    f"<target id=\"target-1\"><name>{runtime_full_test_scan.FULL_TEST_TARGET_NAME}</name></target>"
+                    f"<target id=\"target-1\"><name>{TEST_FULL_TEST_TARGET.target_name}</name></target>"
                     "</get_targets_response>"
                 )
 
@@ -18125,7 +18190,7 @@ db2:keys=5,expires=0,avg_ttl=0
                 self._raise_if_broken()
                 return (
                     "<get_tasks_response>"
-                    f"<task id=\"task-1\"><name>{runtime_full_test_scan.FULL_TEST_TASK_NAME}</name><status>Done</status></task>"
+                    f"<task id=\"task-1\"><name>{TEST_FULL_TEST_TARGET.task_name}</name><status>Done</status></task>"
                     "</get_tasks_response>"
                 )
 
@@ -18141,7 +18206,8 @@ db2:keys=5,expires=0,avg_ttl=0
             payload = runtime_full_test_scan.command_start(
                 FakeGMP(),
                 Path(tmp),
-                confirm_authorized_lan=True,
+                TEST_FULL_TEST_TARGET,
+                confirm_authorized_target=TEST_FULL_TEST_TARGET.cidr,
                 poll_seconds=1,
                 poll_interval=0,
             )
@@ -18170,12 +18236,12 @@ db2:keys=5,expires=0,avg_ttl=0
                 {"id": "scanner-1", "name": runtime_full_test_scan.OPENVAS_SCANNER_NAME}
             ],
             "targets": [
-                {"id": "target-1", "name": runtime_full_test_scan.FULL_TEST_TARGET_NAME}
+                {"id": "target-1", "name": TEST_FULL_TEST_TARGET.target_name}
             ],
             "tasks": [
                 {
                     "id": "task-1",
-                    "name": runtime_full_test_scan.FULL_TEST_TASK_NAME,
+                    "name": TEST_FULL_TEST_TARGET.task_name,
                     "status": "Done",
                 }
             ],
@@ -18206,7 +18272,8 @@ db2:keys=5,expires=0,avg_ttl=0
                             payload = runtime_full_test_scan.command_start(
                                 object(),
                                 Path(tmp),
-                                confirm_authorized_lan=True,
+                                TEST_FULL_TEST_TARGET,
+                                confirm_authorized_target=TEST_FULL_TEST_TARGET.cidr,
                                 repo_root=Path(tmp),
                                 poll_seconds=1,
                                 poll_interval=0,
@@ -18244,7 +18311,7 @@ db2:keys=5,expires=0,avg_ttl=0
             def get_targets(self, tasks=True):
                 return (
                     "<get_targets_response>"
-                    f"<target id=\"target-1\"><name>{runtime_full_test_scan.FULL_TEST_TARGET_NAME}</name></target>"
+                    f"<target id=\"target-1\"><name>{TEST_FULL_TEST_TARGET.target_name}</name></target>"
                     "</get_targets_response>"
                 )
 
@@ -18255,7 +18322,7 @@ db2:keys=5,expires=0,avg_ttl=0
             def get_tasks(self, details=True, ignore_pagination=True):
                 return (
                     "<get_tasks_response>"
-                    f"<task id=\"task-1\"><name>{runtime_full_test_scan.FULL_TEST_TASK_NAME}</name><status>Done</status></task>"
+                    f"<task id=\"task-1\"><name>{TEST_FULL_TEST_TARGET.task_name}</name><status>Done</status></task>"
                     "</get_tasks_response>"
                 )
 
@@ -18266,7 +18333,7 @@ db2:keys=5,expires=0,avg_ttl=0
             def get_tasks(self, details=True, ignore_pagination=True):
                 return (
                     "<get_tasks_response>"
-                    f"<task id=\"task-1\"><name>{runtime_full_test_scan.FULL_TEST_TASK_NAME}</name><status>Queued</status><progress>0</progress></task>"
+                    f"<task id=\"task-1\"><name>{TEST_FULL_TEST_TARGET.task_name}</name><status>Queued</status><progress>0</progress></task>"
                     "</get_tasks_response>"
                 )
 
@@ -18290,7 +18357,8 @@ db2:keys=5,expires=0,avg_ttl=0
             payload = runtime_full_test_scan.command_start(
                 InitialGMP(),
                 Path(tmp),
-                confirm_authorized_lan=True,
+                TEST_FULL_TEST_TARGET,
+                confirm_authorized_target=TEST_FULL_TEST_TARGET.cidr,
                 poll_seconds=1,
                 poll_interval=0,
                 reconnect_client=reconnect,
@@ -18308,7 +18376,7 @@ db2:keys=5,expires=0,avg_ttl=0
             "targets": [],
             "tasks": [],
         }
-        payload = runtime_full_test_scan.preflight_state(state)
+        payload = runtime_full_test_scan.preflight_state(state, TEST_FULL_TEST_TARGET)
         self.assertEqual(payload["status"], "pass")
         self.assertEqual(payload["details"]["scanner"]["id"], "scanner-1")
 
@@ -18400,7 +18468,7 @@ db2:keys=5,expires=0,avg_ttl=0
                 return (
                     "<get_tasks_response>"
                     "<task id=\"task-1\">"
-                    f"<name>{runtime_full_test_scan.FULL_TEST_TASK_NAME}</name>"
+                    f"<name>{TEST_FULL_TEST_TARGET.task_name}</name>"
                     "<status>Done</status>"
                     "</task>"
                     "</get_tasks_response>"
@@ -18423,7 +18491,7 @@ db2:keys=5,expires=0,avg_ttl=0
 
         fake = FakeGMP()
         with tempfile.TemporaryDirectory() as tmp:
-            payload = runtime_full_test_scan.command_status(fake, Path(tmp))
+            payload = runtime_full_test_scan.command_status(fake, Path(tmp), TEST_FULL_TEST_TARGET)
         self.assertEqual(payload["status"], "pass")
         self.assertEqual(payload["details"]["latest_report"]["id"], "report-1")
         self.assertEqual(payload["details"]["latest_report"]["result_count"], "23")
@@ -18447,7 +18515,7 @@ db2:keys=5,expires=0,avg_ttl=0
                 return (
                     "<get_tasks_response>"
                     "<task id=\"task-1\">"
-                    f"<name>{runtime_full_test_scan.FULL_TEST_TASK_NAME}</name>"
+                    f"<name>{TEST_FULL_TEST_TARGET.task_name}</name>"
                     "<status>Done</status>"
                     "</task>"
                     "</get_tasks_response>"
@@ -18467,7 +18535,7 @@ db2:keys=5,expires=0,avg_ttl=0
                 )
 
         with tempfile.TemporaryDirectory() as tmp:
-            payload = runtime_full_test_scan.command_status(FakeGMP(), Path(tmp))
+            payload = runtime_full_test_scan.command_status(FakeGMP(), Path(tmp), TEST_FULL_TEST_TARGET)
         self.assertEqual(payload["details"]["latest_report"]["id"], "report-bad")
         self.assertEqual(payload["details"]["latest_completed_report"]["id"], "report-good")
         self.assertEqual(payload["details"]["latest_no_start_completed_report"]["id"], "report-bad")

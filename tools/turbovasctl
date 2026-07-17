@@ -281,8 +281,8 @@ APP_RUNTIME_ARTIFACT_IGNORED_PATHS = frozenset(
     }
 )
 APP_DEPLOYMENT_RECEIPT = Path("state/app-deployment.json")
-FULL_TEST_TARGET_CIDR = "192.168.178.0/24"
-FULL_TEST_TASK_NAME = f"TurboVAS full test scan {FULL_TEST_TARGET_CIDR}"
+FULL_TEST_TASK_PREFIX = "TurboVAS full test scan "
+MAX_FULL_TEST_TARGET_ADDRESSES = 256
 COMPLETED_SCAN_RUN_STATUS = 1
 RUNTIME_DIRS = (
     "postgres",
@@ -2385,13 +2385,14 @@ ALERT_FORBIDDEN_PAYLOAD_KEYS = frozenset(
     }
 )
 REDIS_REFERENCE_PATTERN = re.compile(r"\bredis\b|redis-openvas|hiredis|scanner_redis|scanner redis", re.IGNORECASE)
-PATH_COUPLING_MARKERS = {
-    "dev_checkout_path": "/home/turboforge/Projects/TurboVAS",
-    "runtime_root_path": "/home/turboforge/Projects/TurboVAS-runtime",
-    "workspace_mount_path": "/workspace",
-    "build_prefix_path": "build/prefix",
-    "container_runtime_path": "/runtime/",
+PATH_COUPLING_PATTERNS = {
+    "absolute_home_checkout_path": re.compile(r"/home/[^/\s\"'`]+/(?:Projects|Projekte)/TurboVAS(?:/|\b)"),
+    "absolute_home_runtime_path": re.compile(r"/home/[^/\s\"'`]+/(?:Projects|Projekte)/TurboVAS-runtime(?:/|\b)"),
+    "workspace_mount_path": re.compile(r"/workspace(?:/|\b)"),
+    "build_prefix_path": re.compile(r"build/prefix(?:/|\b)"),
+    "container_runtime_path": re.compile(r"/runtime/"),
 }
+QUALITY_GATE_SCHEDULE_ENABLE_ENV = "TURBOVAS_ENABLE_QUALITY_GATE_SCHEDULE"
 REDIS_REFERENCE_ROOTS = (
     "compose/",
     "docker/",
@@ -14891,7 +14892,7 @@ def path_coupling_category(relative_path: str) -> str:
 
 
 def path_coupling_markers(text: str) -> list[str]:
-    return sorted(marker for marker, needle in PATH_COUPLING_MARKERS.items() if needle in text)
+    return sorted(marker for marker, pattern in PATH_COUPLING_PATTERNS.items() if pattern.search(text))
 
 
 def path_coupling_references(repo_root: Path) -> list[dict[str, Any]]:
@@ -14921,7 +14922,7 @@ def summarize_path_coupling(references: list[dict[str, Any]]) -> dict[str, Any]:
         by_category.setdefault(category, []).append(path)
         for marker in reference["markers"]:
             by_marker.setdefault(marker, []).append(path)
-        if category in {"component_source", "other_tracked_source"} and "dev_checkout_path" in reference["markers"]:
+        if category in {"component_source", "other_tracked_source"} and "absolute_home_checkout_path" in reference["markers"]:
             warning_paths.append(path)
     return {
         "total_references": len(references),
@@ -18892,8 +18893,58 @@ def command_runtime_nmap_capability_check(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-nmap-capability-check", repo_root, "Nmap capability check completed.", findings)
 
 
-def command_runtime_full_test_scan(repo_root: Path, action: str, confirm_authorized_lan: bool = False) -> dict[str, Any]:
+def validated_full_test_target_cidr(value: str) -> str:
+    try:
+        network = ipaddress.ip_network(value.strip(), strict=True)
+    except ValueError as error:
+        raise ValueError(f"Full-test target must be a canonical CIDR: {error}") from error
+    if network.is_unspecified or network.is_multicast:
+        raise ValueError("Full-test target must not be an unspecified or multicast network.")
+    if network.num_addresses > MAX_FULL_TEST_TARGET_ADDRESSES:
+        raise ValueError(f"Full-test target may contain at most {MAX_FULL_TEST_TARGET_ADDRESSES} addresses; got {network.num_addresses}.")
+    return str(network)
+
+
+def command_runtime_full_test_scan(
+    repo_root: Path,
+    action: str,
+    target_cidr: str,
+    confirm_authorized_target: str | None = None,
+) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
+    try:
+        canonical_target_cidr = validated_full_test_target_cidr(target_cidr)
+    except ValueError as error:
+        return make_result(
+            f"runtime-full-test-scan-{action}",
+            repo_root,
+            "Full test scan command refused an invalid target.",
+            [finding("fail", "full-test-scan.target", str(error))],
+        )
+    if action == "start":
+        if not confirm_authorized_target:
+            return make_result(
+                "runtime-full-test-scan-start",
+                repo_root,
+                "Full test scan start refused without an exact target confirmation.",
+                [finding("fail", "full-test-scan.confirmation", "Pass --confirm-authorized-target with the exact --target-cidr value.")],
+            )
+        try:
+            canonical_confirmation = validated_full_test_target_cidr(confirm_authorized_target)
+        except ValueError as error:
+            return make_result(
+                "runtime-full-test-scan-start",
+                repo_root,
+                "Full test scan start refused an invalid target confirmation.",
+                [finding("fail", "full-test-scan.confirmation", str(error))],
+            )
+        if canonical_confirmation != canonical_target_cidr:
+            return make_result(
+                "runtime-full-test-scan-start",
+                repo_root,
+                "Full test scan start refused a mismatched target confirmation.",
+                [finding("fail", "full-test-scan.confirmation", "--confirm-authorized-target must exactly match --target-cidr.")],
+            )
     secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
     probe = runtime_full_test_scan_probe_path(repo_root)
     artifact_dir = full_test_scan_artifact_dir(repo_root)
@@ -18930,13 +18981,15 @@ def command_runtime_full_test_scan(repo_root: Path, action: str, confirm_authori
         str(secret_path),
         "--artifact-dir",
         str(artifact_dir),
+        "--target-cidr",
+        canonical_target_cidr,
         "--repo-root",
         str(repo_root),
         "--ospd-log-file",
         str(runtime_path(repo_root, "logs", "ospd", "ospd-openvas.log")),
     ]
-    if confirm_authorized_lan:
-        args.append("--confirm-authorized-lan")
+    if confirm_authorized_target:
+        args.extend(["--confirm-authorized-target", confirm_authorized_target])
     result = run_command(args, repo_root, env=build_env(repo_root), timeout=120)
     try:
         parsed = json.loads(result.stdout)
@@ -19814,7 +19867,7 @@ def latest_completed_full_test_report_id(repo_root: Path) -> tuple[str | None, s
     query = (
         "SELECT r.uuid FROM reports r "
         "JOIN tasks t ON t.id = r.task "
-        f"WHERE t.name = {sql_literal(FULL_TEST_TASK_NAME)} "
+        f"WHERE t.name LIKE {sql_literal(FULL_TEST_TASK_PREFIX + '%')} "
         f"AND coalesce(r.scan_run_status, 0) = {COMPLETED_SCAN_RUN_STATUS} "
         "AND coalesce(r.start_time, 0) > 0 "
         "ORDER BY coalesce(r.end_time, 0) DESC, coalesce(r.start_time, 0) DESC, r.id DESC "
@@ -35765,12 +35818,15 @@ def command_quality_gate_schedule(repo_root: Path, action: str) -> dict[str, Any
     findings: list[dict[str, Any]] = []
     details: dict[str, Any] = {"action": action, "host": socket.gethostname(), "user": os.environ.get("USER") or Path.home().name}
     if action == "install":
-        if socket.gethostname() != "turboforge-server":
-            findings.append(finding("fail", "quality-gate-schedule.host", "Quality gate timer installation is allowed only on turboforge-server.", details={"host": socket.gethostname()}))
-            return make_result("quality-gate-schedule", repo_root, "Quality gate schedule installation refused on the wrong host.", findings)
-        if details["user"] != "turboforge":
-            findings.append(finding("fail", "quality-gate-schedule.user", "Quality gate timer installation must run as the turboforge user.", details={"user": details["user"]}))
-            return make_result("quality-gate-schedule", repo_root, "Quality gate schedule installation refused for the wrong user.", findings)
+        if os.environ.get(QUALITY_GATE_SCHEDULE_ENABLE_ENV) != "1":
+            findings.append(
+                finding(
+                    "fail",
+                    "quality-gate-schedule.opt-in",
+                    f"Quality gate timer installation requires {QUALITY_GATE_SCHEDULE_ENABLE_ENV}=1.",
+                )
+            )
+            return make_result("quality-gate-schedule", repo_root, "Quality gate schedule installation refused without explicit host opt-in.", findings)
         systemd = systemctl_user(repo_root, "status", timeout=30)
         if systemd.returncode != 0:
             findings.append(process_step_finding("fail", "quality-gate-schedule.systemd-user", "User-level systemd is unavailable; refusing to fall back to cron.", systemd, ["systemctl", "--user", "status"]))
@@ -36055,10 +36111,13 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-nmap-capability-check", parents=[common], help="verify non-root Nmap raw scan capability for Full and fast")
     subparsers.add_parser("runtime-feed-keyring-init", parents=[common], help="initialize the shared feed signature GnuPG keyring")
     subparsers.add_parser("runtime-feed-import-init", parents=[common], help="refuse standalone feed import outside guarded generation activation")
-    subparsers.add_parser("runtime-full-test-scan-preflight", parents=[common], help="preflight the fixed authorized full test scan")
-    full_test_start = subparsers.add_parser("runtime-full-test-scan-start", parents=[common], help="start the fixed authorized full test scan")
-    full_test_start.add_argument("--confirm-authorized-lan", action="store_true", help="confirm authorization for 192.168.178.0/24")
-    subparsers.add_parser("runtime-full-test-scan-status", parents=[common], help="show the fixed authorized full test scan status")
+    full_test_preflight = subparsers.add_parser("runtime-full-test-scan-preflight", parents=[common], help="preflight an explicit authorized full test scan")
+    full_test_preflight.add_argument("--target-cidr", required=True, help="explicit canonical authorized target CIDR; at most 256 addresses")
+    full_test_start = subparsers.add_parser("runtime-full-test-scan-start", parents=[common], help="start an explicit authorized full test scan")
+    full_test_start.add_argument("--target-cidr", required=True, help="explicit canonical authorized target CIDR; at most 256 addresses")
+    full_test_start.add_argument("--confirm-authorized-target", help="exact target CIDR confirmation required before scan start")
+    full_test_status = subparsers.add_parser("runtime-full-test-scan-status", parents=[common], help="show an explicit authorized full test scan status")
+    full_test_status.add_argument("--target-cidr", required=True, help="explicit canonical authorized target CIDR; at most 256 addresses")
     report_summary = subparsers.add_parser("runtime-report-summary", parents=[common], help="summarize the latest runtime full-test report")
     report_summary.add_argument("--report-id", help="optional report id; defaults to the latest completed full-test report")
     report_summary.add_argument("--max-results", type=int, default=1000, help="maximum results to fetch from the selected report")
@@ -36464,11 +36523,16 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "runtime-feed-import-init":
         result = command_runtime_feed_import_init(repo_root)
     elif args.command == "runtime-full-test-scan-preflight":
-        result = command_runtime_full_test_scan(repo_root, "preflight")
+        result = command_runtime_full_test_scan(repo_root, "preflight", target_cidr=args.target_cidr)
     elif args.command == "runtime-full-test-scan-start":
-        result = command_runtime_full_test_scan(repo_root, "start", confirm_authorized_lan=args.confirm_authorized_lan)
+        result = command_runtime_full_test_scan(
+            repo_root,
+            "start",
+            target_cidr=args.target_cidr,
+            confirm_authorized_target=args.confirm_authorized_target,
+        )
     elif args.command == "runtime-full-test-scan-status":
-        result = command_runtime_full_test_scan(repo_root, "status")
+        result = command_runtime_full_test_scan(repo_root, "status", target_cidr=args.target_cidr)
     elif args.command == "runtime-report-summary":
         result = command_runtime_report(repo_root, "summary", report_id=args.report_id, max_results=args.max_results, top_results=args.top_results)
     elif args.command == "runtime-report-export":

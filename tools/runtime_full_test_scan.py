@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
 import socket
@@ -13,6 +14,7 @@ import subprocess
 import time
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -21,12 +23,10 @@ from xml.sax.saxutils import quoteattr
 from runtime_gmp_smoke import gmp_authenticate_xml, send_gmp_xml_command
 
 
-AUTHORIZED_TARGET_CIDR = "192.168.178.0/24"
 FULL_AND_FAST_SCAN_CONFIG_ID = "daba56c8-73ec-11df-a475-002264764cea"
 IANA_TCP_UDP_PORT_LIST_ID = "4a4717fe-57d2-11e1-9a26-406186ea4fc5"
 OPENVAS_SCANNER_NAME = "OpenVAS Default"
-FULL_TEST_TARGET_NAME = f"TurboVAS full test target {AUTHORIZED_TARGET_CIDR}"
-FULL_TEST_TASK_NAME = f"TurboVAS full test scan {AUTHORIZED_TARGET_CIDR}"
+MAX_FULL_TEST_TARGET_ADDRESSES = 256
 ACTIVE_TASK_STATUSES = {
     "Requested",
     "Queued",
@@ -38,6 +38,35 @@ HANDOFF_TASK_STATUSES = {"Queued", "Running", "Done"}
 COMPLETED_REPORT_STATUS = "Done"
 INTERRUPTED_REPORT_STATUS = "Interrupted"
 ZERO_PROGRESS_COUNTS = ("result_count", "hosts_count", "vulns_count", "cves_count", "os_count")
+
+
+@dataclass(frozen=True)
+class FullTestTarget:
+    cidr: str
+    target_name: str
+    task_name: str
+
+
+def parse_full_test_target(value: str) -> FullTestTarget:
+    candidate = value.strip()
+    if not candidate:
+        raise ValueError("Full-test target CIDR must not be empty.")
+    try:
+        network = ipaddress.ip_network(candidate, strict=True)
+    except ValueError as error:
+        raise ValueError(f"Full-test target must be a canonical CIDR: {error}") from error
+    if network.is_unspecified or network.is_multicast:
+        raise ValueError("Full-test target must not be an unspecified or multicast network.")
+    if network.num_addresses > MAX_FULL_TEST_TARGET_ADDRESSES:
+        raise ValueError(
+            f"Full-test target may contain at most {MAX_FULL_TEST_TARGET_ADDRESSES} addresses; got {network.num_addresses}."
+        )
+    canonical = str(network)
+    return FullTestTarget(
+        cidr=canonical,
+        target_name=f"TurboVAS full test target {canonical}",
+        task_name=f"TurboVAS full test scan {canonical}",
+    )
 
 
 def now_iso() -> str:
@@ -443,9 +472,9 @@ def task_status_snapshot(
     }
 
 
-def current_full_test_task(client: Any, repo_root: Path | None = None) -> tuple[dict[str, str | None] | None, str | None]:
+def current_full_test_task(client: Any, target: FullTestTarget, repo_root: Path | None = None) -> tuple[dict[str, str | None] | None, str | None]:
     state = load_state(client, repo_root)
-    return single_named(state["tasks"], FULL_TEST_TASK_NAME)
+    return single_named(state["tasks"], target.task_name)
 
 
 def response_id(response: Any) -> str | None:
@@ -471,8 +500,8 @@ def id_present(rows: list[dict[str, str | None]], expected_id: str) -> bool:
     return any(row.get("id") == expected_id for row in rows)
 
 
-def active_full_test_tasks(task_rows: list[dict[str, str | None]]) -> list[dict[str, str | None]]:
-    return [row for row in named(task_rows, FULL_TEST_TASK_NAME) if row.get("status") in ACTIVE_TASK_STATUSES]
+def active_full_test_tasks(task_rows: list[dict[str, str | None]], target: FullTestTarget) -> list[dict[str, str | None]]:
+    return [row for row in named(task_rows, target.task_name) if row.get("status") in ACTIVE_TASK_STATUSES]
 
 
 def single_named(rows: list[dict[str, str | None]], name: str) -> tuple[dict[str, str | None] | None, str | None]:
@@ -556,23 +585,23 @@ def load_state(client: Any, repo_root: Path | None = None) -> dict[str, Any]:
     }
 
 
-def preflight_state(state: dict[str, Any]) -> dict[str, Any]:
+def preflight_state(state: dict[str, Any], target_config: FullTestTarget) -> dict[str, Any]:
     scan_config_ok = id_present(state["scan_configs"], FULL_AND_FAST_SCAN_CONFIG_ID)
     port_list_ok = id_present(state["port_lists"], IANA_TCP_UDP_PORT_LIST_ID)
     scanner, scanner_error = single_named(state["scanners"], OPENVAS_SCANNER_NAME)
-    target, target_error = single_named(state["targets"], FULL_TEST_TARGET_NAME)
-    task, task_error = single_named(state["tasks"], FULL_TEST_TASK_NAME)
-    active = active_full_test_tasks(state["tasks"])
+    target, target_error = single_named(state["targets"], target_config.target_name)
+    task, task_error = single_named(state["tasks"], target_config.task_name)
+    active = active_full_test_tasks(state["tasks"], target_config)
     status = "pass" if scan_config_ok and port_list_ok and scanner and not scanner_error and not target_error and not task_error and not active else "fail"
     return result(
         status,
         "Full test scan preflight passed." if status == "pass" else "Full test scan preflight failed.",
-        target_cidr=AUTHORIZED_TARGET_CIDR,
+        target_cidr=target_config.cidr,
         scan_config={"id": FULL_AND_FAST_SCAN_CONFIG_ID, "present": scan_config_ok},
         port_list={"id": IANA_TCP_UDP_PORT_LIST_ID, "present": port_list_ok},
         scanner={"name": OPENVAS_SCANNER_NAME, "id": scanner.get("id") if scanner else None, "error": scanner_error},
-        target={"name": FULL_TEST_TARGET_NAME, "id": target.get("id") if target else None, "error": target_error},
-        task={"name": FULL_TEST_TASK_NAME, "id": task.get("id") if task else None, "status": task.get("status") if task else None, "error": task_error},
+        target={"name": target_config.target_name, "id": target.get("id") if target else None, "error": target_error},
+        task={"name": target_config.task_name, "id": task.get("id") if task else None, "status": task.get("status") if task else None, "error": task_error},
         active_duplicate_tasks=active,
     )
 
@@ -580,11 +609,12 @@ def preflight_state(state: dict[str, Any]) -> dict[str, Any]:
 def ensure_target(
     client: Any,
     state: dict[str, Any],
+    target_config: FullTestTarget,
     *,
     repo_root: Path | None = None,
     operator_name: str = "admin",
 ) -> tuple[str | None, str | None]:
-    target, error = single_named(state["targets"], FULL_TEST_TARGET_NAME)
+    target, error = single_named(state["targets"], target_config.target_name)
     if error:
         return None, error
     if target and target.get("id"):
@@ -596,14 +626,14 @@ def ensure_target(
                 "/api/v1/targets",
                 method="POST",
                 payload={
-                    "name": FULL_TEST_TARGET_NAME,
-                    "comment": "Authorized TurboVAS full test LAN target.",
+                    "name": target_config.target_name,
+                    "comment": "Explicitly authorized TurboVAS full test target.",
                     "alive_tests": ["Scan Config Default"],
                     "allow_simultaneous_ips": True,
                     "reverse_lookup_only": False,
                     "reverse_lookup_unify": False,
                     "port_list_id": IANA_TCP_UDP_PORT_LIST_ID,
-                    "hosts": [AUTHORIZED_TARGET_CIDR],
+                    "hosts": [target_config.cidr],
                     "exclude_hosts": [],
                 },
                 operator_name=operator_name,
@@ -614,10 +644,10 @@ def ensure_target(
         target_id = created.get("id")
         return (target_id, None) if isinstance(target_id, str) and target_id else (None, "Native target creation response did not include an id.")
     response = getattr(client, "create_target")(
-        FULL_TEST_TARGET_NAME,
-        hosts=[AUTHORIZED_TARGET_CIDR],
+        target_config.target_name,
+        hosts=[target_config.cidr],
         port_list_id=IANA_TCP_UDP_PORT_LIST_ID,
-        comment="Authorized TurboVAS full test LAN target.",
+        comment="Explicitly authorized TurboVAS full test target.",
     )
     target_id = response_id(response)
     if not target_id:
@@ -628,13 +658,14 @@ def ensure_target(
 def ensure_task(
     client: Any,
     state: dict[str, Any],
+    target_config: FullTestTarget,
     target_id: str,
     scanner_id: str,
     *,
     repo_root: Path | None = None,
     operator_name: str = "admin",
 ) -> tuple[str | None, str | None]:
-    task, error = single_named(state["tasks"], FULL_TEST_TASK_NAME)
+    task, error = single_named(state["tasks"], target_config.task_name)
     if error:
         return None, error
     if task and task.get("id"):
@@ -646,8 +677,8 @@ def ensure_task(
                 "/api/v1/tasks",
                 method="POST",
                 payload={
-                    "name": FULL_TEST_TASK_NAME,
-                    "comment": "Authorized TurboVAS full test LAN scan.",
+                    "name": target_config.task_name,
+                    "comment": "Explicitly authorized TurboVAS full test scan.",
                     "target_id": target_id,
                     "config_id": FULL_AND_FAST_SCAN_CONFIG_ID,
                     "scanner_id": scanner_id,
@@ -660,11 +691,11 @@ def ensure_task(
         task_id = created.get("id")
         return (task_id, None) if isinstance(task_id, str) and task_id else (None, "Native task creation response did not include an id.")
     response = getattr(client, "create_task")(
-        FULL_TEST_TASK_NAME,
+        target_config.task_name,
         FULL_AND_FAST_SCAN_CONFIG_ID,
         target_id,
         scanner_id,
-        comment="Authorized TurboVAS full test LAN scan.",
+        comment="Explicitly authorized TurboVAS full test scan.",
     )
     task_id = response_id(response)
     if not task_id:
@@ -672,9 +703,9 @@ def ensure_task(
     return task_id, None
 
 
-def command_preflight(client: Any, artifact_dir: Path, repo_root: Path | None = None) -> dict[str, Any]:
+def command_preflight(client: Any, artifact_dir: Path, target_config: FullTestTarget, repo_root: Path | None = None) -> dict[str, Any]:
     state = load_state(client, repo_root)
-    payload = preflight_state(state)
+    payload = preflight_state(state, target_config)
     payload["artifacts"] = [write_artifact(artifact_dir, "preflight.json", payload)]
     return payload
 
@@ -682,7 +713,8 @@ def command_preflight(client: Any, artifact_dir: Path, repo_root: Path | None = 
 def command_start(
     client: Any,
     artifact_dir: Path,
-    confirm_authorized_lan: bool,
+    target_config: FullTestTarget,
+    confirm_authorized_target: str | None,
     repo_root: Path | None = None,
     operator_name: str = "admin",
     poll_seconds: int = 90,
@@ -690,13 +722,28 @@ def command_start(
     ospd_log_file: Path | None = None,
     reconnect_client: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
-    if not confirm_authorized_lan:
-        payload = result("fail", "Full test scan start refused without --confirm-authorized-lan.", target_cidr=AUTHORIZED_TARGET_CIDR)
+    if not confirm_authorized_target:
+        payload = result("fail", "Full test scan start refused without --confirm-authorized-target.", target_cidr=target_config.cidr)
+        payload["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", payload)]
+        return payload
+    try:
+        confirmed_target = parse_full_test_target(confirm_authorized_target)
+    except ValueError as error:
+        payload = result("fail", "Full test scan start refused because the confirmed target is invalid.", target_cidr=target_config.cidr, error=str(error))
+        payload["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", payload)]
+        return payload
+    if confirmed_target.cidr != target_config.cidr:
+        payload = result(
+            "fail",
+            "Full test scan start refused because the confirmed target does not match --target-cidr.",
+            target_cidr=target_config.cidr,
+            confirmed_target_cidr=confirmed_target.cidr,
+        )
         payload["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", payload)]
         return payload
 
     state = load_state(client, repo_root)
-    preflight = preflight_state(state)
+    preflight = preflight_state(state, target_config)
     if preflight["status"] == "fail" and preflight["details"]["active_duplicate_tasks"]:
         preflight["summary"] = "Full test scan start refused because a matching task is already active."
         preflight["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", preflight)]
@@ -711,21 +758,21 @@ def command_start(
         return preflight
 
     scanner_id = preflight["details"]["scanner"]["id"]
-    target_id, target_error = ensure_target(client, state, repo_root=repo_root, operator_name=operator_name)
+    target_id, target_error = ensure_target(client, state, target_config, repo_root=repo_root, operator_name=operator_name)
     if target_error or not target_id:
         payload = result("fail", "Full test scan start refused because the target could not be prepared.", error=target_error)
         payload["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", payload)]
         return payload
 
     state = load_state(client, repo_root)
-    task_id, task_error = ensure_task(client, state, target_id, scanner_id, repo_root=repo_root, operator_name=operator_name)
+    task_id, task_error = ensure_task(client, state, target_config, target_id, scanner_id, repo_root=repo_root, operator_name=operator_name)
     if task_error or not task_id:
         payload = result("fail", "Full test scan start refused because the task could not be prepared.", error=task_error, target_id=target_id)
         payload["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", payload)]
         return payload
 
     refreshed = load_state(client, repo_root)
-    active = active_full_test_tasks(refreshed["tasks"])
+    active = active_full_test_tasks(refreshed["tasks"], target_config)
     if active:
         payload = result("fail", "Full test scan start refused because a matching task is already active.", active_duplicate_tasks=active)
         payload["artifacts"] = [write_artifact(artifact_dir, "start-refused.json", payload)]
@@ -765,7 +812,7 @@ def command_start(
     poll_errors: list[str] = []
     while time.monotonic() <= deadline:
         try:
-            task, task_error = current_full_test_task(client, repo_root)
+            task, task_error = current_full_test_task(client, target_config, repo_root)
             if task_error:
                 observed = {"task_lookup_error": task_error}
                 break
@@ -847,7 +894,7 @@ def command_start(
     payload = result(
         status,
         summary,
-        target_cidr=AUTHORIZED_TARGET_CIDR,
+        target_cidr=target_config.cidr,
         target_id=target_id,
         task_id=task_id,
         report_id=report_id,
@@ -868,15 +915,15 @@ def command_start(
     return payload
 
 
-def command_status(client: Any, artifact_dir: Path, ospd_log_file: Path | None = None, repo_root: Path | None = None) -> dict[str, Any]:
+def command_status(client: Any, artifact_dir: Path, target_config: FullTestTarget, ospd_log_file: Path | None = None, repo_root: Path | None = None) -> dict[str, Any]:
     state = load_state(client, repo_root)
-    task, task_error = single_named(state["tasks"], FULL_TEST_TASK_NAME)
+    task, task_error = single_named(state["tasks"], target_config.task_name)
     if task_error:
         payload = result("fail", "Full test scan status failed because multiple matching tasks exist.", error=task_error)
     elif not task:
-        payload = result("warn", "Full test scan task does not exist yet.", target_cidr=AUTHORIZED_TARGET_CIDR)
+        payload = result("warn", "Full test scan task does not exist yet.", target_cidr=target_config.cidr)
     else:
-        payload = result("pass", "Full test scan status read.", target_cidr=AUTHORIZED_TARGET_CIDR, **task_status_snapshot(client, task, ospd_log_file=ospd_log_file, repo_root=repo_root))
+        payload = result("pass", "Full test scan status read.", target_cidr=target_config.cidr, **task_status_snapshot(client, task, ospd_log_file=ospd_log_file, repo_root=repo_root))
     payload["artifacts"] = [write_artifact(artifact_dir, "status.json", payload)]
     return payload
 
@@ -893,7 +940,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--poll-interval", type=int, default=5, help="seconds between post-start status polls")
     parser.add_argument("--ospd-log-file", help="optional OSPD log file used to find scanner handoff evidence")
     parser.add_argument("--repo-root", help="repository root for native API container reads")
-    parser.add_argument("--confirm-authorized-lan", action="store_true", help="required for start; confirms authorization for 192.168.178.0/24")
+    parser.add_argument("--target-cidr", required=True, help="explicit canonical authorized target CIDR; at most 256 addresses")
+    parser.add_argument("--confirm-authorized-target", help="required for start; must exactly match --target-cidr")
     return parser
 
 
@@ -909,15 +957,17 @@ def main(argv: list[str] | None = None) -> int:
         return connection
 
     try:
+        target_config = parse_full_test_target(args.target_cidr)
         repo_root = Path(args.repo_root) if args.repo_root else None
         if args.command == "preflight":
-            payload = command_preflight(None, Path(args.artifact_dir), repo_root=repo_root)
+            payload = command_preflight(None, Path(args.artifact_dir), target_config, repo_root=repo_root)
         elif args.command == "start":
             client = None if repo_root is not None else open_connection()
             payload = command_start(
                 client,
                 Path(args.artifact_dir),
-                args.confirm_authorized_lan,
+                target_config,
+                args.confirm_authorized_target,
                 repo_root=repo_root,
                 operator_name=args.username,
                 poll_seconds=args.poll_seconds,
@@ -926,7 +976,7 @@ def main(argv: list[str] | None = None) -> int:
                 reconnect_client=None if repo_root is not None else open_connection,
             )
         else:
-            payload = command_status(None, Path(args.artifact_dir), ospd_log_file=Path(args.ospd_log_file) if args.ospd_log_file else None, repo_root=repo_root)
+            payload = command_status(None, Path(args.artifact_dir), target_config, ospd_log_file=Path(args.ospd_log_file) if args.ospd_log_file else None, repo_root=repo_root)
     except Exception as error:  # pylint: disable=broad-except
         error_text = str(error)
         if password:

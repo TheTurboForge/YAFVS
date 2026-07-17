@@ -134,9 +134,9 @@ browser, direct API, production-posture, or release-readiness question.
 - `just runtime-scanner-process-check`: verify scanner process hygiene, including zombie child processes.
 - `just runtime-nmap-capability-check`: verify non-root Nmap raw scan capability for `Full and fast`.
 - `just runtime-feed-keyring-init`: initialize the shared feed signature GnuPG keyring.
-- `just runtime-full-test-scan-preflight`: verify readiness for the fixed authorized `192.168.178.0/24` full test scan.
-- `just runtime-full-test-scan-start --confirm-authorized-lan`: start the fixed authorized full test scan.
-- `just runtime-full-test-scan-status`: report the fixed full test scan task status.
+- `just runtime-full-test-scan-preflight --target-cidr "$TARGET_CIDR"`: verify readiness for one explicit authorized target of at most 256 addresses.
+- `just runtime-full-test-scan-start --target-cidr "$TARGET_CIDR" --confirm-authorized-target "$TARGET_CIDR"`: start only the exactly confirmed target.
+- `just runtime-full-test-scan-status --target-cidr "$TARGET_CIDR"`: report the matching full test scan task status.
 - `just runtime-report-summary`: summarize the latest completed raw full-test scan report.
 - `just runtime-report-export`: export parsed raw full-test scan report results as JSON, defaulting to the latest completed full-test report.
 - `just runtime-report-metrics`: read CVSS Load and authenticated coverage metrics for a raw report.

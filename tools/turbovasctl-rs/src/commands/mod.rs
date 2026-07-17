@@ -3,7 +3,9 @@
 
 mod branding;
 mod common;
+mod path_coupling;
 mod repository;
 
 pub use branding::command_branding_state;
+pub use path_coupling::command_path_coupling_state;
 pub use repository::{command_inventory, command_status, find_repo_root};

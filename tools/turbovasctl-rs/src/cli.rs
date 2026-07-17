@@ -31,6 +31,8 @@ pub enum CliCommand {
     },
     /// Show branding and upstream-identity state.
     BrandingState,
+    /// Inspect absolute checkout/runtime path coupling.
+    PathCouplingState,
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>

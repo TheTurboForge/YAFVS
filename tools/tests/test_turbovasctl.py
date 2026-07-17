@@ -1340,7 +1340,7 @@ class TurboVASCtlTests(unittest.TestCase):
             str(manifest),
             "--",
         ]
-        for arguments in (["status", "--json"], ["inventory", "--json"], ["inventory", "--scope", "components/gsa", "--json"], ["inventory", "--scope", "definitely-invalid", "--json"], ["branding-state", "--json"]):
+        for arguments in (["status", "--json"], ["inventory", "--json"], ["inventory", "--scope", "components/gsa", "--json"], ["inventory", "--scope", "definitely-invalid", "--json"], ["branding-state", "--json"], ["path-coupling-state", "--json"], ["path-coupling-state", "--status-only", "--json"]):
             self.assertEqual(
                 normalized_json(invoke(python_command, arguments)),
                 normalized_json(invoke(rust_command, arguments)),

@@ -11,7 +11,10 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 pub use cli::{Cli, CliCommand, parse_cli};
-pub use commands::{command_branding_state, command_inventory, command_status, find_repo_root};
+pub use commands::{
+    command_branding_state, command_inventory, command_path_coupling_state, command_status,
+    find_repo_root,
+};
 pub use render::{render_human, render_json};
 pub use result::{ResultEnvelope, exit_code};
 
@@ -21,6 +24,7 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         CliCommand::Status => command_status(&repo_root),
         CliCommand::Inventory { scope } => command_inventory(&repo_root, scope.as_deref()),
         CliCommand::BrandingState => command_branding_state(&repo_root),
+        CliCommand::PathCouplingState => command_path_coupling_state(&repo_root, cli.status_only),
     }
 }
 

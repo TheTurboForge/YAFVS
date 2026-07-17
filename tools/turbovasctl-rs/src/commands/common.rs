@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::process::CommandRunner;
-use crate::result::Metadata;
+use crate::result::{Finding, Metadata};
+use serde_json::{Value, json};
 use std::path::Path;
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
@@ -18,6 +19,32 @@ pub(crate) fn run_git(
     runner
         .run("git", &git_args)
         .and_then(|output| output.success.then(|| output.stdout.trim().to_string()))
+}
+
+pub(crate) fn compact_finding(finding: &Finding) -> Finding {
+    let mut compact = Finding::new(&finding.status, &finding.check, finding.message.clone());
+    if let Some(path) = &finding.path
+        && !path.is_empty()
+    {
+        compact.path = Some(path.clone());
+    }
+    if let Some(Value::Object(details)) = &finding.details {
+        let compact_details = details
+            .iter()
+            .map(|(key, value)| {
+                let value = match value {
+                    Value::Array(items) => json!({ "type": "list", "count": items.len() }),
+                    Value::Object(items) => {
+                        json!({ "type": "object", "key_count": items.len() })
+                    }
+                    scalar => scalar.clone(),
+                };
+                (key.clone(), value)
+            })
+            .collect();
+        compact.details = Some(Value::Object(compact_details));
+    }
+    compact
 }
 
 pub(crate) fn git_tracked_files(

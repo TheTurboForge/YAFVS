@@ -12,11 +12,11 @@ use std::path::{Path, PathBuf};
 
 pub use cli::{Cli, CliCommand, parse_cli};
 pub use commands::{
-    command_branding_state, command_feed_copy_to_runtime, command_feed_state,
-    command_gsa_npm_audit, command_inventory, command_native_api_cargo_audit,
+    command_branding_state, command_deps, command_feed_copy_to_runtime, command_feed_state,
+    command_gsa_npm_audit, command_inventory, command_logs, command_native_api_cargo_audit,
     command_native_api_semgrep_audit, command_osv_lockfile_audit, command_path_coupling_state,
-    command_quality_gate_state, command_runtime_plan, command_rust_migration_state,
-    command_security_policy_check, command_status, find_repo_root,
+    command_quality_gate_state, command_runtime_feed_import_init, command_runtime_plan,
+    command_rust_migration_state, command_security_policy_check, command_status, find_repo_root,
 };
 pub use render::{render_human, render_json};
 pub use result::{ResultEnvelope, exit_code};
@@ -44,6 +44,17 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         }
         CliCommand::RuntimePlan => command_runtime_plan(&repo_root),
         CliCommand::FeedCopyToRuntime => command_feed_copy_to_runtime(&repo_root),
+        CliCommand::Deps { component } => command_deps(&repo_root, component.as_deref()),
+        CliCommand::RuntimeFeedImportInit => command_runtime_feed_import_init(&repo_root),
+        CliCommand::Logs {
+            service,
+            service_option,
+            lines,
+        } => command_logs(
+            &repo_root,
+            service_option.as_deref().or(service.as_deref()),
+            *lines,
+        ),
     }
 }
 

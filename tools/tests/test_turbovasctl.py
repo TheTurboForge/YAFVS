@@ -1313,7 +1313,7 @@ class TurboVASCtlTests(unittest.TestCase):
             missing = [item for item in result["findings"] if item["status"] == "fail"]
             self.assertEqual(len(missing), 10)
 
-    def test_rust_turbovasctl_matches_python_migrated_command_contracts(self):
+    def assert_rust_turbovasctl_parity(self, argument_sets, *, human_inventory=False):
         repo_root = Path(__file__).resolve().parents[2]
         manifest = repo_root / "tools" / "turbovasctl-rs" / "Cargo.toml"
         target_dir = repo_root / "build" / "turbovasctl-rs"
@@ -1341,7 +1341,7 @@ class TurboVASCtlTests(unittest.TestCase):
         build = invoke(rust_build_command, [])
         self.assertEqual(build.returncode, 0, build.stderr)
         rust_command = [str(target_dir / "debug" / "turbovasctl")]
-        for arguments in (["status", "--json"], ["inventory", "--json"], ["inventory", "--scope", "components/gsa", "--json"], ["inventory", "--scope", "definitely-invalid", "--json"], ["branding-state", "--json"], ["path-coupling-state", "--json"], ["path-coupling-state", "--status-only", "--json"], ["quality-gate-state", "--json"], ["quality-gate-state", "--status-only", "--json"], ["feed-state", "--json"], ["rust-migration-state", "--json"], ["native-api-cargo-audit", "--json"], ["native-api-cargo-audit", "--status-only", "--json"], ["gsa-npm-audit", "--json"], ["gsa-npm-audit", "--status-only", "--json"], ["native-api-semgrep-audit", "--json"], ["native-api-semgrep-audit", "--status-only", "--json"], ["osv-lockfile-audit", "--json"], ["osv-lockfile-audit", "--status-only", "--json"], ["security-policy-check", "--json"], ["security-policy-check", "--status-only", "--json"], ["runtime-plan", "--json"], ["feed-copy-to-runtime", "--json"]):
+        for arguments in argument_sets:
             python_result = invoke(python_command, arguments)
             rust_result = invoke(rust_command, arguments)
             self.assertEqual(python_result.returncode, rust_result.returncode, arguments)
@@ -1351,12 +1351,55 @@ class TurboVASCtlTests(unittest.TestCase):
                 arguments,
             )
 
-        human_arguments = ["inventory", "--scope", "components/gsa"]
-        self.assertEqual(invoke(python_command, human_arguments).returncode, 0)
-        self.assertEqual(invoke(rust_command, human_arguments).returncode, 0)
-        self.assertEqual(
-            invoke(python_command, human_arguments).stdout,
-            invoke(rust_command, human_arguments).stdout,
+        if human_inventory:
+            human_arguments = ["inventory", "--scope", "components/gsa"]
+            python_result = invoke(python_command, human_arguments)
+            rust_result = invoke(rust_command, human_arguments)
+            self.assertEqual(python_result.returncode, 0)
+            self.assertEqual(rust_result.returncode, 0)
+            self.assertEqual(python_result.stdout, rust_result.stdout)
+
+    def test_rust_turbovasctl_matches_python_migrated_command_contracts(self):
+        self.assert_rust_turbovasctl_parity(
+            (
+                ["status", "--json"],
+                ["inventory", "--json"],
+                ["inventory", "--scope", "components/gsa", "--json"],
+                ["inventory", "--scope", "definitely-invalid", "--json"],
+                ["branding-state", "--json"],
+                ["path-coupling-state", "--json"],
+                ["path-coupling-state", "--status-only", "--json"],
+                ["quality-gate-state", "--json"],
+                ["quality-gate-state", "--status-only", "--json"],
+                ["feed-state", "--json"],
+                ["rust-migration-state", "--json"],
+                ["security-policy-check", "--json"],
+                ["security-policy-check", "--status-only", "--json"],
+                ["runtime-plan", "--json"],
+                ["feed-copy-to-runtime", "--json"],
+                ["deps", "--json"],
+                ["deps", "gsa", "--json"],
+                ["deps", "definitely-invalid", "--json"],
+                ["runtime-feed-import-init", "--json"],
+                ["logs", "--lines", "0", "--json"],
+                ["logs", "definitely-invalid", "--lines", "1", "--json"],
+                ["logs", "--service", "definitely-invalid", "--lines", "1", "--json"],
+            ),
+            human_inventory=True,
+        )
+
+    def test_rust_turbovasctl_matches_python_migrated_external_audits(self):
+        self.assert_rust_turbovasctl_parity(
+            (
+                ["native-api-cargo-audit", "--json"],
+                ["native-api-cargo-audit", "--status-only", "--json"],
+                ["gsa-npm-audit", "--json"],
+                ["gsa-npm-audit", "--status-only", "--json"],
+                ["native-api-semgrep-audit", "--json"],
+                ["native-api-semgrep-audit", "--status-only", "--json"],
+                ["osv-lockfile-audit", "--json"],
+                ["osv-lockfile-audit", "--status-only", "--json"],
+            )
         )
 
     def test_gvmd_target_parser_consumes_target_elements(self):

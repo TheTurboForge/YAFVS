@@ -18,6 +18,26 @@ struct FeedClass {
     markers: &'static [&'static str],
 }
 
+pub fn command_runtime_feed_import_init(repo_root: &Path) -> ResultEnvelope {
+    make_result(
+        metadata(
+            repo_root,
+            "runtime-feed-import-init",
+            &SystemCommandRunner,
+        ),
+        "Feed import stopped outside the guarded generation-activation boundary.".to_string(),
+        vec![Finding::new(
+            "fail",
+            "feed.import.activation-boundary",
+            "Standalone feed import is disabled; use feed-generation-activate or feed-generation-rollback."
+                .to_string(),
+        )],
+    )
+    .with_artifacts(vec![
+        runtime_dir(repo_root).join("feed-store").display().to_string(),
+    ])
+}
+
 pub fn command_feed_copy_to_runtime(repo_root: &Path) -> ResultEnvelope {
     make_result(
         metadata(

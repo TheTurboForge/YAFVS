@@ -53,6 +53,24 @@ pub enum CliCommand {
     RuntimePlan,
     /// Refuse unsafe sequential copying into live feed paths.
     FeedCopyToRuntime,
+    /// Check dependency readiness, optionally for one component.
+    Deps {
+        /// Component name to check.
+        component: Option<String>,
+    },
+    /// Refuse standalone feed import outside guarded generation activation.
+    RuntimeFeedImportInit,
+    /// Show recent runtime logs.
+    Logs {
+        /// Optional Compose service name.
+        service: Option<String>,
+        /// Alias for the positional service argument.
+        #[arg(long = "service")]
+        service_option: Option<String>,
+        /// Number of log lines to request and retain.
+        #[arg(long, default_value_t = 120)]
+        lines: i64,
+    },
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>

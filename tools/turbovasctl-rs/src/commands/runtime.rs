@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use super::common::{metadata, runtime_dir};
-use crate::process::SystemCommandRunner;
+use super::common::{metadata, output_tail, runtime_dir};
+use super::compose::{compose_command, runtime_environment};
+use crate::process::{CommandRunner, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
 use serde_json::json;
 use std::collections::BTreeSet;
@@ -124,6 +125,70 @@ pub fn command_runtime_plan(repo_root: &Path) -> ResultEnvelope {
     .with_artifacts(vec![root.display().to_string(), compose.to_string()])
 }
 
+pub fn command_logs(repo_root: &Path, service: Option<&str>, lines: i64) -> ResultEnvelope {
+    command_logs_with_runner(repo_root, service, lines, &SystemCommandRunner)
+}
+
+fn command_logs_with_runner(
+    repo_root: &Path,
+    service: Option<&str>,
+    lines: i64,
+    runner: &dyn CommandRunner,
+) -> ResultEnvelope {
+    if lines < 1 {
+        return make_result(
+            metadata(repo_root, "logs", runner),
+            "Runtime logs were not collected.".to_string(),
+            vec![
+                Finding::new(
+                    "fail",
+                    "compose.logs.invalid_lines",
+                    "--lines must be 1 or greater.".to_string(),
+                )
+                .with_details(json!({ "service": service, "lines": lines })),
+            ],
+        );
+    }
+    let mut arguments = vec!["logs".to_string(), "--tail".to_string(), lines.to_string()];
+    if let Some(service) = service {
+        arguments.push(service.to_string());
+    }
+    let command = compose_command(repo_root, &arguments);
+    let argument_refs = command.iter().map(String::as_str).collect::<Vec<_>>();
+    let output = runner.run_with(
+        "docker",
+        &argument_refs,
+        Some(repo_root),
+        Some(&runtime_environment(repo_root)),
+        None,
+    );
+    let exit_code = output
+        .as_ref()
+        .and_then(|output| output.exit_code)
+        .unwrap_or(1);
+    let tail = output
+        .as_ref()
+        .map(|output| output_tail(&output.stdout, lines as usize))
+        .unwrap_or_default();
+    let mut message = format!("docker compose logs exit code {exit_code}.");
+    if !tail.is_empty() {
+        message.push('\n');
+        message.push_str(&tail.join("\n"));
+    }
+    make_result(
+        metadata(repo_root, "logs", runner),
+        "Runtime logs collected.".to_string(),
+        vec![
+            Finding::new(
+                if exit_code == 0 { "pass" } else { "fail" },
+                "compose.logs",
+                message,
+            )
+            .with_details(json!({ "service": service, "lines": lines, "output_tail": tail })),
+        ],
+    )
+}
+
 fn gsad_hosts() -> Vec<String> {
     let plural = env::var("TURBOVAS_GSAD_HOSTS").ok();
     let hosts = split_hosts(plural.as_deref());
@@ -154,6 +219,40 @@ fn split_hosts(value: Option<&str>) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::process::ProcessOutput;
+    use std::ffi::OsString;
+
+    struct LogsRunner;
+
+    impl CommandRunner for LogsRunner {
+        fn run(&self, program: &str, _args: &[&str]) -> Option<ProcessOutput> {
+            (program == "git").then(|| ProcessOutput {
+                success: true,
+                exit_code: Some(0),
+                stdout: "deadbee\n".to_string(),
+                stderr: String::new(),
+            })
+        }
+
+        fn run_with(
+            &self,
+            program: &str,
+            _args: &[&str],
+            _cwd: Option<&Path>,
+            _env: Option<&std::collections::BTreeMap<OsString, OsString>>,
+            _timeout: Option<std::time::Duration>,
+        ) -> Option<ProcessOutput> {
+            if program == "docker" {
+                return Some(ProcessOutput {
+                    success: true,
+                    exit_code: Some(0),
+                    stdout: "one\ntwo\nthree\n".to_string(),
+                    stderr: String::new(),
+                });
+            }
+            self.run(program, &[])
+        }
+    }
 
     #[test]
     fn host_splitting_preserves_first_seen_order() {
@@ -161,5 +260,27 @@ mod tests {
             split_hosts(Some("127.0.0.1, localhost,127.0.0.1")),
             vec!["127.0.0.1", "localhost"]
         );
+    }
+
+    #[test]
+    fn logs_retain_only_the_requested_tail() {
+        let result =
+            command_logs_with_runner(Path::new("/srv/TurboVAS"), Some("gvmd"), 2, &LogsRunner);
+        assert_eq!(result.status, "pass");
+        assert_eq!(
+            result.findings[0].message,
+            "docker compose logs exit code 0.\ntwo\nthree"
+        );
+        assert_eq!(
+            result.findings[0].details,
+            Some(json!({ "service": "gvmd", "lines": 2, "output_tail": ["two", "three"] }))
+        );
+    }
+
+    #[test]
+    fn logs_reject_non_positive_line_counts_without_running_docker() {
+        let result = command_logs_with_runner(Path::new("/srv/TurboVAS"), None, 0, &LogsRunner);
+        assert_eq!(result.status, "fail");
+        assert_eq!(result.findings[0].check, "compose.logs.invalid_lines");
     }
 }

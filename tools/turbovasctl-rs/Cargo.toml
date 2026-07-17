@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "turbovasctl"
+version = "0.1.0-alpha.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+time = { version = "0.3", features = ["formatting"] }

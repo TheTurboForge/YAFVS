@@ -6,6 +6,12 @@ set shell := ["bash", "-eo", "pipefail", "-c"]
 turbovasctl *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl "$@"
 
+turbovasctl-rust *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- "$@"
+
+turbovasctl-rust-test:
+    cargo test --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml
+
 status *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl status "$@"
 

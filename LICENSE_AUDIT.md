@@ -13,13 +13,13 @@ Original TurboVAS-created root tooling and public documentation use
 `GPL-3.0-or-later` as the project default unless a more specific compatible
 license is selected for a component-local file.
 
-TurboVAS-created service code outside imported upstream component trees, including
-`services/turbovas-api`, follows this `GPL-3.0-or-later`
-default. Third-party Rust crate dependencies recorded in
-`services/turbovas-api/Cargo.lock` are external package dependencies, not
-vendored source. Keep the lockfile tracked for reproducibility and run the
-normal license/public-release gates before packaging, publishing, or distributing
-artifacts that include the service.
+TurboVAS-created service and tooling code outside imported upstream component
+trees, including `services/turbovas-api` and `tools/turbovasctl-rs`, follows
+this `GPL-3.0-or-later` default. Third-party Rust crate dependencies recorded
+in their tracked `Cargo.lock` files are external package dependencies, not
+vendored source. Keep the lockfiles tracked for reproducibility and run the
+normal license/public-release gates before packaging, publishing, or
+distributing artifacts that include either binary.
 
 ## Component License Summary
 
@@ -158,6 +158,7 @@ reason it cannot.
   preserves the relevant provenance files.
 - Review Greenbone Community Feed terms before bundling, redistributing, mirroring, or packaging feed content. TurboVAS currently supports Community Feed synchronization only and deliberately does not support Greenbone Enterprise Feed subscription keys.
 - Review third-party Rust crate license and security posture for
-  `services/turbovas-api` before public release, packaging, or distribution.
+  `services/turbovas-api` and `tools/turbovasctl-rs` before public release,
+  packaging, or distribution.
 - Define artifact-specific source publication and attribution procedures before
   binary, container, hosted-service, or feed-redistribution modes.

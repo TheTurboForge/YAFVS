@@ -236,6 +236,8 @@ HARDENED_BUILD_MANIFEST = Path("build/hardened/hardening-manifest.json")
 NATIVE_RUST_SERVICES = ("turbovas-api",)
 NATIVE_API_CRATE = Path("services/turbovas-api")
 NATIVE_API_CARGO_LOCK = NATIVE_API_CRATE / "Cargo.lock"
+TURBOVASCTL_RUST_CRATE = Path("tools/turbovasctl-rs")
+TURBOVASCTL_RUST_CARGO_LOCK = TURBOVASCTL_RUST_CRATE / "Cargo.lock"
 NATIVE_API_CARGO_AUDIT_TIMEOUT_SECONDS = 120
 GSA_COMPONENT = Path("components/gsa")
 GSA_PACKAGE_LOCK = GSA_COMPONENT / "package-lock.json"
@@ -246,6 +248,7 @@ NATIVE_API_SEMGREP_CONFIG = Path("policy/semgrep-native-api.yml")
 NATIVE_API_SOURCE_DIR = NATIVE_API_CRATE / "src"
 OSV_LOCKFILES = (
     NATIVE_API_CARGO_LOCK,
+    TURBOVASCTL_RUST_CARGO_LOCK,
     Path("components/openvas-scanner/rust/Cargo.lock"),
     GSA_PACKAGE_LOCK,
 )
@@ -35633,6 +35636,26 @@ def command_quality_gate(repo_root: Path, include_runtime: bool = False) -> dict
     unit = run_command(unit_command, repo_root, env=quality_gate_unit_env(repo_root), timeout=300)
     details["steps"]["python-unit"] = {"exit_code": unit.returncode, "output_tail": output_tail(unit.stdout, 120)}
     findings.append(process_step_finding("pass" if unit.returncode == 0 else "fail", "quality.python-unit", f"Python tool unit tests exit code {unit.returncode}.", unit, unit_command))
+
+    rust_cli_manifest = repo_root / TURBOVASCTL_RUST_CRATE / "Cargo.toml"
+    if rust_cli_manifest.is_file():
+        rust_cli_fmt_command = ["cargo", "fmt", "--manifest-path", str(rust_cli_manifest), "--check"]
+        rust_cli_fmt = run_command(rust_cli_fmt_command, repo_root, env=build_env(repo_root), timeout=120)
+        details["steps"]["turbovasctl-rust-fmt"] = {"exit_code": rust_cli_fmt.returncode, "output_tail": output_tail(rust_cli_fmt.stdout, 120)}
+        findings.append(process_step_finding("pass" if rust_cli_fmt.returncode == 0 else "fail", "quality.turbovasctl-rust-fmt", f"Rust turbovasctl cargo fmt exit code {rust_cli_fmt.returncode}.", rust_cli_fmt, rust_cli_fmt_command))
+
+        rust_cli_test_command = [
+            "cargo",
+            "test",
+            "--locked",
+            "--target-dir",
+            "build/turbovasctl-rs",
+            "--manifest-path",
+            str(rust_cli_manifest),
+        ]
+        rust_cli_test = run_command(rust_cli_test_command, repo_root, env=build_env(repo_root), timeout=300)
+        details["steps"]["turbovasctl-rust-test"] = {"exit_code": rust_cli_test.returncode, "output_tail": output_tail(rust_cli_test.stdout, 160)}
+        findings.append(process_step_finding("pass" if rust_cli_test.returncode == 0 else "fail", "quality.turbovasctl-rust-test", f"Rust turbovasctl cargo test exit code {rust_cli_test.returncode}.", rust_cli_test, rust_cli_test_command))
 
     py_files = [repo_root / "tools" / "turbovasctl", *sorted((repo_root / "tools").glob("runtime_*.py"))]
     py_compile_command = [sys.executable, "-m", "py_compile", *[str(path.relative_to(repo_root)) for path in py_files]]

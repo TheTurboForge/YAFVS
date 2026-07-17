@@ -1312,6 +1312,46 @@ class TurboVASCtlTests(unittest.TestCase):
             missing = [item for item in result["findings"] if item["status"] == "fail"]
             self.assertEqual(len(missing), 10)
 
+    def test_rust_turbovasctl_matches_python_status_and_inventory_contracts(self):
+        repo_root = Path(__file__).resolve().parents[2]
+        manifest = repo_root / "tools" / "turbovasctl-rs" / "Cargo.toml"
+        target_dir = repo_root / "build" / "turbovasctl-rs"
+
+        def invoke(command, arguments):
+            completed = subprocess.run(command + arguments, cwd=repo_root, check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            return completed
+
+        def normalized_json(completed):
+            payload = json.loads(completed.stdout)
+            payload["metadata"].pop("generated_at", None)
+            return payload
+
+        python_command = [sys.executable, str(repo_root / "tools" / "turbovasctl")]
+        rust_command = [
+            "cargo",
+            "run",
+            "--quiet",
+            "--locked",
+            "--target-dir",
+            str(target_dir),
+            "--manifest-path",
+            str(manifest),
+            "--",
+        ]
+        for arguments in (["status", "--json"], ["inventory", "--json"], ["inventory", "--scope", "components/gsa", "--json"], ["inventory", "--scope", "definitely-invalid", "--json"]):
+            self.assertEqual(
+                normalized_json(invoke(python_command, arguments)),
+                normalized_json(invoke(rust_command, arguments)),
+                arguments,
+            )
+
+        human_arguments = ["inventory", "--scope", "components/gsa"]
+        self.assertEqual(
+            invoke(python_command, human_arguments).stdout,
+            invoke(rust_command, human_arguments).stdout,
+        )
+
     def test_gvmd_target_parser_consumes_target_elements(self):
         gmp_source = (Path(__file__).resolve().parents[2] / "components" / "gvmd" / "src" / "gmp.c").read_text(encoding="utf-8")
         start_handler = gmp_source[

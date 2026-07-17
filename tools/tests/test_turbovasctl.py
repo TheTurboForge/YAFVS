@@ -1384,6 +1384,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["logs", "--lines", "0", "--json"],
                 ["logs", "definitely-invalid", "--lines", "1", "--json"],
                 ["logs", "--service", "definitely-invalid", "--lines", "1", "--json"],
+                ["quality-gate-schedule", "--install", "--json"],
             ),
             human_inventory=True,
         )
@@ -1399,6 +1400,14 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["license-report", "--modified-imported-only", "--diff-scope", "staged", "--json"],
                 ["doctor", "--json"],
                 ["doctor", "--status-only", "--json"],
+            )
+        )
+
+    def test_rust_turbovasctl_matches_python_migrated_systemd_status(self):
+        self.assert_rust_turbovasctl_parity(
+            (
+                ["quality-gate-schedule", "--json"],
+                ["quality-gate-schedule", "--status", "--json"],
             )
         )
 

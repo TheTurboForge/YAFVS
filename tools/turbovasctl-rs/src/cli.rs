@@ -96,6 +96,18 @@ pub enum CliCommand {
     },
     /// Run structural and environment health checks.
     Doctor,
+    /// Install, inspect, or disable the user quality-gate timer.
+    QualityGateSchedule {
+        /// Install and enable the timer (requires explicit host opt-in).
+        #[arg(long, conflicts_with_all = ["status", "disable"])]
+        install: bool,
+        /// Inspect timer status (the default action).
+        #[arg(long, conflicts_with_all = ["install", "disable"])]
+        status: bool,
+        /// Disable the timer.
+        #[arg(long, conflicts_with_all = ["install", "status"])]
+        disable: bool,
+    },
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>

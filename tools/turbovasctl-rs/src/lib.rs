@@ -15,9 +15,9 @@ pub use commands::{
     command_branding_state, command_deps, command_doctor, command_feed_copy_to_runtime,
     command_feed_state, command_gsa_npm_audit, command_inventory, command_license_report,
     command_logs, command_native_api_cargo_audit, command_native_api_semgrep_audit,
-    command_osv_lockfile_audit, command_path_coupling_state, command_quality_gate_state,
-    command_runtime_feed_import_init, command_runtime_plan, command_rust_migration_state,
-    command_security_policy_check, command_status, find_repo_root,
+    command_osv_lockfile_audit, command_path_coupling_state, command_quality_gate_schedule,
+    command_quality_gate_state, command_runtime_feed_import_init, command_runtime_plan,
+    command_rust_migration_state, command_security_policy_check, command_status, find_repo_root,
 };
 pub use render::{render_human, render_json};
 pub use result::{ResultEnvelope, exit_code};
@@ -70,6 +70,20 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
             cli.status_only,
         ),
         CliCommand::Doctor => command_doctor(&repo_root, cli.status_only),
+        CliCommand::QualityGateSchedule {
+            install,
+            status: _,
+            disable,
+        } => command_quality_gate_schedule(
+            &repo_root,
+            if *install {
+                "install"
+            } else if *disable {
+                "disable"
+            } else {
+                "status"
+            },
+        ),
     }
 }
 

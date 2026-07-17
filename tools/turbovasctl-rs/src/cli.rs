@@ -71,6 +71,31 @@ pub enum CliCommand {
         #[arg(long, default_value_t = 120)]
         lines: i64,
     },
+    /// Check preserved license and provenance files.
+    LicenseReport {
+        /// Apply the selected publication-mode release gate.
+        #[arg(long)]
+        public_release: bool,
+        /// Publication mode to evaluate.
+        #[arg(
+            long,
+            default_value = "source-public",
+            value_parser = ["source-public", "binary", "container", "hosted", "feed-redistribution"]
+        )]
+        mode: String,
+        /// Diff scope for focused modified-imported-file checks.
+        #[arg(
+            long,
+            default_value = "baseline",
+            value_parser = ["baseline", "staged", "worktree"]
+        )]
+        diff_scope: String,
+        /// Run only the fast modified-imported-file notice checks.
+        #[arg(long)]
+        modified_imported_only: bool,
+    },
+    /// Run structural and environment health checks.
+    Doctor,
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>

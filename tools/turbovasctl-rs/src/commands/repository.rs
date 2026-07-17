@@ -8,10 +8,11 @@ use serde_json::json;
 use std::path::{Component as PathComponent, Path, PathBuf};
 
 #[derive(Clone, Copy)]
-struct ComponentSpec {
-    name: &'static str,
-    path: &'static str,
+pub(crate) struct ComponentSpec {
+    pub(crate) name: &'static str,
+    pub(crate) path: &'static str,
     role: &'static str,
+    pub(crate) licenses: &'static [&'static str],
 }
 
 const COMPONENTS: [ComponentSpec; 10] = [
@@ -19,53 +20,67 @@ const COMPONENTS: [ComponentSpec; 10] = [
         name: "openvas-scanner",
         path: "components/openvas-scanner",
         role: "scanner engine and NASL runtime",
+        licenses: &["COPYING", "license-details.md"],
     },
     ComponentSpec {
         name: "gvm-libs",
         path: "components/gvm-libs",
         role: "shared Greenbone/OpenVAS libraries",
+        licenses: &["COPYING"],
     },
     ComponentSpec {
         name: "pg-gvm",
         path: "components/pg-gvm",
         role: "PostgreSQL extension for gvmd helper functions",
+        licenses: &["LICENSE"],
     },
     ComponentSpec {
         name: "gvmd",
         path: "components/gvmd",
         role: "manager daemon and GMP API",
+        licenses: &["COPYING"],
     },
     ComponentSpec {
         name: "ospd-openvas",
         path: "components/ospd-openvas",
         role: "scanner adapter service",
+        licenses: &["COPYING"],
     },
     ComponentSpec {
         name: "gsad",
         path: "components/gsad",
         role: "web service daemon",
+        licenses: &["LICENSE"],
     },
     ComponentSpec {
         name: "gsa",
         path: "components/gsa",
         role: "web user interface",
+        licenses: &["LICENSE"],
     },
     ComponentSpec {
         name: "openvas-smb",
         path: "components/openvas-smb",
         role: "SMB support library",
+        licenses: &["COPYING"],
     },
     ComponentSpec {
         name: "notus-scanner",
         path: "components/notus-scanner",
         role: "Notus local security check scanner",
+        licenses: &["LICENSE"],
     },
     ComponentSpec {
         name: "greenbone-feed-sync",
         path: "components/greenbone-feed-sync",
         role: "feed synchronization tooling",
+        licenses: &["LICENSE"],
     },
 ];
+
+pub(crate) fn component_specs() -> &'static [ComponentSpec] {
+    &COMPONENTS
+}
 
 pub fn find_repo_root(start: &Path) -> PathBuf {
     find_repo_root_with(start, &SystemCommandRunner)

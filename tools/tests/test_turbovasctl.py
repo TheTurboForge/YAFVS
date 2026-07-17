@@ -1388,6 +1388,20 @@ class TurboVASCtlTests(unittest.TestCase):
             human_inventory=True,
         )
 
+    def test_rust_turbovasctl_matches_python_migrated_license_contracts(self):
+        self.assert_rust_turbovasctl_parity(
+            (
+                ["license-report", "--json"],
+                ["license-report", "--status-only", "--json"],
+                ["license-report", "--public-release", "--mode", "source-public", "--json"],
+                ["license-report", "--public-release", "--mode", "container", "--json"],
+                ["license-report", "--diff-scope", "worktree", "--json"],
+                ["license-report", "--modified-imported-only", "--diff-scope", "staged", "--json"],
+                ["doctor", "--json"],
+                ["doctor", "--status-only", "--json"],
+            )
+        )
+
     def test_rust_turbovasctl_matches_python_migrated_external_audits(self):
         self.assert_rust_turbovasctl_parity(
             (

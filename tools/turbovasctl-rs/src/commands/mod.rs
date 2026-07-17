@@ -6,7 +6,9 @@ mod branding;
 mod common;
 mod compose;
 mod deps;
+mod doctor;
 mod feed;
+mod license;
 mod path_coupling;
 mod quality_gate;
 mod repository;
@@ -20,9 +22,11 @@ pub use audit::{
 };
 pub use branding::command_branding_state;
 pub use deps::command_deps;
+pub use doctor::command_doctor;
 pub use feed::{
     command_feed_copy_to_runtime, command_feed_state, command_runtime_feed_import_init,
 };
+pub use license::command_license_report;
 pub use path_coupling::command_path_coupling_state;
 pub use quality_gate::command_quality_gate_state;
 pub use repository::{command_inventory, command_status, find_repo_root};

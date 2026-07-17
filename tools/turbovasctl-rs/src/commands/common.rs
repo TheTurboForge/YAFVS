@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::env;
 use std::ffi::OsString;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -25,6 +26,31 @@ pub(crate) fn run_git(
     runner
         .run("git", &git_args)
         .and_then(|output| output.success.then(|| output.stdout.trim().to_string()))
+}
+
+pub(crate) fn executable_path(program: &str) -> Option<PathBuf> {
+    let candidate = Path::new(program);
+    if candidate.components().count() > 1 {
+        return is_executable(candidate).then(|| candidate.to_path_buf());
+    }
+    env::split_paths(&env::var_os("PATH")?)
+        .map(|directory| directory.join(program))
+        .find(|candidate| is_executable(candidate))
+}
+
+fn is_executable(path: &Path) -> bool {
+    path.is_file()
+        && path
+            .metadata()
+            .is_ok_and(|metadata| metadata.permissions().mode() & 0o111 != 0)
+}
+
+pub(crate) fn output_tail(output: &str, lines: usize) -> Vec<String> {
+    let rows = output.lines().collect::<Vec<_>>();
+    rows[rows.len().saturating_sub(lines)..]
+        .iter()
+        .map(|line| (*line).to_string())
+        .collect()
 }
 
 pub(crate) fn build_env(repo_root: &Path) -> BTreeMap<OsString, OsString> {

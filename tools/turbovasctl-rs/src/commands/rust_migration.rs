@@ -1,14 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use super::common::{build_env, metadata, runtime_dir};
+use super::common::{build_env, executable_path, metadata, runtime_dir};
 use crate::process::{CommandRunner, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
 use serde::Serialize;
 use serde_json::{Map, Value, json};
-use std::env;
-use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
 const MIGRATION_TOOLS: [(&str, &[&str]); 6] = [
@@ -280,23 +278,6 @@ fn migration_candidate(repo_root: &Path) -> Map<String, Value> {
         ]),
     );
     candidate
-}
-
-fn executable_path(program: &str) -> Option<PathBuf> {
-    let candidate = Path::new(program);
-    if candidate.components().count() > 1 {
-        return is_executable(candidate).then(|| candidate.to_path_buf());
-    }
-    env::split_paths(&env::var_os("PATH")?)
-        .map(|directory| directory.join(program))
-        .find(|candidate| is_executable(candidate))
-}
-
-fn is_executable(path: &Path) -> bool {
-    path.is_file()
-        && path
-            .metadata()
-            .is_ok_and(|metadata| metadata.permissions().mode() & 0o111 != 0)
 }
 
 #[cfg(test)]

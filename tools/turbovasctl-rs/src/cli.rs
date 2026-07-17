@@ -39,6 +39,12 @@ pub enum CliCommand {
     FeedState,
     /// Inspect Rust migration tooling and the first dry-run candidate.
     RustMigrationState,
+    /// Audit native API Rust dependencies against the local advisory database.
+    NativeApiCargoAudit,
+    /// Audit GSA dependencies from the local npm cache.
+    GsaNpmAudit,
+    /// Run the native API Semgrep security policy.
+    NativeApiSemgrepAudit,
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>

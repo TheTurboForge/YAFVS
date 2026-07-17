@@ -12,7 +12,8 @@ use std::path::{Path, PathBuf};
 
 pub use cli::{Cli, CliCommand, parse_cli};
 pub use commands::{
-    command_branding_state, command_feed_state, command_inventory, command_path_coupling_state,
+    command_branding_state, command_feed_state, command_gsa_npm_audit, command_inventory,
+    command_native_api_cargo_audit, command_native_api_semgrep_audit, command_path_coupling_state,
     command_quality_gate_state, command_rust_migration_state, command_status, find_repo_root,
 };
 pub use render::{render_human, render_json};
@@ -28,6 +29,13 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         CliCommand::QualityGateState => command_quality_gate_state(&repo_root, cli.status_only),
         CliCommand::FeedState => command_feed_state(&repo_root),
         CliCommand::RustMigrationState => command_rust_migration_state(&repo_root),
+        CliCommand::NativeApiCargoAudit => {
+            command_native_api_cargo_audit(&repo_root, cli.status_only)
+        }
+        CliCommand::GsaNpmAudit => command_gsa_npm_audit(&repo_root, cli.status_only),
+        CliCommand::NativeApiSemgrepAudit => {
+            command_native_api_semgrep_audit(&repo_root, cli.status_only)
+        }
     }
 }
 

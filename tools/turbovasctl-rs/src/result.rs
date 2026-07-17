@@ -26,6 +26,8 @@ pub struct Finding {
     pub(crate) path: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) details: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) top_findings: Option<Vec<Value>>,
 }
 
 #[derive(Debug, Serialize, PartialEq)]
@@ -44,6 +46,7 @@ impl Finding {
             message,
             path: None,
             details: None,
+            top_findings: None,
         }
     }
 
@@ -54,6 +57,11 @@ impl Finding {
 
     pub(crate) fn with_details(mut self, details: Value) -> Self {
         self.details = Some(details);
+        self
+    }
+
+    pub(crate) fn with_top_findings(mut self, top_findings: Vec<Value>) -> Self {
+        self.top_findings = Some(top_findings);
         self
     }
 }

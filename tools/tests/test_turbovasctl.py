@@ -1313,7 +1313,7 @@ class TurboVASCtlTests(unittest.TestCase):
             missing = [item for item in result["findings"] if item["status"] == "fail"]
             self.assertEqual(len(missing), 10)
 
-    def test_rust_turbovasctl_matches_python_status_and_inventory_contracts(self):
+    def test_rust_turbovasctl_matches_python_migrated_command_contracts(self):
         repo_root = Path(__file__).resolve().parents[2]
         manifest = repo_root / "tools" / "turbovasctl-rs" / "Cargo.toml"
         target_dir = repo_root / "build" / "turbovasctl-rs"
@@ -1340,7 +1340,7 @@ class TurboVASCtlTests(unittest.TestCase):
             str(manifest),
             "--",
         ]
-        for arguments in (["status", "--json"], ["inventory", "--json"], ["inventory", "--scope", "components/gsa", "--json"], ["inventory", "--scope", "definitely-invalid", "--json"]):
+        for arguments in (["status", "--json"], ["inventory", "--json"], ["inventory", "--scope", "components/gsa", "--json"], ["inventory", "--scope", "definitely-invalid", "--json"], ["branding-state", "--json"]):
             self.assertEqual(
                 normalized_json(invoke(python_command, arguments)),
                 normalized_json(invoke(rust_command, arguments)),

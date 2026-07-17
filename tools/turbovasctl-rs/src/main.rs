@@ -3,16 +3,13 @@
 
 use std::env;
 use std::process::ExitCode;
-use turbovasctl::{current_dir, exit_code, parse_cli, render_human, render_json, run, usage};
+use turbovasctl::{current_dir, exit_code, parse_cli, render_human, render_json, run};
 
 fn main() -> ExitCode {
     let cli = match parse_cli(env::args_os().skip(1)) {
         Ok(cli) => cli,
-        Err(message) => {
-            eprintln!("{message}");
-            if message != usage() {
-                eprintln!("{}", usage());
-            }
+        Err(error) => {
+            let _ = error.print();
             return ExitCode::from(2);
         }
     };

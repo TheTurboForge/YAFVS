@@ -1320,7 +1320,6 @@ class TurboVASCtlTests(unittest.TestCase):
 
         def invoke(command, arguments):
             completed = subprocess.run(command + arguments, cwd=repo_root, check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            self.assertEqual(completed.returncode, 0, completed.stderr)
             return completed
 
         def normalized_json(completed):
@@ -1339,16 +1338,22 @@ class TurboVASCtlTests(unittest.TestCase):
             "--manifest-path",
             str(manifest),
         ]
-        invoke(rust_build_command, [])
+        build = invoke(rust_build_command, [])
+        self.assertEqual(build.returncode, 0, build.stderr)
         rust_command = [str(target_dir / "debug" / "turbovasctl")]
-        for arguments in (["status", "--json"], ["inventory", "--json"], ["inventory", "--scope", "components/gsa", "--json"], ["inventory", "--scope", "definitely-invalid", "--json"], ["branding-state", "--json"], ["path-coupling-state", "--json"], ["path-coupling-state", "--status-only", "--json"], ["quality-gate-state", "--json"], ["quality-gate-state", "--status-only", "--json"], ["feed-state", "--json"], ["rust-migration-state", "--json"], ["native-api-cargo-audit", "--json"], ["native-api-cargo-audit", "--status-only", "--json"], ["gsa-npm-audit", "--json"], ["gsa-npm-audit", "--status-only", "--json"], ["native-api-semgrep-audit", "--json"], ["native-api-semgrep-audit", "--status-only", "--json"], ["osv-lockfile-audit", "--json"], ["osv-lockfile-audit", "--status-only", "--json"], ["security-policy-check", "--json"], ["security-policy-check", "--status-only", "--json"]):
+        for arguments in (["status", "--json"], ["inventory", "--json"], ["inventory", "--scope", "components/gsa", "--json"], ["inventory", "--scope", "definitely-invalid", "--json"], ["branding-state", "--json"], ["path-coupling-state", "--json"], ["path-coupling-state", "--status-only", "--json"], ["quality-gate-state", "--json"], ["quality-gate-state", "--status-only", "--json"], ["feed-state", "--json"], ["rust-migration-state", "--json"], ["native-api-cargo-audit", "--json"], ["native-api-cargo-audit", "--status-only", "--json"], ["gsa-npm-audit", "--json"], ["gsa-npm-audit", "--status-only", "--json"], ["native-api-semgrep-audit", "--json"], ["native-api-semgrep-audit", "--status-only", "--json"], ["osv-lockfile-audit", "--json"], ["osv-lockfile-audit", "--status-only", "--json"], ["security-policy-check", "--json"], ["security-policy-check", "--status-only", "--json"], ["runtime-plan", "--json"], ["feed-copy-to-runtime", "--json"]):
+            python_result = invoke(python_command, arguments)
+            rust_result = invoke(rust_command, arguments)
+            self.assertEqual(python_result.returncode, rust_result.returncode, arguments)
             self.assertEqual(
-                normalized_json(invoke(python_command, arguments)),
-                normalized_json(invoke(rust_command, arguments)),
+                normalized_json(python_result),
+                normalized_json(rust_result),
                 arguments,
             )
 
         human_arguments = ["inventory", "--scope", "components/gsa"]
+        self.assertEqual(invoke(python_command, human_arguments).returncode, 0)
+        self.assertEqual(invoke(rust_command, human_arguments).returncode, 0)
         self.assertEqual(
             invoke(python_command, human_arguments).stdout,
             invoke(rust_command, human_arguments).stdout,

@@ -18,6 +18,27 @@ struct FeedClass {
     markers: &'static [&'static str],
 }
 
+pub fn command_feed_copy_to_runtime(repo_root: &Path) -> ResultEnvelope {
+    make_result(
+        metadata(
+            repo_root,
+            "feed-copy-to-runtime",
+            &SystemCommandRunner,
+        ),
+        "Legacy live feed copying is disabled; stage and activate a verified immutable generation."
+            .to_string(),
+        vec![Finding::new(
+            "fail",
+            "feed.copy.activation-boundary",
+            "Sequential rsync into live consumer paths is unsafe; use feed-generation-stage followed by feed-generation-activate."
+                .to_string(),
+        )],
+    )
+    .with_artifacts(vec![
+        runtime_dir(repo_root).join("feed-store").display().to_string(),
+    ])
+}
+
 const FEED_CLASSES: [FeedClass; 5] = [
     FeedClass {
         key: "nasl",

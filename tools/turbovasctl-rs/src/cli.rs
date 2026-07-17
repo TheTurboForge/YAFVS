@@ -49,6 +49,10 @@ pub enum CliCommand {
     OsvLockfileAudit,
     /// Validate security-sensitive path policy scaffolding.
     SecurityPolicyCheck,
+    /// Show the persistent Docker runtime plan.
+    RuntimePlan,
+    /// Refuse unsafe sequential copying into live feed paths.
+    FeedCopyToRuntime,
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>

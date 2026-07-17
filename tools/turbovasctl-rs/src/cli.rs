@@ -33,6 +33,8 @@ pub enum CliCommand {
     BrandingState,
     /// Inspect absolute checkout/runtime path coupling.
     PathCouplingState,
+    /// Show retained local quality gate history.
+    QualityGateState,
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>

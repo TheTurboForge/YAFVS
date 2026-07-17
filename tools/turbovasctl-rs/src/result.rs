@@ -74,6 +74,11 @@ pub(crate) fn make_result(
 }
 
 impl ResultEnvelope {
+    pub(crate) fn with_artifacts(mut self, artifacts: Vec<String>) -> Self {
+        self.artifacts = artifacts;
+        self
+    }
+
     pub(crate) fn with_details(mut self, details: Value) -> Self {
         self.details = Some(details);
         self

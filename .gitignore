@@ -29,6 +29,7 @@
 /components/gsa/.eslintcache
 /components/*/dist/
 /components/*/build/
+/tools/turbovasctl-rs/target/
 
 # Python caches.
 __pycache__/

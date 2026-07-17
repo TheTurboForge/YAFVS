@@ -1329,18 +1329,19 @@ class TurboVASCtlTests(unittest.TestCase):
             return payload
 
         python_command = [sys.executable, str(repo_root / "tools" / "turbovasctl")]
-        rust_command = [
+        rust_build_command = [
             "cargo",
-            "run",
+            "build",
             "--quiet",
             "--locked",
             "--target-dir",
             str(target_dir),
             "--manifest-path",
             str(manifest),
-            "--",
         ]
-        for arguments in (["status", "--json"], ["inventory", "--json"], ["inventory", "--scope", "components/gsa", "--json"], ["inventory", "--scope", "definitely-invalid", "--json"], ["branding-state", "--json"], ["path-coupling-state", "--json"], ["path-coupling-state", "--status-only", "--json"], ["quality-gate-state", "--json"], ["quality-gate-state", "--status-only", "--json"], ["feed-state", "--json"]):
+        invoke(rust_build_command, [])
+        rust_command = [str(target_dir / "debug" / "turbovasctl")]
+        for arguments in (["status", "--json"], ["inventory", "--json"], ["inventory", "--scope", "components/gsa", "--json"], ["inventory", "--scope", "definitely-invalid", "--json"], ["branding-state", "--json"], ["path-coupling-state", "--json"], ["path-coupling-state", "--status-only", "--json"], ["quality-gate-state", "--json"], ["quality-gate-state", "--status-only", "--json"], ["feed-state", "--json"], ["rust-migration-state", "--json"]):
             self.assertEqual(
                 normalized_json(invoke(python_command, arguments)),
                 normalized_json(invoke(rust_command, arguments)),

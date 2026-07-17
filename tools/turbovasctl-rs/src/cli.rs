@@ -37,6 +37,8 @@ pub enum CliCommand {
     QualityGateState,
     /// Show Community Feed cache and active-runtime state.
     FeedState,
+    /// Inspect Rust migration tooling and the first dry-run candidate.
+    RustMigrationState,
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>

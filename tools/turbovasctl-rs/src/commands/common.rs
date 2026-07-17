@@ -4,7 +4,9 @@
 use crate::process::CommandRunner;
 use crate::result::{Finding, Metadata};
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 use std::env;
+use std::ffi::OsString;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -23,6 +25,44 @@ pub(crate) fn run_git(
     runner
         .run("git", &git_args)
         .and_then(|output| output.success.then(|| output.stdout.trim().to_string()))
+}
+
+pub(crate) fn build_env(repo_root: &Path) -> BTreeMap<OsString, OsString> {
+    let mut environment = env::vars_os().collect::<BTreeMap<_, _>>();
+    let prefix = repo_root.join("build/prefix");
+    let current_pkg = environment.get(&OsString::from("PKG_CONFIG_PATH"));
+    let mut pkg_paths = vec![
+        prefix.join("lib/pkgconfig").display().to_string(),
+        prefix.join("lib64/pkgconfig").display().to_string(),
+    ];
+    if let Some(current) = current_pkg.and_then(|value| value.to_str())
+        && !current.is_empty()
+    {
+        pkg_paths.push(current.to_string());
+    }
+    environment.insert(
+        OsString::from("PKG_CONFIG_PATH"),
+        OsString::from(pkg_paths.join(":")),
+    );
+    environment.insert(
+        OsString::from("CMAKE_PREFIX_PATH"),
+        OsString::from(prefix.display().to_string()),
+    );
+    let current_ld = environment.get(&OsString::from("LD_LIBRARY_PATH"));
+    let mut ld_paths = vec![
+        prefix.join("lib").display().to_string(),
+        prefix.join("lib64").display().to_string(),
+    ];
+    if let Some(current) = current_ld.and_then(|value| value.to_str())
+        && !current.is_empty()
+    {
+        ld_paths.push(current.to_string());
+    }
+    environment.insert(
+        OsString::from("LD_LIBRARY_PATH"),
+        OsString::from(ld_paths.join(":")),
+    );
+    environment
 }
 
 pub(crate) fn iso_system_time(timestamp: SystemTime) -> Option<String> {

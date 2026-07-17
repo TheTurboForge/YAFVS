@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 pub use cli::{Cli, CliCommand, parse_cli};
 pub use commands::{
     command_branding_state, command_feed_state, command_inventory, command_path_coupling_state,
-    command_quality_gate_state, command_status, find_repo_root,
+    command_quality_gate_state, command_rust_migration_state, command_status, find_repo_root,
 };
 pub use render::{render_human, render_json};
 pub use result::{ResultEnvelope, exit_code};
@@ -27,6 +27,7 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         CliCommand::PathCouplingState => command_path_coupling_state(&repo_root, cli.status_only),
         CliCommand::QualityGateState => command_quality_gate_state(&repo_root, cli.status_only),
         CliCommand::FeedState => command_feed_state(&repo_root),
+        CliCommand::RustMigrationState => command_rust_migration_state(&repo_root),
     }
 }
 

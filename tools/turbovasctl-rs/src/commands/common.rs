@@ -7,7 +7,9 @@ use serde_json::{Value, json};
 use std::env;
 use std::path::Path;
 use std::path::PathBuf;
+use std::time::SystemTime;
 use time::OffsetDateTime;
+use time::format_description;
 use time::format_description::well_known::Rfc3339;
 
 pub(crate) fn run_git(
@@ -21,6 +23,15 @@ pub(crate) fn run_git(
     runner
         .run("git", &git_args)
         .and_then(|output| output.success.then(|| output.stdout.trim().to_string()))
+}
+
+pub(crate) fn iso_system_time(timestamp: SystemTime) -> Option<String> {
+    let timestamp = OffsetDateTime::from(timestamp);
+    let format = format_description::parse_borrowed::<2>(
+        "[year]-[month]-[day]T[hour]:[minute]:[second]+00:00",
+    )
+    .ok()?;
+    timestamp.format(&format).ok()
 }
 
 pub(crate) fn runtime_dir(repo_root: &Path) -> PathBuf {

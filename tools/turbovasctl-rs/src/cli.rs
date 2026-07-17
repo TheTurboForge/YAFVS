@@ -35,6 +35,8 @@ pub enum CliCommand {
     PathCouplingState,
     /// Show retained local quality gate history.
     QualityGateState,
+    /// Show Community Feed cache and active-runtime state.
+    FeedState,
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>

@@ -1,14 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use super::common::{metadata, runtime_dir};
+use super::common::{iso_system_time, metadata, runtime_dir};
 use crate::process::{CommandRunner, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
 use serde_json::{Map, Value, json};
 use std::fs;
 use std::path::Path;
-use time::OffsetDateTime;
-use time::format_description;
 
 const QUALITY_GATE_ARTIFACT: &str = "quality-gate.json";
 const QUALITY_GATE_HISTORY_PREFIX: &str = "quality-gate-";
@@ -169,12 +167,7 @@ fn history_entry(path: &Path) -> Value {
 
 fn artifact_mtime(path: &Path) -> Option<String> {
     let modified = fs::metadata(path).ok()?.modified().ok()?;
-    let timestamp = OffsetDateTime::from(modified);
-    let format = format_description::parse_borrowed::<2>(
-        "[year]-[month]-[day]T[hour]:[minute]:[second]+00:00",
-    )
-    .ok()?;
-    timestamp.format(&format).ok()
+    iso_system_time(modified)
 }
 
 fn compact_status_only(result: &mut ResultEnvelope) {

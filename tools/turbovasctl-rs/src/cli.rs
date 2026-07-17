@@ -45,6 +45,8 @@ pub enum CliCommand {
     GsaNpmAudit,
     /// Run the native API Semgrep security policy.
     NativeApiSemgrepAudit,
+    /// Audit supported lockfiles with the local OSV database.
+    OsvLockfileAudit,
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>

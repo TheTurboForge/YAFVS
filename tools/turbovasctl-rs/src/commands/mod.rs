@@ -12,6 +12,7 @@ mod rust_migration;
 
 pub use audit::{
     command_gsa_npm_audit, command_native_api_cargo_audit, command_native_api_semgrep_audit,
+    command_osv_lockfile_audit,
 };
 pub use branding::command_branding_state;
 pub use feed::command_feed_state;

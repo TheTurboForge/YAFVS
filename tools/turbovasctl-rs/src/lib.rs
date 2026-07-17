@@ -13,8 +13,9 @@ use std::path::{Path, PathBuf};
 pub use cli::{Cli, CliCommand, parse_cli};
 pub use commands::{
     command_branding_state, command_feed_state, command_gsa_npm_audit, command_inventory,
-    command_native_api_cargo_audit, command_native_api_semgrep_audit, command_path_coupling_state,
-    command_quality_gate_state, command_rust_migration_state, command_status, find_repo_root,
+    command_native_api_cargo_audit, command_native_api_semgrep_audit, command_osv_lockfile_audit,
+    command_path_coupling_state, command_quality_gate_state, command_rust_migration_state,
+    command_status, find_repo_root,
 };
 pub use render::{render_human, render_json};
 pub use result::{ResultEnvelope, exit_code};
@@ -36,6 +37,7 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         CliCommand::NativeApiSemgrepAudit => {
             command_native_api_semgrep_audit(&repo_root, cli.status_only)
         }
+        CliCommand::OsvLockfileAudit => command_osv_lockfile_audit(&repo_root, cli.status_only),
     }
 }
 

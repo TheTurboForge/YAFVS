@@ -14,13 +14,392 @@ const GSA_COMPONENT: &str = "components/gsa";
 const GSA_LOCKFILE: &str = "components/gsa/package-lock.json";
 const NATIVE_API_SEMGREP_CONFIG: &str = "policy/semgrep-native-api.yml";
 const NATIVE_API_SOURCE: &str = "services/turbovas-api/src";
+const OSV_LOCKFILES: [&str; 4] = [
+    NATIVE_API_LOCKFILE,
+    "tools/turbovasctl-rs/Cargo.lock",
+    "components/openvas-scanner/rust/Cargo.lock",
+    GSA_LOCKFILE,
+];
 
 pub fn command_native_api_cargo_audit(repo_root: &Path, status_only: bool) -> ResultEnvelope {
     command_native_api_cargo_audit_with(repo_root, status_only, &SystemCommandRunner)
 }
 
+pub fn command_osv_lockfile_audit(repo_root: &Path, status_only: bool) -> ResultEnvelope {
+    command_osv_lockfile_audit_with(repo_root, status_only, &SystemCommandRunner)
+}
+
+fn command_osv_lockfile_audit_with(
+    repo_root: &Path,
+    status_only: bool,
+    runner: &dyn CommandRunner,
+) -> ResultEnvelope {
+    let artifacts = OSV_LOCKFILES
+        .iter()
+        .map(|path| (*path).to_string())
+        .collect::<Vec<_>>();
+    let missing = OSV_LOCKFILES
+        .iter()
+        .filter(|path| !repo_root.join(path).is_file())
+        .map(|path| (*path).to_string())
+        .collect::<Vec<_>>();
+    let mut findings = vec![
+        Finding::new(
+            if missing.is_empty() { "pass" } else { "fail" },
+            "osv-lockfile-audit.lockfiles",
+            if missing.is_empty() {
+                "Expected lockfiles exist.".to_string()
+            } else {
+                "One or more expected lockfiles are missing.".to_string()
+            },
+        )
+        .with_details(json!({
+            "missing": missing,
+            "lockfile_count": OSV_LOCKFILES.len(),
+        })),
+    ];
+    if executable_path("osv-scanner").is_none() {
+        findings.push(Finding::new(
+            "warn",
+            "osv-lockfile-audit.tool",
+            "osv-scanner is not installed; OSV lockfile audit was skipped.".to_string(),
+        ));
+        return osv_audit_result(
+            repo_root,
+            "OSV lockfile audit could not run because osv-scanner is unavailable.",
+            findings,
+            artifacts,
+            None,
+            status_only,
+            runner,
+        );
+    }
+    if !missing.is_empty() {
+        return osv_audit_result(
+            repo_root,
+            "OSV lockfile audit could not run because required lockfiles are missing.",
+            findings,
+            artifacts,
+            None,
+            status_only,
+            runner,
+        );
+    }
+
+    let mut arguments = vec!["scan", "source", "--format", "json", "--verbosity", "error"];
+    for lockfile in OSV_LOCKFILES {
+        arguments.extend(["--lockfile", lockfile]);
+    }
+    let Some(audit) = runner.run_with(
+        "osv-scanner",
+        &arguments,
+        Some(repo_root),
+        None,
+        Some(Duration::from_secs(120)),
+    ) else {
+        findings.push(Finding::new(
+            "fail",
+            "osv-lockfile-audit.parse",
+            "osv-scanner did not emit parseable JSON.".to_string(),
+        ));
+        return osv_audit_result(
+            repo_root,
+            "OSV lockfile audit failed before results could be parsed.",
+            findings,
+            artifacts,
+            None,
+            status_only,
+            runner,
+        );
+    };
+    let payload = match serde_json::from_str::<Value>(&audit.stdout) {
+        Ok(payload) => payload,
+        Err(_) => {
+            findings.push(
+                Finding::new(
+                    "fail",
+                    "osv-lockfile-audit.parse",
+                    "osv-scanner did not emit parseable JSON.".to_string(),
+                )
+                .with_details(json!({
+                    "returncode": audit.exit_code,
+                    "output_tail": output_tail(&audit.stdout, 40),
+                })),
+            );
+            return osv_audit_result(
+                repo_root,
+                "OSV lockfile audit failed before results could be parsed.",
+                findings,
+                artifacts,
+                None,
+                status_only,
+                runner,
+            );
+        }
+    };
+    let summary = summarize_osv_payload(&payload, repo_root);
+    findings.extend([
+        Finding::new(
+            "pass",
+            "osv-lockfile-audit.tool",
+            "osv-scanner is installed and runnable.".to_string(),
+        ),
+        Finding::new(
+            if summary.high_or_critical_count == 0 {
+                "pass"
+            } else {
+                "fail"
+            },
+            "osv-lockfile-audit.high-critical",
+            format!(
+                "OSV reported {} high/critical lockfile vulnerabilit(y/ies).",
+                summary.high_or_critical_count
+            ),
+        )
+        .with_details(json!({
+            "high_or_critical_count": summary.high_or_critical_count,
+        })),
+        if summary.vulnerability_count > 0 && summary.high_or_critical_count == 0 {
+            Finding::new(
+                "warn",
+                "osv-lockfile-audit.vulnerabilities",
+                format!(
+                    "OSV reported {} lower-severity lockfile vulnerabilit(y/ies).",
+                    summary.vulnerability_count
+                ),
+            )
+            .with_details(json!({
+                "vulnerability_count": summary.vulnerability_count,
+                "top_findings": summary.top_findings,
+            }))
+        } else {
+            Finding::new(
+                "pass",
+                "osv-lockfile-audit.vulnerabilities",
+                format!(
+                    "OSV reported {} total lockfile vulnerabilit(y/ies).",
+                    summary.vulnerability_count
+                ),
+            )
+            .with_details(json!({
+                "vulnerability_count": summary.vulnerability_count,
+            }))
+        },
+    ]);
+    if audit.exit_code != Some(0) && summary.vulnerability_count == 0 {
+        findings.push(
+            Finding::new(
+                "warn",
+                "osv-lockfile-audit.exit-code",
+                format!(
+                    "osv-scanner exited {} without parsed vulnerabilities.",
+                    display_exit_code(audit.exit_code)
+                ),
+            )
+            .with_details(json!({ "output_tail": output_tail(&audit.stdout, 40) })),
+        );
+    }
+    let details = json!({
+        "lockfile_count": OSV_LOCKFILES.len(),
+        "vulnerable_package_count": summary.vulnerable_package_count,
+        "vulnerability_count": summary.vulnerability_count,
+        "high_or_critical_count": summary.high_or_critical_count,
+        "returncode": audit.exit_code,
+        "top_findings": summary.top_findings,
+    });
+    osv_audit_result(
+        repo_root,
+        "OSV lockfile audit completed.",
+        findings,
+        artifacts,
+        Some(details),
+        status_only,
+        runner,
+    )
+}
+
 pub fn command_native_api_semgrep_audit(repo_root: &Path, status_only: bool) -> ResultEnvelope {
     command_native_api_semgrep_audit_with(repo_root, status_only, &SystemCommandRunner)
+}
+
+fn osv_audit_result(
+    repo_root: &Path,
+    summary: &str,
+    findings: Vec<Finding>,
+    artifacts: Vec<String>,
+    details: Option<Value>,
+    status_only: bool,
+    runner: &dyn CommandRunner,
+) -> ResultEnvelope {
+    let mut result = make_result(
+        metadata(repo_root, "osv-lockfile-audit", runner),
+        summary.to_string(),
+        findings,
+    )
+    .with_artifacts(artifacts);
+    if let Some(details) = details {
+        result.details = Some(details);
+    }
+    if status_only {
+        compact_osv_audit(&mut result);
+    }
+    result
+}
+
+fn compact_osv_audit(result: &mut ResultEnvelope) {
+    let finding_count = result.findings.len();
+    let details = result.details.as_ref().and_then(Value::as_object);
+    let top_findings = details
+        .and_then(|details| details.get("top_findings"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let mut non_pass = result
+        .findings
+        .iter()
+        .filter(|finding| finding.status != "pass")
+        .map(|finding| {
+            let compact = compact_finding(finding);
+            if matches!(
+                compact.check.as_str(),
+                "osv-lockfile-audit.vulnerabilities" | "osv-lockfile-audit.high-critical"
+            ) && !top_findings.is_empty()
+            {
+                compact.with_top_findings(top_findings.iter().take(5).cloned().collect())
+            } else {
+                compact
+            }
+        })
+        .collect::<Vec<_>>();
+    result.details = Some(json!({
+        "lockfile_count": detail_or_zero(details, "lockfile_count"),
+        "vulnerable_package_count": detail_or_zero(details, "vulnerable_package_count"),
+        "vulnerability_count": detail_or_zero(details, "vulnerability_count"),
+        "high_or_critical_count": detail_or_zero(details, "high_or_critical_count"),
+        "finding_count": finding_count,
+        "non_pass_count": non_pass.len(),
+    }));
+    if non_pass.is_empty() {
+        non_pass.push(Finding::new(
+            "pass",
+            "osv-lockfile-audit.status-only",
+            "OSV lockfile audit passed; no non-pass findings.".to_string(),
+        ));
+    }
+    result.findings = non_pass;
+}
+
+#[derive(Debug, PartialEq)]
+struct OsvSummary {
+    vulnerable_package_count: u64,
+    vulnerability_count: u64,
+    high_or_critical_count: u64,
+    top_findings: Vec<Value>,
+}
+
+fn summarize_osv_payload(payload: &Value, repo_root: &Path) -> OsvSummary {
+    let mut summary = OsvSummary {
+        vulnerable_package_count: 0,
+        vulnerability_count: 0,
+        high_or_critical_count: 0,
+        top_findings: Vec::new(),
+    };
+    let results = payload
+        .get("results")
+        .and_then(Value::as_array)
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    for result in results.iter().filter_map(Value::as_object) {
+        let path = result
+            .get("source")
+            .and_then(Value::as_object)
+            .and_then(|source| source.get("path"))
+            .and_then(Value::as_str)
+            .map(|path| compact_tool_path(path, repo_root))
+            .unwrap_or_default();
+        let packages = result
+            .get("packages")
+            .and_then(Value::as_array)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        for package_row in packages.iter().filter_map(Value::as_object) {
+            let vulnerabilities = package_row
+                .get("vulnerabilities")
+                .and_then(Value::as_array)
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            if vulnerabilities.is_empty() {
+                continue;
+            }
+            summary.vulnerable_package_count += 1;
+            let package = package_row.get("package").and_then(Value::as_object);
+            let ecosystem = string_field(package, "ecosystem", "unknown");
+            let name = string_field(package, "name", "unknown");
+            let version = string_field(package, "version", "");
+            for vulnerability in vulnerabilities.iter().filter_map(Value::as_object) {
+                summary.vulnerability_count += 1;
+                let severity = osv_severity(vulnerability);
+                let high = matches!(severity.as_str(), "high" | "critical");
+                if high {
+                    summary.high_or_critical_count += 1;
+                }
+                if summary.top_findings.len() < 5 {
+                    summary.top_findings.push(json!({
+                        "status": if high { "fail" } else { "warn" },
+                        "check": "osv-lockfile-audit.vulnerability",
+                        "package": name,
+                        "ecosystem": ecosystem,
+                        "version": version,
+                        "severity": severity,
+                        "advisory": vulnerability
+                            .get("id")
+                            .and_then(Value::as_str)
+                            .unwrap_or("unknown"),
+                        "path": path,
+                    }));
+                }
+            }
+        }
+    }
+    summary
+}
+
+fn osv_severity(vulnerability: &serde_json::Map<String, Value>) -> String {
+    if let Some(severity) = vulnerability
+        .get("database_specific")
+        .and_then(Value::as_object)
+        .and_then(|specific| specific.get("severity"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|severity| !severity.is_empty())
+    {
+        return severity.to_lowercase();
+    }
+    vulnerability
+        .get("severity")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .filter_map(|row| row.get("score"))
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .find(|score| !score.is_empty())
+        .map(str::to_lowercase)
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn string_field(
+    object: Option<&serde_json::Map<String, Value>>,
+    key: &str,
+    default: &str,
+) -> String {
+    object
+        .and_then(|object| object.get(key))
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(default)
+        .to_string()
 }
 
 fn command_native_api_semgrep_audit_with(
@@ -276,7 +655,7 @@ fn semgrep_top_findings(repo_root: &Path, results: &[Value]) -> Vec<Value> {
             json!({
                 "status": "fail",
                 "check": item.get("check_id").and_then(Value::as_str).unwrap_or("unknown"),
-                "path": compact_semgrep_path(
+                "path": compact_tool_path(
                     item.get("path").and_then(Value::as_str).unwrap_or(""),
                     repo_root,
                 ),
@@ -293,7 +672,7 @@ fn semgrep_top_findings(repo_root: &Path, results: &[Value]) -> Vec<Value> {
         .collect()
 }
 
-fn compact_semgrep_path(path: &str, repo_root: &Path) -> String {
+fn compact_tool_path(path: &str, repo_root: &Path) -> String {
     if path.is_empty() {
         return String::new();
     }
@@ -788,9 +1167,30 @@ mod tests {
     fn semgrep_paths_are_repository_relative() {
         let root = Path::new("/tmp/TurboVAS");
         assert_eq!(
-            compact_semgrep_path("/tmp/TurboVAS/services/turbovas-api/src/main.rs", root),
+            compact_tool_path("/tmp/TurboVAS/services/turbovas-api/src/main.rs", root),
             "services/turbovas-api/src/main.rs"
         );
-        assert_eq!(compact_semgrep_path("relative.rs", root), "relative.rs");
+        assert_eq!(compact_tool_path("relative.rs", root), "relative.rs");
+    }
+
+    #[test]
+    fn summarizes_osv_severity_and_packages() {
+        let payload = json!({
+            "results": [{
+                "source": {"path": "/repo/TurboVAS/Cargo.lock"},
+                "packages": [{
+                    "package": {"ecosystem": "crates.io", "name": "example", "version": "1"},
+                    "vulnerabilities": [
+                        {"id": "GHSA-high", "database_specific": {"severity": "HIGH"}},
+                        {"id": "RUSTSEC-low", "severity": [{"score": "CVSS:3.1/AV:L"}]},
+                    ],
+                }],
+            }],
+        });
+        let summary = summarize_osv_payload(&payload, Path::new("/repo/TurboVAS"));
+        assert_eq!(summary.vulnerable_package_count, 1);
+        assert_eq!(summary.vulnerability_count, 2);
+        assert_eq!(summary.high_or_critical_count, 1);
+        assert_eq!(summary.top_findings[0]["status"], "fail");
     }
 }

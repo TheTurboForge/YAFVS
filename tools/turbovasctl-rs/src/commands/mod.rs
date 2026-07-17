@@ -9,6 +9,7 @@ mod path_coupling;
 mod quality_gate;
 mod repository;
 mod rust_migration;
+mod security_policy;
 
 pub use audit::{
     command_gsa_npm_audit, command_native_api_cargo_audit, command_native_api_semgrep_audit,
@@ -20,3 +21,4 @@ pub use path_coupling::command_path_coupling_state;
 pub use quality_gate::command_quality_gate_state;
 pub use repository::{command_inventory, command_status, find_repo_root};
 pub use rust_migration::command_rust_migration_state;
+pub use security_policy::command_security_policy_check;

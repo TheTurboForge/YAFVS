@@ -47,6 +47,8 @@ pub enum CliCommand {
     NativeApiSemgrepAudit,
     /// Audit supported lockfiles with the local OSV database.
     OsvLockfileAudit,
+    /// Validate security-sensitive path policy scaffolding.
+    SecurityPolicyCheck,
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>

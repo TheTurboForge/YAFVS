@@ -13,9 +13,10 @@ components recorded in `../UPSTREAMS.md`; organizations looking for official
 Greenbone/OpenVAS products, support, or services should contact Greenbone
 directly at https://www.greenbone.net/.
 
-TurboVAS is currently in private development. This manual describes the current
-development runtime and implemented operator workflows. It is not production
-deployment guidance.
+TurboVAS is currently in active alpha development. This manual describes the
+current development runtime and implemented operator workflows. It is not
+production deployment guidance. See `CLI_REFERENCE.md` for the grouped command
+surface and command-specific safety notes.
 
 ## Operator Access And Security Boundary
 

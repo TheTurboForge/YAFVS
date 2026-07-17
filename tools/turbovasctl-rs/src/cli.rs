@@ -108,6 +108,12 @@ pub enum CliCommand {
         #[arg(long, conflicts_with_all = ["install", "status"])]
         disable: bool,
     },
+    /// Inspect or rotate the opt-in direct native API runtime bearer token.
+    RuntimeNativeApiDirectToken {
+        /// Rotate the ignored runtime token without printing it.
+        #[arg(long)]
+        rotate: bool,
+    },
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>

@@ -6,6 +6,7 @@ mod branding;
 mod common;
 mod compose;
 mod deps;
+mod direct_token;
 mod doctor;
 mod feed;
 mod license;
@@ -15,6 +16,7 @@ mod quality_schedule;
 mod repository;
 mod runtime;
 mod rust_migration;
+mod secret;
 mod security_policy;
 
 pub use audit::{
@@ -23,6 +25,7 @@ pub use audit::{
 };
 pub use branding::command_branding_state;
 pub use deps::command_deps;
+pub use direct_token::command_runtime_native_api_direct_token;
 pub use doctor::command_doctor;
 pub use feed::{
     command_feed_copy_to_runtime, command_feed_state, command_runtime_feed_import_init,

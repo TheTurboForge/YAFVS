@@ -1385,6 +1385,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["logs", "definitely-invalid", "--lines", "1", "--json"],
                 ["logs", "--service", "definitely-invalid", "--lines", "1", "--json"],
                 ["quality-gate-schedule", "--install", "--json"],
+                ["runtime-native-api-direct-token", "--json"],
             ),
             human_inventory=True,
         )

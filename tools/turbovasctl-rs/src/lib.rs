@@ -16,8 +16,9 @@ pub use commands::{
     command_feed_state, command_gsa_npm_audit, command_inventory, command_license_report,
     command_logs, command_native_api_cargo_audit, command_native_api_semgrep_audit,
     command_osv_lockfile_audit, command_path_coupling_state, command_quality_gate_schedule,
-    command_quality_gate_state, command_runtime_feed_import_init, command_runtime_plan,
-    command_rust_migration_state, command_security_policy_check, command_status, find_repo_root,
+    command_quality_gate_state, command_runtime_feed_import_init,
+    command_runtime_native_api_direct_token, command_runtime_plan, command_rust_migration_state,
+    command_security_policy_check, command_status, find_repo_root,
 };
 pub use render::{render_human, render_json};
 pub use result::{ResultEnvelope, exit_code};
@@ -84,6 +85,9 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
                 "status"
             },
         ),
+        CliCommand::RuntimeNativeApiDirectToken { rotate } => {
+            command_runtime_native_api_direct_token(&repo_root, *rotate)
+        }
     }
 }
 

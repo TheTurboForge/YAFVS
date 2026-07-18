@@ -1152,10 +1152,17 @@ class TurboVASCtlTests(unittest.TestCase):
                 )
             for arguments, expected_exit_code, expected_status in rust_only_contracts:
                 env = feed_generation_env.copy()
+                if arguments[0] == "quality-gate-schedule":
+                    env.pop("TURBOVAS_ENABLE_QUALITY_GATE_SCHEDULE", None)
                 if arguments[0] in {"runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot"}:
                     env["COMPOSE_PROJECT_NAME"] = "turbovasctl-parity-no-runtime"
                 rust_result = invoke(rust_command, arguments, env=env)
-                self.assertEqual(rust_result.returncode, expected_exit_code, arguments)
+                expected_exit_codes = (
+                    expected_exit_code
+                    if isinstance(expected_exit_code, tuple)
+                    else (expected_exit_code,)
+                )
+                self.assertIn(rust_result.returncode, expected_exit_codes, arguments)
                 payload = normalized_json(rust_result)
                 expected_statuses = (
                     expected_status
@@ -1205,7 +1212,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["quality-gate-state", "--json"],
                 ["quality-gate-state", "--status-only", "--json"],
                 ["feed-state", "--json"],
-                ["quality-gate-schedule", "--install", "--json"],
                 ["runtime-native-api-direct-token", "--json"],
                 ["license-report", "--json"],
                 ["license-report", "--status-only", "--json"],
@@ -1215,8 +1221,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["license-report", "--modified-imported-only", "--diff-scope", "staged", "--json"],
                 ["doctor", "--json"],
                 ["doctor", "--status-only", "--json"],
-                ["quality-gate-schedule", "--json"],
-                ["quality-gate-schedule", "--status", "--json"],
             ),
             rust_only_contracts=(
                 (["status", "--json"], 0, ("pass", "warn")),
@@ -1232,6 +1236,9 @@ class TurboVASCtlTests(unittest.TestCase):
                 (["logs", "--lines", "0", "--json"], 1, "fail"),
                 (["logs", "definitely-invalid", "--lines", "1", "--json"], 0, "pass"),
                 (["logs", "--service", "definitely-invalid", "--lines", "1", "--json"], 0, "pass"),
+                (["quality-gate-schedule", "--json"], (0, 1), ("pass", "warn", "fail")),
+                (["quality-gate-schedule", "--status", "--json"], (0, 1), ("pass", "warn", "fail")),
+                (["quality-gate-schedule", "--install", "--json"], 1, "fail"),
                 (["feed-generation-state", "--json"], 0, "warn"),
                 (["feed-generation-state", "--status-only", "--json"], 0, "warn"),
                 (["feed-generation-stage", "--json"], 1, "fail"),
@@ -2367,7 +2374,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "quality-gate-schedule"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2454,14 +2461,13 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_production_posture_check", source)
         self.assertIn("def command_quality_gate", source)
         self.assertIn("def command_quality_gate_state", source)
-        self.assertIn("def command_quality_gate_schedule", source)
         self.assertNotIn("Use: just native-api-request -- --json --path '/api/v1/...';", justfile)
 
     def test_rust_only_foundation_commands_have_no_python_ownership(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "quality-gate-schedule"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotIn(f"def command_{command.replace('-', '_')}", source)
@@ -2815,17 +2821,6 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertEqual(length, 4)
         self.assertEqual(path, "/api/v1/scope-reports?page_size=1&filter=xxxx")
-
-    def test_quality_gate_schedule_install_requires_explicit_machine_opt_in(self):
-        root = Path(__file__).resolve().parents[2]
-        with unittest.mock.patch.dict(os.environ, {}, clear=True):
-            with unittest.mock.patch.object(turbovasctl, "systemctl_user") as systemctl:
-                result = turbovasctl.command_quality_gate_schedule(root, "install")
-
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(result["findings"][0]["check"], "quality-gate-schedule.opt-in")
-        self.assertIn(turbovasctl.QUALITY_GATE_SCHEDULE_ENABLE_ENV, result["findings"][0]["message"])
-        systemctl.assert_not_called()
 
     def test_native_tooling_state_classifies_dependency_surfaces(self):
         root = Path(__file__).resolve().parents[2]

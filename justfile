@@ -357,7 +357,7 @@ quality-gate-state *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl quality-gate-state "$@"
 
 quality-gate-schedule *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl quality-gate-schedule "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- quality-gate-schedule "$@"
 
 gvmd-smoke *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl gvmd-smoke "$@"

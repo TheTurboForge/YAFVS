@@ -503,6 +503,7 @@ mod tests {
             "runtime-performance-snapshot",
             "runtime-redis-state",
             "c-hardening-check",
+            "quality-gate-schedule",
         ] {
             let recipe = justfile
                 .split_once(&format!("{command} *args:\n"))

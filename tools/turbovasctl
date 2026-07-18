@@ -412,8 +412,6 @@ GSA_OPERATION_LOCK = "gsa-quality"
 RUNTIME_MANAGER_LOCK = "runtime-manager"
 FEED_ACTIVATION_LOCK = "feed-generation-activation"
 DEFAULT_RUNTIME_LOCK_TIMEOUT_SECONDS = 1800
-QUALITY_GATE_SYSTEMD_UNITS = ("turbovas-quality-gate.service", "turbovas-quality-gate.timer")
-QUALITY_GATE_TIMER_NAME = "turbovas-quality-gate.timer"
 NATIVE_TOOLING_CATEGORIES = (
     "required_runtime",
     "required_test",
@@ -2286,7 +2284,6 @@ ALERT_FORBIDDEN_PAYLOAD_KEYS = frozenset(
         "sha256_fingerprint",
     }
 )
-QUALITY_GATE_SCHEDULE_ENABLE_ENV = "TURBOVAS_ENABLE_QUALITY_GATE_SCHEDULE"
 QUALITY_GATE_SERVICE_NAME = "turbovas-quality-gate.service"
 LOG_REVIEW_PATTERNS: tuple[tuple[str, str, str, str], ...] = (
     ("fail", "nmap-root-privilege", r"requires root privileges|requires root|raw scans require root privileges", "Nmap/root-privilege warning found."),
@@ -5700,90 +5697,6 @@ def runtime_native_api_rebuild_env(repo_root: Path) -> dict[str, str]:
     if native_api_direct_requested(env):
         ensure_native_api_direct_runtime_env_defaults(repo_root, env)
     return env
-
-
-def systemd_user_env() -> dict[str, str]:
-    env = os.environ.copy()
-    env.setdefault("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
-    return env
-
-
-def systemd_user_unit_dir() -> Path:
-    return Path.home() / ".config" / "systemd" / "user"
-
-
-def systemd_template_dir(repo_root: Path) -> Path:
-    return repo_root / "ops" / "systemd"
-
-
-def quality_gate_log_dir(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "logs", "quality-gate")
-
-
-def systemctl_user(repo_root: Path, *args: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
-    return run_command(["systemctl", "--user", *args], repo_root, env=systemd_user_env(), timeout=timeout)
-
-
-def systemd_show_properties(output: str) -> dict[str, str]:
-    properties: dict[str, str] = {}
-    for line in output.splitlines():
-        if "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        properties[key] = value
-    return properties
-
-
-def render_quality_gate_systemd_unit(repo_root: Path, unit_name: str) -> str:
-    template = systemd_template_dir(repo_root) / f"{unit_name}.in"
-    text = template.read_text(encoding="utf-8")
-    replacements = {
-        "@REPO_ROOT@": str(repo_root),
-        "@PYTHON@": sys.executable,
-        "@RUNTIME_DIR@": str(runtime_dir(repo_root)),
-        "@QUALITY_GATE_LOG_DIR@": str(quality_gate_log_dir(repo_root)),
-    }
-    for key, value in replacements.items():
-        text = text.replace(key, value)
-    return text
-
-
-def quality_gate_schedule_status_details(repo_root: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    findings: list[dict[str, Any]] = []
-    unit_dir = systemd_user_unit_dir()
-    details: dict[str, Any] = {
-        "host": socket.gethostname(),
-        "user": os.environ.get("USER") or Path.home().name,
-        "unit_dir": str(unit_dir),
-        "units": {},
-    }
-    systemd = systemctl_user(repo_root, "status", timeout=30)
-    details["systemd_user_available"] = systemd.returncode == 0
-    findings.append(process_step_finding("pass" if systemd.returncode == 0 else "fail", "quality-gate-schedule.systemd-user", f"systemctl --user status exit code {systemd.returncode}.", systemd, ["systemctl", "--user", "status"]))
-
-    for unit in QUALITY_GATE_SYSTEMD_UNITS:
-        path = unit_dir / unit
-        unit_details: dict[str, Any] = {"path": str(path), "exists": path.is_file()}
-        if path.is_file():
-            findings.append(finding("pass", "quality-gate-schedule.unit-file", f"{unit} is installed in the user unit directory.", str(path)))
-        else:
-            findings.append(finding("warn", "quality-gate-schedule.unit-file", f"{unit} is not installed in the user unit directory.", str(path)))
-        show = systemctl_user(repo_root, "show", unit, "--property=LoadState,UnitFileState,ActiveState,SubState,NextElapseUSecRealtime,LastTriggerUSecRealtime", timeout=30)
-        unit_details["systemctl_show_exit_code"] = show.returncode
-        properties = systemd_show_properties(show.stdout) if show.returncode == 0 else {}
-        unit_details["properties"] = properties
-        if show.returncode == 0 and properties.get("ActiveState") == "failed":
-            findings.append(finding("fail", "quality-gate-schedule.unit-state", f"{unit} is in failed state.", str(path), details=properties))
-        details["units"][unit] = unit_details
-
-    enabled = systemctl_user(repo_root, "is-enabled", QUALITY_GATE_TIMER_NAME, timeout=30)
-    active = systemctl_user(repo_root, "is-active", QUALITY_GATE_TIMER_NAME, timeout=30)
-    details["timer_enabled"] = enabled.stdout.strip()
-    details["timer_active"] = active.stdout.strip()
-    if (unit_dir / QUALITY_GATE_TIMER_NAME).is_file():
-        findings.append(process_step_finding("pass" if enabled.returncode == 0 else "warn", "quality-gate-schedule.enabled", f"{QUALITY_GATE_TIMER_NAME} enablement is {enabled.stdout.strip() or 'unknown'}.", enabled, ["systemctl", "--user", "is-enabled", QUALITY_GATE_TIMER_NAME]))
-        findings.append(process_step_finding("pass" if active.returncode == 0 else "warn", "quality-gate-schedule.active", f"{QUALITY_GATE_TIMER_NAME} activity is {active.stdout.strip() or 'unknown'}.", active, ["systemctl", "--user", "is-active", QUALITY_GATE_TIMER_NAME]))
-    return findings, details
 
 
 def compose_file(repo_root: Path) -> Path:
@@ -32227,53 +32140,6 @@ def command_quality_gate_state(repo_root: Path, status_only: bool = False) -> di
     return result
 
 
-def command_quality_gate_schedule(repo_root: Path, action: str) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    details: dict[str, Any] = {"action": action, "host": socket.gethostname(), "user": os.environ.get("USER") or Path.home().name}
-    if action == "install":
-        if os.environ.get(QUALITY_GATE_SCHEDULE_ENABLE_ENV) != "1":
-            findings.append(
-                finding(
-                    "fail",
-                    "quality-gate-schedule.opt-in",
-                    f"Quality gate timer installation requires {QUALITY_GATE_SCHEDULE_ENABLE_ENV}=1.",
-                )
-            )
-            return make_result("quality-gate-schedule", repo_root, "Quality gate schedule installation refused without explicit host opt-in.", findings)
-        systemd = systemctl_user(repo_root, "status", timeout=30)
-        if systemd.returncode != 0:
-            findings.append(process_step_finding("fail", "quality-gate-schedule.systemd-user", "User-level systemd is unavailable; refusing to fall back to cron.", systemd, ["systemctl", "--user", "status"]))
-            result = make_result("quality-gate-schedule", repo_root, "Quality gate schedule installation blocked because user-level systemd is unavailable.", findings)
-            result["details"] = details
-            return result
-        unit_dir = systemd_user_unit_dir()
-        unit_dir.mkdir(parents=True, exist_ok=True)
-        quality_gate_log_dir(repo_root).mkdir(parents=True, exist_ok=True)
-        for unit in QUALITY_GATE_SYSTEMD_UNITS:
-            target = unit_dir / unit
-            target.write_text(render_quality_gate_systemd_unit(repo_root, unit), encoding="utf-8")
-            findings.append(finding("pass", "quality-gate-schedule.unit-written", f"Wrote {unit} user unit.", str(target)))
-        reload_result = systemctl_user(repo_root, "daemon-reload", timeout=60)
-        findings.append(process_step_finding("pass" if reload_result.returncode == 0 else "fail", "quality-gate-schedule.daemon-reload", f"systemctl --user daemon-reload exit code {reload_result.returncode}.", reload_result, ["systemctl", "--user", "daemon-reload"]))
-        enable = systemctl_user(repo_root, "enable", "--now", QUALITY_GATE_TIMER_NAME, timeout=60)
-        findings.append(process_step_finding("pass" if enable.returncode == 0 else "fail", "quality-gate-schedule.enable", f"Enabled {QUALITY_GATE_TIMER_NAME} with exit code {enable.returncode}.", enable, ["systemctl", "--user", "enable", "--now", QUALITY_GATE_TIMER_NAME]))
-    elif action == "disable":
-        disable = systemctl_user(repo_root, "disable", "--now", QUALITY_GATE_TIMER_NAME, timeout=60)
-        status = "pass" if disable.returncode == 0 else "warn"
-        findings.append(process_step_finding(status, "quality-gate-schedule.disable", f"Disabled {QUALITY_GATE_TIMER_NAME} with exit code {disable.returncode}.", disable, ["systemctl", "--user", "disable", "--now", QUALITY_GATE_TIMER_NAME]))
-    elif action != "status":
-        findings.append(finding("fail", "quality-gate-schedule.action", f"Unknown schedule action {action}."))
-        return make_result("quality-gate-schedule", repo_root, "Unknown quality gate schedule action.", findings)
-
-    status_findings, status_details = quality_gate_schedule_status_details(repo_root)
-    findings.extend(status_findings)
-    details["status"] = status_details
-    summary = "Quality gate schedule status collected." if action == "status" else f"Quality gate schedule {action} completed."
-    result = make_result("quality-gate-schedule", repo_root, summary, findings, [str(systemd_user_unit_dir() / unit) for unit in QUALITY_GATE_SYSTEMD_UNITS])
-    result["details"] = details
-    return result
-
-
 def print_human(result: dict[str, Any]) -> None:
     print(f"{result['status'].upper()}: {result['summary']}")
     for item in result["findings"]:
@@ -32571,11 +32437,6 @@ def build_parser() -> argparse.ArgumentParser:
     quality_gate.add_argument("--runtime", action="store_true", help="include runtime-safe status/log/data diagnostics")
     quality_gate_state = subparsers.add_parser("quality-gate-state", parents=[common], help="show retained local quality gate history")
     quality_gate_state.add_argument("--status-only", action="store_true", help="emit latest status/counts and only non-pass findings for chat-safe closeout checks")
-    quality_gate_schedule = subparsers.add_parser("quality-gate-schedule", parents=[common], help="install, inspect, or disable the server-side quality gate timer")
-    schedule_actions = quality_gate_schedule.add_mutually_exclusive_group()
-    schedule_actions.add_argument("--install", action="store_true", help="install and enable the turboforge user systemd timer")
-    schedule_actions.add_argument("--status", action="store_true", help="show quality gate timer status")
-    schedule_actions.add_argument("--disable", action="store_true", help="disable the turboforge user systemd timer")
     subparsers.add_parser("gvmd-smoke", parents=[common], help="run a narrow gvmd runtime profile smoke")
     return parser
 
@@ -32946,9 +32807,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_quality_gate(repo_root, include_runtime=args.runtime)
     elif args.command == "quality-gate-state":
         result = command_quality_gate_state(repo_root, status_only=args.status_only)
-    elif args.command == "quality-gate-schedule":
-        action = "install" if args.install else "disable" if args.disable else "status"
-        result = command_quality_gate_schedule(repo_root, action)
     elif args.command == "gvmd-smoke":
         result = command_gvmd_smoke(repo_root)
     else:

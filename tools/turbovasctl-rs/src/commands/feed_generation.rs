@@ -31,6 +31,7 @@ use super::runtime_lock::{
 };
 use crate::process::SystemCommandRunner;
 use crate::result::{Finding, ResultEnvelope, make_result};
+use database::DatabaseAttestationAdapter;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -80,6 +81,151 @@ pub fn command_feed_generation_activate(
 
 pub fn command_feed_generation_rollback(repo_root: &Path, generation_id: &str) -> ResultEnvelope {
     activation::command(repo_root, generation_id, true, false, false)
+}
+
+/// Verify the selected immutable feed generation against the private activation
+/// journal and, unless requested otherwise, the PostgreSQL import attestation.
+pub fn command_feed_generation_runtime_guard(
+    repo_root: &Path,
+    selector_only: bool,
+) -> ResultEnvelope {
+    let runtime = runtime_dir(repo_root);
+    let finding = active_feed_generation_runtime_guard_finding(
+        &runtime,
+        selector::read_current_generation(&runtime, &Limits::default()),
+        journal::read_activation_state(&runtime),
+        selector_only,
+        || {
+            DatabaseAttestationAdapter::new(repo_root, &SystemCommandRunner)
+                .read()
+                .map(|attestation| attestation.map(|value| value.generation_id().to_owned()))
+        },
+    );
+    make_result(
+        metadata(
+            repo_root,
+            "feed-generation-runtime-guard",
+            &SystemCommandRunner,
+        ),
+        "Active feed generation runtime guard completed.".into(),
+        vec![finding],
+    )
+}
+
+fn active_feed_generation_runtime_guard_finding<F>(
+    runtime: &Path,
+    selector: Result<Option<Value>, String>,
+    journal_state: Result<Option<Value>, String>,
+    selector_only: bool,
+    read_database: F,
+) -> Finding
+where
+    F: FnOnce() -> Result<Option<String>, String>,
+{
+    let selector_journal =
+        active_feed_generation_selector_journal_finding(runtime, selector, journal_state);
+    if selector_only {
+        return selector_journal;
+    }
+    if selector_journal.status != "pass" {
+        let mut finding = Finding::new("fail", "feed-generation.current", selector_journal.message)
+            .with_path(selector_journal.path.as_deref().unwrap_or_default());
+        if let Some(details) = selector_journal.details {
+            finding = finding.with_details(details);
+        }
+        return finding;
+    }
+    let mut details = selector_journal.details.unwrap_or_else(|| json!({}));
+    match read_database() {
+        Err(error) => Finding::new(
+            "fail",
+            "feed-generation.current",
+            format!("Active feed generation database attestation failed closed: {error}"),
+        )
+        .with_path(
+            &journal::activation_state_path(runtime)
+                .display()
+                .to_string(),
+        )
+        .with_details(details),
+        Ok(database_generation_id) => {
+            let database = database_generation_id
+                .map(Value::String)
+                .unwrap_or(Value::Null);
+            let valid = details["selector_generation_id"] == database;
+            details["database_generation_id"] = database;
+            Finding::new(
+                if valid { "pass" } else { "fail" },
+                "feed-generation.current",
+                if valid {
+                    "Active feed selector, completed import journal, and database attestation agree."
+                        .into()
+                } else {
+                    "No completed feed activation and database attestation match the current selector; recover or explicitly re-import the verified generation before starting app services."
+                        .into()
+                },
+            )
+            .with_path(&journal::activation_state_path(runtime).display().to_string())
+            .with_details(details)
+        }
+    }
+}
+
+fn active_feed_generation_selector_journal_finding(
+    runtime: &Path,
+    selector: Result<Option<Value>, String>,
+    journal_state: Result<Option<Value>, String>,
+) -> Finding {
+    let path = journal::activation_state_path(runtime)
+        .display()
+        .to_string();
+    let (current, state) = match (selector, journal_state) {
+        (Ok(current), Ok(state)) => (current, state),
+        (Err(error), _) | (_, Err(error)) => {
+            return Finding::new(
+                "fail",
+                "feed-generation.selector-journal",
+                format!("Active feed selector or completed import journal failed closed: {error}"),
+            )
+            .with_path(&path);
+        }
+    };
+    let selector_generation_id = current
+        .as_ref()
+        .and_then(|value| value.get("generation_id"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    let journal_status = state
+        .as_ref()
+        .and_then(|value| value.get("status"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    let journal_generation_id = if journal_status == Value::String("active".into()) {
+        state
+            .as_ref()
+            .and_then(|value| value.get("current_generation_id"))
+            .cloned()
+            .unwrap_or(Value::Null)
+    } else {
+        Value::Null
+    };
+    let valid =
+        !selector_generation_id.is_null() && selector_generation_id == journal_generation_id;
+    Finding::new(
+        if valid { "pass" } else { "fail" },
+        "feed-generation.selector-journal",
+        if valid {
+            "Active feed selector and completed import journal agree.".into()
+        } else {
+            "No completed feed activation journal matches the current selector; recover before starting app services.".into()
+        },
+    )
+    .with_path(&path)
+    .with_details(json!({
+        "selector_generation_id": selector_generation_id,
+        "journal_generation_id": journal_generation_id,
+        "journal_status": journal_status,
+    }))
 }
 
 fn command_feed_generation_stage_with_timeout(
@@ -1726,6 +1872,135 @@ mod tests {
         ));
         fs::create_dir(&root).unwrap();
         root
+    }
+
+    fn selected_generation(generation_id: &str) -> Value {
+        json!({"generation_id": generation_id, "verified": true})
+    }
+
+    fn active_journal(generation_id: &str) -> Value {
+        json!({
+            "schema_version": 1,
+            "status": "active",
+            "current_generation_id": generation_id,
+            "target_generation_id": null,
+            "previous_generation_id": null,
+            "rollback_generation_id": null,
+        })
+    }
+
+    #[test]
+    fn runtime_guard_selector_only_skips_database() {
+        let runtime = fixture("runtime-guard-selector-only");
+        let generation_id = "a".repeat(64);
+        let finding = active_feed_generation_runtime_guard_finding(
+            &runtime,
+            Ok(Some(selected_generation(&generation_id))),
+            Ok(Some(active_journal(&generation_id))),
+            true,
+            || panic!("selector-only guard must not read PostgreSQL"),
+        );
+
+        assert_eq!(finding.status, "pass");
+        assert_eq!(finding.check, "feed-generation.selector-journal");
+        assert_eq!(
+            finding.details.unwrap()["selector_generation_id"],
+            generation_id
+        );
+        fs::remove_dir_all(runtime).unwrap();
+    }
+
+    #[test]
+    fn runtime_guard_rejects_interrupted_journal() {
+        let runtime = fixture("runtime-guard-transitioning");
+        let generation_id = "a".repeat(64);
+        let finding = active_feed_generation_runtime_guard_finding(
+            &runtime,
+            Ok(Some(selected_generation(&generation_id))),
+            Ok(Some(json!({
+                "status": "transitioning",
+                "current_generation_id": null,
+                "target_generation_id": generation_id,
+            }))),
+            true,
+            || panic!("selector-only guard must not read PostgreSQL"),
+        );
+
+        assert_eq!(finding.status, "fail");
+        assert_eq!(finding.check, "feed-generation.selector-journal");
+        assert!(
+            finding
+                .message
+                .contains("No completed feed activation journal")
+        );
+        fs::remove_dir_all(runtime).unwrap();
+    }
+
+    #[test]
+    fn runtime_guard_propagates_selector_failure_without_database_read() {
+        let runtime = fixture("runtime-guard-selector-failure");
+        let finding = active_feed_generation_runtime_guard_finding(
+            &runtime,
+            Err("selector changed while verifying".into()),
+            Ok(None),
+            false,
+            || panic!("failed selector/journal guard must not read PostgreSQL"),
+        );
+
+        assert_eq!(finding.status, "fail");
+        assert_eq!(finding.check, "feed-generation.current");
+        assert!(finding.message.contains("failed closed"));
+        assert!(finding.message.contains("selector changed while verifying"));
+        fs::remove_dir_all(runtime).unwrap();
+    }
+
+    #[test]
+    fn runtime_guard_requires_matching_database_attestation() {
+        let runtime = fixture("runtime-guard-database");
+        let generation_id = "a".repeat(64);
+        let invoke = |database_generation_id: Option<String>| {
+            active_feed_generation_runtime_guard_finding(
+                &runtime,
+                Ok(Some(selected_generation(&generation_id))),
+                Ok(Some(active_journal(&generation_id))),
+                false,
+                || Ok(database_generation_id),
+            )
+        };
+
+        assert_eq!(invoke(None).status, "fail");
+        assert_eq!(invoke(Some("b".repeat(64))).status, "fail");
+        let matching = invoke(Some(generation_id.clone()));
+        assert_eq!(matching.status, "pass");
+        assert_eq!(matching.check, "feed-generation.current");
+        assert_eq!(
+            matching.details.unwrap()["database_generation_id"],
+            generation_id
+        );
+        fs::remove_dir_all(runtime).unwrap();
+    }
+
+    #[test]
+    fn runtime_guard_fails_closed_when_database_is_unavailable() {
+        let runtime = fixture("runtime-guard-database-error");
+        let generation_id = "a".repeat(64);
+        let finding = active_feed_generation_runtime_guard_finding(
+            &runtime,
+            Ok(Some(selected_generation(&generation_id))),
+            Ok(Some(active_journal(&generation_id))),
+            false,
+            || Err("malformed attestation".into()),
+        );
+
+        assert_eq!(finding.status, "fail");
+        assert_eq!(finding.check, "feed-generation.current");
+        assert!(
+            finding
+                .message
+                .contains("database attestation failed closed")
+        );
+        assert!(finding.message.contains("malformed attestation"));
+        fs::remove_dir_all(runtime).unwrap();
     }
     fn private(path: &Path) {
         fs::set_permissions(path, fs::Permissions::from_mode(0o700)).unwrap();

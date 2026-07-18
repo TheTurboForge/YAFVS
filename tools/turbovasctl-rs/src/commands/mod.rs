@@ -34,7 +34,8 @@ pub use feed::{
 };
 pub use feed_generation::{
     command_feed_generation_activate, command_feed_generation_rollback,
-    command_feed_generation_stage, command_feed_generation_state,
+    command_feed_generation_runtime_guard, command_feed_generation_stage,
+    command_feed_generation_state,
 };
 pub use license::command_license_report;
 pub use path_coupling::command_path_coupling_state;

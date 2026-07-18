@@ -15765,85 +15765,106 @@ db2:keys=5,expires=0,avg_ttl=0
             self.assertIsNone(turbovasctl.read_feed_activation_state(root))
             self.assertFalse(path.parent.exists())
 
-    def test_active_feed_generation_requires_completed_matching_journal(self):
-        current = {"generation_id": "a" * 64, "verified": True}
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            with unittest.mock.patch.multiple(
+    def test_rust_feed_generation_runtime_guard_bridge_accepts_valid_envelopes(self):
+        for selector_only, status, returncode in (
+            (True, "pass", 0),
+            (False, "fail", 1),
+        ):
+            expected_check = (
+                "feed-generation.selector-journal"
+                if selector_only
+                else "feed-generation.current"
+            )
+            item = {
+                "status": status,
+                "check": expected_check,
+                "message": "guard result",
+                "details": {"selector_generation_id": "a" * 64},
+            }
+            payload = {
+                "status": status,
+                "findings": [item],
+                "metadata": {"command": "feed-generation-runtime-guard"},
+            }
+            with self.subTest(selector_only=selector_only, status=status), unittest.mock.patch.object(
                 turbovasctl,
-                read_current_generation=unittest.mock.Mock(return_value=current),
-                read_feed_activation_state=unittest.mock.Mock(
-                    return_value={
-                        "schema_version": 1,
-                        "status": "transitioning",
-                        "current_generation_id": None,
-                        "target_generation_id": "a" * 64,
-                        "previous_generation_id": None,
-                        "rollback_generation_id": None,
-                        "action": "activate",
+                "run_command",
+                return_value=subprocess.CompletedProcess(
+                    ["cargo"], returncode, json.dumps(payload), ""
+                ),
+            ) as run_command:
+                observed = turbovasctl.rust_feed_generation_runtime_guard_finding(
+                    Path("/tmp/TurboVAS"), selector_only=selector_only
+                )
+
+            self.assertEqual(observed, item)
+            arguments = run_command.call_args.args[0]
+            self.assertEqual(arguments[-1], "--json")
+            self.assertEqual("--selector-only" in arguments, selector_only)
+
+    def test_rust_feed_generation_runtime_guard_bridge_rejects_invalid_results(self):
+        valid_item = {
+            "status": "pass",
+            "check": "feed-generation.current",
+            "message": "guard result",
+        }
+        valid_payload = {
+            "status": "pass",
+            "findings": [valid_item],
+            "metadata": {"command": "feed-generation-runtime-guard"},
+        }
+        cases = {
+            "invalid-json": (0, "not-json"),
+            "wrong-metadata": (
+                0,
+                json.dumps({**valid_payload, "metadata": {"command": "status"}}),
+            ),
+            "wrong-check": (
+                0,
+                json.dumps(
+                    {
+                        **valid_payload,
+                        "findings": [{**valid_item, "check": "unexpected"}],
                     }
                 ),
-                read_feed_generation_db_attestation=unittest.mock.Mock(
-                    return_value={"generation_id": "a" * 64}
+            ),
+            "wrong-envelope-status": (
+                0,
+                json.dumps({**valid_payload, "status": "warn"}),
+            ),
+            "wrong-exit-code": (1, json.dumps(valid_payload)),
+            "multiple-findings": (
+                0,
+                json.dumps({**valid_payload, "findings": [valid_item, valid_item]}),
+            ),
+        }
+        for name, (returncode, stdout) in cases.items():
+            with self.subTest(name=name), unittest.mock.patch.object(
+                turbovasctl,
+                "run_command",
+                return_value=subprocess.CompletedProcess(
+                    ["cargo"], returncode, stdout, ""
                 ),
             ):
-                item = turbovasctl.active_feed_generation_finding(root)
-        self.assertEqual(item["status"], "fail")
-        self.assertIn("No completed feed activation", item["message"])
+                observed = turbovasctl.rust_feed_generation_runtime_guard_finding(
+                    Path("/tmp/TurboVAS"), selector_only=False
+                )
 
-    def test_active_feed_generation_requires_matching_database_attestation(self):
-        generation_id = "a" * 64
-        current = {"generation_id": generation_id, "verified": True}
-        state = {
-            "schema_version": 1,
-            "status": "active",
-            "current_generation_id": generation_id,
-            "target_generation_id": None,
-            "previous_generation_id": None,
-            "rollback_generation_id": None,
-        }
-        with unittest.mock.patch.multiple(
-            turbovasctl,
-            read_current_generation=unittest.mock.Mock(return_value=current),
-            read_feed_activation_state=unittest.mock.Mock(return_value=state),
-            read_feed_generation_db_attestation=unittest.mock.Mock(
-                return_value=None
-            ),
-        ):
-            missing = turbovasctl.active_feed_generation_finding(Path("/tmp"))
-        with unittest.mock.patch.multiple(
-            turbovasctl,
-            read_current_generation=unittest.mock.Mock(return_value=current),
-            read_feed_activation_state=unittest.mock.Mock(return_value=state),
-            read_feed_generation_db_attestation=unittest.mock.Mock(
-                return_value={"generation_id": "b" * 64}
-            ),
-        ):
-            mismatch = turbovasctl.active_feed_generation_finding(Path("/tmp"))
-        with unittest.mock.patch.multiple(
-            turbovasctl,
-            read_current_generation=unittest.mock.Mock(return_value=current),
-            read_feed_activation_state=unittest.mock.Mock(return_value=state),
-            read_feed_generation_db_attestation=unittest.mock.Mock(
-                side_effect=ValueError("malformed attestation")
-            ),
-        ):
-            malformed = turbovasctl.active_feed_generation_finding(Path("/tmp"))
-        with unittest.mock.patch.multiple(
-            turbovasctl,
-            read_current_generation=unittest.mock.Mock(return_value=current),
-            read_feed_activation_state=unittest.mock.Mock(return_value=state),
-            read_feed_generation_db_attestation=unittest.mock.Mock(
-                return_value={"generation_id": generation_id}
-            ),
-        ):
-            matching = turbovasctl.active_feed_generation_finding(Path("/tmp"))
+            self.assertEqual(observed["status"], "fail")
+            self.assertEqual(observed["check"], "feed-generation.current")
+            self.assertIn("failed closed", observed["message"])
 
-        self.assertEqual(missing["status"], "fail")
-        self.assertEqual(mismatch["status"], "fail")
-        self.assertEqual(malformed["status"], "fail")
-        self.assertEqual(matching["status"], "pass")
+    def test_rust_feed_generation_runtime_guard_bridge_handles_subprocess_failure(self):
+        with unittest.mock.patch.object(
+            turbovasctl, "run_command", side_effect=OSError("cargo unavailable")
+        ):
+            observed = turbovasctl.rust_feed_generation_runtime_guard_finding(
+                Path("/tmp/TurboVAS"), selector_only=True
+            )
+
+        self.assertEqual(observed["status"], "fail")
+        self.assertEqual(observed["check"], "feed-generation.selector-journal")
+        self.assertIn("failed closed", observed["message"])
 
 
     def test_app_feed_consumers_use_guarded_active_generation_mount(self):

@@ -39,6 +39,13 @@ pub enum CliCommand {
     FeedState,
     /// Verify immutable content-addressed feed generations without changing them.
     FeedGenerationState,
+    /// Verify that the selected feed generation, activation journal, and database attestation agree.
+    #[command(hide = true)]
+    FeedGenerationRuntimeGuard {
+        /// Verify only the selector and activation journal, without reading PostgreSQL.
+        #[arg(long)]
+        selector_only: bool,
+    },
     /// Stage and verify an immutable content-addressed feed generation.
     FeedGenerationStage,
     /// Activate a verified immutable feed generation.
@@ -146,6 +153,7 @@ impl CliCommand {
             Self::QualityGateState => "quality-gate-state",
             Self::FeedState => "feed-state",
             Self::FeedGenerationState => "feed-generation-state",
+            Self::FeedGenerationRuntimeGuard { .. } => "feed-generation-runtime-guard",
             Self::FeedGenerationStage => "feed-generation-stage",
             Self::FeedGenerationActivate { .. } => "feed-generation-activate",
             Self::FeedGenerationRollback { .. } => "feed-generation-rollback",
@@ -184,6 +192,33 @@ mod tests {
     use clap::CommandFactory;
     use std::fs;
     use std::path::Path;
+
+    #[test]
+    fn parses_feed_generation_runtime_guard() {
+        assert_eq!(
+            parse_cli(["feed-generation-runtime-guard", "--selector-only"]).unwrap(),
+            Cli {
+                command: CliCommand::FeedGenerationRuntimeGuard {
+                    selector_only: true,
+                },
+                json: false,
+                status_only: false,
+            }
+        );
+        assert_eq!(
+            CliCommand::FeedGenerationRuntimeGuard {
+                selector_only: false,
+            }
+            .name(),
+            "feed-generation-runtime-guard"
+        );
+        assert!(
+            Cli::command()
+                .find_subcommand("feed-generation-runtime-guard")
+                .unwrap()
+                .is_hide_set()
+        );
+    }
 
     #[test]
     fn parses_global_flags_before_or_after_subcommands() {
@@ -280,6 +315,7 @@ mod tests {
     fn public_docs_track_the_complete_rust_command_surface() {
         let command_names = Cli::command()
             .get_subcommands()
+            .filter(|command| command.get_name() != "feed-generation-runtime-guard")
             .map(|command| command.get_name().to_string())
             .collect::<Vec<_>>();
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");

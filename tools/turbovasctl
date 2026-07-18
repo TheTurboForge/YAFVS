@@ -3789,64 +3789,65 @@ def write_feed_generation_db_attestation(
 def active_feed_generation_selector_journal_finding(
     repo_root: Path,
 ) -> dict[str, Any]:
-    try:
-        state = read_feed_activation_state(repo_root)
-        current = read_current_generation(
-            runtime_dir(repo_root), FEED_RELEASE, feed_generation_specs()
-        )
-    except (FeedGenerationError, OSError, ValueError) as error:
-        return finding(
-            "fail",
-            "feed-generation.selector-journal",
-            f"Active feed selector or completed import journal failed closed: {error}",
-            str(feed_activation_state_path(repo_root)),
-        )
-    current_id = current.get("generation_id") if current else None
-    state_id = state.get("current_generation_id") if state and state.get("status") == "active" else None
-    valid = current_id is not None and current_id == state_id
-    return finding(
-        "pass" if valid else "fail",
-        "feed-generation.selector-journal",
-        "Active feed selector and completed import journal agree."
-        if valid
-        else "No completed feed activation journal matches the current selector; recover before starting app services.",
-        str(feed_activation_state_path(repo_root)),
-        {"selector_generation_id": current_id, "journal_generation_id": state_id, "journal_status": state.get("status") if state else None},
-    )
+    return rust_feed_generation_runtime_guard_finding(repo_root, selector_only=True)
 
 
 def active_feed_generation_finding(repo_root: Path) -> dict[str, Any]:
-    selector_journal = active_feed_generation_selector_journal_finding(repo_root)
-    if selector_journal["status"] != "pass":
-        return finding(
-            "fail",
-            "feed-generation.current",
-            selector_journal["message"],
-            selector_journal.get("subject"),
-            selector_journal.get("details"),
-        )
+    return rust_feed_generation_runtime_guard_finding(repo_root, selector_only=False)
+
+
+def rust_feed_generation_runtime_guard_finding(
+    repo_root: Path, *, selector_only: bool
+) -> dict[str, Any]:
+    expected_check = (
+        "feed-generation.selector-journal"
+        if selector_only
+        else "feed-generation.current"
+    )
+    arguments = ["feed-generation-runtime-guard"]
+    if selector_only:
+        arguments.append("--selector-only")
+    arguments.append("--json")
+    command = [
+        "cargo",
+        "run",
+        "--quiet",
+        "--locked",
+        "--target-dir",
+        str(repo_root / "build" / "turbovasctl-rs"),
+        "--manifest-path",
+        str(repo_root / TURBOVASCTL_RUST_CRATE / "Cargo.toml"),
+        "--",
+        *arguments,
+    ]
     try:
-        database = read_feed_generation_db_attestation(repo_root)
-    except (OSError, ValueError) as error:
-        return finding(
-            "fail",
-            "feed-generation.current",
-            f"Active feed generation database attestation failed closed: {error}",
-            str(feed_activation_state_path(repo_root)),
-            selector_journal.get("details"),
-        )
-    details = dict(selector_journal.get("details") or {})
-    database_id = database.get("generation_id") if database else None
-    details["database_generation_id"] = database_id
-    valid = database_id == details.get("selector_generation_id")
+        completed = run_command(command, repo_root, timeout=300)
+        payload = json.loads(completed.stdout)
+    except (OSError, json.JSONDecodeError):
+        completed = None
+        payload = None
+
+    findings = payload.get("findings") if isinstance(payload, dict) else None
+    metadata_block = payload.get("metadata") if isinstance(payload, dict) else None
+    item = findings[0] if isinstance(findings, list) and len(findings) == 1 else None
+    status = item.get("status") if isinstance(item, dict) else None
+    valid = (
+        completed is not None
+        and completed.returncode == (1 if status == "fail" else 0)
+        and status in {"pass", "fail"}
+        and isinstance(item.get("message"), str)
+        and item.get("check") == expected_check
+        and payload.get("status") == status
+        and isinstance(metadata_block, dict)
+        and metadata_block.get("command") == "feed-generation-runtime-guard"
+    )
+    if valid:
+        return dict(item)
     return finding(
-        "pass" if valid else "fail",
-        "feed-generation.current",
-        "Active feed selector, completed import journal, and database attestation agree."
-        if valid
-        else "No completed feed activation and database attestation match the current selector; recover or explicitly re-import the verified generation before starting app services.",
+        "fail",
+        expected_check,
+        "Rust feed generation runtime guard failed closed because its result was unavailable or invalid.",
         str(feed_activation_state_path(repo_root)),
-        details,
     )
 
 

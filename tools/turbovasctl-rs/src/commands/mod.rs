@@ -3,6 +3,7 @@
 
 mod audit;
 mod branding;
+mod c_hardening;
 mod common;
 mod compose;
 mod db_introspect;
@@ -28,6 +29,7 @@ pub use audit::{
     command_osv_lockfile_audit,
 };
 pub use branding::command_branding_state;
+pub use c_hardening::command_c_hardening_check;
 pub use db_introspect::command_runtime_db_introspect;
 pub use deps::command_deps;
 pub use direct_token::command_runtime_native_api_direct_token;

@@ -41,6 +41,12 @@ pub enum CliCommand {
         #[arg(long = "columns-for", value_name = "SCHEMA.TABLE")]
         columns_for: Vec<String>,
     },
+    /// Inspect current final C ELF artifact hardening properties.
+    CHardeningCheck {
+        /// Build profile to inspect.
+        #[arg(long, value_parser = ["hardened"])]
+        profile: Option<String>,
+    },
     /// Show retained local quality gate history.
     QualityGateState,
     /// Show Community Feed cache and active-runtime state.
@@ -160,6 +166,7 @@ impl CliCommand {
             Self::PathCouplingState => "path-coupling-state",
             Self::RuntimeRedisState => "runtime-redis-state",
             Self::RuntimeDbIntrospect { .. } => "runtime-db-introspect",
+            Self::CHardeningCheck { .. } => "c-hardening-check",
             Self::QualityGateState => "quality-gate-state",
             Self::FeedState => "feed-state",
             Self::FeedGenerationState => "feed-generation-state",
@@ -247,6 +254,27 @@ mod tests {
                     columns_for: vec!["public.targets".into(), "cert.cert_bund_advs".into(),],
                 },
                 json: false,
+                status_only: true,
+            }
+        );
+    }
+
+    #[test]
+    fn parses_c_hardening_profile_and_compact_mode() {
+        assert_eq!(
+            parse_cli([
+                "c-hardening-check",
+                "--profile",
+                "hardened",
+                "--status-only",
+                "--json",
+            ])
+            .unwrap(),
+            Cli {
+                command: CliCommand::CHardeningCheck {
+                    profile: Some("hardened".into()),
+                },
+                json: true,
                 status_only: true,
             }
         );

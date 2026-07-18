@@ -1436,6 +1436,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self,
         argument_sets,
         *,
+        rust_only_argument_sets=(),
         complete_surface=False,
         human_inventory=False,
         non_repository_status=False,
@@ -1453,7 +1454,10 @@ class TurboVASCtlTests(unittest.TestCase):
                 .splitlines()
                 if line.strip() and not line.strip().startswith("```")
             }
-            covered = {arguments[0] for arguments in argument_sets}
+            covered = {
+                arguments[0]
+                for arguments in (*argument_sets, *rust_only_argument_sets)
+            }
             self.assertEqual(covered, documented)
 
         def invoke(command, arguments, *, env=None):
@@ -1500,6 +1504,12 @@ class TurboVASCtlTests(unittest.TestCase):
                     normalized_json(rust_result),
                     arguments,
                 )
+            for arguments in rust_only_argument_sets:
+                rust_result = invoke(rust_command, arguments, env=feed_generation_env)
+                self.assertEqual(rust_result.returncode, 1, arguments)
+                payload = normalized_json(rust_result)
+                self.assertEqual(payload["status"], "fail", arguments)
+                self.assertEqual(payload["metadata"]["command"], arguments[0], arguments)
 
         if human_inventory:
             human_arguments = ["inventory", "--scope", "components/gsa"]
@@ -1582,6 +1592,10 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["native-api-semgrep-audit", "--status-only", "--json"],
                 ["osv-lockfile-audit", "--json"],
                 ["osv-lockfile-audit", "--status-only", "--json"],
+            ),
+            rust_only_argument_sets=(
+                ["feed-generation-activate", "invalid", "--json"],
+                ["feed-generation-rollback", "invalid", "--json"],
             ),
             complete_surface=True,
             human_inventory=True,

@@ -41,6 +41,22 @@ pub enum CliCommand {
     FeedGenerationState,
     /// Stage and verify an immutable content-addressed feed generation.
     FeedGenerationStage,
+    /// Activate a verified immutable feed generation.
+    FeedGenerationActivate {
+        /// Generation identifier to activate.
+        generation_id: String,
+        /// Allow the first activation when no active generation exists yet.
+        #[arg(long)]
+        allow_first_activation: bool,
+        /// Repair the activation attestation for the currently active generation.
+        #[arg(long)]
+        repair_attestation: bool,
+    },
+    /// Roll back to the journaled predecessor of a verified immutable feed generation.
+    FeedGenerationRollback {
+        /// Generation identifier to roll back from.
+        generation_id: String,
+    },
     /// Inspect Rust migration tooling and the first dry-run candidate.
     RustMigrationState,
     /// Audit native API Rust dependencies against the local advisory database.
@@ -131,6 +147,8 @@ impl CliCommand {
             Self::FeedState => "feed-state",
             Self::FeedGenerationState => "feed-generation-state",
             Self::FeedGenerationStage => "feed-generation-stage",
+            Self::FeedGenerationActivate { .. } => "feed-generation-activate",
+            Self::FeedGenerationRollback { .. } => "feed-generation-rollback",
             Self::RustMigrationState => "rust-migration-state",
             Self::NativeApiCargoAudit => "native-api-cargo-audit",
             Self::GsaNpmAudit => "gsa-npm-audit",
@@ -203,6 +221,58 @@ mod tests {
                 json: false,
                 status_only: true,
             }
+        );
+    }
+
+    #[test]
+    fn parses_feed_generation_activation_and_rollback_commands() {
+        assert_eq!(
+            parse_cli([
+                "feed-generation-activate",
+                "gen-001",
+                "--allow-first-activation",
+                "--repair-attestation",
+            ])
+            .unwrap(),
+            Cli {
+                command: CliCommand::FeedGenerationActivate {
+                    generation_id: "gen-001".to_string(),
+                    allow_first_activation: true,
+                    repair_attestation: true,
+                },
+                json: false,
+                status_only: false,
+            }
+        );
+        assert_eq!(
+            parse_cli(["feed-generation-rollback", "gen-002"]).unwrap(),
+            Cli {
+                command: CliCommand::FeedGenerationRollback {
+                    generation_id: "gen-002".to_string(),
+                },
+                json: false,
+                status_only: false,
+            }
+        );
+    }
+
+    #[test]
+    fn rollback_rejects_activation_only_flags() {
+        assert!(
+            parse_cli([
+                "feed-generation-rollback",
+                "gen-003",
+                "--allow-first-activation"
+            ])
+            .is_err()
+        );
+        assert!(
+            parse_cli([
+                "feed-generation-rollback",
+                "gen-003",
+                "--repair-attestation"
+            ])
+            .is_err()
         );
     }
 

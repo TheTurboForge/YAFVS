@@ -14,6 +14,118 @@ pub(crate) fn runtime_secret_path(repo_root: &Path, name: &str) -> PathBuf {
     runtime_dir(repo_root).join("secrets").join(name)
 }
 
+pub(crate) fn read_or_create_runtime_secret(
+    repo_root: &Path,
+    name: &str,
+) -> io::Result<(String, bool)> {
+    let path = runtime_secret_path(repo_root, name);
+    match read_private_text(&path, 4096) {
+        Ok(secret) => Ok((validate_single_line_secret(&path, secret)?, false)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            let secret = random_urlsafe_token(24)?;
+            write_private_text(&path, &format!("{secret}\n"))?;
+            Ok((secret, true))
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn validate_single_line_secret(path: &Path, mut secret: String) -> io::Result<String> {
+    if secret.ends_with('\n') {
+        secret.pop();
+    }
+    if secret.is_empty()
+        || secret
+            .as_bytes()
+            .iter()
+            .any(|byte| matches!(*byte, b'\0' | b'\n' | b'\r'))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "Runtime secret must contain one line with an optional terminal LF: {}",
+                path.display()
+            ),
+        ));
+    }
+    Ok(secret)
+}
+
+fn read_private_text(path: &Path, max_bytes: usize) -> io::Result<String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "private path has no parent"))?;
+    let directory = open_private_directory(parent)?;
+    let file_name = path.file_name().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "private path has no file name")
+    })?;
+    let name = CString::new(file_name.as_bytes())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid private file name"))?;
+    // SAFETY: the directory descriptor and C string are valid. O_NOFOLLOW
+    // refuses a link in place of the secret file.
+    let raw = unsafe {
+        libc::openat(
+            directory.as_raw_fd(),
+            name.as_ptr(),
+            libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        )
+    };
+    if raw < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: openat returned a new owned descriptor.
+    let mut file = unsafe { File::from_raw_fd(raw) };
+    let before = file.metadata()?;
+    // SAFETY: geteuid has no preconditions.
+    let euid = unsafe { libc::geteuid() };
+    if !before.file_type().is_file()
+        || before.uid() != euid
+        || before.permissions().mode() & 0o077 != 0
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!("Private file is unsafe: {}", path.display()),
+        ));
+    }
+    if before.len() > max_bytes as u64 {
+        return Err(io::Error::new(
+            io::ErrorKind::FileTooLarge,
+            format!("Private file is too large: {}", path.display()),
+        ));
+    }
+    let mut bytes = Vec::with_capacity(before.len() as usize);
+    Read::by_ref(&mut file)
+        .take(max_bytes.saturating_add(1) as u64)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() > max_bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::FileTooLarge,
+            format!("Private file is too large: {}", path.display()),
+        ));
+    }
+    let after = file.metadata()?;
+    if before.dev() != after.dev()
+        || before.ino() != after.ino()
+        || before.len() != after.len()
+        || before.mtime() != after.mtime()
+        || before.mtime_nsec() != after.mtime_nsec()
+        || before.ctime() != after.ctime()
+        || before.ctime_nsec() != after.ctime_nsec()
+        || before.mode() != after.mode()
+    {
+        return Err(io::Error::other(format!(
+            "Private file changed while reading: {}",
+            path.display()
+        )));
+    }
+    String::from_utf8(bytes).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Private file is not UTF-8: {}", path.display()),
+        )
+    })
+}
+
 pub(crate) fn rotate_runtime_secret(repo_root: &Path, name: &str) -> io::Result<PathBuf> {
     let path = runtime_secret_path(repo_root, name);
     let token = random_urlsafe_token(32)?;
@@ -281,6 +393,42 @@ mod tests {
         symlink(&target, root.join("secrets")).unwrap();
         let error = write_private_text(&root.join("secrets/token"), "secret\n").unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn runtime_secret_is_created_once_and_read_back() {
+        let root = fixture();
+        let repo = root.join("TurboVAS");
+        fs::create_dir_all(&repo).unwrap();
+        let (created, was_created) = read_or_create_runtime_secret(&repo, "browser-proxy").unwrap();
+        assert!(was_created);
+        assert!(!created.is_empty());
+        let (observed, was_created) =
+            read_or_create_runtime_secret(&repo, "browser-proxy").unwrap();
+        assert!(!was_created);
+        assert_eq!(observed, created);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn runtime_secret_rejects_links_and_multiple_lines() {
+        let root = fixture();
+        let repo = root.join("TurboVAS");
+        fs::create_dir_all(&repo).unwrap();
+        let path = runtime_secret_path(&repo, "browser-proxy");
+        write_private_text(&path, "first\nsecond\n").unwrap();
+        assert_eq!(
+            read_or_create_runtime_secret(&repo, "browser-proxy")
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidData
+        );
+        fs::remove_file(&path).unwrap();
+        let target = root.join("target");
+        fs::write(&target, "secret\n").unwrap();
+        std::os::unix::fs::symlink(&target, &path).unwrap();
+        assert!(read_or_create_runtime_secret(&repo, "browser-proxy").is_err());
         fs::remove_dir_all(root).unwrap();
     }
 }

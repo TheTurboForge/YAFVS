@@ -4,9 +4,25 @@
 //! Descriptor-anchored verifier for immutable feed generations, with private
 //! activation-journal validation and detached-signature provenance checks.
 
+mod activation;
+mod adapter;
+mod artifact_identity;
+mod canonical_json;
+mod compose_identity;
+mod database;
+mod deployment;
+mod feed_mappings;
 mod journal;
+mod manager_import;
+mod manager_init;
+mod ospd_readiness;
+mod payload;
 mod provenance;
+mod scanner_runtime;
+mod selector;
+mod service_runtime;
 mod stage;
+mod transition;
 
 use super::common::{compact_finding, metadata, runtime_dir};
 use super::runtime_lock::{
@@ -45,6 +61,25 @@ struct Spec {
 
 pub fn command_feed_generation_stage(repo_root: &Path) -> ResultEnvelope {
     command_feed_generation_stage_with_timeout(repo_root, DEFAULT_RUNTIME_LOCK_TIMEOUT)
+}
+
+pub fn command_feed_generation_activate(
+    repo_root: &Path,
+    generation_id: &str,
+    allow_first_activation: bool,
+    repair_attestation: bool,
+) -> ResultEnvelope {
+    activation::command(
+        repo_root,
+        generation_id,
+        false,
+        allow_first_activation,
+        repair_attestation,
+    )
+}
+
+pub fn command_feed_generation_rollback(repo_root: &Path, generation_id: &str) -> ResultEnvelope {
+    activation::command(repo_root, generation_id, true, false, false)
 }
 
 fn command_feed_generation_stage_with_timeout(
@@ -1422,6 +1457,100 @@ fn state(runtime: &Path, l: &Limits) -> R<Value> {
         json!({"generations_root":root,"store_exists":true,"generations":valid,"generation_count":valid.len(),"orphan_staging":orphan,"invalid_entries":invalid,"current_pointer_exists":current_pointer_exists,"current_generation_id":current_id,"current_error":current_error}),
     )
 }
+fn activation_consistency_finding<F>(
+    current_id: Option<&str>,
+    activation: Result<Option<Value>, String>,
+    load_database: F,
+    journal_path: &Path,
+) -> Finding
+where
+    F: FnOnce() -> Result<Option<database::DatabaseAttestation>, String>,
+{
+    let activation = match activation {
+        Ok(activation) => activation,
+        Err(error) => {
+            return Finding::new(
+                "fail",
+                "feed-generation.journal",
+                format!("Feed activation journal is invalid: {error}"),
+            )
+            .with_path(&journal_path.display().to_string());
+        }
+    };
+    match (current_id, activation) {
+        (None, None) => Finding::new(
+            "warn",
+            "feed-generation.journal",
+            "No feed activation has completed yet.".into(),
+        )
+        .with_path(&journal_path.display().to_string()),
+        (Some(current_id), Some(activation))
+            if activation["status"] == "active"
+                && activation["current_generation_id"] == current_id =>
+        {
+            let database = match load_database() {
+                Ok(database) => database,
+                Err(error) => {
+                    return Finding::new(
+                        "fail",
+                        "feed-generation.journal",
+                        format!(
+                            "Active feed generation database attestation failed closed: {error}"
+                        ),
+                    )
+                    .with_path(&journal_path.display().to_string())
+                    .with_details(json!({
+                        "selector_generation_id": current_id,
+                        "journal_generation_id": activation["current_generation_id"],
+                        "journal_status": activation["status"],
+                    }));
+                }
+            };
+            let database_id = database
+                .as_ref()
+                .map(database::DatabaseAttestation::generation_id);
+            let valid = database_id == Some(current_id);
+            Finding::new(
+                if valid { "pass" } else { "fail" },
+                "feed-generation.journal",
+                if valid {
+                    "Active feed selector, completed import journal, and database attestation agree."
+                        .into()
+                } else {
+                    "No completed feed activation and database attestation match the current selector; recover or explicitly re-import the verified generation before starting app services."
+                        .into()
+                },
+            )
+            .with_path(&journal_path.display().to_string())
+            .with_details(json!({
+                "selector_generation_id": current_id,
+                "journal_generation_id": activation["current_generation_id"],
+                "journal_status": activation["status"],
+                "database_generation_id": database_id,
+                "rollback_generation_id": activation
+                    .get("rollback_generation_id")
+                    .unwrap_or(&Value::Null),
+            }))
+        }
+        (current_id, activation) => Finding::new(
+            "fail",
+            "feed-generation.journal",
+            "Feed activation is interrupted or its journal does not match the selector; app startup is blocked."
+                .into(),
+        )
+        .with_path(&journal_path.display().to_string())
+        .with_details(json!({
+            "selector_generation_id": current_id,
+            "journal_generation_id": activation
+                .as_ref()
+                .and_then(|state| state.get("current_generation_id")),
+            "journal_status": activation
+                .as_ref()
+                .and_then(|state| state.get("status")),
+        })),
+    }
+}
+
 pub fn command_feed_generation_state(repo_root: &Path, status_only: bool) -> ResultEnvelope {
     let runtime = runtime_dir(repo_root);
     let root = runtime.join("feed-store/generations");
@@ -1524,57 +1653,15 @@ pub fn command_feed_generation_state(repo_root: &Path, status_only: bool) -> Res
                 )
             }
             let journal_path = journal::activation_state_path(&runtime);
-            match journal::read_activation_state(&runtime) {
-                Err(error) => findings.push(
-                    Finding::new(
-                        "fail",
-                        "feed-generation.journal",
-                        format!("Feed activation journal is invalid: {error}"),
-                    )
-                    .with_path(&journal_path.display().to_string()),
-                ),
-                Ok(None) if s["current_generation_id"].is_null() => findings.push(
-                    Finding::new(
-                        "warn",
-                        "feed-generation.journal",
-                        "No feed activation has completed yet.".into(),
-                    )
-                    .with_path(&journal_path.display().to_string()),
-                ),
-                Ok(Some(activation))
-                    if activation["status"] == "active"
-                        && activation["current_generation_id"] == s["current_generation_id"] =>
-                {
-                    findings.push(
-                        Finding::new(
-                            "pass",
-                            "feed-generation.journal",
-                            "Completed feed activation journal matches the verified selector."
-                                .into(),
-                        )
-                        .with_path(&journal_path.display().to_string())
-                        .with_details(json!({
-                            "current_generation_id": activation["current_generation_id"],
-                            "rollback_generation_id": activation
-                                .get("rollback_generation_id")
-                                .unwrap_or(&Value::Null),
-                        })),
-                    );
-                }
-                Ok(activation) => findings.push(
-                    Finding::new(
-                        "fail",
-                        "feed-generation.journal",
-                        "Feed activation is interrupted or its journal does not match the selector; app startup is blocked."
-                            .into(),
-                    )
-                    .with_path(&journal_path.display().to_string())
-                    .with_details(json!({
-                        "selector_generation_id": s["current_generation_id"],
-                        "journal": activation,
-                    })),
-                ),
-            }
+            findings.push(activation_consistency_finding(
+                s["current_generation_id"].as_str(),
+                journal::read_activation_state(&runtime),
+                || {
+                    database::DatabaseAttestationAdapter::new(repo_root, &SystemCommandRunner)
+                        .read()
+                },
+                &journal_path,
+            ));
             findings.push(Finding::new("pass","feed-generation.activation-boundary","Generation state verification did not change the active runtime feed selector.".into()).with_path(&cur.display().to_string()).with_details(json!({"current_pointer_exists":s["current_pointer_exists"],"current_generation_id":s["current_generation_id"]})));
             for generation in s["generations"].as_array().unwrap() {
                 if let Some(id) = generation["generation_id"].as_str() {
@@ -1659,7 +1746,7 @@ mod tests {
         }
         readonly(path, true);
     }
-    fn cleanup_tree(path: &Path) {
+    pub(super) fn cleanup_tree(path: &Path) {
         if fs::symlink_metadata(path).unwrap().file_type().is_symlink() {
             return;
         }
@@ -1696,7 +1783,7 @@ mod tests {
         seal_tree(&root.join("feed-store/generations").join(&new_id));
         new_id
     }
-    fn valid_generation(name: &str) -> (std::path::PathBuf, String) {
+    pub(super) fn valid_generation(name: &str) -> (std::path::PathBuf, String) {
         let root = fixture(name);
         let store = root.join("feed-store");
         let generations = store.join("generations");
@@ -1852,6 +1939,48 @@ mod tests {
         assert_eq!(result["store_exists"], false);
         assert_eq!(before, fs::read_dir(&root).unwrap().count());
         fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn active_state_requires_matching_database_attestation() {
+        let current = "a".repeat(64);
+        let other = "b".repeat(64);
+        let activation = || {
+            Ok(Some(json!({
+                "status": "active",
+                "current_generation_id": current,
+                "rollback_generation_id": Value::Null,
+            })))
+        };
+        let path = Path::new("/runtime/state/feed-generation/activation.json");
+
+        let missing =
+            activation_consistency_finding(Some(&current), activation(), || Ok(None), path);
+        assert_eq!(missing.status, "fail");
+
+        let mismatched = activation_consistency_finding(
+            Some(&current),
+            activation(),
+            || database::DatabaseAttestation::new(&other, "2026-07-18T12:00:00Z").map(Some),
+            path,
+        );
+        assert_eq!(mismatched.status, "fail");
+
+        let invalid = activation_consistency_finding(
+            Some(&current),
+            activation(),
+            || Err("invalid database attestation".into()),
+            path,
+        );
+        assert_eq!(invalid.status, "fail");
+
+        let matching = activation_consistency_finding(
+            Some(&current),
+            activation(),
+            || database::DatabaseAttestation::new(&current, "2026-07-18T12:00:00Z").map(Some),
+            path,
+        );
+        assert_eq!(matching.status, "pass");
     }
 
     #[test]

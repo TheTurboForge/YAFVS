@@ -13,6 +13,7 @@ use std::path::{Path, PathBuf};
 pub use cli::{Cli, CliCommand, parse_cli};
 pub use commands::{
     command_branding_state, command_deps, command_doctor, command_feed_copy_to_runtime,
+    command_feed_generation_activate, command_feed_generation_rollback,
     command_feed_generation_stage, command_feed_generation_state, command_feed_state,
     command_gsa_npm_audit, command_inventory, command_license_report, command_logs,
     command_native_api_cargo_audit, command_native_api_semgrep_audit, command_osv_lockfile_audit,
@@ -41,6 +42,19 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
             command_feed_generation_state(&repo_root, cli.status_only)
         }
         CliCommand::FeedGenerationStage => command_feed_generation_stage(&repo_root),
+        CliCommand::FeedGenerationActivate {
+            generation_id,
+            allow_first_activation,
+            repair_attestation,
+        } => command_feed_generation_activate(
+            &repo_root,
+            generation_id,
+            *allow_first_activation,
+            *repair_attestation,
+        ),
+        CliCommand::FeedGenerationRollback { generation_id } => {
+            command_feed_generation_rollback(&repo_root, generation_id)
+        }
         CliCommand::RustMigrationState => command_rust_migration_state(&repo_root),
         CliCommand::NativeApiCargoAudit => {
             command_native_api_cargo_audit(&repo_root, cli.status_only)

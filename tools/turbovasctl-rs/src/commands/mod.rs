@@ -14,6 +14,7 @@ mod license;
 mod path_coupling;
 mod quality_gate;
 mod quality_schedule;
+mod redis;
 mod repository;
 mod runtime;
 mod runtime_lock;
@@ -41,6 +42,7 @@ pub use license::command_license_report;
 pub use path_coupling::command_path_coupling_state;
 pub use quality_gate::command_quality_gate_state;
 pub use quality_schedule::command_quality_gate_schedule;
+pub use redis::command_runtime_redis_state;
 pub use repository::{
     command_inventory, command_repository_unavailable, command_status, find_repo_root,
 };

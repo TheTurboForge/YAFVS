@@ -1405,7 +1405,10 @@ class TurboVASCtlTests(unittest.TestCase):
                     arguments,
                 )
             for arguments, expected_exit_code, expected_status in rust_only_contracts:
-                rust_result = invoke(rust_command, arguments, env=feed_generation_env)
+                env = feed_generation_env.copy()
+                if arguments[0] == "runtime-redis-state":
+                    env["COMPOSE_PROJECT_NAME"] = "turbovasctl-parity-no-runtime"
+                rust_result = invoke(rust_command, arguments, env=env)
                 self.assertEqual(rust_result.returncode, expected_exit_code, arguments)
                 payload = normalized_json(rust_result)
                 self.assertEqual(payload["status"], expected_status, arguments)
@@ -1496,6 +1499,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 (["feed-generation-stage", "--json"], 1, "fail"),
                 (["feed-generation-activate", "invalid", "--json"], 1, "fail"),
                 (["feed-generation-rollback", "invalid", "--json"], 1, "fail"),
+                (["runtime-redis-state", "--json"], 0, "warn"),
             ),
             complete_surface=True,
             human_inventory=True,
@@ -2607,7 +2611,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-redis-state", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+        for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             with self.subTest(command=command):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
@@ -2631,12 +2635,12 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_gsa_npm_audit", source)
         self.assertIn("def command_osv_lockfile_audit", source)
         self.assertIn("def command_rust_migration_state", source)
+
         self.assertIn("def command_branding_state", source)
         self.assertIn("def command_runtime_log_review", source)
         self.assertIn("def command_runtime_data_state", source)
         self.assertIn("def command_runtime_db_introspect", source)
         self.assertIn("def command_runtime_performance_snapshot", source)
-        self.assertIn("def command_runtime_redis_state", source)
         self.assertIn("def command_runtime_native_api_smoke", source)
         self.assertIn('native_api_smoke.add_argument("--status-only"', source)
         self.assertIn("command_runtime_native_api_smoke(repo_root, status_only=args.status_only)", source)
@@ -2704,6 +2708,14 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_quality_gate_state", source)
         self.assertIn("def command_quality_gate_schedule", source)
         self.assertNotIn("Use: just native-api-request -- --json --path '/api/v1/...';", justfile)
+
+    def test_runtime_redis_state_is_rust_only(self):
+        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        self.assertNotIn('subparsers.add_parser("runtime-redis-state"', source)
+        self.assertNotIn("def command_runtime_redis_state", source)
+        self.assertIn("runtime-redis-state *args:", justfile)
+        self.assertIn("tools/turbovasctl-rs/Cargo.toml -- runtime-redis-state", justfile)
 
     def test_native_api_cargo_audit_status_only_summarizes_clean_audit(self):
         payload = {
@@ -11679,63 +11691,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn('/api/v1/scanners/{scanner_id}', native_tooling)
         self.assertIn('/api/v1/scanners/{scanner_id}/export', native_tooling)
         self.assertIn('native-api.scanner-detail', native_tooling)
-
-    def test_redis_reference_summary_separates_scanner_and_generic_paths(self):
-        references = [
-            {"path": "compose/dev.yaml", "category": "scanner_kb", "markers": ["redis-openvas"]},
-            {"path": "docker/dev/Dockerfile", "category": "dependency_build", "markers": ["redis-tools"]},
-            {"path": "docs/DATABASE_GRAVITY.md", "category": "documentation", "markers": ["Redis"]},
-            {"path": "components/gvmd/src/example.c", "category": "generic_runtime", "markers": ["redis"]},
-        ]
-        summary = turbovasctl.summarize_redis_references(references)
-        self.assertEqual(summary["by_category"]["scanner_kb"]["paths"], ["compose/dev.yaml"])
-        self.assertEqual(summary["by_category"]["dependency_build"]["count"], 1)
-        self.assertEqual(summary["by_category"]["generic_runtime"]["paths"], ["components/gvmd/src/example.c"])
-
-    def test_redis_reference_category_identifies_scanner_socket(self):
-        self.assertEqual(turbovasctl.redis_reference_category("compose/dev.yaml", "/run/redis-openvas/redis.sock"), "scanner_kb")
-        self.assertEqual(turbovasctl.redis_reference_category("docker/dev/Dockerfile", "redis-tools libhiredis-dev"), "dependency_build")
-        self.assertEqual(turbovasctl.redis_reference_category("docs/ARCHITECTURE_FLOWS.md", "Redis"), "documentation")
-
-    def test_redis_metric_parsers_extract_counts_without_keys(self):
-        info = """
-# Clients
-connected_clients:2
-blocked_clients:0
-# Memory
-used_memory:1024
-used_memory_peak:4096
-# Stats
-total_commands_processed:42
-instantaneous_ops_per_sec:3
-keyspace_hits:10
-keyspace_misses:1
-# Keyspace
-db0:keys=7,expires=2,avg_ttl=1000
-db2:keys=5,expires=0,avg_ttl=0
-"""
-        metrics = turbovasctl.parse_redis_info(info)
-        self.assertEqual(metrics["connected_clients"], 2)
-        self.assertEqual(metrics["blocked_clients"], 0)
-        self.assertEqual(metrics["used_memory"], 1024)
-        self.assertEqual(metrics["used_memory_peak"], 4096)
-        self.assertEqual(metrics["total_commands_processed"], 42)
-        self.assertEqual(metrics["instantaneous_ops_per_sec"], 3)
-        self.assertEqual(metrics["keyspace_hits"], 10)
-        self.assertEqual(metrics["keyspace_misses"], 1)
-        self.assertEqual(metrics["keyspace_keys"], 12)
-        self.assertEqual(turbovasctl.parse_redis_dbsize("5\n"), 5)
-        self.assertIsNone(turbovasctl.parse_redis_dbsize("not-an-int\n"))
-
-    def test_redis_compose_boundaries_expect_generic_redis_removed(self):
-        root = Path(__file__).resolve().parents[2]
-        boundaries = turbovasctl.redis_compose_boundaries(root)
-        self.assertFalse(boundaries["generic_redis_service_present"])
-        self.assertFalse(boundaries["generic_redis_loopback_tcp"])
-        self.assertFalse(boundaries["gvmd_depends_on_generic_redis"])
-        self.assertTrue(boundaries["scanner_redis_no_tcp_port"])
-        self.assertTrue(boundaries["scanner_redis_unix_socket"])
-        self.assertTrue(boundaries["ospd_depends_on_scanner_redis"])
 
     def test_branding_state_separates_provenance_from_active_surfaces(self):
         root = Path(__file__).resolve().parents[2]

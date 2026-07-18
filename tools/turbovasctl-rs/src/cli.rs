@@ -33,6 +33,8 @@ pub enum CliCommand {
     BrandingState,
     /// Inspect absolute checkout/runtime path coupling.
     PathCouplingState,
+    /// Inspect Redis dependency and runtime boundary state.
+    RuntimeRedisState,
     /// Show retained local quality gate history.
     QualityGateState,
     /// Show Community Feed cache and active-runtime state.
@@ -150,6 +152,7 @@ impl CliCommand {
             Self::Inventory { .. } => "inventory",
             Self::BrandingState => "branding-state",
             Self::PathCouplingState => "path-coupling-state",
+            Self::RuntimeRedisState => "runtime-redis-state",
             Self::QualityGateState => "quality-gate-state",
             Self::FeedState => "feed-state",
             Self::FeedGenerationState => "feed-generation-state",

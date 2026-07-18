@@ -12,11 +12,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-const UNITS: [&str; 2] = [
-    "turbovas-quality-gate.service",
-    "turbovas-quality-gate.timer",
-];
-const TIMER: &str = "turbovas-quality-gate.timer";
+const UNITS: [&str; 2] = ["yafvs-quality-gate.service", "yafvs-quality-gate.timer"];
+const TIMER: &str = "yafvs-quality-gate.timer";
 const ENABLE_ENV: &str = "TURBOVAS_ENABLE_QUALITY_GATE_SCHEDULE";
 const SHOW_PROPERTIES: &str = "--property=LoadState,UnitFileState,ActiveState,SubState,NextElapseUSecRealtime,LastTriggerUSecRealtime";
 
@@ -506,12 +503,12 @@ mod tests {
             ));
             fs::create_dir_all(root.join("ops/systemd")).unwrap();
             fs::write(
-                root.join("ops/systemd/turbovas-quality-gate.service.in"),
+                root.join("ops/systemd/yafvs-quality-gate.service.in"),
                 "repo=@REPO_ROOT@ runtime=@RUNTIME_DIR@ log=@QUALITY_GATE_LOG_DIR@ python=@PYTHON@",
             )
             .unwrap();
             fs::write(
-                root.join("ops/systemd/turbovas-quality-gate.timer.in"),
+                root.join("ops/systemd/yafvs-quality-gate.timer.in"),
                 "repo=@REPO_ROOT@ runtime=@RUNTIME_DIR@ log=@QUALITY_GATE_LOG_DIR@ python=@PYTHON@",
             )
             .unwrap();
@@ -607,11 +604,11 @@ mod tests {
         let fixture = Fixture::new(true);
         let runner = FakeCommandRunner::new(BTreeMap::from([
             (
-                "--user is-enabled turbovas-quality-gate.timer".to_string(),
+                "--user is-enabled yafvs-quality-gate.timer".to_string(),
                 process_output(0, "enabled\n"),
             ),
             (
-                "--user is-active turbovas-quality-gate.timer".to_string(),
+                "--user is-active yafvs-quality-gate.timer".to_string(),
                 process_output(0, "active\n"),
             ),
         ]));
@@ -642,24 +639,24 @@ mod tests {
                     Some(Duration::from_secs(60))
                 ),
                 (
-                    "--user enable --now turbovas-quality-gate.timer".to_string(),
+                    "--user enable --now yafvs-quality-gate.timer".to_string(),
                     Some(Duration::from_secs(60))
                 ),
                 ("--user status".to_string(), Some(Duration::from_secs(30))),
                 (
-                    format!("--user show turbovas-quality-gate.service {SHOW_PROPERTIES}"),
+                    format!("--user show yafvs-quality-gate.service {SHOW_PROPERTIES}"),
                     Some(Duration::from_secs(30))
                 ),
                 (
-                    format!("--user show turbovas-quality-gate.timer {SHOW_PROPERTIES}"),
+                    format!("--user show yafvs-quality-gate.timer {SHOW_PROPERTIES}"),
                     Some(Duration::from_secs(30))
                 ),
                 (
-                    "--user is-enabled turbovas-quality-gate.timer".to_string(),
+                    "--user is-enabled yafvs-quality-gate.timer".to_string(),
                     Some(Duration::from_secs(30))
                 ),
                 (
-                    "--user is-active turbovas-quality-gate.timer".to_string(),
+                    "--user is-active yafvs-quality-gate.timer".to_string(),
                     Some(Duration::from_secs(30))
                 ),
             ]
@@ -684,7 +681,7 @@ mod tests {
                 fs::write(fixture.context.unit_dir.join(unit), "unit").unwrap();
             }
             let runner = FakeCommandRunner::new(BTreeMap::from([(
-                "--user disable --now turbovas-quality-gate.timer".to_string(),
+                "--user disable --now yafvs-quality-gate.timer".to_string(),
                 process_output(exit_code, "disabled\n"),
             )]));
             let result = command_quality_gate_schedule_with_runner(
@@ -723,11 +720,11 @@ mod tests {
                 process_output(0, "ActiveState=failed\nLoadState=loaded\n"),
             ),
             (
-                "--user is-enabled turbovas-quality-gate.timer".to_string(),
+                "--user is-enabled yafvs-quality-gate.timer".to_string(),
                 process_output(1, "disabled\n"),
             ),
             (
-                "--user is-active turbovas-quality-gate.timer".to_string(),
+                "--user is-active yafvs-quality-gate.timer".to_string(),
                 process_output(0, "active\n"),
             ),
         ]));

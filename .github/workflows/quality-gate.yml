@@ -78,6 +78,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: turbovas-quality-gate
+          name: yafvs-quality-gate
           path: ${{ runner.temp }}/turbovas-runtime/artifacts/quality-gate/*.json
           if-no-files-found: warn

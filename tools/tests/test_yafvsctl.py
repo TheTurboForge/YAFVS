@@ -11175,8 +11175,8 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_quality_gate_systemd_templates_are_present(self):
         root = Path(__file__).resolve().parents[2]
-        service = root / "ops" / "systemd" / "turbovas-quality-gate.service.in"
-        timer = root / "ops" / "systemd" / "turbovas-quality-gate.timer.in"
+        service = root / "ops" / "systemd" / "yafvs-quality-gate.service.in"
+        timer = root / "ops" / "systemd" / "yafvs-quality-gate.timer.in"
         service_text = service.read_text(encoding="utf-8")
         self.assertIn("SPDX-License-Identifier", service_text)
         self.assertIn("tools/yafvsctl quality-gate --json", service_text)

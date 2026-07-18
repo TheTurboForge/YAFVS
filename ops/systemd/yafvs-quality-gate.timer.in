@@ -9,7 +9,7 @@ Documentation=file:@REPO_ROOT@/README.md
 OnCalendar=*-*-* 03:30:00
 Persistent=true
 RandomizedDelaySec=20m
-Unit=turbovas-quality-gate.service
+Unit=yafvs-quality-gate.service
 
 [Install]
 WantedBy=timers.target

@@ -2284,7 +2284,7 @@ ALERT_FORBIDDEN_PAYLOAD_KEYS = frozenset(
         "sha256_fingerprint",
     }
 )
-QUALITY_GATE_SERVICE_NAME = "turbovas-quality-gate.service"
+QUALITY_GATE_SERVICE_NAME = "yafvs-quality-gate.service"
 LOG_REVIEW_PATTERNS: tuple[tuple[str, str, str, str], ...] = (
     ("fail", "nmap-root-privilege", r"requires root privileges|requires root|raw scans require root privileges", "Nmap/root-privilege warning found."),
     ("fail", "postgres-collation", r"collation version mismatch|database .* has a collation version mismatch", "Postgres collation mismatch found."),

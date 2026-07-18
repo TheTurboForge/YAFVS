@@ -204,9 +204,9 @@ fn credential_openapi_declares_redacted_read_boundary() {
     ] {
         let block = openapi_path_block(path);
         for required in [
-            "x-turbovas-direct: true",
-            "x-turbovas-exposure: direct-read",
-            "x-turbovas-maturity: live-read",
+            "x-yafvs-direct: true",
+            "x-yafvs-exposure: direct-read",
+            "x-yafvs-maturity: live-read",
             replaces,
             "credential-secret-updates-non-up-usk-types-and-deletes",
             "secret",
@@ -225,10 +225,10 @@ fn credential_create_openapi_is_write_only_secret_bearing_and_redacted_on_respon
     for required in [
         "    post:",
         "operationId: postCredentials",
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-replaces: credential-up-usk-create",
-        "x-turbovas-owner-semantics: request-operator-owner",
-        "x-turbovas-side-effect: credential-secret-control",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-replaces: credential-up-usk-create",
+        "x-yafvs-owner-semantics: request-operator-owner",
+        "x-yafvs-side-effect: credential-secret-control",
         "CredentialCreateRequest",
         "response contains redacted metadata only",
     ] {
@@ -266,12 +266,12 @@ fn credential_patch_route_is_direct_write_control_metadata_only() {
     for required in [
         "    patch:",
         "operationId: patchCredentialsByCredentialId",
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-replaces: credential-metadata-modify",
-        "x-turbovas-operator-identity: direct-token-operator",
-        "x-turbovas-owner-semantics: preserve-existing-owner",
-        "x-turbovas-safety-contract: write-control-v1",
-        "x-turbovas-side-effect: metadata-write",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-replaces: credential-metadata-modify",
+        "x-yafvs-operator-identity: direct-token-operator",
+        "x-yafvs-owner-semantics: preserve-existing-owner",
+        "x-yafvs-safety-contract: write-control-v1",
+        "x-yafvs-side-effect: metadata-write",
         "CredentialPatchRequest",
         "Secret updates, allow_insecure, credential type changes, target/scanner links, export, download, clone, restore, and delete remain on inherited compatibility paths.",
     ] {

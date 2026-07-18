@@ -35,9 +35,7 @@ const createNativeHttp = () => {
     buildUrl: ReturnType<typeof testing.fn>;
     session: ReturnType<typeof createSession>;
   };
-  http.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
-  );
+  http.buildUrl = testing.fn((path: string) => `https://yafvs.example/${path}`);
   http.session = createSession();
   http.session.token = 'test-token';
   http.session.jwt = 'jwt-token';
@@ -100,7 +98,7 @@ describe('AlertCommand native definition tests', () => {
 
     expect(http.request).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/alerts',
+      'https://yafvs.example/api/v1/alerts',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
@@ -180,7 +178,7 @@ describe('AlertCommand native definition tests', () => {
 
     expect(http.request).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/alerts/alert-id/definition',
+      'https://yafvs.example/api/v1/alerts/alert-id/definition',
       expect.objectContaining({
         method: 'PUT',
         body: JSON.stringify({
@@ -223,7 +221,7 @@ describe('AlertCommand native definition tests', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/alerts/alert-id/definition',
+      'https://yafvs.example/api/v1/alerts/alert-id/definition',
       expect.objectContaining({
         body: expect.stringContaining('"snmp_community_mode":"replace"'),
       }),
@@ -270,7 +268,7 @@ describe('AlertCommand native definition tests', () => {
     expect(http.request).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/alerts/alert-id',
+      'https://yafvs.example/api/v1/alerts/alert-id',
       expect.objectContaining({
         method: 'PATCH',
         body: JSON.stringify({

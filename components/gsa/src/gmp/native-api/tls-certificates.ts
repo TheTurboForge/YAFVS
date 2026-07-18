@@ -213,7 +213,7 @@ const deleteNative = async (gmp: NativeApiGmp, path: string): Promise<void> => {
     credentials: 'include',
     headers: {
       Accept: 'application/json',
-      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.token ? {'X-YAFVS-Token': gmp.session.token} : {}),
       ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
     },
   });
@@ -389,5 +389,7 @@ export const exportNativeTlsCertificatesMetadata = async (
       return payload;
     }),
   );
-  return new Response(`${JSON.stringify({tls_certificates: tlsCertificates}, null, 2)}\n`);
+  return new Response(
+    `${JSON.stringify({tls_certificates: tlsCertificates}, null, 2)}\n`,
+  );
 };

@@ -392,7 +392,7 @@ const deleteNative = async (gmp: NativeApiGmp, path: string): Promise<void> => {
     credentials: 'include',
     headers: {
       Accept: 'application/json',
-      'X-TurboVAS-Token': gmp.session.token ?? '',
+      'X-YAFVS-Token': gmp.session.token ?? '',
       ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
     },
   });
@@ -411,7 +411,7 @@ const writeNativeJson = async <T>(
   const headers: HeadersInit = {
     Accept: 'application/json',
     ...(body !== undefined ? {'Content-Type': 'application/json'} : {}),
-    ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+    ...(gmp.session.token ? {'X-YAFVS-Token': gmp.session.token} : {}),
     ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
   };
   const response = await fetch(gmp.buildUrl(path), {

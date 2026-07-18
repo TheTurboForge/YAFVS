@@ -20,7 +20,7 @@ const createNativeHttp = () => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -32,7 +32,13 @@ describe('AlertsCommand tests', () => {
   test('should fetch alerts through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 25, total: 1, sort: 'name', filter: 'secops'},
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: 'name',
+          filter: 'secops',
+        },
         items: [
           {
             id: '4e110580-5281-4e8e-bbc5-322f3ef8d9e8',
@@ -67,7 +73,7 @@ describe('AlertsCommand tests', () => {
       filter: 'secops',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/alerts',
+      'https://yafvs.example/api/v1/alerts',
       {
         credentials: 'include',
         headers: {
@@ -127,7 +133,13 @@ describe('AlertsCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 1, total: 3, sort: 'name', filter: 'secops'},
+          page: {
+            page: 2,
+            page_size: 1,
+            total: 3,
+            sort: 'name',
+            filter: 'secops',
+          },
           items: [{id: 'a2', name: 'Notify Owner'}],
         }),
         ok: true,
@@ -172,7 +184,13 @@ describe('AlertsCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: 'secops'},
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'secops',
+          },
           items: [{id: 'a1', name: 'Notify SecOps'}],
         }),
         ok: true,
@@ -180,7 +198,13 @@ describe('AlertsCommand tests', () => {
       })
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: 'secops'},
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'secops',
+          },
           items: [{id: 'a2', name: 'Notify Owner'}],
         }),
         ok: true,

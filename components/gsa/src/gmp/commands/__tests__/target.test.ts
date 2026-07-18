@@ -76,7 +76,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -90,7 +90,7 @@ describe('TargetCommand tests', () => {
       token: 'test-token',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/targets/target-id',
+      'https://yafvs.example/api/v1/targets/target-id',
       {
         credentials: 'include',
         headers: {
@@ -127,7 +127,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -157,7 +157,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -172,7 +172,7 @@ describe('TargetCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/targets/target-id/export',
+      'https://yafvs.example/api/v1/targets/target-id/export',
       {
         credentials: 'include',
         headers: {
@@ -201,7 +201,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -215,14 +215,14 @@ describe('TargetCommand tests', () => {
       'api/v1/targets/target-id/clone',
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/targets/target-id/clone',
+      'https://yafvs.example/api/v1/targets/target-id/clone',
       {
         method: 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({}),
@@ -248,7 +248,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -272,7 +272,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -284,13 +284,13 @@ describe('TargetCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/targets/target-id');
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/targets/target-id',
+      'https://yafvs.example/api/v1/targets/target-id',
       {
         method: 'DELETE',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
       },
@@ -309,7 +309,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -387,7 +387,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -418,14 +418,14 @@ describe('TargetCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/targets');
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/targets',
+      'https://yafvs.example/api/v1/targets',
       {
         method: 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({
@@ -456,7 +456,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -489,14 +489,14 @@ describe('TargetCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/targets');
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/targets',
+      'https://yafvs.example/api/v1/targets',
       {
         method: 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({
@@ -536,7 +536,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     const cmd = new TargetCommand(fakeHttp);
@@ -573,7 +573,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -603,7 +603,7 @@ describe('TargetCommand tests', () => {
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/targets',
+      'https://yafvs.example/api/v1/targets',
       expect.objectContaining({
         body: JSON.stringify({
           name: 'name',
@@ -634,7 +634,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -679,7 +679,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -893,7 +893,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -911,14 +911,14 @@ describe('TargetCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/targets/target_id1');
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/targets/target_id1',
+      'https://yafvs.example/api/v1/targets/target_id1',
       {
         method: 'PATCH',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({
@@ -942,7 +942,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -976,14 +976,14 @@ describe('TargetCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/targets/target_id1');
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/targets/target_id1',
+      'https://yafvs.example/api/v1/targets/target_id1',
       {
         method: 'PATCH',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({
@@ -1029,7 +1029,7 @@ describe('TargetCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';

@@ -18,7 +18,7 @@ const createGmp = ({
   jwt,
   token = 'test-token',
 }: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -98,7 +98,7 @@ describe('native API alerts', () => {
       filter: 'secops',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/alerts',
+      'https://yafvs.example/api/v1/alerts',
       {
         credentials: 'include',
         headers: {
@@ -171,7 +171,7 @@ describe('native API alerts', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/alerts/4e110580-5281-4e8e-bbc5-322f3ef8d9e8',
+      'https://yafvs.example/api/v1/alerts/4e110580-5281-4e8e-bbc5-322f3ef8d9e8',
       {
         credentials: 'include',
         headers: {

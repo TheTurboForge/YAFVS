@@ -81,7 +81,7 @@ describe('report native API loading', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const gmp = {
-      buildUrl: testing.fn(path => `https://turbovas.example/${path}`),
+      buildUrl: testing.fn(path => `https://yafvs.example/${path}`),
       session: {token: 'test-token'},
     };
 
@@ -95,7 +95,7 @@ describe('report native API loading', () => {
       filter: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/reports',
+      'https://yafvs.example/api/v1/reports',
       {
         credentials: 'include',
         headers: {Accept: 'application/json'},

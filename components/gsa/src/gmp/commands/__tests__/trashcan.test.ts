@@ -49,7 +49,7 @@ const createNativeTrashcanCommand = () => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -89,7 +89,7 @@ describe('TrashCanCommand tests', () => {
         session: ReturnType<typeof createSession>;
       };
       fakeHttp.buildUrl = testing.fn(
-        (path: string) => `https://turbovas.example/${path}`,
+        (path: string) => `https://yafvs.example/${path}`,
       );
       fakeHttp.session = createSession();
       fakeHttp.session.token = 'test-token';
@@ -103,14 +103,14 @@ describe('TrashCanCommand tests', () => {
         `api/v1/${path}/1234/restore`,
       );
       expect(fetchMock).toHaveBeenCalledWith(
-        `https://turbovas.example/api/v1/${path}/1234/restore`,
+        `https://yafvs.example/api/v1/${path}/1234/restore`,
         {
           method: 'POST',
           credentials: 'include',
           headers: {
             Accept: 'application/json',
             'Content-Type': 'application/json',
-            'X-TurboVAS-Token': 'test-token',
+            'X-YAFVS-Token': 'test-token',
             Authorization: 'Bearer jwt-token',
           },
           body: JSON.stringify({}),
@@ -128,7 +128,7 @@ describe('TrashCanCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -158,7 +158,7 @@ describe('TrashCanCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -208,7 +208,7 @@ describe('TrashCanCommand tests', () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'https://turbovas.example/api/v1/trashcan/empty-preview',
+      'https://yafvs.example/api/v1/trashcan/empty-preview',
       {
         credentials: 'include',
         headers: {
@@ -219,14 +219,14 @@ describe('TrashCanCommand tests', () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'https://turbovas.example/api/v1/trashcan/empty',
+      'https://yafvs.example/api/v1/trashcan/empty',
       {
         method: 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({
@@ -297,7 +297,7 @@ describe('TrashCanCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -321,7 +321,7 @@ describe('TrashCanCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -366,7 +366,7 @@ describe('TrashCanCommand tests', () => {
         session: ReturnType<typeof createSession>;
       };
       fakeHttp.buildUrl = testing.fn(
-        (path: string) => `https://turbovas.example/${path}`,
+        (path: string) => `https://yafvs.example/${path}`,
       );
       fakeHttp.session = createSession();
       fakeHttp.session.token = 'test-token';
@@ -380,13 +380,13 @@ describe('TrashCanCommand tests', () => {
         `api/v1/${path}/1234/trash`,
       );
       expect(fetchMock).toHaveBeenCalledWith(
-        `https://turbovas.example/api/v1/${path}/1234/trash`,
+        `https://yafvs.example/api/v1/${path}/1234/trash`,
         {
           method: 'DELETE',
           credentials: 'include',
           headers: {
             Accept: 'application/json',
-            'X-TurboVAS-Token': 'test-token',
+            'X-YAFVS-Token': 'test-token',
             Authorization: 'Bearer jwt-token',
           },
         },
@@ -403,7 +403,7 @@ describe('TrashCanCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -433,7 +433,7 @@ describe('TrashCanCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -497,7 +497,7 @@ describe('TrashCanCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -514,7 +514,7 @@ describe('TrashCanCommand tests', () => {
       sort: 'resource_type',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/trashcan/items',
+      'https://yafvs.example/api/v1/trashcan/items',
       {
         credentials: 'include',
         headers: {

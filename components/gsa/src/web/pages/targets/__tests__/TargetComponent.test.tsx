@@ -78,19 +78,29 @@ describe('TargetComponent tests', () => {
   test('should load dialog credentials and port lists through the native API when available', async () => {
     const gmp = {
       ...createGmp(),
-      buildUrl: testing.fn(
-        (path: string) => `https://turbovas.example/${path}`,
-      ),
+      buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
       session: createSession({token: 'test-token'}),
     };
     const fetchMock = testing.fn((url: string) => {
       const payload = url.endsWith('/credentials')
         ? {
-            page: {page: 1, page_size: 1000, total: 0, sort: 'name', filter: ''},
+            page: {
+              page: 1,
+              page_size: 1000,
+              total: 0,
+              sort: 'name',
+              filter: '',
+            },
             items: [],
           }
         : {
-            page: {page: 1, page_size: 1000, total: 1, sort: 'name', filter: ''},
+            page: {
+              page: 1,
+              page_size: 1000,
+              total: 1,
+              sort: 'name',
+              filter: '',
+            },
             items: [
               {
                 id: DEFAULT_PORT_LIST_ID,
@@ -136,7 +146,7 @@ describe('TargetComponent tests', () => {
       filter: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/port-lists',
+      'https://yafvs.example/api/v1/port-lists',
       expect.objectContaining({
         credentials: 'include',
       }),

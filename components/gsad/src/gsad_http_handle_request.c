@@ -31,7 +31,7 @@
  */
 gsad_http_handler_t *global_handlers;
 
-#define NATIVE_API_TOKEN_HEADER "X-TurboVAS-Token"
+#define NATIVE_API_TOKEN_HEADER "X-YAFVS-Token"
 #define SCAN_CONFIG_IMPORT_PATH "/api/v1/scan-configs/import"
 #define SCAN_CONFIG_IMPORT_MAX_BODY_BYTES (2 * 1024 * 1024)
 

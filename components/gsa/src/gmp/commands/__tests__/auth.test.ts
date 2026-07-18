@@ -19,7 +19,7 @@ const createNativeHttp = () => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -47,7 +47,7 @@ describe('AuthenticationCommand tests', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/authentication-settings/ldap',
+      'https://yafvs.example/api/v1/authentication-settings/ldap',
       expect.objectContaining({
         method: 'PUT',
         body: JSON.stringify({

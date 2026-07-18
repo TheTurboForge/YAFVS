@@ -148,7 +148,7 @@ describe('TagDialog tests', () => {
     testing.stubGlobal('fetch', fetchMock);
     const {render} = rendererWith({
       gmp: createGmp({
-        buildUrl: path => `https://turbovas.example/${path}`,
+        buildUrl: path => `https://yafvs.example/${path}`,
         session: {jwt: 'jwt-token', token: 'test-token'},
       }),
     });
@@ -204,7 +204,7 @@ describe('TagDialog tests', () => {
     testing.stubGlobal('fetch', fetchMock);
     const {render} = rendererWith({
       gmp: createGmp({
-        buildUrl: path => `https://turbovas.example/${path}`,
+        buildUrl: path => `https://yafvs.example/${path}`,
         session: {jwt: 'jwt-token', token: 'test-token'},
       }),
     });
@@ -252,7 +252,7 @@ describe('TagDialog tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     const {render} = rendererWith({
       gmp: createGmp({
@@ -295,7 +295,7 @@ describe('TagDialog tests', () => {
     );
     testing.stubGlobal('fetch', fetchMock);
     const buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     const {render} = rendererWith({
       gmp: createGmp({
@@ -352,7 +352,7 @@ describe('TagDialog tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     const {render} = rendererWith({
       gmp: createGmp({
@@ -385,7 +385,7 @@ describe('TagDialog tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     const {render} = rendererWith({
       gmp: createGmp({
@@ -419,7 +419,7 @@ describe('TagDialog tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     const {render} = rendererWith({
       gmp: createGmp({

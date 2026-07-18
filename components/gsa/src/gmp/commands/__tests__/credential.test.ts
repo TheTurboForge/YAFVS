@@ -39,7 +39,7 @@ describe('CredentialCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -54,7 +54,7 @@ describe('CredentialCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/credentials/credential-id/export',
+      'https://yafvs.example/api/v1/credentials/credential-id/export',
       {
         credentials: 'include',
         headers: {
@@ -110,9 +110,6 @@ describe('CredentialCommand tests', () => {
 
     expect(resp.data.id).toEqual('foo');
   });
-
-
-
 
   test('should create credential', async () => {
     const response = createActionResultResponse();
@@ -188,7 +185,6 @@ describe('CredentialCommand tests', () => {
     expect(resp.data.id).toEqual('foo');
   });
 
-
   test('should create regular KRB5 credential with KDC validation', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);
@@ -229,7 +225,6 @@ describe('CredentialCommand tests', () => {
     expect(resp.data.id).toEqual('foo');
   });
 
-
   test('should save credential with minimal params', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);
@@ -264,7 +259,9 @@ describe('CredentialCommand tests', () => {
 
   test('should save credential metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
-      json: testing.fn().mockResolvedValue({id: '1', name: 'updated-credential'}),
+      json: testing
+        .fn()
+        .mockResolvedValue({id: '1', name: 'updated-credential'}),
       ok: true,
       status: 200,
     });
@@ -274,7 +271,7 @@ describe('CredentialCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -290,14 +287,14 @@ describe('CredentialCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/credentials/1');
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/credentials/1',
+      'https://yafvs.example/api/v1/credentials/1',
       {
         method: 'PATCH',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({
@@ -318,7 +315,7 @@ describe('CredentialCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -456,7 +453,6 @@ describe('CredentialCommand tests', () => {
     expect(resp.data.id).toEqual('foo');
   });
 
-
   test('should save regular KRB5 credential with KDC validation', async () => {
     const response = createActionResultResponse();
     const fakeHttp = createHttp(response);
@@ -497,7 +493,6 @@ describe('CredentialCommand tests', () => {
 
     expect(resp.data.id).toEqual('foo');
   });
-
 
   test('should download credential', async () => {
     const response = new ArrayBuffer(8);

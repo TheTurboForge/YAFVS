@@ -15,8 +15,11 @@ import {loadEntities, loadEntity} from 'web/store/entities/filters';
 import {createState} from 'web/store/entities/utils/testing';
 import {filterIdentifier} from 'web/store/utils';
 
-const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+const createGmp = ({
+  jwt,
+  token = 'test-token',
+}: {jwt?: string; token?: string} = {}) => ({
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -75,7 +78,7 @@ describe('native API filters', () => {
       filter_type: 'result',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/filters',
+      'https://yafvs.example/api/v1/filters',
       {
         credentials: 'include',
         headers: {

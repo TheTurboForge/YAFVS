@@ -20,8 +20,8 @@ fn alert_test_remains_an_explicit_real_delivery_action_on_both_write_paths() {
 
     for required in [
         "operationId: postAlertsByAlertIdTest",
-        "x-turbovas-safety-contract: write-control-v1",
-        "x-turbovas-side-effect: alert-real-delivery-control",
+        "x-yafvs-safety-contract: write-control-v1",
+        "x-yafvs-side-effect: alert-real-delivery-control",
         "summary: Send a real test delivery for an alert",
         "A Start Task alert can start its configured task.",
         "'204':",
@@ -53,6 +53,6 @@ fn alert_create_residual_marker_names_only_unimplemented_delivery_payload_mutati
         .split_once("  /alerts/{alert_id}:\n")
         .expect("alerts collection must end before detail route")
         .0;
-    assert!(create.contains("x-turbovas-inherited-still-owns: delivery-payload-mutations"));
+    assert!(create.contains("x-yafvs-inherited-still-owns: delivery-payload-mutations"));
     assert!(!create.contains("alert-test-actions-and-delivery-payload-mutations"));
 }

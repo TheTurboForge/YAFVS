@@ -50,9 +50,7 @@ describe('ReportsCommand tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(
-      path => `https://turbovas.example/${path}`,
-    );
+    fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
     fakeHttp.session.jwt = 'jwt-token';
@@ -76,7 +74,13 @@ describe('ReportsCommand tests', () => {
   test('should page through native API for getAll', async () => {
     const responses = [
       {
-        page: {page: 1, page_size: 500, total: 2, sort: '-creation_time', filter: ''},
+        page: {
+          page: 1,
+          page_size: 500,
+          total: 2,
+          sort: '-creation_time',
+          filter: '',
+        },
         items: [
           {
             id: 'report-1',
@@ -86,12 +90,25 @@ describe('ReportsCommand tests', () => {
             vulnerability_count: 1,
             host_count: 1,
             max_severity: 5,
-            severity: {critical: 0, high: 0, medium: 1, low: 0, log: 0, false_positive: 0},
+            severity: {
+              critical: 0,
+              high: 0,
+              medium: 1,
+              low: 0,
+              log: 0,
+              false_positive: 0,
+            },
           },
         ],
       },
       {
-        page: {page: 2, page_size: 500, total: 2, sort: '-creation_time', filter: ''},
+        page: {
+          page: 2,
+          page_size: 500,
+          total: 2,
+          sort: '-creation_time',
+          filter: '',
+        },
         items: [
           {
             id: 'report-2',
@@ -101,7 +118,14 @@ describe('ReportsCommand tests', () => {
             vulnerability_count: 2,
             host_count: 1,
             max_severity: 7,
-            severity: {critical: 0, high: 1, medium: 1, low: 0, log: 0, false_positive: 0},
+            severity: {
+              critical: 0,
+              high: 1,
+              medium: 1,
+              low: 0,
+              log: 0,
+              false_positive: 0,
+            },
           },
         ],
       },
@@ -115,9 +139,7 @@ describe('ReportsCommand tests', () => {
     );
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(
-      path => `https://turbovas.example/${path}`,
-    );
+    fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
     fakeHttp.session.jwt = 'jwt-token';
@@ -126,7 +148,10 @@ describe('ReportsCommand tests', () => {
     const result = await cmd.getAll();
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(result.data.map(report => report.id)).toEqual(['report-1', 'report-2']);
+    expect(result.data.map(report => report.id)).toEqual([
+      'report-1',
+      'report-2',
+    ]);
     expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/reports', {
       token: 'test-token',
       page: 1,

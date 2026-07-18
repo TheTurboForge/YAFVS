@@ -66,7 +66,7 @@ const createGmp = ({
   }),
 } = {}) => {
   const resolvedBuildUrl =
-    buildUrl ?? testing.fn((path, _params) => `https://turbovas.example/${path}`);
+    buildUrl ?? testing.fn((path, _params) => `https://yafvs.example/${path}`);
   if (buildUrl === undefined) {
     testing.stubGlobal(
       'fetch',
@@ -74,7 +74,13 @@ const createGmp = ({
         const path = String(url);
         const payload = path.includes('/api/v1/filters')
           ? {
-              page: {page: 1, page_size: 10, total: 0, sort: 'name', filter: ''},
+              page: {
+                page: 1,
+                page_size: 10,
+                total: 0,
+                sort: 'name',
+                filter: '',
+              },
               items: [],
             }
           : {

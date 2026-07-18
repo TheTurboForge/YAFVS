@@ -61,7 +61,7 @@ const createGmp = ({
   ...(native
     ? {
         buildUrl: testing.fn(
-          (path, _params) => `https://turbovas.example/${path}`,
+          (path, _params) => `https://yafvs.example/${path}`,
         ),
       }
     : {}),
@@ -517,7 +517,7 @@ describe('TagComponent tests', () => {
       token: 'test-token',
     });
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      'https://turbovas.example/api/v1/tags/1234/export',
+      'https://yafvs.example/api/v1/tags/1234/export',
       expect.objectContaining({credentials: 'include'}),
     );
     expect(onDownloaded).toHaveBeenCalledWith({

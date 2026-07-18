@@ -136,7 +136,7 @@ const createGmp = ({
     foo: 'bar',
   }),
 } = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   targets: {
     get: getTargets,
     deleteByFilter,

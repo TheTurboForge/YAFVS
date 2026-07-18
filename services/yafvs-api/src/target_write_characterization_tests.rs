@@ -444,7 +444,7 @@ fn native_target_broad_mutation_routes_remain_closed() {
             "{path} GET OpenAPI block must keep {replacement}"
         );
         assert!(!get.contains(
-            "x-turbovas-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows"
+            "x-yafvs-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows"
         ));
     }
 
@@ -468,17 +468,17 @@ fn native_target_broad_mutation_routes_remain_closed() {
             "{path} OpenAPI block must keep {replacement}"
         );
         assert!(block.contains(
-            "x-turbovas-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows"
+            "x-yafvs-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows"
         ));
     }
     let export = openapi_path_block("/targets/{target_id}/export");
     for required in [
         "get:",
         "operationId: getTargetsByTargetIdExport",
-        "x-turbovas-direct: true",
-        "x-turbovas-exposure: direct-read",
-        "x-turbovas-maturity: live-read",
-        "x-turbovas-replaces: target-metadata-export-read",
+        "x-yafvs-direct: true",
+        "x-yafvs-exposure: direct-read",
+        "x-yafvs-maturity: live-read",
+        "x-yafvs-replaces: target-metadata-export-read",
         "$ref: '#/components/schemas/Target'",
         "Credential references include id/name/type/port only",
         "file/host-filter input variants",
@@ -489,11 +489,11 @@ fn native_target_broad_mutation_routes_remain_closed() {
         );
     }
     assert!(!export.contains(
-        "x-turbovas-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows"
+        "x-yafvs-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows"
     ));
     for forbidden in [
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-safety-contract: write-control-v1",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-safety-contract: write-control-v1",
         "\n    post:",
         "\n    patch:",
         "\n    put:",
@@ -507,9 +507,9 @@ fn native_target_broad_mutation_routes_remain_closed() {
 
     let detail = openapi_path_block("/targets/{target_id}");
     assert!(detail.contains(
-        "x-turbovas-replaces: target-metadata-simple-scan-inputs-and-credential-links-modify"
+        "x-yafvs-replaces: target-metadata-simple-scan-inputs-and-credential-links-modify"
     ));
-    assert!(detail.contains("x-turbovas-replaces: target-trash-move"));
+    assert!(detail.contains("x-yafvs-replaces: target-trash-move"));
     for forbidden in ["post:", "/clone", "/restore", "/trash"] {
         assert!(
             !detail.contains(forbidden),

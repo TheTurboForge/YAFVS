@@ -138,7 +138,7 @@ const deleteNative = async (
     credentials: 'include',
     headers: {
       Accept: 'application/json',
-      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.token ? {'X-YAFVS-Token': gmp.session.token} : {}),
       ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
     },
   });
@@ -159,7 +159,7 @@ const writeNativeJson = async <T>(
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.token ? {'X-YAFVS-Token': gmp.session.token} : {}),
       ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
     },
     body: JSON.stringify(body),
@@ -292,7 +292,7 @@ export const emptyNativeTrashcan = async (
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
-        ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+        ...(gmp.session.token ? {'X-YAFVS-Token': gmp.session.token} : {}),
         ...(gmp.session.jwt
           ? {Authorization: `Bearer ${gmp.session.jwt}`}
           : {}),

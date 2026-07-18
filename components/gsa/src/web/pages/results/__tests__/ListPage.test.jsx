@@ -140,7 +140,7 @@ const nativeResultItems = [
 ];
 
 const createGmp = ({
-  buildUrl = testing.fn((path, _params) => `https://turbovas.example/${path}`),
+  buildUrl = testing.fn((path, _params) => `https://yafvs.example/${path}`),
   getResults = testing.fn().mockResolvedValue({
     data: results,
     meta: {
@@ -179,7 +179,13 @@ const createGmp = ({
     'fetch',
     testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 10, total: nativeResultItems.length, sort: '-severity', filter: ''},
+        page: {
+          page: 1,
+          page_size: 10,
+          total: nativeResultItems.length,
+          sort: '-severity',
+          filter: '',
+        },
         items: nativeResultItems,
       }),
       ok: true,

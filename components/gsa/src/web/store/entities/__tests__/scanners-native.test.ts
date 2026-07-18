@@ -17,7 +17,7 @@ const createGmp = ({
   jwt,
   token = 'test-token',
 }: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -83,7 +83,7 @@ describe('native API scanners list', () => {
       filter: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scanners',
+      'https://yafvs.example/api/v1/scanners',
       {
         credentials: 'include',
         headers: {
@@ -123,7 +123,9 @@ describe('native API scanners list', () => {
     const gmp = {
       ...createGmp(),
       scanners: {
-        get: testing.fn().mockRejectedValue(new Error('inherited fallback used')),
+        get: testing
+          .fn()
+          .mockRejectedValue(new Error('inherited fallback used')),
       },
     };
 
@@ -203,7 +205,7 @@ describe('native API scanner detail', () => {
       token: 'test-token',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      `https://turbovas.example/api/v1/scanners/${id}`,
+      `https://yafvs.example/api/v1/scanners/${id}`,
       {
         credentials: 'include',
         headers: {

@@ -32,7 +32,7 @@ export class AuthenticationSettingsRequestError extends Error {
 const nativeApiHeaders = (http: Http) => ({
   Accept: 'application/json',
   'Content-Type': 'application/json',
-  ...(http.session.token ? {'X-TurboVAS-Token': http.session.token} : {}),
+  ...(http.session.token ? {'X-YAFVS-Token': http.session.token} : {}),
   ...(http.session.jwt ? {Authorization: `Bearer ${http.session.jwt}`} : {}),
 });
 

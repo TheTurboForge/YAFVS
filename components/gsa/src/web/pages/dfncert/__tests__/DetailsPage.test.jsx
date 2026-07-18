@@ -77,7 +77,7 @@ describe('DfnCert DetailsPage tests', () => {
     testing.stubGlobal('fetch', fetchMock);
     const exportDfnCert = testing.fn().mockResolvedValue({data: '<dfn/>'});
     const buildUrl = testing.fn(
-      (path, _params) => `https://turbovas.example/${path}`,
+      (path, _params) => `https://yafvs.example/${path}`,
     );
     const gmp = createGmp({buildUrl, exportDfnCert});
     const {render, store} = rendererWith({
@@ -101,7 +101,7 @@ describe('DfnCert DetailsPage tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      'https://turbovas.example/api/v1/dfn-cert-advisories/DFN-CERT-2026-001/export',
+      'https://yafvs.example/api/v1/dfn-cert-advisories/DFN-CERT-2026-001/export',
       expect.objectContaining({credentials: 'include'}),
     );
   });

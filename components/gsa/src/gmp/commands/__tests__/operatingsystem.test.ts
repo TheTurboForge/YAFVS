@@ -31,9 +31,7 @@ describe('OperatingSystemCommand tests', () => {
       buildUrl: ReturnType<typeof testing.fn>;
       session: ReturnType<typeof createSession>;
     };
-    fakeHttp.buildUrl = testing.fn(
-      path => `https://turbovas.example/${path}`,
-    );
+    fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
     fakeHttp.session.jwt = 'jwt-token';
@@ -47,7 +45,7 @@ describe('OperatingSystemCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/operating-systems/os-id/export',
+      'https://yafvs.example/api/v1/operating-systems/os-id/export',
       {
         credentials: 'include',
         headers: {
@@ -64,5 +62,4 @@ describe('OperatingSystemCommand tests', () => {
       },
     });
   });
-
 });

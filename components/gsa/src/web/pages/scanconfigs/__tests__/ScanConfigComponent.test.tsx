@@ -257,7 +257,7 @@ afterEach(() => {
 
 const createGmp = (overrides: Record<string, unknown> = {}): GmpFactory => {
   const buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   const fetchNativeScanners = testing.fn((url: string) => {
     const payload = url.endsWith('/families')

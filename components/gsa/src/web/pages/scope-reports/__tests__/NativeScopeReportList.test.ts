@@ -14,7 +14,7 @@ const createGmp = ({
   jwt,
   token = 'test-token',
 }: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -92,7 +92,7 @@ describe('native API scope report list', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scope-reports/scope-report-1',
+      'https://yafvs.example/api/v1/scope-reports/scope-report-1',
       {
         credentials: 'include',
         headers: {
@@ -182,7 +182,7 @@ describe('native API scope report list', () => {
       filter: 'org',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scope-reports',
+      'https://yafvs.example/api/v1/scope-reports',
       {
         credentials: 'include',
         headers: {

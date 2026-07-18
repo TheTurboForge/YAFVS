@@ -12,8 +12,11 @@ import {
   fetchNativeScopeReportResults,
 } from 'gmp/native-api/scope-report-collections';
 
-const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+const createGmp = ({
+  jwt,
+  token = 'test-token',
+}: {jwt?: string; token?: string} = {}) => ({
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -25,7 +28,13 @@ describe('native API scope report evidence collections', () => {
   test('fetches paginated scope-report hosts through the same-origin native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 2, page_size: 25, total: 42, sort: '-result_count', filter: 'linux'},
+        page: {
+          page: 2,
+          page_size: 25,
+          total: 42,
+          sort: '-result_count',
+          filter: 'linux',
+        },
         items: [
           {
             host: '192.0.2.10',
@@ -55,7 +64,10 @@ describe('native API scope report evidence collections', () => {
     expect(collection.items[0].host).toEqual('192.0.2.10');
     expect(collection.items[0].scopeMembership).toEqual('member');
     expect(collection.items[0].authenticatedScanState).toEqual('authenticated');
-    expect(collection.items[0].sourceReportIds).toEqual(['report-1', 'report-2']);
+    expect(collection.items[0].sourceReportIds).toEqual([
+      'report-1',
+      'report-2',
+    ]);
     expect(gmp.buildUrl).toHaveBeenCalledWith(
       'api/v1/scopes/scope-1/reports/scope-report-1/hosts',
       {
@@ -67,7 +79,7 @@ describe('native API scope report evidence collections', () => {
       },
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scopes/scope-1/reports/scope-report-1/hosts',
+      'https://yafvs.example/api/v1/scopes/scope-1/reports/scope-report-1/hosts',
       {
         credentials: 'include',
         headers: {
@@ -83,7 +95,13 @@ describe('native API scope report evidence collections', () => {
       'fetch',
       testing.fn().mockResolvedValue({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 25, total: 1, sort: '-severity', filter: ''},
+          page: {
+            page: 1,
+            page_size: 25,
+            total: 1,
+            sort: '-severity',
+            filter: '',
+          },
           items: [
             {
               id: 'result-1',
@@ -114,9 +132,7 @@ describe('native API scope report evidence collections', () => {
 
     expect(collection.items[0].name).toEqual('Example finding');
     expect(collection.items[0].severity).toEqual(7.5);
-    expect(collection.items[0].rawEvidenceHref).toEqual(
-      '/result/result-1',
-    );
+    expect(collection.items[0].rawEvidenceHref).toEqual('/result/result-1');
     expect(gmp.buildUrl).toHaveBeenCalledWith(
       'api/v1/scopes/scope-1/reports/scope-report-1/results',
       {
@@ -164,7 +180,10 @@ describe('native API scope report evidence collections', () => {
     expect(collection.items[0].protocol).toEqual('tcp');
     expect(collection.items[0].hostCount).toEqual(3);
     expect(collection.items[0].maxSeverity).toEqual(7.5);
-    expect(collection.items[0].sourceReportIds).toEqual(['report-1', 'report-2']);
+    expect(collection.items[0].sourceReportIds).toEqual([
+      'report-1',
+      'report-2',
+    ]);
     expect(gmp.buildUrl).toHaveBeenCalledWith(
       'api/v1/scopes/scope-1/reports/scope-report-1/ports',
       {
@@ -182,7 +201,13 @@ describe('native API scope report evidence collections', () => {
       'fetch',
       testing.fn().mockResolvedValue({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 25, total: 1, sort: '-max_severity', filter: ''},
+          page: {
+            page: 1,
+            page_size: 25,
+            total: 1,
+            sort: '-max_severity',
+            filter: '',
+          },
           items: [
             {
               id: 'CVE-2026-0001',
@@ -226,7 +251,13 @@ describe('native API scope report evidence collections', () => {
       'fetch',
       testing.fn().mockResolvedValue({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 25, total: 1, sort: '-created_at', filter: ''},
+          page: {
+            page: 1,
+            page_size: 25,
+            total: 1,
+            sort: '-created_at',
+            filter: '',
+          },
           items: [
             {
               id: 'result-1',

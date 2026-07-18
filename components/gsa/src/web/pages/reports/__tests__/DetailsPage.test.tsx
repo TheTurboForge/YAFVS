@@ -162,7 +162,7 @@ const createGetSettingMock = () =>
   });
 
 const createGmp = () => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   settings: {
     manualUrl,
     reportResultsThreshold: 100,
@@ -399,7 +399,7 @@ describe('DetailsPage', () => {
         filter: '',
       });
       expect(fetchMock).toHaveBeenCalledWith(
-        'https://turbovas.example/api/v1/targets/target-1',
+        'https://yafvs.example/api/v1/targets/target-1',
         expect.objectContaining({
           credentials: 'include',
         }),
@@ -425,7 +425,7 @@ describe('DetailsPage', () => {
       });
       expect(gmp.filters.get).not.toHaveBeenCalled();
       expect(fetchMock).toHaveBeenCalledWith(
-        'https://turbovas.example/api/v1/filters',
+        'https://yafvs.example/api/v1/filters',
         expect.objectContaining({credentials: 'include'}),
       );
     });

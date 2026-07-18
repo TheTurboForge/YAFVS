@@ -25,9 +25,7 @@ const createNativeHttp = () => {
     session: ReturnType<typeof createSession>;
   };
 
-  http.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
-  );
+  http.buildUrl = testing.fn((path: string) => `https://yafvs.example/${path}`);
   http.session = createSession();
   http.session.token = 'test-token';
   http.session.jwt = 'jwt-token';
@@ -73,7 +71,7 @@ describe('PortListsCommand', () => {
       predefined: '1',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/port-lists',
+      'https://yafvs.example/api/v1/port-lists',
       {
         credentials: 'include',
         headers: {
@@ -423,7 +421,7 @@ describe('native port-list command family', () => {
     });
     expect(http.buildUrl).toHaveBeenCalledWith('api/v1/port-lists/p1/ranges');
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/port-lists/p1/ranges',
+      'https://yafvs.example/api/v1/port-lists/p1/ranges',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({protocol: 'tcp', start: 80, end: 443}),

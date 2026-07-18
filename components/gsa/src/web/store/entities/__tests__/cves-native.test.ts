@@ -15,7 +15,7 @@ const createGmp = ({
   jwt,
   token = 'test-token',
 }: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -83,7 +83,7 @@ describe('native API CVE catalog', () => {
       filter: 'lightllm',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/cves',
+      'https://yafvs.example/api/v1/cves',
       {
         credentials: 'include',
         headers: {
@@ -270,6 +270,8 @@ describe('native API CVE catalog', () => {
     const successAction = dispatch.mock.calls[1][0];
     expect(successAction.type).toEqual('ENTITY_LOADING_SUCCESS');
     expect(successAction.data.name).toEqual('CVE-2026-26220');
-    expect(successAction.data.products).toEqual(['cpe:/a:example:lightllm:1.1.0']);
+    expect(successAction.data.products).toEqual([
+      'cpe:/a:example:lightllm:1.1.0',
+    ]);
   });
 });

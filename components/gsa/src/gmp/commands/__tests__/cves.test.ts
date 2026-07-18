@@ -20,7 +20,7 @@ const createNativeHttp = () => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -32,7 +32,13 @@ describe('CvesCommand tests', () => {
   test('should fetch cves through native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 25, total: 1, sort: '-severity', filter: 'Admin'},
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: '-severity',
+          filter: 'Admin',
+        },
         items: [
           {
             id: 'CVE-2026-10001',
@@ -137,7 +143,13 @@ describe('CvesCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 1, total: 3, sort: 'severity', filter: 'Admin'},
+          page: {
+            page: 2,
+            page_size: 1,
+            total: 3,
+            sort: 'severity',
+            filter: 'Admin',
+          },
           items: [{id: 'CVE-2026-10002'}],
         }),
         ok: true,
@@ -171,7 +183,13 @@ describe('CvesCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 500, total: 2, sort: 'severity', filter: 'Admin'},
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'severity',
+            filter: 'Admin',
+          },
           items: [{id: 'CVE-2026-10001'}],
         }),
         ok: true,
@@ -179,7 +197,13 @@ describe('CvesCommand tests', () => {
       })
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 500, total: 2, sort: 'severity', filter: 'Admin'},
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'severity',
+            filter: 'Admin',
+          },
           items: [{id: 'CVE-2026-10002'}],
         }),
         ok: true,
@@ -222,6 +246,4 @@ describe('CvesCommand tests', () => {
       {id: 'CVE-2026-10002'},
     ]);
   });
-
-
 });

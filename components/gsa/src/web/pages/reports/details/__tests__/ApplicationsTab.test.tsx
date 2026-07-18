@@ -21,7 +21,7 @@ const createGmp = () => ({
         query.set(key, String(value));
       }
     });
-    return `https://turbovas.example/${path}${
+    return `https://yafvs.example/${path}${
       query.size > 0 ? `?${query.toString()}` : ''
     }`;
   }),
@@ -35,7 +35,10 @@ afterEach(() => {
 
 describe('ApplicationsTab', () => {
   test('should render loading state initially', () => {
-    testing.stubGlobal('fetch', testing.fn(() => new Promise(() => {})));
+    testing.stubGlobal(
+      'fetch',
+      testing.fn(() => new Promise(() => {})),
+    );
     const {render} = rendererWith({gmp: createGmp(), router: true});
 
     render(
@@ -82,7 +85,9 @@ describe('ApplicationsTab', () => {
       <ApplicationsTab filter={filter} reportId={reportId} status={'Done'} />,
     );
 
-    const table = await screen.findByTestId('native-raw-report-applications-table');
+    const table = await screen.findByTestId(
+      'native-raw-report-applications-table',
+    );
     const rows = within(table).getAllByRole('row');
     expect(rows[0]).toHaveTextContent('Application');
     expect(rows[0]).toHaveTextContent('CPE');

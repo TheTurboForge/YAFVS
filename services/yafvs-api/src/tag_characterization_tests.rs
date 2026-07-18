@@ -280,29 +280,28 @@ fn native_direct_api_exposes_bounded_tag_reads_and_writes() {
 fn openapi_tag_contract_replaces_filter_and_resource_type_tail() {
     for path in ["/tags", "/tags/{tag_id}/resources"] {
         let block = openapi_path_block(path);
-        assert!(!block.contains("x-turbovas-inherited-still-owns"));
+        assert!(!block.contains("x-yafvs-inherited-still-owns"));
         assert!(block.contains("resource_filter"));
     }
     let patch_block = openapi_path_block("/tags/{tag_id}");
     assert!(
-        patch_block.contains(
-            "x-turbovas-replaces: tag-metadata-resource-type-and-atomic-assignment-write"
-        )
+        patch_block
+            .contains("x-yafvs-replaces: tag-metadata-resource-type-and-atomic-assignment-write")
     );
     assert!(patch_block.contains("resource_type change"));
     let clone_block = openapi_path_block("/tags/{tag_id}/clone");
-    assert!(clone_block.contains("x-turbovas-replaces: tag-clone"));
-    assert!(clone_block.contains("x-turbovas-safety-contract: write-control-v1"));
+    assert!(clone_block.contains("x-yafvs-replaces: tag-clone"));
+    assert!(clone_block.contains("x-yafvs-safety-contract: write-control-v1"));
     let export_block = openapi_path_block("/tags/{tag_id}/export");
-    assert!(export_block.contains("x-turbovas-replaces: tag-metadata-export-read"));
-    assert!(export_block.contains("x-turbovas-exposure: direct-read"));
-    assert!(!export_block.contains("x-turbovas-inherited-still-owns"));
-    assert!(!export_block.contains("x-turbovas-safety-contract: write-control-v1"));
+    assert!(export_block.contains("x-yafvs-replaces: tag-metadata-export-read"));
+    assert!(export_block.contains("x-yafvs-exposure: direct-read"));
+    assert!(!export_block.contains("x-yafvs-inherited-still-owns"));
+    assert!(!export_block.contains("x-yafvs-safety-contract: write-control-v1"));
     let delete_block = openapi_path_block("/tags/{tag_id}");
     assert!(delete_block.contains("Move tag to trash"));
-    assert!(delete_block.contains("x-turbovas-replaces: tag-trash-move"));
+    assert!(delete_block.contains("x-yafvs-replaces: tag-trash-move"));
     let restore_block = openapi_path_block("/tags/{tag_id}/restore");
-    assert!(restore_block.contains("x-turbovas-replaces: tag-restore"));
+    assert!(restore_block.contains("x-yafvs-replaces: tag-restore"));
     let hard_delete_block = openapi_path_block("/tags/{tag_id}/trash");
-    assert!(hard_delete_block.contains("x-turbovas-replaces: tag-hard-delete"));
+    assert!(hard_delete_block.contains("x-yafvs-replaces: tag-hard-delete"));
 }

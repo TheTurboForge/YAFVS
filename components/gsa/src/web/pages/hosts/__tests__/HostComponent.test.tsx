@@ -201,7 +201,7 @@ describe('HostWithTargetComponent tests', () => {
     testing.stubGlobal('fetch', fetchMock);
     const exportHost = testing.fn().mockResolvedValue({data: '<host/>'});
     const buildUrl = testing.fn(
-      (path: string, _params: unknown) => `https://turbovas.example/${path}`,
+      (path: string, _params: unknown) => `https://yafvs.example/${path}`,
     );
     const gmp = createGmp({buildUrl, exportHost});
     let downloadClick: (host: Host) => void = () => {};
@@ -231,7 +231,7 @@ describe('HostWithTargetComponent tests', () => {
       token: 'test-token',
     });
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      'https://turbovas.example/api/v1/hosts/12345/export',
+      'https://yafvs.example/api/v1/hosts/12345/export',
       expect.objectContaining({credentials: 'include'}),
     );
     expect(onDownloaded).toHaveBeenCalledWith({

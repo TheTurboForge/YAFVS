@@ -60,7 +60,7 @@ describe('useFilterDialogSave', () => {
     const create = testing.fn().mockResolvedValue({data: {id: '123'}});
     const get = testing.fn();
     const buildUrl = testing.fn(
-      path => `https://turbovas.example/${String(path)}`,
+      path => `https://yafvs.example/${String(path)}`,
     );
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -107,7 +107,7 @@ describe('useFilterDialogSave', () => {
       token: 'session-token',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/filters/123',
+      'https://yafvs.example/api/v1/filters/123',
       {
         credentials: 'include',
         headers: {

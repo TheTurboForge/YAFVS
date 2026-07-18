@@ -6,10 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import CertBundAdvisoriesCommand from 'gmp/commands/cert-bund-advisories';
-import {
-  createAggregatesResponse,
-  createHttp,
-} from 'gmp/commands/testing';
+import {createAggregatesResponse, createHttp} from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 
@@ -23,7 +20,7 @@ const createNativeHttp = () => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -35,7 +32,13 @@ describe('CertBundAdvisoriesCommand tests', () => {
   test('should fetch CERT-Bund advisories through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 25, total: 1, sort: '-created', filter: 'openssl'},
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: '-created',
+          filter: 'openssl',
+        },
         items: [
           {
             id: 'cert-bund-uuid-1',
@@ -108,7 +111,13 @@ describe('CertBundAdvisoriesCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 1, total: 3, sort: 'created', filter: 'openssl'},
+          page: {
+            page: 2,
+            page_size: 1,
+            total: 3,
+            sort: 'created',
+            filter: 'openssl',
+          },
           items: [{id: 'cb2'}],
         }),
         ok: true,
@@ -148,7 +157,13 @@ describe('CertBundAdvisoriesCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 500, total: 2, sort: 'created', filter: 'openssl'},
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'created',
+            filter: 'openssl',
+          },
           items: [{id: 'cb1'}],
         }),
         ok: true,
@@ -156,7 +171,13 @@ describe('CertBundAdvisoriesCommand tests', () => {
       })
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 500, total: 2, sort: 'created', filter: 'openssl'},
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'created',
+            filter: 'openssl',
+          },
           items: [{id: 'cb2'}],
         }),
         ok: true,
@@ -207,6 +228,4 @@ describe('CertBundAdvisoriesCommand tests', () => {
       {id: 'cb2', name: 'CERT-Bund-2'},
     ]);
   });
-
-
 });

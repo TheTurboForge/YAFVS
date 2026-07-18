@@ -964,7 +964,7 @@ mod tests {
             .and_then(|(_, after)| after.split_once("  /reports/{report_id}/results:"))
             .map(|(path, _)| path)
             .expect("OpenAPI native PDF path must be present");
-        assert!(path.contains("x-turbovas-direct: true"));
+        assert!(path.contains("x-yafvs-direct: true"));
         assert!(path.contains("$ref: '#/components/parameters/CanonicalPdfReportFormatId'"));
         assert!(path.contains("application/pdf"));
         assert!(path.contains("RequestTooLarge"));

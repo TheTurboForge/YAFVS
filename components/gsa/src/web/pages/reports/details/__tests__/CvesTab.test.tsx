@@ -24,7 +24,7 @@ const createGmp = () => ({
         query.set(key, String(value));
       }
     });
-    return `https://turbovas.example/${path}${
+    return `https://yafvs.example/${path}${
       query.size > 0 ? `?${query.toString()}` : ''
     }`;
   }),
@@ -40,7 +40,10 @@ afterEach(() => {
 
 describe('Report CVEs Tab tests', () => {
   test('should render loading state initially', () => {
-    testing.stubGlobal('fetch', testing.fn(() => new Promise(() => {})));
+    testing.stubGlobal(
+      'fetch',
+      testing.fn(() => new Promise(() => {})),
+    );
     const gmp = createGmp();
     const {render} = rendererWith({gmp, router: true, capabilities: true});
 
@@ -52,7 +55,13 @@ describe('Report CVEs Tab tests', () => {
   test('should render native Report CVEs Tab', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 2, total: 1, sort: '-max_severity', filter: ''},
+        page: {
+          page: 1,
+          page_size: 2,
+          total: 1,
+          sort: '-max_severity',
+          filter: '',
+        },
         items: [
           {
             id: 'CVE-2019-1234',
@@ -173,7 +182,13 @@ describe('Report CVEs Tab tests', () => {
       'fetch',
       testing.fn().mockResolvedValue({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 2, total: 0, sort: '-max_severity', filter: ''},
+          page: {
+            page: 1,
+            page_size: 2,
+            total: 0,
+            sort: '-max_severity',
+            filter: '',
+          },
           items: [],
         }),
         ok: true,
@@ -185,7 +200,9 @@ describe('Report CVEs Tab tests', () => {
 
     render(<CvesTab filter={filter} reportId={reportId} status="Done" />);
 
-    expect(await screen.findByTestId('native-raw-report-cves-table')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('native-raw-report-cves-table'),
+    ).toBeInTheDocument();
   });
 
   test('should render native fetch failure', async () => {

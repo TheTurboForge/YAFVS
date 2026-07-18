@@ -24,9 +24,7 @@ const createNativeHttp = () => {
     buildUrl: ReturnType<typeof testing.fn>;
     session: ReturnType<typeof createSession>;
   };
-  http.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
-  );
+  http.buildUrl = testing.fn((path: string) => `https://yafvs.example/${path}`);
   http.session = createSession();
   http.session.token = 'test-token';
   http.session.jwt = 'jwt-token';
@@ -172,7 +170,7 @@ describe('TagCommand', () => {
 
     expect(response.data.id).toEqual('tag-1');
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/tags',
+      'https://yafvs.example/api/v1/tags',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({

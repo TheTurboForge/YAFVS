@@ -5,14 +5,8 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import {
-  ScanConfigCommand,
-  ScanConfigsCommand,
-} from 'gmp/commands/scan-configs';
-import {
-  createHttp,
-  createActionResultResponse,
-} from 'gmp/commands/testing';
+import {ScanConfigCommand, ScanConfigsCommand} from 'gmp/commands/scan-configs';
+import {createHttp, createActionResultResponse} from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
 import {
   SCANCONFIG_TREND_STATIC,
@@ -27,7 +21,7 @@ afterEach(() => {
 
 const createNativeHttp = () => {
   const fakeHttp = createHttp(undefined);
-  fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+  fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
   fakeHttp.session.jwt = 'jwt-token';
@@ -73,7 +67,7 @@ describe('ScanConfigsCommand tests', () => {
       predefined: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scan-configs',
+      'https://yafvs.example/api/v1/scan-configs',
       {
         credentials: 'include',
         headers: {
@@ -383,14 +377,14 @@ describe('ScanConfigCommand tests', () => {
       'api/v1/scan-configs/import',
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scan-configs/import',
+      'https://yafvs.example/api/v1/scan-configs/import',
       {
         method: 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify(backup),
@@ -420,7 +414,7 @@ describe('ScanConfigCommand tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
     fakeHttp.session.jwt = 'jwt-token';
@@ -434,7 +428,7 @@ describe('ScanConfigCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scan-configs/scan-config-id/backup',
+      'https://yafvs.example/api/v1/scan-configs/scan-config-id/backup',
       {
         credentials: 'include',
         headers: {
@@ -454,7 +448,7 @@ describe('ScanConfigCommand tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
     fakeHttp.session.jwt = 'jwt-token';
@@ -469,14 +463,14 @@ describe('ScanConfigCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/scan-configs');
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scan-configs',
+      'https://yafvs.example/api/v1/scan-configs',
       {
         method: 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({
@@ -498,7 +492,7 @@ describe('ScanConfigCommand tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(response);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
 
@@ -523,7 +517,7 @@ describe('ScanConfigCommand tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
     fakeHttp.session.jwt = 'jwt-token';
@@ -536,14 +530,14 @@ describe('ScanConfigCommand tests', () => {
       'api/v1/scan-configs/scan-config-id/clone',
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scan-configs/scan-config-id/clone',
+      'https://yafvs.example/api/v1/scan-configs/scan-config-id/clone',
       {
         method: 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({}),
@@ -565,7 +559,7 @@ describe('ScanConfigCommand tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(response);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
 
@@ -585,7 +579,7 @@ describe('ScanConfigCommand tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
     fakeHttp.session.jwt = 'jwt-token';
@@ -598,13 +592,13 @@ describe('ScanConfigCommand tests', () => {
       'api/v1/scan-configs/scan-config-id',
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scan-configs/scan-config-id',
+      'https://yafvs.example/api/v1/scan-configs/scan-config-id',
       {
         method: 'DELETE',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
       },
@@ -621,7 +615,7 @@ describe('ScanConfigCommand tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(response);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
 
@@ -641,7 +635,7 @@ describe('ScanConfigCommand tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
     fakeHttp.session.jwt = 'jwt-token';
@@ -661,14 +655,14 @@ describe('ScanConfigCommand tests', () => {
       'api/v1/scan-configs/scan-config-id',
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scan-configs/scan-config-id',
+      'https://yafvs.example/api/v1/scan-configs/scan-config-id',
       {
         method: 'PATCH',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({comment: 'Native comment', name: 'Native name'}),
@@ -684,7 +678,7 @@ describe('ScanConfigCommand tests', () => {
     const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(response);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
 
@@ -735,7 +729,7 @@ describe('ScanConfigCommand tests', () => {
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scan-configs/scan-config-id',
+      'https://yafvs.example/api/v1/scan-configs/scan-config-id',
       expect.objectContaining({
         method: 'PATCH',
         body: JSON.stringify({
@@ -877,7 +871,7 @@ describe('ScanConfigCommand tests', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scan-configs/scan-config-id',
+      'https://yafvs.example/api/v1/scan-configs/scan-config-id',
       expect.objectContaining({
         method: 'PATCH',
         body: JSON.stringify({
@@ -916,7 +910,7 @@ describe('ScanConfigCommand tests', () => {
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scan-configs/scan-config-id',
+      'https://yafvs.example/api/v1/scan-configs/scan-config-id',
       expect.objectContaining({
         method: 'PATCH',
         body: JSON.stringify({
@@ -1078,7 +1072,7 @@ describe('ScanConfigCommand tests', () => {
       'api/v1/scan-configs/scan-config-id/families/Port%20scanners/nvts',
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scan-configs/scan-config-id/families/Port%20scanners/nvts',
+      'https://yafvs.example/api/v1/scan-configs/scan-config-id/families/Port%20scanners/nvts',
       expect.objectContaining({
         method: 'PATCH',
         body: JSON.stringify({
@@ -1130,5 +1124,4 @@ describe('ScanConfigCommand tests', () => {
     expect(fakeHttp.buildUrl).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
-
 });

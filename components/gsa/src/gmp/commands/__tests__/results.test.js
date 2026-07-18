@@ -6,10 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {ResultsCommand} from 'gmp/commands/results';
-import {
-  createHttp,
-  createAggregatesResponse,
-} from 'gmp/commands/testing';
+import {createHttp, createAggregatesResponse} from 'gmp/commands/testing';
 import Filter, {ALL_FILTER} from 'gmp/models/filter';
 import Result from 'gmp/models/result';
 import {createSession} from 'gmp/testing';
@@ -20,7 +17,7 @@ afterEach(() => {
 
 const createNativeHttp = () => {
   const fakeHttp = createHttp(undefined);
-  fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+  fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
   fakeHttp.session.jwt = 'jwt-token';
@@ -87,7 +84,7 @@ describe('ResultsCommand tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(undefined);
-    fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+    fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
     fakeHttp.session.jwt = 'jwt-token';
@@ -104,7 +101,7 @@ describe('ResultsCommand tests', () => {
       filter: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/results',
+      'https://yafvs.example/api/v1/results',
       {
         credentials: 'include',
         headers: {

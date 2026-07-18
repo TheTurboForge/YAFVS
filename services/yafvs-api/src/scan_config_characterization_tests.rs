@@ -442,8 +442,8 @@ fn native_direct_api_allows_scan_config_write_control_paths() {
     let list = openapi_path_block("/scan-configs");
     assert!(list.contains("get:"));
     assert!(list.contains("post:"));
-    assert!(list.contains("x-turbovas-replaces: scan-config-create-from-base"));
-    assert!(list.contains("x-turbovas-safety-contract: write-control-v1"));
+    assert!(list.contains("x-yafvs-replaces: scan-config-create-from-base"));
+    assert!(list.contains("x-yafvs-safety-contract: write-control-v1"));
     assert!(!list.contains("\n  patch:"));
     assert!(!list.contains("\n  delete:"));
 
@@ -452,25 +452,23 @@ fn native_direct_api_allows_scan_config_write_control_paths() {
     assert!(detail.contains("patch:"));
     assert!(detail.contains("delete:"));
     assert!(!detail.contains("\n  post:"));
-    assert!(detail.contains("x-turbovas-exposure: direct-write"));
-    assert!(
-        detail.contains("x-turbovas-replaces: scan-config-family-mode-and-preference-mutation")
-    );
-    assert!(detail.contains("x-turbovas-replaces: scan-config-trash-move"));
-    assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
+    assert!(detail.contains("x-yafvs-exposure: direct-write"));
+    assert!(detail.contains("x-yafvs-replaces: scan-config-family-mode-and-preference-mutation"));
+    assert!(detail.contains("x-yafvs-replaces: scan-config-trash-move"));
+    assert!(detail.contains("x-yafvs-safety-contract: write-control-v1"));
     let clone = openapi_path_block("/scan-configs/{scan_config_id}/clone");
     assert!(clone.contains("post:"));
-    assert!(clone.contains("x-turbovas-replaces: scan-config-clone"));
-    assert!(clone.contains("x-turbovas-safety-contract: write-control-v1"));
+    assert!(clone.contains("x-yafvs-replaces: scan-config-clone"));
+    assert!(clone.contains("x-yafvs-safety-contract: write-control-v1"));
     let restore = openapi_path_block("/scan-configs/{scan_config_id}/restore");
     assert!(restore.contains("post:"));
-    assert!(restore.contains("x-turbovas-replaces: scan-config-restore"));
-    assert!(restore.contains("x-turbovas-safety-contract: write-control-v1"));
+    assert!(restore.contains("x-yafvs-replaces: scan-config-restore"));
+    assert!(restore.contains("x-yafvs-safety-contract: write-control-v1"));
 
     let hard_delete = openapi_path_block("/scan-configs/{scan_config_id}/trash");
     assert!(hard_delete.contains("delete:"));
-    assert!(hard_delete.contains("x-turbovas-replaces: scan-config-hard-delete"));
-    assert!(hard_delete.contains("x-turbovas-safety-contract: write-control-v1"));
+    assert!(hard_delete.contains("x-yafvs-replaces: scan-config-hard-delete"));
+    assert!(hard_delete.contains("x-yafvs-safety-contract: write-control-v1"));
 
     let families = openapi_path_block("/scan-configs/{scan_config_id}/families");
     assert!(families.contains("get:"));
@@ -844,33 +842,33 @@ fn native_scan_config_family_nvt_routes_and_openapi_are_read_and_guarded_write()
 
     let detail = openapi_path_block("/scan-configs/{scan_config_id}");
     assert!(detail.contains(
-        "x-turbovas-replaces: scan-config-detail-info-tags-task-backlinks-and-preferences-read"
+        "x-yafvs-replaces: scan-config-detail-info-tags-task-backlinks-and-preferences-read"
     ));
-    assert!(!detail.contains("x-turbovas-inherited-still-owns"));
+    assert!(!detail.contains("x-yafvs-inherited-still-owns"));
 
     let backup = openapi_path_block("/scan-configs/{scan_config_id}/backup");
     assert!(backup.contains("operationId: getScanConfigsByScanConfigIdBackup"));
-    assert!(backup.contains("x-turbovas-replaces: scan-config-versioned-json-backup"));
+    assert!(backup.contains("x-yafvs-replaces: scan-config-versioned-json-backup"));
 
     let import = openapi_path_block("/scan-configs/import");
     assert!(import.contains("operationId: postScanConfigsImport"));
-    assert!(import.contains("x-turbovas-replaces: scan-config-versioned-json-import"));
+    assert!(import.contains("x-yafvs-replaces: scan-config-versioned-json-import"));
 
     let path = openapi_path_block("/scan-configs/{scan_config_id}/families/{family}/nvts");
     for required in [
         "get:",
         "operationId: getScanConfigsByScanConfigIdFamiliesByFamilyNvts",
-        "x-turbovas-direct: true",
-        "x-turbovas-exposure: direct-read",
-        "x-turbovas-maturity: live-read",
-        "x-turbovas-replaces: scan-config-family-nvt-selection-read",
+        "x-yafvs-direct: true",
+        "x-yafvs-exposure: direct-read",
+        "x-yafvs-maturity: live-read",
+        "x-yafvs-replaces: scan-config-family-nvt-selection-read",
         "#/components/parameters/ScanConfigFamilyName",
         "#/components/schemas/ScanConfigFamilyNvts",
         "'404':",
         "patch:",
         "operationId: patchScanConfigsByScanConfigIdFamiliesByFamilyNvts",
-        "x-turbovas-replaces: scan-config-family-nvt-selection-mutation",
-        "x-turbovas-safety-contract: write-control-v1",
+        "x-yafvs-replaces: scan-config-family-nvt-selection-mutation",
+        "x-yafvs-safety-contract: write-control-v1",
         "#/components/schemas/ScanConfigFamilyNvtsPatchRequest",
         "'204':",
         "'409':",

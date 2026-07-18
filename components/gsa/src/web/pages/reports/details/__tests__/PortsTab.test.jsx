@@ -23,7 +23,7 @@ const createGmp = () => ({
         query.set(key, String(value));
       }
     });
-    return `https://turbovas.example/${path}${
+    return `https://yafvs.example/${path}${
       query.size > 0 ? `?${query.toString()}` : ''
     }`;
   }),
@@ -41,7 +41,13 @@ describe('Report Ports Tab tests', () => {
   test('should render Report Ports Tab', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 10, total: 2, sort: '-max_severity', filter: ''},
+        page: {
+          page: 1,
+          page_size: 10,
+          total: 2,
+          sort: '-max_severity',
+          filter: '',
+        },
         items: [
           {
             port: '123/tcp',

@@ -615,12 +615,12 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     let list = openapi_path_block("/tasks");
     assert!(list.contains("get:"));
     assert!(list.contains("post:"));
-    assert!(list.contains("x-turbovas-exposure: direct-read"));
-    assert!(list.contains("x-turbovas-exposure: direct-write"));
-    assert!(list.contains("x-turbovas-replaces: task-create-with-retained-editor-configuration"));
+    assert!(list.contains("x-yafvs-exposure: direct-read"));
+    assert!(list.contains("x-yafvs-exposure: direct-write"));
+    assert!(list.contains("x-yafvs-replaces: task-create-with-retained-editor-configuration"));
     assert!(list.contains("$ref: '#/components/schemas/TaskCreateRequest'"));
     assert!(list.contains(
-        "x-turbovas-inherited-still-owns: task-resume-file-hard-delete-and-other-scanner-control"
+        "x-yafvs-inherited-still-owns: task-resume-file-hard-delete-and-other-scanner-control"
     ));
     assert!(list.contains("name: schedules_only"));
     assert!(list.contains("Return only scan tasks with an attached schedule."));
@@ -635,17 +635,17 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     assert!(detail.contains("get:"));
     assert!(detail.contains("patch:"));
     assert!(detail.contains("delete:"));
-    assert!(detail.contains("x-turbovas-exposure: direct-read"));
-    assert!(detail.contains("x-turbovas-exposure: direct-write"));
-    assert!(detail.contains("x-turbovas-replaces: task-metadata-modify"));
+    assert!(detail.contains("x-yafvs-exposure: direct-read"));
+    assert!(detail.contains("x-yafvs-exposure: direct-write"));
+    assert!(detail.contains("x-yafvs-replaces: task-metadata-modify"));
     assert!(detail.contains("$ref: '#/components/schemas/TaskPatchRequest'"));
-    assert!(!detail.contains("x-turbovas-inherited-still-owns:"));
+    assert!(!detail.contains("x-yafvs-inherited-still-owns:"));
     assert!(
         detail.contains("Direct write-control endpoint for updating task name and comment only")
     );
     assert!(detail.contains("Task clone, start, and stop have separate guarded control routes"));
     assert!(detail.contains("operationId: deleteTasksByTaskId"));
-    assert!(detail.contains("x-turbovas-replaces: task-trash-move"));
+    assert!(detail.contains("x-yafvs-replaces: task-trash-move"));
     assert!(detail.contains("safe non-running live-task trash moves"));
     assert!(detail.contains("Running, queued, requested, stop/delete-waiting, processing"));
 
@@ -653,10 +653,10 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     for required in [
         "post:",
         "operationId: postTasksByTaskIdReplaceConfiguration",
-        "x-turbovas-direct: true",
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-replaces: task-retained-editor-configuration-modify",
-        "x-turbovas-side-effect: scanner-control",
+        "x-yafvs-direct: true",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-replaces: task-retained-editor-configuration-modify",
+        "x-yafvs-side-effect: scanner-control",
         "$ref: '#/components/schemas/TaskReplaceRequest'",
         "atomically replaces",
         "fixed YAFVS report-retention defaults remain unchanged",
@@ -672,13 +672,13 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     for required in [
         "post:",
         "operationId: postTasksByTaskIdClone",
-        "x-turbovas-direct: true",
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-maturity: live-write",
-        "x-turbovas-replaces: task-clone",
-        "x-turbovas-side-effect: scanner-control",
-        "x-turbovas-safety-contract: write-control-v1",
-        "x-turbovas-owner-semantics: request-operator-owner",
+        "x-yafvs-direct: true",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-maturity: live-write",
+        "x-yafvs-replaces: task-clone",
+        "x-yafvs-side-effect: scanner-control",
+        "x-yafvs-safety-contract: write-control-v1",
+        "x-yafvs-owner-semantics: request-operator-owner",
         "$ref: '#/components/schemas/Task'",
         "Location:",
         "committed_response_unavailable",
@@ -725,11 +725,11 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     for required in [
         "post:",
         "operationId: postTasksByTaskIdStart",
-        "x-turbovas-direct: true",
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-maturity: live-control",
-        "x-turbovas-replaces: task-start",
-        "x-turbovas-side-effect: scanner-control",
+        "x-yafvs-direct: true",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-maturity: live-control",
+        "x-yafvs-replaces: task-start",
+        "x-yafvs-side-effect: scanner-control",
         "$ref: '#/components/schemas/TaskStartResult'",
         "gvmd remains responsible for scanner protocol execution",
     ] {
@@ -743,12 +743,12 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     for required in [
         "post:",
         "operationId: postTasksByTaskIdReplaceTarget",
-        "x-turbovas-direct: true",
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-maturity: live-write",
-        "x-turbovas-replaces: task-target-clone-rebind-delete",
-        "x-turbovas-safety-contract: write-control-v1",
-        "x-turbovas-side-effect: scanner-control",
+        "x-yafvs-direct: true",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-maturity: live-write",
+        "x-yafvs-replaces: task-target-clone-rebind-delete",
+        "x-yafvs-safety-contract: write-control-v1",
+        "x-yafvs-side-effect: scanner-control",
         "$ref: '#/components/schemas/TaskTargetReplaceRequest'",
         "$ref: '#/components/schemas/TaskTargetReplaceResult'",
         "atomically cloning the complete retained configuration",
@@ -764,13 +764,13 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     for required in [
         "post:",
         "operationId: postTasksByTaskIdStop",
-        "x-turbovas-direct: true",
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-maturity: live-control",
-        "x-turbovas-replaces: task-stop",
-        "x-turbovas-operator-identity: direct-token-operator",
-        "x-turbovas-owner-semantics: gvmd-acl-user-and-task-permission",
-        "x-turbovas-side-effect: scanner-control",
+        "x-yafvs-direct: true",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-maturity: live-control",
+        "x-yafvs-replaces: task-stop",
+        "x-yafvs-operator-identity: direct-token-operator",
+        "x-yafvs-owner-semantics: gvmd-acl-user-and-task-permission",
+        "x-yafvs-side-effect: scanner-control",
         "$ref: '#/components/schemas/TaskStopResult'",
         "YAFVS_API_GVMD_CONTROL_SOCKET",
         "shared-secret-authenticated",
@@ -788,10 +788,10 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     for required in [
         "get:",
         "operationId: getTasksByTaskIdExport",
-        "x-turbovas-direct: true",
-        "x-turbovas-exposure: direct-read",
-        "x-turbovas-maturity: live-read",
-        "x-turbovas-replaces: task-metadata-export-read",
+        "x-yafvs-direct: true",
+        "x-yafvs-exposure: direct-read",
+        "x-yafvs-maturity: live-read",
+        "x-yafvs-replaces: task-metadata-export-read",
         "$ref: '#/components/schemas/Task'",
         "Task start is available through a separate guarded scan-queue route",
         "inherited file-export formats remain outside this endpoint",
@@ -802,9 +802,9 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
         );
     }
     for forbidden in [
-        "x-turbovas-inherited-still-owns:",
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-safety-contract: write-control-v1",
+        "x-yafvs-inherited-still-owns:",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-safety-contract: write-control-v1",
         "\n    post:",
         "\n    patch:",
         "\n    put:",

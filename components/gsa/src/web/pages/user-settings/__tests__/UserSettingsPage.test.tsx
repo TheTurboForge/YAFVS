@@ -49,7 +49,7 @@ const createGmp = ({
   nativeResponses = {} as Record<string, unknown>,
 } = {}) => {
   const buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   testing.stubGlobal(
     'fetch',

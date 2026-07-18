@@ -20,7 +20,7 @@ const createNativeHttp = () => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -32,7 +32,13 @@ describe('OperatingSystemsCommand tests', () => {
   test('should fetch operating systems through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 25, total: 1, sort: '-latest_severity', filter: 'linux'},
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: '-latest_severity',
+          filter: 'linux',
+        },
         items: [
           {
             id: 'os-1',
@@ -104,7 +110,13 @@ describe('OperatingSystemsCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 1, total: 3, sort: 'latest_severity', filter: 'linux'},
+          page: {
+            page: 2,
+            page_size: 1,
+            total: 3,
+            sort: 'latest_severity',
+            filter: 'linux',
+          },
           items: [{id: 'os-2', name: 'Linux 2'}],
         }),
         ok: true,
@@ -144,7 +156,13 @@ describe('OperatingSystemsCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 500, total: 2, sort: 'latest_severity', filter: 'linux'},
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'latest_severity',
+            filter: 'linux',
+          },
           items: [{id: 'os-1', name: 'Linux 1'}],
         }),
         ok: true,
@@ -152,7 +170,13 @@ describe('OperatingSystemsCommand tests', () => {
       })
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 500, total: 2, sort: 'latest_severity', filter: 'linux'},
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'latest_severity',
+            filter: 'linux',
+          },
           items: [{id: 'os-2', name: 'Linux 2'}],
         }),
         ok: true,

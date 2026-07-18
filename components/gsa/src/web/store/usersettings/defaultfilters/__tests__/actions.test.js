@@ -238,7 +238,7 @@ describe('loadUserSettingsDefaultFilter tests', () => {
     });
     const getFilter = testing.fn();
     const buildUrl = testing.fn(
-      path => `https://turbovas.example/${String(path)}`,
+      path => `https://yafvs.example/${String(path)}`,
     );
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -285,7 +285,7 @@ describe('loadUserSettingsDefaultFilter tests', () => {
         token: 'session-token',
       });
       expect(fetchMock).toHaveBeenCalledWith(
-        'https://turbovas.example/api/v1/filters/foo',
+        'https://yafvs.example/api/v1/filters/foo',
         {
           credentials: 'include',
           headers: {

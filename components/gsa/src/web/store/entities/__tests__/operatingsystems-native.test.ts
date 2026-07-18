@@ -15,8 +15,11 @@ import {loadEntities, loadEntity} from 'web/store/entities/operatingsystems';
 import {createState} from 'web/store/entities/utils/testing';
 import {filterIdentifier} from 'web/store/utils';
 
-const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+const createGmp = ({
+  jwt,
+  token = 'test-token',
+}: {jwt?: string; token?: string} = {}) => ({
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -28,7 +31,13 @@ describe('native API operating systems list', () => {
   test('fetches top-level operating systems as inherited OperatingSystem models', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 25, total: 1, sort: '-latest_severity', filter: ''},
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: '-latest_severity',
+          filter: '',
+        },
         items: [
           {
             id: 'f3a25f89-2b6c-4e58-92b2-942c686f9342',
@@ -77,7 +86,7 @@ describe('native API operating systems list', () => {
       filter: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/operating-systems',
+      'https://yafvs.example/api/v1/operating-systems',
       {
         credentials: 'include',
         headers: {

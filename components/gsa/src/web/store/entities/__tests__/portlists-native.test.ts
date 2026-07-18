@@ -14,8 +14,11 @@ import {loadEntities, loadEntity} from 'web/store/entities/portlists';
 import {createState} from 'web/store/entities/utils/testing';
 import {filterIdentifier} from 'web/store/utils';
 
-const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+const createGmp = ({
+  jwt,
+  token = 'test-token',
+}: {jwt?: string; token?: string} = {}) => ({
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -68,7 +71,7 @@ describe('native API port lists', () => {
       filter: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/port-lists',
+      'https://yafvs.example/api/v1/port-lists',
       {
         credentials: 'include',
         headers: {
@@ -125,10 +128,14 @@ describe('native API port lists', () => {
     expect(portList.portRanges[0].start).toEqual(22);
     expect(portList.portRanges[0].end).toEqual(24);
     expect(portList.targets).toHaveLength(1);
-    expect(portList.targets[0].id).toEqual('6b0caa76-6dd0-4e58-aa69-e2974cf85944');
+    expect(portList.targets[0].id).toEqual(
+      '6b0caa76-6dd0-4e58-aa69-e2974cf85944',
+    );
     expect(portList.targets[0].name).toEqual('Authorized LAN target');
     expect(portList.userTags).toHaveLength(1);
-    expect(portList.userTags[0].id).toEqual('8afbe92e-f808-447c-9399-1492f3f9ef3f');
+    expect(portList.userTags[0].id).toEqual(
+      '8afbe92e-f808-447c-9399-1492f3f9ef3f',
+    );
     expect(portList.userTags[0].name).toEqual('Native tag');
     expect(portList.userTags[0].value).toEqual('true');
     expect(portList.userTags[0].comment).toEqual('Native port list tag');

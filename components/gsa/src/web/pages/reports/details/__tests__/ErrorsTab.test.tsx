@@ -20,7 +20,7 @@ const createGmp = () => ({
         query.set(key, String(value));
       }
     });
-    return `https://turbovas.example/${path}${
+    return `https://yafvs.example/${path}${
       query.size > 0 ? `?${query.toString()}` : ''
     }`;
   }),
@@ -40,7 +40,10 @@ afterEach(() => {
 
 describe('ErrorsTab', () => {
   test('should render loading state initially', () => {
-    testing.stubGlobal('fetch', testing.fn(() => new Promise(() => {})));
+    testing.stubGlobal(
+      'fetch',
+      testing.fn(() => new Promise(() => {})),
+    );
     const gmp = createGmp();
     const {render} = rendererWith({gmp, router: true, capabilities: true});
 
@@ -52,7 +55,13 @@ describe('ErrorsTab', () => {
   test('should render native table with errors', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 10, total: 1, sort: '-created_at', filter: ''},
+        page: {
+          page: 1,
+          page_size: 10,
+          total: 1,
+          sort: '-created_at',
+          filter: '',
+        },
         items: [
           {
             id: 'result-1',
@@ -103,7 +112,13 @@ describe('ErrorsTab', () => {
       'fetch',
       testing.fn().mockResolvedValue({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 10, total: 0, sort: '-created_at', filter: ''},
+          page: {
+            page: 1,
+            page_size: 10,
+            total: 0,
+            sort: '-created_at',
+            filter: '',
+          },
           items: [],
         }),
         ok: true,
@@ -115,7 +130,9 @@ describe('ErrorsTab', () => {
 
     render(<ErrorsTab filter={filter} reportId={reportId} status="Done" />);
 
-    expect(await screen.findByTestId('native-raw-report-errors-table')).toBeInTheDocument();
+    expect(
+      await screen.findByTestId('native-raw-report-errors-table'),
+    ).toBeInTheDocument();
   });
 
   test('should render native fetch failure', async () => {

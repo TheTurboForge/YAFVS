@@ -15,8 +15,11 @@ import {loadEntities, loadEntity} from 'web/store/entities/credentials';
 import {createState} from 'web/store/entities/utils/testing';
 import {filterIdentifier} from 'web/store/utils';
 
-const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+const createGmp = ({
+  jwt,
+  token = 'test-token',
+}: {jwt?: string; token?: string} = {}) => ({
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -78,7 +81,7 @@ describe('native API credentials', () => {
       credential_type: 'up',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/credentials',
+      'https://yafvs.example/api/v1/credentials',
       {
         credentials: 'include',
         headers: {
@@ -165,7 +168,9 @@ describe('native API credentials', () => {
     const gmp = {
       ...createGmp(),
       credentials: {
-        get: testing.fn().mockRejectedValue(new Error('inherited fallback used')),
+        get: testing
+          .fn()
+          .mockRejectedValue(new Error('inherited fallback used')),
       },
     };
 
@@ -211,7 +216,9 @@ describe('native API credentials', () => {
     const gmp = {
       ...createGmp(),
       credential: {
-        get: testing.fn().mockRejectedValue(new Error('inherited fallback used')),
+        get: testing
+          .fn()
+          .mockRejectedValue(new Error('inherited fallback used')),
       },
     };
 

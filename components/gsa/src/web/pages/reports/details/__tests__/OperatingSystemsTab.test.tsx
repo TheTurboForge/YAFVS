@@ -21,7 +21,7 @@ const createGmp = () => ({
         query.set(key, String(value));
       }
     });
-    return `https://turbovas.example/${path}${
+    return `https://yafvs.example/${path}${
       query.size > 0 ? `?${query.toString()}` : ''
     }`;
   }),
@@ -37,7 +37,13 @@ describe('Report Operating Systems Tab tests', () => {
   test('should render native Report Operating Systems Tab', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 2, total: 2, sort: 'max_severity', filter: ''},
+        page: {
+          page: 1,
+          page_size: 2,
+          total: 2,
+          sort: 'max_severity',
+          filter: '',
+        },
         items: [
           {
             name: 'Foo OS',
@@ -86,7 +92,10 @@ describe('Report Operating Systems Tab tests', () => {
   });
 
   test('should show loading state before data arrives', () => {
-    testing.stubGlobal('fetch', testing.fn(() => new Promise(() => {})));
+    testing.stubGlobal(
+      'fetch',
+      testing.fn(() => new Promise(() => {})),
+    );
     const {render} = rendererWith({gmp: createGmp(), router: true});
     render(
       <OperatingSystemsTab filter={filter} reportId={reportId} status="Done" />,

@@ -19,7 +19,7 @@ const createGmp = ({
   jwt,
   token = 'test-token',
 }: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -85,7 +85,7 @@ describe('native API CERT-Bund advisory catalog', () => {
       filter: 'openssl',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/cert-bund-advisories',
+      'https://yafvs.example/api/v1/cert-bund-advisories',
       {
         credentials: 'include',
         headers: {
@@ -226,7 +226,9 @@ describe('native API CERT-Bund advisory catalog', () => {
     expect(advisory?.software).toEqual('Native product');
     expect(advisory?.isWritable()).toEqual(true);
     expect(advisory?.userTags).toHaveLength(1);
-    expect(advisory?.userTags?.[0].id).toEqual('4f1d4875-0a24-48bf-8eda-b1cb256a92cf');
+    expect(advisory?.userTags?.[0].id).toEqual(
+      '4f1d4875-0a24-48bf-8eda-b1cb256a92cf',
+    );
     expect(advisory?.userTags?.[0].name).toEqual('Native tag');
     expect(advisory?.userTags?.[0].value).toEqual('true');
     expect(advisory?.userTags?.[0].comment).toEqual('Native CERT-Bund tag');

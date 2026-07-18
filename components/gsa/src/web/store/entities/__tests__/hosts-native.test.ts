@@ -12,8 +12,11 @@ import {loadEntities, loadEntity} from 'web/store/entities/hosts';
 import {createState} from 'web/store/entities/utils/testing';
 import {filterIdentifier} from 'web/store/utils';
 
-const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+const createGmp = ({
+  jwt,
+  token = 'test-token',
+}: {jwt?: string; token?: string} = {}) => ({
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -94,13 +97,16 @@ describe('native API hosts list', () => {
       sort: '-severity',
       filter: '',
     });
-    expect(fetchMock).toHaveBeenCalledWith('https://turbovas.example/api/v1/hosts', {
-      credentials: 'include',
-      headers: {
-        Accept: 'application/json',
-        Authorization: 'Bearer jwt-token',
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/hosts',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
       },
-    });
+    );
   });
 
   test('loads the host store through same-origin native API', async () => {
@@ -149,8 +155,12 @@ describe('native API hosts list', () => {
     expect(successAction.data[0]).toBeInstanceOf(Host);
     expect(successAction.data[0].name).toEqual('192.0.2.42');
     expect(successAction.data[0].isWritable()).toEqual(true);
-    expect(successAction.data[0].userCapabilities.mayEdit('host')).toEqual(true);
-    expect(successAction.data[0].userCapabilities.mayDelete('host')).toEqual(true);
+    expect(successAction.data[0].userCapabilities.mayEdit('host')).toEqual(
+      true,
+    );
+    expect(successAction.data[0].userCapabilities.mayDelete('host')).toEqual(
+      true,
+    );
   });
 
   test('fetches one host from the native detail endpoint', async () => {

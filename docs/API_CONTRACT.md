@@ -137,7 +137,7 @@ host-binding posture tracked outside this development API.
   non-GET requests return JSON `405 method_not_allowed`. The enforced route set
   is the `APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS` list in
   `services/yafvs-api/src/direct_api_contract_tests.rs` plus OpenAPI
-  `x-turbovas-exposure: direct-write` metadata.
+  `x-yafvs-exposure: direct-write` metadata.
 - Direct v1 browser boundary: direct responses do not emit browser CORS access
   headers. Browser product reads and browser-relevant write routes continue
   through the authenticated same-origin `gsad` proxy. That proxy uses exact
@@ -167,15 +167,15 @@ host-binding posture tracked outside this development API.
   plan preview return JSON `404 not_found` on the direct listener even though
   they remain available to internal runtime validation.
 - Direct v1 contract metadata: scriptable direct-read operations carry
-  `x-turbovas-direct: true` in `api/openapi/yafvs-v1.yaml`. The
+  `x-yafvs-direct: true` in `api/openapi/yafvs-v1.yaml`. The
   `native-tooling-state` command compares those markers with the implementation
   inventory and reports drift as `native-tooling.direct-api-contract`.
 - Exposure and migration contract metadata: boundary seed operations carry
-  `x-turbovas-exposure: direct-read` or `internal-only`, plus compact enforced
-  migration metadata: `x-turbovas-maturity` (`live-read` or `preview-read`),
-  `x-turbovas-replaces` (`feed-status-read`, `tag-resource-name-read`,
+  `x-yafvs-exposure: direct-read` or `internal-only`, plus compact enforced
+  migration metadata: `x-yafvs-maturity` (`live-read` or `preview-read`),
+  `x-yafvs-replaces` (`feed-status-read`, `tag-resource-name-read`,
   `tag-active-resource-assignment-write`, `nvt-catalog-detail-read`, or `none`), and
-  `x-turbovas-inherited-still-owns` (`feed-sync-import-control`,
+  `x-yafvs-inherited-still-owns` (`feed-sync-import-control`,
   `tag-security-info-filter-actions-clone-export-trash`, `nvt-rich-detail`, or
   `retention-mutations`).
   `native-tooling-state` reports missing, invalid, or mismatched seed metadata

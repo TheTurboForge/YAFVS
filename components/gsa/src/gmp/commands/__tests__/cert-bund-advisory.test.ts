@@ -6,10 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import CertBundAdvisoryCommand from 'gmp/commands/cert-bund-advisory';
-import {
-  createActionResultResponse,
-  createHttp,
-} from 'gmp/commands/testing';
+import {createActionResultResponse, createHttp} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -33,7 +30,7 @@ describe('CertBundAdvisoryCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -48,7 +45,7 @@ describe('CertBundAdvisoryCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/cert-bund-advisories/CB-K26-0123/export',
+      'https://yafvs.example/api/v1/cert-bund-advisories/CB-K26-0123/export',
       {
         credentials: 'include',
         headers: {
@@ -83,7 +80,7 @@ describe('CertBundAdvisoryCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';

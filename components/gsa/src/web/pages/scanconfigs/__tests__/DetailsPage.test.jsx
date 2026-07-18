@@ -264,7 +264,7 @@ describe('ScanConfigDetailsPage tests', () => {
     testing.stubGlobal('fetch', fetchMock);
     const exportConfig = testing.fn().mockResolvedValue(new Response('xml'));
     const buildUrl = testing.fn(
-      (path, _params) => `https://turbovas.example/${path}`,
+      (path, _params) => `https://yafvs.example/${path}`,
     );
     const gmp = createGmp({buildUrl, exportConfig});
 
@@ -290,7 +290,7 @@ describe('ScanConfigDetailsPage tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      `https://turbovas.example/api/v1/scan-configs/${config.id}/backup`,
+      `https://yafvs.example/api/v1/scan-configs/${config.id}/backup`,
       expect.objectContaining({credentials: 'include'}),
     );
   });

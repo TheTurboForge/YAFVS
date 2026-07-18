@@ -15,8 +15,11 @@ import {loadEntities, loadEntity} from 'web/store/entities/tags';
 import {createState} from 'web/store/entities/utils/testing';
 import {filterIdentifier} from 'web/store/utils';
 
-const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+const createGmp = ({
+  jwt,
+  token = 'test-token',
+}: {jwt?: string; token?: string} = {}) => ({
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -83,13 +86,16 @@ describe('native API tags', () => {
       resource_type: 'task',
       value: 'prod',
     });
-    expect(fetchMock).toHaveBeenCalledWith('https://turbovas.example/api/v1/tags', {
-      credentials: 'include',
-      headers: {
-        Accept: 'application/json',
-        Authorization: 'Bearer jwt-token',
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/tags',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
       },
-    });
+    );
   });
 
   test('fetches tag detail metadata', async () => {

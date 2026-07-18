@@ -13,9 +13,7 @@ afterEach(() => {
 
 describe('AlertComponent native helpers', () => {
   test('should load alert credential choices through the native API', async () => {
-    const buildUrl = testing.fn(
-      path => `https://turbovas.example/${path}`,
-    );
+    const buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
     const gmp = {
       buildUrl,
       session: createSession({token: 'test-token'}),
@@ -49,7 +47,7 @@ describe('AlertComponent native helpers', () => {
       filter: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/credentials',
+      'https://yafvs.example/api/v1/credentials',
       {
         credentials: 'include',
         headers: {Accept: 'application/json'},

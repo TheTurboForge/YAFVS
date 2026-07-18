@@ -251,8 +251,8 @@ def native_api_browser_proxy_json(
             "set -- -H \"content-type: application/json\" --data \"${TURBOVAS_FULL_TEST_JSON}\"; "
             "else set --; fi; "
             "curl -sS --max-time 10 -X \"${TURBOVAS_FULL_TEST_METHOD}\" -w '\\n%{http_code}' "
-            "-H \"x-turbovas-browser-proxy-secret: ${YAFVS_API_BROWSER_PROXY_SECRET}\" "
-            "-H \"x-turbovas-operator-name: ${TURBOVAS_FULL_TEST_OPERATOR_NAME}\" "
+            "-H \"x-yafvs-browser-proxy-secret: ${YAFVS_API_BROWSER_PROXY_SECRET}\" "
+            "-H \"x-yafvs-operator-name: ${TURBOVAS_FULL_TEST_OPERATOR_NAME}\" "
             "\"$@\" "
             "\"http://127.0.0.1:9080${TURBOVAS_FULL_TEST_PATH}\""
         ),

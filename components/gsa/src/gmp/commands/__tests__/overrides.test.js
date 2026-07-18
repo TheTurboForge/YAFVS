@@ -17,7 +17,7 @@ afterEach(() => {
 
 const createNativeHttp = response => {
   const fakeHttp = createHttp(response);
-  fakeHttp.buildUrl = testing.fn(path => `https://turbovas.example/${path}`);
+  fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
   fakeHttp.session.jwt = 'jwt-token';
@@ -59,7 +59,7 @@ describe('OverridesCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/overrides/override-id',
+      'https://yafvs.example/api/v1/overrides/override-id',
       {
         credentials: 'include',
         headers: {
@@ -126,14 +126,14 @@ describe('OverridesCommand tests', () => {
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/overrides',
+      'https://yafvs.example/api/v1/overrides',
       {
         method: 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({
@@ -171,7 +171,7 @@ describe('OverridesCommand tests', () => {
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/overrides/override-id',
+      'https://yafvs.example/api/v1/overrides/override-id',
       expect.objectContaining({
         method: 'PATCH',
         body: JSON.stringify({
@@ -196,14 +196,14 @@ describe('OverridesCommand tests', () => {
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/overrides/override%2Fid/clone',
+      'https://yafvs.example/api/v1/overrides/override%2Fid/clone',
       {
         method: 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({}),
@@ -263,7 +263,7 @@ describe('OverridesCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/overrides/override-id/export',
+      'https://yafvs.example/api/v1/overrides/override-id/export',
       {
         credentials: 'include',
         headers: {
@@ -290,13 +290,13 @@ describe('OverridesCommand tests', () => {
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/overrides/override-id',
+      'https://yafvs.example/api/v1/overrides/override-id',
       {
         method: 'DELETE',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
       },
@@ -369,7 +369,7 @@ describe('OverridesCommand tests', () => {
       task_name: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/overrides',
+      'https://yafvs.example/api/v1/overrides',
       {
         credentials: 'include',
         headers: {
@@ -488,12 +488,12 @@ describe('OverridesCommand tests', () => {
     expect(result.data).toEqual(overrides);
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'https://turbovas.example/api/v1/overrides/override-1',
+      'https://yafvs.example/api/v1/overrides/override-1',
       expect.objectContaining({method: 'DELETE'}),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'https://turbovas.example/api/v1/overrides/override-2',
+      'https://yafvs.example/api/v1/overrides/override-2',
       expect.objectContaining({method: 'DELETE'}),
     );
   });

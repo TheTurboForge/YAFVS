@@ -25,8 +25,11 @@ DTSTAMP:20260619T100000Z
 END:VEVENT
 END:VCALENDAR`;
 
-const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+const createGmp = ({
+  jwt,
+  token = 'test-token',
+}: {jwt?: string; token?: string} = {}) => ({
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -83,7 +86,7 @@ describe('native API schedules', () => {
       filter: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/schedules',
+      'https://yafvs.example/api/v1/schedules',
       {
         credentials: 'include',
         headers: {
@@ -130,10 +133,14 @@ describe('native API schedules', () => {
 
     expect(schedule.id).toEqual('07f0569c-38a7-4c8c-9a13-0e5f3c119c95');
     expect(schedule.tasks).toHaveLength(1);
-    expect(schedule.tasks[0].id).toEqual('65da9d26-9e74-4b56-af0f-63825a851a23');
+    expect(schedule.tasks[0].id).toEqual(
+      '65da9d26-9e74-4b56-af0f-63825a851a23',
+    );
     expect(schedule.tasks[0].name).toEqual('Authorized LAN task');
     expect(schedule.userTags).toHaveLength(1);
-    expect(schedule.userTags[0].id).toEqual('8afbe92e-f808-447c-9399-1492f3f9ef3f');
+    expect(schedule.userTags[0].id).toEqual(
+      '8afbe92e-f808-447c-9399-1492f3f9ef3f',
+    );
     expect(schedule.userTags[0].name).toEqual('Maintenance window');
     expect(schedule.userTags[0].value).toEqual('weekly');
     expect(schedule.userTags[0].comment).toEqual('Native schedule tag');
@@ -219,7 +226,9 @@ describe('native API schedules', () => {
     const gmp = {
       ...createGmp({jwt: 'jwt-token'}),
       schedule: {
-        get: testing.fn().mockRejectedValue(new Error('inherited fallback used')),
+        get: testing
+          .fn()
+          .mockRejectedValue(new Error('inherited fallback used')),
       },
     };
 

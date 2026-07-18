@@ -19,7 +19,7 @@ const createGmp = ({
   jwt,
   token = 'test-token',
 }: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -85,7 +85,7 @@ describe('native API DFN-CERT advisory catalog', () => {
       filter: 'openssl',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/dfn-cert-advisories',
+      'https://yafvs.example/api/v1/dfn-cert-advisories',
       {
         credentials: 'include',
         headers: {
@@ -134,10 +134,7 @@ describe('native API DFN-CERT advisory catalog', () => {
     testing.stubGlobal('fetch', fetchMock);
     const gmp = createGmp({jwt: 'jwt-token'});
 
-    const response = await fetchNativeDfnCertAdvisory(
-      gmp,
-      'DFN-CERT-2026-001',
-    );
+    const response = await fetchNativeDfnCertAdvisory(gmp, 'DFN-CERT-2026-001');
 
     const advisory = response.dfncert;
     expect(advisory.id).toEqual('dfn-uuid-1');
@@ -229,15 +226,15 @@ describe('native API DFN-CERT advisory catalog', () => {
     expect(advisory?.severity).toEqual(9.1);
     expect(advisory?.cve_refs).toEqual(2);
     expect(advisory?.cves).toEqual(['CVE-2026-10001', 'CVE-2026-10002']);
-    expect(advisory?.advisoryLink).toEqual(
-      'https://example.test/native-dfn',
-    );
+    expect(advisory?.advisoryLink).toEqual('https://example.test/native-dfn');
     expect(advisory?.additionalLinks).toEqual([
       'https://example.test/related-dfn',
     ]);
     expect(advisory?.isWritable()).toEqual(true);
     expect(advisory?.userTags).toHaveLength(1);
-    expect(advisory?.userTags?.[0].id).toEqual('36e88138-bc32-4641-ab07-5d94a924965f');
+    expect(advisory?.userTags?.[0].id).toEqual(
+      '36e88138-bc32-4641-ab07-5d94a924965f',
+    );
     expect(advisory?.userTags?.[0].name).toEqual('Native tag');
     expect(advisory?.userTags?.[0].value).toEqual('true');
     expect(advisory?.userTags?.[0].comment).toEqual('Native DFN-CERT tag');

@@ -97,9 +97,7 @@ describe('ScannerComponent tests', () => {
     });
     testing.stubGlobal('fetch', fetchMock);
     const gmp = createGmp({
-      buildUrl: testing.fn(
-        (path: string) => `https://turbovas.example/${path}`,
-      ),
+      buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
       scanner: {
         get: testing.fn().mockResolvedValue({data: scanner}),
         save: testing.fn().mockResolvedValue(scanner),
@@ -131,7 +129,7 @@ describe('ScannerComponent tests', () => {
       credential_type: 'cc',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/credentials',
+      'https://yafvs.example/api/v1/credentials',
       {
         credentials: 'include',
         headers: {

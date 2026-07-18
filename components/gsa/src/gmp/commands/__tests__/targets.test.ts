@@ -21,7 +21,7 @@ const createNativeHttp = () => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -70,7 +70,7 @@ describe('TargetsCommand tests', () => {
       filter: 'web',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/targets',
+      'https://yafvs.example/api/v1/targets',
       {
         credentials: 'include',
         headers: {
@@ -161,7 +161,13 @@ describe('TargetsCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: 'web'},
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'web',
+          },
           items: [{id: 'target-1', name: 'One'}],
         }),
         ok: true,
@@ -169,7 +175,13 @@ describe('TargetsCommand tests', () => {
       })
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: 'web'},
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'web',
+          },
           items: [{id: 'target-2', name: 'Two'}],
         }),
         ok: true,

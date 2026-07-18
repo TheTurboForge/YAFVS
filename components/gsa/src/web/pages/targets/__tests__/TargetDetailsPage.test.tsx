@@ -150,7 +150,6 @@ describe('TargetDetailsPage tests', () => {
     );
     expect(entityInfo).toHaveTextContent('Owner:admin');
 
-
     expect(
       screen.getByRole('row', {name: /^name target 1/i}),
     ).toBeInTheDocument();
@@ -281,7 +280,6 @@ describe('TargetDetailsPage tests', () => {
     expect(container).toHaveTextContent('No user tags available');
   });
 
-
   test('should call commands', async () => {
     const gmp = createGmp();
     const {render, store} = rendererWith({
@@ -331,7 +329,7 @@ describe('TargetDetailsPage tests', () => {
     testing.stubGlobal('fetch', fetchMock);
     const exportTarget = testing.fn().mockResolvedValue({foo: 'bar'});
     const buildUrl = testing.fn(
-      (path, _params) => `https://turbovas.example/${path}`,
+      (path, _params) => `https://yafvs.example/${path}`,
     );
     const gmp = createGmp({buildUrl, exportTarget});
     const {render, store} = rendererWith({
@@ -355,7 +353,7 @@ describe('TargetDetailsPage tests', () => {
       token: 'test-token',
     });
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      'https://turbovas.example/api/v1/targets/46264/export',
+      'https://yafvs.example/api/v1/targets/46264/export',
       expect.objectContaining({credentials: 'include'}),
     );
   });

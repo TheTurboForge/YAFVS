@@ -25,7 +25,7 @@ const createNativeHttp = () => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -173,7 +173,7 @@ describe('TasksCommand tests', () => {
       filter: 'scan',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/tasks',
+      'https://yafvs.example/api/v1/tasks',
       {
         credentials: 'include',
         headers: {
@@ -264,7 +264,13 @@ describe('TasksCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: 'scan'},
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'scan',
+          },
           items: [{id: 'task-1', name: 'One'}],
         }),
         ok: true,
@@ -272,7 +278,13 @@ describe('TasksCommand tests', () => {
       })
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: 'scan'},
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'scan',
+          },
           items: [{id: 'task-2', name: 'Two'}],
         }),
         ok: true,
@@ -331,7 +343,7 @@ describe('TasksCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -350,7 +362,7 @@ describe('TasksCommand tests', () => {
       schedules_only: 'true',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/tasks',
+      'https://yafvs.example/api/v1/tasks',
       {
         credentials: 'include',
         headers: {

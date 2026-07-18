@@ -638,11 +638,11 @@ fn diagnostic_nvt_selection_openapi_contract_is_direct_guarded_and_minimal() {
         .0;
     for expected in [
         "operationId: postScanConfigsByScanConfigIdDiagnosticNvtSelection",
-        "x-turbovas-direct: true",
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-operator-identity: direct-token-operator",
-        "x-turbovas-safety-contract: write-control-v1",
-        "x-turbovas-side-effect: scan-config-nvt-selector-write",
+        "x-yafvs-direct: true",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-operator-identity: direct-token-operator",
+        "x-yafvs-safety-contract: write-control-v1",
+        "x-yafvs-side-effect: scan-config-nvt-selector-write",
         "$ref: '#/components/schemas/DiagnosticNvtSelectionRequest'",
         "$ref: '#/components/schemas/DiagnosticNvtSelectionAcknowledgement'",
         "'502':",

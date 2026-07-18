@@ -111,7 +111,7 @@ fn openapi_declares_redaction_write_only_fields_and_write_control_metadata() {
         .split_once("  /authentication-settings/ldap:")
         .unwrap()
         .0;
-    assert!(read.contains("x-turbovas-exposure: direct-read"));
+    assert!(read.contains("x-yafvs-exposure: direct-read"));
     assert!(read.contains("$ref: '#/components/schemas/AuthenticationSettings'"));
     assert!(read.contains("never returned"));
 
@@ -131,10 +131,10 @@ fn openapi_declares_redaction_write_only_fields_and_write_control_metadata() {
         .0;
     for operation in [ldap, radius] {
         for metadata in [
-            "x-turbovas-exposure: direct-write",
-            "x-turbovas-safety-contract: write-control-v1",
-            "x-turbovas-side-effect: account-auth-control",
-            "x-turbovas-operator-identity: direct-token-operator",
+            "x-yafvs-exposure: direct-write",
+            "x-yafvs-safety-contract: write-control-v1",
+            "x-yafvs-side-effect: account-auth-control",
+            "x-yafvs-operator-identity: direct-token-operator",
         ] {
             assert!(operation.contains(metadata), "operation missing {metadata}");
         }

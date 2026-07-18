@@ -26,7 +26,7 @@ const createGmp = ({
     data: '<operating_system id="os-123"/>',
   }),
 } = {}) => ({
-  buildUrl: testing.fn((path, _params) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path, _params) => `https://yafvs.example/${path}`),
   session: {...createSession(), token: 'test-token', jwt: 'jwt-token'},
   user: {currentSettings},
   operatingsystem: {export: exportOperatingSystem},
@@ -65,7 +65,10 @@ describe('OperatingSystem Component tests', () => {
     const {render} = rendererWith({gmp, capabilities: true});
 
     render(
-      <OsComponent onDownloadError={onDownloadError} onDownloaded={onDownloaded}>
+      <OsComponent
+        onDownloadError={onDownloadError}
+        onDownloaded={onDownloaded}
+      >
         {({download}) => {
           downloadClick = download;
           return <div>Some Content</div>;
@@ -83,7 +86,7 @@ describe('OperatingSystem Component tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      'https://turbovas.example/api/v1/operating-systems/os-123/export',
+      'https://yafvs.example/api/v1/operating-systems/os-123/export',
       expect.objectContaining({credentials: 'include'}),
     );
     expect(onDownloaded).toHaveBeenCalledWith({

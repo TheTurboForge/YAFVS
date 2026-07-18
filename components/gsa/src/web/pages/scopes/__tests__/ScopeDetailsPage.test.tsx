@@ -58,7 +58,7 @@ afterEach(() => {
 describe('ScopeDetailsPage', () => {
   test('creates scopes with the native-safe payload shape', async () => {
     const buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({items: []}),
@@ -94,7 +94,7 @@ describe('ScopeDetailsPage', () => {
 
   test('loads target and host selector options through native API', async () => {
     const buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     const fetchMock = testing.fn((url: string) => {
       if (url.endsWith('/api/v1/scopes/scope-1')) {
@@ -170,7 +170,7 @@ describe('ScopeDetailsPage', () => {
 
   test('saves scopes with the native-safe payload shape', async () => {
     const buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     const fetchMock = testing.fn((url: string) => {
       if (url.endsWith('/api/v1/scopes/scope-1')) {

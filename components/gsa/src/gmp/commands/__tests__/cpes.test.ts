@@ -20,7 +20,7 @@ const createNativeHttp = () => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -32,7 +32,13 @@ describe('CpesCommand tests', () => {
   test('should fetch cpes through native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 25, total: 1, sort: '-modified', filter: 'Admin'},
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: '-modified',
+          filter: 'Admin',
+        },
         items: [
           {
             id: 'cpe:/a:admin:admin:1.0',
@@ -65,13 +71,16 @@ describe('CpesCommand tests', () => {
       sort: 'modified',
       filter: 'Admin',
     });
-    expect(fetchMock).toHaveBeenCalledWith('https://turbovas.example/api/v1/cpes', {
-      credentials: 'include',
-      headers: {
-        Accept: 'application/json',
-        Authorization: 'Bearer jwt-token',
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/cpes',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
       },
-    });
+    );
   });
 
   test('should page through native API for getAll', async () => {
@@ -85,9 +94,7 @@ describe('CpesCommand tests', () => {
       },
       {
         page: {page: 2, page_size: 2, total: 3, sort: '-modified', filter: ''},
-        items: [
-          {id: 'cpe:/a:ops:ops:1.0', name: 'Ops', title: 'Ops 1.0'},
-        ],
+        items: [{id: 'cpe:/a:ops:ops:1.0', name: 'Ops', title: 'Ops 1.0'}],
       },
     ];
     const fetchMock = testing.fn().mockImplementation(() =>
@@ -150,7 +157,13 @@ describe('CpesCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 1, total: 3, sort: 'modified', filter: 'Admin'},
+          page: {
+            page: 2,
+            page_size: 1,
+            total: 3,
+            sort: 'modified',
+            filter: 'Admin',
+          },
           items: [{id: 'cpe:/a:user:user:1.0'}],
         }),
         ok: true,
@@ -186,7 +199,13 @@ describe('CpesCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 500, total: 2, sort: 'modified', filter: 'Admin'},
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'modified',
+            filter: 'Admin',
+          },
           items: [{id: 'cpe:/a:admin:admin:1.0'}],
         }),
         ok: true,
@@ -194,7 +213,13 @@ describe('CpesCommand tests', () => {
       })
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 500, total: 2, sort: 'modified', filter: 'Admin'},
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'modified',
+            filter: 'Admin',
+          },
           items: [{id: 'cpe:/a:user:user:1.0'}],
         }),
         ok: true,
@@ -237,6 +262,4 @@ describe('CpesCommand tests', () => {
       {id: 'cpe:/a:user:user:1.0'},
     ]);
   });
-
-
 });

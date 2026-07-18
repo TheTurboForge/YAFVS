@@ -86,14 +86,14 @@ fn user_account_openapi_declares_redacted_read_boundary() {
     ] {
         let block = openapi_path_block(path);
         for required in [
-            "x-turbovas-direct: true",
-            "x-turbovas-exposure: direct-read",
-            "x-turbovas-maturity: live-read",
+            "x-yafvs-direct: true",
+            "x-yafvs-exposure: direct-read",
+            "x-yafvs-maturity: live-read",
             replaces,
         ] {
             assert!(block.contains(required), "{path} missing {required}");
         }
-        assert!(!block.contains("x-turbovas-inherited-still-owns:"));
+        assert!(!block.contains("x-yafvs-inherited-still-owns:"));
     }
 
     let tail = OPENAPI

@@ -289,26 +289,26 @@ fn openapi_documents_schedule_create_metadata_patch_and_trash_move_boundary() {
     let list = openapi_path_block("/schedules");
     assert!(list.contains("get:"));
     assert!(list.contains("post:"));
-    assert!(list.contains("x-turbovas-exposure: direct-read"));
-    assert!(list.contains("x-turbovas-exposure: direct-write"));
-    assert!(list.contains("x-turbovas-replaces: schedule-create"));
-    assert!(!list.contains("x-turbovas-inherited-still-owns:"));
-    assert!(list.contains("x-turbovas-safety-contract: write-control-v1"));
+    assert!(list.contains("x-yafvs-exposure: direct-read"));
+    assert!(list.contains("x-yafvs-exposure: direct-write"));
+    assert!(list.contains("x-yafvs-replaces: schedule-create"));
+    assert!(!list.contains("x-yafvs-inherited-still-owns:"));
+    assert!(list.contains("x-yafvs-safety-contract: write-control-v1"));
 
     let detail = openapi_path_block("/schedules/{schedule_id}");
     assert!(detail.contains("get:"));
     assert!(detail.contains("patch:"));
     assert!(detail.contains("delete:"));
-    assert!(detail.contains("x-turbovas-exposure: direct-read"));
-    assert!(detail.contains("x-turbovas-exposure: direct-write"));
-    assert!(detail.contains("x-turbovas-replaces: schedule-metadata-modify"));
+    assert!(detail.contains("x-yafvs-exposure: direct-read"));
+    assert!(detail.contains("x-yafvs-exposure: direct-write"));
+    assert!(detail.contains("x-yafvs-replaces: schedule-metadata-modify"));
     assert!(detail.contains("timezone"));
     assert!(detail.contains("iCalendar value"));
     assert!(detail.contains("'422':"));
     assert!(detail.contains("'503':"));
-    assert!(detail.contains("x-turbovas-replaces: schedule-trash-move"));
-    assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(!detail.contains("x-turbovas-inherited-still-owns:"));
+    assert!(detail.contains("x-yafvs-replaces: schedule-trash-move"));
+    assert!(detail.contains("x-yafvs-safety-contract: write-control-v1"));
+    assert!(!detail.contains("x-yafvs-inherited-still-owns:"));
 
     let openapi = include_str!("../../../api/openapi/yafvs-v1.yaml");
     let patch_schema = openapi
@@ -326,23 +326,23 @@ fn openapi_documents_schedule_create_metadata_patch_and_trash_move_boundary() {
     let restore = openapi_path_block("/schedules/{schedule_id}/restore");
     assert!(restore.contains("post:"));
     assert!(restore.contains("operationId: postSchedulesByScheduleIdRestore"));
-    assert!(restore.contains("x-turbovas-exposure: direct-write"));
-    assert!(restore.contains("x-turbovas-replaces: schedule-restore"));
-    assert!(restore.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(!restore.contains("x-turbovas-inherited-still-owns:"));
+    assert!(restore.contains("x-yafvs-exposure: direct-write"));
+    assert!(restore.contains("x-yafvs-replaces: schedule-restore"));
+    assert!(restore.contains("x-yafvs-safety-contract: write-control-v1"));
+    assert!(!restore.contains("x-yafvs-inherited-still-owns:"));
 
     let hard_delete = openapi_path_block("/schedules/{schedule_id}/trash");
     assert!(hard_delete.contains("delete:"));
     assert!(hard_delete.contains("operationId: deleteSchedulesByScheduleIdTrash"));
-    assert!(hard_delete.contains("x-turbovas-direct: true"));
-    assert!(hard_delete.contains("x-turbovas-exposure: direct-write"));
-    assert!(hard_delete.contains("x-turbovas-replaces: schedule-hard-delete"));
-    assert!(hard_delete.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(!hard_delete.contains("x-turbovas-inherited-still-owns:"));
+    assert!(hard_delete.contains("x-yafvs-direct: true"));
+    assert!(hard_delete.contains("x-yafvs-exposure: direct-write"));
+    assert!(hard_delete.contains("x-yafvs-replaces: schedule-hard-delete"));
+    assert!(hard_delete.contains("x-yafvs-safety-contract: write-control-v1"));
+    assert!(!hard_delete.contains("x-yafvs-inherited-still-owns:"));
     let export = openapi_path_block("/schedules/{schedule_id}/export");
     assert!(export.contains("get:"));
-    assert!(export.contains("x-turbovas-exposure: direct-read"));
-    assert!(export.contains("x-turbovas-replaces: schedule-metadata-export-read"));
-    assert!(!export.contains("x-turbovas-inherited-still-owns:"));
-    assert!(!export.contains("x-turbovas-safety-contract: write-control-v1"));
+    assert!(export.contains("x-yafvs-exposure: direct-read"));
+    assert!(export.contains("x-yafvs-replaces: schedule-metadata-export-read"));
+    assert!(!export.contains("x-yafvs-inherited-still-owns:"));
+    assert!(!export.contains("x-yafvs-safety-contract: write-control-v1"));
 }

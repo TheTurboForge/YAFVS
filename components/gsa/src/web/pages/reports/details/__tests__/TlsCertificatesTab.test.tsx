@@ -21,7 +21,7 @@ const createGmp = () => ({
         query.set(key, String(value));
       }
     });
-    return `https://turbovas.example/${path}${
+    return `https://yafvs.example/${path}${
       query.size > 0 ? `?${query.toString()}` : ''
     }`;
   }),
@@ -88,7 +88,10 @@ describe('Report TLS Certificates Tab tests', () => {
   });
 
   test('should show loading state before data arrives', () => {
-    testing.stubGlobal('fetch', testing.fn(() => new Promise(() => {})));
+    testing.stubGlobal(
+      'fetch',
+      testing.fn(() => new Promise(() => {})),
+    );
     const {render} = rendererWith({router: true, gmp: createGmp()});
 
     render(

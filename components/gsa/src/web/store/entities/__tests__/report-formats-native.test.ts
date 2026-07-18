@@ -14,8 +14,11 @@ import {loadEntities, loadEntity} from 'web/store/entities/reportformats';
 import {createState} from 'web/store/entities/utils/testing';
 import {filterIdentifier} from 'web/store/utils';
 
-const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+const createGmp = ({
+  jwt,
+  token = 'test-token',
+}: {jwt?: string; token?: string} = {}) => ({
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -73,7 +76,7 @@ describe('native API report formats', () => {
       filter: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/report-formats',
+      'https://yafvs.example/api/v1/report-formats',
       {
         credentials: 'include',
         headers: {
@@ -125,7 +128,8 @@ describe('native API report formats', () => {
           {
             name: 'FormatListParam',
             type: 'report_format_list',
-            value: 'a994b278-1f62-11e1-96ac-406186ea4fc5,c402cc3e-b531-11e1-9163-406186ea4fc5',
+            value:
+              'a994b278-1f62-11e1-96ac-406186ea4fc5,c402cc3e-b531-11e1-9163-406186ea4fc5',
             default: 'a994b278-1f62-11e1-96ac-406186ea4fc5',
             options: [],
           },

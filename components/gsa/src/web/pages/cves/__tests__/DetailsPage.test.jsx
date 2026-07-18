@@ -322,7 +322,7 @@ describe('CveDetailsPage tests', () => {
     testing.stubGlobal('fetch', fetchMock);
     const exportCve = testing.fn().mockResolvedValue(new Response({}));
     const buildUrl = testing.fn(
-      (path, _params) => `https://turbovas.example/${path}`,
+      (path, _params) => `https://yafvs.example/${path}`,
     );
     const gmp = createGmp({buildUrl, exportCve});
     const {render, store} = rendererWith({
@@ -340,12 +340,11 @@ describe('CveDetailsPage tests', () => {
     await expect.poll(() => fetchMock.mock.calls.length).toBe(1);
 
     expect(exportCve).not.toHaveBeenCalled();
-    expect(buildUrl).toHaveBeenCalledWith(
-      'api/v1/cves/CVE-2020-9997/export',
-      {token: 'test-token'},
-    );
+    expect(buildUrl).toHaveBeenCalledWith('api/v1/cves/CVE-2020-9997/export', {
+      token: 'test-token',
+    });
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      'https://turbovas.example/api/v1/cves/CVE-2020-9997/export',
+      'https://yafvs.example/api/v1/cves/CVE-2020-9997/export',
       expect.objectContaining({credentials: 'include'}),
     );
   });

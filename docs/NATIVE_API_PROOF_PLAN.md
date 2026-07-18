@@ -143,7 +143,7 @@ direct, but retention mutations remain closed. Direct write-control is limited
 to explicitly registered routes behind verified operator identity and
 `YAFVS_API_DIRECT_WRITE_CONTROL`.
 The OpenAPI contract marks direct scriptable reads with the
-`x-turbovas-direct: true` operation extension, and `native-tooling-state`
+`x-yafvs-direct: true` operation extension, and `native-tooling-state`
 reports whether those markers align with the implementation inventory.
 
 ## Guarded Control Exceptions

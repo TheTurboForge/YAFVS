@@ -21,7 +21,7 @@ const createNativeHttp = (response?: Parameters<typeof createHttp>[0]) => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -66,7 +66,7 @@ describe('ReportFormatsCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/report-formats/report-format-id',
+      'https://yafvs.example/api/v1/report-formats/report-format-id',
       {
         credentials: 'include',
         headers: {
@@ -105,7 +105,7 @@ describe('ReportFormatsCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/report-formats/report-format-id',
+      'https://yafvs.example/api/v1/report-formats/report-format-id',
       {
         credentials: 'include',
         headers: {
@@ -139,14 +139,11 @@ describe('ReportFormatsCommand tests', () => {
     const fakeHttp = createNativeHttp();
 
     const cmd = new ReportFormatCommand(fakeHttp);
-    const result = await cmd.get(
-      {id: 'report-format-id'},
-      {filter: 'rows=1'},
-    );
+    const result = await cmd.get({id: 'report-format-id'}, {filter: 'rows=1'});
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/report-formats/report-format-id',
+      'https://yafvs.example/api/v1/report-formats/report-format-id',
       {
         credentials: 'include',
         headers: {
@@ -181,7 +178,7 @@ describe('ReportFormatsCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/report-formats/report-format-id/export',
+      'https://yafvs.example/api/v1/report-formats/report-format-id/export',
       {
         credentials: 'include',
         headers: {
@@ -237,7 +234,7 @@ describe('ReportFormatsCommand tests', () => {
       filter: 'xml',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/report-formats',
+      'https://yafvs.example/api/v1/report-formats',
       {
         credentials: 'include',
         headers: {

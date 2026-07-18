@@ -77,7 +77,7 @@ describe('CertBund DetailsPage tests', () => {
     testing.stubGlobal('fetch', fetchMock);
     const exportCertBund = testing.fn().mockResolvedValue({data: '<cert/>'});
     const buildUrl = testing.fn(
-      (path, _params) => `https://turbovas.example/${path}`,
+      (path, _params) => `https://yafvs.example/${path}`,
     );
     const gmp = createGmp({buildUrl, exportCertBund});
     const {render, store} = rendererWith({
@@ -101,7 +101,7 @@ describe('CertBund DetailsPage tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      'https://turbovas.example/api/v1/cert-bund-advisories/CERT-Bund-2026-001/export',
+      'https://yafvs.example/api/v1/cert-bund-advisories/CERT-Bund-2026-001/export',
       expect.objectContaining({credentials: 'include'}),
     );
   });

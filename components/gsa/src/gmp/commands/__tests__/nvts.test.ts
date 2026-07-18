@@ -6,10 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import NvtsCommand from 'gmp/commands/nvts';
-import {
-  createAggregatesResponse,
-  createHttp,
-} from 'gmp/commands/testing';
+import {createAggregatesResponse, createHttp} from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 
@@ -23,7 +20,7 @@ const createNativeHttp = () => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -35,7 +32,13 @@ describe('NvtsCommand tests', () => {
   test('should fetch nvts through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 25, total: 1, sort: '-created', filter: 'ssh'},
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: '-created',
+          filter: 'ssh',
+        },
         items: [
           {
             id: '1.3.6.1.4.1.25623.1.0.10330',
@@ -106,7 +109,13 @@ describe('NvtsCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 1, total: 3, sort: 'created', filter: 'ssh'},
+          page: {
+            page: 2,
+            page_size: 1,
+            total: 3,
+            sort: 'created',
+            filter: 'ssh',
+          },
           items: [{id: '2.3.4', oid: '2.3.4', name: 'NVT 2'}],
         }),
         ok: true,
@@ -142,7 +151,13 @@ describe('NvtsCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 500, total: 2, sort: 'created', filter: 'ssh'},
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'created',
+            filter: 'ssh',
+          },
           items: [{id: '1.2.3', oid: '1.2.3', name: 'NVT 1'}],
         }),
         ok: true,
@@ -150,7 +165,13 @@ describe('NvtsCommand tests', () => {
       })
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 500, total: 2, sort: 'created', filter: 'ssh'},
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'created',
+            filter: 'ssh',
+          },
           items: [{id: '2.3.4', oid: '2.3.4', name: 'NVT 2'}],
         }),
         ok: true,
@@ -193,9 +214,4 @@ describe('NvtsCommand tests', () => {
       {id: '2.3.4', name: 'NVT 2'},
     ]);
   });
-
-
-
-
-
 });

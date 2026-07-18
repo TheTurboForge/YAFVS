@@ -16,7 +16,7 @@ const createGmp = ({
   jwt,
   token = 'test-token',
 }: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -108,7 +108,7 @@ describe('native API vulnerabilities list', () => {
       filter: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/vulnerabilities',
+      'https://yafvs.example/api/v1/vulnerabilities',
       {
         credentials: 'include',
         headers: {

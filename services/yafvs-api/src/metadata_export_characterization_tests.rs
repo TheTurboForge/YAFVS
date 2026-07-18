@@ -136,9 +136,9 @@ fn openapi_keeps_metadata_export_boundaries_distinct_from_inherited_file_exports
         let block = openapi_path_block(boundary.openapi_path);
         for required in [
             "get:",
-            "x-turbovas-direct: true",
-            "x-turbovas-exposure: direct-read",
-            "x-turbovas-maturity: live-read",
+            "x-yafvs-direct: true",
+            "x-yafvs-exposure: direct-read",
+            "x-yafvs-maturity: live-read",
             boundary.replaces,
             boundary.schema_ref,
         ] {
@@ -156,14 +156,14 @@ fn openapi_keeps_metadata_export_boundaries_distinct_from_inherited_file_exports
             );
         } else {
             assert!(
-                !block.contains("x-turbovas-inherited-still-owns:"),
+                !block.contains("x-yafvs-inherited-still-owns:"),
                 "{} native metadata export must not advertise inherited ownership",
                 boundary.openapi_path
             );
         }
         for forbidden in [
-            "x-turbovas-exposure: direct-write",
-            "x-turbovas-safety-contract: write-control-v1",
+            "x-yafvs-exposure: direct-write",
+            "x-yafvs-safety-contract: write-control-v1",
             "post:",
             "patch:",
             "delete:",

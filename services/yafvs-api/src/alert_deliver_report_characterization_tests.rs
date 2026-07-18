@@ -21,10 +21,10 @@ fn alert_deliver_report_is_explicit_real_delivery_on_both_authenticated_write_pa
 
     for required in [
         "operationId: postAlertsByAlertIdDeliverReport",
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-operator-identity: direct-token-operator",
-        "x-turbovas-safety-contract: write-control-v1",
-        "x-turbovas-side-effect: alert-report-delivery-control",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-operator-identity: direct-token-operator",
+        "x-yafvs-safety-contract: write-control-v1",
+        "x-yafvs-side-effect: alert-report-delivery-control",
         "Sends a real delivery using the alert's configured delivery settings.",
         "A Start Task alert can start its configured task.",
         "report_format_id parameter is ineffective for alert dispatch",

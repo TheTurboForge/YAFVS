@@ -86,7 +86,9 @@ describe('BulkTags tests', () => {
     const selectedEntities = [];
     const onClose = testing.fn();
     const getAllTags = testing.fn();
-    const buildUrl = testing.fn((path: string) => `https://turbovas.example/${path}`);
+    const buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         page: {page: 1, page_size: 25, total: 1, sort: 'name', filter: ''},
@@ -127,10 +129,13 @@ describe('BulkTags tests', () => {
       resource_type: 'task',
       value: '',
     });
-    expect(fetchMock).toHaveBeenCalledWith('https://turbovas.example/api/v1/tags', {
-      credentials: 'include',
-      headers: {Accept: 'application/json'},
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/tags',
+      {
+        credentials: 'include',
+        headers: {Accept: 'application/json'},
+      },
+    );
   });
 
   test('should load selected tag detail through the native API when available', async () => {
@@ -142,7 +147,7 @@ describe('BulkTags tests', () => {
     const getAllTags = testing.fn();
     const getTag = testing.fn();
     const buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     const fetchMock = testing.fn((url: string) => {
       if (url.endsWith('/api/v1/tags')) {

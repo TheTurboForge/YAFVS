@@ -300,13 +300,13 @@ fn openapi_documents_override_native_contract() {
     let list = openapi_path_block("/overrides");
     assert!(list.contains("get:"));
     assert!(list.contains("post:"));
-    assert!(list.contains("x-turbovas-exposure: direct-read"));
-    assert!(list.contains("x-turbovas-exposure: direct-write"));
-    assert!(list.contains("x-turbovas-replaces: override-create"));
-    assert!(list.contains("x-turbovas-operator-identity: direct-token-operator"));
-    assert!(list.contains("x-turbovas-owner-semantics: request-operator-owner"));
-    assert!(list.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(!list.contains("x-turbovas-inherited-still-owns:"));
+    assert!(list.contains("x-yafvs-exposure: direct-read"));
+    assert!(list.contains("x-yafvs-exposure: direct-write"));
+    assert!(list.contains("x-yafvs-replaces: override-create"));
+    assert!(list.contains("x-yafvs-operator-identity: direct-token-operator"));
+    assert!(list.contains("x-yafvs-owner-semantics: request-operator-owner"));
+    assert!(list.contains("x-yafvs-safety-contract: write-control-v1"));
+    assert!(!list.contains("x-yafvs-inherited-still-owns:"));
     assert!(list.contains("XML metadata export"));
     assert!(list.contains("override aggregate dashboards"));
     assert!(list.contains("filtered override-detail result expansion"));
@@ -316,13 +316,13 @@ fn openapi_documents_override_native_contract() {
     assert!(detail.contains("patch:"));
     assert!(detail.contains("delete:"));
     assert!(detail.contains("operationId: patchOverridesByOverrideId"));
-    assert!(detail.contains("x-turbovas-exposure: direct-write"));
-    assert!(detail.contains("x-turbovas-replaces: override-metadata-modify"));
-    assert!(detail.contains("x-turbovas-replaces: override-trash-move"));
-    assert!(detail.contains("x-turbovas-owner-semantics: preserve-existing-owner"));
-    assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(detail.contains("x-turbovas-exposure: direct-read"));
-    assert!(!detail.contains("x-turbovas-inherited-still-owns:"));
+    assert!(detail.contains("x-yafvs-exposure: direct-write"));
+    assert!(detail.contains("x-yafvs-replaces: override-metadata-modify"));
+    assert!(detail.contains("x-yafvs-replaces: override-trash-move"));
+    assert!(detail.contains("x-yafvs-owner-semantics: preserve-existing-owner"));
+    assert!(detail.contains("x-yafvs-safety-contract: write-control-v1"));
+    assert!(detail.contains("x-yafvs-exposure: direct-read"));
+    assert!(!detail.contains("x-yafvs-inherited-still-owns:"));
 
     for (path, required) in [
         (
@@ -330,9 +330,9 @@ fn openapi_documents_override_native_contract() {
             &[
                 "post:",
                 "operationId: postOverridesByOverrideIdClone",
-                "x-turbovas-exposure: direct-write",
-                "x-turbovas-owner-semantics: request-operator-owner",
-                "x-turbovas-safety-contract: write-control-v1",
+                "x-yafvs-exposure: direct-write",
+                "x-yafvs-owner-semantics: request-operator-owner",
+                "x-yafvs-safety-contract: write-control-v1",
                 "OverrideCloneRequest",
             ][..],
         ),
@@ -341,9 +341,9 @@ fn openapi_documents_override_native_contract() {
             &[
                 "post:",
                 "operationId: postOverridesByOverrideIdRestore",
-                "x-turbovas-exposure: direct-write",
-                "x-turbovas-owner-semantics: preserve-existing-owner",
-                "x-turbovas-safety-contract: write-control-v1",
+                "x-yafvs-exposure: direct-write",
+                "x-yafvs-owner-semantics: preserve-existing-owner",
+                "x-yafvs-safety-contract: write-control-v1",
             ][..],
         ),
         (
@@ -351,9 +351,9 @@ fn openapi_documents_override_native_contract() {
             &[
                 "delete:",
                 "operationId: deleteOverridesByOverrideIdTrash",
-                "x-turbovas-exposure: direct-write",
-                "x-turbovas-owner-semantics: preserve-existing-owner",
-                "x-turbovas-safety-contract: write-control-v1",
+                "x-yafvs-exposure: direct-write",
+                "x-yafvs-owner-semantics: preserve-existing-owner",
+                "x-yafvs-safety-contract: write-control-v1",
             ][..],
         ),
     ] {
@@ -361,17 +361,17 @@ fn openapi_documents_override_native_contract() {
         for required in required {
             assert!(block.contains(required), "{path} missing {required}");
         }
-        assert!(!block.contains("x-turbovas-inherited-still-owns:"));
+        assert!(!block.contains("x-yafvs-inherited-still-owns:"));
     }
 
     let export = openapi_path_block("/overrides/{override_id}/export");
     for required in [
         "get:",
         "operationId: getOverridesByOverrideIdExport",
-        "x-turbovas-direct: true",
-        "x-turbovas-exposure: direct-read",
-        "x-turbovas-maturity: live-read",
-        "x-turbovas-replaces: override-metadata-export-read",
+        "x-yafvs-direct: true",
+        "x-yafvs-exposure: direct-read",
+        "x-yafvs-maturity: live-read",
+        "x-yafvs-replaces: override-metadata-export-read",
         "$ref: '#/components/schemas/OverrideAsset'",
     ] {
         assert!(
@@ -379,7 +379,7 @@ fn openapi_documents_override_native_contract() {
             "override metadata export OpenAPI block missing {required}"
         );
     }
-    assert!(!export.contains("x-turbovas-inherited-still-owns:"));
+    assert!(!export.contains("x-yafvs-inherited-still-owns:"));
 
     let create_schema = OPENAPI
         .split_once("    OverrideCreateRequest:\n")

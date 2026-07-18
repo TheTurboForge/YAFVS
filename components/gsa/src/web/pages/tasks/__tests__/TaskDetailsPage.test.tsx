@@ -337,7 +337,6 @@ describe('TaskDetailsPage tests', () => {
     expect(container).toHaveTextContent('No user tags available');
   });
 
-
   test('should call commands', async () => {
     const getTask = testing.fn().mockResolvedValue({
       data: task5,
@@ -375,7 +374,6 @@ describe('TaskDetailsPage tests', () => {
     expect(startIcon).toHaveAttribute('title', 'Start');
     fireEvent.click(startIcon);
     expect(gmp.task.start).toHaveBeenCalledWith(task5);
-
   });
 
   test('should use native metadata export for downloads', async () => {
@@ -392,7 +390,7 @@ describe('TaskDetailsPage tests', () => {
     testing.stubGlobal('fetch', fetchMock);
     const exportTask = testing.fn().mockResolvedValue({foo: 'bar'});
     const buildUrl = testing.fn(
-      (path, _params) => `https://turbovas.example/${path}`,
+      (path, _params) => `https://yafvs.example/${path}`,
     );
     const gmp = createGmp({buildUrl, exportTask});
 
@@ -416,7 +414,7 @@ describe('TaskDetailsPage tests', () => {
       token: 'test-token',
     });
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      'https://turbovas.example/api/v1/tasks/12345/export',
+      'https://yafvs.example/api/v1/tasks/12345/export',
       expect.objectContaining({credentials: 'include'}),
     );
   });

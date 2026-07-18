@@ -53,7 +53,7 @@ describe('OverrideComponent tests', () => {
   test('should load task choices through the native API when available', async () => {
     const getAllTasks = testing.fn();
     const buildUrl = testing.fn(
-      (path, _params) => `https://turbovas.example/${path}`,
+      (path, _params) => `https://yafvs.example/${path}`,
     );
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -94,7 +94,7 @@ describe('OverrideComponent tests', () => {
       filter: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/tasks',
+      'https://yafvs.example/api/v1/tasks',
       {
         credentials: 'include',
         headers: {Accept: 'application/json'},

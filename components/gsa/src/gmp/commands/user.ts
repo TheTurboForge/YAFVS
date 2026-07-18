@@ -103,7 +103,7 @@ const REPORT_COMPOSER_DEFAULTS_SETTING_ID =
 const nativeApiHeaders = (http: Http, withJsonBody = false) => ({
   Accept: 'application/json',
   ...(withJsonBody ? {'Content-Type': 'application/json'} : {}),
-  ...(http.session.token ? {'X-TurboVAS-Token': http.session.token} : {}),
+  ...(http.session.token ? {'X-YAFVS-Token': http.session.token} : {}),
   ...(http.session.jwt ? {Authorization: `Bearer ${http.session.jwt}`} : {}),
 });
 

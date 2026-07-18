@@ -335,45 +335,45 @@ fn native_direct_api_allows_filter_create_metadata_patch_trash_move_restore_and_
 fn openapi_documents_filter_metadata_patch_and_trash_move_boundary() {
     let list = openapi_path_block("/filters");
     assert!(list.contains("get:"));
-    assert!(list.contains("x-turbovas-exposure: direct-read"));
+    assert!(list.contains("x-yafvs-exposure: direct-read"));
     assert!(list.contains("alert-reference counts"));
     assert!(list.contains("post:"));
-    assert!(list.contains("x-turbovas-replaces: saved-filter-create"));
-    assert!(!list.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage"));
+    assert!(list.contains("x-yafvs-replaces: saved-filter-create"));
+    assert!(!list.contains("x-yafvs-inherited-still-owns: saved-filter-alert-linkage"));
 
     let detail = openapi_path_block("/filters/{filter_id}");
     assert!(detail.contains("get:"));
     assert!(detail.contains("patch:"));
     assert!(detail.contains("delete:"));
-    assert!(detail.contains("x-turbovas-exposure: direct-read"));
-    assert!(detail.contains("x-turbovas-exposure: direct-write"));
+    assert!(detail.contains("x-yafvs-exposure: direct-read"));
+    assert!(detail.contains("x-yafvs-exposure: direct-write"));
     assert!(detail.contains("alert output-filter backlinks"));
-    assert!(detail.contains("x-turbovas-replaces: saved-filter-metadata-modify"));
-    assert!(detail.contains("x-turbovas-replaces: saved-filter-trash-move"));
-    assert!(detail.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(detail.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage"));
+    assert!(detail.contains("x-yafvs-replaces: saved-filter-metadata-modify"));
+    assert!(detail.contains("x-yafvs-replaces: saved-filter-trash-move"));
+    assert!(detail.contains("x-yafvs-safety-contract: write-control-v1"));
+    assert!(detail.contains("x-yafvs-inherited-still-owns: saved-filter-alert-linkage"));
 
     let clone = openapi_path_block("/filters/{filter_id}/clone");
     assert!(clone.contains("post:"));
-    assert!(clone.contains("x-turbovas-exposure: direct-write"));
-    assert!(clone.contains("x-turbovas-replaces: saved-filter-clone"));
-    assert!(clone.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(!clone.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage"));
+    assert!(clone.contains("x-yafvs-exposure: direct-write"));
+    assert!(clone.contains("x-yafvs-replaces: saved-filter-clone"));
+    assert!(clone.contains("x-yafvs-safety-contract: write-control-v1"));
+    assert!(!clone.contains("x-yafvs-inherited-still-owns: saved-filter-alert-linkage"));
 
     let restore = openapi_path_block("/filters/{filter_id}/restore");
     assert!(restore.contains("post:"));
-    assert!(restore.contains("x-turbovas-exposure: direct-write"));
-    assert!(restore.contains("x-turbovas-replaces: saved-filter-restore"));
-    assert!(restore.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(restore.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage"));
+    assert!(restore.contains("x-yafvs-exposure: direct-write"));
+    assert!(restore.contains("x-yafvs-replaces: saved-filter-restore"));
+    assert!(restore.contains("x-yafvs-safety-contract: write-control-v1"));
+    assert!(restore.contains("x-yafvs-inherited-still-owns: saved-filter-alert-linkage"));
 
     let hard_delete = openapi_path_block("/filters/{filter_id}/trash");
     assert!(hard_delete.contains("delete:"));
     assert!(hard_delete.contains("operationId: deleteFiltersByFilterIdTrash"));
-    assert!(hard_delete.contains("x-turbovas-exposure: direct-write"));
-    assert!(hard_delete.contains("x-turbovas-replaces: saved-filter-hard-delete"));
-    assert!(hard_delete.contains("x-turbovas-safety-contract: write-control-v1"));
-    assert!(hard_delete.contains("x-turbovas-inherited-still-owns: saved-filter-alert-linkage"));
+    assert!(hard_delete.contains("x-yafvs-exposure: direct-write"));
+    assert!(hard_delete.contains("x-yafvs-replaces: saved-filter-hard-delete"));
+    assert!(hard_delete.contains("x-yafvs-safety-contract: write-control-v1"));
+    assert!(hard_delete.contains("x-yafvs-inherited-still-owns: saved-filter-alert-linkage"));
 
     assert!(!GSAD_GMP_C.contains("export_filter_gmp"));
     assert!(!GSAD_GMP_C.contains("export_filters_gmp"));

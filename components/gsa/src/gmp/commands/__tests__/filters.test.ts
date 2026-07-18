@@ -20,7 +20,7 @@ const createNativeHttp = () => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -64,7 +64,7 @@ describe('FiltersCommand tests', () => {
       filter: 'alpha',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/filters',
+      'https://yafvs.example/api/v1/filters',
       {
         credentials: 'include',
         headers: {
@@ -190,7 +190,13 @@ describe('FiltersCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 1, total: 3, sort: 'name', filter: 'alpha'},
+          page: {
+            page: 2,
+            page_size: 1,
+            total: 3,
+            sort: 'name',
+            filter: 'alpha',
+          },
           items: [{id: 'f2', name: 'Beta', filter_type: 'user'}],
         }),
         ok: true,
@@ -229,7 +235,13 @@ describe('FiltersCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: 'alpha'},
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'alpha',
+          },
           items: [{id: 'f1', name: 'Alpha', filter_type: 'user'}],
         }),
         ok: true,
@@ -237,7 +249,13 @@ describe('FiltersCommand tests', () => {
       })
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: 'alpha'},
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'alpha',
+          },
           items: [{id: 'f2', name: 'Beta', filter_type: 'user'}],
         }),
         ok: true,

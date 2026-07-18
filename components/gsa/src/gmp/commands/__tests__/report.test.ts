@@ -15,7 +15,7 @@ const createNativeHttp = () => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -58,7 +58,7 @@ describe('ReportCommand tests', () => {
       token: 'test-token',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/reports/foo',
+      'https://yafvs.example/api/v1/reports/foo',
       {
         credentials: 'include',
         headers: {
@@ -93,14 +93,14 @@ describe('ReportCommand tests', () => {
       'api/v1/alerts/alert%2Fid/deliver-report',
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/alerts/alert%2Fid/deliver-report',
+      'https://yafvs.example/api/v1/alerts/alert%2Fid/deliver-report',
       {
         method: 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({

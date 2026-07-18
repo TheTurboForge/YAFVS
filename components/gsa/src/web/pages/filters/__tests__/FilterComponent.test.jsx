@@ -44,7 +44,7 @@ const createGmp = ({
     data: '<filter id="f123"/>',
   }),
 } = {}) => ({
-  buildUrl: testing.fn((path, _params) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path, _params) => `https://yafvs.example/${path}`),
   session: {...createSession(), token: 'test-token', jwt: 'jwt-token'},
   user: {
     currentSettings,

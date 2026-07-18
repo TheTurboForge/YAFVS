@@ -327,10 +327,10 @@ fn report_format_reads_and_trusted_builtin_exports_remain_native() {
     for required in [
         "get:",
         "operationId: getReportFormatsByReportFormatIdExport",
-        "x-turbovas-direct: true",
-        "x-turbovas-exposure: direct-read",
-        "x-turbovas-maturity: live-read",
-        "x-turbovas-replaces: report-format-metadata-export-read",
+        "x-yafvs-direct: true",
+        "x-yafvs-exposure: direct-read",
+        "x-yafvs-maturity: live-read",
+        "x-yafvs-replaces: report-format-metadata-export-read",
         "$ref: '#/components/schemas/ReportFormatAsset'",
     ] {
         assert!(
@@ -339,8 +339,8 @@ fn report_format_reads_and_trusted_builtin_exports_remain_native() {
         );
     }
     for forbidden in [
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-safety-contract: write-control-v1",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-safety-contract: write-control-v1",
         "\n    post:",
         "\n    patch:",
         "\n    delete:",

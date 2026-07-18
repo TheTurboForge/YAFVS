@@ -34,7 +34,7 @@ describe('CpeCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -49,7 +49,7 @@ describe('CpeCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/cpes/cpe%3A%2Fa%3Avendor%3Aproduct%3A1.0',
+      'https://yafvs.example/api/v1/cpes/cpe%3A%2Fa%3Avendor%3Aproduct%3A1.0',
       {
         credentials: 'include',
         headers: {
@@ -81,7 +81,7 @@ describe('CpeCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -98,7 +98,7 @@ describe('CpeCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/cpes/cpe%3A%2Fa%3Avendor%3Aproduct%3A1.0',
+      'https://yafvs.example/api/v1/cpes/cpe%3A%2Fa%3Avendor%3Aproduct%3A1.0',
       {
         credentials: 'include',
         headers: {

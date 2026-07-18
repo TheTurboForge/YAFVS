@@ -1910,12 +1910,12 @@ class YAFVSCtlTests(unittest.TestCase):
                 if method == "post"
                 else "browser-write"
             )
-            self.assertEqual(values["x-turbovas-exposure"], expected_exposure)
-            self.assertEqual(values["x-turbovas-replaces"], replaces)
+            self.assertEqual(values["x-yafvs-exposure"], expected_exposure)
+            self.assertEqual(values["x-yafvs-replaces"], replaces)
             if method != "get":
-                self.assertEqual(values["x-turbovas-owner-semantics"], "gvmd-authoritative-operator-authorization")
-                self.assertEqual(values["x-turbovas-safety-contract"], "write-control-v1")
-                self.assertEqual(values["x-turbovas-side-effect"], "account-auth-control")
+                self.assertEqual(values["x-yafvs-owner-semantics"], "gvmd-authoritative-operator-authorization")
+                self.assertEqual(values["x-yafvs-safety-contract"], "write-control-v1")
+                self.assertEqual(values["x-yafvs-side-effect"], "account-auth-control")
 
         direct_reads = set(yafvsctl.DIRECT_API_SCRIPTABLE_ENDPOINTS)
         self.assertIn("/api/v1/user-management/users", direct_reads)
@@ -3592,13 +3592,13 @@ class YAFVSCtlTests(unittest.TestCase):
                 "  /reports:\n"
                 "    get:\n"
                 "      operationId: getReports\n"
-                "      x-turbovas-direct: true\n"
-                "      x-turbovas-exposure: direct-read\n"
+                "      x-yafvs-direct: true\n"
+                "      x-yafvs-exposure: direct-read\n"
                 "  /scopes:\n"
                 "    post:\n"
                 "      operationId: postScopes\n"
-                "      x-turbovas-direct: true\n"
-                "      x-turbovas-exposure: direct-write\n",
+                "      x-yafvs-direct: true\n"
+                "      x-yafvs-exposure: direct-write\n",
                 encoding="utf-8",
             )
 
@@ -3767,11 +3767,11 @@ class YAFVSCtlTests(unittest.TestCase):
                 "  /scopes/{scope_id}/reports/{scope_report_id}/retention-plan:\n"
                 "    get:\n"
                 "      operationId: getScopesByScopeIdReportsByScopeReportIdRetentionPlan\n"
-                "      x-turbovas-exposure: internal-only\n"
+                "      x-yafvs-exposure: internal-only\n"
                 "  /scopes/{scope_id}:\n"
                 "    patch:\n"
                 "      operationId: patchScopesByScopeId\n"
-                "      x-turbovas-exposure: internal-only\n",
+                "      x-yafvs-exposure: internal-only\n",
                 encoding="utf-8",
             )
             proxy_source = root / "components" / "gsad" / "src" / "gsad_native_api.c"
@@ -3935,7 +3935,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 "paths:\n"
                 "  /feeds:\n"
                 "    get:\n"
-                "      x-turbovas-direct: true\n",
+                "      x-yafvs-direct: true\n",
                 encoding="utf-8",
             )
             source_dir = root / "services" / "yafvs-api" / "src"
@@ -4074,28 +4074,28 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(contract["nondeterministic_operation_ids"], [])
 
         self.assertEqual(
-            contract["allowed_turbovas_operation_fields"],
+            contract["allowed_yafvs_operation_fields"],
             [
-                "x-turbovas-direct",
-                "x-turbovas-exposure",
-                "x-turbovas-inherited-still-owns",
-                "x-turbovas-maturity",
-                "x-turbovas-operator-identity",
-                "x-turbovas-owner-semantics",
-                "x-turbovas-replaces",
-                "x-turbovas-safety-contract",
-                "x-turbovas-side-effect",
+                "x-yafvs-direct",
+                "x-yafvs-exposure",
+                "x-yafvs-inherited-still-owns",
+                "x-yafvs-maturity",
+                "x-yafvs-operator-identity",
+                "x-yafvs-owner-semantics",
+                "x-yafvs-replaces",
+                "x-yafvs-safety-contract",
+                "x-yafvs-side-effect",
             ],
         )
         self.assertEqual(contract["unexpected_turbovas_operation_fields"], [])
         self.assertEqual(contract["allowed_exposure_values"], ["browser-write", "direct-read", "direct-write", "internal-only"])
         actual_exposure_values = sorted(
-            {operation["x_turbovas_values"]["x-turbovas-exposure"] for operation in yafvsctl.openapi_contract_operations(root)}
+            {operation["x_turbovas_values"]["x-yafvs-exposure"] for operation in yafvsctl.openapi_contract_operations(root)}
         )
         self.assertTrue(set(actual_exposure_values).issubset(set(contract["allowed_exposure_values"])))
         self.assertEqual(contract["allowed_maturity_values"], ["live-control", "live-read", "live-write", "preview-control", "preview-read", "preview-write"])
         actual_maturity_values = sorted(
-            {operation["x_turbovas_values"]["x-turbovas-maturity"] for operation in yafvsctl.openapi_contract_operations(root)}
+            {operation["x_turbovas_values"]["x-yafvs-maturity"] for operation in yafvsctl.openapi_contract_operations(root)}
         )
         self.assertTrue(set(actual_maturity_values).issubset(set(contract["allowed_maturity_values"])))
         expected_replaces_values = ['alert-clone',
@@ -4323,7 +4323,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(contract["allowed_replaces_values"], expected_replaces_values)
         actual_replaces_values = sorted(
             {
-                operation["x_turbovas_values"]["x-turbovas-replaces"]
+                operation["x_turbovas_values"]["x-yafvs-replaces"]
                 for operation in yafvsctl.openapi_contract_operations(root)
             }
         )
@@ -4331,9 +4331,9 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(contract["allowed_inherited_still_owns_values"], expected_inherited_still_owns_values)
         actual_inherited_still_owns_values = sorted(
             {
-                operation["x_turbovas_values"].get("x-turbovas-inherited-still-owns")
+                operation["x_turbovas_values"].get("x-yafvs-inherited-still-owns")
                 for operation in yafvsctl.openapi_contract_operations(root)
-                if operation["x_turbovas_values"].get("x-turbovas-inherited-still-owns") is not None
+                if operation["x_turbovas_values"].get("x-yafvs-inherited-still-owns") is not None
             }
         )
         self.assertTrue(set(actual_inherited_still_owns_values).issubset(set(contract["allowed_inherited_still_owns_values"])))
@@ -5602,12 +5602,12 @@ class YAFVSCtlTests(unittest.TestCase):
                 "    get:\n"
                 "      summary: Drifted reports\n"
                 "      operationId: customReports\n"
-                "      x-turbovas-direct: true\n"
-                "      x-turbovas-exposure: banana\n"
-                "      x-turbovas-maturity: stale\n"
-                "      x-turbovas-replaces: everything\n"
-                "      x-turbovas-inherited-still-owns: all-the-things\n"
-                "      x-turbovas-surprise: true\n"
+                "      x-yafvs-direct: true\n"
+                "      x-yafvs-exposure: banana\n"
+                "      x-yafvs-maturity: stale\n"
+                "      x-yafvs-replaces: everything\n"
+                "      x-yafvs-inherited-still-owns: all-the-things\n"
+                "      x-yafvs-surprise: true\n"
                 "      responses:\n"
                 "        '200':\n"
                 "          description: Reports\n"
@@ -5634,7 +5634,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(summary["duplicate_operation_ids"], [])
         self.assertEqual(summary["nondeterministic_operation_ids"][0]["operation"], "GET /reports")
         self.assertEqual(summary["nondeterministic_operation_ids"][0]["expected"], "getReports")
-        self.assertEqual(summary["unexpected_turbovas_operation_fields"], [{"operation": "GET /reports", "fields": ["x-turbovas-surprise"]}])
+        self.assertEqual(summary["unexpected_turbovas_operation_fields"], [{"operation": "GET /reports", "fields": ["x-yafvs-surprise"]}])
         self.assertEqual(summary["invalid_exposure_operations"], [{"operation": "GET /reports", "actual": "banana", "allowed": ["browser-write", "direct-read", "direct-write", "internal-only"]}])
         missing_exposure = {item["operation"] for item in summary["missing_exposure_operations"]}
         self.assertEqual(
@@ -5819,64 +5819,64 @@ class YAFVSCtlTests(unittest.TestCase):
             [
                 {
                     "operation": "GET /reports",
-                    "field": "x-turbovas-inherited-still-owns",
+                    "field": "x-yafvs-inherited-still-owns",
                     "actual": "all-the-things",
                     "allowed": sorted(yafvsctl.OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES),
                 },
                 {
                     "operation": "GET /reports",
-                    "field": "x-turbovas-maturity",
+                    "field": "x-yafvs-maturity",
                     "actual": "stale",
                     "allowed": ["live-control", "live-read", "live-write", "preview-control", "preview-read", "preview-write"],
                 },
                 {
                     "operation": "GET /reports",
-                    "field": "x-turbovas-replaces",
+                    "field": "x-yafvs-replaces",
                     "actual": "everything",
                     "allowed": sorted(yafvsctl.OPENAPI_ALLOWED_REPLACES_VALUES),
                 },
             ],
         )
         missing_migration = {(item["operation"], item["field"]) for item in summary["missing_migration_metadata_operations"]}
-        self.assertIn(("GET /alerts", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /alerts/{alert_id}", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /cert-bund-advisories", "x-turbovas-maturity"), missing_migration)
-        self.assertIn(("GET /cpes", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /cves", "x-turbovas-maturity"), missing_migration)
-        self.assertIn(("GET /cves/{cve_id}", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /dfn-cert-advisories", "x-turbovas-maturity"), missing_migration)
-        self.assertIn(("GET /feeds", "x-turbovas-maturity"), missing_migration)
-        self.assertIn(("GET /nvts", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /nvts/{nvt_id}", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /operating-systems", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /tls-certificates/{certificate_id}", "x-turbovas-maturity"), missing_migration)
-        self.assertIn(("GET /scanners", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /tags", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /tags/{tag_id}", "x-turbovas-maturity"), missing_migration)
-        self.assertIn(("GET /tags/{tag_id}/resources", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /trashcan/summary", "x-turbovas-inherited-still-owns"), missing_migration)
-        self.assertIn(("GET /reports/{report_id}/results", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /scopes/{scope_id}/reports/{scope_report_id}/results", "x-turbovas-maturity"), missing_migration)
-        self.assertIn(("GET /scopes/{scope_id}/reports/{scope_report_id}/metrics", "x-turbovas-replaces"), missing_migration)
-        self.assertIn(("GET /scopes/{scope_id}/reports/{scope_report_id}/retention-plan", "x-turbovas-replaces"), missing_migration)
+        self.assertIn(("GET /alerts", "x-yafvs-replaces"), missing_migration)
+        self.assertIn(("GET /alerts/{alert_id}", "x-yafvs-replaces"), missing_migration)
+        self.assertIn(("GET /cert-bund-advisories", "x-yafvs-maturity"), missing_migration)
+        self.assertIn(("GET /cpes", "x-yafvs-replaces"), missing_migration)
+        self.assertIn(("GET /cves", "x-yafvs-maturity"), missing_migration)
+        self.assertIn(("GET /cves/{cve_id}", "x-yafvs-replaces"), missing_migration)
+        self.assertIn(("GET /dfn-cert-advisories", "x-yafvs-maturity"), missing_migration)
+        self.assertIn(("GET /feeds", "x-yafvs-maturity"), missing_migration)
+        self.assertIn(("GET /nvts", "x-yafvs-replaces"), missing_migration)
+        self.assertIn(("GET /nvts/{nvt_id}", "x-yafvs-replaces"), missing_migration)
+        self.assertIn(("GET /operating-systems", "x-yafvs-replaces"), missing_migration)
+        self.assertIn(("GET /tls-certificates/{certificate_id}", "x-yafvs-maturity"), missing_migration)
+        self.assertIn(("GET /scanners", "x-yafvs-replaces"), missing_migration)
+        self.assertIn(("GET /tags", "x-yafvs-replaces"), missing_migration)
+        self.assertIn(("GET /tags/{tag_id}", "x-yafvs-maturity"), missing_migration)
+        self.assertIn(("GET /tags/{tag_id}/resources", "x-yafvs-replaces"), missing_migration)
+        self.assertIn(("GET /trashcan/summary", "x-yafvs-inherited-still-owns"), missing_migration)
+        self.assertIn(("GET /reports/{report_id}/results", "x-yafvs-replaces"), missing_migration)
+        self.assertIn(("GET /scopes/{scope_id}/reports/{scope_report_id}/results", "x-yafvs-maturity"), missing_migration)
+        self.assertIn(("GET /scopes/{scope_id}/reports/{scope_report_id}/metrics", "x-yafvs-replaces"), missing_migration)
+        self.assertIn(("GET /scopes/{scope_id}/reports/{scope_report_id}/retention-plan", "x-yafvs-replaces"), missing_migration)
         self.assertEqual(
             summary["migration_metadata_mismatches"],
             [
                 {
                     "operation": "GET /reports",
-                    "field": "x-turbovas-inherited-still-owns",
+                    "field": "x-yafvs-inherited-still-owns",
                     "actual": "all-the-things",
                     "expected": "raw-report-generation-non-pdf-export-retention-and-mutations",
                 },
                 {
                     "operation": "GET /reports",
-                    "field": "x-turbovas-maturity",
+                    "field": "x-yafvs-maturity",
                     "actual": "stale",
                     "expected": "live-read",
                 },
                 {
                     "operation": "GET /reports",
-                    "field": "x-turbovas-replaces",
+                    "field": "x-yafvs-replaces",
                     "actual": "everything",
                     "expected": "raw-report-list-read",
                 },
@@ -5887,7 +5887,7 @@ class YAFVSCtlTests(unittest.TestCase):
             [
                 {
                     "operation": "GET /reports",
-                    "field": "x-turbovas-exposure",
+                    "field": "x-yafvs-exposure",
                     "actual": "banana",
                     "expected": "direct-read",
                 },
@@ -5913,7 +5913,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 "  /future-direct:\n"
                 "    get:\n"
                 "      operationId: getFutureDirect\n"
-                "      x-turbovas-exposure: direct-read\n"
+                "      x-yafvs-exposure: direct-read\n"
                 "      responses:\n"
                 "        '200':\n"
                 "          description: Future\n"
@@ -5921,8 +5921,8 @@ class YAFVSCtlTests(unittest.TestCase):
                 "    post:\n"
                 "      summary: Future internal\n"
                 "      operationId: postFutureInternal\n"
-                "      x-turbovas-direct: true\n"
-                "      x-turbovas-exposure: internal-only\n"
+                "      x-yafvs-direct: true\n"
+                "      x-yafvs-exposure: internal-only\n"
                 "      responses:\n"
                 "        '200':\n"
                 "          description: Future\n"
@@ -5930,7 +5930,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 "    get:\n"
                 "      summary: Future metadata\n"
                 "      operationId: getFutureMetadata\n"
-                "      x-turbovas-replaces: none\n"
+                "      x-yafvs-replaces: none\n"
                 "      responses:\n"
                 "        '200':\n"
                 "          description: Future\n"
@@ -5938,7 +5938,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 "    get:\n"
                 "      summary: Future body\n"
                 "      operationId: getFutureBody\n"
-                "      x-turbovas-exposure: direct-read\n"
+                "      x-yafvs-exposure: direct-read\n"
                 "      requestBody:\n"
                 "        required: true\n"
                 "      responses:\n"
@@ -5963,7 +5963,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn(
             {
                 "operation": "GET /future-direct",
-                "field": "x-turbovas-direct",
+                "field": "x-yafvs-direct",
                 "actual": False,
                 "expected": True,
             },
@@ -5972,7 +5972,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn(
             {
                 "operation": "POST /future-internal",
-                "field": "x-turbovas-direct",
+                "field": "x-yafvs-direct",
                 "actual": True,
                 "expected": False,
             },
@@ -5991,15 +5991,15 @@ class YAFVSCtlTests(unittest.TestCase):
                 "    post:\n"
                 "      summary: Create future tag\n"
                 "      operationId: postFutureTag\n"
-                "      x-turbovas-direct: true\n"
-                "      x-turbovas-exposure: direct-write\n"
-                "      x-turbovas-maturity: preview-write\n"
-                "      x-turbovas-replaces: none\n"
-                "      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-clone-export-trash\n"
-                "      x-turbovas-operator-identity: direct-token-operator\n"
-                "      x-turbovas-owner-semantics: request-operator-owner\n"
-                "      x-turbovas-safety-contract: write-control-v1\n"
-                "      x-turbovas-side-effect: metadata-write\n"
+                "      x-yafvs-direct: true\n"
+                "      x-yafvs-exposure: direct-write\n"
+                "      x-yafvs-maturity: preview-write\n"
+                "      x-yafvs-replaces: none\n"
+                "      x-yafvs-inherited-still-owns: tag-security-info-filter-actions-clone-export-trash\n"
+                "      x-yafvs-operator-identity: direct-token-operator\n"
+                "      x-yafvs-owner-semantics: request-operator-owner\n"
+                "      x-yafvs-safety-contract: write-control-v1\n"
+                "      x-yafvs-side-effect: metadata-write\n"
                 "      requestBody:\n"
                 "        required: true\n"
                 "      responses:\n"
@@ -6009,9 +6009,9 @@ class YAFVSCtlTests(unittest.TestCase):
                 "    patch:\n"
                 "      summary: Bad write\n"
                 "      operationId: patchBadWrite\n"
-                "      x-turbovas-direct: true\n"
-                "      x-turbovas-exposure: direct-read\n"
-                "      x-turbovas-side-effect: mystery\n"
+                "      x-yafvs-direct: true\n"
+                "      x-yafvs-exposure: direct-read\n"
+                "      x-yafvs-side-effect: mystery\n"
                 "      responses:\n"
                 "        '200':\n"
                 "          description: Future\n"
@@ -6019,15 +6019,15 @@ class YAFVSCtlTests(unittest.TestCase):
                 "    get:\n"
                 "      summary: Bad get body\n"
                 "      operationId: getBadGetBody\n"
-                "      x-turbovas-direct: true\n"
-                "      x-turbovas-exposure: direct-write\n"
-                "      x-turbovas-maturity: preview-write\n"
-                "      x-turbovas-replaces: none\n"
-                "      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-clone-export-trash\n"
-                "      x-turbovas-operator-identity: not-applicable-preview\n"
-                "      x-turbovas-owner-semantics: not-applicable-preview\n"
-                "      x-turbovas-safety-contract: write-control-v1\n"
-                "      x-turbovas-side-effect: metadata-write\n"
+                "      x-yafvs-direct: true\n"
+                "      x-yafvs-exposure: direct-write\n"
+                "      x-yafvs-maturity: preview-write\n"
+                "      x-yafvs-replaces: none\n"
+                "      x-yafvs-inherited-still-owns: tag-security-info-filter-actions-clone-export-trash\n"
+                "      x-yafvs-operator-identity: not-applicable-preview\n"
+                "      x-yafvs-owner-semantics: not-applicable-preview\n"
+                "      x-yafvs-safety-contract: write-control-v1\n"
+                "      x-yafvs-side-effect: metadata-write\n"
                 "      requestBody:\n"
                 "        required: true\n"
                 "      responses:\n"
@@ -6047,15 +6047,15 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(write_control["request_body_operations"], ["POST /future-tag", "GET /bad-get-body"])
         self.assertEqual(write_control["get_request_body_operations"], ["GET /bad-get-body"])
         missing = {(item["operation"], item["field"]) for item in write_control["missing_write_control_metadata"]}
-        self.assertIn(("PATCH /bad-write", "x-turbovas-maturity"), missing)
-        self.assertIn(("PATCH /bad-write", "x-turbovas-operator-identity"), missing)
-        self.assertIn(("PATCH /bad-write", "x-turbovas-owner-semantics"), missing)
-        self.assertIn(("PATCH /bad-write", "x-turbovas-replaces"), missing)
+        self.assertIn(("PATCH /bad-write", "x-yafvs-maturity"), missing)
+        self.assertIn(("PATCH /bad-write", "x-yafvs-operator-identity"), missing)
+        self.assertIn(("PATCH /bad-write", "x-yafvs-owner-semantics"), missing)
+        self.assertIn(("PATCH /bad-write", "x-yafvs-replaces"), missing)
         invalid = {(item["operation"], item["field"]): item for item in write_control["invalid_write_control_metadata"]}
-        self.assertEqual(invalid[("PATCH /bad-write", "x-turbovas-exposure")]["actual"], "direct-read")
-        self.assertEqual(invalid[("PATCH /bad-write", "x-turbovas-side-effect")]["actual"], "mystery")
+        self.assertEqual(invalid[("PATCH /bad-write", "x-yafvs-exposure")]["actual"], "direct-read")
+        self.assertEqual(invalid[("PATCH /bad-write", "x-yafvs-side-effect")]["actual"], "mystery")
         self.assertEqual(invalid[("GET /bad-get-body", "method")]["actual"], "get")
-        self.assertEqual(invalid[("GET /bad-get-body", "x-turbovas-exposure")]["actual"], "direct-write")
+        self.assertEqual(invalid[("GET /bad-get-body", "x-yafvs-exposure")]["actual"], "direct-write")
 
     def test_openapi_contract_checks_direct_write_uuid_path_parameters(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -6069,15 +6069,15 @@ class YAFVSCtlTests(unittest.TestCase):
                 "    patch:\n"
                 "      summary: Patch future tag\n"
                 "      operationId: patchFutureTagsByTagId\n"
-                "      x-turbovas-direct: true\n"
-                "      x-turbovas-exposure: direct-write\n"
-                "      x-turbovas-maturity: live-write\n"
-                "      x-turbovas-replaces: tag-metadata-write\n"
-                "      x-turbovas-inherited-still-owns: tag-security-info-filter-actions-clone-export-trash\n"
-                "      x-turbovas-operator-identity: direct-token-operator\n"
-                "      x-turbovas-owner-semantics: preserve-existing-owner\n"
-                "      x-turbovas-safety-contract: write-control-v1\n"
-                "      x-turbovas-side-effect: metadata-write\n"
+                "      x-yafvs-direct: true\n"
+                "      x-yafvs-exposure: direct-write\n"
+                "      x-yafvs-maturity: live-write\n"
+                "      x-yafvs-replaces: tag-metadata-write\n"
+                "      x-yafvs-inherited-still-owns: tag-security-info-filter-actions-clone-export-trash\n"
+                "      x-yafvs-operator-identity: direct-token-operator\n"
+                "      x-yafvs-owner-semantics: preserve-existing-owner\n"
+                "      x-yafvs-safety-contract: write-control-v1\n"
+                "      x-yafvs-side-effect: metadata-write\n"
                 "      parameters:\n"
                 "        - $ref: '#/components/parameters/TagId'\n"
                 "      requestBody:\n"
@@ -6400,7 +6400,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(auth["alignment_status"], "pass")
         self.assertEqual(set(auth["servers"]), {"/api/v1", "http://127.0.0.1:19080/api/v1"})
         self.assertEqual(set(auth["security_requirements"]), {"operatorSession", "bearerAuth"})
-        self.assertEqual(auth["security_schemes"]["operatorSession"]["name"], "turbovas_session")
+        self.assertEqual(auth["security_schemes"]["operatorSession"]["name"], "yafvs_session")
         self.assertEqual(auth["security_schemes"]["bearerAuth"]["scheme"], "bearer")
         compact = yafvsctl.compact_native_tooling_summary({"openapi_contract": summary})["openapi_contract"]
         self.assertEqual(compact["auth_contract_alignment_status"], "pass")
@@ -10655,18 +10655,18 @@ class YAFVSCtlTests(unittest.TestCase):
         ]
         for operation, operation_id, replaces, inherited_still_owns in expected_catalog_metadata:
             self.assertEqual(operation["operation_id"], operation_id)
-            self.assertIn("x-turbovas-direct", operation["x_turbovas_fields"])
-            self.assertEqual(operation["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
-            self.assertEqual(operation["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
-            self.assertEqual(operation["x_turbovas_values"]["x-turbovas-replaces"], replaces)
-            self.assertEqual(operation["x_turbovas_values"].get("x-turbovas-inherited-still-owns"), inherited_still_owns)
+            self.assertIn("x-yafvs-direct", operation["x_yafvs_fields"])
+            self.assertEqual(operation["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
+            self.assertEqual(operation["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
+            self.assertEqual(operation["x_turbovas_values"]["x-yafvs-replaces"], replaces)
+            self.assertEqual(operation["x_turbovas_values"].get("x-yafvs-inherited-still-owns"), inherited_still_owns)
 
         for operation in (
             operations[("get", "/filters")],
             operations[("get", "/filters/{filter_id}")],
             operations[("get", "/filters/{filter_id}/export")],
         ):
-            self.assertNotIn("x-turbovas-inherited-still-owns", operation["x_turbovas_values"])
+            self.assertNotIn("x-yafvs-inherited-still-owns", operation["x_turbovas_values"])
 
         self.assertIn('GSA CVE detail metadata export', native_tooling)
         self.assertIn('GSA NVT detail metadata export', native_tooling)
@@ -10696,51 +10696,51 @@ class YAFVSCtlTests(unittest.TestCase):
         ]
         for operation, operation_id, replaces, inherited_still_owns in expected_asset_metadata:
             self.assertEqual(operation["operation_id"], operation_id)
-            self.assertIn("x-turbovas-direct", operation["x_turbovas_fields"])
-            self.assertEqual(operation["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
-            self.assertEqual(operation["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
-            self.assertEqual(operation["x_turbovas_values"]["x-turbovas-replaces"], replaces)
-            self.assertEqual(operation["x_turbovas_values"].get("x-turbovas-inherited-still-owns"), inherited_still_owns)
+            self.assertIn("x-yafvs-direct", operation["x_yafvs_fields"])
+            self.assertEqual(operation["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
+            self.assertEqual(operation["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
+            self.assertEqual(operation["x_turbovas_values"]["x-yafvs-replaces"], replaces)
+            self.assertEqual(operation["x_turbovas_values"].get("x-yafvs-inherited-still-owns"), inherited_still_owns)
 
         self.assertEqual(alerts["operation_id"], "getAlerts")
-        self.assertIn("x-turbovas-direct", alerts["x_turbovas_fields"])
-        self.assertEqual(alerts["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
-        self.assertEqual(alerts["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
-        self.assertEqual(alerts["x_turbovas_values"]["x-turbovas-replaces"], "alert-metadata-list-read")
-        self.assertNotIn("x-turbovas-inherited-still-owns", alerts["x_turbovas_values"])
+        self.assertIn("x-yafvs-direct", alerts["x_yafvs_fields"])
+        self.assertEqual(alerts["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
+        self.assertEqual(alerts["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
+        self.assertEqual(alerts["x_turbovas_values"]["x-yafvs-replaces"], "alert-metadata-list-read")
+        self.assertNotIn("x-yafvs-inherited-still-owns", alerts["x_turbovas_values"])
         self.assertEqual(alert_detail["operation_id"], "getAlertsByAlertId")
-        self.assertIn("x-turbovas-direct", alert_detail["x_turbovas_fields"])
-        self.assertEqual(alert_detail["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
-        self.assertEqual(alert_detail["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
-        self.assertEqual(alert_detail["x_turbovas_values"]["x-turbovas-replaces"], "alert-metadata-detail-read")
-        self.assertNotIn("x-turbovas-inherited-still-owns", alert_detail["x_turbovas_values"])
+        self.assertIn("x-yafvs-direct", alert_detail["x_yafvs_fields"])
+        self.assertEqual(alert_detail["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
+        self.assertEqual(alert_detail["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
+        self.assertEqual(alert_detail["x_turbovas_values"]["x-yafvs-replaces"], "alert-metadata-detail-read")
+        self.assertNotIn("x-yafvs-inherited-still-owns", alert_detail["x_turbovas_values"])
         self.assertEqual(alert_detail["responses"]["404"], "#/components/responses/NotFound")
         self.assertEqual(alert_export["operation_id"], "getAlertsByAlertIdExport")
-        self.assertIn("x-turbovas-direct", alert_export["x_turbovas_fields"])
-        self.assertEqual(alert_export["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
-        self.assertEqual(alert_export["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
-        self.assertEqual(alert_export["x_turbovas_values"]["x-turbovas-replaces"], "alert-metadata-export-read")
-        self.assertNotIn("x-turbovas-inherited-still-owns", alert_export["x_turbovas_values"])
+        self.assertIn("x-yafvs-direct", alert_export["x_yafvs_fields"])
+        self.assertEqual(alert_export["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
+        self.assertEqual(alert_export["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
+        self.assertEqual(alert_export["x_turbovas_values"]["x-yafvs-replaces"], "alert-metadata-export-read")
+        self.assertNotIn("x-yafvs-inherited-still-owns", alert_export["x_turbovas_values"])
         self.assertEqual(alert_export["responses"]["404"], "#/components/responses/NotFound")
         self.assertEqual(feeds["operation_id"], "getFeeds")
-        self.assertIn("x-turbovas-direct", feeds["x_turbovas_fields"])
-        self.assertEqual(feeds["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
-        self.assertEqual(feeds["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
-        self.assertEqual(feeds["x_turbovas_values"]["x-turbovas-replaces"], "feed-status-read")
-        self.assertEqual(feeds["x_turbovas_values"]["x-turbovas-inherited-still-owns"], "feed-sync-import-control")
+        self.assertIn("x-yafvs-direct", feeds["x_yafvs_fields"])
+        self.assertEqual(feeds["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
+        self.assertEqual(feeds["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
+        self.assertEqual(feeds["x_turbovas_values"]["x-yafvs-replaces"], "feed-status-read")
+        self.assertEqual(feeds["x_turbovas_values"]["x-yafvs-inherited-still-owns"], "feed-sync-import-control")
         self.assertEqual(feeds["responses"]["400"], "#/components/responses/BadRequest")
         self.assertEqual(tag_resource_names["operation_id"], "getTagsResourceNamesByResourceType")
-        self.assertIn("x-turbovas-direct", tag_resource_names["x_turbovas_fields"])
-        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
-        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
-        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-turbovas-replaces"], "tag-resource-name-read")
-        self.assertNotIn("x-turbovas-inherited-still-owns", tag_resource_names["x_turbovas_values"])
+        self.assertIn("x-yafvs-direct", tag_resource_names["x_yafvs_fields"])
+        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
+        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
+        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-yafvs-replaces"], "tag-resource-name-read")
+        self.assertNotIn("x-yafvs-inherited-still-owns", tag_resource_names["x_turbovas_values"])
         self.assertEqual(tag_resource_names["responses"]["404"], "#/components/responses/NotFound")
         self.assertEqual(trashcan_summary["operation_id"], "getTrashcanSummary")
-        self.assertIn("x-turbovas-direct", trashcan_summary["x_turbovas_fields"])
-        self.assertEqual(trashcan_summary["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
-        self.assertEqual(trashcan_summary["x_turbovas_values"]["x-turbovas-maturity"], "live-read")
-        self.assertEqual(trashcan_summary["x_turbovas_values"]["x-turbovas-replaces"], "trashcan-count-summary-read")
+        self.assertIn("x-yafvs-direct", trashcan_summary["x_yafvs_fields"])
+        self.assertEqual(trashcan_summary["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
+        self.assertEqual(trashcan_summary["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
+        self.assertEqual(trashcan_summary["x_turbovas_values"]["x-yafvs-replaces"], "trashcan-count-summary-read")
         root = Path(__file__).resolve().parents[2]
         result = yafvsctl.command_native_tooling_removal_review(root)
         status_only = yafvsctl.command_native_tooling_removal_review(root, status_only=True)
@@ -10792,11 +10792,11 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("/scopes/{scope_id}/reports/{scope_report_id}/retention-plan:", openapi)
         operations = {(item["method"], item["path"]): item for item in yafvsctl.openapi_contract_operations(root)}
         retention = operations[("get", "/scopes/{scope_id}/reports/{scope_report_id}/retention-plan")]
-        self.assertEqual(retention["x_turbovas_values"]["x-turbovas-exposure"], "direct-read")
-        self.assertEqual(retention["x_turbovas_values"]["x-turbovas-maturity"], "preview-read")
-        self.assertEqual(retention["x_turbovas_values"]["x-turbovas-replaces"], "none")
-        self.assertEqual(retention["x_turbovas_values"]["x-turbovas-inherited-still-owns"], "retention-mutations")
-        self.assertIn("x-turbovas-direct", retention["x_turbovas_fields"])
+        self.assertEqual(retention["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
+        self.assertEqual(retention["x_turbovas_values"]["x-yafvs-maturity"], "preview-read")
+        self.assertEqual(retention["x_turbovas_values"]["x-yafvs-replaces"], "none")
+        self.assertEqual(retention["x_turbovas_values"]["x-yafvs-inherited-still-owns"], "retention-mutations")
+        self.assertIn("x-yafvs-direct", retention["x_yafvs_fields"])
         self.assertIn("ScopeReportRetentionPlan", openapi)
         self.assertIn("detail_compacted", openapi)
         self.assertIn("aggregate_only", openapi)
@@ -10909,7 +10909,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("XML metadata export, aggregate dashboards, and filtered detail result expansion are intentionally not retained.", export["notes"])
         for operation in yafvsctl.openapi_contract_operations(root):
             if operation["path"].startswith("/overrides"):
-                self.assertNotIn("x-turbovas-inherited-still-owns", operation["x_turbovas_values"])
+                self.assertNotIn("x-yafvs-inherited-still-owns", operation["x_turbovas_values"])
 
     def test_native_schedule_csv_script_is_absent_after_native_retirement(self):
         root = Path(__file__).resolve().parents[2]

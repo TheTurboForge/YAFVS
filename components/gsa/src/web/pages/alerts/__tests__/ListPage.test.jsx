@@ -154,8 +154,7 @@ const createGmp = ({
   }),
 } = {}) => {
   const resolvedBuildUrl =
-    buildUrl ??
-    testing.fn((path, _params) => `https://turbovas.example/${path}`);
+    buildUrl ?? testing.fn((path, _params) => `https://yafvs.example/${path}`);
   if (buildUrl === undefined) {
     testing.stubGlobal(
       'fetch',
@@ -334,7 +333,7 @@ describe('Alert ListPage tests', () => {
 
   test('should load alert dialog selector choices through native API', async () => {
     const buildUrl = testing.fn(
-      (path, _params) => `https://turbovas.example/${path}`,
+      (path, _params) => `https://yafvs.example/${path}`,
     );
     const payloads = {
       'api/v1/report-formats': {

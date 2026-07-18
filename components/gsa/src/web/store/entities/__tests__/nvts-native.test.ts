@@ -20,7 +20,7 @@ const createGmp = ({
   jwt,
   token = 'test-token',
 }: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -30,18 +30,19 @@ afterEach(() => {
 
 describe('native API NVT catalog', () => {
   test('maps NVT category and discovery filters to native query fields', () => {
-    expect(nativeNvtsQueryFromFilter(Filter.fromString('category=3')).filter).toEqual(
-      'category=3',
-    );
-    expect(nativeNvtsQueryFromFilter(Filter.fromString('discovery=1')).filter).toEqual(
-      'discovery=1',
-    );
-    expect(nativeNvtsQueryFromFilter(Filter.fromString('sort=category')).sort).toEqual(
-      'category',
-    );
-    expect(nativeNvtsQueryFromFilter(Filter.fromString('sort-reverse=discovery')).sort).toEqual(
-      '-discovery',
-    );
+    expect(
+      nativeNvtsQueryFromFilter(Filter.fromString('category=3')).filter,
+    ).toEqual('category=3');
+    expect(
+      nativeNvtsQueryFromFilter(Filter.fromString('discovery=1')).filter,
+    ).toEqual('discovery=1');
+    expect(
+      nativeNvtsQueryFromFilter(Filter.fromString('sort=category')).sort,
+    ).toEqual('category');
+    expect(
+      nativeNvtsQueryFromFilter(Filter.fromString('sort-reverse=discovery'))
+        .sort,
+    ).toEqual('-discovery');
   });
 
   test('fetches top-level NVTs as inherited models', async () => {
@@ -131,13 +132,16 @@ describe('native API NVT catalog', () => {
       sort: '-created',
       filter: 'ssh',
     });
-    expect(fetchMock).toHaveBeenCalledWith('https://turbovas.example/api/v1/nvts', {
-      credentials: 'include',
-      headers: {
-        Accept: 'application/json',
-        Authorization: 'Bearer jwt-token',
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/nvts',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
       },
-    });
+    );
   });
 
   test('loads the NVT store through same-origin native API', async () => {
@@ -269,49 +273,49 @@ describe('native API NVT catalog', () => {
   test('loads NVT detail through native API without inherited get_info overlay', async () => {
     const id = '1.3.6.1.4.1.25623.1.1.9.2026.29807996710206';
     const fetchMock = testing.fn().mockResolvedValue({
-        json: testing.fn().mockResolvedValue({
-          id,
-          oid: id,
-          name: 'Native NVT',
-          comment: 'native comment',
-          family: 'Native family',
-          category: '5',
-          discovery: 1,
-          severity: 5.0,
-          qod: 97,
-          qod_type: 'package',
-          solution_type: 'VendorFix',
-          solution: 'Please install the updated package(s).',
-          summary: 'Native summary',
-          insight: 'Native insight',
-          affected: 'Native affected package',
-          impact: 'Native impact',
-          detection: 'Native detection method',
-          default_timeout: '300',
-          preferences: [
-            {
-              id: 1,
-              name: 'retained-pref',
-              hr_name: 'Retained preference',
-              type: 'entry',
-              value: 'retained',
-              default: 'retained-default',
-            },
-          ],
-          tags: 'cvss_base_vector=AV:N/AC:L/Au:N/C:P/I:N/A:N',
-          cves: ['CVE-2026-10001'],
-          xrefs: ['url:https://example.test/advisory'],
-          user_tags: [
-            {
-              id: '4a281aca-c02b-4566-8247-6a16b144ecdf',
-              name: 'Native tag',
-              value: 'true',
-              comment: 'Native NVT tag',
-            },
-          ],
-        }),
-        ok: true,
-        status: 200,
+      json: testing.fn().mockResolvedValue({
+        id,
+        oid: id,
+        name: 'Native NVT',
+        comment: 'native comment',
+        family: 'Native family',
+        category: '5',
+        discovery: 1,
+        severity: 5.0,
+        qod: 97,
+        qod_type: 'package',
+        solution_type: 'VendorFix',
+        solution: 'Please install the updated package(s).',
+        summary: 'Native summary',
+        insight: 'Native insight',
+        affected: 'Native affected package',
+        impact: 'Native impact',
+        detection: 'Native detection method',
+        default_timeout: '300',
+        preferences: [
+          {
+            id: 1,
+            name: 'retained-pref',
+            hr_name: 'Retained preference',
+            type: 'entry',
+            value: 'retained',
+            default: 'retained-default',
+          },
+        ],
+        tags: 'cvss_base_vector=AV:N/AC:L/Au:N/C:P/I:N/A:N',
+        cves: ['CVE-2026-10001'],
+        xrefs: ['url:https://example.test/advisory'],
+        user_tags: [
+          {
+            id: '4a281aca-c02b-4566-8247-6a16b144ecdf',
+            name: 'Native tag',
+            value: 'true',
+            comment: 'Native NVT tag',
+          },
+        ],
+      }),
+      ok: true,
+      status: 200,
     });
     testing.stubGlobal('fetch', fetchMock);
     const gmp = {
@@ -357,7 +361,9 @@ describe('native API NVT catalog', () => {
     expect(nvt?.defaultTimeout).toEqual(300);
     expect(nvt?.timeout).toBeUndefined();
     expect(nvt?.userTags).toHaveLength(1);
-    expect(nvt?.userTags?.[0].id).toEqual('4a281aca-c02b-4566-8247-6a16b144ecdf');
+    expect(nvt?.userTags?.[0].id).toEqual(
+      '4a281aca-c02b-4566-8247-6a16b144ecdf',
+    );
     expect(nvt?.userTags?.[0].name).toEqual('Native tag');
     expect(nvt?.userTags?.[0].value).toEqual('true');
     expect(nvt?.userTags?.[0].comment).toEqual('Native NVT tag');

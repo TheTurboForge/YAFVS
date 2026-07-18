@@ -23,9 +23,7 @@ afterEach(() => {
 
 const createNativeHttp = () => {
   const fakeHttp = createHttp(undefined);
-  fakeHttp.buildUrl = testing.fn(
-    path => `https://turbovas.example/${path}`,
-  );
+  fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
   fakeHttp.session.jwt = 'jwt-token';
@@ -82,14 +80,14 @@ describe('TlsCertificateCommand tests', () => {
       'api/v1/tls-certificates/tls-certificate-id',
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/tls-certificates/tls-certificate-id',
+      'https://yafvs.example/api/v1/tls-certificates/tls-certificate-id',
       {
         method: 'DELETE',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           Authorization: 'Bearer jwt-token',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
         },
       },
     );
@@ -117,7 +115,7 @@ describe('TlsCertificateCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/tls-certificates/tls-certificate-id/export',
+      'https://yafvs.example/api/v1/tls-certificates/tls-certificate-id/export',
       {
         credentials: 'include',
         headers: {
@@ -154,7 +152,7 @@ describe('TlsCertificateCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/tls-certificates/tls-certificate-id/certificate',
+      'https://yafvs.example/api/v1/tls-certificates/tls-certificate-id/certificate',
       {
         credentials: 'include',
         headers: {
@@ -166,14 +164,19 @@ describe('TlsCertificateCommand tests', () => {
     expect(result.data.id).toEqual('tls-certificate-id');
     expect(result.data.certificate).toEqual('BASE64CERTIFICATE');
   });
-
 });
 
 describe('TlsCertificatesCommand tests', () => {
   test('should fetch TLS certificates through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 25, total: 1, sort: 'name', filter: 'example'},
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: 'name',
+          filter: 'example',
+        },
         items: [
           {
             id: 'tls-certificate-id',
@@ -268,7 +271,13 @@ describe('TlsCertificatesCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 1, total: 3, sort: 'name', filter: 'example'},
+          page: {
+            page: 2,
+            page_size: 1,
+            total: 3,
+            sort: 'name',
+            filter: 'example',
+          },
           items: [{id: 'tls-2', name: 'two'}],
         }),
         ok: true,
@@ -308,7 +317,13 @@ describe('TlsCertificatesCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: 'example'},
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'example',
+          },
           items: [{id: 'tls-1', name: 'one'}],
         }),
         ok: true,
@@ -316,7 +331,13 @@ describe('TlsCertificatesCommand tests', () => {
       })
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: 'example'},
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'name',
+            filter: 'example',
+          },
           items: [{id: 'tls-2', name: 'two'}],
         }),
         ok: true,

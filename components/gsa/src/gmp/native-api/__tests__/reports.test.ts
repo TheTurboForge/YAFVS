@@ -14,7 +14,7 @@ import {
 } from 'gmp/native-api/reports';
 
 const createNativeHttp = () => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {token: 'test-token', jwt: 'jwt-token'},
 });
 
@@ -40,7 +40,7 @@ describe('report native API query builders', () => {
       },
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      `https://turbovas.example/api/v1/reports/${reportId}/download`,
+      `https://yafvs.example/api/v1/reports/${reportId}/download`,
       {
         credentials: 'include',
         headers: {

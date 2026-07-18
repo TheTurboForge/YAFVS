@@ -11,8 +11,11 @@ import {loadEntities, loadEntity} from 'web/store/entities/cpes';
 import {createState} from 'web/store/entities/utils/testing';
 import {filterIdentifier} from 'web/store/utils';
 
-const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+const createGmp = ({
+  jwt,
+  token = 'test-token',
+}: {jwt?: string; token?: string} = {}) => ({
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -24,7 +27,13 @@ describe('native API CPE catalog', () => {
   test('fetches top-level CPEs as inherited Cpe models', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 25, total: 1, sort: '-modified', filter: 'lightllm'},
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: '-modified',
+          filter: 'lightllm',
+        },
         items: [
           {
             id: 'cpe:/a:example:lightllm:1.1.0',
@@ -71,13 +80,16 @@ describe('native API CPE catalog', () => {
       sort: '-modified',
       filter: 'lightllm',
     });
-    expect(fetchMock).toHaveBeenCalledWith('https://turbovas.example/api/v1/cpes', {
-      credentials: 'include',
-      headers: {
-        Accept: 'application/json',
-        Authorization: 'Bearer jwt-token',
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/cpes',
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer jwt-token',
+        },
       },
-    });
+    );
   });
 
   test('fetches one CPE detail through the native API', async () => {

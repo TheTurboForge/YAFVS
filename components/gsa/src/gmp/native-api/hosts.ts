@@ -183,7 +183,9 @@ const nativeSearchFromFilter = (filter?: Filter): string => {
   return /[=<>:~]/.test(criteria) ? '' : criteria;
 };
 
-export const nativeHostsQueryFromFilter = (filter?: Filter): NativeHostsQuery => {
+export const nativeHostsQueryFromFilter = (
+  filter?: Filter,
+): NativeHostsQuery => {
   const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
   const first = Math.max(1, integerValue(filter?.get('first'), 1));
   return {
@@ -229,7 +231,7 @@ const deleteNative = async (gmp: NativeApiGmp, path: string): Promise<void> => {
     credentials: 'include',
     headers: {
       Accept: 'application/json',
-      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.token ? {'X-YAFVS-Token': gmp.session.token} : {}),
       ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
     },
   });
@@ -251,7 +253,7 @@ const writeNativeJson = async <T>(
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+      ...(gmp.session.token ? {'X-YAFVS-Token': gmp.session.token} : {}),
       ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
     },
     body: JSON.stringify(body),
@@ -269,9 +271,7 @@ const matchingOperatingSystem = (
   operatingSystems: NativeHostOperatingSystemPayload[] = [],
 ) =>
   identifier.name === 'OS'
-    ? operatingSystems.find(
-        os => os.operating_system_name === identifier.value,
-      )
+    ? operatingSystems.find(os => os.operating_system_name === identifier.value)
     : undefined;
 
 const nativeIdentifierToElement = (
@@ -295,7 +295,8 @@ const nativeIdentifierToElement = (
 };
 
 const nativeIdentifierKey = (item: NativeHostIdentifierPayload): string =>
-  stringValue(item.id) || `${stringValue(item.name)}:${stringValue(item.value)}`;
+  stringValue(item.id) ||
+  `${stringValue(item.name)}:${stringValue(item.value)}`;
 
 const nativeIdentifierItems = (
   item: NativeHostPayload,

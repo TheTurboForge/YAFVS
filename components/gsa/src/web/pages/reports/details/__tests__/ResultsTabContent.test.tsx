@@ -29,7 +29,7 @@ const createGmp = () => ({
         query.set(key, String(value));
       }
     });
-    return `https://turbovas.example/${path}${
+    return `https://yafvs.example/${path}${
       query.size > 0 ? `?${query.toString()}` : ''
     }`;
   }),
@@ -152,7 +152,9 @@ describe('ResultsTabContent', () => {
       />,
     );
 
-    expect(await screen.findByText('OpenSSH Vulnerability')).toBeInTheDocument();
+    expect(
+      await screen.findByText('OpenSSH Vulnerability'),
+    ).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining('/api/v1/reports/report-123/results'),
       expect.objectContaining({credentials: 'include'}),

@@ -10,25 +10,25 @@ bounded, and validated.
 Every non-GET native operation, request-body operation, or side-effecting
 operation must declare these OpenAPI fields before implementation:
 
-- `x-turbovas-exposure`: `internal-only` by default, or `direct-write` only
+- `x-yafvs-exposure`: `internal-only` by default, or `direct-write` only
   after the direct-access auth/exposure posture is deliberately approved for
   that path.
-- `x-turbovas-maturity`: `preview-write`, `live-write`, `preview-control`, or
+- `x-yafvs-maturity`: `preview-write`, `live-write`, `preview-control`, or
   `live-control`.
-- `x-turbovas-replaces`: the inherited product workflow or `none` while the
+- `x-yafvs-replaces`: the inherited product workflow or `none` while the
   contract is still a scaffold.
-- `x-turbovas-inherited-still-owns`: the legacy behavior that still owns any
+- `x-yafvs-inherited-still-owns`: the legacy behavior that still owns any
   unreplaced part of the workflow.
-- `x-turbovas-operator-identity`: how the write/control operation maps the
+- `x-yafvs-operator-identity`: how the write/control operation maps the
   request to an operator principal: `proxied-session-operator`,
   `direct-token-operator`, `service-admin-dev-only`, or
   `not-applicable-preview`.
-- `x-turbovas-owner-semantics`: how persistent owner fields or gvmd-style
+- `x-yafvs-owner-semantics`: how persistent owner fields or gvmd-style
   current-user semantics are handled: `request-operator-owner`,
   `preserve-existing-owner`, `single-admin-owner`, `no-owner-state`, or
   `not-applicable-preview`.
-- `x-turbovas-safety-contract`: currently `write-control-v1`.
-- `x-turbovas-side-effect`: one of `metadata-write`, `metadata-delete`,
+- `x-yafvs-safety-contract`: currently `write-control-v1`.
+- `x-yafvs-side-effect`: one of `metadata-write`, `metadata-delete`,
   `resource-assignment-write`, `scanner-control`, `feed-control`,
   `credential-secret-control`, `account-auth-control`, `destructive-mutation`,
   `report-generation`, or `export-generation`.
@@ -121,7 +121,7 @@ Request shape:
 Validation and state rules:
 
 - Native live writes require an authenticated operator. OpenAPI metadata must
-  use `x-turbovas-operator-identity: proxied-session-operator` for the browser
+  use `x-yafvs-operator-identity: proxied-session-operator` for the browser
   bridge or `direct-token-operator` for direct API access. `service-admin-dev-only`
   is allowed only for preview/scaffold operations, not live scope writes.
 - Ownership for create is `request-operator-owner`; patch and delete preserve

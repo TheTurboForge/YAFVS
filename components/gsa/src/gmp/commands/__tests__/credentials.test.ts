@@ -21,7 +21,7 @@ const createNativeHttp = () => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -55,14 +55,16 @@ describe('CredentialCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
     fakeHttp.session.jwt = 'jwt-token';
 
     const cmd = new CredentialsCommand(fakeHttp);
-    const result = await cmd.get({filter: 'first=1 rows=25 search=ssh type=usk'});
+    const result = await cmd.get({
+      filter: 'first=1 rows=25 search=ssh type=usk',
+    });
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(result.data[0].id).toEqual('6d799e1f-a81b-4b33-8090-5d4b0ed8ec77');
@@ -76,7 +78,7 @@ describe('CredentialCommand tests', () => {
       credential_type: 'usk',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/credentials',
+      'https://yafvs.example/api/v1/credentials',
       {
         credentials: 'include',
         headers: {

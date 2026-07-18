@@ -162,7 +162,7 @@ fn openapi_documents_raw_report_reads_without_generation_or_export_contract() {
         ),
     ] {
         let block = openapi_path_block(path);
-        let inherited_owner = "x-turbovas-inherited-still-owns: raw-report-generation-non-pdf-export-retention-and-mutations";
+        let inherited_owner = "x-yafvs-inherited-still-owns: raw-report-generation-non-pdf-export-retention-and-mutations";
         assert_eq!(
             block.contains(inherited_owner),
             keeps_generic_legacy_owner,
@@ -170,9 +170,9 @@ fn openapi_documents_raw_report_reads_without_generation_or_export_contract() {
         );
         for required in [
             "get:",
-            "x-turbovas-direct: true",
-            "x-turbovas-exposure: direct-read",
-            "x-turbovas-maturity: live-read",
+            "x-yafvs-direct: true",
+            "x-yafvs-exposure: direct-read",
+            "x-yafvs-maturity: live-read",
             replacement,
         ] {
             assert!(
@@ -181,8 +181,8 @@ fn openapi_documents_raw_report_reads_without_generation_or_export_contract() {
             );
         }
         for forbidden in [
-            "x-turbovas-exposure: direct-write",
-            "x-turbovas-safety-contract: write-control-v1",
+            "x-yafvs-exposure: direct-write",
+            "x-yafvs-safety-contract: write-control-v1",
             "\n    post:",
             "\n    patch:",
             "\n    put:",

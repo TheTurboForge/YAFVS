@@ -34,7 +34,7 @@ describe('NvtCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -49,7 +49,7 @@ describe('NvtCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/nvts/1.3.6.1.4.1.25623.1.0.100000/export',
+      'https://yafvs.example/api/v1/nvts/1.3.6.1.4.1.25623.1.0.100000/export',
       {
         credentials: 'include',
         headers: {
@@ -83,7 +83,7 @@ describe('NvtCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -95,7 +95,7 @@ describe('NvtCommand tests', () => {
       token: 'test-token',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/nvts/1.2.3',
+      'https://yafvs.example/api/v1/nvts/1.2.3',
       {
         credentials: 'include',
         headers: {
@@ -197,7 +197,7 @@ describe('NvtCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -244,7 +244,7 @@ describe('NvtCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     const cmd = new NvtCommand(fakeHttp);

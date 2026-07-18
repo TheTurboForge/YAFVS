@@ -27,7 +27,7 @@ const createGmp = ({
     data: TlsCertificate.fromElement({_id: nativePayload.id}),
   }),
 } = {}) => ({
-  buildUrl: testing.fn((path, _params) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path, _params) => `https://yafvs.example/${path}`),
   session: {...createSession(), token: 'test-token', jwt: 'jwt-token'},
   user: {currentSettings},
   tlscertificate: {export: exportTlsCertificate, get: getTlsCertificate},
@@ -77,7 +77,7 @@ describe('TLS Certificate Component tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      `https://turbovas.example/api/v1/tls-certificates/${nativePayload.id}/export`,
+      `https://yafvs.example/api/v1/tls-certificates/${nativePayload.id}/export`,
       expect.objectContaining({credentials: 'include'}),
     );
     expect(onDownloaded).toHaveBeenCalledWith({

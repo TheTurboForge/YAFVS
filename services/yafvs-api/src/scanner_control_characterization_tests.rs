@@ -301,15 +301,15 @@ fn openapi_documents_scanner_configuration_metadata_and_verify_control_boundary(
     let list = openapi_path_block("/scanners");
     assert!(list.contains("get:"));
     assert!(list.contains("post:"));
-    assert!(list.contains("x-turbovas-exposure: direct-read"));
-    assert!(list.contains("x-turbovas-exposure: direct-write"));
-    assert!(!list.contains("x-turbovas-inherited-still-owns:"));
+    assert!(list.contains("x-yafvs-exposure: direct-read"));
+    assert!(list.contains("x-yafvs-exposure: direct-write"));
+    assert!(!list.contains("x-yafvs-inherited-still-owns:"));
     for required in [
         "operationId: postScanners",
-        "x-turbovas-replaces: scanner-create",
-        "x-turbovas-operator-identity: direct-token-operator",
-        "x-turbovas-owner-semantics: request-operator-owner",
-        "x-turbovas-safety-contract: write-control-v1",
+        "x-yafvs-replaces: scanner-create",
+        "x-yafvs-operator-identity: direct-token-operator",
+        "x-yafvs-owner-semantics: request-operator-owner",
+        "x-yafvs-safety-contract: write-control-v1",
         "$ref: '#/components/schemas/ScannerConfigurationRequest'",
         "'201':",
         "Location:",
@@ -326,9 +326,9 @@ fn openapi_documents_scanner_configuration_metadata_and_verify_control_boundary(
     assert!(detail.contains("get:"));
     assert!(detail.contains("patch:"));
     assert!(!detail.contains("delete:"));
-    assert!(detail.contains("x-turbovas-exposure: direct-read"));
-    assert!(detail.contains("x-turbovas-exposure: direct-write"));
-    assert!(!detail.contains("x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"));
+    assert!(detail.contains("x-yafvs-exposure: direct-read"));
+    assert!(detail.contains("x-yafvs-exposure: direct-write"));
+    assert!(!detail.contains("x-yafvs-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"));
     assert!(
         detail.contains("Native direct write-control can create scanners, replace complete retained editor configuration, patch name/comment metadata, and verify bounded local scanner availability")
     );
@@ -345,11 +345,11 @@ fn openapi_documents_scanner_configuration_metadata_and_verify_control_boundary(
     for required in [
         "post:",
         "operationId: postScannersByScannerIdReplaceConfiguration",
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-replaces: scanner-complete-retained-editor-configuration-modify",
-        "x-turbovas-operator-identity: direct-token-operator",
-        "x-turbovas-owner-semantics: preserve-existing-owner",
-        "x-turbovas-safety-contract: write-control-v1",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-replaces: scanner-complete-retained-editor-configuration-modify",
+        "x-yafvs-operator-identity: direct-token-operator",
+        "x-yafvs-owner-semantics: preserve-existing-owner",
+        "x-yafvs-safety-contract: write-control-v1",
         "$ref: '#/components/schemas/ScannerConfigurationRequest'",
         "$ref: '#/components/schemas/ScannerAssetDetail'",
         "without contacting or verifying it",
@@ -373,14 +373,14 @@ fn openapi_documents_scanner_configuration_metadata_and_verify_control_boundary(
     for required in [
         "post:",
         "operationId: postScannersByScannerIdVerify",
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-inherited-still-owns: remote-scanner-tls-relay-verification",
-        "x-turbovas-maturity: live-control",
-        "x-turbovas-replaces: scanner-verify",
-        "x-turbovas-operator-identity: direct-token-operator",
-        "x-turbovas-owner-semantics: no-owner-state",
-        "x-turbovas-safety-contract: write-control-v1",
-        "x-turbovas-side-effect: scanner-control",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-inherited-still-owns: remote-scanner-tls-relay-verification",
+        "x-yafvs-maturity: live-control",
+        "x-yafvs-replaces: scanner-verify",
+        "x-yafvs-operator-identity: direct-token-operator",
+        "x-yafvs-owner-semantics: no-owner-state",
+        "x-yafvs-safety-contract: write-control-v1",
+        "x-yafvs-side-effect: scanner-control",
         "$ref: '#/components/schemas/ScannerVerifyResult'",
         "local Unix-socket OSP scanners",
         "Remote, TLS, TCP, relay",
@@ -401,10 +401,10 @@ fn openapi_documents_scanner_configuration_metadata_and_verify_control_boundary(
     for required in [
         "get:",
         "operationId: getScannersByScannerIdExport",
-        "x-turbovas-direct: true",
-        "x-turbovas-exposure: direct-read",
-        "x-turbovas-maturity: live-read",
-        "x-turbovas-replaces: scanner-metadata-export-read",
+        "x-yafvs-direct: true",
+        "x-yafvs-exposure: direct-read",
+        "x-yafvs-maturity: live-read",
+        "x-yafvs-replaces: scanner-metadata-export-read",
         "$ref: '#/components/schemas/ScannerAssetDetail'",
         "including scanner CA public certificate text when present",
         "Credential secrets, credential certificate metadata",
@@ -415,10 +415,10 @@ fn openapi_documents_scanner_configuration_metadata_and_verify_control_boundary(
             "scanner metadata export OpenAPI block missing {required}"
         );
     }
-    assert!(!export.contains("x-turbovas-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"));
+    assert!(!export.contains("x-yafvs-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"));
     for forbidden in [
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-safety-contract: write-control-v1",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-safety-contract: write-control-v1",
         "\n    post:",
         "\n    patch:",
         "\n    delete:",

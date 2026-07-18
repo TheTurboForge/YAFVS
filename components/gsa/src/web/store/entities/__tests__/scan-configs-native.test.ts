@@ -22,7 +22,7 @@ const createGmp = ({
   jwt,
   token = 'test-token',
 }: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -89,7 +89,7 @@ describe('native API scan configs', () => {
       predefined: '1',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scan-configs',
+      'https://yafvs.example/api/v1/scan-configs',
       {
         credentials: 'include',
         headers: {
@@ -360,14 +360,14 @@ describe('native API scan configs', () => {
       'api/v1/scan-configs/config%2Fid/families/Port%20scanners/nvts',
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scan-configs/config%2Fid/families/Port%20scanners/nvts',
+      'https://yafvs.example/api/v1/scan-configs/config%2Fid/families/Port%20scanners/nvts',
       {
         method: 'PATCH',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({

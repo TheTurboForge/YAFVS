@@ -73,7 +73,7 @@ script/curl -> opt-in direct bearer listener -> yafvs-api -> PostgreSQL
   preview/scaffold endpoints, starting with the scope-report retention plan
   preview, return JSON `404 not_found` on the direct listener even when the
   bearer token is valid.
-- Direct-read OpenAPI operations carry `x-turbovas-direct: true` and
+- Direct-read OpenAPI operations carry `x-yafvs-direct: true` and
   `just native-tooling-state --json` reports marker/inventory alignment through
   `native-tooling.direct-api-contract`. Treat drift there as a contract bug
   before expanding direct exposure.

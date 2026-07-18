@@ -15,9 +15,9 @@ use crate::{
 use uuid::Uuid;
 
 const BROWSER_PROXY_SECRET_ENV: &str = "YAFVS_API_BROWSER_PROXY_SECRET";
-const BROWSER_PROXY_SECRET_HEADER: &str = "x-turbovas-browser-proxy-secret";
-const BROWSER_PROXY_OPERATOR_NAME_HEADER: &str = "x-turbovas-operator-name";
-const BROWSER_PROXY_OPERATOR_UUID_HEADER: &str = "x-turbovas-operator-uuid";
+const BROWSER_PROXY_SECRET_HEADER: &str = "x-yafvs-browser-proxy-secret";
+const BROWSER_PROXY_OPERATOR_NAME_HEADER: &str = "x-yafvs-operator-name";
+const BROWSER_PROXY_OPERATOR_UUID_HEADER: &str = "x-yafvs-operator-uuid";
 
 #[derive(Clone)]
 pub(crate) struct BrowserProxyAuth {

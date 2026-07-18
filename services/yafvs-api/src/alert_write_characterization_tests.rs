@@ -643,7 +643,7 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
     ] {
         let block = openapi_path_block(path);
         for required in [
-            "x-turbovas-exposure: direct-read",
+            "x-yafvs-exposure: direct-read",
             replaces,
             "condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates",
             "inherited XML export, restore, hard-delete, and delivery-payload mutations",
@@ -662,9 +662,9 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
     for required in [
         "    patch:",
         "operationId: patchAlertsByAlertId",
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-replaces: alert-metadata-modify",
-        "x-turbovas-safety-contract: write-control-v1",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-replaces: alert-metadata-modify",
+        "x-yafvs-safety-contract: write-control-v1",
         "AlertPatchRequest",
         "event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, restore, hard-delete, and delivery-payload mutation remain on inherited compatibility paths",
     ] {
@@ -673,13 +673,13 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
             "/alerts/{{alert_id}} missing {required}"
         );
     }
-    assert!(!patch.contains("x-turbovas-inherited-still-owns: alert-detail-delivery-control"));
+    assert!(!patch.contains("x-yafvs-inherited-still-owns: alert-detail-delivery-control"));
     let delete = openapi_operation_block(&detail, "delete");
     for required in [
         "    delete:",
         "operationId: deleteAlertsByAlertId",
-        "x-turbovas-replaces: alert-trash-move",
-        "x-turbovas-side-effect: metadata-delete",
+        "x-yafvs-replaces: alert-trash-move",
+        "x-yafvs-side-effect: metadata-delete",
     ] {
         assert!(
             delete.contains(required),
@@ -691,9 +691,9 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
     for required in [
         "    post:",
         "operationId: postAlertsByAlertIdClone",
-        "x-turbovas-exposure: direct-write",
-        "x-turbovas-replaces: alert-clone",
-        "x-turbovas-safety-contract: write-control-v1",
+        "x-yafvs-exposure: direct-write",
+        "x-yafvs-replaces: alert-clone",
+        "x-yafvs-safety-contract: write-control-v1",
         "AlertCloneRequest",
     ] {
         assert!(
@@ -701,8 +701,8 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
             "/alerts/{{alert_id}}/clone missing {required}"
         );
     }
-    assert!(!delete.contains("x-turbovas-inherited-still-owns: alert-detail-delivery-control"));
-    assert!(!clone.contains("x-turbovas-inherited-still-owns: alert-detail-delivery-control"));
+    assert!(!delete.contains("x-yafvs-inherited-still-owns: alert-detail-delivery-control"));
+    assert!(!clone.contains("x-yafvs-inherited-still-owns: alert-detail-delivery-control"));
 }
 
 #[test]
@@ -756,7 +756,7 @@ fn native_scp_alert_create_contract_is_explicitly_parsed_scrubbed_and_direct_wri
     let create_path = openapi_path_block("/alerts");
     let create = openapi_operation_block(&create_path, "post");
     for required in [
-        "x-turbovas-replaces: alert-email-smb-syslog-snmp-scp-start-task-create",
+        "x-yafvs-replaces: alert-email-smb-syslog-snmp-scp-start-task-create",
         "summary: Create a task-status EMAIL, SMB, Syslog, SNMP, SCP, or Start Task alert",
         "Creates one operator-owned EMAIL, SMB, Syslog, SNMP, SCP, or Start Task alert",
     ] {

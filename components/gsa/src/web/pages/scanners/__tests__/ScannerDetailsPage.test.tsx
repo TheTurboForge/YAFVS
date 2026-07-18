@@ -18,9 +18,7 @@ import {entityLoadingActions} from 'web/store/entities/scanners';
 const reloadInterval = -1;
 const manualUrl = 'test/';
 
-const createMockScanner = (
-  type: string = OPENVAS_SCANNER_TYPE,
-) => {
+const createMockScanner = (type: string = OPENVAS_SCANNER_TYPE) => {
   const baseScanner = {
     _id: 'scanner-123',
     owner: {name: 'admin'},
@@ -138,12 +136,6 @@ describe('ScannerDetailsPage tests', () => {
     ).toBeInTheDocument();
   });
 
-
-
-
-
-
-
   test('should display user tags content when tab is clicked', () => {
     const scanner = createMockScanner();
     const gmp = createGmp({scanner});
@@ -164,7 +156,6 @@ describe('ScannerDetailsPage tests', () => {
 
     expect(container).toHaveTextContent('No user tags available');
   });
-
 
   test('should render toolbar icons', () => {
     const scanner = createMockScanner();
@@ -202,7 +193,7 @@ describe('ScannerDetailsPage tests', () => {
     testing.stubGlobal('fetch', fetchMock);
     const exportScanner = testing.fn().mockResolvedValue({data: '<scanner/>'});
     const buildUrl = testing.fn(
-      (path, _params) => `https://turbovas.example/${path}`,
+      (path, _params) => `https://yafvs.example/${path}`,
     );
     const gmp = createGmp({buildUrl, exportScanner, scanner});
 
@@ -227,9 +218,8 @@ describe('ScannerDetailsPage tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      `https://turbovas.example/api/v1/scanners/${scanner.id}/export`,
+      `https://yafvs.example/api/v1/scanners/${scanner.id}/export`,
       expect.objectContaining({credentials: 'include'}),
     );
   });
-
 });

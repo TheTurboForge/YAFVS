@@ -15,8 +15,11 @@ import {loadEntities, loadEntity} from 'web/store/entities/tlscertificates';
 import {createState} from 'web/store/entities/utils/testing';
 import {filterIdentifier} from 'web/store/utils';
 
-const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+const createGmp = ({
+  jwt,
+  token = 'test-token',
+}: {jwt?: string; token?: string} = {}) => ({
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -28,7 +31,13 @@ describe('native API TLS certificates list', () => {
   test('fetches top-level TLS certificates as inherited TlsCertificate models', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 25, total: 1, sort: '-last_seen', filter: ''},
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: '-last_seen',
+          filter: '',
+        },
         items: [
           {
             id: 'a4d44986-29ce-4b85-9def-0ac63108d198',
@@ -83,7 +92,7 @@ describe('native API TLS certificates list', () => {
       filter: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/tls-certificates',
+      'https://yafvs.example/api/v1/tls-certificates',
       {
         credentials: 'include',
         headers: {
@@ -191,7 +200,13 @@ describe('native API TLS certificates list', () => {
     const dispatch = testing.fn();
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 10, total: 1, sort: '-last_seen', filter: ''},
+        page: {
+          page: 1,
+          page_size: 10,
+          total: 1,
+          sort: '-last_seen',
+          filter: '',
+        },
         items: [
           {
             id: 'a4d44986-29ce-4b85-9def-0ac63108d198',

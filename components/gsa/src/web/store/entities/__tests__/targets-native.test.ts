@@ -12,8 +12,11 @@ import {loadEntities, loadEntity} from 'web/store/entities/targets';
 import {createState} from 'web/store/entities/utils/testing';
 import {filterIdentifier} from 'web/store/utils';
 
-const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+const createGmp = ({
+  jwt,
+  token = 'test-token',
+}: {jwt?: string; token?: string} = {}) => ({
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -90,7 +93,7 @@ describe('native API target list', () => {
       filter: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/targets',
+      'https://yafvs.example/api/v1/targets',
       {
         credentials: 'include',
         headers: {
@@ -146,7 +149,7 @@ describe('native API target list', () => {
       token: 'test-token',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/targets/target-1',
+      'https://yafvs.example/api/v1/targets/target-1',
       {
         credentials: 'include',
         headers: {
@@ -185,7 +188,9 @@ describe('native API target list', () => {
     const gmp = {
       ...createGmp(),
       target: {
-        getAll: testing.fn().mockRejectedValue(new Error('inherited fallback used')),
+        getAll: testing
+          .fn()
+          .mockRejectedValue(new Error('inherited fallback used')),
       },
     };
 
@@ -239,7 +244,9 @@ describe('native API target list', () => {
     const gmp = {
       ...createGmp(),
       target: {
-        get: testing.fn().mockRejectedValue(new Error('inherited fallback used')),
+        get: testing
+          .fn()
+          .mockRejectedValue(new Error('inherited fallback used')),
       },
     };
 

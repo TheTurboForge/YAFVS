@@ -73,15 +73,15 @@ fn result_openapi_documents_read_only_boundary() {
         let block = openapi_path_block(path);
         for required in [
             "get:",
-            "x-turbovas-direct: true",
-            "x-turbovas-exposure: direct-read",
-            "x-turbovas-maturity: live-read",
+            "x-yafvs-direct: true",
+            "x-yafvs-exposure: direct-read",
+            "x-yafvs-maturity: live-read",
             replaces,
         ] {
             assert!(block.contains(required), "{path} block missing {required}");
         }
         if inherited.is_empty() {
-            assert!(!block.contains("x-turbovas-inherited-still-owns:"));
+            assert!(!block.contains("x-yafvs-inherited-still-owns:"));
         } else {
             assert!(
                 block.contains(inherited),
@@ -89,8 +89,8 @@ fn result_openapi_documents_read_only_boundary() {
             );
         }
         for forbidden in [
-            "x-turbovas-exposure: direct-write",
-            "x-turbovas-safety-contract: write-control-v1",
+            "x-yafvs-exposure: direct-write",
+            "x-yafvs-safety-contract: write-control-v1",
             "\n    post:",
             "\n    patch:",
             "\n    delete:",

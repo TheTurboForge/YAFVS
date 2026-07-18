@@ -21,7 +21,7 @@ const createNativeHttp = () => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -33,7 +33,13 @@ describe('ScannersCommand tests', () => {
   test('should fetch scanners through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 25, total: 1, sort: 'name', filter: 'OpenVAS'},
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: 'name',
+          filter: 'OpenVAS',
+        },
         items: [
           {
             id: '08b69003-5fc2-4037-a479-93b440211c73',
@@ -58,7 +64,7 @@ describe('ScannersCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -79,7 +85,7 @@ describe('ScannersCommand tests', () => {
       filter: 'OpenVAS',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scanners',
+      'https://yafvs.example/api/v1/scanners',
       {
         credentials: 'include',
         headers: {

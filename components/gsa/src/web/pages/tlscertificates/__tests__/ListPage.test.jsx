@@ -53,7 +53,7 @@ const nativeTlsCertificateItem = {
 };
 
 const createGmp = ({
-  buildUrl = testing.fn((path, _params) => `https://turbovas.example/${path}`),
+  buildUrl = testing.fn((path, _params) => `https://yafvs.example/${path}`),
   getTlsCertificates = testing.fn().mockResolvedValue({
     data: [tlsCertificate],
     meta: {
@@ -88,7 +88,13 @@ const createGmp = ({
     'fetch',
     testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 10, total: 1, sort: '-last_seen', filter: ''},
+        page: {
+          page: 1,
+          page_size: 10,
+          total: 1,
+          sort: '-last_seen',
+          filter: '',
+        },
         items: [nativeTlsCertificateItem],
       }),
       ok: true,

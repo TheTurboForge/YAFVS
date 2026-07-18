@@ -5,10 +5,7 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import {
-  createAggregatesResponse,
-  createHttp,
-} from 'gmp/commands/testing';
+import {createAggregatesResponse, createHttp} from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
 import {VulnerabilityCommand, VulnerabilitiesCommand} from 'gmp/commands/vulns';
@@ -19,9 +16,7 @@ afterEach(() => {
 
 const createNativeHttp = () => {
   const fakeHttp = createHttp(undefined);
-  fakeHttp.buildUrl = testing.fn(
-    path => `https://turbovas.example/${path}`,
-  );
+  fakeHttp.buildUrl = testing.fn(path => `https://yafvs.example/${path}`);
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
   fakeHttp.session.jwt = 'jwt-token';
@@ -53,7 +48,7 @@ describe('VulnerabilityCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/vulnerabilities/1.3.6.1.4.1.25623.1.0.900001/export',
+      'https://yafvs.example/api/v1/vulnerabilities/1.3.6.1.4.1.25623.1.0.900001/export',
       {
         credentials: 'include',
         headers: {
@@ -68,14 +63,19 @@ describe('VulnerabilityCommand tests', () => {
       severity: 7.5,
     });
   });
-
 });
 
 describe('VulnerabilitiesCommand tests', () => {
   test('should fetch vulnerabilities through native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 25, total: 1, sort: '-severity', filter: 'postgres'},
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: '-severity',
+          filter: 'postgres',
+        },
         items: [
           {
             id: '1.3.6.1.4.1.25623.1.0.900001',

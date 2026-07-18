@@ -5,7 +5,10 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import {HostsCommand, type NativeHostBulkDeleteError} from 'gmp/native-api/hosts';
+import {
+  HostsCommand,
+  type NativeHostBulkDeleteError,
+} from 'gmp/native-api/hosts';
 import {createHttp} from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
@@ -20,7 +23,7 @@ const createNativeHttp = () => {
     session: ReturnType<typeof createSession>;
   };
   fakeHttp.buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   fakeHttp.session = createSession();
   fakeHttp.session.token = 'test-token';
@@ -32,7 +35,13 @@ describe('HostsCommand tests', () => {
   test('should fetch hosts through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 25, total: 1, sort: '-severity', filter: 'web'},
+        page: {
+          page: 1,
+          page_size: 25,
+          total: 1,
+          sort: '-severity',
+          filter: 'web',
+        },
         items: [
           {
             id: 'host-1',
@@ -156,7 +165,13 @@ describe('HostsCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 1, total: 3, sort: 'severity', filter: 'web'},
+          page: {
+            page: 2,
+            page_size: 1,
+            total: 3,
+            sort: 'severity',
+            filter: 'web',
+          },
           items: [{id: 'host-2', name: '192.0.2.20', severity: 5.0}],
         }),
         ok: true,
@@ -190,7 +205,13 @@ describe('HostsCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 500, total: 2, sort: 'severity', filter: 'web'},
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'severity',
+            filter: 'web',
+          },
           items: [{id: 'host-1', name: '192.0.2.10', severity: 7.5}],
         }),
         ok: true,
@@ -198,7 +219,13 @@ describe('HostsCommand tests', () => {
       })
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 2, page_size: 500, total: 2, sort: 'severity', filter: 'web'},
+          page: {
+            page: 2,
+            page_size: 500,
+            total: 2,
+            sort: 'severity',
+            filter: 'web',
+          },
           items: [{id: 'host-2', name: '192.0.2.20', severity: 5.0}],
         }),
         ok: true,
@@ -255,14 +282,8 @@ describe('HostsCommand tests', () => {
 
     expect(result.data).toEqual(['host-1', 'host-2']);
     expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
-      1,
-      'api/v1/hosts/host-1',
-    );
-    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
-      2,
-      'api/v1/hosts/host-2',
-    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/hosts/host-1');
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/hosts/host-2');
   });
 
   test('should report the completed and pending IDs after a partial bulk delete', async () => {
@@ -291,7 +312,13 @@ describe('HostsCommand tests', () => {
       .fn()
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 500, total: 2, sort: 'severity', filter: 'web'},
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 2,
+            sort: 'severity',
+            filter: 'web',
+          },
           items: [
             {id: 'host-1', name: '192.0.2.10', severity: 7.5},
             {id: 'host-2', name: '192.0.2.20', severity: 5.0},
@@ -304,7 +331,13 @@ describe('HostsCommand tests', () => {
       .mockResolvedValueOnce({ok: true, status: 204})
       .mockResolvedValueOnce({
         json: testing.fn().mockResolvedValue({
-          page: {page: 1, page_size: 500, total: 0, sort: 'severity', filter: 'web'},
+          page: {
+            page: 1,
+            page_size: 500,
+            total: 0,
+            sort: 'severity',
+            filter: 'web',
+          },
           items: [],
         }),
         ok: true,
@@ -327,13 +360,7 @@ describe('HostsCommand tests', () => {
       sort: 'severity',
       filter: 'web',
     });
-    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
-      2,
-      'api/v1/hosts/host-1',
-    );
-    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(
-      3,
-      'api/v1/hosts/host-2',
-    );
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/hosts/host-1');
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(3, 'api/v1/hosts/host-2');
   });
 });

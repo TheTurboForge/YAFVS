@@ -6,10 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import DfnCertAdvisoryCommand from 'gmp/commands/dfn-cert-advisory';
-import {
-  createActionResultResponse,
-  createHttp,
-} from 'gmp/commands/testing';
+import {createActionResultResponse, createHttp} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -33,7 +30,7 @@ describe('DfnCertAdvisoryCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -48,7 +45,7 @@ describe('DfnCertAdvisoryCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/dfn-cert-advisories/DFN-CERT-2026-2178/export',
+      'https://yafvs.example/api/v1/dfn-cert-advisories/DFN-CERT-2026-2178/export',
       {
         credentials: 'include',
         headers: {
@@ -83,7 +80,7 @@ describe('DfnCertAdvisoryCommand tests', () => {
       session: ReturnType<typeof createSession>;
     };
     fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';

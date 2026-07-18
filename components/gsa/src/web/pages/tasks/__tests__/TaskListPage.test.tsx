@@ -108,7 +108,7 @@ const createGmp = ({
   }),
 } = {}) => {
   const buildUrl = testing.fn(
-    (path: string) => `https://turbovas.example/${path}`,
+    (path: string) => `https://yafvs.example/${path}`,
   );
   testing.stubGlobal(
     'fetch',

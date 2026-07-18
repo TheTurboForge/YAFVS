@@ -132,9 +132,7 @@ describe('ResourceList tests', () => {
     testing.stubGlobal('fetch', fetchMock);
     const getTasks = testing.fn();
     const gmp = {
-      buildUrl: testing.fn(
-        (path: string) => `https://turbovas.example/${path}`,
-      ),
+      buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
       session: {jwt: 'jwt-token', token: 'test-token'},
       tasks: {
         get: getTasks,
@@ -186,9 +184,7 @@ describe('ResourceList tests', () => {
       testing.stubGlobal('fetch', fetchMock);
       const getInheritedResources = testing.fn();
       const gmp = {
-        buildUrl: testing.fn(
-          (path: string) => `https://turbovas.example/${path}`,
-        ),
+        buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
         session: {jwt: 'jwt-token', token: 'test-token'},
         [pluralResourceType]: {
           get: getInheritedResources,
@@ -222,9 +218,7 @@ describe('ResourceList tests', () => {
       meta: {filter: Filter.fromString(), counts: new CollectionCounts()},
     });
     const gmp = {
-      buildUrl: testing.fn(
-        (path: string) => `https://turbovas.example/${path}`,
-      ),
+      buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
       session: {jwt: 'jwt-token', token: 'test-token'},
       credentials: {
         get: getCredentials,

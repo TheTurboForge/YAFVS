@@ -54,10 +54,13 @@ const nativePayload = {
   ],
 };
 
-const createGmp = ({jwt, token = 'test-token'}: {jwt?: string; token?: string} = {}) => ({
+const createGmp = ({
+  jwt,
+  token = 'test-token',
+}: {jwt?: string; token?: string} = {}) => ({
   buildUrl: testing.fn((path: string, params?: Record<string, string>) => {
     const suffix = params?.token ? `?token=${params.token}` : '';
-    return `https://turbovas.example/${path}${suffix}`;
+    return `https://yafvs.example/${path}${suffix}`;
   }),
   session: {jwt, token},
 });
@@ -74,7 +77,9 @@ describe('native API report metrics', () => {
     expect(metrics.summary.averageSystemCvssLoad).toEqual(6.25);
     expect(metrics.summary.authenticatedScanCoveragePercent).toEqual(50);
     expect(metrics.systems[0].authenticationState).toEqual('authenticated');
-    expect(metrics.systems[1].authenticationState).toEqual('no_credential_path');
+    expect(metrics.systems[1].authenticationState).toEqual(
+      'no_credential_path',
+    );
     expect(metrics.vulnerabilities[0].nvtOid).toEqual(
       '1.3.6.1.4.1.25623.1.0.1',
     );
@@ -97,7 +102,7 @@ describe('native API report metrics', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/reports/report%2Fid/metrics?token=test-token',
+      'https://yafvs.example/api/v1/reports/report%2Fid/metrics?token=test-token',
       {
         credentials: 'include',
         headers: {
@@ -124,7 +129,7 @@ describe('native API report metrics', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/scopes/scope-1/reports/scope-report-1/metrics?token=test-token',
+      'https://yafvs.example/api/v1/scopes/scope-1/reports/scope-report-1/metrics?token=test-token',
       {
         credentials: 'include',
         headers: {Accept: 'application/json'},

@@ -181,7 +181,7 @@ const nativeUserManagementToModel = (item: NativeUserManagementPayload): User =>
 const userManagementHeaders = (gmp: NativeApiGmp, withJsonBody = false) => ({
   Accept: 'application/json',
   ...(withJsonBody ? {'Content-Type': 'application/json'} : {}),
-  ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+  ...(gmp.session.token ? {'X-YAFVS-Token': gmp.session.token} : {}),
   ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
 });
 

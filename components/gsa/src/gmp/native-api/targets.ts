@@ -298,12 +298,12 @@ const nativeHeaders = (gmp: NativeApiGmp): HeadersInit => {
 const nativeWriteHeaders = (gmp: NativeApiGmp): HeadersInit => ({
   ...nativeHeaders(gmp),
   'Content-Type': 'application/json',
-  ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+  ...(gmp.session.token ? {'X-YAFVS-Token': gmp.session.token} : {}),
 });
 
 const nativeDeleteHeaders = (gmp: NativeApiGmp): HeadersInit => ({
   ...nativeHeaders(gmp),
-  ...(gmp.session.token ? {'X-TurboVAS-Token': gmp.session.token} : {}),
+  ...(gmp.session.token ? {'X-YAFVS-Token': gmp.session.token} : {}),
 });
 
 const fetchNativeJson = async <T>(

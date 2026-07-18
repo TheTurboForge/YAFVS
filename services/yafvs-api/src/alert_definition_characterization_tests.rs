@@ -133,7 +133,7 @@ fn openapi_marks_non_retained_alert_semantics_as_intentional() {
         .split("\n  /alerts/{alert_id}/clone:")
         .next()
         .unwrap();
-    assert!(!definition_path.contains("x-turbovas-inherited-still-owns"));
+    assert!(!definition_path.contains("x-yafvs-inherited-still-owns"));
     assert_eq!(
         definition_path
             .matches("intentionally not retained")

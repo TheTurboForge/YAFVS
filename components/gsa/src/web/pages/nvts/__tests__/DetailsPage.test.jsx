@@ -257,7 +257,7 @@ const createGmp = ({
     .mockResolvedValue(currentSettingsDefaultResponse),
 } = {}) => {
   const resolvedBuildUrl =
-    buildUrl ?? testing.fn((path, _params) => `https://turbovas.example/${path}`);
+    buildUrl ?? testing.fn((path, _params) => `https://yafvs.example/${path}`);
   if (buildUrl === undefined) {
     testing.stubGlobal(
       'fetch',
@@ -525,7 +525,7 @@ describe('Nvt DetailsPage tests', () => {
     testing.stubGlobal('fetch', fetchMock);
     const exportNvt = testing.fn().mockResolvedValue({data: '<nvt/>'});
     const buildUrl = testing.fn(
-      (path, _params) => `https://turbovas.example/${path}`,
+      (path, _params) => `https://yafvs.example/${path}`,
     );
     const gmp = createGmp({buildUrl, exportNvt});
     const {render, store} = rendererWith({
@@ -548,7 +548,7 @@ describe('Nvt DetailsPage tests', () => {
       token: 'test-token',
     });
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      'https://turbovas.example/api/v1/nvts/12345/export',
+      'https://yafvs.example/api/v1/nvts/12345/export',
       expect.objectContaining({credentials: 'include'}),
     );
   });

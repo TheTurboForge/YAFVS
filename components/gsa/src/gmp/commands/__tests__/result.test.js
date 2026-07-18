@@ -34,7 +34,7 @@ describe('ResultCommand tests', () => {
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(undefined);
     fakeHttp.buildUrl = testing.fn(
-      (path, _params) => `https://turbovas.example/${path}`,
+      (path, _params) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -44,12 +44,11 @@ describe('ResultCommand tests', () => {
     const result = await cmd.get({id: 'result-id'});
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
-    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
-      'api/v1/results/result-id',
-      {token: 'test-token'},
-    );
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/results/result-id', {
+      token: 'test-token',
+    });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/results/result-id',
+      'https://yafvs.example/api/v1/results/result-id',
       {
         credentials: 'include',
         headers: {
@@ -74,7 +73,7 @@ describe('ResultCommand tests', () => {
     );
     const fakeHttp = createHttp(undefined);
     fakeHttp.buildUrl = testing.fn(
-      (path, _params) => `https://turbovas.example/${path}`,
+      (path, _params) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -100,7 +99,7 @@ describe('ResultCommand tests', () => {
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createHttp(undefined);
     fakeHttp.buildUrl = testing.fn(
-      (path, _params) => `https://turbovas.example/${path}`,
+      (path, _params) => `https://yafvs.example/${path}`,
     );
     fakeHttp.session = createSession();
     fakeHttp.session.token = 'test-token';
@@ -115,7 +114,7 @@ describe('ResultCommand tests', () => {
       {token: 'test-token'},
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/results/result-id/export',
+      'https://yafvs.example/api/v1/results/result-id/export',
       {
         credentials: 'include',
         headers: {
@@ -130,5 +129,4 @@ describe('ResultCommand tests', () => {
       severity: 7.5,
     });
   });
-
 });

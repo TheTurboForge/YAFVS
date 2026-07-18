@@ -141,7 +141,7 @@ export const generateNativeScopeReport = async (
         Accept: 'application/json',
         ...(gmp.session.token === undefined
           ? {}
-          : {'X-TurboVAS-Token': gmp.session.token}),
+          : {'X-YAFVS-Token': gmp.session.token}),
         ...(gmp.session.jwt === undefined
           ? {}
           : {Authorization: `Bearer ${gmp.session.jwt}`}),
@@ -410,7 +410,7 @@ export const deleteNativeScopeReport = async (
         Accept: 'application/json',
         ...(gmp.session.token === undefined
           ? {}
-          : {'X-TurboVAS-Token': gmp.session.token}),
+          : {'X-YAFVS-Token': gmp.session.token}),
         ...(gmp.session.jwt === undefined
           ? {}
           : {Authorization: `Bearer ${gmp.session.jwt}`}),

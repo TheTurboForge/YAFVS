@@ -205,7 +205,7 @@ const writeNativeJson = async <T>(
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      'X-TurboVAS-Token': gmp.session.token ?? '',
+      'X-YAFVS-Token': gmp.session.token ?? '',
       ...(gmp.session.jwt ? {Authorization: `Bearer ${gmp.session.jwt}`} : {}),
     },
     body: JSON.stringify(body),
@@ -255,8 +255,7 @@ const nativeScannerToModel = (
       : undefined,
     relay_host: stringValue(item.relay_host),
     relay_port: integerValue(item.relay_port),
-    in_use:
-      detail && (item.tasks?.length ?? 0) > 0 ? YES_VALUE : NO_VALUE,
+    in_use: detail && (item.tasks?.length ?? 0) > 0 ? YES_VALUE : NO_VALUE,
     tasks: detail
       ? {task: (item.tasks ?? []).map(nativeTaskToElement)}
       : undefined,

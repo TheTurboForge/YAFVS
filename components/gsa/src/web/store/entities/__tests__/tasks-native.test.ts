@@ -16,7 +16,7 @@ const createGmp = ({
   jwt,
   token = 'test-token',
 }: {jwt?: string; token?: string} = {}) => ({
-  buildUrl: testing.fn((path: string) => `https://turbovas.example/${path}`),
+  buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
   session: {jwt, token},
 });
 
@@ -97,7 +97,7 @@ describe('native API task list', () => {
       filter: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/tasks',
+      'https://yafvs.example/api/v1/tasks',
       {
         credentials: 'include',
         headers: {
@@ -155,7 +155,7 @@ describe('native API task list', () => {
       token: 'test-token',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/tasks/task-1',
+      'https://yafvs.example/api/v1/tasks/task-1',
       {
         credentials: 'include',
         headers: {

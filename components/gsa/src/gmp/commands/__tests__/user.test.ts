@@ -26,7 +26,7 @@ const createNativeHttp = (response?: Parameters<typeof createHttp>[0]) => {
   fakeHttp.buildUrl = testing.fn(
     (path: string, params?: Record<string, string>) => {
       const query = params ? `?${new URLSearchParams(params).toString()}` : '';
-      return `https://turbovas.example/${path}${query}`;
+      return `https://yafvs.example/${path}${query}`;
     },
   );
   fakeHttp.session = createSession();
@@ -66,7 +66,7 @@ describe('UserCommand tests', () => {
     const cmd = new UserCommand(fakeHttp);
     const resp = await cmd.currentAuthSettings();
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/authentication-settings',
+      'https://yafvs.example/api/v1/authentication-settings',
       expect.objectContaining({method: 'GET'}),
     );
     expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
@@ -105,13 +105,13 @@ describe('UserCommand tests', () => {
 
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/user-management/users/source-user/clone',
+      'https://yafvs.example/api/v1/user-management/users/source-user/clone',
       {
         method: 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
       },
@@ -203,14 +203,14 @@ describe('UserCommand tests', () => {
     expect(fakeHttp.request).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'https://turbovas.example/api/v1/user-management/users',
+      'https://yafvs.example/api/v1/user-management/users',
       {
         method: 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({
@@ -222,14 +222,14 @@ describe('UserCommand tests', () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'https://turbovas.example/api/v1/user-management/users/user-id',
+      'https://yafvs.example/api/v1/user-management/users/user-id',
       {
         method: 'PATCH',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({
@@ -242,13 +242,13 @@ describe('UserCommand tests', () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      'https://turbovas.example/api/v1/user-management/users/user-id?inheritor_id=owner-id',
+      'https://yafvs.example/api/v1/user-management/users/user-id?inheritor_id=owner-id',
       {
         method: 'DELETE',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
       },
@@ -340,26 +340,26 @@ describe('UserCommand tests', () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'https://turbovas.example/api/v1/session/ping',
+      'https://yafvs.example/api/v1/session/ping',
       {
         method: 'GET',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
       },
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'https://turbovas.example/api/v1/session/renew',
+      'https://yafvs.example/api/v1/session/renew',
       {
         method: 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
       },
@@ -432,27 +432,27 @@ describe('UserCommand tests', () => {
     expect(settings.preferredlanguage.value).toEqual('en');
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'https://turbovas.example/api/v1/users/current/settings?token=test-token',
+      'https://yafvs.example/api/v1/users/current/settings?token=test-token',
       {
         method: 'GET',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
       },
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'https://turbovas.example/api/v1/users/current/settings/rows',
+      'https://yafvs.example/api/v1/users/current/settings/rows',
       {
         method: 'PUT',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({value: 25}),
@@ -460,14 +460,14 @@ describe('UserCommand tests', () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      'https://turbovas.example/api/v1/users/current/timezone',
+      'https://yafvs.example/api/v1/users/current/timezone',
       {
         method: 'PUT',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({value: 'Europe/Berlin'}),
@@ -491,14 +491,14 @@ describe('UserCommand tests', () => {
       'api/v1/users/current/password',
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/users/current/password',
+      'https://yafvs.example/api/v1/users/current/password',
       {
         method: 'POST',
         credentials: 'include',
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'X-TurboVAS-Token': 'test-token',
+          'X-YAFVS-Token': 'test-token',
           Authorization: 'Bearer jwt-token',
         },
         body: JSON.stringify({

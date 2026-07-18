@@ -251,9 +251,7 @@ describe('PortListComponent tests', () => {
   test('should load edit dialog prefill through native API when available', async () => {
     const gmp = {
       ...createGmp(),
-      buildUrl: testing.fn(
-        (path: string) => `https://turbovas.example/${path}`,
-      ),
+      buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
       session: createSession({token: 'test-token'}),
     };
     const fetchMock = testing.fn().mockResolvedValue({
@@ -296,7 +294,7 @@ describe('PortListComponent tests', () => {
       token: 'test-token',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/port-lists/123',
+      'https://yafvs.example/api/v1/port-lists/123',
       expect.objectContaining({credentials: 'include'}),
     );
     expect(
@@ -330,9 +328,7 @@ describe('PortListComponent tests', () => {
           },
         }),
       }),
-      buildUrl: testing.fn(
-        (path: string) => `https://turbovas.example/${path}`,
-      ),
+      buildUrl: testing.fn((path: string) => `https://yafvs.example/${path}`),
       session: createSession({token: 'test-token'}),
     };
     let downloadClick: ((entity: PortList) => void) | undefined;
@@ -353,16 +349,17 @@ describe('PortListComponent tests', () => {
     );
 
     await wait();
-    downloadClick?.(PortList.fromElement({_id: '123', name: 'Native Port List'}));
+    downloadClick?.(
+      PortList.fromElement({_id: '123', name: 'Native Port List'}),
+    );
     await wait();
 
     expect(gmp.portlist.export).not.toHaveBeenCalled();
-    expect(gmp.buildUrl).toHaveBeenCalledWith(
-      'api/v1/port-lists/123/export',
-      {token: 'test-token'},
-    );
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/port-lists/123/export', {
+      token: 'test-token',
+    });
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
-      'https://turbovas.example/api/v1/port-lists/123/export',
+      'https://yafvs.example/api/v1/port-lists/123/export',
       expect.objectContaining({credentials: 'include'}),
     );
     expect(onDownloaded).toHaveBeenCalledWith({

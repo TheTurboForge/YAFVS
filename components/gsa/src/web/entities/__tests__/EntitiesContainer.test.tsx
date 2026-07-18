@@ -207,7 +207,7 @@ describe('EntitiesContainer', () => {
   test('should load tag-bulk choices through the native API when available', async () => {
     const getAllTags = testing.fn();
     const buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -240,7 +240,7 @@ describe('EntitiesContainer', () => {
       value: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://turbovas.example/api/v1/tags',
+      'https://yafvs.example/api/v1/tags',
       {
         credentials: 'include',
         headers: {Accept: 'application/json'},
@@ -252,7 +252,7 @@ describe('EntitiesContainer', () => {
     const getAllTags = testing.fn();
     const getTag = testing.fn();
     const buildUrl = testing.fn(
-      (path: string) => `https://turbovas.example/${path}`,
+      (path: string) => `https://yafvs.example/${path}`,
     );
     const fetchMock = testing.fn((url: string) => {
       if (url.endsWith('/api/v1/tags')) {

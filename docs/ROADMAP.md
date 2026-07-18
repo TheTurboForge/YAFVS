@@ -51,6 +51,32 @@ such as VEX where useful, and explicit evidence for non-applicability. Operators
 should be able to see why a finding exists and how strongly the evidence
 supports it.
 
+### Provenance-Aware Vulnerability Intelligence
+
+TurboVAS is intended to complement the Greenbone Community Feed with a
+versioned, signed TurboVAS Community Feed. Candidate inputs include CVE List
+V5, vendor CSAF/VEX, CISA KEV, FIRST EPSS, NVD CPE/configuration data,
+OSV/GHSA, MITRE CWE, FIRST CVSS, and EUVD. These are starting points for
+evaluated source adoption, not a claim that every source is already integrated
+or suitable for identical use.
+
+Raw source records should remain separately identifiable. Normalization should
+produce provenance-bearing assertions about identity, affected and fixed
+versions, product matching, exploitation, probability, weakness, and severity
+without erasing disagreements, freshness, or source-specific terms. A compiled
+TurboVAS feed should distinguish copied source assertions, TurboVAS resolution
+and applicability logic, and independently authored TurboVAS detections.
+
+The Greenbone Community Feed should remain a separately governed execution and
+detection source. TurboVAS can enrich Greenbone findings in the database, API,
+reporting, and presentation layers without rewriting Greenbone feed files.
+Source availability is not blanket republication permission: every published
+feed generation must carry machine-readable provenance and licensing, required
+attribution and notices, and exclude material that is unknown-license,
+local-use-only, or otherwise incompatible with public redistribution. The
+[License Audit](../LICENSE_AUDIT.md) remains authoritative for current
+publication boundaries.
+
 ### Systematic Hygiene And Root-Cause Reduction
 
 TurboVAS should help operators identify patterns that are larger than one CVE
@@ -125,8 +151,8 @@ testable product path rather than disconnected framework pieces.
    contracts, Rust operator tooling, retained-scanner hardening, and production
    boundaries.
 2. Expand the actionability layer: evidence observations, additional inventory
-   inputs, applicability reasoning, systemic clustering, remediation state, and
-   recurrence analysis.
+   inputs, source-policy-controlled vulnerability intelligence, applicability
+   reasoning, systemic clustering, remediation state, and recurrence analysis.
 3. Enrich both concurrent work queues: improve housekeeping campaign views and
    add explainable threat, exposure, asset, and control context without turning
    either into a substitute for the other.

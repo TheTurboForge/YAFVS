@@ -615,13 +615,13 @@ fn restore_hosts(
             .and_then(|hosts| hosts.iter().map(Value::as_str).collect::<Option<Vec<_>>>())
             .ok_or_else(|| "Recorded GSAD published hosts are invalid".to_owned())?;
         environment.insert(
-            OsString::from("TURBOVAS_GSAD_HOST"),
+            OsString::from("YAFVS_GSAD_HOST"),
             OsString::from(values.join(",")),
         );
         return Ok(Some(hosts.clone()));
     }
     let Some(text) = environment
-        .get(&OsString::from("TURBOVAS_GSAD_HOST"))
+        .get(&OsString::from("YAFVS_GSAD_HOST"))
         .and_then(|value| value.to_str())
     else {
         return Ok(None);
@@ -1087,18 +1087,18 @@ mod tests {
             "restore_gsad_hosts": ["192.0.2.10", "2001:db8::10"],
         });
         let mut environment = std::collections::BTreeMap::from([(
-            OsString::from("TURBOVAS_GSAD_HOST"),
+            OsString::from("YAFVS_GSAD_HOST"),
             OsString::from("127.0.0.1"),
         )]);
         let restored = restore_hosts(Some(&state), &mut environment).unwrap();
         assert_eq!(restored, Some(state["restore_gsad_hosts"].clone()));
         assert_eq!(
-            environment[&OsString::from("TURBOVAS_GSAD_HOST")],
+            environment[&OsString::from("YAFVS_GSAD_HOST")],
             OsString::from("192.0.2.10,2001:db8::10")
         );
 
         let mut environment = std::collections::BTreeMap::from([(
-            OsString::from("TURBOVAS_GSAD_HOST"),
+            OsString::from("YAFVS_GSAD_HOST"),
             OsString::from("198.51.100.4,2001:db8::4"),
         )]);
         assert_eq!(
@@ -1106,7 +1106,7 @@ mod tests {
             Some(json!(["198.51.100.4", "2001:db8::4"]))
         );
         environment.insert(
-            OsString::from("TURBOVAS_GSAD_HOST"),
+            OsString::from("YAFVS_GSAD_HOST"),
             OsString::from("not-an-ip"),
         );
         assert!(restore_hosts(None, &mut environment).is_err());

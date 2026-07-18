@@ -12,12 +12,12 @@ runs:
     - name: validate architecture input
       shell: bash
       env:
-        TURBOVAS_RUST_BIN_ARCH: ${{ inputs.arch }}
+        YAFVS_RUST_BIN_ARCH: ${{ inputs.arch }}
       run: |
-        case "$TURBOVAS_RUST_BIN_ARCH" in
+        case "$YAFVS_RUST_BIN_ARCH" in
           amd64|arm64) ;;
           *)
-            echo "Unsupported architecture: $TURBOVAS_RUST_BIN_ARCH" >&2
+            echo "Unsupported architecture: $YAFVS_RUST_BIN_ARCH" >&2
             exit 1
             ;;
         esac
@@ -30,16 +30,16 @@ runs:
     - run: mkdir -p .docker/install/usr/local
       shell: bash
     - run: |
-        case "$TURBOVAS_RUST_BIN_ARCH" in
+        case "$YAFVS_RUST_BIN_ARCH" in
           amd64|arm64) ;;
           *)
-            echo "Unsupported architecture: $TURBOVAS_RUST_BIN_ARCH" >&2
+            echo "Unsupported architecture: $YAFVS_RUST_BIN_ARCH" >&2
             exit 1
             ;;
         esac
-        mv "assets/linux/$TURBOVAS_RUST_BIN_ARCH" .docker/install/usr/local/bin
+        mv "assets/linux/$YAFVS_RUST_BIN_ARCH" .docker/install/usr/local/bin
       shell: bash
       env:
-        TURBOVAS_RUST_BIN_ARCH: ${{ inputs.arch }}
+        YAFVS_RUST_BIN_ARCH: ${{ inputs.arch }}
     - run: ls -las .docker/install/usr/local/bin
       shell: bash

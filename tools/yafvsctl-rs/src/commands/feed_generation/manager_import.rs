@@ -288,7 +288,7 @@ mod tests {
             assert_eq!(command[4], "-f");
             assert_eq!(
                 command[5],
-                base.join("TurboVAS-runtime/state/feed-generation/app-images.json")
+                base.join("YAFVS-runtime/state/feed-generation/app-images.json")
                     .display()
                     .to_string()
             );

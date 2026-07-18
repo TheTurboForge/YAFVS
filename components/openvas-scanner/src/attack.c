@@ -171,13 +171,13 @@ set_kb_readable (kb_t host_kb)
     }
 
   if (kb_item_set_str_with_main_kb_check (
-        host_kb, "internal/turbovas.owner-token", host_owner_token, 0)
+        host_kb, "internal/yafvs.owner-token", host_owner_token, 0)
       || kb_item_set_str_with_main_kb_check (
-        host_kb, "internal/turbovas.db-kind", "child", 0)
+        host_kb, "internal/yafvs.db-kind", "child", 0)
       || kb_item_set_str_with_main_kb_check (
-        host_kb, "internal/turbovas.parent-owner-token", parent_owner_token, 0)
+        host_kb, "internal/yafvs.parent-owner-token", parent_owner_token, 0)
       || kb_item_set_int_with_main_kb_check (
-        host_kb, "internal/turbovas.parent-db-index",
+        host_kb, "internal/yafvs.parent-db-index",
         kb_get_kb_index (main_kb)))
     {
       g_warning ("Refusing to publish incomplete host Redis DB ownership "

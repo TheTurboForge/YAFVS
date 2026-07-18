@@ -1654,7 +1654,7 @@ mod tests {
                 .find(|finding| finding.check == "performance.scanner-redis")
                 .and_then(|finding| finding.path.as_deref()),
             Some(
-                root.join("TurboVAS-runtime/run/redis-openvas/redis.sock")
+                root.join("YAFVS-runtime/run/redis-openvas/redis.sock")
                     .to_string_lossy()
                     .as_ref()
             )

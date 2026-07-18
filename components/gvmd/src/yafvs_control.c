@@ -1789,11 +1789,11 @@ yafvs_control_log_trash_empty_audit (const char *operator_uuid,
     return;
 
   g_log_structured (G_LOG_DOMAIN, G_LOG_LEVEL_MESSAGE, "MESSAGE", "%s",
-                    message, "TURBOVAS_AUDIT_ACTION", "%s", "trash-empty",
-                    "TURBOVAS_OPERATOR_UUID", "%s", operator_uuid,
-                    "TURBOVAS_OUTCOME", "%s", outcome,
-                    "TURBOVAS_EXPECTED_TOTAL", "%" G_GINT64_FORMAT,
-                    expected_total, "TURBOVAS_ACTUAL_TOTAL", "%" G_GINT64_FORMAT,
+                    message, "YAFVS_AUDIT_ACTION", "%s", "trash-empty",
+                    "YAFVS_OPERATOR_UUID", "%s", operator_uuid,
+                    "YAFVS_OUTCOME", "%s", outcome,
+                    "YAFVS_EXPECTED_TOTAL", "%" G_GINT64_FORMAT,
+                    expected_total, "YAFVS_ACTUAL_TOTAL", "%" G_GINT64_FORMAT,
                     actual_total, NULL);
 }
 

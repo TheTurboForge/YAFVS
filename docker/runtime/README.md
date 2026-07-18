@@ -24,7 +24,7 @@ The experimental `app` profile adds inherited application services:
   internal by default, with an opt-in bearer-auth direct development listener
 
 Persistent state is stored outside the repository by default, normally in the
-sibling `TurboVAS-runtime` directory. Runtime commands create host-visible
+sibling `YAFVS-runtime` directory. Runtime commands create host-visible
 storage for Postgres, scanner Redis, Mosquitto, feeds, run sockets, logs,
 artifacts, certificates, secrets, and service state.
 
@@ -34,7 +34,7 @@ explicitly; empty broker credentials intentionally fail startup.
 
 Infrastructure services bind host ports to `127.0.0.1` only. `gsad` also
 defaults to loopback, but can be explicitly bound for development by setting
-`TURBOVAS_GSAD_HOST` for one address or comma-separated `TURBOVAS_GSAD_HOSTS`
+`YAFVS_GSAD_HOST` for one address or comma-separated `YAFVS_GSAD_HOSTS`
 for multiple addresses before startup. The generated GSA `config.js` uses the
 browser's current host so each configured URL can talk back to the same `gsad`
 endpoint. TurboVAS no longer starts the inherited generic Redis service in the
@@ -46,7 +46,7 @@ to `127.0.0.1:19080`. Source,
 `build/`, and `build/prefix` are bind-mounted for fast development feedback
 instead of forcing container rebuilds after small source changes. App
 containers also mount the checkout at the absolute path supplied through
-`TURBOVAS_REPO_MOUNT_PATH` because the current CMake build baseline embeds its
+`YAFVS_REPO_MOUNT_PATH` because the current CMake build baseline embeds its
 development checkout path. `tools/yafvsctl` supplies the current repository
 root automatically. Direct `docker compose` use must set the variable
 explicitly; there is no machine-specific fallback.
@@ -99,7 +99,7 @@ facts for future instrumentation work; it writes a latest JSON artifact plus
 retained timestamped history and does not optimize or mutate runtime state.
 `quality-gate-state` reports retained quality-gate history.
 `quality-gate-schedule` manages a development user-level systemd timer only
-when the operator explicitly sets `TURBOVAS_ENABLE_QUALITY_GATE_SCHEDULE=1`.
+when the operator explicitly sets `YAFVS_ENABLE_QUALITY_GATE_SCHEDULE=1`.
 It does not assume a hostname or account and does not fall back to cron if user
 systemd is unavailable.
 

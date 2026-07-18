@@ -623,10 +623,10 @@ task_status_t
 task_run_status (task_t);
 
 int
-turbovas_task_control_lock (task_t, lockfile_t *);
+yafvs_task_control_lock (task_t, lockfile_t *);
 
 int
-turbovas_task_control_unlock (lockfile_t *);
+yafvs_task_control_unlock (lockfile_t *);
 
 void
 set_task_run_status (task_t, task_status_t);

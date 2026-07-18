@@ -2691,7 +2691,7 @@ start_task (const char *task_id, char **report_id)
 }
 
 int
-turbovas_task_control_lock (task_t task, lockfile_t *lockfile)
+yafvs_task_control_lock (task_t task, lockfile_t *lockfile)
 {
   gchar *name;
   int ret;
@@ -2703,7 +2703,7 @@ turbovas_task_control_lock (task_t task, lockfile_t *lockfile)
 }
 
 int
-turbovas_task_control_unlock (lockfile_t *lockfile)
+yafvs_task_control_unlock (lockfile_t *lockfile)
 {
   return lockfile_unlock (lockfile);
 }
@@ -2838,7 +2838,7 @@ stop_osp_task (task_t task)
   lockfile_t control_lock = { 0 };
   gboolean finalized_report = FALSE;
 
-  if (turbovas_task_control_lock (task, &control_lock))
+  if (yafvs_task_control_lock (task, &control_lock))
     return -1;
 
   previous_task = current_scanner_task;
@@ -2918,7 +2918,7 @@ end_stop_osp:
   current_scanner_task = previous_task;
   global_current_report = previous_report;
 
-  if (turbovas_task_control_unlock (&control_lock))
+  if (yafvs_task_control_unlock (&control_lock))
     return -1;
   return ret;
 }

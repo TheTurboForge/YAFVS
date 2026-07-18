@@ -8,26 +8,26 @@ services:
     build:
       context: ..
       dockerfile: docker/runtime/postgres/Dockerfile
-    image: turbovas-postgres-dev
+    image: yafvs-postgres-dev
     restart: unless-stopped
     environment:
-      LD_LIBRARY_PATH: /turbovas-prefix/lib:/turbovas-prefix/lib64
-      POSTGRES_USER: ${POSTGRES_USER:-turbovas}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-turbovas-dev}
-      POSTGRES_DB: ${POSTGRES_DB:-turbovas}
+      LD_LIBRARY_PATH: /yafvs-prefix/lib:/yafvs-prefix/lib64
+      POSTGRES_USER: ${POSTGRES_USER:-yafvs}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yafvs-dev}
+      POSTGRES_DB: ${POSTGRES_DB:-yafvs}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "127.0.0.1:15432:5432"
     volumes:
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/postgres
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/postgres
         target: /var/lib/postgresql/data
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/postgres
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/logs/postgres
         target: /var/log/postgresql
       - type: bind
         source: ../build/prefix
-        target: /turbovas-prefix
+        target: /yafvs-prefix
         read_only: true
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -38,7 +38,7 @@ services:
   redis-openvas:
     image: redis:7-bookworm
     restart: unless-stopped
-    user: "${TURBOVAS_UID:-1000}:${TURBOVAS_GID:-1000}"
+    user: "${YAFVS_UID:-1000}:${YAFVS_GID:-1000}"
     command:
       - sh
       - -lc
@@ -55,13 +55,13 @@ services:
         --logfile /logs/redis-openvas.log
     volumes:
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/redis-openvas
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/redis-openvas
         target: /data
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/redis-openvas
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/run/redis-openvas
         target: /run/redis-openvas
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/redis-openvas
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/logs/redis-openvas
         target: /logs
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -s /run/redis-openvas/redis.sock ping | grep -q PONG"]
@@ -72,23 +72,23 @@ services:
   mosquitto:
     image: eclipse-mosquitto:2
     restart: unless-stopped
-    user: "${TURBOVAS_UID:-1000}:${TURBOVAS_GID:-1000}"
+    user: "${YAFVS_UID:-1000}:${YAFVS_GID:-1000}"
     command:
       - sh
       - -ec
       - >
         umask 077 &&
-        test -s /run/secrets/turbovas-mqtt-openvas-password &&
-        test -s /run/secrets/turbovas-mqtt-notus-password &&
-        test -s /run/secrets/turbovas-mqtt-ospd-password &&
-        test -s /run/secrets/turbovas-mqtt-health-password &&
+        test -s /run/secrets/yafvs-mqtt-openvas-password &&
+        test -s /run/secrets/yafvs-mqtt-notus-password &&
+        test -s /run/secrets/yafvs-mqtt-ospd-password &&
+        test -s /run/secrets/yafvs-mqtt-health-password &&
         cp /mosquitto/config-source/mosquitto.acl /mosquitto/config-secrets/mosquitto.acl &&
         chmod 600 /mosquitto/config-secrets/mosquitto.acl &&
         printf 'openvas:%s\nnotus:%s\nospd:%s\nhealth:%s\n'
-        "$(cat /run/secrets/turbovas-mqtt-openvas-password)"
-        "$(cat /run/secrets/turbovas-mqtt-notus-password)"
-        "$(cat /run/secrets/turbovas-mqtt-ospd-password)"
-        "$(cat /run/secrets/turbovas-mqtt-health-password)"
+        "$(cat /run/secrets/yafvs-mqtt-openvas-password)"
+        "$(cat /run/secrets/yafvs-mqtt-notus-password)"
+        "$(cat /run/secrets/yafvs-mqtt-ospd-password)"
+        "$(cat /run/secrets/yafvs-mqtt-health-password)"
         > /mosquitto/config-secrets/passwords &&
         chmod 600 /mosquitto/config-secrets/passwords &&
         mosquitto_passwd -U /mosquitto/config-secrets/passwords &&
@@ -96,11 +96,11 @@ services:
         '-h 127.0.0.1'
         '-p 1883'
         '-u health'
-        "-P $(cat /run/secrets/turbovas-mqtt-health-password)"
-        '-t turbovas/health'
+        "-P $(cat /run/secrets/yafvs-mqtt-health-password)"
+        '-t yafvs/health'
         '-m ok'
-        > /tmp/turbovas-mqtt-health.options &&
-        chmod 600 /tmp/turbovas-mqtt-health.options &&
+        > /tmp/yafvs-mqtt-health.options &&
+        chmod 600 /tmp/yafvs-mqtt-health.options &&
         exec /usr/sbin/mosquitto -c /mosquitto/config/mosquitto.conf
     ports:
       - "127.0.0.1:1883:1883"
@@ -114,32 +114,32 @@ services:
         target: /mosquitto/config-source/mosquitto.acl
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/mosquitto/secrets
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/mosquitto/secrets
         target: /mosquitto/config-secrets
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets/mqtt-openvas-password
-        target: /run/secrets/turbovas-mqtt-openvas-password
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/secrets/mqtt-openvas-password
+        target: /run/secrets/yafvs-mqtt-openvas-password
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets/mqtt-notus-password
-        target: /run/secrets/turbovas-mqtt-notus-password
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/secrets/mqtt-notus-password
+        target: /run/secrets/yafvs-mqtt-notus-password
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets/mqtt-ospd-password
-        target: /run/secrets/turbovas-mqtt-ospd-password
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/secrets/mqtt-ospd-password
+        target: /run/secrets/yafvs-mqtt-ospd-password
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets/mqtt-health-password
-        target: /run/secrets/turbovas-mqtt-health-password
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/secrets/mqtt-health-password
+        target: /run/secrets/yafvs-mqtt-health-password
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/mosquitto/data
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/mosquitto/data
         target: /mosquitto/data
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/mosquitto
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/logs/mosquitto
         target: /mosquitto/log
     healthcheck:
-      test: ["CMD", "mosquitto_pub", "-o", "/tmp/turbovas-mqtt-health.options"]
+      test: ["CMD", "mosquitto_pub", "-o", "/tmp/yafvs-mqtt-health.options"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -150,21 +150,21 @@ services:
       context: ..
       dockerfile: docker/dev/Dockerfile
     working_dir: /workspace
-    user: "${TURBOVAS_UID:-1000}:${TURBOVAS_GID:-1000}"
+    user: "${YAFVS_UID:-1000}:${YAFVS_GID:-1000}"
     environment:
       HOME: /tmp
       CCACHE_DIR: /workspace/build/ccache
       CMAKE_GENERATOR: Ninja
-      TURBOVAS_RUNTIME_DIR: /runtime
+      YAFVS_RUNTIME_DIR: /runtime
     volumes:
       - type: bind
         source: ..
         target: /workspace
       - type: bind
         source: ..
-        target: ${TURBOVAS_REPO_MOUNT_PATH:?set TURBOVAS_REPO_MOUNT_PATH to the absolute checkout path}
+        target: ${YAFVS_REPO_MOUNT_PATH:?set YAFVS_REPO_MOUNT_PATH to the absolute checkout path}
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}
         target: /runtime
       - type: bind
         source: ../build
@@ -173,12 +173,12 @@ services:
 
   gvmd:
     profiles: ["app"]
-    image: turbovas-gvmd
+    image: yafvs-gvmd
     build:
       context: ..
       dockerfile: docker/dev/Dockerfile
     working_dir: /workspace
-    user: "${TURBOVAS_UID:-1000}:${TURBOVAS_GID:-1000}"
+    user: "${YAFVS_UID:-1000}:${YAFVS_GID:-1000}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -188,10 +188,10 @@ services:
       HOME: /tmp
       LD_LIBRARY_PATH: /workspace/build/prefix/lib:/workspace/build/prefix/lib64
       PATH: /workspace/build/prefix/sbin:/workspace/build/prefix/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      PGPASSWORD: ${POSTGRES_PASSWORD:-turbovas-dev}
-      POSTGRES_USER: ${POSTGRES_USER:-turbovas}
-      POSTGRES_DB: ${POSTGRES_DB:-turbovas}
-      TURBOVAS_RUNTIME_DIR: /runtime
+      PGPASSWORD: ${POSTGRES_PASSWORD:-yafvs-dev}
+      POSTGRES_USER: ${POSTGRES_USER:-yafvs}
+      POSTGRES_DB: ${POSTGRES_DB:-yafvs}
+      YAFVS_RUNTIME_DIR: /runtime
       YAFVS_GVMD_CONTROL_SECRET: ${YAFVS_GVMD_CONTROL_SECRET:-}
     volumes:
       - type: bind
@@ -200,42 +200,42 @@ services:
         read_only: true
       - type: bind
         source: ..
-        target: ${TURBOVAS_REPO_MOUNT_PATH:?set TURBOVAS_REPO_MOUNT_PATH to the absolute checkout path}
+        target: ${YAFVS_REPO_MOUNT_PATH:?set YAFVS_REPO_MOUNT_PATH to the absolute checkout path}
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feed-store/current
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/feed-store/current
         target: /runtime/feeds
         bind:
           create_host_path: false
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/feed-update.lock
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/run/feed-update.lock
         target: /runtime/run/feed-update.lock
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/gvmd-gmp
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/run/gvmd-gmp
         target: /runtime/run/gvmd-gmp
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/gvmd-control
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/run/gvmd-control
         target: /runtime/run/gvmd-control
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/gvmd
-        target: ${TURBOVAS_REPO_MOUNT_PATH:?set TURBOVAS_REPO_MOUNT_PATH to the absolute checkout path}/build/run/gvmd
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/run/gvmd
+        target: ${YAFVS_REPO_MOUNT_PATH:?set YAFVS_REPO_MOUNT_PATH to the absolute checkout path}/build/run/gvmd
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/ospd
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/run/ospd
         target: /runtime/run/ospd
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/gvmd
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/logs/gvmd
         target: /runtime/logs/gvmd
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/gvmd
-        target: ${TURBOVAS_REPO_MOUNT_PATH:?set TURBOVAS_REPO_MOUNT_PATH to the absolute checkout path}/build/logs
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/logs/gvmd
+        target: ${YAFVS_REPO_MOUNT_PATH:?set YAFVS_REPO_MOUNT_PATH to the absolute checkout path}/build/logs
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/state/gvmd
-        target: ${TURBOVAS_REPO_MOUNT_PATH:?set TURBOVAS_REPO_MOUNT_PATH to the absolute checkout path}/build/var/lib/gvm/gvmd
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/state/gvmd
+        target: ${YAFVS_REPO_MOUNT_PATH:?set YAFVS_REPO_MOUNT_PATH to the absolute checkout path}/build/var/lib/gvm/gvmd
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/state/gvmd-bind-files/gvmd.sem
-        target: ${TURBOVAS_REPO_MOUNT_PATH:?set TURBOVAS_REPO_MOUNT_PATH to the absolute checkout path}/build/var/lib/gvm/gvmd.sem
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/state/gvmd-bind-files/gvmd.sem
+        target: ${YAFVS_REPO_MOUNT_PATH:?set YAFVS_REPO_MOUNT_PATH to the absolute checkout path}/build/var/lib/gvm/gvmd.sem
       - type: bind
         source: ../build
         target: /workspace/build
@@ -247,10 +247,10 @@ services:
         mkdir -p /runtime/run/gvmd-gmp /runtime/run/gvmd-control /runtime/logs/gvmd &&
         rm -f /runtime/run/gvmd-gmp/gvmd.sock /runtime/run/gvmd-control/yafvs-control.sock &&
         exec gvmd --foreground
-        --database="$${POSTGRES_DB:-turbovas}"
+        --database="$${POSTGRES_DB:-yafvs}"
         --db-host=postgres
         --db-port=5432
-        --db-user="$${POSTGRES_USER:-turbovas}"
+        --db-user="$${POSTGRES_USER:-yafvs}"
         --feed-lock-path=/runtime/run/feed-update.lock
         --disable-scheduling
         --scan-queue
@@ -261,12 +261,12 @@ services:
 
   ospd-openvas:
     profiles: ["app"]
-    image: turbovas-ospd-openvas
+    image: yafvs-ospd-openvas
     build:
       context: ..
       dockerfile: docker/dev/Dockerfile
     init: true
-    hostname: turbovas-ospd-openvas
+    hostname: yafvs-ospd-openvas
     working_dir: /workspace
     cap_add:
       - NET_RAW
@@ -281,9 +281,9 @@ services:
       GNUPGHOME: /runtime/state/feed-gnupg
       LD_LIBRARY_PATH: /workspace/build/prefix/lib:/workspace/build/prefix/lib64
       PATH: /workspace/build/venvs/ospd-openvas/bin:/workspace/build/openvas-scanner/src:/workspace/build/prefix/sbin:/workspace/build/prefix/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      TURBOVAS_RUNTIME_DIR: /runtime
-      TURBOVAS_UID: ${TURBOVAS_UID:-1000}
-      TURBOVAS_GID: ${TURBOVAS_GID:-1000}
+      YAFVS_RUNTIME_DIR: /runtime
+      YAFVS_UID: ${YAFVS_UID:-1000}
+      YAFVS_GID: ${YAFVS_GID:-1000}
       NMAP_PRIVILEGED: "1"
     volumes:
       - type: bind
@@ -292,26 +292,26 @@ services:
         read_only: true
       - type: bind
         source: ..
-        target: ${TURBOVAS_REPO_MOUNT_PATH:?set TURBOVAS_REPO_MOUNT_PATH to the absolute checkout path}
+        target: ${YAFVS_REPO_MOUNT_PATH:?set YAFVS_REPO_MOUNT_PATH to the absolute checkout path}
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/ospd
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/run/ospd
         target: /runtime/run/ospd
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/redis-openvas
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/run/redis-openvas
         target: /runtime/run/redis-openvas
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/certs
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/certs
         target: /runtime/certs
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/ospd
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/logs/ospd
         target: /runtime/logs/ospd
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/state/feed-gnupg
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/state/feed-gnupg
         target: /runtime/state/feed-gnupg
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feed-store/current
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/feed-store/current
         target: /runtime/feeds
         bind:
           create_host_path: false
@@ -321,25 +321,25 @@ services:
         target: /workspace/build
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/state/ospd/openvas.conf
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/state/ospd/openvas.conf
         target: /workspace/build/prefix/etc/openvas/openvas.conf
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/state/ospd/result-spool
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/state/ospd/result-spool
         target: /runtime/state/ospd/result-spool
         bind:
           create_host_path: false
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets/mqtt-ospd-password
-        target: /run/secrets/turbovas-mqtt-ospd-password
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/secrets/mqtt-ospd-password
+        target: /run/secrets/yafvs-mqtt-ospd-password
         read_only: true
     command:
       - sh
       - -lc
       - >
-        install -d -m 0770 -o "$${TURBOVAS_UID:-1000}" -g "$${TURBOVAS_GID:-1000}" /runtime/run/ospd /runtime/logs/ospd &&
-        install -d -m 0700 -o "$${TURBOVAS_UID:-1000}" -g "$${TURBOVAS_GID:-1000}" /runtime/state/feed-gnupg &&
-        install -d -m 0700 -o "$${TURBOVAS_UID:-1000}" -g "$${TURBOVAS_GID:-1000}" /runtime/state/ospd/result-spool &&
+        install -d -m 0770 -o "$${YAFVS_UID:-1000}" -g "$${YAFVS_GID:-1000}" /runtime/run/ospd /runtime/logs/ospd &&
+        install -d -m 0700 -o "$${YAFVS_UID:-1000}" -g "$${YAFVS_GID:-1000}" /runtime/state/feed-gnupg &&
+        install -d -m 0700 -o "$${YAFVS_UID:-1000}" -g "$${YAFVS_GID:-1000}" /runtime/state/ospd/result-spool &&
         mkdir -p /runtime/feeds/notus/advisories &&
         if command -v setcap >/dev/null 2>&1; then
           setcap cap_net_raw,cap_net_admin+eip /usr/bin/nmap ||
@@ -349,8 +349,8 @@ services:
         fi &&
         rm -f /runtime/run/ospd/ospd-openvas.sock /runtime/run/ospd/ospd-openvas.pid &&
         exec setpriv
-        --reuid "$${TURBOVAS_UID:-1000}"
-        --regid "$${TURBOVAS_GID:-1000}"
+        --reuid "$${YAFVS_UID:-1000}"
+        --regid "$${YAFVS_GID:-1000}"
         --clear-groups
         --inh-caps +net_raw,+net_admin
         --ambient-caps +net_raw,+net_admin
@@ -367,18 +367,18 @@ services:
         --mqtt-broker-address=mosquitto
         --mqtt-broker-port=1883
         --mqtt-broker-username=ospd
-        --mqtt-broker-password-file=/run/secrets/turbovas-mqtt-ospd-password
+        --mqtt-broker-password-file=/run/secrets/yafvs-mqtt-ospd-password
         --max-scans=0
         --notus-feed-dir=/runtime/feeds/notus/advisories
 
   notus-scanner:
     profiles: ["app"]
-    image: turbovas-notus-scanner
+    image: yafvs-notus-scanner
     build:
       context: ..
       dockerfile: docker/dev/Dockerfile
     working_dir: /workspace
-    user: "${TURBOVAS_UID:-1000}:${TURBOVAS_GID:-1000}"
+    user: "${YAFVS_UID:-1000}:${YAFVS_GID:-1000}"
     depends_on:
       mosquitto:
         condition: service_healthy
@@ -387,7 +387,7 @@ services:
       GNUPGHOME: /runtime/state/feed-gnupg
       LD_LIBRARY_PATH: /workspace/build/prefix/lib:/workspace/build/prefix/lib64
       PATH: /workspace/build/venvs/notus-scanner/bin:/workspace/build/prefix/sbin:/workspace/build/prefix/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      TURBOVAS_RUNTIME_DIR: /runtime
+      YAFVS_RUNTIME_DIR: /runtime
     volumes:
       - type: bind
         source: ..
@@ -395,19 +395,19 @@ services:
         read_only: true
       - type: bind
         source: ..
-        target: ${TURBOVAS_REPO_MOUNT_PATH:?set TURBOVAS_REPO_MOUNT_PATH to the absolute checkout path}
+        target: ${YAFVS_REPO_MOUNT_PATH:?set YAFVS_REPO_MOUNT_PATH to the absolute checkout path}
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/notus
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/run/notus
         target: /runtime/run/notus
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/notus
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/logs/notus
         target: /runtime/logs/notus
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/state/feed-gnupg
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/state/feed-gnupg
         target: /runtime/state/feed-gnupg
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feed-store/current
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/feed-store/current
         target: /runtime/feeds
         bind:
           create_host_path: false
@@ -417,8 +417,8 @@ services:
         target: /workspace/build
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets/mqtt-notus-password
-        target: /run/secrets/turbovas-mqtt-notus-password
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/secrets/mqtt-notus-password
+        target: /run/secrets/yafvs-mqtt-notus-password
         read_only: true
     command:
       - sh
@@ -432,19 +432,19 @@ services:
         --mqtt-broker-address=mosquitto
         --mqtt-broker-port=1883
         --mqtt-broker-username=notus
-        --mqtt-broker-password-file=/run/secrets/turbovas-mqtt-notus-password
+        --mqtt-broker-password-file=/run/secrets/yafvs-mqtt-notus-password
         --pid-file=/runtime/run/notus/notus-scanner.pid
         --log-file=/runtime/logs/notus/notus-scanner.log
         --log-level=INFO
 
   gsad:
     profiles: ["app"]
-    image: turbovas-gsad
+    image: yafvs-gsad
     build:
       context: ..
       dockerfile: docker/dev/Dockerfile
     working_dir: /workspace
-    user: "${TURBOVAS_UID:-1000}:${TURBOVAS_GID:-1000}"
+    user: "${YAFVS_UID:-1000}:${YAFVS_GID:-1000}"
     depends_on:
       gvmd:
         condition: service_started
@@ -452,10 +452,10 @@ services:
       HOME: /tmp
       LD_LIBRARY_PATH: /workspace/build/prefix/lib:/workspace/build/prefix/lib64
       PATH: /workspace/build/prefix/sbin:/workspace/build/prefix/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      TURBOVAS_RUNTIME_DIR: /runtime
+      YAFVS_RUNTIME_DIR: /runtime
       YAFVS_API_BROWSER_PROXY_SECRET: ${YAFVS_API_BROWSER_PROXY_SECRET:-}
     ports:
-      - "${TURBOVAS_GSAD_HOST:-127.0.0.1}:19392:9392"
+      - "${YAFVS_GSAD_HOST:-127.0.0.1}:19392:9392"
     volumes:
       - type: bind
         source: ..
@@ -463,25 +463,25 @@ services:
         read_only: true
       - type: bind
         source: ..
-        target: ${TURBOVAS_REPO_MOUNT_PATH:?set TURBOVAS_REPO_MOUNT_PATH to the absolute checkout path}
+        target: ${YAFVS_REPO_MOUNT_PATH:?set YAFVS_REPO_MOUNT_PATH to the absolute checkout path}
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/gvmd-gmp
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/run/gvmd-gmp
         target: /runtime/run/gvmd
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/certs
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/certs
         target: /runtime/certs
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/gsad
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/logs/gsad
         target: /runtime/logs/gsad
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/logs/gsad
-        target: ${TURBOVAS_REPO_MOUNT_PATH:?set TURBOVAS_REPO_MOUNT_PATH to the absolute checkout path}/build/logs
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/logs/gsad
+        target: ${YAFVS_REPO_MOUNT_PATH:?set YAFVS_REPO_MOUNT_PATH to the absolute checkout path}/build/logs
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/gsad
-        target: ${TURBOVAS_REPO_MOUNT_PATH:?set TURBOVAS_REPO_MOUNT_PATH to the absolute checkout path}/build/run/gsad
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/run/gsad
+        target: ${YAFVS_REPO_MOUNT_PATH:?set YAFVS_REPO_MOUNT_PATH to the absolute checkout path}/build/run/gsad
       - type: bind
         source: ../build
         target: /workspace/build
@@ -502,7 +502,7 @@ services:
 
   yafvs-api:
     profiles: ["app"]
-    image: turbovas-yafvs-api
+    image: yafvs-yafvs-api
     build:
       context: ..
       dockerfile: docker/yafvs-api/Dockerfile
@@ -512,7 +512,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-turbovas}:${POSTGRES_PASSWORD:-turbovas-dev}@postgres:5432/${POSTGRES_DB:-turbovas}
+      DATABASE_URL: postgres://${POSTGRES_USER:-yafvs}:${POSTGRES_PASSWORD:-yafvs-dev}@postgres:5432/${POSTGRES_DB:-yafvs}
       RUST_LOG: ${YAFVS_API_LOG:-info}
       YAFVS_API_BIND: 0.0.0.0:9080
       YAFVS_API_DIRECT_BIND: ${YAFVS_API_DIRECT_BIND:-}
@@ -524,25 +524,25 @@ services:
       YAFVS_API_BROWSER_PROXY_SECRET: ${YAFVS_API_BROWSER_PROXY_SECRET:-}
       YAFVS_API_GVMD_CONTROL_SOCKET: /runtime/run/gvmd/yafvs-control.sock
       YAFVS_GVMD_CONTROL_SECRET: ${YAFVS_GVMD_CONTROL_SECRET:-}
-      TURBOVAS_FEED_METADATA_DIR: /runtime/feeds
-      TURBOVAS_FEED_LOCK_DIR: /runtime/run
+      YAFVS_FEED_METADATA_DIR: /runtime/feeds
+      YAFVS_FEED_LOCK_DIR: /runtime/run
     volumes:
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feed-store/current
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/feed-store/current
         target: /runtime/feeds
         bind:
           create_host_path: false
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/feed-update.lock
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/run/feed-update.lock
         target: /runtime/run/feed-update.lock
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/ospd
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/run/ospd
         target: /runtime/run/ospd
         read_only: true
       - type: bind
-        source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/run/gvmd-control
+        source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/run/gvmd-control
         target: /runtime/run/gvmd
         read_only: true
     # No host port by default. Direct API exposure is added only by the
@@ -550,4 +550,4 @@ services:
 
 networks:
   default:
-    name: turbovas-dev
+    name: yafvs-dev

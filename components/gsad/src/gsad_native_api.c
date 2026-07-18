@@ -2291,8 +2291,8 @@ fetch_native_api_json (const gchar *method, const gchar *path,
                        guint *status_code, gchar **error_message,
                        gboolean *mutation_outcome_indeterminate)
 {
-  const gchar *host = g_getenv ("TURBOVAS_NATIVE_API_HOST");
-  const gchar *port = g_getenv ("TURBOVAS_NATIVE_API_PORT");
+  const gchar *host = g_getenv ("YAFVS_NATIVE_API_HOST");
+  const gchar *port = g_getenv ("YAFVS_NATIVE_API_PORT");
   int fd;
   GString *request;
   GString *response;
@@ -2466,8 +2466,8 @@ fetch_native_api_pdf (const gchar *path,
                       native_api_pdf_response_t *pdf_response,
                       gchar **error_message)
 {
-  const gchar *host = g_getenv ("TURBOVAS_NATIVE_API_HOST");
-  const gchar *port = g_getenv ("TURBOVAS_NATIVE_API_PORT");
+  const gchar *host = g_getenv ("YAFVS_NATIVE_API_HOST");
+  const gchar *port = g_getenv ("YAFVS_NATIVE_API_PORT");
   int fd;
   GString *request;
   GByteArray *response;

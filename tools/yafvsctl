@@ -57,7 +57,7 @@ COMMENT_NOTICE_SUFFIXES = frozenset({".c", ".h", ".js", ".jsx", ".ts", ".tsx", "
 COMMENT_NOTICE_NAMES = frozenset({"Makefile", ".dockerignore", ".gitignore"})
 IMPORTED_ADDED_PREFIXES = ("components/pg-gvm/",)
 FEED_CONTENT_TRACKED_PREFIXES = (
-    "TurboVAS-runtime/",
+    "YAFVS-runtime/",
     "feed-cache/",
     "feeds/openvas/plugins/",
     "feeds/notus/",
@@ -149,7 +149,7 @@ HARDENED_REQUIRED_FEATURES = (
     "pie",
 )
 HARDENED_CONTROL_FLOW_ARCHITECTURES = ("x86_64", "amd64", "aarch64", "arm64")
-HARDENED_CMAKE_INJECTION = Path("build/hardened/turbovas-hardening.cmake")
+HARDENED_CMAKE_INJECTION = Path("build/hardened/yafvs-hardening.cmake")
 HARDENED_CONFIGURATION = Path("build/hardened/hardening-configuration.json")
 HARDENED_BUILD_MANIFEST = Path("build/hardened/hardening-manifest.json")
 NATIVE_RUST_SERVICES = ("yafvs-api",)
@@ -249,8 +249,8 @@ RUNTIME_PORTS = {
     "mosquitto": "127.0.0.1:1883:1883",
 }
 DEFAULT_GSAD_HOST = "127.0.0.1"
-GSAD_HOST_ENV = "TURBOVAS_GSAD_HOST"
-GSAD_HOSTS_ENV = "TURBOVAS_GSAD_HOSTS"
+GSAD_HOST_ENV = "YAFVS_GSAD_HOST"
+GSAD_HOSTS_ENV = "YAFVS_GSAD_HOSTS"
 GSAD_PORT = "19392"
 GSAD_CONTAINER_PORT = "9392"
 APP_PORTS = {"gsad": f"${{{GSAD_HOST_ENV}:-{DEFAULT_GSAD_HOST}}}:{GSAD_PORT}:9392"}
@@ -273,36 +273,36 @@ YAFVS_API_BROWSER_PROXY_SECRET_ENV = "YAFVS_API_BROWSER_PROXY_SECRET"
 YAFVS_API_BROWSER_PROXY_SECRET = "native-api-browser-proxy-secret"
 YAFVS_GVMD_CONTROL_SECRET_ENV = "YAFVS_GVMD_CONTROL_SECRET"
 YAFVS_GVMD_CONTROL_SECRET = "gvmd-control-secret"
-TURBOVAS_MQTT_OPENVAS_PASSWORD_ENV = "TURBOVAS_MQTT_OPENVAS_PASSWORD"
-TURBOVAS_MQTT_NOTUS_PASSWORD_ENV = "TURBOVAS_MQTT_NOTUS_PASSWORD"
-TURBOVAS_MQTT_OSPD_PASSWORD_ENV = "TURBOVAS_MQTT_OSPD_PASSWORD"
-TURBOVAS_MQTT_HEALTH_PASSWORD_ENV = "TURBOVAS_MQTT_HEALTH_PASSWORD"
-TURBOVAS_MQTT_OSPD_PASSWORD_SECRET = "mqtt-ospd-password"
-TURBOVAS_MQTT_OSPD_PASSWORD_CONTAINER_FILE = (
-    "/run/secrets/turbovas-mqtt-ospd-password"
+YAFVS_MQTT_OPENVAS_PASSWORD_ENV = "YAFVS_MQTT_OPENVAS_PASSWORD"
+YAFVS_MQTT_NOTUS_PASSWORD_ENV = "YAFVS_MQTT_NOTUS_PASSWORD"
+YAFVS_MQTT_OSPD_PASSWORD_ENV = "YAFVS_MQTT_OSPD_PASSWORD"
+YAFVS_MQTT_HEALTH_PASSWORD_ENV = "YAFVS_MQTT_HEALTH_PASSWORD"
+YAFVS_MQTT_OSPD_PASSWORD_SECRET = "mqtt-ospd-password"
+YAFVS_MQTT_OSPD_PASSWORD_CONTAINER_FILE = (
+    "/run/secrets/yafvs-mqtt-ospd-password"
 )
-TURBOVAS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE = (
-    "/run/secrets/turbovas-mqtt-notus-password"
+YAFVS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE = (
+    "/run/secrets/yafvs-mqtt-notus-password"
 )
-TURBOVAS_MQTT_OPENVAS_PASSWORD_CONTAINER_FILE = (
-    "/run/secrets/turbovas-mqtt-openvas-password"
+YAFVS_MQTT_OPENVAS_PASSWORD_CONTAINER_FILE = (
+    "/run/secrets/yafvs-mqtt-openvas-password"
 )
-TURBOVAS_MQTT_HEALTH_PASSWORD_CONTAINER_FILE = (
-    "/run/secrets/turbovas-mqtt-health-password"
+YAFVS_MQTT_HEALTH_PASSWORD_CONTAINER_FILE = (
+    "/run/secrets/yafvs-mqtt-health-password"
 )
-TURBOVAS_MQTT_RUNTIME_SECRETS = (
-    (TURBOVAS_MQTT_OPENVAS_PASSWORD_ENV, "mqtt-openvas-password"),
-    (TURBOVAS_MQTT_NOTUS_PASSWORD_ENV, "mqtt-notus-password"),
-    (TURBOVAS_MQTT_OSPD_PASSWORD_ENV, "mqtt-ospd-password"),
-    (TURBOVAS_MQTT_HEALTH_PASSWORD_ENV, "mqtt-health-password"),
+YAFVS_MQTT_RUNTIME_SECRETS = (
+    (YAFVS_MQTT_OPENVAS_PASSWORD_ENV, "mqtt-openvas-password"),
+    (YAFVS_MQTT_NOTUS_PASSWORD_ENV, "mqtt-notus-password"),
+    (YAFVS_MQTT_OSPD_PASSWORD_ENV, "mqtt-ospd-password"),
+    (YAFVS_MQTT_HEALTH_PASSWORD_ENV, "mqtt-health-password"),
 )
-TURBOVAS_MQTT_CONTAINER_SECRET_FILES = {
-    "mqtt-openvas-password": TURBOVAS_MQTT_OPENVAS_PASSWORD_CONTAINER_FILE,
-    "mqtt-notus-password": TURBOVAS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE,
-    "mqtt-ospd-password": TURBOVAS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
-    "mqtt-health-password": TURBOVAS_MQTT_HEALTH_PASSWORD_CONTAINER_FILE,
+YAFVS_MQTT_CONTAINER_SECRET_FILES = {
+    "mqtt-openvas-password": YAFVS_MQTT_OPENVAS_PASSWORD_CONTAINER_FILE,
+    "mqtt-notus-password": YAFVS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE,
+    "mqtt-ospd-password": YAFVS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
+    "mqtt-health-password": YAFVS_MQTT_HEALTH_PASSWORD_CONTAINER_FILE,
 }
-TURBOVAS_MQTT_ENVIRONMENT_SERVICES = (
+YAFVS_MQTT_ENVIRONMENT_SERVICES = (
     "mosquitto",
     "ospd-openvas",
     "notus-scanner",
@@ -323,7 +323,7 @@ DIRECT_API_EXPECTED_RESPONSE_HEADERS = {
 }
 POSTGRES_DEFAULTS = {
     "user": "turbovas",
-    "password": "turbovas-dev",
+    "password": "yafvs-dev",
     "database": "turbovas",
 }
 POSTGRES_COLLATION_BASE_DATABASES = ("postgres", "template1")
@@ -340,7 +340,7 @@ FEED_DB_ATTESTATION_META_NAME = "turbovas_feed_generation_attestation"
 FEED_DB_ATTESTATION_IMPORT_CONTRACT = "gvmd-nvt+gvmd-data-all+scap/v1"
 FEED_DB_ATTESTATION_MAX_BYTES = 4096
 FEED_SYNC_TYPE = "all"
-FEED_SYNC_SESSION = "turbovas-feed-sync"
+FEED_SYNC_SESSION = "yafvs-feed-sync"
 GREENBONE_COMMUNITY_FEED_URL = "rsync://feed.community.greenbone.net/community"
 FEED_RSYNC_TIMEOUT_SECONDS = 900
 GREENBONE_COMMUNITY_KEY_URL = "https://www.greenbone.net/GBCommunitySigningKey.asc"
@@ -397,7 +397,7 @@ NATIVE_TASK_ACTIVE_STATUSES = frozenset({"Running", "Requested", "Queued"})
 # Persisted gvmd task_status_t values that can still own scanner/control work.
 FEED_TRANSITION_BLOCKING_TASK_STATUS_IDS = (0, 3, 4, 10, 11, 14, 16, 17, 18, 19)
 OSPD_REQUIRED_CAPS = {"NET_ADMIN": 12, "NET_RAW": 13}
-OSPD_STABLE_HOSTNAME = "turbovas-ospd-openvas"
+OSPD_STABLE_HOSTNAME = "yafvs-ospd-openvas"
 DOCKER_HEX_HOSTNAME_PATTERN = re.compile(r"^[0-9a-f]{12}$", re.IGNORECASE)
 NMAP_PRIVILEGED_ENV = "NMAP_PRIVILEGED"
 NMAP_PRIVILEGE_WARNING_PATTERNS = (
@@ -2799,15 +2799,15 @@ def gsa_quality_env(repo_root: Path) -> dict[str, str]:
 
 def quality_gate_unit_env(repo_root: Path) -> dict[str, str]:
     env = build_env(repo_root)
-    env.pop("TURBOVAS_RUNTIME_DIR", None)
+    env.pop("YAFVS_RUNTIME_DIR", None)
     return env
 
 
 def runtime_dir(repo_root: Path) -> Path:
-    configured = os.environ.get("TURBOVAS_RUNTIME_DIR")
+    configured = os.environ.get("YAFVS_RUNTIME_DIR")
     if configured:
         return Path(configured).expanduser().resolve()
-    return (repo_root.parent / "TurboVAS-runtime").resolve()
+    return (repo_root.parent / "YAFVS-runtime").resolve()
 
 
 def runtime_path(repo_root: Path, *parts: str) -> Path:
@@ -4327,8 +4327,8 @@ def running_service_config_secret_exposure(
 
 def mqtt_runtime_environment_evidence(repo_root: Path) -> dict[str, Any]:
     expected_pair_count = (
-        len(TURBOVAS_MQTT_RUNTIME_SECRETS)
-        * len(TURBOVAS_MQTT_ENVIRONMENT_SERVICES)
+        len(YAFVS_MQTT_RUNTIME_SECRETS)
+        * len(YAFVS_MQTT_ENVIRONMENT_SERVICES)
     )
     inspected_pair_count = 0
     unreadable_secret_names: list[str] = []
@@ -4336,7 +4336,7 @@ def mqtt_runtime_environment_evidence(repo_root: Path) -> dict[str, Any]:
     key_exposure_pairs: list[str] = []
     value_exposure_pairs: list[str] = []
     secret_values: list[str] = []
-    for env_name, secret_name in TURBOVAS_MQTT_RUNTIME_SECRETS:
+    for env_name, secret_name in YAFVS_MQTT_RUNTIME_SECRETS:
         try:
             secret = read_private_text(
                 runtime_secret_path(repo_root, secret_name),
@@ -4346,7 +4346,7 @@ def mqtt_runtime_environment_evidence(repo_root: Path) -> dict[str, Any]:
             unreadable_secret_names.append(secret_name)
             continue
         secret_values.append(secret)
-        for service in TURBOVAS_MQTT_ENVIRONMENT_SERVICES:
+        for service in YAFVS_MQTT_ENVIRONMENT_SERVICES:
             pair = f"{service}:{env_name}"
             evidence = running_service_env_secret_exposure(
                 repo_root, service, env_name, secret
@@ -4361,7 +4361,7 @@ def mqtt_runtime_environment_evidence(repo_root: Path) -> dict[str, Any]:
                 value_exposure_pairs.append(pair)
     uninspected_config_services: list[str] = []
     config_secret_exposure_services: list[str] = []
-    for service in TURBOVAS_MQTT_ENVIRONMENT_SERVICES:
+    for service in YAFVS_MQTT_ENVIRONMENT_SERVICES:
         config_evidence = running_service_config_secret_exposure(
             repo_root, service, secret_values
         )
@@ -4386,21 +4386,21 @@ def mqtt_runtime_mount_evidence(repo_root: Path) -> dict[str, Any]:
         (
             "ospd-openvas",
             "mqtt-ospd-password",
-            TURBOVAS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
+            YAFVS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
         ),
         (
             "notus-scanner",
             "mqtt-notus-password",
-            TURBOVAS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE,
+            YAFVS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE,
         ),
     ]
     specs.extend(
         (
             "mosquitto",
             secret_name,
-            TURBOVAS_MQTT_CONTAINER_SECRET_FILES[secret_name],
+            YAFVS_MQTT_CONTAINER_SECRET_FILES[secret_name],
         )
-        for _env_name, secret_name in TURBOVAS_MQTT_RUNTIME_SECRETS
+        for _env_name, secret_name in YAFVS_MQTT_RUNTIME_SECRETS
     )
     uninspected: list[str] = []
     unmatched: list[str] = []
@@ -4760,7 +4760,7 @@ def gsad_binding_transition_findings(repo_root: Path) -> list[dict[str, Any]]:
         finding(
             "warn",
             "gsad.host-binding.transition",
-            "gsad is currently published on non-loopback host bindings that this runtime-app-up request will not keep; set TURBOVAS_GSAD_HOSTS if LAN/Tailscale browser access should remain available.",
+            "gsad is currently published on non-loopback host bindings that this runtime-app-up request will not keep; set YAFVS_GSAD_HOSTS if LAN/Tailscale browser access should remain available.",
             details={
                 "current_published_hosts": current,
                 "requested_hosts": requested,
@@ -5136,7 +5136,7 @@ def locked_private_directory(path: Path):
     lock_fd = -1
     try:
         lock_fd = os.open(
-            ".turbovas-private.lock",
+            ".yafvs-private.lock",
             os.O_RDWR
             | os.O_CREAT
             | os.O_NOFOLLOW
@@ -5693,16 +5693,16 @@ def wait_for_socket(path: Path, timeout_seconds: int = 20) -> bool:
 def runtime_env(repo_root: Path) -> dict[str, str]:
     env = build_env(repo_root)
     env.setdefault("COMPOSE_PROJECT_NAME", "turbovas")
-    env.setdefault("TURBOVAS_RUNTIME_DIR", str(runtime_dir(repo_root)))
-    env.setdefault("TURBOVAS_REPO_MOUNT_PATH", str(repo_root))
-    env.setdefault("TURBOVAS_UID", str(os.getuid()))
-    env.setdefault("TURBOVAS_GID", str(os.getgid()))
+    env.setdefault("YAFVS_RUNTIME_DIR", str(runtime_dir(repo_root)))
+    env.setdefault("YAFVS_REPO_MOUNT_PATH", str(repo_root))
+    env.setdefault("YAFVS_UID", str(os.getuid()))
+    env.setdefault("YAFVS_GID", str(os.getgid()))
     env.setdefault("POSTGRES_USER", POSTGRES_DEFAULTS["user"])
     env.setdefault("POSTGRES_PASSWORD", POSTGRES_DEFAULTS["password"])
     env.setdefault("POSTGRES_DB", POSTGRES_DEFAULTS["database"])
     env.setdefault("OPENVAS_CONFIG", str(openvas_runtime_config_path(repo_root)))
     env.setdefault(GSAD_HOST_ENV, DEFAULT_GSAD_HOST)
-    for env_name, secret_name in TURBOVAS_MQTT_RUNTIME_SECRETS:
+    for env_name, secret_name in YAFVS_MQTT_RUNTIME_SECRETS:
         read_or_create_runtime_secret(repo_root, secret_name)
         env.pop(env_name, None)
     return env
@@ -6453,7 +6453,7 @@ def copy_gvmd_state_tree(source_fd: int, destination_fd: int, relative: tuple[st
         relative_name = "/".join((*relative, name))
         if stat.S_ISLNK(source_stat.st_mode) or not (stat.S_ISDIR(source_stat.st_mode) or stat.S_ISREG(source_stat.st_mode)):
             raise OSError(errno.EINVAL, f"gvmd seed source contains a symlink or special file: {relative_name}")
-        if stat.S_ISREG(source_stat.st_mode) and (name.startswith("gvm-") or name.startswith("turbovas-task-control-")):
+        if stat.S_ISREG(source_stat.st_mode) and (name.startswith("gvm-") or name.startswith("yafvs-task-control-")):
             skipped.append(relative_name)
             continue
         mode = stat.S_IMODE(source_stat.st_mode)
@@ -6676,7 +6676,7 @@ def ensure_runtime_dirs(repo_root: Path) -> list[dict[str, Any]]:
             if dirname in PRIVATE_RUNTIME_DIRS:
                 private_fd = open_private_directory(path)
                 os.close(private_fd)
-            probe = path / ".turbovas-write-test"
+            probe = path / ".yafvs-write-test"
             probe.write_text("ok\n", encoding="utf-8")
             probe.unlink()
             status = "pass"
@@ -6704,7 +6704,7 @@ def ensure_build_runtime_dirs(repo_root: Path) -> list[dict[str, Any]]:
         path = repo_root / dirname
         try:
             path.mkdir(parents=True, exist_ok=True)
-            probe = path / ".turbovas-write-test"
+            probe = path / ".yafvs-write-test"
             probe.write_text("ok\n", encoding="utf-8")
             probe.unlink()
             findings.append(finding("pass", "build-runtime.dir", f"Inherited build runtime directory is writable: {path}", str(path.relative_to(repo_root))))
@@ -6793,8 +6793,8 @@ def hostname_looks_like_docker_short_id(hostname: str | None) -> bool:
 
 def ospd_setpriv_raw_socket_probe_command(repo_root: Path) -> list[str]:
     env = runtime_env(repo_root)
-    uid = env["TURBOVAS_UID"]
-    gid = env["TURBOVAS_GID"]
+    uid = env["YAFVS_UID"]
+    gid = env["YAFVS_GID"]
     probe = "import socket; socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP); print('raw-ok')"
     return [
         "setpriv",
@@ -6815,8 +6815,8 @@ def ospd_setpriv_raw_socket_probe_command(repo_root: Path) -> list[str]:
 
 def ospd_setpriv_nmap_probe_commands(repo_root: Path) -> list[tuple[str, list[str]]]:
     env = runtime_env(repo_root)
-    uid = env["TURBOVAS_UID"]
-    gid = env["TURBOVAS_GID"]
+    uid = env["YAFVS_UID"]
+    gid = env["YAFVS_GID"]
     prefix = [
         "setpriv",
         "--reuid",
@@ -6843,7 +6843,7 @@ def ospd_setpriv_nmap_probe_commands(repo_root: Path) -> list[tuple[str, list[st
             "nmap.os-detection",
             [
                 *prefix,
-                "python3 -m http.server 18080 --bind 127.0.0.1 >/tmp/turbovas-nmap-probe.log 2>&1 & "
+                "python3 -m http.server 18080 --bind 127.0.0.1 >/tmp/yafvs-nmap-probe.log 2>&1 & "
                 "pid=$!; "
                 "trap 'kill $pid 2>/dev/null || true' EXIT; "
                 "sleep 1; "
@@ -6981,9 +6981,9 @@ print(json.dumps(result, sort_keys=True))
         command = [
             "setpriv",
             "--reuid",
-            env["TURBOVAS_UID"],
+            env["YAFVS_UID"],
             "--regid",
-            env["TURBOVAS_GID"],
+            env["YAFVS_GID"],
             "--clear-groups",
             *command,
         ]
@@ -6996,7 +6996,7 @@ def ospd_mqtt_secret_exposure_probe_command(
     return mqtt_file_secret_exposure_probe_command(
         repo_root,
         "ospd-openvas",
-        TURBOVAS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
+        YAFVS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
         "/workspace/build/venvs/ospd-openvas/bin/python",
         True,
     )
@@ -7008,7 +7008,7 @@ def notus_mqtt_secret_exposure_probe_command(
     return mqtt_file_secret_exposure_probe_command(
         repo_root,
         "notus-scanner",
-        TURBOVAS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE,
+        YAFVS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE,
         "/workspace/build/venvs/notus-scanner/bin/python",
         False,
     )
@@ -7052,9 +7052,9 @@ print('mqtt-auth-ok')
         command = [
             "setpriv",
             "--reuid",
-            env["TURBOVAS_UID"],
+            env["YAFVS_UID"],
             "--regid",
-            env["TURBOVAS_GID"],
+            env["YAFVS_GID"],
             "--clear-groups",
             *command,
         ]
@@ -7195,7 +7195,7 @@ def refresh_mqtt_broker(repo_root: Path) -> dict[str, Any]:
 
 def mqtt_health_probe_command() -> list[str]:
     """Return the broker's file-backed authenticated health probe."""
-    return ["mosquitto_pub", "-o", "/tmp/turbovas-mqtt-health.options"]
+    return ["mosquitto_pub", "-o", "/tmp/yafvs-mqtt-health.options"]
 
 
 def log_review_matches(lines: Iterable[str], service: str | None = None) -> list[dict[str, Any]]:
@@ -14099,8 +14099,8 @@ def hardened_profile_configuration(repo_root: Path) -> tuple[list[str], dict[str
     injection_path.parent.mkdir(parents=True, exist_ok=True)
     injection_path.write_text(
         "# Generated by tools/yafvsctl; do not edit.\n"
-        "if(NOT TURBOVAS_HARDENING_OPTIONS_APPLIED)\n"
-        "  set(TURBOVAS_HARDENING_OPTIONS_APPLIED TRUE)\n"
+        "if(NOT YAFVS_HARDENING_OPTIONS_APPLIED)\n"
+        "  set(YAFVS_HARDENING_OPTIONS_APPLIED TRUE)\n"
         "  add_compile_options(\n"
         + "".join(f"    {flag}\n" for flag in compiler_flags)
         + "  )\n"
@@ -15336,8 +15336,8 @@ def command_runtime_scanner_capability_check(repo_root: Path) -> dict[str, Any]:
     status_path = f"/proc/{scanner_pid}/status" if scanner_pid else "/proc/1/status"
     status = exec_in_service(repo_root, service, ["sh", "-lc", f"sed -n 's/^Uid:/Uid:/p; s/^Gid:/Gid:/p; s/^CapInh:/CapInh:/p; s/^CapPrm:/CapPrm:/p; s/^CapEff:/CapEff:/p; s/^CapBnd:/CapBnd:/p; s/^CapAmb:/CapAmb:/p' {shlex.quote(status_path)}"])
     values = parse_proc_status(status.stdout)
-    expected_uid = runtime_env(repo_root)["TURBOVAS_UID"]
-    expected_gid = runtime_env(repo_root)["TURBOVAS_GID"]
+    expected_uid = runtime_env(repo_root)["YAFVS_UID"]
+    expected_gid = runtime_env(repo_root)["YAFVS_GID"]
     actual_uid = first_proc_status_id(values.get("Uid"))
     actual_gid = first_proc_status_id(values.get("Gid"))
     findings.append(finding("pass" if status.returncode == 0 else "fail", "ospd.proc-status", f"{status_path} read exit code {status.returncode}.", details={"output_tail": output_tail(status.stdout, 40)}))
@@ -15377,10 +15377,10 @@ def command_runtime_scanner_process_check(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     service = "ospd-openvas"
     secret_path = runtime_secret_path(
-        repo_root, TURBOVAS_MQTT_OSPD_PASSWORD_SECRET
+        repo_root, YAFVS_MQTT_OSPD_PASSWORD_SECRET
     )
     secret_metadata = runtime_secret_file_metadata(secret_path)
-    expected_uid = int(runtime_env(repo_root)["TURBOVAS_UID"])
+    expected_uid = int(runtime_env(repo_root)["YAFVS_UID"])
     actual_uid = (
         secret_path.lstat().st_uid if secret_metadata["exists"] else None
     )
@@ -15602,14 +15602,14 @@ def command_runtime_scanner_process_check(repo_root: Path) -> dict[str, Any]:
         (
             "ospd-openvas",
             "ospd",
-            TURBOVAS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
+            YAFVS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
             "/workspace/build/venvs/ospd-openvas/bin/python",
             True,
         ),
         (
             "notus-scanner",
             "notus",
-            TURBOVAS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE,
+            YAFVS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE,
             "/workspace/build/venvs/notus-scanner/bin/python",
             False,
         ),
@@ -17718,8 +17718,8 @@ def direct_task_target_replace_runtime_findings(
     findings: list[dict[str, Any]] = []
     content_type = (("Content-Type", "application/json"),)
     fixture_suffix = f"{int(time.time())}-{os.getpid()}"
-    source_target_name = f"turbovas-direct-write-smoke-replace-source-{fixture_suffix}"
-    task_name = f"turbovas-direct-write-smoke-replace-task-{fixture_suffix}"
+    source_target_name = f"yafvs-direct-write-smoke-replace-source-{fixture_suffix}"
+    task_name = f"yafvs-direct-write-smoke-replace-task-{fixture_suffix}"
     source_target_id: str | None = None
     task_id: str | None = None
     new_target_id: str | None = None
@@ -18273,7 +18273,7 @@ def direct_trash_empty_runtime_findings(
         return findings
 
     content_type = (("Content-Type", "application/json"),)
-    fixture_name = f"turbovas-direct-write-smoke-trash-empty-{int(time.time())}-{os.getpid()}"
+    fixture_name = f"yafvs-direct-write-smoke-trash-empty-{int(time.time())}-{os.getpid()}"
     owner_sql = f"(SELECT id FROM users WHERE uuid = {sql_literal(operator_uuid)})"
     live_fixture_selector = (
         "SELECT id FROM tags WHERE "
@@ -18788,51 +18788,51 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
     predefined_port_list_id: str | None = None
     port_list_id: str | None = None
     port_list_clone_id: str | None = None
-    port_list_name = f"turbovas-direct-write-smoke-port-list-{int(time.time())}-{os.getpid()}"
+    port_list_name = f"yafvs-direct-write-smoke-port-list-{int(time.time())}-{os.getpid()}"
     port_list_clone_name = f"{port_list_name}-clone"
     schedule_id: str | None = None
     schedule_clone_id: str | None = None
     schedule_original_comment = ""
-    schedule_name = f"turbovas-direct-write-smoke-schedule-{int(time.time())}-{os.getpid()}"
+    schedule_name = f"yafvs-direct-write-smoke-schedule-{int(time.time())}-{os.getpid()}"
     schedule_clone_name = f"{schedule_name}-clone"
-    schedule_icalendar = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//TurboVAS//Schedule//EN\r\nBEGIN:VEVENT\r\nDTSTART:20350101T000000Z\r\nRRULE:FREQ=DAILY\r\nDURATION:PT1H\r\nUID:turbovas-direct-write-smoke-schedule\r\nDTSTAMP:19700101T000000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
-    schedule_patch_icalendar = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//TurboVAS//Schedule//EN\r\nBEGIN:VEVENT\r\nDTSTART:20360101T000000Z\r\nRRULE:FREQ=WEEKLY\r\nDURATION:PT2H\r\nUID:turbovas-direct-write-smoke-schedule\r\nDTSTAMP:19700101T000000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+    schedule_icalendar = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//TurboVAS//Schedule//EN\r\nBEGIN:VEVENT\r\nDTSTART:20350101T000000Z\r\nRRULE:FREQ=DAILY\r\nDURATION:PT1H\r\nUID:yafvs-direct-write-smoke-schedule\r\nDTSTAMP:19700101T000000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+    schedule_patch_icalendar = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//TurboVAS//Schedule//EN\r\nBEGIN:VEVENT\r\nDTSTART:20360101T000000Z\r\nRRULE:FREQ=WEEKLY\r\nDURATION:PT2H\r\nUID:yafvs-direct-write-smoke-schedule\r\nDTSTAMP:19700101T000000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
     scan_config_id: str | None = None
     scan_config_clone_id: str | None = None
     scan_config_import_id: str | None = None
-    scan_config_name = f"turbovas-direct-write-smoke-scan-config-{int(time.time())}-{os.getpid()}"
+    scan_config_name = f"yafvs-direct-write-smoke-scan-config-{int(time.time())}-{os.getpid()}"
     scan_config_clone_name = f"{scan_config_name}-clone"
     scan_config_import_name = f"{scan_config_name}-import"
     override_id: str | None = None
     override_clone_id: str | None = None
     override_nvt_id: str | None = None
-    override_text = f"turbovas-direct-write-smoke-override-{int(time.time())}-{os.getpid()}"
+    override_text = f"yafvs-direct-write-smoke-override-{int(time.time())}-{os.getpid()}"
     override_cleanup_required = False
-    scope_name = f"turbovas-direct-write-smoke-scope-{int(time.time())}-{os.getpid()}"
-    filter_name = f"turbovas-direct-write-smoke-filter-{int(time.time())}-{os.getpid()}"
+    scope_name = f"yafvs-direct-write-smoke-scope-{int(time.time())}-{os.getpid()}"
+    filter_name = f"yafvs-direct-write-smoke-filter-{int(time.time())}-{os.getpid()}"
     filter_clone_name = f"{filter_name}-clone"
-    tag_name = f"turbovas-direct-write-smoke-{int(time.time())}-{os.getpid()}"
+    tag_name = f"yafvs-direct-write-smoke-{int(time.time())}-{os.getpid()}"
     tag_clone_name = f"{tag_name}-clone"
-    alert_name = f"turbovas-direct-write-smoke-alert-{int(time.time())}-{os.getpid()}"
-    alert_tag_name = f"turbovas-direct-write-smoke-alert-tag-{int(time.time())}-{os.getpid()}"
+    alert_name = f"yafvs-direct-write-smoke-alert-{int(time.time())}-{os.getpid()}"
+    alert_tag_name = f"yafvs-direct-write-smoke-alert-tag-{int(time.time())}-{os.getpid()}"
     credential_id: str | None = None
-    credential_name = f"turbovas-direct-write-smoke-credential-{int(time.time())}-{os.getpid()}"
-    smb_alert_name = f"turbovas-direct-write-smoke-smb-alert-{int(time.time())}-{os.getpid()}"
-    smb_report_format_name = f"turbovas-direct-write-smoke-smb-format-{int(time.time())}-{os.getpid()}"
+    credential_name = f"yafvs-direct-write-smoke-credential-{int(time.time())}-{os.getpid()}"
+    smb_alert_name = f"yafvs-direct-write-smoke-smb-alert-{int(time.time())}-{os.getpid()}"
+    smb_report_format_name = f"yafvs-direct-write-smoke-smb-format-{int(time.time())}-{os.getpid()}"
     credential_helper_name = f"{credential_name}-csv-helper"
     credential_updated_comment = "TurboVAS direct write smoke updated credential metadata"
     target_id: str | None = None
     target_clone_id: str | None = None
     target_create_with_credential_id: str | None = None
     target_credential_id: str | None = None
-    target_name = f"turbovas-direct-write-smoke-target-{int(time.time())}-{os.getpid()}"
+    target_name = f"yafvs-direct-write-smoke-target-{int(time.time())}-{os.getpid()}"
     target_clone_name = f"{target_name}-clone"
     target_create_with_credential_name = f"{target_name}-with-credential"
     target_credential_name = f"{target_name}-credential"
     target_updated_comment = "TurboVAS direct write smoke updated target metadata"
     task_id: str | None = None
     task_clone_id: str | None = None
-    task_name = f"turbovas-direct-write-smoke-task-{int(time.time())}-{os.getpid()}"
+    task_name = f"yafvs-direct-write-smoke-task-{int(time.time())}-{os.getpid()}"
     task_clone_name = f"{task_name} Clone 1"
     task_schedule_id: str | None = None
     task_schedule_name = f"{task_name}-schedule"
@@ -19175,7 +19175,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 findings.append(native_api_probe_finding("pass" if scan_config_unknown_preference_ok else "fail", "native-api-direct.scan-config-preference-unknown-denied", "Direct write-control rejects preference identities absent from the current feed catalog." if scan_config_unknown_preference_ok else "Direct write-control did not reject an unknown scanner preference identity.", scan_config_unknown_preference, direct_native_api_display_command(scan_config_detail_path, token=token, env=env, method="PATCH", body=scan_config_unknown_preference_body, extra_headers=content_type), scan_config_unknown_preference_json, {"http_status": scan_config_unknown_preference_status, "scan_config_id": scan_config_id, **summarize_native_api_response(scan_config_unknown_preference_json)}))
 
                 scan_config_secret_identity = {"oid": scan_config_secret_before["nvt"]["oid"], "id": scan_config_secret_before["id"], "type": scan_config_secret_before["type"]}
-                scan_config_secret_value = f"turbovas-direct-write-smoke-secret-{os.getpid()}"
+                scan_config_secret_value = f"yafvs-direct-write-smoke-secret-{os.getpid()}"
                 scan_config_secret_set_body = json.dumps({"preferences": [{"scope": "nvt", "name": scan_config_secret_before["name"], "action": "set", "value": scan_config_secret_value, "nvt": scan_config_secret_identity}]}, separators=(",", ":"))
                 scan_config_secret_set = direct_native_api_curl(repo_root, scan_config_detail_path, token=token, env=env, method="PATCH", body=scan_config_secret_set_body, extra_headers=content_type)
                 scan_config_secret_set_json, scan_config_secret_set_status = parse_json_output_with_http_status(scan_config_secret_set)
@@ -20162,7 +20162,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                     "comment": "TurboVAS concurrent alert create serialization proof",
                     "active": False,
                     "status": "Done",
-                    "to_address": "turbovas-smoke@example.invalid",
+                    "to_address": "yafvs-smoke@example.invalid",
                     "subject": "TurboVAS concurrent create proof",
                     "notice": "simple",
                 },
@@ -20214,7 +20214,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                     "comment": "TurboVAS direct write smoke temporary EMAIL alert",
                     "active": False,
                     "status": "Done",
-                    "to_address": "turbovas-smoke@example.invalid",
+                    "to_address": "yafvs-smoke@example.invalid",
                     "subject": "TurboVAS delivery subject sentinel",
                     "notice": "simple",
                 },
@@ -20237,7 +20237,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 and alert_create_json.get("name") == alert_name
                 and alert_create_json.get("active") is False
                 and alert_metadata_item_ok(alert_create_json)
-                and "turbovas-smoke@example.invalid" not in alert_create_serialized
+                and "yafvs-smoke@example.invalid" not in alert_create_serialized
                 and "TurboVAS delivery subject sentinel" not in alert_create_serialized
             )
             alert_create_committed, alert_create_outcome_uncertain = native_api_create_cleanup_state(
@@ -20260,7 +20260,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                     and isinstance(alert_definition_read_json, dict)
                     and alert_definition_read_json.get("method") == "EMAIL"
                     and alert_definition_read_json.get("name") == alert_name
-                    and alert_definition_read_json.get("to_address") == "turbovas-smoke@example.invalid"
+                    and alert_definition_read_json.get("to_address") == "yafvs-smoke@example.invalid"
                     and alert_definition_read_json.get("subject") == "TurboVAS delivery subject sentinel"
                     and "snmp_community" not in alert_definition_read_json
                 )
@@ -20320,7 +20320,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                     "name": f"{alert_name}-missing-format",
                     "active": False,
                     "status": "Done",
-                    "to_address": "turbovas-smoke@example.invalid",
+                    "to_address": "yafvs-smoke@example.invalid",
                     "subject": "TurboVAS missing format probe",
                     "notice": "include",
                     "report_format_id": "00000000-0000-0000-0000-000000000000",
@@ -20338,7 +20338,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                     "name": f"{alert_name}-missing-recipient-credential",
                     "active": False,
                     "status": "Done",
-                    "to_address": "turbovas-smoke@example.invalid",
+                    "to_address": "yafvs-smoke@example.invalid",
                     "subject": "TurboVAS missing credential probe",
                     "notice": "simple",
                     "recipient_credential_id": "00000000-0000-0000-0000-000000000000",
@@ -20469,9 +20469,9 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 {
                     "name": credential_name,
                     "comment": "TurboVAS direct write smoke temporary credential",
-                    "login": "turbovas-direct-write-smoke-user",
+                    "login": "yafvs-direct-write-smoke-user",
                     "type": "up",
-                    "password": "turbovas-direct-write-smoke-secret",
+                    "password": "yafvs-direct-write-smoke-secret",
                 },
                 separators=(",", ":"),
             )
@@ -20501,7 +20501,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 and credential_create_json.get("credential_type") == "up"
                 and credential_create_json.get("owner_id") == admin_uuid
                 and credential_create_json.get("smb_compatible") is True
-                and "turbovas-direct-write-smoke-secret" not in credential_create_serialized
+                and "yafvs-direct-write-smoke-secret" not in credential_create_serialized
                 and not any(field in credential_create_json for field in ("password", "passphrase", "private_key", "secret"))
             )
             credential_create_committed, credential_create_outcome_uncertain = native_api_create_cleanup_state(
@@ -20601,8 +20601,8 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                             "active": False,
                             "status": "Done",
                             "smb_credential_id": credential_id,
-                            "smb_share_path": "//turbovas-smoke.invalid/reports",
-                            "smb_file_path": "turbovas-direct-write-smoke/report.csv",
+                            "smb_share_path": "//yafvs-smoke.invalid/reports",
+                            "smb_file_path": "yafvs-direct-write-smoke/report.csv",
                             "report_format_id": smb_report_format_id,
                             "smb_max_protocol": "default",
                         },
@@ -20625,8 +20625,8 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                         smb_alert_create.returncode == 0 and smb_alert_create_status == 201
                         and isinstance(smb_alert_id, str) and alert_metadata_item_ok(smb_alert_create_json)
                         and isinstance(smb_alert_method_type, str) and smb_alert_method_type.upper() == "SMB"
-                        and "turbovas-smoke.invalid" not in smb_alert_serialized
-                        and "turbovas-direct-write-smoke/report.csv" not in smb_alert_serialized
+                        and "yafvs-smoke.invalid" not in smb_alert_serialized
+                        and "yafvs-direct-write-smoke/report.csv" not in smb_alert_serialized
                         and credential_id not in smb_alert_serialized
                     )
                     _smb_alert_create_committed, smb_alert_create_outcome_uncertain = native_api_create_cleanup_state(
@@ -20662,11 +20662,11 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
             credential_helper_ok = False
             credential_helper_secret = secrets.token_urlsafe(24)
             try:
-                with tempfile.TemporaryDirectory(prefix="turbovas-credential-helper-smoke-") as temporary_directory:
+                with tempfile.TemporaryDirectory(prefix="yafvs-credential-helper-smoke-") as temporary_directory:
                     credential_csv_file = Path(temporary_directory) / "credentials.csv"
                     descriptor = os.open(credential_csv_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
                     with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as handle:
-                        handle.write(f"{credential_helper_name},UP,turbovas-helper-smoke,{credential_helper_secret}\n")
+                        handle.write(f"{credential_helper_name},UP,yafvs-helper-smoke,{credential_helper_secret}\n")
                     credential_helper_result = command_native_credentials_from_csv(
                         repo_root,
                         credential_csv_file,
@@ -20777,8 +20777,8 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                     f"SELECT make_uuid(), id, {sql_literal(target_credential_name)}, 'TurboVAS direct write smoke temporary target credential', m_now(), m_now(), 'up', 0 "
                     f"FROM users WHERE uuid = {sql_literal(admin_uuid or '')} RETURNING id, uuid), "
                     "inserted_data AS (INSERT INTO credentials_data (credential, type, value) "
-                    "SELECT id, 'username', 'turbovas-direct-write-smoke-target-user' FROM inserted "
-                    "UNION ALL SELECT id, 'password', 'turbovas-direct-write-smoke-target-secret' FROM inserted RETURNING credential) "
+                    "SELECT id, 'username', 'yafvs-direct-write-smoke-target-user' FROM inserted "
+                    "UNION ALL SELECT id, 'password', 'yafvs-direct-write-smoke-target-secret' FROM inserted RETURNING credential) "
                     "SELECT uuid FROM inserted;"
                 )
                 target_credential_fixture = psql(repo_root, target_credential_fixture_sql)
@@ -22275,7 +22275,7 @@ def _command_runtime_native_api_direct_smoke_unlocked(repo_root: Path, status_on
 
     disabled_task_create_body = json.dumps(
         {
-            "name": "turbovas-direct-disabled-task-create",
+            "name": "yafvs-direct-disabled-task-create",
             "target_id": "00000000-0000-0000-0000-000000000000",
             "config_id": "00000000-0000-0000-0000-000000000000",
             "scanner_id": "00000000-0000-0000-0000-000000000000",
@@ -26137,7 +26137,7 @@ def command_native_export_report_bundle(
             raise ValueError(f"--max-items must be between 1 and {NATIVE_REPORT_BUNDLE_MAX_ITEMS_LIMIT}")
         if type(max_bytes) is not int or not 1 <= max_bytes <= NATIVE_REPORT_BUNDLE_MAX_BYTES_LIMIT:
             raise ValueError(f"--max-bytes must be between 1 and {NATIVE_REPORT_BUNDLE_MAX_BYTES_LIMIT}")
-        output_path = (output or Path(f"{report_id}.turbovas-report.zip")).expanduser()
+        output_path = (output or Path(f"{report_id}.yafvs-report.zip")).expanduser()
         if output_path.exists() and output_path.is_dir():
             raise ValueError("--output must name a file, not a directory")
         if output_path.exists() and not overwrite:
@@ -26254,7 +26254,7 @@ def command_native_export_report_bundle(
                 role="human_spreadsheet_view",
             )
             manifest = {
-                "format": "turbovas-native-report-bundle",
+                "format": "yafvs-native-report-bundle",
                 "schema_version": 1,
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "report_id": report_id,
@@ -31531,7 +31531,7 @@ def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = No
     findings.append(finding("pass" if shutil.which("node") else "fail", "node.available", "node is available for Playwright browser smoke." if shutil.which("node") else "node is not available on PATH."))
     try:
         artifact_dir.mkdir(parents=True, exist_ok=True)
-        probe_file = artifact_dir / ".turbovas-write-test"
+        probe_file = artifact_dir / ".yafvs-write-test"
         probe_file.write_text("ok\n", encoding="utf-8")
         probe_file.unlink()
         findings.append(finding("pass", "browser-smoke.artifact-dir", "Browser smoke per-run artifact directory is ready.", str(artifact_dir), {"parent": str(artifact_parent_dir), "routes": list(routes or [])}))
@@ -31613,7 +31613,7 @@ def command_runtime_browser_regression(repo_root: Path, *, status_only: bool = F
     findings.append(finding("pass" if shutil.which("node") else "fail", "node.available", "node is available for Playwright browser regression." if shutil.which("node") else "node is not available on PATH."))
     try:
         artifact_dir.mkdir(parents=True, exist_ok=True)
-        probe_file = artifact_dir / ".turbovas-write-test"
+        probe_file = artifact_dir / ".yafvs-write-test"
         probe_file.write_text("ok\n", encoding="utf-8")
         probe_file.unlink()
         findings.append(finding("pass", "browser-regression.artifact-dir", "Browser regression artifact directory is ready.", str(artifact_dir)))
@@ -31685,7 +31685,7 @@ def command_runtime_credential_smoke(repo_root: Path) -> dict[str, Any]:
     findings.append(finding("pass" if shutil.which("node") else "fail", "node.available", "node is available for credential browser smoke." if shutil.which("node") else "node is not available on PATH."))
     try:
         artifact_dir.mkdir(parents=True, exist_ok=True)
-        probe_file = artifact_dir / ".turbovas-write-test"
+        probe_file = artifact_dir / ".yafvs-write-test"
         probe_file.write_text("ok\n", encoding="utf-8")
         probe_file.unlink()
         findings.append(finding("pass", "credential-smoke.artifact-dir", "Credential smoke artifact directory is ready.", str(artifact_dir)))
@@ -31697,7 +31697,7 @@ def command_runtime_credential_smoke(repo_root: Path) -> dict[str, Any]:
     if aggregate_status(findings) == "fail":
         return make_result("runtime-credential-smoke", repo_root, "Runtime credential smoke stopped at prerequisites.", findings, [str(artifact_dir)])
 
-    credential_name = "turbovas-credential-smoke-" + secrets.token_hex(4)
+    credential_name = "yafvs-credential-smoke-" + secrets.token_hex(4)
     credential_password = secrets.token_urlsafe(24)
     args = [
         sys.executable,
@@ -31896,7 +31896,7 @@ def _command_gvmd_smoke_unlocked(repo_root: Path) -> dict[str, Any]:
         [
             "sh",
             "-lc",
-            "env PGPASSWORD=${POSTGRES_PASSWORD:-turbovas-dev} psql -h postgres -U ${POSTGRES_USER:-turbovas} -d ${POSTGRES_DB:-turbovas} -At -c \"SELECT extversion FROM pg_extension WHERE extname = 'pg-gvm';\"",
+            "env PGPASSWORD=${POSTGRES_PASSWORD:-yafvs-dev} psql -h postgres -U ${POSTGRES_USER:-yafvs} -d ${POSTGRES_DB:-yafvs} -At -c \"SELECT extversion FROM pg_extension WHERE extname = 'pg-gvm';\"",
         ],
     )
     findings.append(finding("pass" if db_probe.returncode == 0 and db_probe.stdout.strip() else "warn", "gvmd.database", f"gvmd profile DB probe exit code {db_probe.returncode}.", details={"output_tail": db_probe.stdout.splitlines()[-40:]}))
@@ -32215,7 +32215,7 @@ def build_parser() -> argparse.ArgumentParser:
     native_export_report_pdf.add_argument("--status-only", action="store_true", help="emit compact PDF export metadata without PDF content")
     native_export_report_bundle = subparsers.add_parser("native-export-report-bundle", parents=[common], help="export a complete versioned native report evidence bundle")
     native_export_report_bundle.add_argument("--report-id", required=True, help="raw report UUID")
-    native_export_report_bundle.add_argument("--output", type=Path, help="ZIP output path; defaults to REPORT_ID.turbovas-report.zip")
+    native_export_report_bundle.add_argument("--output", type=Path, help="ZIP output path; defaults to REPORT_ID.yafvs-report.zip")
     native_export_report_bundle.add_argument("--max-items", type=int, default=NATIVE_REPORT_BUNDLE_DEFAULT_MAX_ITEMS, help=f"per-collection safety cap from 1 to {NATIVE_REPORT_BUNDLE_MAX_ITEMS_LIMIT}")
     native_export_report_bundle.add_argument("--max-bytes", type=int, default=NATIVE_REPORT_BUNDLE_DEFAULT_MAX_BYTES, help=f"uncompressed bundle safety cap from 1 to {NATIVE_REPORT_BUNDLE_MAX_BYTES_LIMIT}")
     native_export_report_bundle.add_argument("--overwrite", action="store_true", help="replace an existing output atomically")

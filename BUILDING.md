@@ -143,7 +143,7 @@ just down
 ```
 
 Runtime state is host-visible and persistent under the sibling
-`TurboVAS-runtime` directory by default when commands are run through
+`YAFVS-runtime` directory by default when commands are run through
 `tools/yafvsctl`. `runtime-certs-init`, `runtime-init`,
 `runtime-manager-init`, scanner Redis/config initialization, and scanner
 registration are designed to be idempotent and must not delete or recreate
@@ -157,11 +157,11 @@ entrypoint that immediately drops to the development UID/GID with only
 sockets without a privileged container or host networking.
 `runtime-scanner-capability-check` verifies that runtime state before scans.
 Feed downloads use a persistent local Community Feed cache under
-`TurboVAS-runtime/feed-cache/`. `feed-generation-stage` seals that cache into a
+`YAFVS-runtime/feed-cache/`. `feed-generation-stage` seals that cache into a
 content-addressed generation, and retained app services consume only the
-verified `TurboVAS-runtime/feed-store/current` generation through
+verified `YAFVS-runtime/feed-store/current` generation through
 `/runtime/feeds`. OSPD and Notus share a persistent feed signature keyring under
-`TurboVAS-runtime/state/feed-gnupg`.
+`YAFVS-runtime/state/feed-gnupg`.
 `feed-generation-activate` verifies the selected generation, coordinates the
 app services around the pointer switch, and verifies the resulting runtime
 state. It fails closed unless the database proves that no scan task is active.
@@ -180,8 +180,8 @@ CIDR. YAFVS does not ship a real network target or infer authorization.
 `build-ui` stages the GSA production bundle under
 `build/prefix/share/gvm/gsad/web` and writes a development `config.js` for the
 active browser endpoint. `gsad` defaults to loopback host binding; for a single
-development address set `TURBOVAS_GSAD_HOST` before `runtime-app-up`, or for
+development address set `YAFVS_GSAD_HOST` before `runtime-app-up`, or for
 multiple explicit development addresses set comma-separated
-`TURBOVAS_GSAD_HOSTS`. Run `runtime-webui-smoke` with the same environment to
+`YAFVS_GSAD_HOSTS`. Run `runtime-webui-smoke` with the same environment to
 verify every configured URL. The local development admin credentials are
 `admin` / `admin`; do not treat those defaults as production credentials.

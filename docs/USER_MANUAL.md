@@ -385,7 +385,7 @@ the ignored runtime secret written by the direct smoke. Do not echo the token,
 commit it, paste it into logs, or run this with shell xtrace enabled:
 
 ```sh
-TOKEN="$(tr -d '\n' < ../TurboVAS-runtime/secrets/native-api-bearer-token)"
+TOKEN="$(tr -d '\n' < ../YAFVS-runtime/secrets/native-api-bearer-token)"
 curl --fail-with-body -sS \
   -H "Authorization: Bearer ${TOKEN}" \
   -H 'Accept: application/json' \

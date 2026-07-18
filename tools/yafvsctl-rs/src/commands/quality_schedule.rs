@@ -14,7 +14,7 @@ use std::time::Duration;
 
 const UNITS: [&str; 2] = ["yafvs-quality-gate.service", "yafvs-quality-gate.timer"];
 const TIMER: &str = "yafvs-quality-gate.timer";
-const ENABLE_ENV: &str = "TURBOVAS_ENABLE_QUALITY_GATE_SCHEDULE";
+const ENABLE_ENV: &str = "YAFVS_ENABLE_QUALITY_GATE_SCHEDULE";
 const SHOW_PROPERTIES: &str = "--property=LoadState,UnitFileState,ActiveState,SubState,NextElapseUSecRealtime,LastTriggerUSecRealtime";
 
 #[derive(Debug, Clone)]
@@ -498,7 +498,7 @@ mod tests {
         fn new(enabled: bool) -> Self {
             let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
             let root = env::temp_dir().join(format!(
-                "turbovas-quality-schedule-{}-{sequence}",
+                "yafvs-quality-schedule-{}-{sequence}",
                 std::process::id()
             ));
             fs::create_dir_all(root.join("ops/systemd")).unwrap();

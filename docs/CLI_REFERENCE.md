@@ -110,7 +110,7 @@ then prepare and deploy the new application identity explicitly.
   native-contract, Python, Compose, Rust, and fast GSA checks.
 - `just quality-gate-state`: read retained local gate history.
 - `just quality-gate-schedule --status`: inspect the user-systemd timer.
-- `TURBOVAS_ENABLE_QUALITY_GATE_SCHEDULE=1 just quality-gate-schedule --install`:
+- `YAFVS_ENABLE_QUALITY_GATE_SCHEDULE=1 just quality-gate-schedule --install`:
   explicitly opt this host into timer installation. YAFVS assumes no
   hostname or user and never falls back to cron.
 - `just closeout-readiness`: summarize closeout evidence.
@@ -205,9 +205,9 @@ them with direct database or protocol mutations.
   removed and a pre-migration `runtime-data-state` artifact has been retained.
 
 `tools/yafvsctl` supplies the current absolute checkout path to Compose.
-Direct `docker compose` use must set `TURBOVAS_REPO_MOUNT_PATH` explicitly.
-Runtime state defaults to the sibling `TurboVAS-runtime` directory and can be
-relocated with `TURBOVAS_RUNTIME_DIR`.
+Direct `docker compose` use must set `YAFVS_REPO_MOUNT_PATH` explicitly.
+Runtime state defaults to the sibling `YAFVS-runtime` directory and can be
+relocated with `YAFVS_RUNTIME_DIR`.
 
 ## Feed Generation And Deployment
 

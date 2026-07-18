@@ -15,11 +15,11 @@
 #include <glib.h>
 #include <gvm/util/kb.h> // for kb_t
 
-#define TABLE_DRIVEN_LSC_MANIFEST_KEY "internal/turbovas.notus-manifest"
+#define TABLE_DRIVEN_LSC_MANIFEST_KEY "internal/yafvs.notus-manifest"
 #define TABLE_DRIVEN_LSC_MANIFEST_FAILURE_KEY \
-  "internal/turbovas.notus-manifest-failure"
+  "internal/yafvs.notus-manifest-failure"
 #define TABLE_DRIVEN_LSC_MANIFEST_SEAL_KEY \
-  "internal/turbovas.notus-manifest-seal"
+  "internal/yafvs.notus-manifest-seal"
 #define TABLE_DRIVEN_LSC_ID_LENGTH 36
 #define TABLE_DRIVEN_LSC_HOST_IP_MAX_LENGTH 45
 #define TABLE_DRIVEN_LSC_SCAN_ID_MAX_LENGTH 128

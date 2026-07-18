@@ -397,7 +397,7 @@ mod tests {
 
     fn fixture(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "turbovas-runtime-lock-{name}-{}-{}",
+            "yafvs-runtime-lock-{name}-{}-{}",
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));

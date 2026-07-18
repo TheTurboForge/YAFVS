@@ -139,7 +139,7 @@ runtime-data-state -> DB/table/runtime-state classification + product-data audit
 runtime-performance-snapshot -> parsed Docker/DB/report-workflow/scanner-Redis/static-asset baselines
 ```
 
-Diagnostics should create artifacts outside git under `TurboVAS-runtime`, not
+Diagnostics should create artifacts outside git under `YAFVS-runtime`, not
 new product state. `db_owned_export` artifacts are generated from gvmd/PostgreSQL
 and should not become hidden sources of truth. Product-relevant durable data
 discovered in diagnostics should be evaluated for migration into

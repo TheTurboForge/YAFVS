@@ -323,7 +323,7 @@ mod tests {
         let plugins = repo
             .parent()
             .unwrap()
-            .join("TurboVAS-runtime/feed-cache/community/22.04/var-lib/openvas/plugins");
+            .join("YAFVS-runtime/feed-cache/community/22.04/var-lib/openvas/plugins");
         fs::create_dir_all(&plugins).unwrap();
         fs::write(plugins.join("plugin_feed_info.inc"), b"info").unwrap();
         fs::write(plugins.join("LICENSE"), b"license").unwrap();

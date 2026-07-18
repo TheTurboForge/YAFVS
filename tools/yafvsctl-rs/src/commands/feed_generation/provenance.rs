@@ -472,7 +472,7 @@ mod tests {
     #[test]
     fn valid_signatures_use_private_copies_and_emit_sorted_provenance() {
         let repo = fixture("valid");
-        let runtime = repo.parent().unwrap().join("TurboVAS-runtime");
+        let runtime = repo.parent().unwrap().join("YAFVS-runtime");
         let keyring = runtime.join("state/feed-gnupg");
         fs::create_dir_all(&keyring).unwrap();
         fs::set_permissions(&keyring, fs::Permissions::from_mode(0o700)).unwrap();
@@ -501,7 +501,7 @@ mod tests {
     #[test]
     fn cache_layout_uses_source_paths_for_staging_provenance() {
         let repo = fixture("cache-layout");
-        let runtime = repo.parent().unwrap().join("TurboVAS-runtime");
+        let runtime = repo.parent().unwrap().join("YAFVS-runtime");
         let keyring = runtime.join("state/feed-gnupg");
         fs::create_dir_all(&keyring).unwrap();
         fs::set_permissions(&keyring, fs::Permissions::from_mode(0o700)).unwrap();

@@ -233,7 +233,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("gvm-tools", yafvsctl.BASELINE_CHAIN)
 
     def test_hardened_profile_uses_isolated_build_and_prefix_paths(self):
-        root = Path("/tmp/turbovas-test")
+        root = Path("/tmp/yafvs-test")
         source, build, prefix = yafvsctl.cmake_paths(root, "gvmd", "hardened")
         self.assertEqual(source, root / "components" / "gvmd")
         self.assertEqual(build, root / "build" / "hardened" / "gvmd")
@@ -285,7 +285,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_cmake_fresh_support_reports_missing_cmake(self):
         with unittest.mock.patch.object(yafvsctl.shutil, "which", return_value=None):
-            supported, message = yafvsctl.cmake_fresh_support(Path("/tmp/turbovas-test"))
+            supported, message = yafvsctl.cmake_fresh_support(Path("/tmp/yafvs-test"))
         self.assertFalse(supported)
         self.assertIn("cmake is unavailable", message)
 
@@ -294,12 +294,12 @@ class YAFVSCtlTests(unittest.TestCase):
         with unittest.mock.patch.object(
             yafvsctl.shutil, "which", return_value="/usr/bin/cmake"
         ), unittest.mock.patch.object(yafvsctl, "run_command", return_value=completed):
-            supported, message = yafvsctl.cmake_fresh_support(Path("/tmp/turbovas-test"))
+            supported, message = yafvsctl.cmake_fresh_support(Path("/tmp/yafvs-test"))
         self.assertFalse(supported)
         self.assertIn("cmake >= 3.24", message)
 
     def test_hardened_profile_uses_fortify_level_two_for_retained_cmake_roots(self):
-        root = Path("/tmp/turbovas-test")
+        root = Path("/tmp/yafvs-test")
 
         def probe(_root, flags, **_kwargs):
             return "-D_FORTIFY_SOURCE=3" not in flags
@@ -316,7 +316,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertTrue(any(argument.startswith("-DCMAKE_MODULE_LINKER_FLAGS=") for argument in args))
 
     def test_profile_rejects_non_cmake_components(self):
-        root = Path("/tmp/turbovas-test")
+        root = Path("/tmp/yafvs-test")
         build = yafvsctl.command_build(root, "gsa", profile="hardened")
         configure = yafvsctl.command_configure(root, "gsa", profile="hardened")
         self.assertEqual(build["status"], "fail")
@@ -325,7 +325,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(configure["findings"][0]["check"], "build.profile-unsupported")
 
     def test_configure_without_profile_preserves_non_cmake_warning(self):
-        result = yafvsctl.command_configure(Path("/tmp/turbovas-test"), "gsa")
+        result = yafvsctl.command_configure(Path("/tmp/yafvs-test"), "gsa")
         self.assertNotEqual(result["status"], "fail")
         self.assertEqual(result["findings"][0]["status"], "warn")
         self.assertEqual(result["findings"][0]["check"], "build.unsupported")
@@ -1139,7 +1139,7 @@ class YAFVSCtlTests(unittest.TestCase):
         rust_command = [str(target_dir / "debug" / "yafvsctl")]
         with tempfile.TemporaryDirectory() as parity_runtime:
             feed_generation_env = os.environ.copy()
-            feed_generation_env["TURBOVAS_RUNTIME_DIR"] = parity_runtime
+            feed_generation_env["YAFVS_RUNTIME_DIR"] = parity_runtime
             for arguments in argument_sets:
                 env = feed_generation_env if arguments[0] in {"feed-generation-state", "feed-generation-stage"} else None
                 python_result = invoke(python_command, arguments, env=env)
@@ -1153,7 +1153,7 @@ class YAFVSCtlTests(unittest.TestCase):
             for arguments, expected_exit_code, expected_status in rust_only_contracts:
                 env = feed_generation_env.copy()
                 if arguments[0] == "quality-gate-schedule":
-                    env.pop("TURBOVAS_ENABLE_QUALITY_GATE_SCHEDULE", None)
+                    env.pop("YAFVS_ENABLE_QUALITY_GATE_SCHEDULE", None)
                 if arguments[0] in {"runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot"}:
                     env["COMPOSE_PROJECT_NAME"] = "yafvsctl-parity-no-runtime"
                 rust_result = invoke(rust_command, arguments, env=env)
@@ -1599,7 +1599,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("str(scope_probe)", browser_regression_command)
 
     def test_full_test_scan_load_state_uses_native_api_when_repo_root_is_available(self):
-        root = Path("/tmp/turbovas-test")
+        root = Path("/tmp/yafvs-test")
         payloads = {
             "/api/v1/scan-configs?page_size=500": {"items": [{"id": runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID, "name": "Full and fast"}]},
             "/api/v1/port-lists?page_size=500": {"items": [{"id": runtime_full_test_scan.IANA_TCP_UDP_PORT_LIST_ID, "name": "All IANA assigned TCP and UDP"}]},
@@ -1619,7 +1619,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(state["tasks"][0]["progress"], "100")
 
     def test_full_test_scan_ensure_target_uses_native_create_when_repo_root_is_available(self):
-        root = Path("/tmp/turbovas-test")
+        root = Path("/tmp/yafvs-test")
         state = {"targets": []}
 
         with unittest.mock.patch.object(
@@ -1647,7 +1647,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("credentials", payload)
 
     def test_full_test_scan_ensure_task_uses_native_create_when_repo_root_is_available(self):
-        root = Path("/tmp/turbovas-test")
+        root = Path("/tmp/yafvs-test")
         state = {"tasks": []}
 
         with unittest.mock.patch.object(
@@ -1678,7 +1678,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("alert_ids", payload)
 
     def test_full_test_scan_reports_for_task_uses_native_api_when_repo_root_is_available(self):
-        root = Path("/tmp/turbovas-test")
+        root = Path("/tmp/yafvs-test")
         payload = {
             "items": [
                 {
@@ -2080,7 +2080,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 pid=4242,
             )
 
-            parent = Path(tmp) / "TurboVAS-runtime" / "artifacts" / "browser-smoke"
+            parent = Path(tmp) / "YAFVS-runtime" / "artifacts" / "browser-smoke"
             self.assertEqual(run_dir.parent, parent)
             self.assertEqual(run_dir.name, "20260621T194501123456Z-pid4242-routes-reports-scopes-reports-filter-rows-10")
 
@@ -2088,7 +2088,7 @@ class YAFVSCtlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             probe = root / "tools" / "runtime_browser_smoke.py"
-            secret = root.parent / "TurboVAS-runtime" / "secrets" / "admin-password"
+            secret = root.parent / "YAFVS-runtime" / "secrets" / "admin-password"
             probe.parent.mkdir(parents=True)
             secret.parent.mkdir(parents=True)
             probe.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
@@ -2119,7 +2119,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 result = yafvsctl.command_runtime_browser_smoke(root, ["reports"])
 
             artifact_arg = captured["command"][captured["command"].index("--artifact-dir") + 1]
-            parent = str(root.parent / "TurboVAS-runtime" / "artifacts" / "browser-smoke")
+            parent = str(root.parent / "YAFVS-runtime" / "artifacts" / "browser-smoke")
             self.assertEqual(result["status"], "pass")
             self.assertTrue(artifact_arg.startswith(parent + os.sep), artifact_arg)
             self.assertTrue(artifact_arg.endswith("20260621T194501000000Z-pid4242-routes-reports"), artifact_arg)
@@ -2172,7 +2172,7 @@ class YAFVSCtlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             probe = root / "tools" / "runtime_browser_smoke.py"
-            secret = root.parent / "TurboVAS-runtime" / "secrets" / "admin-password"
+            secret = root.parent / "YAFVS-runtime" / "secrets" / "admin-password"
             probe.parent.mkdir(parents=True)
             secret.parent.mkdir(parents=True)
             probe.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
@@ -2275,7 +2275,7 @@ class YAFVSCtlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             probe = root / "tools" / "runtime_browser_regression.py"
-            secret = root.parent / "TurboVAS-runtime" / "secrets" / "admin-password"
+            secret = root.parent / "YAFVS-runtime" / "secrets" / "admin-password"
             probe.parent.mkdir(parents=True)
             secret.parent.mkdir(parents=True)
             probe.write_text("#!/usr/bin/env python3\n", encoding="utf-8")
@@ -4679,7 +4679,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     "status": "fail",
                     "check": "production.default-credentials",
                     "message": "default password",
-                    "path": "/home/user/TurboVAS-runtime/secrets/gvmd-admin-password",
+                    "path": "/home/user/YAFVS-runtime/secrets/gvmd-admin-password",
                     "details": {
                         "token_path": "/tmp/native-api-token",
                         "safe_count": 1,
@@ -7721,7 +7721,7 @@ class YAFVSCtlTests(unittest.TestCase):
             self.assertEqual(result["details"]["sha256"], hashlib.sha256(content).hexdigest())
             self.assertEqual(result["details"]["byte_count"], len(content))
             self.assertEqual(result["details"]["collection_counts"]["raw-results"], 1)
-            self.assertEqual(manifest["format"], "turbovas-native-report-bundle")
+            self.assertEqual(manifest["format"], "yafvs-native-report-bundle")
             self.assertTrue(manifest["evidence_contract"]["complete"])
             self.assertFalse(manifest["evidence_contract"]["legacy_xml_byte_or_schema_parity"])
             self.assertEqual(raw["items"], [raw_row])
@@ -11180,7 +11180,7 @@ class YAFVSCtlTests(unittest.TestCase):
         service_text = service.read_text(encoding="utf-8")
         self.assertIn("SPDX-License-Identifier", service_text)
         self.assertIn("tools/yafvsctl quality-gate --json", service_text)
-        self.assertNotIn("TURBOVAS_RUNTIME_DIR", service_text)
+        self.assertNotIn("YAFVS_RUNTIME_DIR", service_text)
         self.assertIn("OnCalendar=*-*-* 03:30:00", timer.read_text(encoding="utf-8"))
 
     def test_github_quality_gate_workflow_is_source_only(self):
@@ -11205,7 +11205,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "rustup toolchain install stable --profile minimal",
             "cache-dependency-path: components/gsa/package-lock.json",
             "npm ci",
-            "TURBOVAS_RUNTIME_DIR=\"$RUNNER_TEMP/turbovas-runtime\"",
+            "YAFVS_RUNTIME_DIR=\"$RUNNER_TEMP/yafvs-runtime\"",
             "tools/yafvsctl quality-gate --json",
             "actions/upload-artifact@v7",
         ]
@@ -11466,16 +11466,16 @@ class YAFVSCtlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
-            previous = os.environ.get("TURBOVAS_RUNTIME_DIR")
-            os.environ["TURBOVAS_RUNTIME_DIR"] = "/tmp/not-the-test-runtime"
+            previous = os.environ.get("YAFVS_RUNTIME_DIR")
+            os.environ["YAFVS_RUNTIME_DIR"] = "/tmp/not-the-test-runtime"
             try:
                 env = yafvsctl.quality_gate_unit_env(root)
             finally:
                 if previous is None:
-                    os.environ.pop("TURBOVAS_RUNTIME_DIR", None)
+                    os.environ.pop("YAFVS_RUNTIME_DIR", None)
                 else:
-                    os.environ["TURBOVAS_RUNTIME_DIR"] = previous
-            self.assertNotIn("TURBOVAS_RUNTIME_DIR", env)
+                    os.environ["YAFVS_RUNTIME_DIR"] = previous
+            self.assertNotIn("YAFVS_RUNTIME_DIR", env)
 
     def test_runtime_credential_smoke_uses_existing_playwright_paths(self):
         self.assertEqual(
@@ -11507,7 +11507,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_runtime_browser_smoke_playwright_search_paths(self):
         candidates = runtime_browser_smoke.PLAYWRIGHT_NODE_PATHS
-        self.assertIn("/home/turboforge/.local/share/turbovas-tools/playwright/node_modules", candidates)
+        self.assertIn("/home/turboforge/.local/share/yafvs-tools/playwright/node_modules", candidates)
         self.assertIn("/home/turboforge/.local/nodejs/node-v22.22.3-linux-x64/lib/node_modules", candidates)
 
     def test_license_helpers_detect_modified_imported_notice_gaps(self):
@@ -11827,7 +11827,7 @@ class YAFVSCtlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
-            self.assertEqual(yafvsctl.runtime_dir(root), Path(tmp) / "TurboVAS-runtime")
+            self.assertEqual(yafvsctl.runtime_dir(root), Path(tmp) / "YAFVS-runtime")
 
     def test_runtime_services_include_scanner_redis(self):
         self.assertEqual(yafvsctl.RUNTIME_SERVICES, ("postgres", "redis-openvas", "mosquitto"))
@@ -11838,7 +11838,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def make_app_execution_mount_fixture(self, tmp):
         root = Path(tmp) / "TurboVAS"
-        runtime = Path(tmp) / "TurboVAS-runtime"
+        runtime = Path(tmp) / "YAFVS-runtime"
         (root / "build").mkdir(parents=True)
         for directory in (
             runtime,
@@ -11963,9 +11963,9 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_gsad_port_defaults_loopback_and_can_be_overridden(self):
         self.assertEqual(yafvsctl.DEFAULT_GSAD_HOST, "127.0.0.1")
-        self.assertEqual(yafvsctl.GSAD_HOST_ENV, "TURBOVAS_GSAD_HOST")
-        self.assertEqual(yafvsctl.GSAD_HOSTS_ENV, "TURBOVAS_GSAD_HOSTS")
-        self.assertEqual(yafvsctl.APP_PORTS["gsad"], "${TURBOVAS_GSAD_HOST:-127.0.0.1}:19392:9392")
+        self.assertEqual(yafvsctl.GSAD_HOST_ENV, "YAFVS_GSAD_HOST")
+        self.assertEqual(yafvsctl.GSAD_HOSTS_ENV, "YAFVS_GSAD_HOSTS")
+        self.assertEqual(yafvsctl.APP_PORTS["gsad"], "${YAFVS_GSAD_HOST:-127.0.0.1}:19392:9392")
         self.assertNotIn("yafvs-api", yafvsctl.APP_PORTS)
         self.assertEqual(yafvsctl.YAFVS_API_CONTAINER_PORT, "9080")
         self.assertEqual(yafvsctl.YAFVS_API_DIRECT_CONTAINER_PORT, "9081")
@@ -12232,7 +12232,7 @@ class YAFVSCtlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             source = root / "build" / "var" / "lib" / "gvm" / "gvmd"
-            runtime_state = Path(tmp) / "TurboVAS-runtime" / "state"
+            runtime_state = Path(tmp) / "YAFVS-runtime" / "state"
             (source / "gnupg").mkdir(parents=True)
             runtime_state.mkdir(parents=True, mode=0o700)
             (runtime_state / "gvmd-bind-files").mkdir(mode=0o700)
@@ -12241,7 +12241,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
             with unittest.mock.patch.object(yafvsctl, "container_running", return_value=False):
                 finding = yafvsctl.seed_gvmd_runtime_state(root)
-            destination = Path(tmp) / "TurboVAS-runtime" / "state" / "gvmd"
+            destination = Path(tmp) / "YAFVS-runtime" / "state" / "gvmd"
             key_text = (destination / "gnupg" / "private.key").read_text(encoding="utf-8")
             transient_exists = (destination / "gvm-serving").exists()
             semaphore_exists = (runtime_state / "gvmd-bind-files" / "gvmd.sem").is_file()
@@ -12257,7 +12257,7 @@ class YAFVSCtlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
-            state = Path(tmp) / "TurboVAS-runtime" / "state"
+            state = Path(tmp) / "YAFVS-runtime" / "state"
             state.mkdir(parents=True, mode=0o700)
             (state / "gvmd-bind-files").mkdir(mode=0o700)
 
@@ -12270,7 +12270,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_gvmd_runtime_state_seed_rejects_symlink_destination(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            state = Path(tmp) / "TurboVAS-runtime" / "state"
+            state = Path(tmp) / "YAFVS-runtime" / "state"
             external = Path(tmp) / "external-state"
             root.mkdir()
             state.mkdir(parents=True, mode=0o700)
@@ -12286,7 +12286,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_gvmd_runtime_state_seed_rejects_symlink_semaphore_replacement(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            state = Path(tmp) / "TurboVAS-runtime" / "state"
+            state = Path(tmp) / "YAFVS-runtime" / "state"
             bind_parent = state / "gvmd-bind-files"
             external = Path(tmp) / "external-sem"
             root.mkdir()
@@ -12305,7 +12305,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_gvmd_runtime_state_seed_rejects_bind_parent_nested_under_app_writable_source(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            state = Path(tmp) / "TurboVAS-runtime" / "state"
+            state = Path(tmp) / "YAFVS-runtime" / "state"
             root.mkdir()
             (state / "gvmd-bind-files").mkdir(parents=True, mode=0o700)
 
@@ -12319,7 +12319,7 @@ class YAFVSCtlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             source = root / "build" / "var" / "lib" / "gvm" / "gvmd"
-            state = Path(tmp) / "TurboVAS-runtime" / "state"
+            state = Path(tmp) / "YAFVS-runtime" / "state"
             source.mkdir(parents=True)
             state.mkdir(parents=True, mode=0o700)
             (state / "gvmd-bind-files").mkdir(mode=0o700)
@@ -12340,7 +12340,7 @@ class YAFVSCtlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             source = root / "build" / "var" / "lib" / "gvm" / "gvmd"
-            state = Path(tmp) / "TurboVAS-runtime" / "state"
+            state = Path(tmp) / "YAFVS-runtime" / "state"
             source.mkdir(parents=True)
             state.mkdir(parents=True, mode=0o700)
             (state / "gvmd-bind-files").mkdir(mode=0o700)
@@ -12361,7 +12361,7 @@ class YAFVSCtlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             source = root / "build" / "var" / "lib" / "gvm" / "gvmd"
-            destination = Path(tmp) / "TurboVAS-runtime" / "state" / "gvmd"
+            destination = Path(tmp) / "YAFVS-runtime" / "state" / "gvmd"
             source.mkdir(parents=True)
             destination.mkdir(parents=True, mode=0o700)
             (destination.parent / "gvmd-bind-files").mkdir(mode=0o700)
@@ -12385,8 +12385,8 @@ class YAFVSCtlTests(unittest.TestCase):
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
             files = yafvsctl.cert_files(root)
-            self.assertEqual(files["ca_cert"], Path(tmp) / "TurboVAS-runtime" / "certs" / "CA" / "cacert.pem")
-            self.assertEqual(files["client_key"], Path(tmp) / "TurboVAS-runtime" / "certs" / "private" / "CA" / "clientkey.pem")
+            self.assertEqual(files["ca_cert"], Path(tmp) / "YAFVS-runtime" / "certs" / "CA" / "cacert.pem")
+            self.assertEqual(files["client_key"], Path(tmp) / "YAFVS-runtime" / "certs" / "private" / "CA" / "clientkey.pem")
 
     def test_compose_command_uses_dev_compose_file(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -12835,7 +12835,7 @@ class YAFVSCtlTests(unittest.TestCase):
             json.dumps(
                 [
                     "PATH=/usr/bin",
-                    "TURBOVAS_MQTT_OSPD_PASSWORD=fixture-secret",
+                    "YAFVS_MQTT_OSPD_PASSWORD=fixture-secret",
                 ]
             ),
             "",
@@ -12846,7 +12846,7 @@ class YAFVSCtlTests(unittest.TestCase):
             result = yafvsctl.running_service_env_secret_exposure(
                 root,
                 "ospd-openvas",
-                "TURBOVAS_MQTT_OSPD_PASSWORD",
+                "YAFVS_MQTT_OSPD_PASSWORD",
                 "fixture-secret",
             )
         self.assertEqual(
@@ -13230,7 +13230,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"items": [{"id": override_nvt_id, "oid": override_nvt_id, "name": "fixture NVT"}], "page": {"total": 1}}) + "\n200", "")
                 if method == "POST" and path == "/api/v1/overrides":
                     payload = json.loads(body)
-                    self.assertEqual(payload, {"nvt_id": override_nvt_id, "text": f"turbovas-direct-write-smoke-override-1-{yafvsctl.os.getpid()}", "severity": 0.0, "new_severity": 4.2, "activation": {"mode": "inactive"}})
+                    self.assertEqual(payload, {"nvt_id": override_nvt_id, "text": f"yafvs-direct-write-smoke-override-1-{yafvsctl.os.getpid()}", "severity": 0.0, "new_severity": 4.2, "activation": {"mode": "inactive"}})
                     override_source_live["value"] = True
                     return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": override_uuid, "text": payload["text"], "new_severity": 4.2, "active": False}) + "\n201", "")
                 if method == "PATCH" and path == f"/api/v1/overrides/{override_uuid}":
@@ -13239,10 +13239,10 @@ class YAFVSCtlTests(unittest.TestCase):
                 if method == "POST" and path == f"/api/v1/overrides/{override_uuid}/clone":
                     self.assertEqual(json.loads(body), {})
                     override_clone_live["value"] = True
-                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": override_clone_uuid, "text": f"turbovas-direct-write-smoke-override-1-{yafvsctl.os.getpid()}", "new_severity": 4.3}) + "\n201", "")
+                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": override_clone_uuid, "text": f"yafvs-direct-write-smoke-override-1-{yafvsctl.os.getpid()}", "new_severity": 4.3}) + "\n201", "")
                 if method == "POST" and path == f"/api/v1/overrides/{override_uuid}/restore":
                     override_source_live["value"] = True
-                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": override_uuid, "text": f"turbovas-direct-write-smoke-override-1-{yafvsctl.os.getpid()}"}) + "\n200", "")
+                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": override_uuid, "text": f"yafvs-direct-write-smoke-override-1-{yafvsctl.os.getpid()}"}) + "\n200", "")
                 if method == "DELETE" and path == f"/api/v1/overrides/{override_uuid}/trash":
                     override_source_live["value"] = False
                     return yafvsctl.subprocess.CompletedProcess([], 0, "\n204", "")
@@ -13298,7 +13298,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     self.assertEqual(payload["active"], False)
                     self.assertEqual(payload["status"], "Done")
                     self.assertEqual(payload["notice"], "simple")
-                    self.assertEqual(payload["to_address"], "turbovas-smoke@example.invalid")
+                    self.assertEqual(payload["to_address"], "yafvs-smoke@example.invalid")
                     alert_definition["value"] = {
                         "method": "EMAIL",
                         "name": payload["name"],
@@ -13340,9 +13340,9 @@ class YAFVSCtlTests(unittest.TestCase):
                     payload = json.loads(body)
                     self.assertEqual(payload["type"], "up")
                     self.assertIn("password", payload)
-                    if payload["login"] == "turbovas-helper-smoke":
+                    if payload["login"] == "yafvs-helper-smoke":
                         return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": credential_helper_uuid, "name": payload["name"], "comment": payload["comment"], "credential_type": "up", "owner": "admin", "owner_id": operator_uuid, "smb_compatible": True}) + "\n201", "")
-                    self.assertEqual(payload["login"], "turbovas-direct-write-smoke-user")
+                    self.assertEqual(payload["login"], "yafvs-direct-write-smoke-user")
                     return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": credential_uuid, "name": payload["name"], "comment": payload["comment"], "credential_type": "up", "owner": "admin", "owner_id": operator_uuid, "smb_compatible": True}) + "\n201", "")
                 if method == "POST" and path == "/api/v1/targets":
                     payload = json.loads(body)
@@ -13397,7 +13397,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_clone_uuid, "name": payload["name"], "comment": payload["comment"], "hosts": ["192.0.2.42", "192.0.2.43"], "exclude_hosts": ["192.0.2.43"]}) + "\n201", "")
                 if method == "POST" and path.startswith(f"/api/v1/targets/{target_uuid}/restore"):
                     target_live["value"] = True
-                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_uuid, "name": "turbovas-direct-write-smoke-target", "comment": target_updated_comment}) + "\n200", "")
+                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_uuid, "name": "yafvs-direct-write-smoke-target", "comment": target_updated_comment}) + "\n200", "")
                 if method == "DELETE" and path.startswith(f"/api/v1/targets/{target_clone_uuid}/trash"):
                     target_clone_live["value"] = False
                     return yafvsctl.subprocess.CompletedProcess([], 0, "\n204", "")
@@ -13482,7 +13482,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     task_clone_live["value"] = True
                     payload = {
                         "id": task_clone_uuid,
-                        "name": f"turbovas-direct-write-smoke-task-1-{yafvsctl.os.getpid()} Clone 1",
+                        "name": f"yafvs-direct-write-smoke-task-1-{yafvsctl.os.getpid()} Clone 1",
                         "comment": task_updated_comment,
                         "status": "New",
                         "target": {"id": target_uuid, "name": "temporary target"},
@@ -13737,7 +13737,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     if any(item["protocol"] == "udp" and item["start"] == 65002 and item["end"] == 65002 for item in temp_port_list_ranges["value"]):
                         return yafvsctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"conflict","message":"port range overlaps an existing range"}}\n409', "")
                     temp_port_list_ranges["value"].append({"id": temp_port_range_uuid, "protocol": "udp", "start": 65002, "end": 65002})
-                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": temp_port_list_uuid, "name": "turbovas-direct-write-smoke-port-list-1-1", "predefined": False, "port_ranges": temp_port_list_ranges["value"]}) + "\n201", "")
+                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": temp_port_list_uuid, "name": "yafvs-direct-write-smoke-port-list-1-1", "predefined": False, "port_ranges": temp_port_list_ranges["value"]}) + "\n201", "")
                 if method == "DELETE" and path == f"/api/v1/port-lists/{temp_port_list_uuid}/ranges/{temp_port_range_uuid}":
                     temp_port_list_ranges["value"] = [item for item in temp_port_list_ranges["value"] if item["id"] != temp_port_range_uuid]
                     return yafvsctl.subprocess.CompletedProcess([], 0, "\n204", "")
@@ -13752,7 +13752,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     return yafvsctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"not_found"}}\n404', "")
                 if method == "POST" and path.startswith(f"/api/v1/port-lists/{temp_port_list_uuid}/restore"):
                     temp_port_list_live["value"] = True
-                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": temp_port_list_uuid, "name": "turbovas-direct-write-smoke-port-list-1-" + str(yafvsctl.os.getpid())}) + "\n200", "")
+                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": temp_port_list_uuid, "name": "yafvs-direct-write-smoke-port-list-1-" + str(yafvsctl.os.getpid())}) + "\n200", "")
                 if method == "DELETE" and path.startswith(f"/api/v1/port-lists/{temp_port_list_uuid}/trash"):
                     return yafvsctl.subprocess.CompletedProcess([], 0, "\n204", "")
                 if method == "DELETE" and path.startswith(f"/api/v1/port-lists/{temp_port_list_uuid}"):
@@ -13862,7 +13862,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertFalse(any(path.endswith("/start") for _method, path in probes))
         task_cleanup_command = next(" ".join(command) for command in commands if "fixed-task-smoke-cleanup" in " ".join(command))
         self.assertNotIn("DELETE FROM permissions", task_cleanup_command)
-        self.assertIn(f"turbovas-direct-write-smoke-task-1-{yafvsctl.os.getpid()} Clone 1", task_cleanup_command)
+        self.assertIn(f"yafvs-direct-write-smoke-task-1-{yafvsctl.os.getpid()} Clone 1", task_cleanup_command)
         self.assertIn(task_updated_comment, task_cleanup_command)
         self.assertIn(operator_uuid, task_cleanup_command)
         self.assertEqual(checks["native-api-direct.filter-fixture"], "pass")
@@ -14528,26 +14528,26 @@ class YAFVSCtlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
-            self.assertEqual(yafvsctl.scanner_redis_socket_path(root), Path(tmp) / "TurboVAS-runtime" / "run" / "redis-openvas" / "redis.sock")
-            self.assertEqual(yafvsctl.openvas_runtime_config_path(root), Path(tmp) / "TurboVAS-runtime" / "state" / "ospd" / "openvas.conf")
+            self.assertEqual(yafvsctl.scanner_redis_socket_path(root), Path(tmp) / "YAFVS-runtime" / "run" / "redis-openvas" / "redis.sock")
+            self.assertEqual(yafvsctl.openvas_runtime_config_path(root), Path(tmp) / "YAFVS-runtime" / "state" / "ospd" / "openvas.conf")
             self.assertEqual(yafvsctl.runtime_full_test_scan_probe_path(root), root / "tools" / "runtime_full_test_scan.py")
-            self.assertEqual(yafvsctl.full_test_scan_artifact_dir(root), Path(tmp) / "TurboVAS-runtime" / "artifacts" / "full-test-scan")
+            self.assertEqual(yafvsctl.full_test_scan_artifact_dir(root), Path(tmp) / "YAFVS-runtime" / "artifacts" / "full-test-scan")
 
     def test_feed_paths_live_under_runtime_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
-            self.assertEqual(yafvsctl.feed_cache_var_lib(root), Path(tmp) / "TurboVAS-runtime" / "feed-cache" / "community" / "22.04" / "var-lib")
-            self.assertEqual(yafvsctl.feed_runtime_root(root), Path(tmp) / "TurboVAS-runtime" / "feed-store" / "current")
-            self.assertEqual(yafvsctl.feed_sync_log_dir(root), Path(tmp) / "TurboVAS-runtime" / "logs" / "feed-sync")
+            self.assertEqual(yafvsctl.feed_cache_var_lib(root), Path(tmp) / "YAFVS-runtime" / "feed-cache" / "community" / "22.04" / "var-lib")
+            self.assertEqual(yafvsctl.feed_runtime_root(root), Path(tmp) / "YAFVS-runtime" / "feed-store" / "current")
+            self.assertEqual(yafvsctl.feed_sync_log_dir(root), Path(tmp) / "YAFVS-runtime" / "logs" / "feed-sync")
 
     def test_feed_keyring_paths_live_under_runtime_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
-            self.assertEqual(yafvsctl.feed_gnupg_home(root), Path(tmp) / "TurboVAS-runtime" / "state" / "feed-gnupg")
-            self.assertEqual(yafvsctl.feed_keyring_artifact_dir(root), Path(tmp) / "TurboVAS-runtime" / "artifacts" / "feed-keyring")
-            self.assertEqual(yafvsctl.feed_community_key_path(root), Path(tmp) / "TurboVAS-runtime" / "artifacts" / "feed-keyring" / "GBCommunitySigningKey.asc")
+            self.assertEqual(yafvsctl.feed_gnupg_home(root), Path(tmp) / "YAFVS-runtime" / "state" / "feed-gnupg")
+            self.assertEqual(yafvsctl.feed_keyring_artifact_dir(root), Path(tmp) / "YAFVS-runtime" / "artifacts" / "feed-keyring")
+            self.assertEqual(yafvsctl.feed_community_key_path(root), Path(tmp) / "YAFVS-runtime" / "artifacts" / "feed-keyring" / "GBCommunitySigningKey.asc")
 
     def test_feed_keyring_constants_match_greenbone_community_key(self):
         self.assertEqual(yafvsctl.GREENBONE_COMMUNITY_FEED_URL, "rsync://feed.community.greenbone.net/community")
@@ -14561,9 +14561,9 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(yafvsctl.missing_required_caps("0000000000001000"), ["NET_RAW"])
 
     def test_scanner_hostname_guard_rejects_docker_short_ids(self):
-        self.assertEqual(yafvsctl.OSPD_STABLE_HOSTNAME, "turbovas-ospd-openvas")
+        self.assertEqual(yafvsctl.OSPD_STABLE_HOSTNAME, "yafvs-ospd-openvas")
         self.assertTrue(yafvsctl.hostname_looks_like_docker_short_id("b758d8ce41ff"))
-        self.assertFalse(yafvsctl.hostname_looks_like_docker_short_id("turbovas-ospd-openvas"))
+        self.assertFalse(yafvsctl.hostname_looks_like_docker_short_id("yafvs-ospd-openvas"))
         self.assertFalse(yafvsctl.hostname_looks_like_docker_short_id("scan-node-01"))
 
     def test_proc_status_helpers_parse_ids(self):
@@ -14646,11 +14646,11 @@ class YAFVSCtlTests(unittest.TestCase):
         )
         self.assertEqual(command[-2], "-c")
         self.assertIn(
-            yafvsctl.TURBOVAS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
+            yafvsctl.YAFVS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
             command[-1],
         )
         self.assertIn("cmdline_secret_pids", command[-1])
-        self.assertNotIn("TURBOVAS_MQTT_OSPD_PASSWORD", command[-1])
+        self.assertNotIn("YAFVS_MQTT_OSPD_PASSWORD", command[-1])
 
     def test_mqtt_auth_probe_supports_paho_one_and_two(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -14659,19 +14659,19 @@ class YAFVSCtlTests(unittest.TestCase):
             command = yafvsctl.mqtt_authenticated_probe_command(
                 root,
                 "ospd",
-                yafvsctl.TURBOVAS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
+                yafvsctl.YAFVS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
                 "/venv/bin/python",
                 False,
             )
         script = command[-1]
         self.assertIn("hasattr(mqtt, 'CallbackAPIVersion')", script)
         self.assertIn("else mqtt.Client()", script)
-        self.assertNotIn("TURBOVAS_MQTT_OSPD_PASSWORD", script)
+        self.assertNotIn("YAFVS_MQTT_OSPD_PASSWORD", script)
 
     def test_mqtt_health_probe_uses_file_backed_credentials(self):
         self.assertEqual(
             yafvsctl.mqtt_health_probe_command(),
-            ["mosquitto_pub", "-o", "/tmp/turbovas-mqtt-health.options"],
+            ["mosquitto_pub", "-o", "/tmp/yafvs-mqtt-health.options"],
         )
 
     @unittest.mock.patch.object(yafvsctl, "container_running", return_value=True)
@@ -14742,7 +14742,7 @@ class YAFVSCtlTests(unittest.TestCase):
             root.mkdir()
             yafvsctl.write_private_text(
                 yafvsctl.runtime_secret_path(
-                    root, yafvsctl.TURBOVAS_MQTT_OSPD_PASSWORD_SECRET
+                    root, yafvsctl.YAFVS_MQTT_OSPD_PASSWORD_SECRET
                 ),
                 "fixture-secret\n",
             )
@@ -14823,7 +14823,7 @@ class YAFVSCtlTests(unittest.TestCase):
             root.mkdir()
             yafvsctl.write_private_text(
                 yafvsctl.runtime_secret_path(
-                    root, yafvsctl.TURBOVAS_MQTT_OSPD_PASSWORD_SECRET
+                    root, yafvsctl.YAFVS_MQTT_OSPD_PASSWORD_SECRET
                 ),
                 "fixture-secret\n",
             )
@@ -14878,13 +14878,13 @@ class YAFVSCtlTests(unittest.TestCase):
                 [
                     (
                         "advisories",
-                        Path(tmp) / "TurboVAS-runtime" / "feed-store" / "current" / "notus" / "advisories" / "sha256sums",
-                        Path(tmp) / "TurboVAS-runtime" / "feed-store" / "current" / "notus" / "advisories" / "sha256sums.asc",
+                        Path(tmp) / "YAFVS-runtime" / "feed-store" / "current" / "notus" / "advisories" / "sha256sums",
+                        Path(tmp) / "YAFVS-runtime" / "feed-store" / "current" / "notus" / "advisories" / "sha256sums.asc",
                     ),
                     (
                         "products",
-                        Path(tmp) / "TurboVAS-runtime" / "feed-store" / "current" / "notus" / "products" / "sha256sums",
-                        Path(tmp) / "TurboVAS-runtime" / "feed-store" / "current" / "notus" / "products" / "sha256sums.asc",
+                        Path(tmp) / "YAFVS-runtime" / "feed-store" / "current" / "notus" / "products" / "sha256sums",
+                        Path(tmp) / "YAFVS-runtime" / "feed-store" / "current" / "notus" / "products" / "sha256sums.asc",
                     ),
                 ],
             )
@@ -15086,12 +15086,12 @@ class YAFVSCtlTests(unittest.TestCase):
             encoding="utf-8"
         )
         mounts = re.findall(
-            r"source: \$\{TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime\}/feed-store/current\n"
+            r"source: \$\{YAFVS_RUNTIME_DIR:-../../YAFVS-runtime\}/feed-store/current\n"
             r"\s+target: /runtime/feeds",
             compose,
         )
         guarded_mounts = re.findall(
-            r"source: \$\{TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime\}/feed-store/current\n"
+            r"source: \$\{YAFVS_RUNTIME_DIR:-../../YAFVS-runtime\}/feed-store/current\n"
             r"\s+target: /runtime/feeds\n"
             r"\s+bind:\n"
             r"\s+create_host_path: false",
@@ -15102,11 +15102,11 @@ class YAFVSCtlTests(unittest.TestCase):
         app_section = compose.split("  gvmd:\n", 1)[1]
         self.assertNotIn("restart: unless-stopped", app_section)
         self.assertNotIn(
-            "source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feeds/openvas",
+            "source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/feeds/openvas",
             compose,
         )
         self.assertNotIn(
-            "source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/feeds/notus",
+            "source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/feeds/notus",
             compose,
         )
 
@@ -15183,7 +15183,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 env[yafvsctl.YAFVS_API_BROWSER_PROXY_SECRET_ENV],
                 env[yafvsctl.YAFVS_GVMD_CONTROL_SECRET_ENV],
             )
-            for env_name, secret_name in yafvsctl.TURBOVAS_MQTT_RUNTIME_SECRETS:
+            for env_name, secret_name in yafvsctl.YAFVS_MQTT_RUNTIME_SECRETS:
                 self.assertNotIn(env_name, env)
                 self.assertEqual(
                     yafvsctl.runtime_secret_path(root, secret_name).stat().st_mode & 0o777,
@@ -15194,7 +15194,7 @@ class YAFVSCtlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
-            env_name, secret_name = yafvsctl.TURBOVAS_MQTT_RUNTIME_SECRETS[0]
+            env_name, secret_name = yafvsctl.YAFVS_MQTT_RUNTIME_SECRETS[0]
             with unittest.mock.patch.dict(
                 os.environ, {env_name: "legacy-environment-secret"}
             ):
@@ -15662,7 +15662,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("YAFVS_GVMD_CONTROL_SECRET: ${YAFVS_API_BROWSER_PROXY_SECRET:-}", compose)
         gvmd = compose.split("  gvmd:\n", 1)[1].split("\n  ospd-openvas:", 1)[0]
         self.assertIn("/run/ospd", gvmd)
-        self.assertNotIn("source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}\n        target: /runtime", gvmd)
+        self.assertNotIn("source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}\n        target: /runtime", gvmd)
         gsad = compose.split("  gsad:\n", 1)[1].split("\n  yafvs-api:", 1)[0]
         yafvs_api = compose.split("  yafvs-api:\n", 1)[1]
         app_services = {
@@ -15672,35 +15672,35 @@ class YAFVSCtlTests(unittest.TestCase):
             "gsad": gsad,
             "yafvs-api": yafvs_api,
         }
-        broad_runtime_mount = "source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}\n        target: /runtime"
+        broad_runtime_mount = "source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}\n        target: /runtime"
         for service, block in app_services.items():
             self.assertNotIn(broad_runtime_mount, block, service)
             self.assertNotIn("/runtime/secrets", block, service)
         ospd = app_services["ospd-openvas"]
         self.assertIn(
-            "source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}/secrets/mqtt-ospd-password",
+            "source: ${YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}/secrets/mqtt-ospd-password",
             ospd,
         )
         self.assertIn(
-            "target: /run/secrets/turbovas-mqtt-ospd-password",
+            "target: /run/secrets/yafvs-mqtt-ospd-password",
             ospd,
         )
         self.assertIn(
-            "--mqtt-broker-password-file=/run/secrets/turbovas-mqtt-ospd-password",
+            "--mqtt-broker-password-file=/run/secrets/yafvs-mqtt-ospd-password",
             ospd,
         )
-        self.assertNotIn("TURBOVAS_MQTT_OSPD_PASSWORD:", ospd)
+        self.assertNotIn("YAFVS_MQTT_OSPD_PASSWORD:", ospd)
         self.assertNotIn("--mqtt-broker-password=", ospd)
         self.assertIn(broad_runtime_mount, dev_shell)
         self.assertIn("/mosquitto/secrets", mosquitto)
-        self.assertNotIn("TURBOVAS_MQTT_OPENVAS_PASSWORD:", mosquitto)
-        self.assertNotIn("TURBOVAS_MQTT_NOTUS_PASSWORD:", mosquitto)
-        self.assertNotIn("TURBOVAS_MQTT_OSPD_PASSWORD:", mosquitto)
-        self.assertNotIn("TURBOVAS_MQTT_HEALTH_PASSWORD:", mosquitto)
+        self.assertNotIn("YAFVS_MQTT_OPENVAS_PASSWORD:", mosquitto)
+        self.assertNotIn("YAFVS_MQTT_NOTUS_PASSWORD:", mosquitto)
+        self.assertNotIn("YAFVS_MQTT_OSPD_PASSWORD:", mosquitto)
+        self.assertNotIn("YAFVS_MQTT_HEALTH_PASSWORD:", mosquitto)
         self.assertNotIn("mosquitto_passwd -b", mosquitto)
         self.assertIn("mosquitto_passwd -U", mosquitto)
         self.assertIn(
-            '["CMD", "mosquitto_pub", "-o", "/tmp/turbovas-mqtt-health.options"]',
+            '["CMD", "mosquitto_pub", "-o", "/tmp/yafvs-mqtt-health.options"]',
             mosquitto,
         )
         for secret_name in (
@@ -15710,13 +15710,13 @@ class YAFVSCtlTests(unittest.TestCase):
             "mqtt-health-password",
         ):
             self.assertIn(
-                f"source: ${{TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}}/secrets/{secret_name}",
+                f"source: ${{YAFVS_RUNTIME_DIR:-../../YAFVS-runtime}}/secrets/{secret_name}",
                 mosquitto,
             )
         notus = app_services["notus-scanner"]
         self.assertNotIn("NOTUS_SCANNER_MQTT_BROKER_PASSWORD:", notus)
         self.assertIn(
-            "--mqtt-broker-password-file=/run/secrets/turbovas-mqtt-notus-password",
+            "--mqtt-broker-password-file=/run/secrets/yafvs-mqtt-notus-password",
             notus,
         )
         self.assertIn("/run/gvmd-gmp", gsad)
@@ -16009,7 +16009,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
         client.send_xml = fake_send
 
-        client.get_users(filter_string="name=turbovas-rbac-smoke")
+        client.get_users(filter_string="name=yafvs-rbac-smoke")
         client.create_user("user<one>", password="secret&value")
         client.modify_user("user-id", name="renamed", password="new-secret", comment="comment")
         client.get_tasks(details=True, ignore_pagination=True)
@@ -16018,7 +16018,7 @@ class YAFVSCtlTests(unittest.TestCase):
         client.modify_filter("filter-id", name="filter two", term="rows=2", filter_type="task", comment="changed")
         client.delete_filter("filter-id", ultimate=True)
 
-        self.assertEqual(sent[0], '<get_users filter="name=turbovas-rbac-smoke"/>')
+        self.assertEqual(sent[0], '<get_users filter="name=yafvs-rbac-smoke"/>')
         self.assertEqual(sent[1], '<create_user><name>user&lt;one&gt;</name><password>secret&amp;value</password></create_user>')
         self.assertEqual(sent[2], '<modify_user user_id="user-id"><new_name>renamed</new_name><comment>comment</comment><password>new-secret</password></modify_user>')
         self.assertEqual(sent[3], '<get_tasks usage_type="scan" details="1" ignore_pagination="1"/>')
@@ -16549,7 +16549,7 @@ class YAFVSCtlTests(unittest.TestCase):
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
             self.assertFalse((root / "tools" / "runtime_report.py").exists())
-            self.assertEqual(yafvsctl.report_artifact_dir(root), Path(tmp) / "TurboVAS-runtime" / "artifacts" / "reports")
+            self.assertEqual(yafvsctl.report_artifact_dir(root), Path(tmp) / "YAFVS-runtime" / "artifacts" / "reports")
             self.assertIn("artifacts/reports", yafvsctl.RUNTIME_DIRS)
 
     def test_runtime_report_summary_helpers_format_native_rows(self):

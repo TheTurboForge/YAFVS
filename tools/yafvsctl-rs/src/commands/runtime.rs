@@ -52,7 +52,7 @@ pub fn command_runtime_plan(repo_root: &Path) -> ResultEnvelope {
         Finding::new(
             "pass",
             "runtime.ports",
-            "Infrastructure ports are loopback-only; gsad defaults to loopback but can be explicitly bound with TURBOVAS_GSAD_HOST or TURBOVAS_GSAD_HOSTS."
+            "Infrastructure ports are loopback-only; gsad defaults to loopback but can be explicitly bound with YAFVS_GSAD_HOST or YAFVS_GSAD_HOSTS."
                 .to_string(),
         )
         .with_details(json!({
@@ -184,12 +184,12 @@ fn command_logs_with_runner(
 }
 
 fn gsad_hosts() -> Vec<String> {
-    let plural = env::var("TURBOVAS_GSAD_HOSTS").ok();
+    let plural = env::var("YAFVS_GSAD_HOSTS").ok();
     let hosts = split_hosts(plural.as_deref());
     if !hosts.is_empty() {
         return hosts;
     }
-    let singular = env::var("TURBOVAS_GSAD_HOST").ok();
+    let singular = env::var("YAFVS_GSAD_HOST").ok();
     let hosts = split_hosts(singular.as_deref());
     if hosts.is_empty() {
         vec!["127.0.0.1".to_string()]

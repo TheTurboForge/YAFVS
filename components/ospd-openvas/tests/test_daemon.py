@@ -1052,7 +1052,7 @@ class TestOspdOpenvas(TestCase):
             [
                 hostile_row,
                 b'not-a-text-result-row',
-                '{"turbovas_internal":"oversized_result","bytes":4194305}',
+                '{"yafvs_internal":"oversized_result","bytes":4194305}',
                 'x' * (w.MAX_REDIS_RESULT_ROW_LENGTH + 1),
                 openvas_result_row(
                     'LOG',

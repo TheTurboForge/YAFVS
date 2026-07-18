@@ -15,8 +15,8 @@ use serde::Serialize;
 
 use crate::errors::ApiError;
 
-const FEED_METADATA_ROOT_ENV: &str = "TURBOVAS_FEED_METADATA_DIR";
-const FEED_LOCK_ROOT_ENV: &str = "TURBOVAS_FEED_LOCK_DIR";
+const FEED_METADATA_ROOT_ENV: &str = "YAFVS_FEED_METADATA_DIR";
+const FEED_LOCK_ROOT_ENV: &str = "YAFVS_FEED_LOCK_DIR";
 const DEFAULT_FEED_METADATA_ROOT: &str = "/runtime/feeds";
 const DEFAULT_FEED_LOCK_ROOT: &str = "/runtime/run";
 const MAX_FEED_METADATA_BYTES: u64 = 256 * 1024;

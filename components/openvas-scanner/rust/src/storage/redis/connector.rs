@@ -744,15 +744,15 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "requires TURBOVAS_TEST_REDIS_URL pointing to a disposable Redis"]
+    #[ignore = "requires YAFVS_TEST_REDIS_URL pointing to a disposable Redis"]
     fn stale_owned_selector_cannot_adopt_replacement_namespace() {
         assert_eq!(
-            std::env::var("TURBOVAS_TEST_REDIS_DEDICATED").as_deref(),
+            std::env::var("YAFVS_TEST_REDIS_DEDICATED").as_deref(),
             Ok("1"),
             "refusing to modify a Redis instance not marked disposable"
         );
-        let address = std::env::var("TURBOVAS_TEST_REDIS_URL")
-            .expect("TURBOVAS_TEST_REDIS_URL must name the disposable Redis");
+        let address = std::env::var("YAFVS_TEST_REDIS_URL")
+            .expect("YAFVS_TEST_REDIS_URL must name the disposable Redis");
         let client = redis::Client::open(address.as_str()).expect("valid Redis URL");
         let mut connection = client
             .get_connection()

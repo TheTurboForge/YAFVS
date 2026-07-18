@@ -178,7 +178,7 @@ listener, first run the direct smoke so the ignored runtime secret exists, then
 read the token into shell memory without printing it:
 
 ```sh
-TOKEN="$(tr -d '\n' < ../TurboVAS-runtime/secrets/native-api-bearer-token)"
+TOKEN="$(tr -d '\n' < ../YAFVS-runtime/secrets/native-api-bearer-token)"
 curl --fail-with-body -sS \
   -H "Authorization: Bearer ${TOKEN}" \
   -H 'Accept: application/json' \

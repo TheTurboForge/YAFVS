@@ -9,10 +9,10 @@ use std::io;
 use std::path::Path;
 
 const MQTT_PASSWORD_ENVIRONMENTS: [&str; 4] = [
-    "TURBOVAS_MQTT_OPENVAS_PASSWORD",
-    "TURBOVAS_MQTT_NOTUS_PASSWORD",
-    "TURBOVAS_MQTT_OSPD_PASSWORD",
-    "TURBOVAS_MQTT_HEALTH_PASSWORD",
+    "YAFVS_MQTT_OPENVAS_PASSWORD",
+    "YAFVS_MQTT_NOTUS_PASSWORD",
+    "YAFVS_MQTT_OSPD_PASSWORD",
+    "YAFVS_MQTT_HEALTH_PASSWORD",
 ];
 const MQTT_RUNTIME_SECRETS: [&str; 4] = [
     "mqtt-openvas-password",
@@ -27,24 +27,24 @@ const GVMD_CONTROL_SECRET: &str = "gvmd-control-secret";
 
 pub(crate) fn runtime_environment(repo_root: &Path) -> BTreeMap<OsString, OsString> {
     let mut environment = build_env(repo_root);
-    insert_default(&mut environment, "COMPOSE_PROJECT_NAME", "turbovas");
+    insert_default(&mut environment, "COMPOSE_PROJECT_NAME", "yafvs");
     insert_default(
         &mut environment,
-        "TURBOVAS_RUNTIME_DIR",
+        "YAFVS_RUNTIME_DIR",
         &runtime_dir(repo_root).display().to_string(),
     );
     insert_default(
         &mut environment,
-        "TURBOVAS_REPO_MOUNT_PATH",
+        "YAFVS_REPO_MOUNT_PATH",
         &repo_root.display().to_string(),
     );
     // SAFETY: getuid/getgid have no preconditions and do not dereference memory.
     let (uid, gid) = unsafe { (libc::getuid(), libc::getgid()) };
-    insert_default(&mut environment, "TURBOVAS_UID", &uid.to_string());
-    insert_default(&mut environment, "TURBOVAS_GID", &gid.to_string());
-    insert_default(&mut environment, "POSTGRES_USER", "turbovas");
-    insert_default(&mut environment, "POSTGRES_PASSWORD", "turbovas-dev");
-    insert_default(&mut environment, "POSTGRES_DB", "turbovas");
+    insert_default(&mut environment, "YAFVS_UID", &uid.to_string());
+    insert_default(&mut environment, "YAFVS_GID", &gid.to_string());
+    insert_default(&mut environment, "POSTGRES_USER", "yafvs");
+    insert_default(&mut environment, "POSTGRES_PASSWORD", "yafvs-dev");
+    insert_default(&mut environment, "POSTGRES_DB", "yafvs");
     insert_default(
         &mut environment,
         "OPENVAS_CONFIG",
@@ -53,7 +53,7 @@ pub(crate) fn runtime_environment(repo_root: &Path) -> BTreeMap<OsString, OsStri
             .display()
             .to_string(),
     );
-    insert_default(&mut environment, "TURBOVAS_GSAD_HOST", "127.0.0.1");
+    insert_default(&mut environment, "YAFVS_GSAD_HOST", "127.0.0.1");
     for name in MQTT_PASSWORD_ENVIRONMENTS {
         environment.remove(&OsString::from(name));
     }

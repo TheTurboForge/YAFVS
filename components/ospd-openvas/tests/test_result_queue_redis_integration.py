@@ -194,8 +194,8 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
         owner_token = str(uuid.uuid4())
         parent = self.redis_db(1)
         self.ctx.hset(DBINDEX_NAME, 1, owner_token)
-        parent.rpush('internal/turbovas.owner-token', owner_token)
-        parent.rpush('internal/turbovas.db-kind', 'parent')
+        parent.rpush('internal/yafvs.owner-token', owner_token)
+        parent.rpush('internal/yafvs.db-kind', 'parent')
         parent.rpush('internal/scanid', 'scan-recovery')
         previous_address = (
             OpenvasDB._db_address
@@ -209,7 +209,7 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
             self.assertEqual(discovered[0][0], 'scan-recovery')
             self.assertEqual(discovered[0][1].owner_token, owner_token)
 
-            parent.lset('internal/turbovas.owner-token', 0, str(uuid.uuid4()))
+            parent.lset('internal/yafvs.owner-token', 0, str(uuid.uuid4()))
             with self.assertRaises(OspdOpenvasError):
                 list(MainDB(self.ctx).reserved_parent_databases())
         finally:
@@ -260,12 +260,12 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
             for index in (3, 4):
                 self.assertEqual(
                     self.redis_db(index).type(
-                        'internal/turbovas.owner-token'
+                        'internal/yafvs.owner-token'
                     ),
                     'none',
                 )
                 self.assertEqual(
-                    self.redis_db(index).type('internal/turbovas.db-kind'),
+                    self.redis_db(index).type('internal/yafvs.db-kind'),
                     'none',
                 )
         finally:
@@ -327,13 +327,13 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
             for index in (3, 13):
                 self.assertEqual(
                     self.redis_db(index).lindex(
-                        'internal/turbovas.owner-token', 0
+                        'internal/yafvs.owner-token', 0
                     ),
                     migrated_tokens[index],
                 )
                 self.assertEqual(
                     self.redis_db(index).lindex(
-                        'internal/turbovas.db-kind', 0
+                        'internal/yafvs.db-kind', 0
                     ),
                     'parent',
                 )
@@ -355,13 +355,13 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
             for index in list(range(4, 13)) + [14, 15]:
                 self.assertEqual(
                     self.redis_db(index).lindex(
-                        'internal/turbovas.owner-token', 0
+                        'internal/yafvs.owner-token', 0
                     ),
                     migrated_tokens[index],
                 )
                 self.assertEqual(
                     self.redis_db(index).lindex(
-                        'internal/turbovas.db-kind', 0
+                        'internal/yafvs.db-kind', 0
                     ),
                     'child',
                 )
@@ -454,7 +454,7 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
                         'internal/scanid', 'scan-recovery'
                     ),
                     self.redis_db(3).rpush(
-                        'internal/turbovas.owner-token', '1'
+                        'internal/yafvs.owner-token', '1'
                     ),
                 ),
             ),
@@ -581,8 +581,8 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
         self.ctx.hset(DBINDEX_NAME, mapping={1: parent_token, 2: child_token})
         parent.rpush('internal/scanid', 'scan-recovery')
         parent.rpush('internal/dbindex', f'2:{child_token}')
-        child.rpush('internal/turbovas.owner-token', child_token)
-        child.rpush('internal/turbovas.db-kind', 'child')
+        child.rpush('internal/yafvs.owner-token', child_token)
+        child.rpush('internal/yafvs.db-kind', 'child')
         child.rpush('internal/scan_id', 'scan-recovery')
         previous_address = (
             OpenvasDB._db_address

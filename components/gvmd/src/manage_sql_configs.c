@@ -52,9 +52,9 @@ switch_representation (config_t, int);
 static void
 update_config_caches (config_t);
 
-#define TURBOVAS_DIAGNOSTIC_NMAP_OID "1.3.6.1.4.1.25623.1.0.14259"
-#define TURBOVAS_DIAGNOSTIC_PING_OID OID_PING_HOST
-#define TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY "Port scanners"
+#define YAFVS_DIAGNOSTIC_NMAP_OID "1.3.6.1.4.1.25623.1.0.14259"
+#define YAFVS_DIAGNOSTIC_PING_OID OID_PING_HOST
+#define YAFVS_DIAGNOSTIC_PREREQUISITE_FAMILY "Port scanners"
 
 
 
@@ -3790,10 +3790,10 @@ diagnostic_nvt_state_matches (config_t config, const char *quoted_selector,
                               const char *quoted_nvt_family)
 {
   const int desired_nvt_count =
-    1 + (strcmp (quoted_nvt_oid, TURBOVAS_DIAGNOSTIC_NMAP_OID) != 0)
-      + (strcmp (quoted_nvt_oid, TURBOVAS_DIAGNOSTIC_PING_OID) != 0);
+    1 + (strcmp (quoted_nvt_oid, YAFVS_DIAGNOSTIC_NMAP_OID) != 0)
+      + (strcmp (quoted_nvt_oid, YAFVS_DIAGNOSTIC_PING_OID) != 0);
   const int desired_family_count =
-    strcmp (quoted_nvt_family, TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY)
+    strcmp (quoted_nvt_family, YAFVS_DIAGNOSTIC_PREREQUISITE_FAMILY)
       == 0 ? 1 : 2;
   long long int count;
 
@@ -3808,20 +3808,20 @@ diagnostic_nvt_state_matches (config_t config, const char *quoted_selector,
     return -1;
   if (count != 1)
     return 0;
-  if (strcmp (quoted_nvt_oid, TURBOVAS_DIAGNOSTIC_NMAP_OID))
+  if (strcmp (quoted_nvt_oid, YAFVS_DIAGNOSTIC_NMAP_OID))
     {
       if (diagnostic_selector_oid_count (
-            quoted_selector, TURBOVAS_DIAGNOSTIC_NMAP_OID,
-            TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY, &count))
+            quoted_selector, YAFVS_DIAGNOSTIC_NMAP_OID,
+            YAFVS_DIAGNOSTIC_PREREQUISITE_FAMILY, &count))
         return -1;
       if (count != 1)
         return 0;
     }
-  if (strcmp (quoted_nvt_oid, TURBOVAS_DIAGNOSTIC_PING_OID))
+  if (strcmp (quoted_nvt_oid, YAFVS_DIAGNOSTIC_PING_OID))
     {
       if (diagnostic_selector_oid_count (
-            quoted_selector, TURBOVAS_DIAGNOSTIC_PING_OID,
-            TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY, &count))
+            quoted_selector, YAFVS_DIAGNOSTIC_PING_OID,
+            YAFVS_DIAGNOSTIC_PREREQUISITE_FAMILY, &count))
         return -1;
       if (count != 1)
         return 0;
@@ -3993,8 +3993,8 @@ manage_configure_diagnostic_nvt (const char *config_id, const char *nvt_oid,
   if (sql_int64 (
         &value,
         "SELECT count(*) FROM nvts"
-        " WHERE oid = '" TURBOVAS_DIAGNOSTIC_NMAP_OID "'"
-        " AND family = '" TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY "';"))
+        " WHERE oid = '" YAFVS_DIAGNOSTIC_NMAP_OID "'"
+        " AND family = '" YAFVS_DIAGNOSTIC_PREREQUISITE_FAMILY "';"))
     goto rollback;
   if (value != 1)
     {
@@ -4004,8 +4004,8 @@ manage_configure_diagnostic_nvt (const char *config_id, const char *nvt_oid,
   if (sql_int64 (
         &value,
         "SELECT count(*) FROM nvts"
-        " WHERE oid = '" TURBOVAS_DIAGNOSTIC_PING_OID "'"
-        " AND family = '" TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY "';"))
+        " WHERE oid = '" YAFVS_DIAGNOSTIC_PING_OID "'"
+        " AND family = '" YAFVS_DIAGNOSTIC_PREREQUISITE_FAMILY "';"))
     goto rollback;
   if (value != 1)
     {
@@ -4031,19 +4031,19 @@ manage_configure_diagnostic_nvt (const char *config_id, const char *nvt_oid,
        " VALUES ('%s', 0, " G_STRINGIFY (NVT_SELECTOR_TYPE_NVT)
        ", '%s', '%s');",
        quoted_selector, quoted_nvt_oid, quoted_nvt_family);
-  if (strcmp (nvt_oid, TURBOVAS_DIAGNOSTIC_NMAP_OID))
+  if (strcmp (nvt_oid, YAFVS_DIAGNOSTIC_NMAP_OID))
     sql ("INSERT INTO nvt_selectors"
          " (name, exclude, type, family_or_nvt, family)"
          " VALUES ('%s', 0, " G_STRINGIFY (NVT_SELECTOR_TYPE_NVT)
-         ", '" TURBOVAS_DIAGNOSTIC_NMAP_OID "',"
-         " '" TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY "');",
+         ", '" YAFVS_DIAGNOSTIC_NMAP_OID "',"
+         " '" YAFVS_DIAGNOSTIC_PREREQUISITE_FAMILY "');",
          quoted_selector);
-  if (strcmp (nvt_oid, TURBOVAS_DIAGNOSTIC_PING_OID))
+  if (strcmp (nvt_oid, YAFVS_DIAGNOSTIC_PING_OID))
     sql ("INSERT INTO nvt_selectors"
          " (name, exclude, type, family_or_nvt, family)"
          " VALUES ('%s', 0, " G_STRINGIFY (NVT_SELECTOR_TYPE_NVT)
-         ", '" TURBOVAS_DIAGNOSTIC_PING_OID "',"
-         " '" TURBOVAS_DIAGNOSTIC_PREREQUISITE_FAMILY "');",
+         ", '" YAFVS_DIAGNOSTIC_PING_OID "',"
+         " '" YAFVS_DIAGNOSTIC_PREREQUISITE_FAMILY "');",
          quoted_selector);
 
   sql ("UPDATE configs"

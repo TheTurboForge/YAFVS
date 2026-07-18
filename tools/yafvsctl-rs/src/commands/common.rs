@@ -101,12 +101,12 @@ pub(crate) fn iso_system_time(timestamp: SystemTime) -> Option<String> {
 }
 
 pub(crate) fn runtime_dir(repo_root: &Path) -> PathBuf {
-    let configured = env::var_os("TURBOVAS_RUNTIME_DIR").map(PathBuf::from);
+    let configured = env::var_os("YAFVS_RUNTIME_DIR").map(PathBuf::from);
     let path = configured.map(expand_home).unwrap_or_else(|| {
         repo_root
             .parent()
             .unwrap_or(repo_root)
-            .join("TurboVAS-runtime")
+            .join("YAFVS-runtime")
     });
     let absolute = if path.is_absolute() {
         path

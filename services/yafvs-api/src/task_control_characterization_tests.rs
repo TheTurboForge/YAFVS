@@ -323,14 +323,14 @@ fn inherited_stop_internal_only_requests_stop_for_active_task_statuses() {
 fn osp_start_stop_is_serialized_and_only_verified_absence_is_success() {
     let stop = inherited_function(MANAGE_C, "stop_osp_task");
     for required in [
-        "turbovas_task_control_lock (task, &control_lock)",
+        "yafvs_task_control_lock (task, &control_lock)",
         "set_report_scan_run_status (scan_report, TASK_STATUS_STOP_REQUESTED)",
         "report_scan_run_status (scan_report, &report_status)",
         "scan_queue_remove (scan_report)",
         "ensure_osp_scan_absent (task, scan_id)",
         "set_task_run_status (task, TASK_STATUS_STOPPED)",
         "set_report_scan_run_status (scan_report, TASK_STATUS_STOPPED)",
-        "turbovas_task_control_unlock (&control_lock)",
+        "yafvs_task_control_unlock (&control_lock)",
     ] {
         assert!(stop.contains(required), "stop_osp_task missing {required}");
     }
@@ -357,18 +357,18 @@ fn osp_start_stop_is_serialized_and_only_verified_absence_is_success() {
     }
 
     let start = inherited_function(MANAGE_OSP_C, "handle_osp_scan_start");
-    let lock_offset = start.find("turbovas_task_control_lock").unwrap();
+    let lock_offset = start.find("yafvs_task_control_lock").unwrap();
     let launch_offset = start.find("launch_osp_openvas_task").unwrap();
     let unlock_offset = launch_offset
         + start[launch_offset..]
-            .find("turbovas_task_control_unlock")
+            .find("yafvs_task_control_unlock")
             .unwrap();
     assert!(lock_offset < launch_offset);
     assert!(launch_offset < unlock_offset);
     assert!(start.contains("task_run_status (task) != TASK_STATUS_REQUESTED"));
 
     let status_update = inherited_function(MANAGE_OSP_C, "set_osp_active_status");
-    assert!(status_update.contains("turbovas_task_control_lock"));
+    assert!(status_update.contains("yafvs_task_control_lock"));
     assert!(status_update.contains("current != TASK_STATUS_REQUESTED"));
     assert!(status_update.contains("current != TASK_STATUS_QUEUED"));
     assert!(status_update.contains("current != TASK_STATUS_RUNNING"));
@@ -388,12 +388,12 @@ fn osp_start_stop_is_serialized_and_only_verified_absence_is_success() {
 fn osp_handlers_reject_stale_reports_and_serialize_finalization_with_stop() {
     let start = inherited_function(MANAGE_OSP_C, "handle_osp_scan_start");
     for required in [
-        "turbovas_task_control_lock (task, &control_lock)",
+        "yafvs_task_control_lock (task, &control_lock)",
         "report_scan_run_status (global_current_report, &report_status)",
         "task_run_status (task) != TASK_STATUS_REQUESTED",
         "report_status != TASK_STATUS_REQUESTED",
         "launch_osp_openvas_task",
-        "turbovas_task_control_unlock (&control_lock)",
+        "yafvs_task_control_unlock (&control_lock)",
     ] {
         assert!(
             start.contains(required),
@@ -420,10 +420,10 @@ fn osp_handlers_reject_stale_reports_and_serialize_finalization_with_stop() {
 
     let end = inherited_function(MANAGE_OSP_C, "handle_osp_scan_end");
     for required in [
-        "turbovas_task_control_lock (task, &control_lock)",
+        "yafvs_task_control_lock (task, &control_lock)",
         "report_scan_run_status (global_current_report, &report_status)",
         "already_finalized",
-        "turbovas_task_control_unlock (&control_lock)",
+        "yafvs_task_control_unlock (&control_lock)",
     ] {
         assert!(
             end.contains(required),

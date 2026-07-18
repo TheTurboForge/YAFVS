@@ -98,7 +98,7 @@ OPENVAS_RESULT_UNRECOVERABLE_FAILURES = frozenset(
     ('counter-state', 'queue-state-unreadable')
 )
 OVERSIZED_RESULT_MARKER_PREFIX = (
-    '{"turbovas_internal":"oversized_result","bytes":'
+    '{"yafvs_internal":"oversized_result","bytes":'
 )
 
 
@@ -140,10 +140,10 @@ def parse_openvas_result_row(row: Any) -> Optional[Dict[str, str]]:
 
 # TurboVAS defaults scanner plugin execution to 180 seconds because it is
 # preferable for things to fail quickly.
-TURBOVAS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS = 180
+YAFVS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS = 180
 # Keep scanner startup bounded by the same fast-fail default as per-NVT and
 # plugin execution. A shorter deadline risks rejecting legitimate startup work.
-OPENVAS_STARTUP_TIMEOUT_SECONDS = TURBOVAS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS
+OPENVAS_STARTUP_TIMEOUT_SECONDS = YAFVS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS
 OPENVAS_STOP_GRACE_PERIOD_SECONDS = 15
 OPENVAS_STOP_TERMINATE_GRACE_PERIOD_SECONDS = 5
 OPENVAS_STOP_KILL_GRACE_PERIOD_SECONDS = 5
@@ -246,7 +246,7 @@ OSPD_PARAMS = {
     'plugins_timeout': {
         'type': 'integer',
         'name': 'plugins_timeout',
-        'default': TURBOVAS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS,
+        'default': YAFVS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS,
         'mandatory': 0,
         'visible_for_client': True,
         'description': 'This is the maximum lifetime, in seconds of a plugin.',
@@ -273,7 +273,7 @@ OSPD_PARAMS = {
     'scanner_plugins_timeout': {
         'type': 'integer',
         'name': 'scanner_plugins_timeout',
-        'default': TURBOVAS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS,
+        'default': YAFVS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS,
         'mandatory': 1,
         'visible_for_client': True,
         'description': 'Like plugins_timeout, but for ACT_SCANNER plugins.',

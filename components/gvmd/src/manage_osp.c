@@ -865,7 +865,7 @@ set_osp_active_status (task_t task, report_t report, task_status_t status)
   task_status_t current, report_status;
   int ret = 0;
 
-  if (turbovas_task_control_lock (task, &control_lock))
+  if (yafvs_task_control_lock (task, &control_lock))
     return -1;
   current = task_run_status (task);
   if (report_scan_run_status (report, &report_status))
@@ -883,7 +883,7 @@ set_osp_active_status (task_t task, report_t report, task_status_t status)
       set_task_run_status (task, status);
       set_report_scan_run_status (report, status);
     }
-  if (turbovas_task_control_unlock (&control_lock))
+  if (yafvs_task_control_unlock (&control_lock))
     return -1;
   return ret;
 }
@@ -1104,22 +1104,22 @@ handle_osp_scan_start (task_t task, target_t target, const char *scan_id,
   lockfile_t control_lock = { 0 };
   task_status_t report_status;
 
-  if (turbovas_task_control_lock (task, &control_lock))
+  if (yafvs_task_control_lock (task, &control_lock))
     return -1;
   if (report_scan_run_status (global_current_report, &report_status))
     {
-      turbovas_task_control_unlock (&control_lock);
+      yafvs_task_control_unlock (&control_lock);
       return -1;
     }
   if (task_run_status (task) != TASK_STATUS_REQUESTED
       || report_status != TASK_STATUS_REQUESTED)
     {
-      turbovas_task_control_unlock (&control_lock);
+      yafvs_task_control_unlock (&control_lock);
       return -2;
     }
   rc = launch_osp_openvas_task (task, target, scan_id, start_from, &error,
                                 discovery_out);
-  if (turbovas_task_control_unlock (&control_lock))
+  if (yafvs_task_control_unlock (&control_lock))
     {
       g_free (error);
       return -1;
@@ -1317,12 +1317,12 @@ handle_osp_scan_end (task_t task, int handle_progress_rc, gboolean discovery)
   task_status_t task_status, report_status;
   gboolean already_finalized;
 
-  if (turbovas_task_control_lock (task, &control_lock))
+  if (yafvs_task_control_lock (task, &control_lock))
     return -1;
   task_status = task_run_status (task);
   if (report_scan_run_status (global_current_report, &report_status))
     {
-      turbovas_task_control_unlock (&control_lock);
+      yafvs_task_control_unlock (&control_lock);
       return -1;
     }
   already_finalized =
@@ -1382,7 +1382,7 @@ handle_osp_scan_end (task_t task, int handle_progress_rc, gboolean discovery)
   global_current_report = 0;
   current_scanner_task = (task_t) 0;
 
-  if (turbovas_task_control_unlock (&control_lock))
+  if (yafvs_task_control_unlock (&control_lock))
     return -1;
   return handle_progress_rc;
 }

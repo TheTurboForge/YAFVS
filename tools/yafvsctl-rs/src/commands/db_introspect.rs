@@ -687,7 +687,7 @@ mod tests {
                         exit_code: Some(1),
                         stdout: (0..100)
                             .map(|index| format!("failure-{index}"))
-                            .chain(std::iter::once("turbovas-dev".into()))
+                            .chain(std::iter::once("yafvs-dev".into()))
                             .collect::<Vec<_>>()
                             .join("\n"),
                         stderr: String::new(),
@@ -815,7 +815,7 @@ mod tests {
         assert!(
             !serde_json::to_string(&full)
                 .unwrap()
-                .contains("turbovas-dev")
+                .contains("yafvs-dev")
         );
     }
 
@@ -860,7 +860,7 @@ mod tests {
         };
         let failed = command_with(Path::new("/srv/TurboVAS"), false, &[], &failed_runner);
         let serialized = serde_json::to_string(&failed).unwrap();
-        assert!(!serialized.contains("turbovas-dev"));
+        assert!(!serialized.contains("yafvs-dev"));
         assert!(serialized.contains("[redacted]"));
         assert!(failed.findings.iter().all(|finding| {
             finding

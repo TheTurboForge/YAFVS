@@ -195,7 +195,7 @@ for _ = 1, max_items do
     redis.call('RPOP', KEYS[1])
     redis.call('RPOP', KEYS[7])
     redis.call('RPOP', KEYS[9])
-    local marker = '{"turbovas_internal":"oversized_result","bytes":'
+    local marker = '{"yafvs_internal":"oversized_result","bytes":'
       .. tostring(candidate_bytes) .. '}'
     redis.call('RPUSH', KEYS[2], marker)
     redis.call('RPUSH', KEYS[8], candidate_id)
@@ -433,8 +433,8 @@ MAX_OWNER_TOKEN_LENGTH = 128
 LEGACY_OWNER_TOKEN = '1'
 PERMANENT_CACHE_MARKERS = ('nvticache', 'notuscache')
 LEGACY_MIGRATION_IDENTITY_KEYS = (
-    'internal/turbovas.owner-token',
-    'internal/turbovas.db-kind',
+    'internal/yafvs.owner-token',
+    'internal/yafvs.db-kind',
     'internal/scanid',
     'internal/scan_id',
     'internal/dbindex',
@@ -1084,9 +1084,9 @@ class BaseKbDB(BaseDB):
     RESULT_CLAIM_ADMISSION_IDS_KEY = 'internal/results.ospd-claim-admission-ids'
     RESULT_SIZES_KEY = 'internal/results.sizes'
     RESULT_CLAIM_SIZES_KEY = 'internal/results.ospd-claim-sizes'
-    NOTUS_MANIFEST_KEY = 'internal/turbovas.notus-manifest'
-    NOTUS_MANIFEST_SEAL_KEY = 'internal/turbovas.notus-manifest-seal'
-    NOTUS_MANIFEST_FAILURE_KEY = 'internal/turbovas.notus-manifest-failure'
+    NOTUS_MANIFEST_KEY = 'internal/yafvs.notus-manifest'
+    NOTUS_MANIFEST_SEAL_KEY = 'internal/yafvs.notus-manifest-seal'
+    NOTUS_MANIFEST_FAILURE_KEY = 'internal/yafvs.notus-manifest-failure'
     MAX_NOTUS_MANIFEST_RUNS = 10_000
     MAX_NOTUS_MANIFEST_ENTRY_BYTES = 1024
 
@@ -1324,7 +1324,7 @@ class KbDB(BaseKbDB):
             scan_db.select(kbindex, owner_token)
             if (
                 tokenized_reference
-                and scan_db._get_single_item('internal/turbovas.owner-token')
+                and scan_db._get_single_item('internal/yafvs.owner-token')
                 != owner_token
             ):
                 raise OspdOpenvasError(
@@ -1338,9 +1338,9 @@ class KbDB(BaseKbDB):
                 'Refusing to initialize a scan in an unowned Redis database.'
             )
         self._set_single_item(
-            'internal/turbovas.owner-token', [self.owner_token]
+            'internal/yafvs.owner-token', [self.owner_token]
         )
-        self._set_single_item('internal/turbovas.db-kind', ['parent'])
+        self._set_single_item('internal/yafvs.db-kind', ['parent'])
         self._add_single_item(f'internal/{scan_id}', ['new'])
         self._add_single_item('internal/scanid', [scan_id])
 
@@ -1349,8 +1349,8 @@ class KbDB(BaseKbDB):
     ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         """Return the owner, kind, and scan identity stored in this namespace."""
         return (
-            self._get_single_item('internal/turbovas.owner-token'),
-            self._get_single_item('internal/turbovas.db-kind'),
+            self._get_single_item('internal/yafvs.owner-token'),
+            self._get_single_item('internal/yafvs.db-kind'),
             self._get_single_item('internal/scanid'),
         )
 
@@ -1592,10 +1592,10 @@ class MainDB(BaseDB):
             ctx = OpenvasDB.create_context(index)
             database = KbDB(index, ctx, owner_token=owner_token)
             stored_owner = self._strict_optional_list_value(
-                ctx, index, 'internal/turbovas.owner-token'
+                ctx, index, 'internal/yafvs.owner-token'
             )
             database_kind = self._strict_optional_list_value(
-                ctx, index, 'internal/turbovas.db-kind'
+                ctx, index, 'internal/yafvs.db-kind'
             )
             parent_scan_id = self._strict_optional_list_value(
                 ctx, index, 'internal/scanid'
@@ -1735,9 +1735,9 @@ class MainDB(BaseDB):
                     ):
                         pipe.execute_command('SELECT', index)
                         pipe.rpush(
-                            'internal/turbovas.owner-token', tokens[index]
+                            'internal/yafvs.owner-token', tokens[index]
                         )
-                        pipe.rpush('internal/turbovas.db-kind', 'parent')
+                        pipe.rpush('internal/yafvs.db-kind', 'parent')
                         pipe.delete('internal/dbindex')
                         if child_indexes:
                             pipe.rpush(
@@ -1750,9 +1750,9 @@ class MainDB(BaseDB):
                     for index in sorted(plan['children']):
                         pipe.execute_command('SELECT', index)
                         pipe.rpush(
-                            'internal/turbovas.owner-token', tokens[index]
+                            'internal/yafvs.owner-token', tokens[index]
                         )
-                        pipe.rpush('internal/turbovas.db-kind', 'child')
+                        pipe.rpush('internal/yafvs.db-kind', 'child')
                     pipe.execute_command('SELECT', self.DEFAULT_INDEX)
                     pipe.hset(DBINDEX_NAME, mapping=tokens)
                     pipe.execute()

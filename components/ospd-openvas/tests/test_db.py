@@ -383,7 +383,7 @@ class TestOpenvasDB(TestCase):
         self, _mock_uuid, mock_redis
     ):
         ctx = mock_redis.from_url.return_value
-        marker = '{"turbovas_internal":"oversized_result","bytes":2048}'
+        marker = '{"yafvs_internal":"oversized_result","bytes":2048}'
         ctx.eval.return_value = ['claim-1', marker]
 
         claim_id, results = OpenvasDB.claim_list_items(
@@ -771,11 +771,11 @@ class KbDBTestCase(TestCase):
         set_calls = mock_openvas_db.set_single_item.call_args_list
         self.assertEqual(
             set_calls[0].args,
-            (self.ctx, 'internal/turbovas.owner-token', [OWNER_TOKEN]),
+            (self.ctx, 'internal/yafvs.owner-token', [OWNER_TOKEN]),
         )
         self.assertEqual(
             set_calls[1].args,
-            (self.ctx, 'internal/turbovas.db-kind', ['parent']),
+            (self.ctx, 'internal/yafvs.db-kind', ['parent']),
         )
 
         calls = mock_openvas_db.add_single_item.call_args_list

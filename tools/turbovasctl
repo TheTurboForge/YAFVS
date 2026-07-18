@@ -396,7 +396,6 @@ NATIVE_BULK_MODIFY_SCHEDULES_MAX_LIMIT = 500
 NATIVE_TASK_ACTIVE_STATUSES = frozenset({"Running", "Requested", "Queued"})
 # Persisted gvmd task_status_t values that can still own scanner/control work.
 FEED_TRANSITION_BLOCKING_TASK_STATUS_IDS = (0, 3, 4, 10, 11, 14, 16, 17, 18, 19)
-GVMD_IMPORT_TIMEOUT_SECONDS = 7200
 OSPD_REQUIRED_CAPS = {"NET_ADMIN": 12, "NET_RAW": 13}
 OSPD_STABLE_HOSTNAME = "turbovas-ospd-openvas"
 DOCKER_HEX_HOSTNAME_PATTERN = re.compile(r"^[0-9a-f]{12}$", re.IGNORECASE)
@@ -2358,13 +2357,6 @@ class FeedClass:
     markers: tuple[str, ...]
 
 
-@dataclass(frozen=True)
-class RuntimeFeedMapping:
-    key: str
-    label: str
-    build_rel: str
-    container_target: str
-
 
 @dataclass(frozen=True)
 class Component:
@@ -2421,12 +2413,6 @@ FEED_SIGNED_MANIFESTS: dict[str, tuple[tuple[str, str], ...]] = {
 FEED_UNSIGNED_METADATA: dict[str, tuple[str, ...]] = {
     "notus": ("LICENSE", "LICENSE.GPLv2", "LICENSE.ODbLv1", "timestamp"),
 }
-RUNTIME_FEED_MAPPINGS: tuple[RuntimeFeedMapping, ...] = (
-    RuntimeFeedMapping("nasl", "OpenVAS plugin feed", "build/var/lib/openvas/plugins", "/runtime/feeds/openvas/plugins"),
-    RuntimeFeedMapping("gvmd", "GVMD data objects feed", "build/var/lib/gvm/data-objects/gvmd", f"/runtime/feeds/gvm/data-objects/gvmd/{FEED_RELEASE}"),
-    RuntimeFeedMapping("scap", "SCAP data feed", "build/var/lib/gvm/scap-data", "/runtime/feeds/gvm/scap-data"),
-    RuntimeFeedMapping("cert", "CERT data feed", "build/var/lib/gvm/cert-data", "/runtime/feeds/gvm/cert-data"),
-)
 
 BUILD_META: dict[str, BuildMeta] = {
     "gvm-libs": BuildMeta(
@@ -3704,9 +3690,6 @@ def notus_signature_files(repo_root: Path) -> list[tuple[str, Path, Path]]:
     root = feed_runtime_root(repo_root) / "notus"
     return [(subtree, root / subtree / "sha256sums", root / subtree / "sha256sums.asc") for subtree in NOTUS_SIGNATURE_SUBTREES]
 
-
-def runtime_feed_mapping_paths(repo_root: Path) -> list[tuple[RuntimeFeedMapping, Path]]:
-    return [(mapping, repo_root / mapping.build_rel) for mapping in RUNTIME_FEED_MAPPINGS]
 
 
 def feed_sync_binary(repo_root: Path) -> Path:
@@ -5260,13 +5243,6 @@ def gvmd_db_args(repo_root: Path) -> list[str]:
     ]
 
 
-def gvmd_runtime_args(repo_root: Path) -> list[str]:
-    return [
-        *gvmd_db_args(repo_root),
-        "--broker-address=mosquitto:1883",
-        "--feed-lock-path=/runtime/run/feed-update.lock",
-    ]
-
 
 def run_app_oneoff(
     repo_root: Path,
@@ -5317,23 +5293,6 @@ def run_gvmd_oneoff(
         app_image_ids=app_image_ids,
     )
 
-
-def run_gvmd_runtime_oneoff(
-    repo_root: Path,
-    args: list[str],
-    no_deps: bool = True,
-    timeout: int = 300,
-    *,
-    app_image_ids: dict[str, str] | None = None,
-) -> subprocess.CompletedProcess[str]:
-    return run_app_oneoff(
-        repo_root,
-        "gvmd",
-        ["gvmd", *gvmd_runtime_args(repo_root), *args],
-        no_deps=no_deps,
-        timeout=timeout,
-        app_image_ids=app_image_ids,
-    )
 
 
 def source_gvmd_database_version(repo_root: Path) -> int | None:
@@ -5439,18 +5398,6 @@ def ospd_vt_load_status_from_logs(lines: Iterable[str]) -> tuple[str, list[str]]
             relevant.append(line)
     return "wait", relevant
 
-
-def wait_for_ospd_vt_load(repo_root: Path, timeout_seconds: int = 300) -> tuple[str, list[str]]:
-    deadline = time.monotonic() + timeout_seconds
-    last_lines: list[str] = []
-    while time.monotonic() < deadline:
-        status, lines = ospd_vt_load_status_from_logs(service_log_tail(repo_root, "ospd-openvas", lines=200))
-        if lines:
-            last_lines = lines
-        if status in ("pass", "fail"):
-            return status, last_lines
-        time.sleep(5)
-    return "wait", last_lines
 
 
 def gvmd_socket_path(repo_root: Path) -> Path:
@@ -6800,67 +6747,6 @@ def ensure_build_runtime_dirs(repo_root: Path) -> list[dict[str, Any]]:
     return findings
 
 
-def directory_is_empty(path: Path) -> bool:
-    try:
-        next(path.iterdir())
-    except StopIteration:
-        return True
-    except OSError:
-        return False
-    return False
-
-
-def ensure_runtime_feed_mappings(repo_root: Path) -> list[dict[str, Any]]:
-    findings: list[dict[str, Any]] = []
-    for mapping, path in runtime_feed_mapping_paths(repo_root):
-        desired = mapping.container_target
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-        except OSError as error:
-            findings.append(finding("fail", f"feed-map.{mapping.key}", f"Could not create parent directory for {mapping.label}: {error}", str(path)))
-            continue
-
-        if path.is_symlink():
-            current = os.readlink(path)
-            if current == desired:
-                findings.append(finding("pass", f"feed-map.{mapping.key}", f"{mapping.label} mapping points at the active feed generation.", str(path), {"target": current, "expected_target": desired}))
-            else:
-                try:
-                    path.unlink()
-                    path.symlink_to(desired)
-                    findings.append(finding("pass", f"feed-map.{mapping.key}", f"Stale {mapping.label} symlink retargeted to the active feed generation.", str(path), {"old_target": current, "target": desired}))
-                except OSError as error:
-                    findings.append(finding("fail", f"feed-map.{mapping.key}", f"Could not retarget stale {mapping.label} symlink: {error}", str(path), {"target": current, "expected_target": desired}))
-            continue
-
-        if not path.exists():
-            try:
-                path.symlink_to(desired)
-                findings.append(finding("pass", f"feed-map.{mapping.key}", f"{mapping.label} mapping created.", str(path), {"target": desired}))
-            except OSError as error:
-                findings.append(finding("fail", f"feed-map.{mapping.key}", f"Could not create {mapping.label} mapping: {error}", str(path), {"target": desired}))
-            continue
-
-        if path.is_dir() and directory_is_empty(path):
-            try:
-                path.rmdir()
-                path.symlink_to(desired)
-                findings.append(finding("pass", f"feed-map.{mapping.key}", f"Empty {mapping.label} directory replaced with runtime feed mapping.", str(path), {"target": desired}))
-            except OSError as error:
-                findings.append(finding("fail", f"feed-map.{mapping.key}", f"Could not replace empty {mapping.label} directory with mapping: {error}", str(path), {"target": desired}))
-            continue
-
-        findings.append(
-            finding(
-                "fail",
-                f"feed-map.{mapping.key}",
-                f"{mapping.label} path already exists and is not an empty directory or expected symlink; refusing to replace it.",
-                str(path),
-                {"expected_target": desired},
-            )
-        )
-    return findings
-
 
 def container_id(repo_root: Path, service: str) -> str | None:
     result = run_command(compose_command(repo_root, "ps", "-q", service), repo_root, env=runtime_env(repo_root))
@@ -7458,81 +7344,6 @@ def psql_value(result: subprocess.CompletedProcess[str]) -> str:
             return clean
     return ""
 
-
-def nvts_feed_version_query() -> str:
-    return "SELECT COALESCE((SELECT value FROM meta WHERE name = 'nvts_feed_version'), '');"
-
-
-OSPD_VTS_VERSION_PROBE_XML = '<get_vts version_only="1"/>'
-
-
-def ospd_vts_version_probe_command(_repo_root: Path) -> str:
-    return OSPD_VTS_VERSION_PROBE_XML
-
-
-def read_unix_xml_response(connection: socket.socket) -> str:
-    chunks: list[bytes] = []
-    while True:
-        chunk = connection.recv(16 * 1024)
-        if not chunk:
-            raise RuntimeError("Unix socket closed before sending a complete XML response")
-        chunks.append(chunk)
-        payload = b"".join(chunks)
-        try:
-            ET.fromstring(payload)
-            return payload.decode("utf-8", errors="replace")
-        except ET.ParseError:
-            continue
-
-
-def raw_unix_xml_command(socket_path: Path, command: str, timeout: int = 60) -> str:
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-        connection.settimeout(timeout)
-        connection.connect(str(socket_path))
-        connection.sendall(command.encode("utf-8"))
-        return read_unix_xml_response(connection)
-
-
-def run_ospd_vts_version_probe(repo_root: Path) -> subprocess.CompletedProcess[str]:
-    command = ospd_vts_version_probe_command(repo_root)
-    args = [str(ospd_socket_path(repo_root)), command]
-    try:
-        output = raw_unix_xml_command(ospd_socket_path(repo_root), command, timeout=60)
-        return subprocess.CompletedProcess(args, 0, output, "")
-    except Exception as error:  # pylint: disable=broad-except
-        return subprocess.CompletedProcess(args, 1, str(error), "")
-
-
-def xml_local_name(tag: str) -> str:
-    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
-
-
-def parse_ospd_vts_version(output: str) -> str | None:
-    try:
-        root = ET.fromstring(output)
-    except ET.ParseError:
-        return None
-    for element in root.iter():
-        if xml_local_name(str(element.tag)) == "vts":
-            version = element.get("vts_version")
-            return version if version else None
-    return None
-
-
-def wait_for_ospd_vts_version(repo_root: Path, timeout_seconds: int = 180) -> tuple[str | None, list[str]]:
-    deadline = time.monotonic() + timeout_seconds
-    last_output: list[str] = []
-    while time.monotonic() < deadline:
-        result = run_ospd_vts_version_probe(repo_root)
-        last_output = output_tail(result.stdout, 40)
-        if result.returncode == 0:
-            version = parse_ospd_vts_version(result.stdout)
-            if version:
-                return version, last_output
-        if "OSPd OpenVAS is still starting" not in result.stdout:
-            break
-        time.sleep(5)
-    return None, last_output
 
 
 def postgres_collation_databases(repo_root: Path) -> tuple[str, ...]:
@@ -15536,298 +15347,6 @@ def command_runtime_feed_keyring_init(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-feed-keyring-init", repo_root, "Shared feed signature keyring initialization completed.", findings, [str(home), str(key_path)])
 
 
-def native_required_feed_object_findings(repo_root: Path) -> list[dict[str, Any]]:
-    checks = (
-        (
-            "feed-objects.native-scan-config",
-            "Required Full and Fast scan config is available through the native API.",
-            "Required Full and Fast scan config was not available through the native API.",
-            f"/api/v1/scan-configs/{urllib.parse.quote(FULL_AND_FAST_SCAN_CONFIG_ID)}",
-            FULL_AND_FAST_SCAN_CONFIG_ID,
-        ),
-        (
-            "feed-objects.native-port-list",
-            "Required IANA TCP/UDP port list is available through the native API.",
-            "Required IANA TCP/UDP port list was not available through the native API.",
-            f"/api/v1/port-lists/{urllib.parse.quote(IANA_TCP_UDP_PORT_LIST_ID)}",
-            IANA_TCP_UDP_PORT_LIST_ID,
-        ),
-    )
-    findings: list[dict[str, Any]] = []
-    for check, pass_message, fail_message, path, expected_id in checks:
-        response = native_api_curl(repo_root, path)
-        parsed = parse_json_output(response)
-        observed_id = str(parsed.get("id") or "") if isinstance(parsed, dict) else ""
-        ok = response.returncode == 0 and observed_id == expected_id
-        findings.append(
-            native_api_probe_finding(
-                "pass" if ok else "fail",
-                check,
-                pass_message if ok else fail_message,
-                response,
-                compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", f"http://127.0.0.1:9080{path}"),
-                parsed if isinstance(parsed, dict) else None,
-                {"expected_id": expected_id, "observed_id": observed_id, **summarize_native_api_response(parsed)},
-            )
-        )
-    return findings
-
-
-def command_runtime_feed_import_init(
-    repo_root: Path,
-    *,
-    activation_managed: bool = False,
-    restart_services: bool = True,
-    app_image_ids: dict[str, str] | None = None,
-) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    if not activation_managed:
-        findings.append(
-            finding(
-                "fail",
-                "feed.import.activation-boundary",
-                "Standalone feed import is disabled; use feed-generation-activate or feed-generation-rollback.",
-            )
-        )
-        return make_result(
-            "runtime-feed-import-init",
-            repo_root,
-            "Feed import stopped outside the guarded generation-activation boundary.",
-            findings,
-            [str(runtime_dir(repo_root) / "feed-store")],
-        )
-    if app_image_ids is None:
-        findings.append(
-            finding(
-                "fail",
-                "feed.import.app-images",
-                "Guarded feed import requires pinned app image identities.",
-            )
-        )
-        return make_result(
-            "runtime-feed-import-init",
-            repo_root,
-            "Feed import stopped because pinned application images were unavailable.",
-            findings,
-            [str(runtime_dir(repo_root) / "feed-store")],
-        )
-    validate_app_service_image_ids(app_image_ids)
-    findings.append(
-        finding(
-            "pass",
-            "feed.import.app-images",
-            "Feed import is pinned to pre-transition application images and cannot rebuild them.",
-            details={"services": list(APP_SERVICES)},
-        )
-    )
-    feed_state = command_feed_state(repo_root)
-    findings.extend(feed_state["findings"])
-    runtime_findings = [item for item in feed_state["findings"] if item["check"].startswith("feed.runtime.")]
-    runtime_class_findings = [item for item in runtime_findings if item["check"] != "feed.runtime.root"]
-    if any(item["status"] != "pass" for item in runtime_class_findings):
-        findings.append(finding("fail", "feed.runtime.ready", "Runtime feed copy is incomplete; refusing local feed import."))
-        return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because runtime feed classes are missing.", findings, [str(feed_runtime_root(repo_root))])
-    findings.append(finding("pass", "feed.runtime.ready", "Runtime feed copy has all required feed classes."))
-
-    findings.extend(ensure_runtime_feed_mappings(repo_root))
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-feed-import-init", repo_root, "Feed import stopped while mapping runtime feed paths.", findings, [str(feed_runtime_root(repo_root))])
-
-    pre_manager_stop = run_command(compose_command(repo_root, "--profile", "app", "stop", "gvmd"), repo_root, env=runtime_env(repo_root), timeout=120)
-    findings.append(finding("pass" if pre_manager_stop.returncode == 0 else "fail", "gvmd.stop-for-manager-init", f"Stop gvmd service before manager one-shot initialization exit code {pre_manager_stop.returncode}.", details={"output_tail": output_tail(pre_manager_stop.stdout, 80)}))
-    if pre_manager_stop.returncode != 0:
-        return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because gvmd could not be stopped before manager initialization.", findings, [str(runtime_dir(repo_root))])
-
-    manager = command_runtime_manager_init(
-        repo_root,
-        lifecycle_managed=True,
-        build_image=False,
-        app_image_ids=app_image_ids,
-    )
-    findings.append(finding(manager["status"], "runtime.manager-init", manager["summary"], details={"status": manager["status"]}))
-    scanner_redis = command_runtime_scanner_redis_init(repo_root, probe_openvas=False, lifecycle_managed=True)
-    findings.append(finding(scanner_redis["status"], "runtime.scanner-redis", scanner_redis["summary"], details={"status": scanner_redis["status"]}))
-    keyring = command_runtime_feed_keyring_init(repo_root)
-    findings.append(finding(keyring["status"], "runtime.feed-keyring", keyring["summary"], details={"status": keyring["status"]}))
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-feed-import-init", repo_root, "Feed import stopped at runtime prerequisites.", findings, [str(runtime_dir(repo_root))])
-
-    scanner_services = ("ospd-openvas", "notus-scanner")
-    scanner_up_command = compose_command_with_app_images(
-        repo_root,
-        app_image_ids,
-        "--profile",
-        "app",
-        "up",
-        "-d",
-        "--no-deps",
-        "--no-build",
-        "--pull",
-        "never",
-        "--force-recreate",
-        *scanner_services,
-    )
-    scanner_up = run_command(scanner_up_command, repo_root, env=runtime_env(repo_root), timeout=900)
-    findings.append(finding("pass" if scanner_up.returncode == 0 else "fail", "runtime.scanner-services-up", f"Start scanner-side app services for feed import exit code {scanner_up.returncode}.", details={"services": list(scanner_services), "output_tail": output_tail(scanner_up.stdout, 120)}))
-    for service in scanner_services:
-        running = container_running(repo_root, service)
-        findings.append(finding("pass" if running else "fail", "runtime.scanner-service.running", f"{service} container is {'running' if running else 'not running'}.", details={"service": service, "logs_tail": [] if running else service_log_tail(repo_root, service)}))
-        observed_image = container_image_id(repo_root, service)
-        findings.append(
-            finding(
-                "pass" if observed_image == app_image_ids[service] else "fail",
-                "runtime.scanner-service.image",
-                f"{service} uses the pinned pre-transition image."
-                if observed_image == app_image_ids[service]
-                else f"{service} image identity changed during feed import.",
-                details={"service": service, "expected": app_image_ids[service], "observed": observed_image},
-            )
-        )
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because scanner-side services are not ready.", findings, [str(runtime_dir(repo_root))])
-
-    ospd_ready = wait_for_socket(ospd_socket_path(repo_root), timeout_seconds=30)
-    findings.append(finding("pass" if ospd_ready else "fail", "ospd.socket", "ospd-openvas socket is ready for VT metadata rebuild." if ospd_ready else "ospd-openvas socket is not ready; cannot rebuild VT metadata.", str(ospd_socket_path(repo_root))))
-    if not ospd_ready:
-        return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because OSPD is not ready.", findings, [str(runtime_dir(repo_root))])
-
-    vt_status, vt_lines = wait_for_ospd_vt_load(repo_root, timeout_seconds=300)
-    findings.append(
-        finding(
-            "pass" if vt_status == "pass" else "fail",
-            "ospd.vt-load",
-            "ospd-openvas finished loading VTs before manager rebuild." if vt_status == "pass" else "ospd-openvas did not finish loading VTs before manager rebuild.",
-            details={"status": vt_status, "log_lines": vt_lines[-20:]},
-        )
-    )
-    if vt_status != "pass":
-        return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because OSPD did not finish loading VTs.", findings, [str(runtime_dir(repo_root))])
-
-    findings.append(finding("pass", "ospd.vts-probe", "OSPD VT-version readiness probe uses the runtime Unix socket directly; gvm-tools is not required."))
-
-    ospd_feed_version, ospd_probe_tail = wait_for_ospd_vts_version(repo_root, timeout_seconds=180)
-    findings.append(
-        finding(
-            "pass" if ospd_feed_version else "fail",
-            "ospd.vts-version",
-            f"ospd-openvas reports VT feed version {ospd_feed_version}." if ospd_feed_version else "ospd-openvas did not report a VT feed version before the readiness timeout.",
-            details={"feed_version": ospd_feed_version, "output_tail": ospd_probe_tail},
-        )
-    )
-
-    db_version_result = psql(repo_root, nvts_feed_version_query())
-    db_feed_version = psql_value(db_version_result) if db_version_result.returncode == 0 else ""
-    findings.append(
-        finding(
-            "pass" if db_version_result.returncode == 0 else "warn",
-            "gvmd.nvts-feed-version",
-            f"gvmd NVT database feed version is {db_feed_version or 'empty'}." if db_version_result.returncode == 0 else f"gvmd NVT database feed version query exit code {db_version_result.returncode}.",
-            details={"feed_version": db_feed_version, "output_tail": output_tail(db_version_result.stdout, 40)},
-        )
-    )
-    if not ospd_feed_version:
-        return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because OSPD did not report a VT feed version.", findings, [str(runtime_dir(repo_root))])
-
-    stop_gvmd = run_command(compose_command(repo_root, "--profile", "app", "stop", "gvmd"), repo_root, env=runtime_env(repo_root), timeout=120)
-    findings.append(finding("pass" if stop_gvmd.returncode == 0 else "fail", "gvmd.stop-for-import", f"Stop gvmd service before one-shot feed import exit code {stop_gvmd.returncode}.", details={"output_tail": output_tail(stop_gvmd.stdout, 80)}))
-    if stop_gvmd.returncode != 0:
-        return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because gvmd could not be stopped cleanly.", findings, [str(runtime_dir(repo_root))])
-
-    findings.append(
-        finding(
-            "pass",
-            "gvmd.rebuild-nvt-generation",
-            "NVT metadata will be rebuilt for the selected immutable generation; matching publisher version strings do not prove content identity.",
-            details={
-                "database_feed_version": db_feed_version,
-                "ospd_feed_version": ospd_feed_version,
-            },
-        )
-    )
-    import_steps: list[tuple[str, list[str]]] = [
-        ("gvmd.rebuild-nvt", ["--rebuild", f"--osp-vt-update=/runtime/run/ospd/{ospd_socket_path(repo_root).name}"]),
-        ("gvmd.rebuild-gvmd-data", ["--rebuild-gvmd-data=all"]),
-        ("gvmd.rebuild-scap", ["--rebuild-scap"]),
-    ]
-    import_failed = False
-    for check, args in import_steps:
-        result = run_gvmd_runtime_oneoff(
-            repo_root,
-            args,
-            no_deps=False,
-            timeout=GVMD_IMPORT_TIMEOUT_SECONDS,
-            app_image_ids=app_image_ids,
-        )
-        findings.append(finding("pass" if result.returncode == 0 else "fail", check, f"gvmd {' '.join(args)} exit code {result.returncode}.", details={"output_tail": output_tail(result.stdout, 120)}))
-        if result.returncode != 0:
-            import_failed = True
-            break
-
-    if import_failed:
-        stopped = stop_app_services_for_feed_transition(repo_root, "runtime.import-failure-stop")
-        findings.append(stopped)
-        return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because a rebuild/import step failed.", findings, [str(runtime_dir(repo_root))])
-
-    if not restart_services:
-        stopped = stop_app_services_for_feed_transition(repo_root, "runtime.import-complete-stop")
-        findings.append(stopped)
-        return make_result(
-            "runtime-feed-import-init",
-            repo_root,
-            "Feed database imports completed and all app services are stopped for durable activation commit."
-            if stopped["status"] == "pass"
-            else "Feed database imports completed but app services could not be stopped before activation commit.",
-            findings,
-            [str(runtime_dir(repo_root)), str(feed_runtime_root(repo_root))],
-        )
-
-    restart_findings = compose_app_services_up_with_retry(
-        repo_root,
-        "runtime.app-restart",
-        "Restart app services after feed import",
-        app_image_ids=app_image_ids,
-    )
-    findings.extend(restart_findings)
-    findings.extend(app_service_image_findings(repo_root, app_image_ids, check="runtime.app.image"))
-    for service in APP_SERVICES:
-        running = container_running(repo_root, service)
-        findings.append(finding("pass" if running else "fail", "runtime.app.running", f"{service} container is {'running' if running else 'not running'} after feed import.", details={"service": service, "logs_tail": [] if running else service_log_tail(repo_root, service)}))
-    if aggregate_status(restart_findings) == "fail":
-        return make_result("runtime-feed-import-init", repo_root, "Feed import stopped because app services could not be restarted.", findings, [str(runtime_dir(repo_root))])
-
-    gvmd_ready = wait_for_socket(gvmd_socket_path(repo_root), timeout_seconds=180)
-    findings.append(finding("pass" if gvmd_ready else "fail", "gvmd.socket-wait", "gvmd socket became ready after feed import restart." if gvmd_ready else "gvmd socket did not become ready after feed import restart.", str(gvmd_socket_path(repo_root))))
-
-    native_ready = container_running(repo_root, "turbovas-api")
-    findings.append(finding("pass" if native_ready else "fail", "native-api.container", "turbovas-api is running for native feed object verification." if native_ready else "turbovas-api is not running; native feed object verification cannot start."))
-    if native_ready:
-        findings.extend(native_required_feed_object_findings(repo_root))
-    summary = "Runtime feed import and native verification completed."
-    if aggregate_status(findings) == "fail":
-        summary = "Feed import completed but native feed object verification failed."
-    return make_result("runtime-feed-import-init", repo_root, summary, findings, [str(runtime_dir(repo_root)), str(feed_runtime_root(repo_root))])
-
-
-def stop_app_services_for_feed_transition(repo_root: Path, check: str) -> dict[str, Any]:
-    command = compose_command(
-        repo_root, "--profile", "app", "rm", "-f", "-s", *APP_SERVICES
-    )
-    stopped = run_command(command, repo_root, env=runtime_app_env(repo_root), timeout=300)
-    remaining_services = [
-        service
-        for service in APP_SERVICES
-        if docker_container_state(repo_root, service) is not None
-    ]
-    item = process_step_finding(
-        "pass" if stopped.returncode == 0 and not remaining_services else "fail",
-        check,
-        f"Remove all app service containers for feed generation transition exit code {stopped.returncode}; {len(remaining_services)} service container(s) remain.",
-        stopped,
-        command,
-    )
-    item["details"]["remaining_services"] = remaining_services
-    return item
-
 
 def command_runtime_scanner_capability_check(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
@@ -17398,27 +16917,6 @@ def command_feed_cache_sync(repo_root: Path) -> dict[str, Any]:
     start = run_command(["tmux", "new-session", "-d", "-s", FEED_SYNC_SESSION, shell_command], repo_root)
     findings.append(finding("pass" if start.returncode == 0 else "fail", "feed-sync.session-start", f"Start tmux feed sync session exit code {start.returncode}.", details={"session": FEED_SYNC_SESSION, "log_path": str(log_path), "output_tail": output_tail(start.stdout, 80)}))
     return make_result("feed-cache-sync", repo_root, "Feed cache sync session start attempted.", findings, [str(feed_cache_var_lib(repo_root)), str(log_path)])
-
-
-def command_feed_copy_to_runtime(repo_root: Path) -> dict[str, Any]:
-    return make_result(
-        "feed-copy-to-runtime",
-        repo_root,
-        "Legacy live feed copying is disabled; stage and activate a verified immutable generation.",
-        [
-            finding(
-                "fail",
-                "feed.copy.activation-boundary",
-                "Sequential rsync into live consumer paths is unsafe; use feed-generation-stage followed by feed-generation-activate.",
-            )
-        ],
-        [str(runtime_dir(repo_root) / "feed-store")],
-    )
-
-
-
-
-
 
 
 
@@ -33010,7 +32508,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-scanner-process-check", parents=[common], help="verify ospd-openvas process hygiene")
     subparsers.add_parser("runtime-nmap-capability-check", parents=[common], help="verify non-root Nmap raw scan capability for Full and fast")
     subparsers.add_parser("runtime-feed-keyring-init", parents=[common], help="initialize the shared feed signature GnuPG keyring")
-    subparsers.add_parser("runtime-feed-import-init", parents=[common], help="refuse standalone feed import outside guarded generation activation")
     full_test_preflight = subparsers.add_parser("runtime-full-test-scan-preflight", parents=[common], help="preflight an explicit authorized full test scan")
     full_test_preflight.add_argument("--target-cidr", required=True, help="explicit canonical authorized target CIDR; at most 256 addresses")
     full_test_start = subparsers.add_parser("runtime-full-test-scan-start", parents=[common], help="start an explicit authorized full test scan")
@@ -33041,7 +32538,6 @@ def build_parser() -> argparse.ArgumentParser:
     scope_report_metrics.add_argument("--scope-report-id", help="optional scope report id; defaults to the latest Organization scope report")
     subparsers.add_parser("feed-state", parents=[common], help="show Greenbone Community Feed cache and active-generation state")
     subparsers.add_parser("feed-cache-sync", parents=[common], help="start full Greenbone Community Feed cache sync in tmux")
-    subparsers.add_parser("feed-copy-to-runtime", parents=[common], help="refuse retired sequential copying into live feed paths")
     subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
     subparsers.add_parser("runtime-log-review", parents=[common], help="review recent full-stack runtime logs")
@@ -33381,8 +32877,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_nmap_capability_check(repo_root)
     elif args.command == "runtime-feed-keyring-init":
         result = command_runtime_feed_keyring_init(repo_root)
-    elif args.command == "runtime-feed-import-init":
-        result = command_runtime_feed_import_init(repo_root)
     elif args.command == "runtime-full-test-scan-preflight":
         result = command_runtime_full_test_scan(repo_root, "preflight", target_cidr=args.target_cidr)
     elif args.command == "runtime-full-test-scan-start":
@@ -33412,8 +32906,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_feed_state(repo_root)
     elif args.command == "feed-cache-sync":
         result = command_feed_cache_sync(repo_root)
-    elif args.command == "feed-copy-to-runtime":
-        result = command_feed_copy_to_runtime(repo_root)
     elif args.command == "runtime-status":
         result = command_runtime_status(repo_root)
     elif args.command == "runtime-smoke":

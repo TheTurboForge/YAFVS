@@ -1205,8 +1205,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["quality-gate-state", "--json"],
                 ["quality-gate-state", "--status-only", "--json"],
                 ["feed-state", "--json"],
-                ["feed-copy-to-runtime", "--json"],
-                ["runtime-feed-import-init", "--json"],
                 ["quality-gate-schedule", "--install", "--json"],
                 ["runtime-native-api-direct-token", "--json"],
                 ["license-report", "--json"],
@@ -1239,6 +1237,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 (["feed-generation-stage", "--json"], 1, "fail"),
                 (["feed-generation-activate", "invalid", "--json"], 1, "fail"),
                 (["feed-generation-rollback", "invalid", "--json"], 1, "fail"),
+                (["feed-copy-to-runtime", "--json"], 1, "fail"),
+                (["runtime-feed-import-init", "--json"], 1, "fail"),
                 (["runtime-redis-state", "--json"], 0, "warn"),
                 (["runtime-data-state", "--json"], 0, "warn"),
                 (["runtime-db-introspect", "--json"], 0, "warn"),
@@ -15198,57 +15198,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("runtime-feed-import-init", docs)
         self.assertNotIn("feed-copy-to-runtime", docs)
 
-    def test_runtime_feed_mappings_point_to_runtime_copy(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            mappings = turbovasctl.runtime_feed_mapping_paths(root)
-            self.assertEqual(
-                [(mapping.key, path.relative_to(root), mapping.container_target) for mapping, path in mappings],
-                [
-                    ("nasl", Path("build/var/lib/openvas/plugins"), "/runtime/feeds/openvas/plugins"),
-                    ("gvmd", Path("build/var/lib/gvm/data-objects/gvmd"), "/runtime/feeds/gvm/data-objects/gvmd/22.04"),
-                    ("scap", Path("build/var/lib/gvm/scap-data"), "/runtime/feeds/gvm/scap-data"),
-                    ("cert", Path("build/var/lib/gvm/cert-data"), "/runtime/feeds/gvm/cert-data"),
-                ],
-            )
-            self.assertTrue(all("feed-cache" not in mapping.container_target for mapping, _path in mappings))
-
-    def test_runtime_feed_mapping_creates_missing_symlinks(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            findings = turbovasctl.ensure_runtime_feed_mappings(root)
-            self.assertEqual(turbovasctl.aggregate_status(findings), "pass")
-            for mapping, path in turbovasctl.runtime_feed_mapping_paths(root):
-                self.assertTrue(path.is_symlink())
-                self.assertEqual(path.readlink(), Path(mapping.container_target))
-
-    def test_runtime_feed_mapping_retargets_stale_symlink(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            first_mapping, first_path = turbovasctl.runtime_feed_mapping_paths(root)[0]
-            first_path.parent.mkdir(parents=True)
-            first_path.symlink_to("/runtime/feeds/old")
-            findings = turbovasctl.ensure_runtime_feed_mappings(root)
-            first_finding = next(item for item in findings if item["check"] == f"feed-map.{first_mapping.key}")
-            self.assertEqual(first_finding["status"], "pass")
-            self.assertEqual(first_path.readlink(), Path(first_mapping.container_target))
-
-    def test_runtime_feed_mapping_refuses_non_empty_directory(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            first_mapping, first_path = turbovasctl.runtime_feed_mapping_paths(root)[0]
-            first_path.mkdir(parents=True)
-            marker = first_path / "keep.txt"
-            marker.write_text("do not replace\n", encoding="utf-8")
-            findings = turbovasctl.ensure_runtime_feed_mappings(root)
-            first_finding = next(item for item in findings if item["check"] == f"feed-map.{first_mapping.key}")
-            self.assertEqual(first_finding["status"], "fail")
-            self.assertTrue(marker.is_file())
-
     def test_ospd_vt_load_status_from_logs(self):
         self.assertEqual(
             turbovasctl.ospd_vt_load_status_from_logs(["OSPD: Loading VTs. Scans will be queued"])[0],
@@ -15262,75 +15211,6 @@ class TurboVASCtlTests(unittest.TestCase):
             turbovasctl.ospd_vt_load_status_from_logs(["OSPD: OpenVAS Scanner failed to load VTs."])[0],
             "fail",
         )
-
-    def test_ospd_vts_version_probe_uses_runtime_socket(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            command = turbovasctl.ospd_vts_version_probe_command(root)
-            self.assertEqual(command, '<get_vts version_only="1"/>')
-
-    def test_run_ospd_vts_version_probe_uses_raw_unix_socket(self):
-        original_raw = turbovasctl.raw_unix_xml_command
-        calls = []
-
-        def fake_raw(socket_path, command, timeout=60):
-            calls.append((socket_path, command, timeout))
-            return '<get_vts_response status="200" status_text="OK"><vts vts_version="202605221736" /></get_vts_response>'
-
-        try:
-            turbovasctl.raw_unix_xml_command = fake_raw
-            with tempfile.TemporaryDirectory() as tmp:
-                root = Path(tmp) / "TurboVAS"
-                root.mkdir()
-                result = turbovasctl.run_ospd_vts_version_probe(root)
-                expected_socket = turbovasctl.ospd_socket_path(root)
-        finally:
-            turbovasctl.raw_unix_xml_command = original_raw
-
-        self.assertEqual(result.returncode, 0)
-        self.assertEqual(calls[0][0], expected_socket)
-        self.assertEqual(calls[0][1], '<get_vts version_only="1"/>')
-        self.assertEqual(calls[0][2], 60)
-
-    def test_parse_ospd_vts_version(self):
-        response = (
-            '<get_vts_response status="200" status_text="OK">'
-            '<vts vts_version="202605221736" feed_vendor="Greenbone AG" total="" />'
-            "</get_vts_response>"
-        )
-        self.assertEqual(turbovasctl.parse_ospd_vts_version(response), "202605221736")
-        self.assertIsNone(turbovasctl.parse_ospd_vts_version("<get_vts_response/>"))
-        self.assertIsNone(turbovasctl.parse_ospd_vts_version("not xml"))
-
-    def test_wait_for_ospd_vts_version_retries_still_starting(self):
-        responses = [
-            '<error_response status="400" status_text="OSPd OpenVAS is still starting" />',
-            '<get_vts_response status="200" status_text="OK"><vts vts_version="202605221736" /></get_vts_response>',
-        ]
-        original_run_probe = turbovasctl.run_ospd_vts_version_probe
-        original_sleep = turbovasctl.time.sleep
-
-        def fake_run_probe(_root):
-            return turbovasctl.subprocess.CompletedProcess([], 0, responses.pop(0), "")
-
-        try:
-            turbovasctl.run_ospd_vts_version_probe = fake_run_probe
-            turbovasctl.time.sleep = lambda _seconds: None
-            with tempfile.TemporaryDirectory() as tmp:
-                root = Path(tmp) / "TurboVAS"
-                root.mkdir()
-                version, output = turbovasctl.wait_for_ospd_vts_version(root)
-        finally:
-            turbovasctl.run_ospd_vts_version_probe = original_run_probe
-            turbovasctl.time.sleep = original_sleep
-
-        self.assertEqual(version, "202605221736")
-        self.assertIn("202605221736", "\n".join(output))
-
-    def test_nvts_feed_version_query_targets_meta_table(self):
-        self.assertIn("nvts_feed_version", turbovasctl.nvts_feed_version_query())
-        self.assertIn("meta", turbovasctl.nvts_feed_version_query())
 
     def test_feed_state_reports_missing_cache_and_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -16215,182 +16095,7 @@ class TurboVASCtlTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "modify temporary filter failed"):
             runtime_rbac_smoke.require_ok_response(response, "modify temporary filter")
 
-    def test_native_feed_object_verification_uses_detail_endpoints(self):
-        calls = []
-        original_native_api_curl = turbovasctl.native_api_curl
-
-        def fake_native_api_curl(_root, path, **_kwargs):
-            calls.append(path)
-            if path == f"/api/v1/scan-configs/{turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID}":
-                payload = {"id": turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID, "name": "Full and fast"}
-                return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps(payload), "")
-            if path == f"/api/v1/port-lists/{turbovasctl.IANA_TCP_UDP_PORT_LIST_ID}":
-                payload = {"id": turbovasctl.IANA_TCP_UDP_PORT_LIST_ID, "name": "All IANA assigned TCP and UDP"}
-                return turbovasctl.subprocess.CompletedProcess([], 0, json.dumps(payload), "")
-            return turbovasctl.subprocess.CompletedProcess([], 22, "", "unexpected path")
-
-        try:
-            turbovasctl.native_api_curl = fake_native_api_curl
-            with tempfile.TemporaryDirectory() as tmp:
-                root = Path(tmp) / "TurboVAS"
-                root.mkdir()
-                findings = turbovasctl.native_required_feed_object_findings(root)
-        finally:
-            turbovasctl.native_api_curl = original_native_api_curl
-
-        self.assertEqual([item["status"] for item in findings], ["pass", "pass"])
-        self.assertEqual(
-            calls,
-            [
-                f"/api/v1/scan-configs/{turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID}",
-                f"/api/v1/port-lists/{turbovasctl.IANA_TCP_UDP_PORT_LIST_ID}",
-            ],
-        )
-        self.assertEqual(findings[0]["details"]["response_summary"]["expected_id"], turbovasctl.FULL_AND_FAST_SCAN_CONFIG_ID)
-
-    def test_runtime_feed_import_uses_native_object_verification(self):
-        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
-        self.assertIn("feed-objects.native-scan-config", source)
-        self.assertIn("feed-objects.native-port-list", source)
-        self.assertNotIn("feed-objects.gmp", source)
-        self.assertNotIn("runtime_feed_objects_probe_path", source)
-
-    def run_mocked_runtime_feed_import(
-        self, restart_status="pass", rebuild_returncode=0
-    ):
-        image_ids = {
-            service: "sha256:" + f"{index + 1:x}" * 64
-            for index, service in enumerate(turbovasctl.APP_SERVICES)
-        }
-        restart = unittest.mock.Mock(
-            return_value=[
-                turbovasctl.finding(
-                    restart_status,
-                    "runtime.app-restart",
-                    f"Mock app restart {restart_status}.",
-                )
-            ]
-        )
-        rebuild = unittest.mock.Mock(
-            return_value=subprocess.CompletedProcess(
-                [], rebuild_returncode, "mock rebuild", ""
-            )
-        )
-        wait_for_socket = unittest.mock.Mock(return_value=True)
-        completed = subprocess.CompletedProcess([], 0, "", "")
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            with unittest.mock.patch.multiple(
-                turbovasctl,
-                command_feed_state=unittest.mock.Mock(
-                    return_value={
-                        "findings": [
-                            turbovasctl.finding(
-                                "pass",
-                                "feed.runtime.nasl",
-                                "Mock runtime feed is ready.",
-                            )
-                        ]
-                    }
-                ),
-                ensure_runtime_feed_mappings=unittest.mock.Mock(return_value=[]),
-                run_command=unittest.mock.Mock(return_value=completed),
-                runtime_env=unittest.mock.Mock(return_value={}),
-                command_runtime_manager_init=unittest.mock.Mock(
-                    return_value={"status": "pass", "summary": "manager ready"}
-                ),
-                command_runtime_scanner_redis_init=unittest.mock.Mock(
-                    return_value={"status": "pass", "summary": "scanner ready"}
-                ),
-                command_runtime_feed_keyring_init=unittest.mock.Mock(
-                    return_value={"status": "pass", "summary": "keyring ready"}
-                ),
-                container_running=unittest.mock.Mock(return_value=True),
-                container_image_id=unittest.mock.Mock(
-                    side_effect=lambda _root, service: image_ids[service]
-                ),
-                app_service_image_findings=unittest.mock.Mock(return_value=[]),
-                wait_for_socket=wait_for_socket,
-                wait_for_ospd_vt_load=unittest.mock.Mock(
-                    return_value=("pass", [])
-                ),
-                wait_for_ospd_vts_version=unittest.mock.Mock(
-                    return_value=("202607130100", [])
-                ),
-                psql=unittest.mock.Mock(
-                    return_value=subprocess.CompletedProcess(
-                        [], 0, "202607130100\n", ""
-                    )
-                ),
-                run_gvmd_runtime_oneoff=rebuild,
-                compose_app_services_up_with_retry=restart,
-                native_required_feed_object_findings=unittest.mock.Mock(
-                    return_value=[]
-                ),
-            ):
-                result = turbovasctl.command_runtime_feed_import_init(
-                    root,
-                    activation_managed=True,
-                    app_image_ids=image_ids,
-                )
-        return result, restart, rebuild, wait_for_socket
-
-    def test_runtime_feed_import_accepts_successful_app_restart(self):
-        result, restart, rebuild, wait_for_socket = (
-            self.run_mocked_runtime_feed_import()
-        )
-
-        self.assertEqual(result["status"], "pass")
-        restart.assert_called_once()
-        self.assertEqual(rebuild.call_count, 3)
-        self.assertEqual(rebuild.call_args_list[0].args[1][0], "--rebuild")
-        self.assertEqual(wait_for_socket.call_count, 2)
-
-    def test_runtime_feed_import_reports_failed_app_restart(self):
-        result, restart, rebuild, wait_for_socket = (
-            self.run_mocked_runtime_feed_import(restart_status="fail")
-        )
-
-        self.assertEqual(result["status"], "fail")
-        self.assertIn("could not be restarted", result["summary"])
-        restart.assert_called_once()
-        self.assertEqual(rebuild.call_count, 3)
-        self.assertEqual(wait_for_socket.call_count, 1)
-
-    def test_runtime_feed_import_leaves_services_stopped_after_failed_rebuild(self):
-        result, restart, rebuild, wait_for_socket = (
-            self.run_mocked_runtime_feed_import(rebuild_returncode=1)
-        )
-
-        self.assertEqual(result["status"], "fail")
-        restart.assert_not_called()
-        rebuild.assert_called_once()
-        self.assertEqual(wait_for_socket.call_count, 1)
-
-    def test_runtime_feed_import_force_recreates_scanner_consumers(self):
-        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(
-            encoding="utf-8"
-        )
-        function = source[
-            source.index("def command_runtime_feed_import_init") : source.index(
-                "def stop_app_services_for_feed_transition"
-            )
-        ]
-        scanner_start = function[
-            function.index("scanner_up_command") : function.index("scanner_up =")
-        ]
-        self.assertIn('"--force-recreate"', scanner_start)
-        self.assertIn('"--no-build"', scanner_start)
-        self.assertIn('"never"', scanner_start)
-        self.assertNotIn('"--build"', scanner_start)
-        self.assertLess(
-            function.index("if import_failed:"),
-            function.index("compose_app_services_up_with_retry"),
-        )
-
     def test_feed_activation_commits_journal_before_restarting_services(self):
-        source = TURBOVASCTL_PATH.read_text(encoding="utf-8")
         transition_source = (
             TURBOVASCTL_PATH.parent
             / "turbovasctl-rs/src/commands/feed_generation/transition.rs"
@@ -16404,23 +16109,22 @@ class TurboVASCtlTests(unittest.TestCase):
         restart = success.index("restart_and_verify_apps(false)")
 
         self.assertLess(active_journal, restart)
-        importer = source[
-            source.index("def command_runtime_feed_import_init") : source.index(
-                "def stop_app_services_for_feed_transition"
-            )
-        ]
-        no_restart = importer[importer.index("if not restart_services:") :]
-        self.assertLess(
-            no_restart.index("stop_app_services_for_feed_transition"),
-            no_restart.index("compose_app_services_up_with_retry"),
-        )
-        quiesce = source[
-            source.index("def stop_app_services_for_feed_transition") : source.index(
-                "def command_runtime_scanner_capability_check"
-            )
-        ]
-        self.assertIn('"rm", "-f", "-s"', quiesce)
-        self.assertIn("docker_container_state", quiesce)
+
+    def test_retired_feed_refusals_are_rust_only_cli_ownership(self):
+        python_source = TURBOVASCTL_PATH.read_text(encoding="utf-8")
+        rust_cli = (
+            TURBOVASCTL_PATH.parent / "turbovasctl-rs/src/cli.rs"
+        ).read_text(encoding="utf-8")
+        cli_reference = (
+            TURBOVASCTL_PATH.parent.parent / "docs/CLI_REFERENCE.md"
+        ).read_text(encoding="utf-8")
+        for command in ("runtime-feed-import-init", "feed-copy-to-runtime"):
+            definition = "command_" + command.replace("-", "_")
+            self.assertNotIn(f'add_parser("{command}"', python_source)
+            self.assertNotIn(f"def {definition}", python_source)
+            self.assertNotIn(f'args.command == "{command}"', python_source)
+            self.assertIn(command, rust_cli)
+            self.assertIn(command, cli_reference)
 
     def test_operator_acl_keeps_global_maintenance_settings_visible(self):
         acl = (
@@ -16436,17 +16140,6 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertIn("ACL_IS_GLOBAL", macro)
         self.assertIn("EXISTS (SELECT 1 FROM users", macro)
-
-    def test_standalone_feed_import_and_legacy_live_copy_fail_closed(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            imported = turbovasctl.command_runtime_feed_import_init(root)
-            copied = turbovasctl.command_feed_copy_to_runtime(root)
-        self.assertEqual(imported["status"], "fail")
-        self.assertIn("guarded generation-activation", imported["summary"])
-        self.assertEqual(copied["status"], "fail")
-        self.assertIn("Legacy live feed copying is disabled", copied["summary"])
 
     def test_full_test_scan_target_is_explicit_canonical_and_bounded(self):
         self.assertEqual(TEST_FULL_TEST_TARGET.cidr, "192.0.2.0/24")

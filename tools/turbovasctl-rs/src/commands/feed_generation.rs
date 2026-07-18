@@ -1553,9 +1553,17 @@ where
 
 pub fn command_feed_generation_state(repo_root: &Path, status_only: bool) -> ResultEnvelope {
     let runtime = runtime_dir(repo_root);
+    command_feed_generation_state_at(repo_root, &runtime, status_only)
+}
+
+fn command_feed_generation_state_at(
+    repo_root: &Path,
+    runtime: &Path,
+    status_only: bool,
+) -> ResultEnvelope {
     let root = runtime.join("feed-store/generations");
     let mut findings = Vec::new();
-    match state(&runtime, &Limits::default()) {
+    match state(runtime, &Limits::default()) {
         Err(e) => findings.push(
             Finding::new(
                 "fail",
@@ -1652,10 +1660,10 @@ pub fn command_feed_generation_state(repo_root: &Path, status_only: bool) -> Res
                     .with_path(&cur.display().to_string()),
                 )
             }
-            let journal_path = journal::activation_state_path(&runtime);
+            let journal_path = journal::activation_state_path(runtime);
             findings.push(activation_consistency_finding(
                 s["current_generation_id"].as_str(),
-                journal::read_activation_state(&runtime),
+                journal::read_activation_state(runtime),
                 || {
                     database::DatabaseAttestationAdapter::new(repo_root, &SystemCommandRunner)
                         .read()
@@ -1981,6 +1989,89 @@ mod tests {
             path,
         );
         assert_eq!(matching.status, "pass");
+    }
+
+    #[test]
+    fn empty_state_command_and_status_only_have_exact_contract() {
+        let root = fixture("state-command-empty");
+        let repo = root.join("TurboVAS");
+        let runtime = root.join("runtime");
+        fs::create_dir(&repo).unwrap();
+
+        let result = command_feed_generation_state_at(&repo, &runtime, false);
+        let compact = command_feed_generation_state_at(&repo, &runtime, true);
+        let generations = runtime.join("feed-store/generations");
+
+        assert_eq!(result.status, "warn");
+        assert_eq!(result.summary, "Immutable feed generation state verified.");
+        assert_eq!(result.artifacts, vec![generations.display().to_string()]);
+        assert_eq!(
+            result
+                .findings
+                .iter()
+                .map(|finding| (finding.check.as_str(), finding.status.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("feed-generation.integrity", "warn"),
+                ("feed-generation.orphan-staging", "pass"),
+                ("feed-generation.current", "warn"),
+                ("feed-generation.journal", "warn"),
+                ("feed-generation.activation-boundary", "pass"),
+            ]
+        );
+        assert_eq!(compact.status, "warn");
+        assert_eq!(
+            compact
+                .findings
+                .iter()
+                .map(|finding| (finding.check.as_str(), finding.status.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("feed-generation.integrity", "warn"),
+                ("feed-generation.current", "warn"),
+                ("feed-generation.journal", "warn"),
+            ]
+        );
+        assert_eq!(compact.artifacts, result.artifacts);
+        assert_eq!(compact.metadata.command, "feed-generation-state");
+
+        fs::remove_dir(repo).unwrap();
+        fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn interrupted_or_mismatched_activation_journal_fails_state_contract() {
+        let current = "a".repeat(64);
+        let other = "b".repeat(64);
+        let path = Path::new("/runtime/state/feed-generation/activation.json");
+        for activation in [
+            json!({
+                "status": "transitioning",
+                "current_generation_id": Value::Null,
+                "target_generation_id": current,
+            }),
+            json!({
+                "status": "active",
+                "current_generation_id": other,
+                "rollback_generation_id": Value::Null,
+            }),
+        ] {
+            let finding = activation_consistency_finding(
+                Some(&current),
+                Ok(Some(activation)),
+                || panic!("mismatched journal must not query the database"),
+                path,
+            );
+            assert_eq!(finding.status, "fail");
+            assert_eq!(
+                finding.message,
+                "Feed activation is interrupted or its journal does not match the selector; app startup is blocked."
+            );
+            assert_eq!(
+                finding.details.as_ref().unwrap()["selector_generation_id"],
+                current
+            );
+        }
     }
 
     #[test]

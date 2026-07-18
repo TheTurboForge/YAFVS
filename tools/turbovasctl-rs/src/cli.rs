@@ -304,4 +304,30 @@ mod tests {
             command_names.len()
         )));
     }
+
+    #[test]
+    fn feed_generation_golden_recipes_run_rust_directly() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let justfile = fs::read_to_string(repo_root.join("justfile")).unwrap();
+        for command in [
+            "feed-generation-stage",
+            "feed-generation-state",
+            "feed-generation-activate",
+            "feed-generation-rollback",
+        ] {
+            let recipe = justfile
+                .split_once(&format!("{command} *args:\n"))
+                .unwrap()
+                .1
+                .split_once("\n\n")
+                .unwrap()
+                .0;
+            assert!(recipe.contains("cargo run --quiet --locked"), "{command}");
+            assert!(
+                recipe.contains(&format!("-- {command} \"$@\"")),
+                "{command}"
+            );
+            assert!(!recipe.contains("tools/turbovasctl "), "{command}");
+        }
+    }
 }

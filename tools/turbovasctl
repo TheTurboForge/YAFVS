@@ -44,12 +44,7 @@ sys.path.insert(0, str(TOOLS_MODULE_DIR))
 from feed_generation import (  # noqa: E402
     FeedClassSpec as GenerationFeedClassSpec,
     FeedGenerationError,
-    clear_current_generation,
-    generation_state,
     read_current_generation,
-    select_generation,
-    stage_generation,
-    verify_generation,
 )
 try:
     import tomllib
@@ -3957,104 +3952,8 @@ def feed_generation_specs() -> tuple[GenerationFeedClassSpec, ...]:
     )
 
 
-def read_stable_regular_file(path: Path, *, max_bytes: int = 64 * 1024 * 1024) -> bytes:
-    parent_fd = descriptor = -1
-    try:
-        parent_fd, _canonical_parent = open_absolute_directory_nofollow(path.parent)
-        before = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
-        if (stat.S_ISLNK(before.st_mode) or not stat.S_ISREG(before.st_mode)
-                or before.st_nlink != 1 or before.st_size > max_bytes):
-            raise OSError(errno.EINVAL, f"file is unsafe or exceeds {max_bytes} bytes: {path}")
-        descriptor = os.open(path.name, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=parent_fd)
-        opened = os.fstat(descriptor)
-        if (before.st_dev, before.st_ino) != (opened.st_dev, opened.st_ino):
-            raise OSError(errno.ESTALE, f"file changed while opening: {path}")
-        payload = bytearray()
-        while len(payload) < opened.st_size:
-            chunk = os.read(descriptor, min(1024 * 1024, opened.st_size - len(payload)))
-            if not chunk:
-                raise OSError(errno.ESTALE, f"file was truncated while reading: {path}")
-            payload.extend(chunk)
-        if os.read(descriptor, 1):
-            raise OSError(errno.ESTALE, f"file grew while reading: {path}")
-        final = os.fstat(descriptor)
-        if (opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns) != (final.st_size, final.st_mtime_ns, final.st_ctime_ns):
-            raise OSError(errno.ESTALE, f"file changed while reading: {path}")
-        return bytes(payload)
-    finally:
-        if descriptor >= 0:
-            os.close(descriptor)
-        if parent_fd >= 0:
-            os.close(parent_fd)
 
 
-def feed_generation_signature_provenance(
-    repo_root: Path,
-    content_root: Path,
-    specs: Sequence[GenerationFeedClassSpec],
-    *,
-    root_attribute: str,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    findings: list[dict[str, Any]] = []
-    provenance: list[dict[str, Any]] = []
-    signed_specs = [spec for spec in specs if spec.signed_manifests]
-    if not signed_specs:
-        return findings, provenance
-    home = feed_gnupg_home(repo_root)
-    try:
-        home_stat = home.stat()
-        home_safe = home.is_dir() and home_stat.st_uid == os.getuid() and not (stat.S_IMODE(home_stat.st_mode) & 0o077)
-    except OSError:
-        home_safe = False
-    findings.append(finding("pass" if home_safe else "fail", "feed-generation.signing-keyring", "Feed signature keyring is private and user-owned." if home_safe else "Feed signature keyring is missing, not private, or not user-owned; run just runtime-feed-keyring-init.", str(home)))
-    if not shutil.which("gpg"):
-        findings.append(finding("fail", "feed-generation.gpg", "GPG is required to verify signed feed manifests."))
-        return findings, provenance
-    if not home_safe:
-        return findings, provenance
-    fingerprint = run_command(gpg_command(repo_root, "--with-colons", "--fingerprint", GREENBONE_COMMUNITY_KEY_FPR), repo_root, timeout=60)
-    fingerprint_ok = fingerprint.returncode == 0 and GREENBONE_COMMUNITY_KEY_FPR in fingerprint.stdout.replace(" ", "").upper()
-    findings.append(finding("pass" if fingerprint_ok else "fail", "feed-generation.signing-key", "Configured Greenbone Community signing-key fingerprint is present." if fingerprint_ok else "Configured Greenbone Community signing-key fingerprint is missing.", details={"fingerprint": GREENBONE_COMMUNITY_KEY_FPR, "output_tail": output_tail(fingerprint.stdout, 40)}))
-    if not fingerprint_ok:
-        return findings, provenance
-    with tempfile.TemporaryDirectory(prefix="turbovas-feed-signature-") as temporary:
-        temporary_root = Path(temporary)
-        for spec in signed_specs:
-            class_root = content_root / getattr(spec, root_attribute)
-            for index, (checksums_rel, signature_rel) in enumerate(spec.signed_manifests):
-                checksums_path = class_root / checksums_rel
-                signature_path = class_root / signature_rel
-                try:
-                    checksums = read_stable_regular_file(checksums_path)
-                    signature = read_stable_regular_file(signature_path)
-                except OSError as error:
-                    findings.append(finding("fail", f"feed-generation.signature.{spec.key}.{index}", f"Signed feed manifest files are unsafe or unreadable: {error}", str(class_root)))
-                    continue
-                temporary_checksums = temporary_root / f"{spec.key}-{index}.sha256sums"
-                temporary_signature = temporary_root / f"{spec.key}-{index}.sha256sums.asc"
-                temporary_checksums.write_bytes(checksums)
-                temporary_signature.write_bytes(signature)
-                temporary_checksums.chmod(0o600)
-                temporary_signature.chmod(0o600)
-                verify = run_command(gpg_command(repo_root, "--status-fd=1", "--verify", str(temporary_signature), str(temporary_checksums)), repo_root, timeout=120)
-                valid_signer = any(
-                    line.startswith("[GNUPG:] VALIDSIG ") and GREENBONE_COMMUNITY_KEY_FPR in line.upper().split()
-                    for line in verify.stdout.splitlines()
-                )
-                status = "pass" if verify.returncode == 0 and valid_signer else "fail"
-                findings.append(finding(status, f"feed-generation.signature.{spec.key}.{index}", f"Verify signed {spec.key} checksum manifest exit code {verify.returncode}.", str(checksums_path), {"output_tail": output_tail(verify.stdout, 40)}))
-                if status == "pass":
-                    provenance.append(
-                        {
-                            "class": spec.key,
-                            "checksums_path": checksums_rel,
-                            "signature_path": signature_rel,
-                            "checksums_sha256": hashlib.sha256(checksums).hexdigest(),
-                            "signature_sha256": hashlib.sha256(signature).hexdigest(),
-                            "signing_key_fingerprint": GREENBONE_COMMUNITY_KEY_FPR,
-                        }
-                    )
-    return findings, sorted(provenance, key=lambda row: (row["class"], row["checksums_path"]))
 
 
 def gsa_build_dir(repo_root: Path) -> Path:
@@ -19812,138 +19711,10 @@ def command_feed_copy_to_runtime(repo_root: Path) -> dict[str, Any]:
     )
 
 
-def _command_feed_generation_stage_unlocked(repo_root: Path) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    cache_root = feed_cache_var_lib(repo_root)
-    runtime_root = runtime_dir(repo_root)
-    specs = feed_generation_specs()
-    signature_findings, signature_provenance = feed_generation_signature_provenance(
-        repo_root,
-        cache_root,
-        specs,
-        root_attribute="source_rel",
-    )
-    findings.extend(signature_findings)
-    if aggregate_status(findings) == "fail":
-        return make_result(
-            "feed-generation-stage",
-            repo_root,
-            "Immutable feed generation staging stopped because signed feed provenance could not be verified.",
-            findings,
-            [str(cache_root), str(runtime_root / "feed-store")],
-        )
-    try:
-        staged = stage_generation(cache_root, runtime_root, FEED_RELEASE, specs, signature_provenance)
-    except (FeedGenerationError, OSError) as error:
-        findings.append(
-            finding(
-                "fail",
-                "feed-generation.stage",
-                f"Immutable feed generation staging failed closed: {error}",
-                str(runtime_root / "feed-store" / "generations"),
-            )
-        )
-        return make_result(
-            "feed-generation-stage",
-            repo_root,
-            "Immutable feed generation staging failed.",
-            findings,
-            [str(cache_root), str(runtime_root / "feed-store")],
-        )
-    findings.append(
-        finding(
-            "pass",
-            "feed-generation.stage",
-            "A complete immutable feed generation was verified and staged without changing the active runtime feed.",
-            staged["path"],
-            staged,
-        )
-    )
-    return make_result(
-        "feed-generation-stage",
-        repo_root,
-        "Immutable feed generation staging completed.",
-        findings,
-        [staged["path"]],
-    )
 
 
-def command_feed_generation_stage(repo_root: Path) -> dict[str, Any]:
-    try:
-        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "feed-generation-stage"):
-            return _command_feed_generation_stage_unlocked(repo_root)
-    except RuntimeLockTimeout as error:
-        return make_result(
-            "feed-generation-stage",
-            repo_root,
-            "Feed generation staging stopped while waiting for the feed lifecycle lock.",
-            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
-            [str(runtime_lock_dir(repo_root))],
-        )
 
 
-def command_feed_generation_state(repo_root: Path, *, status_only: bool = False) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    root = runtime_dir(repo_root) / "feed-store" / "generations"
-    try:
-        state = generation_state(runtime_dir(repo_root), FEED_RELEASE, feed_generation_specs())
-    except (FeedGenerationError, OSError) as error:
-        findings.append(finding("fail", "feed-generation.state", f"Feed generation store verification failed closed: {error}", str(root)))
-    else:
-        invalid = state["invalid_entries"]
-        orphaned = state["orphan_staging"]
-        if invalid:
-            findings.append(finding("fail", "feed-generation.integrity", "One or more immutable feed generations failed verification.", str(root), {"invalid_entries": invalid}))
-        elif state["generation_count"] == 0:
-            findings.append(finding("warn", "feed-generation.integrity", "No immutable feed generation has been staged yet.", str(root), {"store_exists": state["store_exists"]}))
-        else:
-            findings.append(finding("pass", "feed-generation.integrity", f"Verified {state['generation_count']} immutable feed generation(s).", str(root), {"generations": state["generations"]}))
-        if orphaned:
-            findings.append(finding("warn", "feed-generation.orphan-staging", "Orphan feed-generation staging directories require review.", str(root), {"orphan_staging": orphaned}))
-        else:
-            findings.append(finding("pass", "feed-generation.orphan-staging", "No orphan feed-generation staging directories were found.", str(root)))
-        if state.get("current_error"):
-            findings.append(finding("fail", "feed-generation.current", f"Active feed generation selector is invalid: {state['current_error']}", str(runtime_dir(repo_root) / "feed-store" / "current")))
-        elif state.get("current_generation_id"):
-            findings.append(finding("pass", "feed-generation.current", "Active feed generation selector resolves to a fully verified generation.", str(runtime_dir(repo_root) / "feed-store" / "current"), {"current_generation_id": state["current_generation_id"]}))
-        else:
-            findings.append(finding("warn", "feed-generation.current", "No feed generation is active.", str(runtime_dir(repo_root) / "feed-store" / "current")))
-        try:
-            activation_state = read_feed_activation_state(repo_root)
-        except (OSError, ValueError) as error:
-            findings.append(finding("fail", "feed-generation.journal", f"Feed activation journal is invalid: {error}", str(feed_activation_state_path(repo_root))))
-        else:
-            journal_id = activation_state.get("current_generation_id") if activation_state and activation_state.get("status") == "active" else None
-            selector_id = state.get("current_generation_id")
-            if activation_state is None and selector_id is None:
-                findings.append(finding("warn", "feed-generation.journal", "No feed activation has completed yet.", str(feed_activation_state_path(repo_root))))
-            elif activation_state is not None and activation_state.get("status") == "active" and journal_id == selector_id:
-                findings.append(finding("pass", "feed-generation.journal", "Completed feed activation journal matches the verified selector.", str(feed_activation_state_path(repo_root)), {"current_generation_id": journal_id, "rollback_generation_id": activation_state.get("rollback_generation_id")}))
-            else:
-                findings.append(finding("fail", "feed-generation.journal", "Feed activation is interrupted or its journal does not match the selector; app startup is blocked.", str(feed_activation_state_path(repo_root)), {"selector_generation_id": selector_id, "journal": activation_state}))
-        findings.append(
-            finding(
-                "pass",
-                "feed-generation.activation-boundary",
-                "Generation state verification did not change the active runtime feed selector.",
-                str(runtime_dir(repo_root) / "feed-store" / "current"),
-                {"current_pointer_exists": state["current_pointer_exists"], "current_generation_id": state.get("current_generation_id")},
-            )
-        )
-        for generation in state["generations"]:
-            signature_findings, _provenance = feed_generation_signature_provenance(
-                repo_root,
-                root / generation["generation_id"],
-                feed_generation_specs(),
-                root_attribute="runtime_rel",
-            )
-            findings.extend(signature_findings)
-    result = make_result("feed-generation-state", repo_root, "Immutable feed generation state verified.", findings, [str(root)])
-    if not status_only:
-        return result
-    compact = dict(result)
-    compact["findings"] = [compact_doctor_finding(item) for item in findings if item.get("status") != "pass"] or [finding("pass", "feed-generation-state.status-only", "Feed generation state passed without non-pass findings.")]
-    return compact
 
 
 def runtime_app_up_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -35855,9 +35626,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("feed-state", parents=[common], help="show Greenbone Community Feed cache and active-generation state")
     subparsers.add_parser("feed-cache-sync", parents=[common], help="start full Greenbone Community Feed cache sync in tmux")
     subparsers.add_parser("feed-copy-to-runtime", parents=[common], help="refuse retired sequential copying into live feed paths")
-    subparsers.add_parser("feed-generation-stage", parents=[common], help="stage and verify an immutable content-addressed feed generation")
-    feed_generation_state_parser = subparsers.add_parser("feed-generation-state", parents=[common], help="verify immutable content-addressed feed generations")
-    feed_generation_state_parser.add_argument("--status-only", action="store_true", help="emit only non-pass findings and compact generation state")
     subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
     subparsers.add_parser("runtime-log-review", parents=[common], help="review recent full-stack runtime logs")
@@ -36264,10 +36032,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_feed_cache_sync(repo_root)
     elif args.command == "feed-copy-to-runtime":
         result = command_feed_copy_to_runtime(repo_root)
-    elif args.command == "feed-generation-stage":
-        result = command_feed_generation_stage(repo_root)
-    elif args.command == "feed-generation-state":
-        result = command_feed_generation_state(repo_root, status_only=args.status_only)
     elif args.command == "runtime-status":
         result = command_runtime_status(repo_root)
     elif args.command == "runtime-smoke":

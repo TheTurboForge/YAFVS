@@ -255,10 +255,10 @@ feed-cache-sync *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl feed-cache-sync "$@"
 
 feed-generation-stage *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl feed-generation-stage "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- feed-generation-stage "$@"
 
 feed-generation-state *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl feed-generation-state "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- feed-generation-state "$@"
 
 feed-generation-activate *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- feed-generation-activate "$@"

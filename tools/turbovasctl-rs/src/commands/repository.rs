@@ -82,8 +82,12 @@ pub(crate) fn component_specs() -> &'static [ComponentSpec] {
     &COMPONENTS
 }
 
-pub fn find_repo_root(start: &Path) -> PathBuf {
+pub fn find_repo_root(start: &Path) -> Option<PathBuf> {
     find_repo_root_with(start, &SystemCommandRunner)
+}
+
+pub fn command_repository_unavailable(start: &Path, command: &str) -> ResultEnvelope {
+    command_repository_unavailable_with(start, command, &SystemCommandRunner)
 }
 
 pub fn command_status(repo_root: &Path) -> ResultEnvelope {
@@ -94,13 +98,66 @@ pub fn command_inventory(repo_root: &Path, scope: Option<&str>) -> ResultEnvelop
     command_inventory_with(repo_root, scope, &SystemCommandRunner)
 }
 
-pub(crate) fn find_repo_root_with(start: &Path, runner: &dyn CommandRunner) -> PathBuf {
+pub(crate) fn find_repo_root_with(start: &Path, runner: &dyn CommandRunner) -> Option<PathBuf> {
     run_git(runner, start, &["rev-parse", "--show-toplevel"])
+        .filter(|value| !value.is_empty())
         .map(PathBuf::from)
-        .unwrap_or_else(|| start.canonicalize().unwrap_or_else(|_| start.to_path_buf()))
+}
+
+fn command_repository_unavailable_with(
+    start: &Path,
+    command: &str,
+    runner: &dyn CommandRunner,
+) -> ResultEnvelope {
+    let root = start.canonicalize().unwrap_or_else(|_| start.to_path_buf());
+    make_result(
+        metadata(&root, command, runner),
+        "TurboVAS repository could not be located.".to_string(),
+        vec![Finding::new(
+            "fail",
+            "git.repository",
+            format!(
+                "Current directory is not inside a Git work tree: {}",
+                root.display()
+            ),
+        )],
+    )
 }
 
 pub(crate) fn command_status_with(repo_root: &Path, runner: &dyn CommandRunner) -> ResultEnvelope {
+    if run_git(runner, repo_root, &["rev-parse", "--is-inside-work-tree"]).as_deref()
+        != Some("true")
+    {
+        return make_result(
+            metadata(repo_root, "status", runner),
+            "Repository status could not be collected.".to_string(),
+            vec![
+                Finding::new(
+                    "fail",
+                    "git.repository",
+                    format!(
+                        "Current directory is not inside a Git work tree: {}",
+                        repo_root.display()
+                    ),
+                ),
+                Finding::new(
+                    "fail",
+                    "git.head",
+                    "Current branch and HEAD are unavailable outside a Git work tree.".to_string(),
+                ),
+                Finding::new(
+                    "warn",
+                    "git.upstream",
+                    "No upstream tracking branch is configured.".to_string(),
+                ),
+                Finding::new(
+                    "fail",
+                    "git.worktree",
+                    "Worktree state is unavailable outside a Git work tree.".to_string(),
+                ),
+            ],
+        );
+    }
     let branch = run_git(runner, repo_root, &["branch", "--show-current"])
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| "(detached or unavailable)".to_string());
@@ -242,6 +299,7 @@ mod tests {
     impl CommandRunner for FakeRunner {
         fn run(&self, _program: &str, args: &[&str]) -> Option<ProcessOutput> {
             let stdout = match *args.last()? {
+                "--is-inside-work-tree" => "true",
                 "--show-current" => "main",
                 "HEAD" => "abc1234",
                 "--short" => " M tracked-file",
@@ -262,5 +320,36 @@ mod tests {
         let result = command_status_with(Path::new("/repo"), &FakeRunner);
         assert_eq!(result.status, "warn");
         assert_eq!(result.findings[1].message, "Current branch main at abc1234");
+    }
+
+    struct FailingRunner;
+
+    impl CommandRunner for FailingRunner {
+        fn run(&self, _program: &str, _args: &[&str]) -> Option<ProcessOutput> {
+            None
+        }
+    }
+
+    #[test]
+    fn repository_discovery_and_status_fail_closed_outside_git() {
+        assert_eq!(
+            find_repo_root_with(Path::new("/not-a-repository"), &FailingRunner),
+            None
+        );
+        let result = command_status_with(Path::new("/not-a-repository"), &FailingRunner);
+        assert_eq!(result.status, "fail");
+        assert_eq!(
+            result
+                .findings
+                .iter()
+                .map(|finding| (finding.check.as_str(), finding.status.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("git.repository", "fail"),
+                ("git.head", "fail"),
+                ("git.upstream", "warn"),
+                ("git.worktree", "fail"),
+            ]
+        );
     }
 }

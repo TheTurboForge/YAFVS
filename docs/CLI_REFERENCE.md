@@ -32,8 +32,10 @@ not use a failure exit code; `fail` exits non-zero.
 - `just rust-migration-state`: inspect C-to-Rust tooling and the current proof
   candidate.
 
-The experimental Rust command spine currently implements only read-only
-`status` and `inventory`:
+The incremental Rust command spine currently implements 21 parity-tested
+subcommands. Python remains canonical only for commands not listed in this
+mechanically checked block while the normal `just` recipes continue to provide
+a stable front door:
 
 ```sh
 just turbovasctl-rust status --json
@@ -41,8 +43,36 @@ just turbovasctl-rust inventory --json
 just turbovasctl-rust-test
 ```
 
-The Python `tools/turbovasctl` entrypoint remains canonical for every other
-command during incremental migration.
+<!-- rust-cli-commands:start -->
+```text
+status
+inventory
+branding-state
+path-coupling-state
+quality-gate-state
+feed-state
+rust-migration-state
+native-api-cargo-audit
+gsa-npm-audit
+native-api-semgrep-audit
+osv-lockfile-audit
+security-policy-check
+runtime-plan
+feed-copy-to-runtime
+deps
+runtime-feed-import-init
+logs
+license-report
+doctor
+quality-gate-schedule
+runtime-native-api-direct-token
+```
+<!-- rust-cli-commands:end -->
+
+Parity includes each command's existing mutation boundary. In particular,
+`feed-copy-to-runtime` and `runtime-feed-import-init` retain their guarded
+refusals; quality-gate schedule changes still require explicit host opt-in; and
+direct-token rotation remains an explicit `--rotate` action.
 
 ## Build Commands
 

@@ -2856,11 +2856,11 @@ def run_command(
         return subprocess.CompletedProcess(command, 124, stdout)
 
 
-def find_repo_root(start: Path) -> Path:
+def find_repo_root(start: Path) -> Path | None:
     git_root = run_git(start, ["rev-parse", "--show-toplevel"])
     if git_root:
         return Path(git_root)
-    return start.resolve()
+    return None
 
 
 def metadata(repo_root: Path, command: str) -> dict[str, Any]:
@@ -2893,6 +2893,22 @@ def contract_drift_status(alignment_status: Any) -> str:
 
 def make_result(command: str, repo_root: Path, summary: str, findings: list[dict[str, Any]], artifacts: list[str] | None = None) -> dict[str, Any]:
     return {"status": aggregate_status(findings), "summary": summary, "findings": findings, "artifacts": artifacts or [], "metadata": metadata(repo_root, command)}
+
+
+def command_repository_unavailable(start: Path, command: str) -> dict[str, Any]:
+    root = start.resolve()
+    return make_result(
+        command,
+        root,
+        "TurboVAS repository could not be located.",
+        [
+            finding(
+                "fail",
+                "git.repository",
+                f"Current directory is not inside a Git work tree: {root}",
+            )
+        ],
+    )
 
 
 def finding(status: str, check: str, message: str, path: str | None = None, details: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -8399,6 +8415,16 @@ def python_version_finding() -> dict[str, Any]:
 
 def command_status(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
+    if run_git(repo_root, ["rev-parse", "--is-inside-work-tree"]) != "true":
+        findings.extend(
+            [
+                finding("fail", "git.repository", f"Current directory is not inside a Git work tree: {repo_root}"),
+                finding("fail", "git.head", "Current branch and HEAD are unavailable outside a Git work tree."),
+                finding("warn", "git.upstream", "No upstream tracking branch is configured."),
+                finding("fail", "git.worktree", "Worktree state is unavailable outside a Git work tree."),
+            ]
+        )
+        return make_result("status", repo_root, "Repository status could not be collected.", findings)
     branch = run_git(repo_root, ["branch", "--show-current"]) or "(detached or unavailable)"
     head = run_git(repo_root, ["rev-parse", "--short", "HEAD"]) or "unavailable"
     porcelain = run_git(repo_root, ["status", "--short"]) or ""
@@ -36214,7 +36240,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    repo_root = find_repo_root(Path.cwd())
+    cwd = Path.cwd()
+    repo_root = find_repo_root(cwd)
+    if repo_root is None:
+        result = command_status(cwd) if args.command == "status" else command_repository_unavailable(cwd, args.command)
+        return emit(result, args.json)
     if args.command == "status":
         result = command_status(repo_root)
     elif args.command == "inventory":

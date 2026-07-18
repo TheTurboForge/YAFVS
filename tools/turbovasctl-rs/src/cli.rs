@@ -116,6 +116,34 @@ pub enum CliCommand {
     },
 }
 
+impl CliCommand {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Status => "status",
+            Self::Inventory { .. } => "inventory",
+            Self::BrandingState => "branding-state",
+            Self::PathCouplingState => "path-coupling-state",
+            Self::QualityGateState => "quality-gate-state",
+            Self::FeedState => "feed-state",
+            Self::RustMigrationState => "rust-migration-state",
+            Self::NativeApiCargoAudit => "native-api-cargo-audit",
+            Self::GsaNpmAudit => "gsa-npm-audit",
+            Self::NativeApiSemgrepAudit => "native-api-semgrep-audit",
+            Self::OsvLockfileAudit => "osv-lockfile-audit",
+            Self::SecurityPolicyCheck => "security-policy-check",
+            Self::RuntimePlan => "runtime-plan",
+            Self::FeedCopyToRuntime => "feed-copy-to-runtime",
+            Self::Deps { .. } => "deps",
+            Self::RuntimeFeedImportInit => "runtime-feed-import-init",
+            Self::Logs { .. } => "logs",
+            Self::LicenseReport { .. } => "license-report",
+            Self::Doctor => "doctor",
+            Self::QualityGateSchedule { .. } => "quality-gate-schedule",
+            Self::RuntimeNativeApiDirectToken { .. } => "runtime-native-api-direct-token",
+        }
+    }
+}
+
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>
 where
     I: IntoIterator<Item = S>,
@@ -129,6 +157,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::CommandFactory;
+    use std::fs;
+    use std::path::Path;
 
     #[test]
     fn parses_global_flags_before_or_after_subcommands() {
@@ -167,5 +198,34 @@ mod tests {
                 status_only: true,
             }
         );
+    }
+
+    #[test]
+    fn public_docs_track_the_complete_rust_command_surface() {
+        let command_names = Cli::command()
+            .get_subcommands()
+            .map(|command| command.get_name().to_string())
+            .collect::<Vec<_>>();
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let cli_reference = fs::read_to_string(repo_root.join("docs/CLI_REFERENCE.md")).unwrap();
+        let documented = cli_reference
+            .split_once("<!-- rust-cli-commands:start -->")
+            .unwrap()
+            .1
+            .split_once("<!-- rust-cli-commands:end -->")
+            .unwrap()
+            .0
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with("```"))
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        assert_eq!(documented, command_names);
+
+        let readme = fs::read_to_string(repo_root.join("README.md")).unwrap();
+        assert!(readme.contains(&format!(
+            "{} parity-tested subcommands",
+            command_names.len()
+        )));
     }
 }

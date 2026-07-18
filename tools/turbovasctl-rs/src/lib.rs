@@ -16,7 +16,7 @@ pub use commands::{
     command_feed_state, command_gsa_npm_audit, command_inventory, command_license_report,
     command_logs, command_native_api_cargo_audit, command_native_api_semgrep_audit,
     command_osv_lockfile_audit, command_path_coupling_state, command_quality_gate_schedule,
-    command_quality_gate_state, command_runtime_feed_import_init,
+    command_quality_gate_state, command_repository_unavailable, command_runtime_feed_import_init,
     command_runtime_native_api_direct_token, command_runtime_plan, command_rust_migration_state,
     command_security_policy_check, command_status, find_repo_root,
 };
@@ -24,7 +24,11 @@ pub use render::{render_human, render_json};
 pub use result::{ResultEnvelope, exit_code};
 
 pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
-    let repo_root = find_repo_root(cwd);
+    let repo_root = match find_repo_root(cwd) {
+        Some(repo_root) => repo_root,
+        None if matches!(cli.command, CliCommand::Status) => return command_status(cwd),
+        None => return command_repository_unavailable(cwd, cli.command.name()),
+    };
     match &cli.command {
         CliCommand::Status => command_status(&repo_root),
         CliCommand::Inventory { scope } => command_inventory(&repo_root, scope.as_deref()),

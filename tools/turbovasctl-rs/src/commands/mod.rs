@@ -34,7 +34,9 @@ pub use license::command_license_report;
 pub use path_coupling::command_path_coupling_state;
 pub use quality_gate::command_quality_gate_state;
 pub use quality_schedule::command_quality_gate_schedule;
-pub use repository::{command_inventory, command_status, find_repo_root};
+pub use repository::{
+    command_inventory, command_repository_unavailable, command_status, find_repo_root,
+};
 pub use runtime::{command_logs, command_runtime_plan};
 pub use rust_migration::command_rust_migration_state;
 pub use security_policy::command_security_policy_check;

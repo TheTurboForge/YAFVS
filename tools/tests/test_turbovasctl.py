@@ -1313,10 +1313,44 @@ class TurboVASCtlTests(unittest.TestCase):
             missing = [item for item in result["findings"] if item["status"] == "fail"]
             self.assertEqual(len(missing), 10)
 
-    def assert_rust_turbovasctl_parity(self, argument_sets, *, human_inventory=False):
+    def test_repository_discovery_and_status_fail_closed_outside_git(self):
+        with unittest.mock.patch.object(turbovasctl, "run_git", return_value=None):
+            self.assertIsNone(turbovasctl.find_repo_root(Path("/not-a-repository")))
+            result = turbovasctl.command_status(Path("/not-a-repository"))
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(
+            {item["check"]: item["status"] for item in result["findings"]},
+            {
+                "git.repository": "fail",
+                "git.head": "fail",
+                "git.upstream": "warn",
+                "git.worktree": "fail",
+            },
+        )
+
+    def assert_rust_turbovasctl_parity(
+        self,
+        argument_sets,
+        *,
+        complete_surface=False,
+        human_inventory=False,
+        non_repository_status=False,
+    ):
         repo_root = Path(__file__).resolve().parents[2]
         manifest = repo_root / "tools" / "turbovasctl-rs" / "Cargo.toml"
         target_dir = repo_root / "build" / "turbovasctl-rs"
+
+        if complete_surface:
+            reference = (repo_root / "docs" / "CLI_REFERENCE.md").read_text(encoding="utf-8")
+            documented = {
+                line.strip()
+                for line in reference.split("<!-- rust-cli-commands:start -->", 1)[1]
+                .split("<!-- rust-cli-commands:end -->", 1)[0]
+                .splitlines()
+                if line.strip() and not line.strip().startswith("```")
+            }
+            covered = {arguments[0] for arguments in argument_sets}
+            self.assertEqual(covered, documented)
 
         def invoke(command, arguments):
             completed = subprocess.run(command + arguments, cwd=repo_root, check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1359,6 +1393,31 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertEqual(rust_result.returncode, 0)
             self.assertEqual(python_result.stdout, rust_result.stdout)
 
+        if non_repository_status:
+            with tempfile.TemporaryDirectory() as tmp:
+                python_result = subprocess.run(
+                    python_command + ["status", "--json"],
+                    cwd=tmp,
+                    check=False,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                rust_result = subprocess.run(
+                    rust_command + ["status", "--json"],
+                    cwd=tmp,
+                    check=False,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+            self.assertEqual(python_result.returncode, 1)
+            self.assertEqual(rust_result.returncode, 1)
+            self.assertEqual(
+                normalized_json(python_result),
+                normalized_json(rust_result),
+            )
+
     def test_rust_turbovasctl_matches_python_migrated_command_contracts(self):
         self.assert_rust_turbovasctl_parity(
             (
@@ -1386,13 +1445,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["logs", "--service", "definitely-invalid", "--lines", "1", "--json"],
                 ["quality-gate-schedule", "--install", "--json"],
                 ["runtime-native-api-direct-token", "--json"],
-            ),
-            human_inventory=True,
-        )
-
-    def test_rust_turbovasctl_matches_python_migrated_license_contracts(self):
-        self.assert_rust_turbovasctl_parity(
-            (
                 ["license-report", "--json"],
                 ["license-report", "--status-only", "--json"],
                 ["license-report", "--public-release", "--mode", "source-public", "--json"],
@@ -1401,20 +1453,8 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["license-report", "--modified-imported-only", "--diff-scope", "staged", "--json"],
                 ["doctor", "--json"],
                 ["doctor", "--status-only", "--json"],
-            )
-        )
-
-    def test_rust_turbovasctl_matches_python_migrated_systemd_status(self):
-        self.assert_rust_turbovasctl_parity(
-            (
                 ["quality-gate-schedule", "--json"],
                 ["quality-gate-schedule", "--status", "--json"],
-            )
-        )
-
-    def test_rust_turbovasctl_matches_python_migrated_external_audits(self):
-        self.assert_rust_turbovasctl_parity(
-            (
                 ["native-api-cargo-audit", "--json"],
                 ["native-api-cargo-audit", "--status-only", "--json"],
                 ["gsa-npm-audit", "--json"],
@@ -1423,7 +1463,10 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["native-api-semgrep-audit", "--status-only", "--json"],
                 ["osv-lockfile-audit", "--json"],
                 ["osv-lockfile-audit", "--status-only", "--json"],
-            )
+            ),
+            complete_surface=True,
+            human_inventory=True,
+            non_repository_status=True,
         )
 
     def test_gvmd_target_parser_consumes_target_elements(self):

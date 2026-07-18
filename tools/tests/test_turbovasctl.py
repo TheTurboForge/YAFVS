@@ -1274,14 +1274,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["doctor", "--status-only", "--json"],
                 ["quality-gate-schedule", "--json"],
                 ["quality-gate-schedule", "--status", "--json"],
-                ["native-api-cargo-audit", "--json"],
-                ["native-api-cargo-audit", "--status-only", "--json"],
-                ["gsa-npm-audit", "--json"],
-                ["gsa-npm-audit", "--status-only", "--json"],
-                ["native-api-semgrep-audit", "--json"],
-                ["native-api-semgrep-audit", "--status-only", "--json"],
-                ["osv-lockfile-audit", "--json"],
-                ["osv-lockfile-audit", "--status-only", "--json"],
             ),
             rust_only_contracts=(
                 (["feed-generation-state", "--json"], 0, "warn"),
@@ -1298,6 +1290,14 @@ class TurboVASCtlTests(unittest.TestCase):
                 (["path-coupling-state", "--status-only", "--json"], 0, "pass"),
                 (["security-policy-check", "--json"], 0, "pass"),
                 (["security-policy-check", "--status-only", "--json"], 0, "pass"),
+                (["native-api-cargo-audit", "--json"], 0, "pass"),
+                (["native-api-cargo-audit", "--status-only", "--json"], 0, "pass"),
+                (["gsa-npm-audit", "--json"], 0, "pass"),
+                (["gsa-npm-audit", "--status-only", "--json"], 0, "pass"),
+                (["native-api-semgrep-audit", "--json"], 0, "pass"),
+                (["native-api-semgrep-audit", "--status-only", "--json"], 0, "pass"),
+                (["osv-lockfile-audit", "--json"], 0, "warn"),
+                (["osv-lockfile-audit", "--status-only", "--json"], 0, "warn"),
             ),
             complete_surface=True,
             human_inventory=True,
@@ -2409,7 +2409,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check"}
+        rust_only_commands = {"native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2431,10 +2431,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_native_api_client_contract", source)
         self.assertIn("def command_native_api_replacement_dashboard", source)
         self.assertIn("def command_closeout_readiness", source)
-        self.assertIn("def command_native_api_cargo_audit", source)
-        self.assertIn("def command_native_api_semgrep_audit", source)
-        self.assertIn("def command_gsa_npm_audit", source)
-        self.assertIn("def command_osv_lockfile_audit", source)
         self.assertIn("def command_rust_migration_state", source)
 
         self.assertIn("def command_branding_state", source)
@@ -2537,6 +2533,21 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("runtime-performance-snapshot *args:", justfile)
         self.assertIn("tools/turbovasctl-rs/Cargo.toml -- runtime-performance-snapshot", justfile)
 
+    def test_audit_commands_are_rust_only(self):
+        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        for command, function_name in (
+            ("native-api-cargo-audit", "command_native_api_cargo_audit"),
+            ("gsa-npm-audit", "command_gsa_npm_audit"),
+            ("native-api-semgrep-audit", "command_native_api_semgrep_audit"),
+            ("osv-lockfile-audit", "command_osv_lockfile_audit"),
+        ):
+            with self.subTest(command=command):
+                self.assertNotIn(f'subparsers.add_parser("{command}"', source)
+                self.assertNotIn(f"def {function_name}", source)
+                self.assertIn(f"{command} *args:", justfile)
+                self.assertIn(f"tools/turbovasctl-rs/Cargo.toml -- {command}", justfile)
+
     def test_policy_diagnostics_are_rust_only(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
@@ -2550,95 +2561,10 @@ class TurboVASCtlTests(unittest.TestCase):
                 self.assertIn(f"{command} *args:", justfile)
                 self.assertIn(f"tools/turbovasctl-rs/Cargo.toml -- {command}", justfile)
 
-    def test_native_api_cargo_audit_status_only_summarizes_clean_audit(self):
-        payload = {
-            "database": {"advisory-count": 123},
-            "lockfile": {"dependency-count": 4},
-            "vulnerabilities": {"count": 0, "list": []},
-            "warnings": {},
-        }
-        with tempfile.TemporaryDirectory() as tmp, \
-             unittest.mock.patch.object(turbovasctl.shutil, "which", return_value="/usr/bin/cargo-audit"), \
-             unittest.mock.patch.object(turbovasctl, "run_command", return_value=subprocess.CompletedProcess(["cargo", "audit", "--json"], 0, json.dumps(payload))):
-            root = Path(tmp)
-            crate = root / "services" / "turbovas-api"
-            crate.mkdir(parents=True)
-            (crate / "Cargo.lock").write_text("# lock\n", encoding="utf-8")
-            result = turbovasctl.command_native_api_cargo_audit(root, status_only=True)
 
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["details"]["vulnerability_count"], 0)
-        self.assertEqual(result["details"]["dependency_count"], 4)
-        self.assertEqual(result["findings"][0]["check"], "native-api-cargo-audit.status-only")
 
-    def test_native_api_cargo_audit_reports_vulnerabilities(self):
-        payload = {
-            "database": {"advisory-count": 123},
-            "lockfile": {"dependency-count": 4},
-            "vulnerabilities": {"count": 2, "list": [{}, {}]},
-            "warnings": {},
-        }
-        with tempfile.TemporaryDirectory() as tmp, \
-             unittest.mock.patch.object(turbovasctl.shutil, "which", return_value="/usr/bin/cargo-audit"), \
-             unittest.mock.patch.object(turbovasctl, "run_command", return_value=subprocess.CompletedProcess(["cargo", "audit", "--json"], 1, json.dumps(payload))):
-            root = Path(tmp)
-            crate = root / "services" / "turbovas-api"
-            crate.mkdir(parents=True)
-            (crate / "Cargo.lock").write_text("# lock\n", encoding="utf-8")
-            result = turbovasctl.command_native_api_cargo_audit(root, status_only=True)
 
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(result["details"]["vulnerability_count"], 2)
-        self.assertEqual(result["findings"][0]["check"], "native-api-cargo-audit.vulnerabilities")
 
-    def test_native_api_cargo_audit_warns_when_tool_missing(self):
-        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(turbovasctl.shutil, "which", return_value=None):
-            root = Path(tmp)
-            crate = root / "services" / "turbovas-api"
-            crate.mkdir(parents=True)
-            (crate / "Cargo.lock").write_text("# lock\n", encoding="utf-8")
-            result = turbovasctl.command_native_api_cargo_audit(root, status_only=True)
-
-        self.assertEqual(result["status"], "warn")
-        self.assertEqual(result["findings"][0]["check"], "native-api-cargo-audit.tool")
-
-    def test_gsa_npm_audit_status_only_summarizes_clean_audit(self):
-        payload = {
-            "metadata": {
-                "vulnerabilities": {"info": 0, "low": 0, "moderate": 0, "high": 0, "critical": 0, "total": 0},
-                "dependencies": {"total": 12},
-            }
-        }
-        with tempfile.TemporaryDirectory() as tmp, \
-             unittest.mock.patch.object(turbovasctl.shutil, "which", return_value="/usr/bin/npm"), \
-             unittest.mock.patch.object(turbovasctl, "run_command", return_value=subprocess.CompletedProcess(["npm", "audit"], 0, json.dumps(payload))):
-            root = Path(tmp)
-            component = root / "components" / "gsa"
-            component.mkdir(parents=True)
-            (component / "package-lock.json").write_text("{}\n", encoding="utf-8")
-            result = turbovasctl.command_gsa_npm_audit(root, status_only=True)
-
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["details"]["high_count"], 0)
-        self.assertEqual(result["details"]["dependency_count"], 12)
-        self.assertEqual(result["findings"][0]["check"], "gsa-npm-audit.status-only")
-
-    def test_native_api_semgrep_audit_status_only_omits_pass_findings(self):
-        payload = {"results": [], "errors": []}
-        with tempfile.TemporaryDirectory() as tmp, \
-             unittest.mock.patch.object(turbovasctl.shutil, "which", return_value="/usr/bin/semgrep"), \
-             unittest.mock.patch.object(turbovasctl, "run_command", return_value=subprocess.CompletedProcess(["semgrep"], 0, json.dumps(payload))):
-            root = Path(tmp)
-            source = root / turbovasctl.NATIVE_API_SOURCE_DIR
-            source.mkdir(parents=True)
-            config = root / turbovasctl.NATIVE_API_SEMGREP_CONFIG
-            config.parent.mkdir(parents=True)
-            config.write_text("rules: []\n", encoding="utf-8")
-            result = turbovasctl.command_native_api_semgrep_audit(root, status_only=True)
-
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["details"]["result_count"], 0)
-        self.assertEqual(result["findings"][0]["check"], "native-api-semgrep-audit.status-only")
 
     def test_native_api_semgrep_policy_covers_the_tokio_postgres_query_surface(self):
         policy = (
@@ -2659,154 +2585,12 @@ class TurboVASCtlTests(unittest.TestCase):
         ):
             self.assertIn(f"$CLIENT.{method}", policy)
 
-    def test_native_api_semgrep_audit_fails_for_findings(self):
-        payload = {
-            "results": [
-                {
-                    "check_id": "turbovas.native-api.unsafe-rust",
-                    "path": "/repo/TurboVAS/services/turbovas-api/src/main.rs",
-                    "start": {"line": 42},
-                    "extra": {"message": "unsafe Rust"},
-                }
-            ],
-            "errors": [],
-        }
-        with tempfile.TemporaryDirectory() as tmp, \
-             unittest.mock.patch.object(turbovasctl.shutil, "which", return_value="/usr/bin/semgrep"), \
-             unittest.mock.patch.object(turbovasctl, "run_command", return_value=subprocess.CompletedProcess(["semgrep"], 1, json.dumps(payload))):
-            root = Path(tmp)
-            source = root / turbovasctl.NATIVE_API_SOURCE_DIR
-            source.mkdir(parents=True)
-            config = root / turbovasctl.NATIVE_API_SEMGREP_CONFIG
-            config.parent.mkdir(parents=True)
-            config.write_text("rules: []\n", encoding="utf-8")
-            result = turbovasctl.command_native_api_semgrep_audit(root, status_only=True)
 
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(result["details"]["result_count"], 1)
-        self.assertEqual(result["findings"][0]["check"], "native-api-semgrep-audit.findings")
-        self.assertEqual(result["findings"][0]["top_findings"][0]["check"], "turbovas.native-api.unsafe-rust")
 
-    def test_native_api_semgrep_audit_warns_when_tool_missing(self):
-        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(turbovasctl.shutil, "which", return_value=None):
-            root = Path(tmp)
-            source = root / turbovasctl.NATIVE_API_SOURCE_DIR
-            source.mkdir(parents=True)
-            config = root / turbovasctl.NATIVE_API_SEMGREP_CONFIG
-            config.parent.mkdir(parents=True)
-            config.write_text("rules: []\n", encoding="utf-8")
-            result = turbovasctl.command_native_api_semgrep_audit(root, status_only=True)
 
-        self.assertEqual(result["status"], "warn")
-        self.assertEqual(result["findings"][0]["check"], "native-api-semgrep-audit.tool")
 
-    def test_gsa_npm_audit_reports_high_or_critical_vulnerabilities(self):
-        payload = {
-            "metadata": {
-                "vulnerabilities": {"info": 0, "low": 0, "moderate": 1, "high": 2, "critical": 1, "total": 4},
-                "dependencies": {"total": 12},
-            }
-        }
-        with tempfile.TemporaryDirectory() as tmp, \
-             unittest.mock.patch.object(turbovasctl.shutil, "which", return_value="/usr/bin/npm"), \
-             unittest.mock.patch.object(turbovasctl, "run_command", return_value=subprocess.CompletedProcess(["npm", "audit"], 1, json.dumps(payload))):
-            root = Path(tmp)
-            component = root / "components" / "gsa"
-            component.mkdir(parents=True)
-            (component / "package-lock.json").write_text("{}\n", encoding="utf-8")
-            result = turbovasctl.command_gsa_npm_audit(root, status_only=True)
 
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(result["details"]["high_count"], 2)
-        self.assertEqual(result["details"]["critical_count"], 1)
-        self.assertEqual(result["findings"][0]["check"], "gsa-npm-audit.high-critical")
 
-    def test_gsa_npm_audit_warns_when_tool_missing(self):
-        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(turbovasctl.shutil, "which", return_value=None):
-            root = Path(tmp)
-            component = root / "components" / "gsa"
-            component.mkdir(parents=True)
-            (component / "package-lock.json").write_text("{}\n", encoding="utf-8")
-            result = turbovasctl.command_gsa_npm_audit(root, status_only=True)
-
-        self.assertEqual(result["status"], "warn")
-        self.assertEqual(result["findings"][0]["check"], "gsa-npm-audit.tool")
-
-    def test_osv_lockfile_audit_warns_for_low_vulnerabilities(self):
-        payload = {
-            "results": [
-                {
-                    "source": {"path": "/repo/TurboVAS/components/ospd-openvas/poetry.lock"},
-                    "packages": [
-                        {
-                            "package": {"ecosystem": "PyPI", "name": "paramiko", "version": "4.0.0"},
-                            "vulnerabilities": [
-                                {"id": "GHSA-r374-rxx8-8654", "database_specific": {"severity": "LOW"}}
-                            ],
-                        }
-                    ],
-                }
-            ]
-        }
-        with tempfile.TemporaryDirectory() as tmp, \
-             unittest.mock.patch.object(turbovasctl.shutil, "which", return_value="/usr/local/bin/osv-scanner"), \
-             unittest.mock.patch.object(turbovasctl, "run_command", return_value=subprocess.CompletedProcess(["osv-scanner"], 1, json.dumps(payload))):
-            root = Path(tmp)
-            for lockfile in turbovasctl.OSV_LOCKFILES:
-                path = root / lockfile
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("# lock\n", encoding="utf-8")
-            result = turbovasctl.command_osv_lockfile_audit(root, status_only=True)
-
-        self.assertEqual(result["status"], "warn")
-        self.assertEqual(result["details"]["vulnerability_count"], 1)
-        self.assertEqual(result["details"]["high_or_critical_count"], 0)
-        self.assertEqual(result["findings"][0]["check"], "osv-lockfile-audit.vulnerabilities")
-        self.assertEqual(result["findings"][0]["top_findings"][0]["package"], "paramiko")
-        self.assertEqual(result["findings"][0]["top_findings"][0]["path"], "components/ospd-openvas/poetry.lock")
-
-    def test_osv_lockfile_audit_fails_for_high_vulnerabilities(self):
-        payload = {
-            "results": [
-                {
-                    "source": {"path": "/repo/TurboVAS/components/gsa/package-lock.json"},
-                    "packages": [
-                        {
-                            "package": {"ecosystem": "npm", "name": "example", "version": "1.0.0"},
-                            "vulnerabilities": [
-                                {"id": "GHSA-high", "database_specific": {"severity": "HIGH"}}
-                            ],
-                        }
-                    ],
-                }
-            ]
-        }
-        with tempfile.TemporaryDirectory() as tmp, \
-             unittest.mock.patch.object(turbovasctl.shutil, "which", return_value="/usr/local/bin/osv-scanner"), \
-             unittest.mock.patch.object(turbovasctl, "run_command", return_value=subprocess.CompletedProcess(["osv-scanner"], 1, json.dumps(payload))):
-            root = Path(tmp)
-            for lockfile in turbovasctl.OSV_LOCKFILES:
-                path = root / lockfile
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("# lock\n", encoding="utf-8")
-            result = turbovasctl.command_osv_lockfile_audit(root, status_only=True)
-
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(result["details"]["high_or_critical_count"], 1)
-        self.assertEqual(result["findings"][0]["check"], "osv-lockfile-audit.high-critical")
-        self.assertEqual(result["findings"][0]["top_findings"][0]["advisory"], "GHSA-high")
-
-    def test_osv_lockfile_audit_warns_when_tool_missing(self):
-        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(turbovasctl.shutil, "which", return_value=None):
-            root = Path(tmp)
-            for lockfile in turbovasctl.OSV_LOCKFILES:
-                path = root / lockfile
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("# lock\n", encoding="utf-8")
-            result = turbovasctl.command_osv_lockfile_audit(root, status_only=True)
-
-        self.assertEqual(result["status"], "warn")
-        self.assertEqual(result["findings"][0]["check"], "osv-lockfile-audit.tool")
 
     def test_quality_gate_state_status_only_omits_history(self):
         result = {

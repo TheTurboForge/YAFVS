@@ -167,26 +167,8 @@ HARDENED_CMAKE_INJECTION = Path("build/hardened/turbovas-hardening.cmake")
 HARDENED_CONFIGURATION = Path("build/hardened/hardening-configuration.json")
 HARDENED_BUILD_MANIFEST = Path("build/hardened/hardening-manifest.json")
 NATIVE_RUST_SERVICES = ("turbovas-api",)
-NATIVE_API_CRATE = Path("services/turbovas-api")
-NATIVE_API_CARGO_LOCK = NATIVE_API_CRATE / "Cargo.lock"
 TURBOVASCTL_RUST_CRATE = Path("tools/turbovasctl-rs")
-TURBOVASCTL_RUST_CARGO_LOCK = TURBOVASCTL_RUST_CRATE / "Cargo.lock"
 TURBOVASCTL_RUST_BRIDGE_MAX_OUTPUT_BYTES = 1024 * 1024
-NATIVE_API_CARGO_AUDIT_TIMEOUT_SECONDS = 120
-GSA_COMPONENT = Path("components/gsa")
-GSA_PACKAGE_LOCK = GSA_COMPONENT / "package-lock.json"
-GSA_NPM_AUDIT_TIMEOUT_SECONDS = 120
-OSV_SCANNER_TIMEOUT_SECONDS = 120
-NATIVE_API_SEMGREP_TIMEOUT_SECONDS = 120
-NATIVE_API_SEMGREP_CONFIG = Path("policy/semgrep-native-api.yml")
-NATIVE_API_SOURCE_DIR = NATIVE_API_CRATE / "src"
-OSV_LOCKFILES = (
-    NATIVE_API_CARGO_LOCK,
-    TURBOVASCTL_RUST_CARGO_LOCK,
-    Path("components/openvas-scanner/rust/Cargo.lock"),
-    GSA_PACKAGE_LOCK,
-)
-OSV_HIGH_SEVERITIES = {"high", "critical"}
 RUNTIME_PYTHON_CHAIN = ("greenbone-feed-sync", "ospd-openvas", "notus-scanner")
 PYTHON_CHAIN = RUNTIME_PYTHON_CHAIN
 BASELINE_CHAIN = (*C_SERVICES_CHAIN, "gsa", *RUNTIME_PYTHON_CHAIN)
@@ -12837,26 +12819,6 @@ def compact_license_status_finding(item: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
-def native_api_semgrep_audit_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    compact = dict(result)
-    findings = result.get("findings", [])
-    non_pass = [compact_doctor_finding(item) for item in findings if item.get("status") != "pass"]
-    details = result.get("details", {}) if isinstance(result.get("details"), dict) else {}
-    top_findings = details.get("top_findings") if isinstance(details.get("top_findings"), list) else []
-    if top_findings:
-        for item in non_pass:
-            if item.get("check") == "native-api-semgrep-audit.findings":
-                item["top_findings"] = top_findings[:5]
-    compact["details"] = {
-        "result_count": details.get("result_count", 0),
-        "error_count": details.get("error_count", 0),
-        "finding_count": len(findings),
-        "non_pass_count": len(non_pass),
-    }
-    compact["findings"] = non_pass or [
-        finding("pass", "native-api-semgrep-audit.status-only", "Native API Semgrep audit passed; no non-pass findings.")
-    ]
-    return compact
 
 
 def native_target_xml_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -12912,66 +12874,10 @@ def production_posture_status_only_result(result: dict[str, Any]) -> dict[str, A
     return compact
 
 
-def gsa_npm_audit_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    compact = dict(result)
-    findings = result.get("findings", [])
-    non_pass = [compact_doctor_finding(item) for item in findings if item.get("status") != "pass"]
-    details = result.get("details", {}) if isinstance(result.get("details"), dict) else {}
-    compact["details"] = {
-        "high_count": details.get("high_count", 0),
-        "critical_count": details.get("critical_count", 0),
-        "total_count": details.get("total_count", 0),
-        "dependency_count": details.get("dependency_count", 0),
-        "finding_count": len(findings),
-        "non_pass_count": len(non_pass),
-    }
-    compact["findings"] = non_pass or [
-        finding("pass", "gsa-npm-audit.status-only", "GSA npm audit passed; no non-pass findings.")
-    ]
-    return compact
 
 
-def native_api_cargo_audit_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    compact = dict(result)
-    findings = result.get("findings", [])
-    non_pass = [compact_doctor_finding(item) for item in findings if item.get("status") != "pass"]
-    details = result.get("details", {}) if isinstance(result.get("details"), dict) else {}
-    compact["details"] = {
-        "vulnerability_count": details.get("vulnerability_count", 0),
-        "warning_count": details.get("warning_count", 0),
-        "dependency_count": details.get("dependency_count", 0),
-        "advisory_count": details.get("advisory_count", 0),
-        "finding_count": len(findings),
-        "non_pass_count": len(non_pass),
-    }
-    compact["findings"] = non_pass or [
-        finding("pass", "native-api-cargo-audit.status-only", "Native API cargo audit passed; no non-pass findings.")
-    ]
-    return compact
 
 
-def osv_lockfile_audit_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    compact = dict(result)
-    findings = result.get("findings", [])
-    non_pass = [compact_doctor_finding(item) for item in findings if item.get("status") != "pass"]
-    details = result.get("details", {}) if isinstance(result.get("details"), dict) else {}
-    top_findings = details.get("top_findings") if isinstance(details.get("top_findings"), list) else []
-    if top_findings:
-        for item in non_pass:
-            if item.get("check") in {"osv-lockfile-audit.vulnerabilities", "osv-lockfile-audit.high-critical"}:
-                item["top_findings"] = top_findings[:5]
-    compact["details"] = {
-        "lockfile_count": details.get("lockfile_count", 0),
-        "vulnerable_package_count": details.get("vulnerable_package_count", 0),
-        "vulnerability_count": details.get("vulnerability_count", 0),
-        "high_or_critical_count": details.get("high_or_critical_count", 0),
-        "finding_count": len(findings),
-        "non_pass_count": len(non_pass),
-    }
-    compact["findings"] = non_pass or [
-        finding("pass", "osv-lockfile-audit.status-only", "OSV lockfile audit passed; no non-pass findings.")
-    ]
-    return compact
 
 
 def license_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -12999,104 +12905,10 @@ def license_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def compact_semgrep_path(path: str, repo_root: Path) -> str:
-    if not path:
-        return ""
-    try:
-        source_path = Path(path)
-        if source_path.is_absolute():
-            return str(source_path.resolve().relative_to(repo_root.resolve()))
-    except (OSError, ValueError):
-        marker = "/TurboVAS/"
-        if marker in path:
-            return path.split(marker, 1)[1]
-        return Path(path).name
-    return path
 
 
-def summarize_semgrep_payload(payload: dict[str, Any], repo_root: Path) -> dict[str, Any]:
-    results = payload.get("results", []) if isinstance(payload, dict) else []
-    errors = payload.get("errors", []) if isinstance(payload, dict) else []
-    if not isinstance(results, list):
-        results = []
-    if not isinstance(errors, list):
-        errors = []
-    top_findings: list[dict[str, Any]] = []
-    for item in results[:5]:
-        if not isinstance(item, dict):
-            continue
-        extra = item.get("extra") if isinstance(item.get("extra"), dict) else {}
-        start = item.get("start") if isinstance(item.get("start"), dict) else {}
-        top_findings.append(
-            {
-                "status": "fail",
-                "check": str(item.get("check_id") or "unknown"),
-                "path": compact_semgrep_path(str(item.get("path") or ""), repo_root),
-                "line": int(start.get("line") or 0),
-                "message": str(extra.get("message") or "Semgrep finding"),
-            }
-        )
-    return {
-        "result_count": len(results),
-        "error_count": len(errors),
-        "top_findings": top_findings,
-    }
 
 
-def command_native_api_semgrep_audit(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    config = repo_root / NATIVE_API_SEMGREP_CONFIG
-    source_dir = repo_root / NATIVE_API_SOURCE_DIR
-    artifacts = [str(NATIVE_API_SEMGREP_CONFIG), str(NATIVE_API_SOURCE_DIR)]
-    findings.append(finding("pass" if config.is_file() else "fail", "native-api-semgrep-audit.config", "Native API Semgrep policy exists." if config.is_file() else "Native API Semgrep policy is missing.", str(NATIVE_API_SEMGREP_CONFIG)))
-    findings.append(finding("pass" if source_dir.is_dir() else "fail", "native-api-semgrep-audit.source", "Native API source directory exists." if source_dir.is_dir() else "Native API source directory is missing.", str(NATIVE_API_SOURCE_DIR)))
-    if shutil.which("semgrep") is None:
-        findings.append(finding("warn", "native-api-semgrep-audit.tool", "semgrep is not installed; native API static security check was skipped."))
-        result = make_result("native-api-semgrep-audit", repo_root, "Native API Semgrep audit could not run because semgrep is unavailable.", findings, artifacts)
-        if status_only:
-            result = native_api_semgrep_audit_status_only_result(result)
-        return result
-    if not config.is_file() or not source_dir.is_dir():
-        result = make_result("native-api-semgrep-audit", repo_root, "Native API Semgrep audit could not run because required files are missing.", findings, artifacts)
-        if status_only:
-            result = native_api_semgrep_audit_status_only_result(result)
-        return result
-
-    audit = run_command(
-        ["semgrep", "--quiet", "--config", str(NATIVE_API_SEMGREP_CONFIG), "--json", "--error", "--metrics=off", str(NATIVE_API_SOURCE_DIR)],
-        repo_root,
-        timeout=NATIVE_API_SEMGREP_TIMEOUT_SECONDS,
-    )
-    try:
-        payload = json.loads(audit.stdout)
-    except json.JSONDecodeError:
-        findings.append(finding("fail", "native-api-semgrep-audit.parse", "semgrep did not emit parseable JSON.", details={"returncode": audit.returncode, "output_tail": output_tail(audit.stdout, 40)}))
-        result = make_result("native-api-semgrep-audit", repo_root, "Native API Semgrep audit failed before results could be parsed.", findings, artifacts)
-        if status_only:
-            result = native_api_semgrep_audit_status_only_result(result)
-        return result
-
-    summary = summarize_semgrep_payload(payload, repo_root)
-    result_count = int(summary["result_count"])
-    error_count = int(summary["error_count"])
-    findings.append(finding("pass", "native-api-semgrep-audit.tool", "semgrep is installed and runnable."))
-    findings.append(finding("fail" if error_count else "pass", "native-api-semgrep-audit.errors", f"semgrep reported {error_count} execution error(s).", details={"error_count": error_count}))
-    findings.append(finding("fail" if result_count else "pass", "native-api-semgrep-audit.findings", f"semgrep reported {result_count} native API static security finding(s).", details={"result_count": result_count}))
-    if result_count:
-        findings[-1]["top_findings"] = summary["top_findings"]
-    result = make_result("native-api-semgrep-audit", repo_root, "Native API Semgrep audit completed.", findings, artifacts)
-    result["details"] = {
-        "result_count": result_count,
-        "error_count": error_count,
-        "returncode": audit.returncode,
-        "top_findings": summary["top_findings"],
-    }
-    if audit.returncode != 0 and result_count == 0 and error_count == 0:
-        result["findings"].append(finding("warn", "native-api-semgrep-audit.exit-code", f"semgrep exited {audit.returncode} without parsed findings or errors.", details={"output_tail": output_tail(audit.stdout, 40)}))
-        result["status"] = aggregate_status(result["findings"])
-    if status_only:
-        result = native_api_semgrep_audit_status_only_result(result)
-    return result
 
 
 def compact_doctor_finding(item: dict[str, Any]) -> dict[str, Any]:
@@ -15284,255 +15096,16 @@ def command_runtime_plan(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-plan", repo_root, "Persistent Docker runtime plan collected.", findings, [str(root), str(compose_file(repo_root).relative_to(repo_root))])
 
 
-def command_native_api_cargo_audit(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    crate_dir = repo_root / NATIVE_API_CRATE
-    lockfile = repo_root / NATIVE_API_CARGO_LOCK
-    findings.append(finding("pass" if crate_dir.is_dir() else "fail", "native-api-cargo-audit.crate", "Native API crate exists." if crate_dir.is_dir() else "Native API crate is missing.", str(NATIVE_API_CRATE)))
-    findings.append(finding("pass" if lockfile.is_file() else "fail", "native-api-cargo-audit.lockfile", "Native API Cargo.lock exists." if lockfile.is_file() else "Native API Cargo.lock is missing.", str(NATIVE_API_CARGO_LOCK)))
-    if shutil.which("cargo-audit") is None:
-        findings.append(finding("warn", "native-api-cargo-audit.tool", "cargo-audit is not installed; native API dependency advisory check was skipped."))
-        result = make_result("native-api-cargo-audit", repo_root, "Native API cargo audit could not run because cargo-audit is unavailable.", findings, [str(NATIVE_API_CARGO_LOCK)])
-        if status_only:
-            result = native_api_cargo_audit_status_only_result(result)
-        return result
-    if not crate_dir.is_dir() or not lockfile.is_file():
-        result = make_result("native-api-cargo-audit", repo_root, "Native API cargo audit could not run because required files are missing.", findings, [str(NATIVE_API_CARGO_LOCK)])
-        if status_only:
-            result = native_api_cargo_audit_status_only_result(result)
-        return result
-
-    audit = run_command(["cargo", "audit", "--no-fetch", "--stale", "--json", "--quiet"], crate_dir, timeout=NATIVE_API_CARGO_AUDIT_TIMEOUT_SECONDS)
-    try:
-        payload = json.loads(audit.stdout)
-    except json.JSONDecodeError:
-        findings.append(finding("fail", "native-api-cargo-audit.parse", "cargo audit did not emit parseable JSON.", details={"returncode": audit.returncode, "output_tail": output_tail(audit.stdout, 40)}))
-        result = make_result("native-api-cargo-audit", repo_root, "Native API cargo audit failed before advisory results could be parsed.", findings, [str(NATIVE_API_CARGO_LOCK)])
-        if status_only:
-            result = native_api_cargo_audit_status_only_result(result)
-        return result
-
-    vulnerabilities = payload.get("vulnerabilities", {}) if isinstance(payload, dict) else {}
-    warnings = payload.get("warnings", {}) if isinstance(payload, dict) else {}
-    database = payload.get("database", {}) if isinstance(payload, dict) else {}
-    lockfile_payload = payload.get("lockfile", {}) if isinstance(payload, dict) else {}
-    vulnerability_count = int(vulnerabilities.get("count") or 0) if isinstance(vulnerabilities, dict) else 0
-    warning_count = sum(len(value) for value in warnings.values() if isinstance(value, list)) if isinstance(warnings, dict) else 0
-    advisory_count = int(database.get("advisory-count") or 0) if isinstance(database, dict) else 0
-    dependency_count = int(lockfile_payload.get("dependency-count") or 0) if isinstance(lockfile_payload, dict) else 0
-    findings.append(finding("pass", "native-api-cargo-audit.tool", "cargo-audit is installed and runnable."))
-    findings.append(finding("fail" if vulnerability_count else "pass", "native-api-cargo-audit.vulnerabilities", f"cargo audit reported {vulnerability_count} vulnerable native API dependency package(s).", str(NATIVE_API_CARGO_LOCK), {"vulnerability_count": vulnerability_count}))
-    findings.append(finding("warn" if warning_count else "pass", "native-api-cargo-audit.warnings", f"cargo audit reported {warning_count} warning item(s).", str(NATIVE_API_CARGO_LOCK), {"warning_count": warning_count}))
-    result = make_result("native-api-cargo-audit", repo_root, "Native API cargo audit completed.", findings, [str(NATIVE_API_CARGO_LOCK)])
-    result["details"] = {
-        "vulnerability_count": vulnerability_count,
-        "warning_count": warning_count,
-        "dependency_count": dependency_count,
-        "advisory_count": advisory_count,
-        "returncode": audit.returncode,
-    }
-    if audit.returncode != 0 and vulnerability_count == 0 and warning_count == 0:
-        result["findings"].append(finding("warn", "native-api-cargo-audit.exit-code", f"cargo audit exited {audit.returncode} without parsed vulnerabilities or warnings.", details={"output_tail": output_tail(audit.stdout, 40)}))
-        result["status"] = aggregate_status(result["findings"])
-    if status_only:
-        result = native_api_cargo_audit_status_only_result(result)
-    return result
 
 
-def command_gsa_npm_audit(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    component_dir = repo_root / GSA_COMPONENT
-    lockfile = repo_root / GSA_PACKAGE_LOCK
-    findings.append(finding("pass" if component_dir.is_dir() else "fail", "gsa-npm-audit.component", "GSA component exists." if component_dir.is_dir() else "GSA component is missing.", str(GSA_COMPONENT)))
-    findings.append(finding("pass" if lockfile.is_file() else "fail", "gsa-npm-audit.lockfile", "GSA package-lock.json exists." if lockfile.is_file() else "GSA package-lock.json is missing.", str(GSA_PACKAGE_LOCK)))
-    if shutil.which("npm") is None:
-        findings.append(finding("warn", "gsa-npm-audit.tool", "npm is not installed; GSA dependency audit was skipped."))
-        result = make_result("gsa-npm-audit", repo_root, "GSA npm audit could not run because npm is unavailable.", findings, [str(GSA_PACKAGE_LOCK)])
-        if status_only:
-            result = gsa_npm_audit_status_only_result(result)
-        return result
-    if not component_dir.is_dir() or not lockfile.is_file():
-        result = make_result("gsa-npm-audit", repo_root, "GSA npm audit could not run because required files are missing.", findings, [str(GSA_PACKAGE_LOCK)])
-        if status_only:
-            result = gsa_npm_audit_status_only_result(result)
-        return result
-
-    audit = run_command(["npm", "audit", "--audit-level=high", "--json", "--offline"], component_dir, timeout=GSA_NPM_AUDIT_TIMEOUT_SECONDS)
-    try:
-        payload = json.loads(audit.stdout)
-    except json.JSONDecodeError:
-        findings.append(finding("fail", "gsa-npm-audit.parse", "npm audit did not emit parseable JSON.", details={"returncode": audit.returncode, "output_tail": output_tail(audit.stdout, 40)}))
-        result = make_result("gsa-npm-audit", repo_root, "GSA npm audit failed before results could be parsed.", findings, [str(GSA_PACKAGE_LOCK)])
-        if status_only:
-            result = gsa_npm_audit_status_only_result(result)
-        return result
-
-    metadata_payload = payload.get("metadata", {}) if isinstance(payload, dict) else {}
-    vulnerabilities = metadata_payload.get("vulnerabilities", {}) if isinstance(metadata_payload, dict) else {}
-    dependencies = metadata_payload.get("dependencies", {}) if isinstance(metadata_payload, dict) else {}
-    high_count = int(vulnerabilities.get("high") or 0) if isinstance(vulnerabilities, dict) else 0
-    critical_count = int(vulnerabilities.get("critical") or 0) if isinstance(vulnerabilities, dict) else 0
-    total_count = int(vulnerabilities.get("total") or 0) if isinstance(vulnerabilities, dict) else 0
-    dependency_count = int(dependencies.get("total") or 0) if isinstance(dependencies, dict) else 0
-    severe_count = high_count + critical_count
-    findings.append(finding("pass", "gsa-npm-audit.tool", "npm audit is installed and runnable."))
-    findings.append(finding("fail" if severe_count else "pass", "gsa-npm-audit.high-critical", f"npm audit reported {high_count} high and {critical_count} critical GSA dependency vulnerabilities.", str(GSA_PACKAGE_LOCK), {"high_count": high_count, "critical_count": critical_count}))
-    result = make_result("gsa-npm-audit", repo_root, "GSA npm audit completed.", findings, [str(GSA_PACKAGE_LOCK)])
-    result["details"] = {
-        "high_count": high_count,
-        "critical_count": critical_count,
-        "total_count": total_count,
-        "dependency_count": dependency_count,
-        "returncode": audit.returncode,
-    }
-    if audit.returncode != 0 and severe_count == 0:
-        result["findings"].append(finding("warn", "gsa-npm-audit.exit-code", f"npm audit exited {audit.returncode} without parsed high or critical vulnerabilities.", details={"output_tail": output_tail(audit.stdout, 40)}))
-        result["status"] = aggregate_status(result["findings"])
-    if status_only:
-        result = gsa_npm_audit_status_only_result(result)
-    return result
 
 
-def osv_severity(vulnerability: dict[str, Any]) -> str:
-    database_specific = vulnerability.get("database_specific") if isinstance(vulnerability.get("database_specific"), dict) else {}
-    severity = database_specific.get("severity")
-    if isinstance(severity, str) and severity.strip():
-        return severity.strip().lower()
-    severity_rows = vulnerability.get("severity")
-    if isinstance(severity_rows, list):
-        for row in severity_rows:
-            if isinstance(row, dict):
-                score = row.get("score")
-                if isinstance(score, str) and score.strip():
-                    return score.strip().lower()
-    return "unknown"
 
 
-def compact_osv_source_path(path: str, repo_root: Path) -> str:
-    if not path:
-        return ""
-    try:
-        source_path = Path(path)
-        if source_path.is_absolute():
-            return str(source_path.resolve().relative_to(repo_root.resolve()))
-    except (OSError, ValueError):
-        marker = "/TurboVAS/"
-        if marker in path:
-            return path.split(marker, 1)[1]
-        return Path(path).name
-    return path
 
 
-def summarize_osv_payload(payload: dict[str, Any], repo_root: Path) -> dict[str, Any]:
-    results = payload.get("results", []) if isinstance(payload, dict) else []
-    if not isinstance(results, list):
-        results = []
-    vulnerable_package_count = 0
-    vulnerability_count = 0
-    high_or_critical_count = 0
-    top_findings: list[dict[str, Any]] = []
-    for result in results:
-        if not isinstance(result, dict):
-            continue
-        source = result.get("source") if isinstance(result.get("source"), dict) else {}
-        path = compact_osv_source_path(str(source.get("path") or ""), repo_root)
-        packages = result.get("packages", [])
-        if not isinstance(packages, list):
-            continue
-        for package_row in packages:
-            if not isinstance(package_row, dict):
-                continue
-            vulnerabilities = package_row.get("vulnerabilities", [])
-            if not isinstance(vulnerabilities, list) or not vulnerabilities:
-                continue
-            package = package_row.get("package") if isinstance(package_row.get("package"), dict) else {}
-            vulnerable_package_count += 1
-            ecosystem = str(package.get("ecosystem") or "unknown")
-            name = str(package.get("name") or "unknown")
-            version = str(package.get("version") or "")
-            for vulnerability in vulnerabilities:
-                if not isinstance(vulnerability, dict):
-                    continue
-                vulnerability_count += 1
-                severity = osv_severity(vulnerability)
-                if severity in OSV_HIGH_SEVERITIES:
-                    high_or_critical_count += 1
-                if len(top_findings) < 5:
-                    top_findings.append(
-                        {
-                            "status": "fail" if severity in OSV_HIGH_SEVERITIES else "warn",
-                            "check": "osv-lockfile-audit.vulnerability",
-                            "package": name,
-                            "ecosystem": ecosystem,
-                            "version": version,
-                            "severity": severity,
-                            "advisory": str(vulnerability.get("id") or "unknown"),
-                            "path": path,
-                        }
-                    )
-    return {
-        "vulnerable_package_count": vulnerable_package_count,
-        "vulnerability_count": vulnerability_count,
-        "high_or_critical_count": high_or_critical_count,
-        "top_findings": top_findings,
-    }
 
 
-def command_osv_lockfile_audit(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    artifacts = [str(path) for path in OSV_LOCKFILES]
-    missing = [str(path) for path in OSV_LOCKFILES if not (repo_root / path).is_file()]
-    findings.append(finding("pass" if not missing else "fail", "osv-lockfile-audit.lockfiles", "Expected lockfiles exist." if not missing else "One or more expected lockfiles are missing.", details={"missing": missing, "lockfile_count": len(OSV_LOCKFILES)}))
-    if shutil.which("osv-scanner") is None:
-        findings.append(finding("warn", "osv-lockfile-audit.tool", "osv-scanner is not installed; OSV lockfile audit was skipped."))
-        result = make_result("osv-lockfile-audit", repo_root, "OSV lockfile audit could not run because osv-scanner is unavailable.", findings, artifacts)
-        if status_only:
-            result = osv_lockfile_audit_status_only_result(result)
-        return result
-    if missing:
-        result = make_result("osv-lockfile-audit", repo_root, "OSV lockfile audit could not run because required lockfiles are missing.", findings, artifacts)
-        if status_only:
-            result = osv_lockfile_audit_status_only_result(result)
-        return result
-
-    command = ["osv-scanner", "scan", "source", "--format", "json", "--verbosity", "error"]
-    for lockfile in OSV_LOCKFILES:
-        command.extend(["--lockfile", str(lockfile)])
-    audit = run_command(command, repo_root, timeout=OSV_SCANNER_TIMEOUT_SECONDS)
-    try:
-        payload = json.loads(audit.stdout)
-    except json.JSONDecodeError:
-        findings.append(finding("fail", "osv-lockfile-audit.parse", "osv-scanner did not emit parseable JSON.", details={"returncode": audit.returncode, "output_tail": output_tail(audit.stdout, 40)}))
-        result = make_result("osv-lockfile-audit", repo_root, "OSV lockfile audit failed before results could be parsed.", findings, artifacts)
-        if status_only:
-            result = osv_lockfile_audit_status_only_result(result)
-        return result
-
-    summary = summarize_osv_payload(payload, repo_root)
-    vulnerability_count = int(summary["vulnerability_count"])
-    high_or_critical_count = int(summary["high_or_critical_count"])
-    vulnerable_package_count = int(summary["vulnerable_package_count"])
-    findings.append(finding("pass", "osv-lockfile-audit.tool", "osv-scanner is installed and runnable."))
-    findings.append(finding("fail" if high_or_critical_count else "pass", "osv-lockfile-audit.high-critical", f"OSV reported {high_or_critical_count} high/critical lockfile vulnerabilit(y/ies).", details={"high_or_critical_count": high_or_critical_count}))
-    if vulnerability_count and not high_or_critical_count:
-        findings.append(finding("warn", "osv-lockfile-audit.vulnerabilities", f"OSV reported {vulnerability_count} lower-severity lockfile vulnerabilit(y/ies).", details={"vulnerability_count": vulnerability_count, "top_findings": summary["top_findings"]}))
-    else:
-        findings.append(finding("pass", "osv-lockfile-audit.vulnerabilities", f"OSV reported {vulnerability_count} total lockfile vulnerabilit(y/ies).", details={"vulnerability_count": vulnerability_count}))
-    result = make_result("osv-lockfile-audit", repo_root, "OSV lockfile audit completed.", findings, artifacts)
-    result["details"] = {
-        "lockfile_count": len(OSV_LOCKFILES),
-        "vulnerable_package_count": vulnerable_package_count,
-        "vulnerability_count": vulnerability_count,
-        "high_or_critical_count": high_or_critical_count,
-        "returncode": audit.returncode,
-        "top_findings": summary["top_findings"],
-    }
-    if audit.returncode != 0 and vulnerability_count == 0:
-        result["findings"].append(finding("warn", "osv-lockfile-audit.exit-code", f"osv-scanner exited {audit.returncode} without parsed vulnerabilities.", details={"output_tail": output_tail(audit.stdout, 40)}))
-        result["status"] = aggregate_status(result["findings"])
-    if status_only:
-        result = osv_lockfile_audit_status_only_result(result)
-    return result
 
 
 def posix_path_within(path: str, parent: str) -> bool:
@@ -33851,14 +33424,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
     subparsers.add_parser("runtime-log-review", parents=[common], help="review recent full-stack runtime logs")
-    native_api_cargo_audit = subparsers.add_parser("native-api-cargo-audit", parents=[common], help="audit native API Rust dependencies for known advisories")
-    native_api_cargo_audit.add_argument("--status-only", action="store_true", help="emit compact advisory counts and only non-pass findings for chat-safe native API dependency checks")
-    native_api_semgrep_audit = subparsers.add_parser("native-api-semgrep-audit", parents=[common], help="run bounded Semgrep security rules over the native API source")
-    native_api_semgrep_audit.add_argument("--status-only", action="store_true", help="emit compact finding counts and only non-pass findings for chat-safe native API Semgrep checks")
-    gsa_npm_audit = subparsers.add_parser("gsa-npm-audit", parents=[common], help="audit GSA npm dependencies for high/critical advisories")
-    gsa_npm_audit.add_argument("--status-only", action="store_true", help="emit compact vulnerability counts and only non-pass findings for chat-safe GSA dependency checks")
-    osv_lockfile_audit = subparsers.add_parser("osv-lockfile-audit", parents=[common], help="audit selected lockfiles with OSV Scanner")
-    osv_lockfile_audit.add_argument("--status-only", action="store_true", help="emit compact vulnerability counts and only non-pass findings for chat-safe OSV checks")
     runtime_app_up = subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
     runtime_app_up.add_argument("--status-only", action="store_true", help="emit compact app startup status and only non-pass findings for chat-safe validation")
     subparsers.add_parser("runtime-app-build", parents=[common], help="build application images explicitly without starting or changing feed state")
@@ -34248,14 +33813,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_smoke(repo_root)
     elif args.command == "runtime-log-review":
         result = command_runtime_log_review(repo_root)
-    elif args.command == "native-api-cargo-audit":
-        result = command_native_api_cargo_audit(repo_root, status_only=args.status_only)
-    elif args.command == "native-api-semgrep-audit":
-        result = command_native_api_semgrep_audit(repo_root, status_only=args.status_only)
-    elif args.command == "gsa-npm-audit":
-        result = command_gsa_npm_audit(repo_root, status_only=args.status_only)
-    elif args.command == "osv-lockfile-audit":
-        result = command_osv_lockfile_audit(repo_root, status_only=args.status_only)
     elif args.command == "runtime-app-up":
         result = command_runtime_app_up(repo_root, status_only=args.status_only)
     elif args.command == "runtime-app-build":

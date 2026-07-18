@@ -1249,14 +1249,10 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["inventory", "--scope", "components/gsa", "--json"],
                 ["inventory", "--scope", "definitely-invalid", "--json"],
                 ["branding-state", "--json"],
-                ["path-coupling-state", "--json"],
-                ["path-coupling-state", "--status-only", "--json"],
                 ["quality-gate-state", "--json"],
                 ["quality-gate-state", "--status-only", "--json"],
                 ["feed-state", "--json"],
                 ["rust-migration-state", "--json"],
-                ["security-policy-check", "--json"],
-                ["security-policy-check", "--status-only", "--json"],
                 ["runtime-plan", "--json"],
                 ["feed-copy-to-runtime", "--json"],
                 ["deps", "--json"],
@@ -1298,6 +1294,10 @@ class TurboVASCtlTests(unittest.TestCase):
                 (["runtime-db-introspect", "--json"], 0, "warn"),
                 (["runtime-performance-snapshot", "--json"], 0, "warn"),
                 (["c-hardening-check", "--status-only", "--json"], 1, "fail"),
+                (["path-coupling-state", "--json"], 0, "pass"),
+                (["path-coupling-state", "--status-only", "--json"], 0, "pass"),
+                (["security-policy-check", "--json"], 0, "pass"),
+                (["security-policy-check", "--status-only", "--json"], 0, "pass"),
             ),
             complete_surface=True,
             human_inventory=True,
@@ -2409,7 +2409,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot"}
+        rust_only_commands = {"path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2499,8 +2499,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def native_api_request_display_command", source)
         self.assertIn("native_api_request_display_command(repo_root, request_path, method=method, request_id=request_id, body=body)", source)
         self.assertIn("--allow-write-control", source)
-        self.assertIn("def command_security_policy_check", source)
-        self.assertIn("def command_path_coupling_state", source)
         self.assertIn("def command_production_posture_check", source)
         self.assertIn("def command_quality_gate", source)
         self.assertIn("def command_quality_gate_state", source)
@@ -2538,6 +2536,19 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("def command_runtime_performance_snapshot", source)
         self.assertIn("runtime-performance-snapshot *args:", justfile)
         self.assertIn("tools/turbovasctl-rs/Cargo.toml -- runtime-performance-snapshot", justfile)
+
+    def test_policy_diagnostics_are_rust_only(self):
+        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        for command, function_name in (
+            ("path-coupling-state", "command_path_coupling_state"),
+            ("security-policy-check", "command_security_policy_check"),
+        ):
+            with self.subTest(command=command):
+                self.assertNotIn(f'subparsers.add_parser("{command}"', source)
+                self.assertNotIn(f"def {function_name}", source)
+                self.assertIn(f"{command} *args:", justfile)
+                self.assertIn(f"tools/turbovasctl-rs/Cargo.toml -- {command}", justfile)
 
     def test_native_api_cargo_audit_status_only_summarizes_clean_audit(self):
         payload = {
@@ -3053,70 +3064,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(length, 4)
         self.assertEqual(path, "/api/v1/scope-reports?page_size=1&filter=xxxx")
 
-    def test_security_policy_check_validates_seeded_policy(self):
-        root = Path(__file__).resolve().parents[2]
-        result = turbovasctl.command_security_policy_check(root)
-        self.assertEqual(result["status"], "pass")
-        area_ids = {area["id"] for area in result["details"]["areas"]}
-        self.assertIn("protocol-parsing", area_ids)
-        self.assertIn("scanner-execution", area_ids)
-        self.assertIn("native-api", area_ids)
-        self.assertGreaterEqual(result["details"]["area_count"], 7)
-
-    def test_security_policy_status_only_is_chat_safe(self):
-        root = Path(__file__).resolve().parents[2]
-        full = turbovasctl.command_security_policy_check(root)
-        compact = turbovasctl.command_security_policy_check(root, status_only=True)
-
-        self.assertEqual(compact["status"], "pass")
-        self.assertEqual(compact["details"]["area_count"], full["details"]["area_count"])
-        self.assertEqual(compact["details"]["non_pass_count"], 0)
-        self.assertNotIn("areas", compact["details"])
-        self.assertEqual(
-            compact["findings"],
-            [
-                {
-                    "status": "pass",
-                    "check": "security-policy.status-only",
-                    "message": "Security policy check passed; no non-pass findings.",
-                }
-            ],
-        )
-        self.assertLess(len(json.dumps(compact)), len(json.dumps(full)))
-
-    def test_path_coupling_helpers_classify_expected_markers(self):
-        self.assertEqual(turbovasctl.path_coupling_category("docs/README.md"), "documentation")
-        self.assertEqual(turbovasctl.path_coupling_category("docker/runtime/README.md"), "documentation")
-        self.assertEqual(turbovasctl.path_coupling_category("compose/dev.yaml"), "runtime_tooling")
-        self.assertEqual(turbovasctl.path_coupling_category("tools/tests/test_turbovasctl.py"), "diagnostic_tooling")
-        markers = turbovasctl.path_coupling_markers("/home/example/Projects/TurboVAS build/prefix /runtime/state")
-        self.assertIn("absolute_home_checkout_path", markers)
-        self.assertIn("build_prefix_path", markers)
-        self.assertIn("container_runtime_path", markers)
-
-    def test_path_coupling_warns_only_for_product_dev_checkout_markers(self):
-        summary = turbovasctl.summarize_path_coupling(
-            [
-                {
-                    "path": "components/example.c",
-                    "category": "component_source",
-                    "markers": ["absolute_home_checkout_path"],
-                },
-                {
-                    "path": "tools/turbovasctl",
-                    "category": "runtime_tooling",
-                    "markers": ["absolute_home_checkout_path"],
-                },
-                {
-                    "path": "tools/tests/test_turbovasctl.py",
-                    "category": "diagnostic_tooling",
-                    "markers": ["dev_checkout_path"],
-                },
-            ]
-        )
-
-        self.assertEqual(summary["non_documentation_dev_checkout_paths"], ["components/example.c"])
-
     def test_quality_gate_schedule_install_requires_explicit_machine_opt_in(self):
         root = Path(__file__).resolve().parents[2]
         with unittest.mock.patch.dict(os.environ, {}, clear=True):
@@ -3127,18 +3074,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["findings"][0]["check"], "quality-gate-schedule.opt-in")
         self.assertIn(turbovasctl.QUALITY_GATE_SCHEDULE_ENABLE_ENV, result["findings"][0]["message"])
         systemctl.assert_not_called()
-
-    def test_path_coupling_status_only_is_chat_safe(self):
-        root = Path(__file__).resolve().parents[2]
-        full = turbovasctl.command_path_coupling_state(root)
-        compact = turbovasctl.command_path_coupling_state(root, status_only=True)
-
-        self.assertEqual(compact["details"]["reference_count"], full["details"]["reference_count"])
-        self.assertNotIn("references", compact["details"])
-        self.assertIn("non_documentation_dev_checkout_path_count", compact["details"])
-        for item in compact["findings"]:
-            self.assertNotIn("by_category", json.dumps(item.get("details", {})))
-        self.assertLess(len(json.dumps(compact)), len(json.dumps(full)))
 
     def test_native_tooling_state_classifies_dependency_surfaces(self):
         root = Path(__file__).resolve().parents[2]
@@ -4926,13 +4861,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["direct_runtime_alignment_status"], "warn")
         self.assertEqual(result["details"]["direct_body_limit_alignment_status"], "warn")
         self.assertEqual(result["details"]["direct_body_limit_missing_property_count"], 1)
-
-    def test_security_policy_toml_missing_dependency_is_graceful(self):
-        with unittest.mock.patch.object(turbovasctl, "tomllib", None):
-            payload, error = turbovasctl.load_security_sensitive_paths(Path("."))
-
-        self.assertIsNone(payload)
-        self.assertIn("Python 3.11", error)
 
     def test_python_version_finding_warns_below_minimum(self):
         with unittest.mock.patch.object(turbovasctl, "tool_version", return_value="Python 3.10.12"):
@@ -6762,23 +6690,6 @@ class TurboVASCtlTests(unittest.TestCase):
         mismatches = {(item["scheme"], item["field"]): item for item in auth["security_scheme_mismatches"]}
         self.assertEqual(mismatches[("bearerAuth", "type")]["actual"], "apiKey")
         self.assertIsNone(mismatches[("bearerAuth", "scheme")]["actual"])
-
-    def test_security_policy_marks_native_api_contract_surfaces_sensitive(self):
-        root = Path(__file__).resolve().parents[2]
-        result = turbovasctl.command_security_policy_check(root)
-        native_api_area = next(area for area in result["details"]["areas"] if area["id"] == "native-api")
-
-        for expected_path in (
-            "api/openapi/",
-            "services/turbovas-api/",
-            "components/gsad/src/gsad_native_api.c",
-            "components/gsad/src/gsad_http_handle_request.c",
-            "components/gsad/src/gsad_validator.c",
-            "components/gsa/src/gmp/native-api/",
-            "compose/dev.yaml",
-            "tools/turbovasctl",
-        ):
-            self.assertIn(expected_path, native_api_area["paths"])
 
     def test_certbund_report_rows_expand_one_result_per_cert_ref(self):
         rows = turbovasctl.certbund_report_rows(

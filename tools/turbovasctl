@@ -41,14 +41,6 @@ if str(TOOLS_MODULE_DIR) in sys.path:
     sys.path.remove(str(TOOLS_MODULE_DIR))
 sys.path.insert(0, str(TOOLS_MODULE_DIR))
 
-try:
-    import tomllib
-except ModuleNotFoundError:  # pragma: no cover - exercised by monkeypatch in tests.
-    tomllib = None  # type: ignore[assignment]
-
-TOML_DECODE_ERROR = getattr(tomllib, "TOMLDecodeError", ValueError)
-
-
 STATUSES = ("pass", "warn", "fail")
 MINIMUM_TURBOVASCTL_PYTHON = (3, 11)
 COMPOSE_APP_UP_TRANSIENT_ERRORS = (
@@ -73,8 +65,6 @@ FEED_CONTENT_TRACKED_PREFIXES = (
     "feeds/gvm/cert-data/",
     "feeds/gvm/data-objects/",
 )
-SECURITY_POLICY_DOC = Path("docs/SECURITY_POLICY.md")
-SECURITY_SENSITIVE_PATHS_FILE = Path("policy/security-sensitive-paths.toml")
 PUBLIC_READINESS_LICENSE_ITEMS = (
     "source-public license/provenance boundary for original TurboVAS-only files and docs",
     "AGPL source-publication procedure for network services",
@@ -2329,13 +2319,6 @@ ALERT_FORBIDDEN_PAYLOAD_KEYS = frozenset(
         "sha256_fingerprint",
     }
 )
-PATH_COUPLING_PATTERNS = {
-    "absolute_home_checkout_path": re.compile(r"/home/[^/\s\"'`]+/(?:Projects|Projekte)/TurboVAS(?:/|\b)"),
-    "absolute_home_runtime_path": re.compile(r"/home/[^/\s\"'`]+/(?:Projects|Projekte)/TurboVAS-runtime(?:/|\b)"),
-    "workspace_mount_path": re.compile(r"/workspace(?:/|\b)"),
-    "build_prefix_path": re.compile(r"build/prefix(?:/|\b)"),
-    "container_runtime_path": re.compile(r"/runtime/"),
-}
 QUALITY_GATE_SCHEDULE_ENABLE_ENV = "TURBOVAS_ENABLE_QUALITY_GATE_SCHEDULE"
 BRANDING_MARKERS = ("OpenVAS", "OPENVAS", "Greenbone", "greenbone", "GSA")
 BRANDING_PATH_MARKERS = (
@@ -13151,41 +13134,6 @@ def doctor_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
-def security_policy_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    compact = dict(result)
-    findings = result.get("findings", [])
-    non_pass = [compact_doctor_finding(item) for item in findings if item.get("status") != "pass"]
-    details = result.get("details", {}) if isinstance(result.get("details"), dict) else {}
-    compact["details"] = {
-        "area_count": details.get("area_count", 0),
-        "finding_count": len(findings),
-        "non_pass_count": len(non_pass),
-    }
-    compact["findings"] = non_pass or [
-        finding("pass", "security-policy.status-only", "Security policy check passed; no non-pass findings.")
-    ]
-    return compact
-
-
-def path_coupling_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    compact = dict(result)
-    findings = result.get("findings", [])
-    non_pass = [compact_doctor_finding(item) for item in findings if item.get("status") != "pass"]
-    details = result.get("details", {}) if isinstance(result.get("details"), dict) else {}
-    summary = details.get("summary", {}) if isinstance(details.get("summary"), dict) else {}
-    non_doc_paths = summary.get("non_documentation_dev_checkout_paths", [])
-    compact["details"] = {
-        "reference_count": details.get("reference_count", summary.get("total_references", 0)),
-        "non_documentation_dev_checkout_path_count": len(non_doc_paths) if isinstance(non_doc_paths, list) else 0,
-        "finding_count": len(findings),
-        "non_pass_count": len(non_pass),
-    }
-    compact["findings"] = non_pass or [
-        finding("pass", "path-coupling.status-only", "Path-coupling check passed; no non-pass findings.")
-    ]
-    return compact
-
-
 def native_api_migration_matrix_rows(repo_root: Path) -> list[dict[str, Any]]:
     items = native_tooling_inventory(repo_root)
     summary = summarize_native_tooling(items, repo_root)
@@ -14320,81 +14268,6 @@ def command_rust_migration_state(repo_root: Path) -> dict[str, Any]:
     return result
 
 
-def path_coupling_category(relative_path: str) -> str:
-    if relative_path.startswith("docs/") or relative_path.endswith((".md", ".rst", ".txt")) or relative_path in {"README.md", "BUILDING.md"}:
-        return "documentation"
-    if relative_path.startswith(("compose/", "docker/", "ops/")) or relative_path in {"justfile", "tools/turbovasctl"}:
-        return "runtime_tooling"
-    if relative_path.startswith("tools/"):
-        return "diagnostic_tooling"
-    if relative_path.startswith("components/"):
-        return "component_source"
-    return "other_tracked_source"
-
-
-def path_coupling_markers(text: str) -> list[str]:
-    return sorted(marker for marker, pattern in PATH_COUPLING_PATTERNS.items() if pattern.search(text))
-
-
-def path_coupling_references(repo_root: Path) -> list[dict[str, Any]]:
-    references: list[dict[str, Any]] = []
-    for relative_path in git_tracked_files(repo_root) or []:
-        path = repo_root / relative_path
-        if not path.is_file():
-            continue
-        try:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            continue
-        markers = path_coupling_markers(text)
-        if not markers:
-            continue
-        references.append({"path": relative_path, "category": path_coupling_category(relative_path), "markers": markers})
-    return sorted(references, key=lambda item: (item["category"], item["path"]))
-
-
-def summarize_path_coupling(references: list[dict[str, Any]]) -> dict[str, Any]:
-    by_category: dict[str, list[str]] = {}
-    by_marker: dict[str, list[str]] = {}
-    warning_paths: list[str] = []
-    for reference in references:
-        path = reference["path"]
-        category = reference["category"]
-        by_category.setdefault(category, []).append(path)
-        for marker in reference["markers"]:
-            by_marker.setdefault(marker, []).append(path)
-        if category in {"component_source", "other_tracked_source"} and "absolute_home_checkout_path" in reference["markers"]:
-            warning_paths.append(path)
-    return {
-        "total_references": len(references),
-        "by_category": {category: {"count": len(paths), "paths": paths[:50]} for category, paths in sorted(by_category.items())},
-        "by_marker": {marker: {"count": len(paths), "paths": paths[:50]} for marker, paths in sorted(by_marker.items())},
-        "non_documentation_dev_checkout_paths": sorted(set(warning_paths))[:100],
-    }
-
-
-def command_path_coupling_state(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
-    references = path_coupling_references(repo_root)
-    summary = summarize_path_coupling(references)
-    warning_paths = summary["non_documentation_dev_checkout_paths"]
-    findings = [
-        finding("pass", "path-coupling.source-map", f"Classified {len(references)} tracked path-coupling reference(s).", details=summary),
-        finding(
-            "warn" if warning_paths else "pass",
-            "path-coupling.dev-checkout",
-            "Hard-coded development checkout paths exist outside documentation."
-            if warning_paths
-            else "No hard-coded development checkout paths found outside documentation.",
-            details={"paths": warning_paths},
-        ),
-    ]
-    result = make_result("path-coupling-state", repo_root, "Absolute path and runtime path coupling state collected.", findings)
-    result["details"] = {"references": references[:200], "summary": summary, "reference_count": len(references)}
-    if status_only:
-        result = path_coupling_status_only_result(result)
-    return result
-
-
 def comment_notice_supported(relative_path: str) -> bool:
     path = Path(relative_path)
     return path.name in COMMENT_NOTICE_NAMES or path.suffix in COMMENT_NOTICE_SUFFIXES
@@ -15409,90 +15282,6 @@ def command_runtime_plan(repo_root: Path) -> dict[str, Any]:
         finding("warn", "runtime.deferred", "Scan execution remains guarded and requires scanner capability checks."),
     ]
     return make_result("runtime-plan", repo_root, "Persistent Docker runtime plan collected.", findings, [str(root), str(compose_file(repo_root).relative_to(repo_root))])
-
-
-def load_security_sensitive_paths(repo_root: Path) -> tuple[dict[str, Any] | None, str | None]:
-    if tomllib is None:
-        return None, "Python 3.11 or newer is required for TOML-backed security policy checks."
-    path = repo_root / SECURITY_SENSITIVE_PATHS_FILE
-    try:
-        with path.open("rb") as handle:
-            return tomllib.load(handle), None
-    except OSError as exc:
-        return None, str(exc)
-    except TOML_DECODE_ERROR as exc:
-        return None, str(exc)
-
-
-def normalize_security_policy_area(area: dict[str, Any]) -> dict[str, Any]:
-    paths = [path for path in area.get("paths", []) if isinstance(path, str) and path]
-    checks = [check for check in area.get("required_checks", []) if isinstance(check, str) and check]
-    return {
-        "id": area.get("id") if isinstance(area.get("id"), str) else "",
-        "title": area.get("title") if isinstance(area.get("title"), str) else "",
-        "risk": area.get("risk") if isinstance(area.get("risk"), str) else "",
-        "paths": paths,
-        "required_checks": checks,
-    }
-
-
-def security_policy_area_findings(repo_root: Path, areas: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    findings: list[dict[str, Any]] = []
-    seen_ids: set[str] = set()
-    for raw_area in areas:
-        area = normalize_security_policy_area(raw_area)
-        area_id = area["id"] or "<missing-id>"
-        missing_fields = [field for field in ("id", "title", "risk") if not area[field]]
-        if not area["paths"]:
-            missing_fields.append("paths")
-        if not area["required_checks"]:
-            missing_fields.append("required_checks")
-        duplicate_id = area["id"] in seen_ids if area["id"] else False
-        if area["id"]:
-            seen_ids.add(area["id"])
-        missing_paths = [path for path in area["paths"] if not (repo_root / path).exists()]
-        status = "pass"
-        if missing_fields or duplicate_id:
-            status = "fail"
-        elif missing_paths:
-            status = "warn"
-        message_state = "valid" if status == "pass" else "not fully valid"
-        findings.append(
-            finding(
-                status,
-                "security-policy.area",
-                f"Security policy area {area_id} is {message_state}.",
-                details={**area, "missing_fields": missing_fields, "duplicate_id": duplicate_id, "missing_paths": missing_paths},
-            )
-        )
-    return findings
-
-
-def command_security_policy_check(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    doc_path = repo_root / SECURITY_POLICY_DOC
-    policy_path = repo_root / SECURITY_SENSITIVE_PATHS_FILE
-    findings.append(finding("pass" if doc_path.is_file() else "fail", "security-policy.doc", "Security policy documentation exists." if doc_path.is_file() else "Security policy documentation is missing.", str(SECURITY_POLICY_DOC)))
-    findings.append(finding("pass" if policy_path.is_file() else "fail", "security-policy.paths-file", "Security-sensitive path policy exists." if policy_path.is_file() else "Security-sensitive path policy is missing.", str(SECURITY_SENSITIVE_PATHS_FILE)))
-    if not policy_path.is_file():
-        return make_result("security-policy-check", repo_root, "Security-sensitive path policy check failed before parsing.", findings, [str(SECURITY_POLICY_DOC), str(SECURITY_SENSITIVE_PATHS_FILE)])
-    parsed, error = load_security_sensitive_paths(repo_root)
-    if parsed is None:
-        findings.append(finding("fail", "security-policy.parse", "Security-sensitive path policy could not be parsed.", str(SECURITY_SENSITIVE_PATHS_FILE), {"error": error or "unknown"}))
-        return make_result("security-policy-check", repo_root, "Security-sensitive path policy check failed while parsing.", findings, [str(SECURITY_POLICY_DOC), str(SECURITY_SENSITIVE_PATHS_FILE)])
-    areas = parsed.get("areas", []) if isinstance(parsed, dict) else []
-    if not isinstance(areas, list) or not areas:
-        findings.append(finding("fail", "security-policy.areas", "Security-sensitive path policy does not define any areas.", str(SECURITY_SENSITIVE_PATHS_FILE)))
-        return make_result("security-policy-check", repo_root, "Security-sensitive path policy has no areas.", findings, [str(SECURITY_POLICY_DOC), str(SECURITY_SENSITIVE_PATHS_FILE)])
-    area_dicts = [area for area in areas if isinstance(area, dict)]
-    findings.append(finding("pass", "security-policy.parse", "Security-sensitive path policy parsed successfully.", str(SECURITY_SENSITIVE_PATHS_FILE), {"area_count": len(area_dicts)}))
-    findings.extend(security_policy_area_findings(repo_root, area_dicts))
-    area_summaries = [normalize_security_policy_area(area) for area in area_dicts]
-    result = make_result("security-policy-check", repo_root, "Security-sensitive path policy checked.", findings, [str(SECURITY_POLICY_DOC), str(SECURITY_SENSITIVE_PATHS_FILE)])
-    result["details"] = {"areas": area_summaries, "area_count": len(area_summaries)}
-    if status_only:
-        result = security_policy_status_only_result(result)
-    return result
 
 
 def command_native_api_cargo_audit(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
@@ -34062,8 +33851,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
     subparsers.add_parser("runtime-log-review", parents=[common], help="review recent full-stack runtime logs")
-    security_policy = subparsers.add_parser("security-policy-check", parents=[common], help="validate security-sensitive path policy scaffolding")
-    security_policy.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe security policy checks")
     native_api_cargo_audit = subparsers.add_parser("native-api-cargo-audit", parents=[common], help="audit native API Rust dependencies for known advisories")
     native_api_cargo_audit.add_argument("--status-only", action="store_true", help="emit compact advisory counts and only non-pass findings for chat-safe native API dependency checks")
     native_api_semgrep_audit = subparsers.add_parser("native-api-semgrep-audit", parents=[common], help="run bounded Semgrep security rules over the native API source")
@@ -34072,8 +33859,6 @@ def build_parser() -> argparse.ArgumentParser:
     gsa_npm_audit.add_argument("--status-only", action="store_true", help="emit compact vulnerability counts and only non-pass findings for chat-safe GSA dependency checks")
     osv_lockfile_audit = subparsers.add_parser("osv-lockfile-audit", parents=[common], help="audit selected lockfiles with OSV Scanner")
     osv_lockfile_audit.add_argument("--status-only", action="store_true", help="emit compact vulnerability counts and only non-pass findings for chat-safe OSV checks")
-    path_coupling = subparsers.add_parser("path-coupling-state", parents=[common], help="inspect absolute checkout/runtime path coupling")
-    path_coupling.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe path-coupling checks")
     runtime_app_up = subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
     runtime_app_up.add_argument("--status-only", action="store_true", help="emit compact app startup status and only non-pass findings for chat-safe validation")
     subparsers.add_parser("runtime-app-build", parents=[common], help="build application images explicitly without starting or changing feed state")
@@ -34463,8 +34248,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_smoke(repo_root)
     elif args.command == "runtime-log-review":
         result = command_runtime_log_review(repo_root)
-    elif args.command == "security-policy-check":
-        result = command_security_policy_check(repo_root, status_only=args.status_only)
     elif args.command == "native-api-cargo-audit":
         result = command_native_api_cargo_audit(repo_root, status_only=args.status_only)
     elif args.command == "native-api-semgrep-audit":
@@ -34473,8 +34256,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_gsa_npm_audit(repo_root, status_only=args.status_only)
     elif args.command == "osv-lockfile-audit":
         result = command_osv_lockfile_audit(repo_root, status_only=args.status_only)
-    elif args.command == "path-coupling-state":
-        result = command_path_coupling_state(repo_root, status_only=args.status_only)
     elif args.command == "runtime-app-up":
         result = command_runtime_app_up(repo_root, status_only=args.status_only)
     elif args.command == "runtime-app-build":

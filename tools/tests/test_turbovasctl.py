@@ -1274,6 +1274,110 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(result["status"], "fail")
         self.assertIn("feed lifecycle lock", result["summary"])
 
+    def test_feed_generation_stage_stops_before_staging_on_provenance_failure(self):
+        provenance_finding = turbovasctl.finding(
+            "fail", "feed-generation.signature.nasl.0", "Injected provenance failure.",
+            "/cache/openvas/plugins/sha256sums", {"source": "test"}
+        )
+        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.dict(
+            os.environ, {"TURBOVAS_RUNTIME_DIR": str(Path(tmp) / "runtime")}
+        ), unittest.mock.patch.object(
+            turbovasctl, "feed_generation_signature_provenance",
+            return_value=([provenance_finding], []),
+        ) as provenance, unittest.mock.patch.object(
+            turbovasctl, "stage_generation"
+        ) as stage_generation:
+            result = turbovasctl.command_feed_generation_stage(Path(tmp) / "repo")
+
+        provenance.assert_called_once_with(
+            Path(tmp) / "repo", Path(tmp) / "runtime" / "feed-cache" / "community" / "22.04" / "var-lib",
+            turbovasctl.feed_generation_specs(), root_attribute="source_rel"
+        )
+        stage_generation.assert_not_called()
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["summary"], "Immutable feed generation staging stopped because signed feed provenance could not be verified.")
+        self.assertEqual(result["findings"], [provenance_finding])
+        self.assertEqual(result["artifacts"], [str(Path(tmp) / "runtime" / "feed-cache" / "community" / "22.04" / "var-lib"), str(Path(tmp) / "runtime" / "feed-store")])
+
+    def test_feed_generation_stage_preserves_provenance_on_staging_failure(self):
+        provenance_finding = turbovasctl.finding("pass", "feed-generation.signature.nasl.0", "Provenance verified.")
+        provenance = [{"class": "nasl", "source": "test"}]
+        error = turbovasctl.FeedGenerationError("injected staging failure")
+        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.dict(
+            os.environ, {"TURBOVAS_RUNTIME_DIR": str(Path(tmp) / "runtime")}
+        ), unittest.mock.patch.object(
+            turbovasctl, "feed_generation_signature_provenance",
+            return_value=([provenance_finding], provenance),
+        ), unittest.mock.patch.object(
+            turbovasctl, "stage_generation", side_effect=error
+        ) as stage_generation:
+            result = turbovasctl.command_feed_generation_stage(Path(tmp) / "repo")
+
+        stage_generation.assert_called_once_with(
+            Path(tmp) / "runtime" / "feed-cache" / "community" / "22.04" / "var-lib",
+            Path(tmp) / "runtime", "22.04", turbovasctl.feed_generation_specs(), provenance
+        )
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["summary"], "Immutable feed generation staging failed.")
+        self.assertEqual(result["findings"], [
+            provenance_finding,
+            turbovasctl.finding("fail", "feed-generation.stage", "Immutable feed generation staging failed closed: injected staging failure", str(Path(tmp) / "runtime" / "feed-store" / "generations")),
+        ])
+        self.assertEqual(result["artifacts"], [
+            str(Path(tmp) / "runtime" / "feed-cache" / "community" / "22.04" / "var-lib"),
+            str(Path(tmp) / "runtime" / "feed-store"),
+        ])
+
+    def test_feed_generation_stage_passes_exact_staging_arguments_and_result(self):
+        provenance_finding = turbovasctl.finding("pass", "feed-generation.signature.nasl.0", "Provenance verified.")
+        provenance = [{"class": "nasl", "source": "test"}]
+        staged_path = Path("/runtime/feed-store/generations/" + "a" * 64)
+        staged = {"generation_id": "a" * 64, "path": str(staged_path), "file_count": 7, "byte_count": 42, "provenance": provenance}
+        specs = turbovasctl.feed_generation_specs()
+        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.dict(
+            os.environ, {"TURBOVAS_RUNTIME_DIR": str(Path(tmp) / "runtime")}
+        ), unittest.mock.patch.object(
+            turbovasctl, "feed_generation_signature_provenance", return_value=([provenance_finding], provenance)
+        ), unittest.mock.patch.object(
+            turbovasctl, "feed_generation_specs", return_value=specs
+        ), unittest.mock.patch.object(
+            turbovasctl, "stage_generation", return_value=staged
+        ) as stage_generation:
+            result = turbovasctl.command_feed_generation_stage(Path(tmp) / "repo")
+
+        stage_generation.assert_called_once_with(
+            Path(tmp) / "runtime" / "feed-cache" / "community" / "22.04" / "var-lib",
+            Path(tmp) / "runtime", "22.04", specs, provenance
+        )
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["summary"], "Immutable feed generation staging completed.")
+        self.assertEqual(result["findings"], [
+            provenance_finding,
+            turbovasctl.finding("pass", "feed-generation.stage", "A complete immutable feed generation was verified and staged without changing the active runtime feed.", str(staged_path), staged),
+        ])
+        self.assertEqual(result["artifacts"], [str(staged_path)])
+
+    def test_feed_generation_stage_reports_lock_timeout_without_entering_unlocked_stage(self):
+        metadata = {"operation": "feed-generation-activate", "pid": 1234}
+        error = turbovasctl.RuntimeLockTimeout(turbovasctl.FEED_ACTIVATION_LOCK, "feed-generation-stage", metadata)
+        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.dict(
+            os.environ, {"TURBOVAS_RUNTIME_DIR": str(Path(tmp) / "runtime")}
+        ), unittest.mock.patch.object(
+            turbovasctl, "acquire_runtime_lock", side_effect=error
+        ), unittest.mock.patch.object(
+            turbovasctl, "_command_feed_generation_stage_unlocked"
+        ) as unlocked:
+            result = turbovasctl.command_feed_generation_stage(Path(tmp) / "repo")
+
+        unlocked.assert_not_called()
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["summary"], "Feed generation staging stopped while waiting for the feed lifecycle lock.")
+        self.assertEqual(result["findings"], [turbovasctl.finding(
+            "fail", "feed-generation.activation-lock", "Timed out waiting for runtime lock 'feed-generation-activation'; another operation may still be running.",
+            details={"operation": "feed-generation-stage", "holder": metadata}
+        )])
+        self.assertEqual(result["artifacts"], [str(Path(tmp) / "runtime" / "run" / "locks")])
+
     def test_runtime_app_up_status_only_omits_pass_output_tails(self):
         result = {
             "status": "pass",
@@ -1387,7 +1491,7 @@ class TurboVASCtlTests(unittest.TestCase):
             feed_generation_env = os.environ.copy()
             feed_generation_env["TURBOVAS_RUNTIME_DIR"] = parity_runtime
             for arguments in argument_sets:
-                env = feed_generation_env if arguments[0] == "feed-generation-state" else None
+                env = feed_generation_env if arguments[0] in {"feed-generation-state", "feed-generation-stage"} else None
                 python_result = invoke(python_command, arguments, env=env)
                 rust_result = invoke(rust_command, arguments, env=env)
                 self.assertEqual(python_result.returncode, rust_result.returncode, arguments)
@@ -1445,6 +1549,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["feed-state", "--json"],
                 ["feed-generation-state", "--json"],
                 ["feed-generation-state", "--status-only", "--json"],
+                ["feed-generation-stage", "--json"],
                 ["rust-migration-state", "--json"],
                 ["security-policy-check", "--json"],
                 ["security-policy-check", "--status-only", "--json"],

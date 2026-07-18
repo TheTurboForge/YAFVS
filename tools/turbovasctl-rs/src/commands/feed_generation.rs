@@ -6,8 +6,13 @@
 
 mod journal;
 mod provenance;
+mod stage;
 
 use super::common::{compact_finding, metadata, runtime_dir};
+use super::runtime_lock::{
+    DEFAULT_RUNTIME_LOCK_TIMEOUT, FEED_ACTIVATION_LOCK, RuntimeLockError, RuntimeOperationLock,
+    runtime_lock_dir,
+};
 use crate::process::SystemCommandRunner;
 use crate::result::{Finding, ResultEnvelope, make_result};
 use serde_json::{Map, Value, json};
@@ -36,6 +41,111 @@ struct Spec {
     markers: &'static [&'static str],
     signed: &'static [(&'static str, &'static str)],
     unsigned: &'static [&'static str],
+}
+
+pub fn command_feed_generation_stage(repo_root: &Path) -> ResultEnvelope {
+    command_feed_generation_stage_with_timeout(repo_root, DEFAULT_RUNTIME_LOCK_TIMEOUT)
+}
+
+fn command_feed_generation_stage_with_timeout(
+    repo_root: &Path,
+    timeout: std::time::Duration,
+) -> ResultEnvelope {
+    match RuntimeOperationLock::acquire(
+        repo_root,
+        FEED_ACTIVATION_LOCK,
+        "feed-generation-stage",
+        timeout,
+    ) {
+        Ok(_lock) => command_feed_generation_stage_unlocked(repo_root),
+        Err(RuntimeLockError::Timeout {
+            name,
+            operation,
+            holder,
+        }) => make_result(
+            metadata(repo_root, "feed-generation-stage", &SystemCommandRunner),
+            "Feed generation staging stopped while waiting for the feed lifecycle lock.".into(),
+            vec![Finding::new(
+                "fail",
+                "feed-generation.activation-lock",
+                format!(
+                    "Timed out waiting for runtime lock '{name}'; another operation may still be running."
+                ),
+            )
+            .with_details(json!({"operation": operation, "holder": holder}))],
+        )
+        .with_artifacts(vec![runtime_lock_dir(repo_root).display().to_string()]),
+        Err(RuntimeLockError::Setup(error)) => make_result(
+            metadata(repo_root, "feed-generation-stage", &SystemCommandRunner),
+            "Feed generation staging stopped because the feed lifecycle lock failed closed."
+                .into(),
+            vec![Finding::new(
+                "fail",
+                "feed-generation.activation-lock",
+                format!("Feed lifecycle lock failed closed: {error}"),
+            )],
+        )
+        .with_artifacts(vec![runtime_lock_dir(repo_root).display().to_string()]),
+    }
+}
+
+fn command_feed_generation_stage_unlocked(repo_root: &Path) -> ResultEnvelope {
+    let runtime = runtime_dir(repo_root);
+    let cache = runtime.join(format!("feed-cache/community/{RELEASE}/var-lib"));
+    let (mut findings, provenance) =
+        provenance::cache_signature_findings(repo_root, &cache, &SystemCommandRunner);
+    if findings.iter().any(|finding| finding.status == "fail") {
+        return make_result(
+            metadata(repo_root, "feed-generation-stage", &SystemCommandRunner),
+            "Immutable feed generation staging stopped because signed feed provenance could not be verified."
+                .into(),
+            findings,
+        )
+        .with_artifacts(vec![
+            cache.display().to_string(),
+            runtime.join("feed-store").display().to_string(),
+        ]);
+    }
+    match stage::stage_generation(&cache, &runtime, &provenance, &Limits::default()) {
+        Err(error) => {
+            findings.push(
+                Finding::new(
+                    "fail",
+                    "feed-generation.stage",
+                    format!("Immutable feed generation staging failed closed: {error}"),
+                )
+                .with_path(&runtime.join("feed-store/generations").display().to_string()),
+            );
+            make_result(
+                metadata(repo_root, "feed-generation-stage", &SystemCommandRunner),
+                "Immutable feed generation staging failed.".into(),
+                findings,
+            )
+            .with_artifacts(vec![
+                cache.display().to_string(),
+                runtime.join("feed-store").display().to_string(),
+            ])
+        }
+        Ok(staged) => {
+            let path = staged["path"].as_str().unwrap_or_default().to_string();
+            findings.push(
+                Finding::new(
+                    "pass",
+                    "feed-generation.stage",
+                    "A complete immutable feed generation was verified and staged without changing the active runtime feed."
+                        .into(),
+                )
+                .with_path(&path)
+                .with_details(staged),
+            );
+            make_result(
+                metadata(repo_root, "feed-generation-stage", &SystemCommandRunner),
+                "Immutable feed generation staging completed.".into(),
+                findings,
+            )
+            .with_artifacts(vec![path])
+        }
+    }
 }
 fn specs() -> [Spec; 5] {
     [
@@ -448,7 +558,13 @@ fn inventory(root: i32, l: &Limits) -> R<Inventory> {
     walk(root, "", l, &mut out)?;
     Ok(out)
 }
-fn stable_read(root: i32, path: &str, size: u64, manifest: bool) -> R<Vec<u8>> {
+fn stable_read(
+    root: i32,
+    path: &str,
+    size: u64,
+    manifest: bool,
+    allow_writable: bool,
+) -> R<Vec<u8>> {
     if size > MAX_MANIFEST {
         return Err(if manifest {
             "generation manifest exceeds size limit".into()
@@ -464,7 +580,7 @@ fn stable_read(root: i32, path: &str, size: u64, manifest: bool) -> R<Vec<u8>> {
         || !is_reg(&before)
         || before.st_nlink != 1
         || before.st_size as u64 != size
-        || mode(&before) & 0o222 != 0
+        || (!allow_writable && mode(&before) & 0o222 != 0)
     {
         return Err(if manifest {
             "generation manifest is unsafe".into()
@@ -541,7 +657,7 @@ fn manifest(fd: i32) -> R<Value> {
     if s.st_size as u64 > MAX_MANIFEST {
         return Err("generation manifest exceeds size limit".into());
     };
-    let b = stable_read(fd, MANIFEST, s.st_size as u64, true)?;
+    let b = stable_read(fd, MANIFEST, s.st_size as u64, true, false)?;
     serde_json::from_slice::<Value>(&b)
         .map_err(|_| "generation manifest is not valid JSON".into())
         .and_then(|v| {
@@ -742,6 +858,9 @@ fn parse_sums(b: &[u8], mp: &str, l: &Limits) -> R<BTreeMap<String, String>> {
     }
 }
 fn verify(root: &Path, id: &str, l: &Limits) -> R<Value> {
+    verify_entry(root, id, id, l)
+}
+fn verify_entry(root: &Path, id: &str, entry: &str, l: &Limits) -> R<Value> {
     if !digest(&Value::String(id.into())) {
         return Err(format!("invalid generation identifier: {id:?}"));
     };
@@ -750,7 +869,7 @@ fn verify(root: &Path, id: &str, l: &Limits) -> R<Value> {
     if ss.st_uid != uid() || mode(&ss) & 0o077 != 0 {
         return Err("feed generation store is not private and user-owned".into());
     };
-    let generation_fd = open_dir_at(store.as_raw_fd(), id)?;
+    let generation_fd = open_dir_at(store.as_raw_fd(), entry)?;
     let gs = stat(generation_fd.as_raw_fd())?;
     if gs.st_uid != uid() || mode(&gs) & 0o222 != 0 {
         return Err("generation root is writable".into());
@@ -1069,7 +1188,7 @@ fn verify(root: &Path, id: &str, l: &Limits) -> R<Value> {
             meta.insert((*cp).to_string());
             meta.insert((*sp).to_string());
             for (p, d) in parse_sums(
-                &stable_read(generation_fd.as_raw_fd(), &x.0, x.2, false)?,
+                &stable_read(generation_fd.as_raw_fd(), &x.0, x.2, false, false)?,
                 cp,
                 l,
             )? {
@@ -1158,8 +1277,8 @@ fn verify(root: &Path, id: &str, l: &Limits) -> R<Value> {
     {
         return Err("feed generation store path changed while verifying".into());
     }
-    let parent_entry = stat_at(store.as_raw_fd(), id)?;
-    let reopened_generation = open_dir_at(store.as_raw_fd(), id)?;
+    let parent_entry = stat_at(store.as_raw_fd(), entry)?;
+    let reopened_generation = open_dir_at(store.as_raw_fd(), entry)?;
     let reopened_generation_stat = stat(reopened_generation.as_raw_fd())?;
     if !is_dir(&parent_entry)
         || identity(&parent_entry) != identity(&gs)
@@ -2024,6 +2143,45 @@ mod tests {
             assert!(state(&root, &Limits::default()).is_err());
         }
         assert_eq!(fds(), before);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn stage_command_reports_exact_lifecycle_lock_timeout_contract() {
+        let root = fixture("stage-lock-timeout");
+        let repo = root.join("TurboVAS");
+        fs::create_dir(&repo).unwrap();
+        let holder = RuntimeOperationLock::acquire(
+            &repo,
+            FEED_ACTIVATION_LOCK,
+            "feed-generation-activate",
+            std::time::Duration::ZERO,
+        )
+        .unwrap();
+
+        let result = command_feed_generation_stage_with_timeout(&repo, std::time::Duration::ZERO);
+
+        assert_eq!(result.status, "fail");
+        assert_eq!(
+            result.summary,
+            "Feed generation staging stopped while waiting for the feed lifecycle lock."
+        );
+        assert_eq!(result.findings.len(), 1);
+        assert_eq!(result.findings[0].check, "feed-generation.activation-lock");
+        assert_eq!(
+            result.findings[0].details.as_ref().unwrap()["operation"],
+            "feed-generation-stage"
+        );
+        assert_eq!(
+            result.findings[0].details.as_ref().unwrap()["holder"]["operation"],
+            "feed-generation-activate"
+        );
+        assert_eq!(
+            result.artifacts,
+            vec![runtime_lock_dir(&repo).display().to_string()]
+        );
+        drop(holder);
+        cleanup_tree(&root);
         fs::remove_dir_all(root).unwrap();
     }
 }

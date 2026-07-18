@@ -39,6 +39,8 @@ pub enum CliCommand {
     FeedState,
     /// Verify immutable content-addressed feed generations without changing them.
     FeedGenerationState,
+    /// Stage and verify an immutable content-addressed feed generation.
+    FeedGenerationStage,
     /// Inspect Rust migration tooling and the first dry-run candidate.
     RustMigrationState,
     /// Audit native API Rust dependencies against the local advisory database.
@@ -128,6 +130,7 @@ impl CliCommand {
             Self::QualityGateState => "quality-gate-state",
             Self::FeedState => "feed-state",
             Self::FeedGenerationState => "feed-generation-state",
+            Self::FeedGenerationStage => "feed-generation-stage",
             Self::RustMigrationState => "rust-migration-state",
             Self::NativeApiCargoAudit => "native-api-cargo-audit",
             Self::GsaNpmAudit => "gsa-npm-audit",

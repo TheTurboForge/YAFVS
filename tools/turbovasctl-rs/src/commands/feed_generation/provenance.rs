@@ -20,6 +20,30 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 const MAX_SIGNED_SOURCE_BYTES: u64 = 64 * 1024 * 1024;
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
+#[derive(Clone, Copy)]
+enum ContentLayout {
+    Cache,
+    Generation,
+}
+
+impl ContentLayout {
+    fn class_root(self, spec: &super::Spec) -> &str {
+        match self {
+            Self::Cache => spec.source,
+            Self::Generation => spec.runtime,
+        }
+    }
+
+    fn reopen_error(self, error: &str) -> String {
+        match self {
+            Self::Cache => format!("Feed cache could not be reopened safely: {error}"),
+            Self::Generation => {
+                format!("Verified generation could not be reopened safely: {error}")
+            }
+        }
+    }
+}
+
 struct TempTree(PathBuf);
 
 impl Drop for TempTree {
@@ -89,7 +113,7 @@ fn failed_output() -> ProcessOutput {
     }
 }
 
-fn stable_source(root: i32, path: &str) -> Result<Vec<u8>, String> {
+fn stable_source(root: i32, path: &str, layout: ContentLayout) -> Result<Vec<u8>, String> {
     let limits = Limits::default();
     let components = parts(path, &limits)?;
     let parent = beneath(root, &components[..components.len() - 1])?;
@@ -99,7 +123,13 @@ fn stable_source(root: i32, path: &str) -> Result<Vec<u8>, String> {
             "file is unsafe or exceeds {MAX_SIGNED_SOURCE_BYTES} bytes: {path}"
         ));
     }
-    stable_read(root, path, metadata.st_size as u64, false)
+    stable_read(
+        root,
+        path,
+        metadata.st_size as u64,
+        false,
+        matches!(layout, ContentLayout::Cache),
+    )
 }
 
 fn keyring_is_safe(home: &Path) -> bool {
@@ -112,7 +142,8 @@ fn keyring_is_safe(home: &Path) -> bool {
 
 fn signature_provenance_with(
     repo_root: &Path,
-    generation_root: &Path,
+    content_root: &Path,
+    layout: ContentLayout,
     runner: &dyn CommandRunner,
     gpg: Option<&Path>,
 ) -> (Vec<Finding>, Vec<Value>) {
@@ -195,25 +226,26 @@ fn signature_provenance_with(
             return (findings, provenance);
         }
     };
-    let generation = match absolute_dir(generation_root) {
-        Ok(generation) => generation,
+    let content = match absolute_dir(content_root) {
+        Ok(content) => content,
         Err(error) => {
             findings.push(Finding::new(
                 "fail",
                 "feed-generation.signature-source",
-                format!("Verified generation could not be reopened safely: {error}"),
+                layout.reopen_error(&error),
             ));
             return (findings, provenance);
         }
     };
     for spec in specs().into_iter().filter(|spec| !spec.signed.is_empty()) {
-        let class_root = generation_root.join(spec.runtime);
+        let relative_root = layout.class_root(&spec);
+        let class_root = content_root.join(relative_root);
         for (index, (checksums_rel, signature_rel)) in spec.signed.iter().enumerate() {
-            let checksums_path = format!("{}/{}", spec.runtime, checksums_rel);
-            let signature_path = format!("{}/{}", spec.runtime, signature_rel);
+            let checksums_path = format!("{relative_root}/{checksums_rel}");
+            let signature_path = format!("{relative_root}/{signature_rel}");
             let (checksums, signature) = match (
-                stable_source(generation.as_raw_fd(), &checksums_path),
-                stable_source(generation.as_raw_fd(), &signature_path),
+                stable_source(content.as_raw_fd(), &checksums_path, layout),
+                stable_source(content.as_raw_fd(), &signature_path, layout),
             ) {
                 (Ok(checksums), Ok(signature)) => (checksums, signature),
                 (Err(error), _) | (_, Err(error)) => {
@@ -283,7 +315,7 @@ fn signature_provenance_with(
                         spec.key
                     ),
                 )
-                .with_path(&generation_root.join(&checksums_path).display().to_string())
+                .with_path(&content_root.join(&checksums_path).display().to_string())
                 .with_details(json!({"output_tail": output_tail(&verify.stdout, 40)})),
             );
             if passed {
@@ -311,7 +343,28 @@ pub(super) fn signature_findings(
     runner: &dyn CommandRunner,
 ) -> (Vec<Finding>, Vec<Value>) {
     let gpg = executable_path("gpg");
-    signature_provenance_with(repo_root, generation_root, runner, gpg.as_deref())
+    signature_provenance_with(
+        repo_root,
+        generation_root,
+        ContentLayout::Generation,
+        runner,
+        gpg.as_deref(),
+    )
+}
+
+pub(super) fn cache_signature_findings(
+    repo_root: &Path,
+    cache_root: &Path,
+    runner: &dyn CommandRunner,
+) -> (Vec<Finding>, Vec<Value>) {
+    let gpg = executable_path("gpg");
+    signature_provenance_with(
+        repo_root,
+        cache_root,
+        ContentLayout::Cache,
+        runner,
+        gpg.as_deref(),
+    )
 }
 
 #[cfg(test)]
@@ -369,12 +422,35 @@ mod tests {
         generation
     }
 
+    fn signed_cache(root: &Path) -> PathBuf {
+        let cache = root.join("cache");
+        fs::create_dir(&cache).unwrap();
+        for spec in specs().into_iter().filter(|spec| !spec.signed.is_empty()) {
+            for (checksums, signature) in spec.signed {
+                for (path, content) in [
+                    (checksums, b"checksums".as_slice()),
+                    (signature, b"signature".as_slice()),
+                ] {
+                    let path = cache.join(spec.source).join(path);
+                    fs::create_dir_all(path.parent().unwrap()).unwrap();
+                    fs::write(&path, content).unwrap();
+                }
+            }
+        }
+        cache
+    }
+
     #[test]
     fn missing_gpg_is_reported_after_keyring_state() {
         let repo = fixture("missing-gpg");
         let generation = signed_generation(&repo);
-        let (findings, provenance) =
-            signature_provenance_with(&repo, &generation, &PassingGpg, None);
+        let (findings, provenance) = signature_provenance_with(
+            &repo,
+            &generation,
+            ContentLayout::Generation,
+            &PassingGpg,
+            None,
+        );
         assert_eq!(
             findings
                 .iter()
@@ -404,6 +480,7 @@ mod tests {
         let (findings, provenance) = signature_provenance_with(
             &repo,
             &generation,
+            ContentLayout::Generation,
             &PassingGpg,
             Some(Path::new("/bin/true")),
         );
@@ -418,6 +495,35 @@ mod tests {
                 rows[1]["checksums_path"].as_str(),
             )
         }));
+        fs::remove_dir_all(repo.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn cache_layout_uses_source_paths_for_staging_provenance() {
+        let repo = fixture("cache-layout");
+        let runtime = repo.parent().unwrap().join("TurboVAS-runtime");
+        let keyring = runtime.join("state/feed-gnupg");
+        fs::create_dir_all(&keyring).unwrap();
+        fs::set_permissions(&keyring, fs::Permissions::from_mode(0o700)).unwrap();
+        let cache = signed_cache(&repo);
+
+        let (findings, provenance) = signature_provenance_with(
+            &repo,
+            &cache,
+            ContentLayout::Cache,
+            &PassingGpg,
+            Some(Path::new("/bin/true")),
+        );
+
+        assert!(findings.iter().all(|finding| finding.status == "pass"));
+        assert_eq!(provenance.len(), 4);
+        assert!(
+            findings
+                .iter()
+                .filter_map(|finding| finding.path.as_deref())
+                .all(|path| !path.contains("/generation/")
+                    && (path.contains("/cache/") || path.contains("feed-gnupg")))
+        );
         fs::remove_dir_all(repo.parent().unwrap()).unwrap();
     }
 }

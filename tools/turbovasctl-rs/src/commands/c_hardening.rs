@@ -9,10 +9,14 @@ use regex::Regex;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
-use std::io::Read;
+use std::ffi::CString;
+use std::fs::{self, File};
+use std::io::{Read, Write};
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use time::OffsetDateTime;
 use time::format_description;
@@ -39,6 +43,7 @@ const RETIRED_PREFIX_ARTIFACTS: [&str; 6] = [
 const HARDENED_CONFIGURATION: &str = "build/hardened/hardening-configuration.json";
 const HARDENED_CMAKE_INJECTION: &str = "build/hardened/turbovas-hardening.cmake";
 const HARDENED_BUILD_MANIFEST: &str = "build/hardened/hardening-manifest.json";
+static NEXT_MANIFEST_TEMP: AtomicU64 = AtomicU64::new(0);
 
 const GVM_LIBS: [&str; 9] = [
     "build/gvm-libs/base/libgvm_base.so.*",
@@ -355,17 +360,196 @@ fn manifest_payload(repo_root: &Path, runner: &dyn CommandRunner) -> Result<Valu
                 .ok_or_else(|| format!("could not identify {}", path.display()))
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let configuration = file_record(repo_root, &configuration_path)
+        .ok_or_else(|| "hardened configuration identity is unavailable".to_string())?;
+    let cmake_injection = file_record(repo_root, &injection_path)
+        .ok_or_else(|| "hardened CMake injection identity is unavailable".to_string())?;
     Ok(json!({
         "schema_version": 1,
         "profile": "hardened",
         "head": head,
         "source_status": source_status,
-        "configuration": file_record(repo_root, &configuration_path),
-        "cmake_injection": file_record(repo_root, &injection_path),
+        "configuration": configuration,
+        "cmake_injection": cmake_injection,
         "toolchains": toolchains,
         "compile_databases": compile_databases,
         "artifacts": artifacts,
     }))
+}
+
+fn write_manifest_atomically(repo_root: &Path, payload: &Value) -> Result<(), String> {
+    let canonical_root = repo_root
+        .canonicalize()
+        .map_err(|_| "repository root is unavailable".to_string())?;
+    let expected_root = fs::metadata(&canonical_root)
+        .map_err(|_| "repository root identity is unavailable".to_string())?;
+    let root_name = CString::new(canonical_root.as_os_str().as_bytes())
+        .map_err(|_| "repository root has an invalid path".to_string())?;
+    // SAFETY: root_name is NUL-terminated and O_NOFOLLOW requires the final
+    // component to remain the expected directory rather than a symlink.
+    let root_fd = unsafe {
+        libc::open(
+            root_name.as_ptr(),
+            libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        )
+    };
+    if root_fd < 0 {
+        return Err("repository root could not be opened safely".into());
+    }
+    // SAFETY: open returned a new owned descriptor.
+    let root = unsafe { OwnedFd::from_raw_fd(root_fd) };
+    let mut root_stat = std::mem::MaybeUninit::<libc::stat>::uninit();
+    // SAFETY: root is open and root_stat points to writable storage.
+    if unsafe { libc::fstat(root.as_raw_fd(), root_stat.as_mut_ptr()) } != 0 {
+        return Err("repository root identity could not be verified".into());
+    }
+    // SAFETY: successful fstat initialized root_stat.
+    let root_stat = unsafe { root_stat.assume_init() };
+    if root_stat.st_mode & libc::S_IFMT != libc::S_IFDIR
+        || root_stat.st_dev != expected_root.dev()
+        || root_stat.st_ino != expected_root.ino()
+    {
+        return Err("repository root identity changed while opening it".into());
+    }
+    let open_child_directory = |parent: &OwnedFd, name: &'static [u8]| -> Result<OwnedFd, String> {
+        let name = CString::new(name).expect("static directory name");
+        // SAFETY: parent is an open directory descriptor, name is valid, and
+        // O_NOFOLLOW rejects a substituted symlink.
+        let descriptor = unsafe {
+            libc::openat(
+                parent.as_raw_fd(),
+                name.as_ptr(),
+                libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            )
+        };
+        if descriptor < 0 {
+            return Err("hardened build directory could not be opened safely".into());
+        }
+        // SAFETY: openat returned a new owned descriptor.
+        Ok(unsafe { OwnedFd::from_raw_fd(descriptor) })
+    };
+    let build = open_child_directory(&root, b"build")?;
+    let parent = open_child_directory(&build, b"hardened")?;
+    let target_name = CString::new("hardening-manifest.json").expect("static manifest name");
+    let mut target_stat = std::mem::MaybeUninit::<libc::stat>::uninit();
+    // SAFETY: parent and target_name are valid and target_stat is writable;
+    // AT_SYMLINK_NOFOLLOW inspects rather than follows the destination.
+    let target_status = unsafe {
+        libc::fstatat(
+            parent.as_raw_fd(),
+            target_name.as_ptr(),
+            target_stat.as_mut_ptr(),
+            libc::AT_SYMLINK_NOFOLLOW,
+        )
+    };
+    if target_status == 0 {
+        // SAFETY: successful fstatat initialized target_stat.
+        let target_stat = unsafe { target_stat.assume_init() };
+        if target_stat.st_mode & libc::S_IFMT != libc::S_IFREG {
+            return Err("manifest target is not a regular file".into());
+        }
+    } else if std::io::Error::last_os_error().raw_os_error() != Some(libc::ENOENT) {
+        return Err("manifest target could not be inspected safely".into());
+    }
+    let text = serde_json::to_string_pretty(payload)
+        .map(|text| format!("{text}\n"))
+        .map_err(|_| "manifest payload could not be serialized".to_string())?;
+    let temporary_name = CString::new(format!(
+        ".hardening-manifest.json.tmp-{}-{}",
+        std::process::id(),
+        NEXT_MANIFEST_TEMP.fetch_add(1, Ordering::Relaxed)
+    ))
+    .expect("generated manifest temporary name");
+    let write_result = (|| -> Result<(), String> {
+        // SAFETY: the held directory descriptor and temporary name are valid;
+        // O_EXCL/O_NOFOLLOW prevent replacing or following an attacker entry.
+        let temporary_fd = unsafe {
+            libc::openat(
+                parent.as_raw_fd(),
+                temporary_name.as_ptr(),
+                libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+                0o600,
+            )
+        };
+        if temporary_fd < 0 {
+            return Err("manifest temporary file could not be created".into());
+        }
+        // SAFETY: openat returned a new descriptor transferred to File.
+        let mut file = unsafe { File::from_raw_fd(temporary_fd) };
+        file.write_all(text.as_bytes())
+            .and_then(|()| file.sync_all())
+            .map_err(|_| "manifest temporary file could not be persisted".to_string())?;
+        drop(file);
+        // SAFETY: both names are relative to the same held directory
+        // descriptor, so rename atomically replaces only the verified target.
+        if unsafe {
+            libc::renameat(
+                parent.as_raw_fd(),
+                temporary_name.as_ptr(),
+                parent.as_raw_fd(),
+                target_name.as_ptr(),
+            )
+        } != 0
+        {
+            return Err("manifest could not be atomically installed".into());
+        }
+        // SAFETY: fsync accepts the held directory descriptor.
+        if unsafe { libc::fsync(parent.as_raw_fd()) } != 0 {
+            return Err("manifest directory update could not be persisted".into());
+        }
+        Ok(())
+    })();
+    if write_result.is_err() {
+        // SAFETY: unlinkat is constrained to the held directory and exact
+        // generated temporary name; failure means cleanup is unnecessary.
+        unsafe { libc::unlinkat(parent.as_raw_fd(), temporary_name.as_ptr(), 0) };
+    }
+    write_result
+}
+
+fn command_manifest_with(repo_root: &Path, runner: &dyn CommandRunner) -> ResultEnvelope {
+    let finding = match manifest_payload(repo_root, runner) {
+        Ok(payload) => match write_manifest_atomically(repo_root, &payload) {
+            Ok(()) => Finding::new(
+                "pass",
+                "build-c-services.hardening-manifest",
+                "Hardened build manifest recorded source, toolchain, compile database, and exact ELF identities.".into(),
+            )
+            .with_path(HARDENED_BUILD_MANIFEST),
+            Err(error) => Finding::new(
+                "fail",
+                "build-c-services.hardening-manifest",
+                format!("Hardened build manifest was not written: {error}."),
+            )
+            .with_path(HARDENED_BUILD_MANIFEST),
+        },
+        Err(error) => Finding::new(
+            "fail",
+            "build-c-services.hardening-manifest",
+            format!("Hardened build manifest was not written: {error}."),
+        )
+        .with_path(HARDENED_BUILD_MANIFEST),
+    };
+    let passed = finding.status == "pass";
+    let result = make_result(
+        metadata(repo_root, "c-hardening-manifest-write", runner),
+        if passed {
+            "Hardened build manifest recorded."
+        } else {
+            "Hardened build manifest could not be recorded."
+        }
+        .into(),
+        vec![finding],
+    );
+    if passed {
+        result.with_artifacts(vec![HARDENED_BUILD_MANIFEST.into()])
+    } else {
+        result
+    }
+}
+
+pub fn command_c_hardening_manifest_write(repo_root: &Path) -> ResultEnvelope {
+    command_manifest_with(repo_root, &SystemCommandRunner)
 }
 
 fn property(status: &str, evidence: String) -> Value {
@@ -1383,6 +1567,7 @@ mod tests {
     use super::*;
     use crate::process::ProcessOutput;
     use std::cell::RefCell;
+    use std::os::unix::fs::{PermissionsExt, symlink};
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
@@ -1403,6 +1588,80 @@ mod tests {
         fn path(&self) -> &Path {
             &self.0
         }
+    }
+
+    #[test]
+    fn manifest_install_is_atomic_private_and_refuses_symlinks() {
+        let temporary = TestDir::new();
+        let repo = temporary.path();
+        let parent = repo.join("build/hardened");
+        fs::create_dir_all(&parent).unwrap();
+        let target = parent.join("hardening-manifest.json");
+        fs::write(&target, "old").unwrap();
+        write_manifest_atomically(repo, &json!({"schema_version": 1})).unwrap();
+        assert_eq!(
+            serde_json::from_str::<Value>(&fs::read_to_string(&target).unwrap()).unwrap(),
+            json!({"schema_version": 1})
+        );
+        assert_eq!(
+            fs::metadata(&target).unwrap().permissions().mode() & 0o077,
+            0
+        );
+        assert!(
+            fs::read_dir(&parent)
+                .unwrap()
+                .filter_map(Result::ok)
+                .all(|entry| !entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".hardening-manifest.json.tmp-"))
+        );
+
+        fs::remove_file(&target).unwrap();
+        let outside = repo.join("outside-manifest.json");
+        fs::write(&outside, "outside").unwrap();
+        symlink(&outside, &target).unwrap();
+        assert!(write_manifest_atomically(repo, &json!({"schema_version": 2})).is_err());
+        assert_eq!(fs::read_to_string(outside).unwrap(), "outside");
+    }
+
+    #[test]
+    fn manifest_install_refuses_symlinked_build_parent() {
+        let temporary = TestDir::new();
+        let repo = temporary.path();
+        let outside = repo.join("outside/hardened");
+        fs::create_dir_all(&outside).unwrap();
+        symlink(outside.parent().unwrap(), repo.join("build")).unwrap();
+        assert!(write_manifest_atomically(repo, &json!({"schema_version": 1})).is_err());
+        assert!(!outside.join("hardening-manifest.json").exists());
+    }
+
+    #[test]
+    fn manifest_command_fails_closed_with_stable_bridge_envelope() {
+        let temporary = TestDir::new();
+        let repo = temporary.path();
+        fs::create_dir_all(repo.join("build/hardened")).unwrap();
+        let runner = FakeRunner {
+            outputs: RefCell::new(vec![
+                output(true, "0123456789abcdef\n"),
+                output(true, ""),
+                output(true, "01234567\n"),
+            ]),
+        };
+        let result = command_manifest_with(repo, &runner);
+        assert_eq!(result.status, "fail");
+        assert!(result.artifacts.is_empty());
+        assert_eq!(result.metadata.command, "c-hardening-manifest-write");
+        assert_eq!(result.findings.len(), 1);
+        assert_eq!(
+            result.findings[0].check,
+            "build-c-services.hardening-manifest"
+        );
+        assert_eq!(
+            result.findings[0].path.as_deref(),
+            Some(HARDENED_BUILD_MANIFEST)
+        );
+        assert!(!repo.join(HARDENED_BUILD_MANIFEST).exists());
     }
 
     impl Drop for TestDir {

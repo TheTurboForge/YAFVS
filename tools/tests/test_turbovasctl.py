@@ -366,11 +366,89 @@ class TurboVASCtlTests(unittest.TestCase):
             chain = {"status": "pass", "summary": "ok", "findings": [], "artifacts": [], "metadata": {}}
             manifest_finding = {"status": "pass", "check": "manifest", "message": "ok"}
             with unittest.mock.patch.object(turbovasctl, "command_build_chain", return_value=chain), unittest.mock.patch.object(
-                turbovasctl, "write_hardened_build_manifest", return_value=manifest_finding
+                turbovasctl, "rust_c_hardening_manifest_finding", return_value=manifest_finding
             ):
                 result = turbovasctl.command_build_c_services(root, "hardened")
         self.assertFalse(manifest.exists())
         self.assertEqual(result["status"], "pass")
+
+    def test_rust_c_hardening_manifest_bridge_accepts_valid_envelopes(self):
+        expected_path = str(turbovasctl.HARDENED_BUILD_MANIFEST)
+        for status, returncode in (("pass", 0), ("fail", 1)):
+            item = {
+                "status": status,
+                "check": "build-c-services.hardening-manifest",
+                "message": "manifest result",
+                "path": expected_path,
+            }
+            payload = {
+                "status": status,
+                "summary": "manifest summary",
+                "findings": [item],
+                "metadata": {"command": "c-hardening-manifest-write"},
+            }
+            with self.subTest(status=status), unittest.mock.patch.object(
+                turbovasctl,
+                "run_command",
+                return_value=subprocess.CompletedProcess(
+                    ["cargo"], returncode, json.dumps(payload), "ignored stderr"
+                ),
+            ) as run_command:
+                observed = turbovasctl.rust_c_hardening_manifest_finding(
+                    Path("/tmp/TurboVAS")
+                )
+            self.assertEqual(observed, item)
+            arguments = run_command.call_args.args[0]
+            self.assertEqual(arguments[-2:], ["c-hardening-manifest-write", "--json"])
+
+    def test_rust_c_hardening_manifest_bridge_rejects_invalid_results(self):
+        expected_path = str(turbovasctl.HARDENED_BUILD_MANIFEST)
+        valid_item = {
+            "status": "pass",
+            "check": "build-c-services.hardening-manifest",
+            "message": "manifest result",
+            "path": expected_path,
+        }
+        valid_payload = {
+            "status": "pass",
+            "summary": "manifest summary",
+            "findings": [valid_item],
+            "metadata": {"command": "c-hardening-manifest-write"},
+        }
+        cases = {
+            "invalid-json": (0, "not-json"),
+            "duplicate-key": (0, '{"status":"pass","status":"fail"}'),
+            "wrong-command": (0, json.dumps({**valid_payload, "metadata": {"command": "status"}})),
+            "wrong-check": (0, json.dumps({**valid_payload, "findings": [{**valid_item, "check": "unexpected"}]})),
+            "wrong-path": (0, json.dumps({**valid_payload, "findings": [{**valid_item, "path": "../escape"}]})),
+            "wrong-status": (0, json.dumps({**valid_payload, "status": "warn"})),
+            "wrong-exit": (1, json.dumps(valid_payload)),
+            "multiple-findings": (0, json.dumps({**valid_payload, "findings": [valid_item, valid_item]})),
+            "oversized": (0, " " * (turbovasctl.TURBOVASCTL_RUST_BRIDGE_MAX_OUTPUT_BYTES + 1)),
+        }
+        for name, (returncode, stdout) in cases.items():
+            with self.subTest(name=name), unittest.mock.patch.object(
+                turbovasctl,
+                "run_command",
+                return_value=subprocess.CompletedProcess(["cargo"], returncode, stdout, "secret stderr"),
+            ):
+                observed = turbovasctl.rust_c_hardening_manifest_finding(
+                    Path("/tmp/TurboVAS")
+                )
+            self.assertEqual(observed["status"], "fail")
+            self.assertEqual(observed["check"], "build-c-services.hardening-manifest")
+            self.assertIn("failed closed", observed["message"])
+            self.assertNotIn("secret stderr", observed["message"])
+
+    def test_rust_c_hardening_manifest_bridge_handles_subprocess_failure(self):
+        with unittest.mock.patch.object(
+            turbovasctl, "run_command", side_effect=OSError("cargo unavailable")
+        ):
+            observed = turbovasctl.rust_c_hardening_manifest_finding(
+                Path("/tmp/TurboVAS")
+            )
+        self.assertEqual(observed["status"], "fail")
+        self.assertIn("failed closed", observed["message"])
 
     def test_hardened_build_preflight_removes_stale_registered_artifact_and_prefix_only(self):
         with tempfile.TemporaryDirectory() as tmp:

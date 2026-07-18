@@ -12,8 +12,8 @@ use std::path::{Path, PathBuf};
 
 pub use cli::{Cli, CliCommand, parse_cli};
 pub use commands::{
-    command_branding_state, command_c_hardening_check, command_deps, command_doctor,
-    command_feed_copy_to_runtime, command_feed_generation_activate,
+    command_branding_state, command_c_hardening_check, command_c_hardening_manifest_write,
+    command_deps, command_doctor, command_feed_copy_to_runtime, command_feed_generation_activate,
     command_feed_generation_rollback, command_feed_generation_runtime_guard,
     command_feed_generation_stage, command_feed_generation_state, command_feed_state,
     command_gsa_npm_audit, command_inventory, command_license_report, command_logs,
@@ -45,6 +45,7 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         CliCommand::CHardeningCheck { profile } => {
             command_c_hardening_check(&repo_root, cli.status_only, profile.as_deref())
         }
+        CliCommand::CHardeningManifestWrite => command_c_hardening_manifest_write(&repo_root),
         CliCommand::QualityGateState => command_quality_gate_state(&repo_root, cli.status_only),
         CliCommand::FeedState => command_feed_state(&repo_root),
         CliCommand::FeedGenerationState => {

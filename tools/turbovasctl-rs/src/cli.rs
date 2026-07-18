@@ -47,6 +47,9 @@ pub enum CliCommand {
         #[arg(long, value_parser = ["hardened"])]
         profile: Option<String>,
     },
+    /// Record the exact hardened C build identity after a successful build.
+    #[command(hide = true)]
+    CHardeningManifestWrite,
     /// Show retained local quality gate history.
     QualityGateState,
     /// Show Community Feed cache and active-runtime state.
@@ -167,6 +170,7 @@ impl CliCommand {
             Self::RuntimeRedisState => "runtime-redis-state",
             Self::RuntimeDbIntrospect { .. } => "runtime-db-introspect",
             Self::CHardeningCheck { .. } => "c-hardening-check",
+            Self::CHardeningManifestWrite => "c-hardening-manifest-write",
             Self::QualityGateState => "quality-gate-state",
             Self::FeedState => "feed-state",
             Self::FeedGenerationState => "feed-generation-state",
@@ -232,6 +236,24 @@ mod tests {
         assert!(
             Cli::command()
                 .find_subcommand("feed-generation-runtime-guard")
+                .unwrap()
+                .is_hide_set()
+        );
+    }
+
+    #[test]
+    fn parses_hidden_c_hardening_manifest_writer() {
+        assert_eq!(
+            parse_cli(["c-hardening-manifest-write", "--json"]).unwrap(),
+            Cli {
+                command: CliCommand::CHardeningManifestWrite,
+                json: true,
+                status_only: false,
+            }
+        );
+        assert!(
+            Cli::command()
+                .find_subcommand("c-hardening-manifest-write")
                 .unwrap()
                 .is_hide_set()
         );
@@ -375,7 +397,7 @@ mod tests {
     fn public_docs_track_the_complete_rust_command_surface() {
         let command_names = Cli::command()
             .get_subcommands()
-            .filter(|command| command.get_name() != "feed-generation-runtime-guard")
+            .filter(|command| !command.is_hide_set())
             .map(|command| command.get_name().to_string())
             .collect::<Vec<_>>();
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");

@@ -215,6 +215,7 @@ NATIVE_API_CRATE = Path("services/turbovas-api")
 NATIVE_API_CARGO_LOCK = NATIVE_API_CRATE / "Cargo.lock"
 TURBOVASCTL_RUST_CRATE = Path("tools/turbovasctl-rs")
 TURBOVASCTL_RUST_CARGO_LOCK = TURBOVASCTL_RUST_CRATE / "Cargo.lock"
+TURBOVASCTL_RUST_BRIDGE_MAX_OUTPUT_BYTES = 1024 * 1024
 NATIVE_API_CARGO_AUDIT_TIMEOUT_SECONDS = 120
 GSA_COMPONENT = Path("components/gsa")
 GSA_PACKAGE_LOCK = GSA_COMPONENT / "package-lock.json"
@@ -15569,7 +15570,7 @@ def command_build_c_services(repo_root: Path, profile: str | None = None) -> dic
         result["findings"].insert(0, cleanup_finding)
         result["status"] = aggregate_status(result["findings"])
     if profile == "hardened" and result["status"] == "pass":
-        manifest_finding = write_hardened_build_manifest(repo_root)
+        manifest_finding = rust_c_hardening_manifest_finding(repo_root)
         result["findings"].append(manifest_finding)
         result["artifacts"] = sorted(set([*result["artifacts"], str(HARDENED_BUILD_MANIFEST)]))
         result["status"] = aggregate_status(result["findings"])
@@ -15719,13 +15720,59 @@ def hardened_build_manifest_payload(repo_root: Path) -> tuple[dict[str, Any] | N
     }, None
 
 
-def write_hardened_build_manifest(repo_root: Path) -> dict[str, Any]:
-    payload, error = hardened_build_manifest_payload(repo_root)
-    if payload is None:
-        return finding("fail", "build-c-services.hardening-manifest", f"Hardened build manifest was not written: {error}.")
-    path = repo_root / HARDENED_BUILD_MANIFEST
-    write_json_artifact(path.parent, path.name, payload)
-    return finding("pass", "build-c-services.hardening-manifest", "Hardened build manifest recorded source, toolchain, compile database, and exact ELF identities.", str(HARDENED_BUILD_MANIFEST))
+def rust_c_hardening_manifest_finding(repo_root: Path) -> dict[str, Any]:
+    expected_check = "build-c-services.hardening-manifest"
+    expected_path = str(HARDENED_BUILD_MANIFEST)
+    command = [
+        "cargo",
+        "run",
+        "--quiet",
+        "--locked",
+        "--target-dir",
+        str(repo_root / "build" / "turbovasctl-rs"),
+        "--manifest-path",
+        str(repo_root / TURBOVASCTL_RUST_CRATE / "Cargo.toml"),
+        "--",
+        "c-hardening-manifest-write",
+        "--json",
+    ]
+    try:
+        completed = run_command(command, repo_root, timeout=300)
+    except OSError:
+        completed = None
+    stdout = completed.stdout if completed is not None else None
+    if not isinstance(stdout, str) or len(stdout.encode("utf-8")) > TURBOVASCTL_RUST_BRIDGE_MAX_OUTPUT_BYTES:
+        payload = None
+    else:
+        try:
+            payload = json.loads(stdout, object_pairs_hook=reject_duplicate_json_object_keys)
+        except (json.JSONDecodeError, ValueError):
+            payload = None
+
+    findings = payload.get("findings") if isinstance(payload, dict) else None
+    metadata_block = payload.get("metadata") if isinstance(payload, dict) else None
+    item = findings[0] if isinstance(findings, list) and len(findings) == 1 else None
+    status = item.get("status") if isinstance(item, dict) else None
+    valid = (
+        completed is not None
+        and completed.returncode == (1 if status == "fail" else 0)
+        and status in {"pass", "fail"}
+        and isinstance(item.get("message"), str)
+        and item.get("check") == expected_check
+        and item.get("path") == expected_path
+        and payload.get("status") == status
+        and isinstance(payload.get("summary"), str)
+        and isinstance(metadata_block, dict)
+        and metadata_block.get("command") == "c-hardening-manifest-write"
+    )
+    if valid:
+        return dict(item)
+    return finding(
+        "fail",
+        expected_check,
+        "Rust hardened build manifest writer failed closed because its result was unavailable or invalid.",
+        expected_path,
+    )
 
 
 def c_hardening_artifact_file_evidence(path: Path) -> dict[str, Any]:

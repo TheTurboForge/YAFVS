@@ -1103,7 +1103,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 )
             for arguments, expected_exit_code, expected_status in rust_only_contracts:
                 env = feed_generation_env.copy()
-                if arguments[0] in {"runtime-redis-state", "runtime-db-introspect"}:
+                if arguments[0] in {"runtime-redis-state", "runtime-db-introspect", "runtime-performance-snapshot"}:
                     env["COMPOSE_PROJECT_NAME"] = "turbovasctl-parity-no-runtime"
                 rust_result = invoke(rust_command, arguments, env=env)
                 self.assertEqual(rust_result.returncode, expected_exit_code, arguments)
@@ -1198,6 +1198,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 (["feed-generation-rollback", "invalid", "--json"], 1, "fail"),
                 (["runtime-redis-state", "--json"], 0, "warn"),
                 (["runtime-db-introspect", "--json"], 0, "warn"),
+                (["runtime-performance-snapshot", "--json"], 0, "warn"),
                 (["c-hardening-check", "--status-only", "--json"], 1, "fail"),
             ),
             complete_surface=True,
@@ -2310,7 +2311,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"runtime-db-introspect"}
+        rust_only_commands = {"runtime-db-introspect", "runtime-performance-snapshot"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2341,7 +2342,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_branding_state", source)
         self.assertIn("def command_runtime_log_review", source)
         self.assertIn("def command_runtime_data_state", source)
-        self.assertIn("def command_runtime_performance_snapshot", source)
         self.assertIn("def command_runtime_native_api_smoke", source)
         self.assertIn('native_api_smoke.add_argument("--status-only"', source)
         self.assertIn("command_runtime_native_api_smoke(repo_root, status_only=args.status_only)", source)
@@ -2425,6 +2425,14 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("def command_runtime_db_introspect", source)
         self.assertIn("runtime-db-introspect *args:", justfile)
         self.assertIn("tools/turbovasctl-rs/Cargo.toml -- runtime-db-introspect", justfile)
+
+    def test_runtime_performance_snapshot_is_rust_only(self):
+        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        self.assertNotIn('subparsers.add_parser("runtime-performance-snapshot"', source)
+        self.assertNotIn("def command_runtime_performance_snapshot", source)
+        self.assertIn("runtime-performance-snapshot *args:", justfile)
+        self.assertIn("tools/turbovasctl-rs/Cargo.toml -- runtime-performance-snapshot", justfile)
 
     def test_native_api_cargo_audit_status_only_summarizes_clean_audit(self):
         payload = {
@@ -11495,68 +11503,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(audit["status"], "warn")
         self.assertEqual(audit["unowned_product_data"][0]["path"], "metrics")
         self.assertIn("scope_report_system_metrics", audit["unowned_product_data"][0]["missing_tables"])
-
-    def test_performance_parses_docker_percent_and_byte_units(self):
-        self.assertEqual(turbovasctl.parse_percent("40.18%"), 40.18)
-        self.assertEqual(turbovasctl.parse_byte_quantity("60.22MiB"), int(60.22 * 1024 * 1024))
-        self.assertEqual(turbovasctl.parse_byte_quantity("1.53GB"), int(1.53 * 1000 * 1000 * 1000))
-        self.assertIsNone(turbovasctl.parse_byte_quantity("not-a-size"))
-
-    def test_performance_normalizes_docker_stats_row(self):
-        row = turbovasctl.normalize_docker_stat(
-            {
-                "Name": "turbovas-postgres-1",
-                "ID": "abc123",
-                "CPUPerc": "5.39%",
-                "MemPerc": "0.39%",
-                "MemUsage": "62.06MiB / 15.5GiB",
-                "NetIO": "159MB / 1.79GB",
-                "BlockIO": "1.53GB / 222MB",
-                "PIDs": "7",
-            }
-        )
-        self.assertEqual(row["name"], "turbovas-postgres-1")
-        self.assertEqual(row["cpu_percent"], 5.39)
-        self.assertEqual(row["pids"], 7)
-        self.assertEqual(row["memory_usage_bytes"], int(62.06 * 1024 * 1024))
-        self.assertEqual(row["network_tx_bytes"], int(1.79 * 1000 * 1000 * 1000))
-        self.assertEqual(row["block_read_bytes"], int(1.53 * 1000 * 1000 * 1000))
-
-    def test_performance_top_numeric_rows_orders_missing_values_last(self):
-        rows = [{"name": "a", "cpu_percent": None}, {"name": "b", "cpu_percent": 2.0}, {"name": "c", "cpu_percent": 1.0}]
-        self.assertEqual([row["name"] for row in turbovasctl.top_numeric_rows(rows, "cpu_percent")], ["b", "c", "a"])
-
-    def test_parse_relation_size_rows(self):
-        self.assertEqual(
-            turbovasctl.parse_relation_size_rows("results|123\nreports|45\n"),
-            [{"name": "results", "byte_count": 123}, {"name": "reports", "byte_count": 45}],
-        )
-
-    def test_parse_pipe_int_rows(self):
-        self.assertEqual(
-            turbovasctl.parse_pipe_int_rows("reports|13\nignored|not-int\nscope_reports|23\n"),
-            {"reports": 13, "scope_reports": 23},
-        )
-
-    def test_performance_snapshot_captures_report_workflow_baseline(self):
-        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
-        self.assertIn("performance.report-workflow", source)
-        self.assertIn("performance.scanner-redis", source)
-        self.assertIn("def scanner_redis_metrics", source)
-        self.assertIn("max_sources_per_scope_report", source)
-        self.assertIn("max_results_per_report", source)
-        self.assertIn("max_scope_report_result_count", source)
-        self.assertIn("parse_pipe_int_rows", source)
-
-    def test_performance_redis_metric_parsers_do_not_expose_key_names(self):
-        metrics = turbovasctl.parse_redis_info(
-            "connected_clients:2\nused_memory:1024\ndb0:keys=7\ndb2:keys=5\n"
-        )
-        self.assertEqual(metrics["connected_clients"], 2)
-        self.assertEqual(metrics["used_memory"], 1024)
-        self.assertEqual(metrics["keyspace_keys"], 12)
-        self.assertNotIn("db0", metrics)
-        self.assertEqual(turbovasctl.parse_redis_dbsize("bad\n5\n"), 5)
 
     def test_quality_gate_systemd_templates_are_present(self):
         root = Path(__file__).resolve().parents[2]

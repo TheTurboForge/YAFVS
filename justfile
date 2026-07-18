@@ -282,7 +282,7 @@ runtime-db-introspect *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- runtime-db-introspect "$@"
 
 runtime-performance-snapshot *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-performance-snapshot "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- runtime-performance-snapshot "$@"
 
 runtime-redis-state *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- runtime-redis-state "$@"

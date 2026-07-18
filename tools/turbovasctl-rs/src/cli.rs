@@ -105,7 +105,6 @@ pub enum CliCommand {
     /// Refuse standalone feed import outside guarded generation activation.
     RuntimeFeedImportInit,
     /// Capture a runtime performance snapshot for diagnostics.
-    #[command(hide = true)]
     RuntimePerformanceSnapshot,
     /// Show recent runtime logs.
     Logs {
@@ -437,6 +436,7 @@ mod tests {
             "feed-generation-activate",
             "feed-generation-rollback",
             "runtime-db-introspect",
+            "runtime-performance-snapshot",
             "runtime-redis-state",
             "c-hardening-check",
         ] {

@@ -58,9 +58,6 @@ COMPOSE_APP_UP_TRANSIENT_ERRORS = (
 )
 SHORT_SECRET_BOUNDARY_CHARS = r"A-Za-z0-9_./-"
 LONG_SECRET_MIN_LENGTH = 12
-DECIMAL_BYTE_UNITS = {"B": 1, "KB": 1000, "kB": 1000, "MB": 1000**2, "GB": 1000**3, "TB": 1000**4}
-BINARY_BYTE_UNITS = {"KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4}
-BYTE_UNITS = {**DECIMAL_BYTE_UNITS, **BINARY_BYTE_UNITS}
 EXPECTED_ROOT_DOCS = ("README.md", "UPSTREAMS.md", "LICENSE_AUDIT.md")
 IMPORT_BASELINE_COMMIT = "def84d156dd45c27cad0a75bc2302ce151585d3c"
 TURBOVAS_MODIFICATION_NOTICE = "TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>."
@@ -454,7 +451,6 @@ NMAP_PRIVILEGE_WARNING_PATTERNS = (
 )
 LOG_REVIEW_TAIL_LINES = 300
 RETAINED_QUALITY_GATE_ARTIFACTS = 30
-RETAINED_PERFORMANCE_ARTIFACTS = 30
 GSA_OPERATION_LOCK = "gsa-quality"
 RUNTIME_MANAGER_LOCK = "runtime-manager"
 FEED_ACTIVATION_LOCK = "feed-generation-activation"
@@ -5663,10 +5659,6 @@ def quality_gate_artifact_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "artifacts", "quality-gate")
 
 
-def performance_artifact_dir(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "artifacts", "performance")
-
-
 def rust_migration_artifact_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "artifacts", "rust-migration")
 
@@ -7370,112 +7362,6 @@ def path_tree_summary(path: Path, recursive: bool = True) -> dict[str, Any]:
     if latest:
         summary["latest_mtime"] = datetime.fromtimestamp(latest, timezone.utc).replace(microsecond=0).isoformat()
     return summary
-
-
-def parse_percent(value: str | None) -> float | None:
-    if value is None:
-        return None
-    value = value.strip()
-    if not value.endswith("%"):
-        return None
-    try:
-        return float(value[:-1])
-    except ValueError:
-        return None
-
-
-def parse_byte_quantity(value: str | None) -> int | None:
-    if value is None:
-        return None
-    value = value.strip()
-    match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)\s*([A-Za-z]+)", value)
-    if not match:
-        return None
-    number, unit = match.groups()
-    multiplier = BYTE_UNITS.get(unit)
-    if multiplier is None:
-        return None
-    return int(float(number) * multiplier)
-
-
-def parse_byte_pair(value: str | None, first_key: str, second_key: str) -> dict[str, int | None]:
-    if value is None or "/" not in value:
-        return {first_key: None, second_key: None}
-    first, second = value.split("/", 1)
-    return {first_key: parse_byte_quantity(first), second_key: parse_byte_quantity(second)}
-
-
-def normalize_docker_stat(row: dict[str, str]) -> dict[str, Any]:
-    normalized: dict[str, Any] = {
-        "name": row.get("Name"),
-        "id": row.get("ID"),
-        "cpu_percent": parse_percent(row.get("CPUPerc")),
-        "memory_percent": parse_percent(row.get("MemPerc")),
-        "pids": None,
-    }
-    try:
-        normalized["pids"] = int(row.get("PIDs", ""))
-    except ValueError:
-        normalized["pids"] = None
-    normalized.update(parse_byte_pair(row.get("MemUsage"), "memory_usage_bytes", "memory_limit_bytes"))
-    normalized.update(parse_byte_pair(row.get("NetIO"), "network_rx_bytes", "network_tx_bytes"))
-    normalized.update(parse_byte_pair(row.get("BlockIO"), "block_read_bytes", "block_write_bytes"))
-    return normalized
-
-
-def top_numeric_rows(rows: list[dict[str, Any]], key: str, limit: int = 5) -> list[dict[str, Any]]:
-    return sorted(rows, key=lambda row: row.get(key) if row.get(key) is not None else -1, reverse=True)[:limit]
-
-
-def largest_files(path: Path, limit: int = 10) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    files: list[dict[str, Any]] = []
-    if path.is_file():
-        try:
-            return [{"path": str(path), "byte_count": path.stat().st_size}]
-        except OSError:
-            return []
-    for root, _, filenames in os.walk(path):
-        for filename in filenames:
-            candidate = Path(root) / filename
-            try:
-                size = candidate.stat().st_size
-            except OSError:
-                continue
-            try:
-                display_path = str(candidate.relative_to(path))
-            except ValueError:
-                display_path = str(candidate)
-            files.append({"path": display_path, "byte_count": size})
-    return sorted(files, key=lambda item: item["byte_count"], reverse=True)[:limit]
-
-
-def parse_relation_size_rows(output: str) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for line in output.splitlines():
-        if "|" not in line:
-            continue
-        name, size = line.strip().split("|", 1)
-        try:
-            byte_count: int | None = int(size)
-        except ValueError:
-            byte_count = None
-        rows.append({"name": name, "byte_count": byte_count})
-    return rows
-
-
-def parse_pipe_int_rows(output: str) -> dict[str, int]:
-    rows: dict[str, int] = {}
-    for line in output.splitlines():
-        if "|" not in line:
-            continue
-        name, value = line.strip().split("|", 1)
-        try:
-            rows[name] = int(value)
-        except ValueError:
-            continue
-    return rows
 
 
 def summarize_data_outside_db(paths: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -33706,166 +33592,6 @@ def command_runtime_data_state(repo_root: Path) -> dict[str, Any]:
     return result
 
 
-def scanner_redis_cli(repo_root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
-    return exec_in_service(repo_root, "redis-openvas", ["redis-cli", "-s", "/run/redis-openvas/redis.sock", *args])
-
-
-def parse_redis_info(stdout: str) -> dict[str, int]:
-    allowed = {
-        "used_memory",
-        "used_memory_peak",
-        "connected_clients",
-        "blocked_clients",
-        "total_commands_processed",
-        "instantaneous_ops_per_sec",
-        "keyspace_hits",
-        "keyspace_misses",
-    }
-    metrics: dict[str, int] = {}
-    db_key_total = 0
-    for raw_line in stdout.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or ":" not in line:
-            continue
-        key, value = line.split(":", 1)
-        if key in allowed:
-            try:
-                metrics[key] = int(value)
-            except ValueError:
-                continue
-        elif key.startswith("db"):
-            for part in value.split(","):
-                if part.startswith("keys="):
-                    try:
-                        db_key_total += int(part.split("=", 1)[1])
-                    except ValueError:
-                        pass
-    if db_key_total:
-        metrics["keyspace_keys"] = db_key_total
-    return metrics
-
-
-def parse_redis_dbsize(stdout: str) -> int | None:
-    for line in stdout.splitlines():
-        try:
-            return int(line.strip())
-        except ValueError:
-            continue
-    return None
-
-
-def scanner_redis_metrics(repo_root: Path) -> dict[str, Any]:
-    metrics: dict[str, Any] = {}
-    dbsize = scanner_redis_cli(repo_root, ["DBSIZE"])
-    metrics["dbsize_status"] = "pass" if dbsize.returncode == 0 else "fail"
-    metrics["dbsize"] = parse_redis_dbsize(dbsize.stdout) if dbsize.returncode == 0 else None
-    if dbsize.returncode != 0:
-        metrics["dbsize_output_tail"] = output_tail(dbsize.stdout, 20)
-
-    info = scanner_redis_cli(repo_root, ["INFO"])
-    metrics["info_status"] = "pass" if info.returncode == 0 else "fail"
-    if info.returncode == 0:
-        metrics.update(parse_redis_info(info.stdout))
-    else:
-        metrics["info_output_tail"] = output_tail(info.stdout, 20)
-    return metrics
-
-
-def command_runtime_performance_snapshot(repo_root: Path) -> dict[str, Any]:
-    artifact_dir = performance_artifact_dir(repo_root)
-    findings: list[dict[str, Any]] = []
-    details: dict[str, Any] = {"docker_stats": [], "database": {}, "paths": {}}
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-
-    stats = run_command(["docker", "stats", "--no-stream", "--format", "json"], repo_root, env=runtime_env(repo_root), timeout=120)
-    if stats.returncode == 0:
-        for line in stats.stdout.splitlines():
-            try:
-                details["docker_stats"].append(json.loads(line))
-            except json.JSONDecodeError:
-                continue
-    details["docker_stats_numeric"] = [normalize_docker_stat(row) for row in details["docker_stats"]]
-    details["docker_top"] = {
-        "cpu_percent": top_numeric_rows(details["docker_stats_numeric"], "cpu_percent"),
-        "memory_usage_bytes": top_numeric_rows(details["docker_stats_numeric"], "memory_usage_bytes"),
-        "network_rx_bytes": top_numeric_rows(details["docker_stats_numeric"], "network_rx_bytes"),
-        "network_tx_bytes": top_numeric_rows(details["docker_stats_numeric"], "network_tx_bytes"),
-        "block_read_bytes": top_numeric_rows(details["docker_stats_numeric"], "block_read_bytes"),
-        "block_write_bytes": top_numeric_rows(details["docker_stats_numeric"], "block_write_bytes"),
-        "pids": top_numeric_rows(details["docker_stats_numeric"], "pids"),
-    }
-    findings.append(process_step_finding("pass" if stats.returncode == 0 else "warn", "performance.docker-stats", f"docker stats snapshot exit code {stats.returncode}.", stats, ["docker", "stats", "--no-stream", "--format", "json"]))
-    if stats.returncode == 0:
-        findings.append(finding("pass", "performance.docker-stats-numeric", "Docker stats numeric summary captured.", details={"container_count": len(details["docker_stats_numeric"]), "top": details["docker_top"]}))
-
-    if container_running(repo_root, "postgres"):
-        db_size = psql(repo_root, "SELECT pg_database_size(current_database());")
-        details["database"]["byte_count"] = int(psql_value(db_size) or "0") if db_size.returncode == 0 and psql_value(db_size).isdigit() else None
-        findings.append(finding("pass" if db_size.returncode == 0 else "warn", "performance.database-size", "Database size captured." if db_size.returncode == 0 else "Database size query failed.", details={"output_tail": output_tail(db_size.stdout, 40), "byte_count": details["database"].get("byte_count")}))
-        table_query, presence = table_presence_rows(repo_root, (*DATABASE_CORE_TABLES, *DATABASE_SCOPE_TABLES))
-        if table_query.returncode == 0:
-            details["database"]["row_counts"] = {table: table_row_count(repo_root, table) for table, exists in presence.items() if exists}
-            findings.append(finding("pass", "performance.table-row-counts", "Database row-count estimates captured for known tables.", details={"table_count": len(details["database"]["row_counts"])}))
-        else:
-            findings.append(finding("warn", "performance.table-row-counts", "Could not inspect database row counts.", details={"output_tail": output_tail(table_query.stdout, 80)}))
-        largest_relations = psql(
-            repo_root,
-            "SELECT relname || '|' || pg_total_relation_size(c.oid) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public' AND c.relkind IN ('r','m','i','t') ORDER BY pg_total_relation_size(c.oid) DESC LIMIT 10;",
-        )
-        details["database"]["largest_relations"] = parse_relation_size_rows(largest_relations.stdout) if largest_relations.returncode == 0 else []
-        findings.append(finding("pass" if largest_relations.returncode == 0 else "warn", "performance.database-largest-relations", "Largest database relations captured." if largest_relations.returncode == 0 else "Largest database relation query failed.", details={"relations": details["database"].get("largest_relations", []), "output_tail": output_tail(largest_relations.stdout, 80)}))
-        report_workflow = psql(
-            repo_root,
-            "SELECT 'reports|' || count (*) FROM reports "
-            "UNION ALL SELECT 'scope_reports|' || count (*) FROM scope_reports "
-            "UNION ALL SELECT 'scope_report_sources|' || count (*) FROM scope_report_sources "
-            "UNION ALL SELECT 'max_sources_per_scope_report|' || coalesce ((SELECT max (source_count) FROM (SELECT count (*) AS source_count FROM scope_report_sources GROUP BY scope_report) x), 0) "
-            "UNION ALL SELECT 'max_results_per_report|' || coalesce ((SELECT max (result_count) FROM (SELECT count (*) AS result_count FROM results GROUP BY report) x), 0) "
-            "UNION ALL SELECT 'max_scope_report_result_count|' || coalesce ((SELECT max (result_count) FROM scope_reports), 0) "
-            "UNION ALL SELECT 'max_scope_report_source_host_count|' || coalesce ((SELECT max (evidence_host_count) FROM scope_reports), 0);",
-        )
-        details["report_workflow"] = parse_pipe_int_rows(report_workflow.stdout) if report_workflow.returncode == 0 else {}
-        findings.append(finding("pass" if report_workflow.returncode == 0 else "warn", "performance.report-workflow", "Report workflow baseline captured." if report_workflow.returncode == 0 else "Report workflow baseline query failed.", details={"report_workflow": details.get("report_workflow", {}), "output_tail": output_tail(report_workflow.stdout, 80)}))
-    else:
-        findings.append(finding("warn", "performance.database", "Postgres is not running; database size and row counts are unavailable."))
-
-    if container_running(repo_root, "redis-openvas"):
-        scanner_redis = scanner_redis_metrics(repo_root)
-        details["scanner_redis"] = scanner_redis
-        metrics_ready = scanner_redis.get("dbsize_status") == "pass" and scanner_redis.get("info_status") == "pass"
-        findings.append(
-            finding(
-                "pass" if metrics_ready else "warn",
-                "performance.scanner-redis",
-                "Scanner Redis performance counters captured without key names or values."
-                if metrics_ready
-                else "Scanner Redis performance counters could not be fully captured.",
-                str(scanner_redis_socket_path(repo_root)),
-                {"scanner_redis": scanner_redis},
-            )
-        )
-    else:
-        findings.append(finding("warn", "performance.scanner-redis", "Scanner Redis is not running; performance counters are unavailable.", str(scanner_redis_socket_path(repo_root))))
-
-    for name, path, recursive in (
-        ("runtime-artifacts", runtime_path(repo_root, "artifacts"), True),
-        ("runtime-logs", runtime_path(repo_root, "logs"), True),
-        ("gsa-static", gsad_static_dir(repo_root), True),
-        ("build-prefix", repo_root / "build" / "prefix", False),
-    ):
-        summary = path_tree_summary(path, recursive=recursive)
-        if name == "gsa-static":
-            summary["largest_files"] = largest_files(path)
-        details["paths"][name] = summary
-        findings.append(finding("pass" if summary["exists"] else "warn", "performance.path", f"{name} size snapshot captured." if summary["exists"] else f"{name} path is missing.", summary["path"], {"summary": summary}))
-
-    latest_path, timestamped_path = retained_json_artifact_paths(artifact_dir, "performance-snapshot", "performance-snapshot.json")
-    result = make_result("runtime-performance-snapshot", repo_root, "Runtime performance snapshot completed.", findings, [str(latest_path), str(timestamped_path)])
-    result["details"] = details
-    write_retained_json_artifact(latest_path, timestamped_path, result, "performance-snapshot", RETAINED_PERFORMANCE_ARTIFACTS)
-    return result
-
-
 def command_runtime_status(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     manager_lock = runtime_lock_status(repo_root, RUNTIME_MANAGER_LOCK)
@@ -34528,7 +34254,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
     subparsers.add_parser("runtime-log-review", parents=[common], help="review recent full-stack runtime logs")
     subparsers.add_parser("runtime-data-state", parents=[common], help="inspect database-centered runtime data state")
-    subparsers.add_parser("runtime-performance-snapshot", parents=[common], help="capture a lightweight runtime performance snapshot")
     security_policy = subparsers.add_parser("security-policy-check", parents=[common], help="validate security-sensitive path policy scaffolding")
     security_policy.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe security policy checks")
     native_api_cargo_audit = subparsers.add_parser("native-api-cargo-audit", parents=[common], help="audit native API Rust dependencies for known advisories")
@@ -34932,8 +34657,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_log_review(repo_root)
     elif args.command == "runtime-data-state":
         result = command_runtime_data_state(repo_root)
-    elif args.command == "runtime-performance-snapshot":
-        result = command_runtime_performance_snapshot(repo_root)
     elif args.command == "security-policy-check":
         result = command_security_policy_check(repo_root, status_only=args.status_only)
     elif args.command == "native-api-cargo-audit":

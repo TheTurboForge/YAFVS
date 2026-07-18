@@ -165,37 +165,6 @@ RUST_MIGRATION_FIRST_CANDIDATE = {
 CORE_C_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner")
 C_SERVICES_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner", "pg-gvm", "gvmd", "gsad")
 C_BUILD_PROFILES = ("hardened",)
-C_HARDENING_ARTIFACT_SPECS = {
-    "gvm-libs": (
-        "build/gvm-libs/base/libgvm_base.so.*",
-        "build/gvm-libs/boreas/libgvm_boreas.so.*",
-        "build/gvm-libs/gmp/libgvm_gmp.so.*",
-        "build/gvm-libs/http/libgvm_http.so.*",
-        "build/gvm-libs/http_scanner/libgvm_http_scanner.so.*",
-        "build/gvm-libs/openvasd/libgvm_openvasd.so.*",
-        "build/gvm-libs/osp/libgvm_osp.so.*",
-        "build/gvm-libs/security_intelligence/libgvm_security_intelligence.so.*",
-        "build/gvm-libs/util/libgvm_util.so.*",
-    ),
-    "openvas-smb": (
-        "build/openvas-smb/wmi/wmic",
-        "build/openvas-smb/wmi/libopenvas_wmiclient.so.*",
-    ),
-    "openvas-scanner": (
-        "build/openvas-scanner/src/openvas",
-        "build/openvas-scanner/misc/libopenvas_misc.so.*",
-        "build/openvas-scanner/nasl/libopenvas_nasl.so.*",
-        "build/openvas-scanner/nasl/openvas-nasl",
-        "build/openvas-scanner/nasl/openvas-nasl-lint",
-    ),
-    "pg-gvm": ("build/pg-gvm/libpg-gvm.so",),
-    "gvmd": (
-        "build/gvmd/src/gvmd",
-        "build/gvmd/src/libgvm-pg-server.so.*",
-    ),
-    "gsad": ("build/gsad/src/gsad",),
-}
-C_HARDENING_EXPECTED_ARTIFACT_COUNT = 20
 HARDENED_REQUIRED_FEATURES = (
     "format_security",
     "fortify",
@@ -15577,149 +15546,6 @@ def command_build_c_services(repo_root: Path, profile: str | None = None) -> dic
     return result
 
 
-def c_hardening_artifact_specs(profile: str | None = None) -> dict[str, tuple[str, ...]]:
-    if profile is None:
-        return C_HARDENING_ARTIFACT_SPECS
-    return {
-        component: tuple(pattern.replace("build/", f"build/{profile}/", 1) for pattern in patterns)
-        for component, patterns in C_HARDENING_ARTIFACT_SPECS.items()
-    }
-
-
-def c_hardening_artifact_paths(repo_root: Path, profile: str | None = None) -> list[tuple[str, Path]]:
-    artifacts: list[tuple[str, Path]] = []
-    seen: set[Path] = set()
-    resolved_root = repo_root.resolve()
-    for component, patterns in c_hardening_artifact_specs(profile).items():
-        for pattern in patterns:
-            for path in sorted(repo_root.glob(pattern)):
-                if not path.is_file():
-                    continue
-                try:
-                    resolved = path.resolve(strict=True)
-                    if not resolved.is_relative_to(resolved_root) or resolved in seen:
-                        continue
-                    with resolved.open("rb") as stream:
-                        if stream.read(4) != b"\x7fELF":
-                            continue
-                except OSError:
-                    continue
-                seen.add(resolved)
-                artifacts.append((component, resolved))
-    return artifacts
-
-
-def c_hardening_artifact_spec_matches(repo_root: Path, profile: str | None = None) -> dict[str, dict[str, int]]:
-    return {
-        component: {
-            pattern: sum(1 for path in repo_root.glob(pattern) if path.is_file())
-            for pattern in patterns
-        }
-        for component, patterns in c_hardening_artifact_specs(profile).items()
-    }
-
-
-def c_hardening_file_record(repo_root: Path, path: Path) -> dict[str, Any]:
-    evidence = c_hardening_artifact_file_evidence(path)
-    try:
-        display_path = str(path.relative_to(repo_root))
-    except ValueError:
-        display_path = str(path)
-    return {"path": display_path, **evidence}
-
-
-def c_hardening_git_source_state(repo_root: Path) -> str | None:
-    result = run_command(
-        ["git", "status", "--porcelain=v1", "--untracked-files=all"],
-        repo_root,
-    )
-    return result.stdout.rstrip("\n") if result.returncode == 0 else None
-
-
-def c_hardening_cmake_cache(repo_root: Path, component: str, profile: str) -> dict[str, str]:
-    _, build, _ = cmake_paths(repo_root, component, profile)
-    cache_path = build / "CMakeCache.txt"
-    values: dict[str, str] = {}
-    try:
-        lines = cache_path.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return values
-    for line in lines:
-        if line.startswith("//") or line.startswith("#") or ":" not in line or "=" not in line:
-            continue
-        key = line.split(":", 1)[0]
-        values[key] = line.partition("=")[2]
-    return values
-
-
-def c_hardening_configured_toolchain(repo_root: Path, component: str, profile: str) -> dict[str, Any] | None:
-    _, build, _ = cmake_paths(repo_root, component, profile)
-    cache = c_hardening_cmake_cache(repo_root, component, profile)
-    compiler_value = cache.get("CMAKE_C_COMPILER")
-    if not compiler_value:
-        return None
-    compiler = Path(compiler_value)
-    if not compiler.is_absolute():
-        compiler = (build / compiler).resolve()
-    try:
-        compiler_record = c_hardening_file_record(repo_root, compiler.resolve())
-    except OSError:
-        return None
-    compiler_config = next(iter(sorted((build / "CMakeFiles").glob("*/CMakeCCompiler.cmake"))), None)
-    if compiler_config is None:
-        return None
-    try:
-        compiler_text = compiler_config.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return None
-
-    def cmake_set(name: str) -> str | None:
-        match = re.search(rf"^set\({re.escape(name)} \"([^\"]*)\"\)", compiler_text, re.MULTILINE)
-        return match.group(1) if match else None
-
-    return {
-        "compiler": compiler_record,
-        "compiler_id": cmake_set("CMAKE_C_COMPILER_ID"),
-        "compiler_version": cmake_set("CMAKE_C_COMPILER_VERSION"),
-        "build_type": cache.get("CMAKE_BUILD_TYPE"),
-        "generator": cache.get("CMAKE_GENERATOR"),
-    }
-
-
-def hardened_build_manifest_payload(repo_root: Path) -> tuple[dict[str, Any] | None, str | None]:
-    head = run_git(repo_root, ["rev-parse", "HEAD"])
-    source_status = c_hardening_git_source_state(repo_root)
-    configuration_path = repo_root / HARDENED_CONFIGURATION
-    injection_path = repo_root / HARDENED_CMAKE_INJECTION
-    if head is None or source_status is None or not configuration_path.is_file() or not injection_path.is_file():
-        return None, "source state or hardened configuration artifacts are unavailable"
-    compile_databases: dict[str, Any] = {}
-    toolchains: dict[str, Any] = {}
-    for component in C_SERVICES_CHAIN:
-        _, build, _ = cmake_paths(repo_root, component, "hardened")
-        database = build / "compile_commands.json"
-        toolchain = c_hardening_configured_toolchain(repo_root, component, "hardened")
-        if not database.is_file() or toolchain is None:
-            return None, f"{component} compile database or configured toolchain is unavailable"
-        compile_databases[component] = c_hardening_file_record(repo_root, database)
-        toolchains[component] = toolchain
-    artifact_pairs = c_hardening_artifact_paths(repo_root, "hardened")
-    matches = c_hardening_artifact_spec_matches(repo_root, "hardened")
-    if len(artifact_pairs) != C_HARDENING_EXPECTED_ARTIFACT_COUNT or any(count == 0 for patterns in matches.values() for count in patterns.values()):
-        return None, "the exact hardened ELF registry is incomplete or has unexpected cardinality"
-    return {
-        "schema_version": 1,
-        "profile": "hardened",
-        "head": head,
-        "source_status": source_status,
-        "configuration": c_hardening_file_record(repo_root, configuration_path),
-        "cmake_injection": c_hardening_file_record(repo_root, injection_path),
-        "toolchains": toolchains,
-        "compile_databases": compile_databases,
-        "artifacts": [c_hardening_file_record(repo_root, path) for _component, path in artifact_pairs],
-    }, None
-
-
 def rust_c_hardening_manifest_finding(repo_root: Path) -> dict[str, Any]:
     expected_check = "build-c-services.hardening-manifest"
     expected_path = str(HARDENED_BUILD_MANIFEST)
@@ -15773,19 +15599,6 @@ def rust_c_hardening_manifest_finding(repo_root: Path) -> dict[str, Any]:
         "Rust hardened build manifest writer failed closed because its result was unavailable or invalid.",
         expected_path,
     )
-
-
-def c_hardening_artifact_file_evidence(path: Path) -> dict[str, Any]:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for block in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(block)
-    stat = path.stat()
-    return {
-        "sha256": digest.hexdigest(),
-        "size_bytes": stat.st_size,
-        "mtime_ns": stat.st_mtime_ns,
-    }
 
 
 def _command_build_ui_unlocked(repo_root: Path) -> dict[str, Any]:

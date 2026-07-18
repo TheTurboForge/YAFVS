@@ -8,6 +8,6 @@ Documentation=file:@REPO_ROOT@/README.md
 [Service]
 Type=oneshot
 WorkingDirectory=@REPO_ROOT@
-ExecStart=@PYTHON@ tools/turbovasctl quality-gate --json
+ExecStart=@PYTHON@ tools/yafvsctl quality-gate --json
 StandardOutput=append:@QUALITY_GATE_LOG_DIR@/quality-gate.log
 StandardError=append:@QUALITY_GATE_LOG_DIR@/quality-gate.log

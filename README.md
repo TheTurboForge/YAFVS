@@ -80,9 +80,9 @@ invitation to guess.
 The explicit Rust entrypoint exposes the complete migrated command surface:
 
 ```sh
-just turbovasctl-rust --help
-just turbovasctl-rust status --json
-just turbovasctl-rust doctor --status-only --json
+just yafvsctl-rust --help
+just yafvsctl-rust status --json
+just yafvsctl-rust doctor --status-only --json
 ```
 
 A full build, feed initialization, application startup, and browser workflow

@@ -116,10 +116,10 @@ writes.
 native raw report detail/result-row endpoints; the remaining heavy raw report
 detail tabs stay inherited follow-ups.
 
-Read-only scripting can use `tools/turbovasctl native-api-request --json --path
+Read-only scripting can use `tools/yafvsctl native-api-request --json --path
 '/api/v1/...'` or `just native-api-request --json --path '/api/v1/...'` from
 inside the development runtime boundary. Opt-in direct development access uses
-`tools/turbovasctl native-api-request --direct --json --path '/api/v1/...'`
+`tools/yafvsctl native-api-request --direct --json --path '/api/v1/...'`
 after `just runtime-native-api-direct-smoke --json` has created the bearer-auth
 listener and ignored runtime secret. These paths cover DB-backed report, scope,
 target, task, scan-config metadata, host asset metadata, tag metadata, override

@@ -3,107 +3,107 @@
 
 set shell := ["bash", "-eo", "pipefail", "-c"]
 
-turbovasctl *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl "$@"
+yafvsctl *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl "$@"
 
-turbovasctl-rust *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- "$@"
+yafvsctl-rust *args:
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- "$@"
 
-turbovasctl-rust-test:
-    cargo test --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml
+yafvsctl-rust-test:
+    cargo test --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml
 
 status *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- status "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- status "$@"
 
 inventory *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- inventory "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- inventory "$@"
 
 native-tooling-state *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-tooling-state "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-tooling-state "$@"
 
 native-api-request *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-api-request "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-api-request "$@"
 
 native-empty-trash *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-empty-trash "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-empty-trash "$@"
 
 native-verify-scanners *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-verify-scanners "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-verify-scanners "$@"
 
 native-start-task *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-start-task "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-start-task "$@"
 
 native-nvt-diagnostic-scan *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-nvt-diagnostic-scan "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-nvt-diagnostic-scan "$@"
 
 native-scan-new-system *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-scan-new-system "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-scan-new-system "$@"
 
 native-scan-with-delivery *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-scan-with-delivery "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-scan-with-delivery "$@"
 
 native-export-report-csv *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-export-report-csv "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-export-report-csv "$@"
 
 native-export-report-pdf *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-export-report-pdf "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-export-report-pdf "$@"
 
 native-export-report-bundle *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-export-report-bundle "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-export-report-bundle "$@"
 
 native-delete-overrides-by-filter *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-delete-overrides-by-filter "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-delete-overrides-by-filter "$@"
 
 native-bulk-modify-schedules *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-bulk-modify-schedules "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-bulk-modify-schedules "$@"
 
 native-stop-task *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-stop-task "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-stop-task "$@"
 
 native-update-task-target *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-update-task-target "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-update-task-target "$@"
 
 native-stop-tasks-from-csv *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-stop-tasks-from-csv "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-stop-tasks-from-csv "$@"
 
 native-stop-all-tasks *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-stop-all-tasks "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-stop-all-tasks "$@"
 
 native-start-tasks-from-csv *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-start-tasks-from-csv "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-start-tasks-from-csv "$@"
 
 native-tasks-from-csv *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-tasks-from-csv "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-tasks-from-csv "$@"
 
 native-targets-from-host-list *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-targets-from-host-list "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-targets-from-host-list "$@"
 
 native-targets-from-csv *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-targets-from-csv "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-targets-from-csv "$@"
 
 native-targets-from-xml *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-targets-from-xml "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-targets-from-xml "$@"
 
 native-tags-from-csv *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-tags-from-csv "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-tags-from-csv "$@"
 
 native-credentials-from-csv *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-credentials-from-csv "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-credentials-from-csv "$@"
 
 native-alerts-from-csv *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-alerts-from-csv "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-alerts-from-csv "$@"
 
 native-api-migration-matrix *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-api-migration-matrix "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-api-migration-matrix "$@"
 
 native-api-client-contract *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-api-client-contract "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-api-client-contract "$@"
 
 native-api-replacement-dashboard *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl native-api-replacement-dashboard "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-api-replacement-dashboard "$@"
 
 closeout-readiness *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl closeout-readiness "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl closeout-readiness "$@"
 
 native-api-rust-test *filters:
     @set -- {{filters}}; \
@@ -126,238 +126,238 @@ gsa-vitest *args:
       cd components/gsa && npm exec vitest -- run "$@"
 
 rust-migration-state *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- rust-migration-state "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- rust-migration-state "$@"
 
 doctor *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl doctor "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl doctor "$@"
 
 branding-state *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- branding-state "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- branding-state "$@"
 
 license-report *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- license-report "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- license-report "$@"
 
 license-precommit *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- license-report --diff-scope staged --modified-imported-only --status-only "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- license-report --diff-scope staged --modified-imported-only --status-only "$@"
 
 secret-precommit *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; gitleaks protect --staged --redact --no-banner --log-level error --exit-code 7 --report-format json "$@"
 
 license-public-release-gate *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- license-report --public-release "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- license-report --public-release "$@"
 
 production-posture-check *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl production-posture-check "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl production-posture-check "$@"
 
 deps *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- deps "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- deps "$@"
 
 configure *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl configure "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl configure "$@"
 
 build *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl build "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl build "$@"
 
 build-core-c *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl build-core-c "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl build-core-c "$@"
 
 build-c-services *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl build-c-services "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl build-c-services "$@"
 
 c-hardening-check *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- c-hardening-check "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- c-hardening-check "$@"
 
 build-ui *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl build-ui "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl build-ui "$@"
 
 build-python *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl build-python "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl build-python "$@"
 
 build-baseline *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl build-baseline "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl build-baseline "$@"
 
 runtime-plan *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- runtime-plan "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- runtime-plan "$@"
 
 up *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl up "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl up "$@"
 
 down *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl down "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl down "$@"
 
 logs *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- logs "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- logs "$@"
 
 runtime-init *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-init "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-init "$@"
 
 runtime-certs-init *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-certs-init "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-certs-init "$@"
 
 runtime-manager-init *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-manager-init "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-manager-init "$@"
 
 runtime-scanner-redis-init *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-scanner-redis-init "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-scanner-redis-init "$@"
 
 runtime-gmp-smoke *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-gmp-smoke "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-gmp-smoke "$@"
 
 runtime-scanner-register *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-scanner-register "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-scanner-register "$@"
 
 runtime-scanner-capability-check *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-scanner-capability-check "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-scanner-capability-check "$@"
 
 runtime-scanner-process-check *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-scanner-process-check "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-scanner-process-check "$@"
 
 runtime-nmap-capability-check *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-nmap-capability-check "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-nmap-capability-check "$@"
 
 runtime-feed-keyring-init *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-feed-keyring-init "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-feed-keyring-init "$@"
 
 runtime-full-test-scan-preflight *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-full-test-scan-preflight "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-full-test-scan-preflight "$@"
 
 runtime-full-test-scan-start *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-full-test-scan-start "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-full-test-scan-start "$@"
 
 runtime-full-test-scan-status *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-full-test-scan-status "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-full-test-scan-status "$@"
 
 runtime-report-summary *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-report-summary "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-report-summary "$@"
 
 runtime-report-export *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-report-export "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-report-export "$@"
 
 runtime-certbund-report *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-certbund-report "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-certbund-report "$@"
 
 runtime-report-metrics *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-report-metrics "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-report-metrics "$@"
 
 runtime-scope-smoke *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-scope-smoke "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-scope-smoke "$@"
 
 runtime-scope-report-summary *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-scope-report-summary "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-scope-report-summary "$@"
 
 runtime-scope-report-metrics *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-scope-report-metrics "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-scope-report-metrics "$@"
 
 feed-state *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl feed-state "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl feed-state "$@"
 
 feed-cache-sync *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl feed-cache-sync "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl feed-cache-sync "$@"
 
 feed-generation-stage *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- feed-generation-stage "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- feed-generation-stage "$@"
 
 feed-generation-state *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- feed-generation-state "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- feed-generation-state "$@"
 
 feed-generation-activate *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- feed-generation-activate "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- feed-generation-activate "$@"
 
 feed-generation-rollback *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- feed-generation-rollback "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- feed-generation-rollback "$@"
 
 runtime-status *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-status "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-status "$@"
 
 runtime-smoke *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-smoke "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-smoke "$@"
 
 runtime-log-review *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-log-review "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-log-review "$@"
 
 runtime-data-state *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- runtime-data-state "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- runtime-data-state "$@"
 
 runtime-db-introspect *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- runtime-db-introspect "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- runtime-db-introspect "$@"
 
 runtime-performance-snapshot *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- runtime-performance-snapshot "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- runtime-performance-snapshot "$@"
 
 runtime-redis-state *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- runtime-redis-state "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- runtime-redis-state "$@"
 
 security-policy-check *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- security-policy-check "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- security-policy-check "$@"
 
 native-api-cargo-audit *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- native-api-cargo-audit "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- native-api-cargo-audit "$@"
 
 gsa-npm-audit *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- gsa-npm-audit "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- gsa-npm-audit "$@"
 
 osv-lockfile-audit *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- osv-lockfile-audit "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- osv-lockfile-audit "$@"
 
 native-api-semgrep-audit *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- native-api-semgrep-audit "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- native-api-semgrep-audit "$@"
 
 path-coupling-state *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- path-coupling-state "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- path-coupling-state "$@"
 
 runtime-app-up *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-app-up "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-app-up "$@"
 
 runtime-app-build *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-app-build "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-app-build "$@"
 
 runtime-app-down *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-app-down "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-app-down "$@"
 
 runtime-app-smoke *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-app-smoke "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-app-smoke "$@"
 
 runtime-native-api-smoke *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-native-api-smoke "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-native-api-smoke "$@"
 
 runtime-native-api-direct-smoke *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-native-api-direct-smoke "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-native-api-direct-smoke "$@"
 
 runtime-native-api-direct-write-smoke *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-native-api-direct-write-smoke "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-native-api-direct-write-smoke "$@"
 
 runtime-native-api-direct-bootstrap *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-native-api-direct-bootstrap "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-native-api-direct-bootstrap "$@"
 
 runtime-native-api-direct-token *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- runtime-native-api-direct-token "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- runtime-native-api-direct-token "$@"
 
 runtime-native-api-rebuild *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-native-api-rebuild "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-native-api-rebuild "$@"
 
 runtime-webui-smoke *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-webui-smoke "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-webui-smoke "$@"
 
 runtime-browser-smoke *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-browser-smoke "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-browser-smoke "$@"
 
 runtime-browser-regression *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-browser-regression "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-browser-regression "$@"
 
 runtime-credential-smoke *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-credential-smoke "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-credential-smoke "$@"
 
 runtime-rbac-smoke *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl runtime-rbac-smoke "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-rbac-smoke "$@"
 
 quality-gate *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl quality-gate "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl quality-gate "$@"
 
 quality-gate-state *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl quality-gate-state "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl quality-gate-state "$@"
 
 quality-gate-schedule *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- quality-gate-schedule "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- quality-gate-schedule "$@"
 
 gvmd-smoke *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl gvmd-smoke "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl gvmd-smoke "$@"

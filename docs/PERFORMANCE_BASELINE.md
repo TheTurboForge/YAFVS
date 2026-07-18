@@ -17,7 +17,7 @@ just runtime-performance-snapshot --json
 
 The command writes retained artifacts under
 `$TURBOVAS_RUNTIME_DIR/artifacts/performance/`; when the variable is unset,
-`tools/turbovasctl` uses the sibling `TurboVAS-runtime` directory. The snapshot
+`tools/yafvsctl` uses the sibling `TurboVAS-runtime` directory. The snapshot
 records Docker, PostgreSQL, report-workflow, scanner Redis, runtime artifact,
 and GSA static-asset facts.
 

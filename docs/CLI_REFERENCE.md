@@ -4,15 +4,15 @@
 # YAFVS CLI Reference
 
 The root `justfile` is the normal command surface. It delegates deterministic
-implementation work to `tools/turbovasctl` and forwards additional arguments:
+implementation work to `tools/yafvsctl` and forwards additional arguments:
 
 ```sh
 just doctor --status-only --json
-tools/turbovasctl doctor --status-only --json
+tools/yafvsctl doctor --status-only --json
 ```
 
 Use `just --list` for the current recipe inventory and
-`tools/turbovasctl --help` or a subcommand's `--help` for exact arguments.
+`tools/yafvsctl --help` or a subcommand's `--help` for exact arguments.
 Machine-readable results use a common `status`, `summary`, `findings`,
 `artifacts`, and `metadata` envelope. `warn` is non-zero in meaning but does
 not use a failure exit code; `fail` exits non-zero.
@@ -38,9 +38,9 @@ mechanically checked block while the normal `just` recipes continue to provide
 a stable front door:
 
 ```sh
-just turbovasctl-rust status --json
-just turbovasctl-rust inventory --json
-just turbovasctl-rust-test
+just yafvsctl-rust status --json
+just yafvsctl-rust inventory --json
+just yafvsctl-rust-test
 ```
 
 <!-- rust-cli-commands:start -->
@@ -199,7 +199,7 @@ them with direct database or protocol mutations.
 - `just runtime-performance-snapshot`: record thresholdless runtime metrics.
 - `just runtime-redis-state`: inspect scanner Redis boundaries.
 
-`tools/turbovasctl` supplies the current absolute checkout path to Compose.
+`tools/yafvsctl` supplies the current absolute checkout path to Compose.
 Direct `docker compose` use must set `TURBOVAS_REPO_MOUNT_PATH` explicitly.
 Runtime state defaults to the sibling `TurboVAS-runtime` directory and can be
 relocated with `TURBOVAS_RUNTIME_DIR`.

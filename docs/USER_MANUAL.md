@@ -284,7 +284,7 @@ Use a request ID when a direct probe needs a visible correlation ID in
 responses/logs:
 
 ```sh
-tools/turbovasctl native-api-request --direct --json --request-id 'operator-check-1' --path '/api/v1/reports?page_size=1'
+tools/yafvsctl native-api-request --direct --json --request-id 'operator-check-1' --path '/api/v1/reports?page_size=1'
 ```
 
 Host-list target creation is available without GMP/XML or `gvm-tools` through
@@ -293,26 +293,26 @@ request shape, then rerun with explicit write-control intent after direct
 write-control is enabled:
 
 ```sh
-tools/turbovasctl native-targets-from-host-list --json --hosts-file ./hosts.txt --dry-run
-tools/turbovasctl native-targets-from-host-list --json --hosts-file ./hosts.txt --port-range 'T:1-443,U:53' --allow-write-control --status-only
-tools/turbovasctl native-targets-from-csv --json --csv-file ./targets.csv --dry-run
-tools/turbovasctl native-targets-from-csv --json --csv-file ./targets.csv --allow-write-control --status-only
-tools/turbovasctl native-targets-from-xml --json --xml-file ./targets.xml --dry-run
-tools/turbovasctl native-targets-from-xml --json --xml-file ./targets.xml --allow-write-control --status-only
-tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --dry-run
-tools/turbovasctl native-tags-from-csv --json --csv-file ./tags.csv --allow-write-control --status-only
-tools/turbovasctl native-verify-scanners --json --allow-write-control --status-only
-tools/turbovasctl native-start-task --task-id TASK_UUID --allow-write-control
-tools/turbovasctl native-scan-new-system --host 192.0.2.10 --dry-run --status-only
-tools/turbovasctl native-scan-new-system --host 192.0.2.10 --allow-scan-control --status-only
-tools/turbovasctl native-export-report-csv --report-id REPORT_UUID --output ./report.csv --status-only
-tools/turbovasctl native-export-report-bundle --report-id REPORT_UUID --output ./report.turbovas-report.zip --status-only
-tools/turbovasctl native-delete-overrides-by-filter --filter 'obsolete policy' --dry-run --status-only
-tools/turbovasctl native-delete-overrides-by-filter --filter 'obsolete policy' --allow-write-control --confirm-snapshot SNAPSHOT_SHA256 --status-only
-tools/turbovasctl native-stop-task --task-id TASK_UUID --allow-write-control --status-only
-tools/turbovasctl native-update-task-target --task-id TASK_UUID --host 192.0.2.10 --host 192.0.2.11 --exclude-host 192.0.2.11 --allow-write-control --status-only
-tools/turbovasctl native-update-task-target --task-id TASK_UUID --hosts-file ./replacement-hosts.csv --allow-write-control --status-only
-tools/turbovasctl native-start-tasks-from-csv --csv-file ./tasks.csv --allow-write-control --status-only
+tools/yafvsctl native-targets-from-host-list --json --hosts-file ./hosts.txt --dry-run
+tools/yafvsctl native-targets-from-host-list --json --hosts-file ./hosts.txt --port-range 'T:1-443,U:53' --allow-write-control --status-only
+tools/yafvsctl native-targets-from-csv --json --csv-file ./targets.csv --dry-run
+tools/yafvsctl native-targets-from-csv --json --csv-file ./targets.csv --allow-write-control --status-only
+tools/yafvsctl native-targets-from-xml --json --xml-file ./targets.xml --dry-run
+tools/yafvsctl native-targets-from-xml --json --xml-file ./targets.xml --allow-write-control --status-only
+tools/yafvsctl native-tags-from-csv --json --csv-file ./tags.csv --dry-run
+tools/yafvsctl native-tags-from-csv --json --csv-file ./tags.csv --allow-write-control --status-only
+tools/yafvsctl native-verify-scanners --json --allow-write-control --status-only
+tools/yafvsctl native-start-task --task-id TASK_UUID --allow-write-control
+tools/yafvsctl native-scan-new-system --host 192.0.2.10 --dry-run --status-only
+tools/yafvsctl native-scan-new-system --host 192.0.2.10 --allow-scan-control --status-only
+tools/yafvsctl native-export-report-csv --report-id REPORT_UUID --output ./report.csv --status-only
+tools/yafvsctl native-export-report-bundle --report-id REPORT_UUID --output ./report.turbovas-report.zip --status-only
+tools/yafvsctl native-delete-overrides-by-filter --filter 'obsolete policy' --dry-run --status-only
+tools/yafvsctl native-delete-overrides-by-filter --filter 'obsolete policy' --allow-write-control --confirm-snapshot SNAPSHOT_SHA256 --status-only
+tools/yafvsctl native-stop-task --task-id TASK_UUID --allow-write-control --status-only
+tools/yafvsctl native-update-task-target --task-id TASK_UUID --host 192.0.2.10 --host 192.0.2.11 --exclude-host 192.0.2.11 --allow-write-control --status-only
+tools/yafvsctl native-update-task-target --task-id TASK_UUID --hosts-file ./replacement-hosts.csv --allow-write-control --status-only
+tools/yafvsctl native-start-tasks-from-csv --csv-file ./tasks.csv --allow-write-control --status-only
 ```
 
 `native-update-task-target` replaces the retired GMP script with one guarded
@@ -434,7 +434,7 @@ preferences, and legacy partial-write behavior are deliberately not retained.
 Starting a task is available through the guarded native
 `POST /api/v1/tasks/{task_id}/start` route, either through the authenticated
 browser proxy or direct API access. It requires explicit operator consent via
-`tools/turbovasctl native-start-task --task-id TASK_UUID --allow-write-control`.
+`tools/yafvsctl native-start-task --task-id TASK_UUID --allow-write-control`.
 The request transactionally creates the report and gvmd `scan_queue` request;
 gvmd remains responsible for scanner execution and result ingestion.
 For name-based batch operation, `native-start-tasks-from-csv` reads the first

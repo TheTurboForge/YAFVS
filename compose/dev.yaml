@@ -546,7 +546,7 @@ services:
         target: /runtime/run/gvmd
         read_only: true
     # No host port by default. Direct API exposure is added only by the
-    # generated opt-in direct-API override used by turbovasctl.
+    # generated opt-in direct-API override used by yafvsctl.
 
 networks:
   default:

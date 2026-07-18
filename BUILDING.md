@@ -50,16 +50,16 @@ entrypoints directly only when testing a specific implementation.
 
 ```sh
 just deps --json
-tools/turbovasctl build-baseline --json
-tools/turbovasctl quality-gate-state --json
-tools/turbovasctl production-posture-check --json
+tools/yafvsctl build-baseline --json
+tools/yafvsctl quality-gate-state --json
+tools/yafvsctl production-posture-check --json
 just rust-migration-state --json
-tools/turbovasctl runtime-native-api-smoke --json
+tools/yafvsctl runtime-native-api-smoke --json
 ```
 
 ## Quality Gates
 
-`just quality-gate` and `tools/turbovasctl quality-gate --json` are the local
+`just quality-gate` and `tools/yafvsctl quality-gate --json` are the local
 source-quality contract. They run the routine license report, doctor checks,
 Python unit tests, Python compile checks, Docker Compose config validation,
 Rust CLI and native API formatting/tests when present, GSA type-checking, and
@@ -91,7 +91,7 @@ until their command surfaces and machine-readable evidence have landed.
 The server baseline uses the Ubuntu `libcurl4-gnutls-dev` package because the scanner build expects the GnuTLS curl variant. The C service documentation build also expects `xmltoman` and `xmlmantohtml`; `just deps gvmd`, `just deps gsad`, and `just deps openvas-smb` check those tools explicitly so missing manpage-generation dependencies show up before a build.
 
 The scanner build currently passes `-isystem /usr/include/mit-krb5` through
-`turbovasctl` because Ubuntu's `mit-krb5-gssapi` pkg-config metadata exposes the
+`yafvsctl` because Ubuntu's `mit-krb5-gssapi` pkg-config metadata exposes the
 GSSAPI header path there. This keeps the Phase 2 baseline reproducible without
 modifying imported source code.
 
@@ -144,7 +144,7 @@ just down
 
 Runtime state is host-visible and persistent under the sibling
 `TurboVAS-runtime` directory by default when commands are run through
-`tools/turbovasctl`. `runtime-certs-init`, `runtime-init`,
+`tools/yafvsctl`. `runtime-certs-init`, `runtime-init`,
 `runtime-manager-init`, scanner Redis/config initialization, and scanner
 registration are designed to be idempotent and must not delete or recreate
 unrelated runtime data. Feed generation activation and rollback are separate

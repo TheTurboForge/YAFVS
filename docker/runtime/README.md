@@ -28,7 +28,7 @@ sibling `TurboVAS-runtime` directory. Runtime commands create host-visible
 storage for Postgres, scanner Redis, Mosquitto, feeds, run sockets, logs,
 artifacts, certificates, secrets, and service state.
 
-`tools/turbovasctl` creates the ignored runtime-only MQTT passwords before it
+`tools/yafvsctl` creates the ignored runtime-only MQTT passwords before it
 starts the broker. A raw `docker compose up` must supply those passwords
 explicitly; empty broker credentials intentionally fail startup.
 
@@ -47,7 +47,7 @@ to `127.0.0.1:19080`. Source,
 instead of forcing container rebuilds after small source changes. App
 containers also mount the checkout at the absolute path supplied through
 `TURBOVAS_REPO_MOUNT_PATH` because the current CMake build baseline embeds its
-development checkout path. `tools/turbovasctl` supplies the current repository
+development checkout path. `tools/yafvsctl` supplies the current repository
 root automatically. Direct `docker compose` use must set the variable
 explicitly; there is no machine-specific fallback.
 
@@ -104,7 +104,7 @@ It does not assume a hostname or account and does not fall back to cron if user
 systemd is unavailable.
 
 The GitHub Actions quality-gate workflow is deliberately source-only. It shares
-the same `tools/turbovasctl quality-gate --json` contract, but does not start
+the same `tools/yafvsctl quality-gate --json` contract, but does not start
 Docker runtime services, scans, feed sync/copy commands, or public-release
 gates. Runtime-aware continuous checking belongs to the server-side timer.
 

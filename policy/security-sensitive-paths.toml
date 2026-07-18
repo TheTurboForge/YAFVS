@@ -52,7 +52,7 @@ risk = "Feed changes can break scanner correctness, signature validation, or fee
 paths = [
   "components/greenbone-feed-sync/",
   "components/notus-scanner/",
-  "tools/turbovasctl",
+  "tools/yafvsctl",
   "docker/runtime/README.md",
 ]
 required_checks = [
@@ -68,7 +68,7 @@ risk = "Runtime changes can expose the scanner, lose state, or invalidate develo
 paths = [
   "compose/dev.yaml",
   "docker/runtime/",
-  "tools/turbovasctl",
+  "tools/yafvsctl",
   "ops/systemd/",
 ]
 required_checks = [
@@ -89,7 +89,7 @@ paths = [
   "components/gsad/src/gsad_validator.c",
   "components/gsa/src/gmp/native-api/",
   "compose/dev.yaml",
-  "tools/turbovasctl",
+  "tools/yafvsctl",
   "docs/API_CONTRACT.md",
   "docs/GMP_XML_STRANGLER.md",
   "docs/DATABASE_GRAVITY.md",

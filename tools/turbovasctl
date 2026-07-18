@@ -34664,6 +34664,71 @@ def command_runtime_db_introspect(repo_root: Path, status_only: bool = False, co
     return result
 
 
+def scanner_redis_cli(repo_root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
+    return exec_in_service(repo_root, "redis-openvas", ["redis-cli", "-s", "/run/redis-openvas/redis.sock", *args])
+
+
+def parse_redis_info(stdout: str) -> dict[str, int]:
+    allowed = {
+        "used_memory",
+        "used_memory_peak",
+        "connected_clients",
+        "blocked_clients",
+        "total_commands_processed",
+        "instantaneous_ops_per_sec",
+        "keyspace_hits",
+        "keyspace_misses",
+    }
+    metrics: dict[str, int] = {}
+    db_key_total = 0
+    for raw_line in stdout.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        if key in allowed:
+            try:
+                metrics[key] = int(value)
+            except ValueError:
+                continue
+        elif key.startswith("db"):
+            for part in value.split(","):
+                if part.startswith("keys="):
+                    try:
+                        db_key_total += int(part.split("=", 1)[1])
+                    except ValueError:
+                        pass
+    if db_key_total:
+        metrics["keyspace_keys"] = db_key_total
+    return metrics
+
+
+def parse_redis_dbsize(stdout: str) -> int | None:
+    for line in stdout.splitlines():
+        try:
+            return int(line.strip())
+        except ValueError:
+            continue
+    return None
+
+
+def scanner_redis_metrics(repo_root: Path) -> dict[str, Any]:
+    metrics: dict[str, Any] = {}
+    dbsize = scanner_redis_cli(repo_root, ["DBSIZE"])
+    metrics["dbsize_status"] = "pass" if dbsize.returncode == 0 else "fail"
+    metrics["dbsize"] = parse_redis_dbsize(dbsize.stdout) if dbsize.returncode == 0 else None
+    if dbsize.returncode != 0:
+        metrics["dbsize_output_tail"] = output_tail(dbsize.stdout, 20)
+
+    info = scanner_redis_cli(repo_root, ["INFO"])
+    metrics["info_status"] = "pass" if info.returncode == 0 else "fail"
+    if info.returncode == 0:
+        metrics.update(parse_redis_info(info.stdout))
+    else:
+        metrics["info_output_tail"] = output_tail(info.stdout, 20)
+    return metrics
+
+
 def command_runtime_performance_snapshot(repo_root: Path) -> dict[str, Any]:
     artifact_dir = performance_artifact_dir(repo_root)
     findings: list[dict[str, Any]] = []

@@ -11833,11 +11833,21 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         self.assertIn("performance.report-workflow", source)
         self.assertIn("performance.scanner-redis", source)
-        self.assertIn("scanner_redis_metrics", source)
+        self.assertIn("def scanner_redis_metrics", source)
         self.assertIn("max_sources_per_scope_report", source)
         self.assertIn("max_results_per_report", source)
         self.assertIn("max_scope_report_result_count", source)
         self.assertIn("parse_pipe_int_rows", source)
+
+    def test_performance_redis_metric_parsers_do_not_expose_key_names(self):
+        metrics = turbovasctl.parse_redis_info(
+            "connected_clients:2\nused_memory:1024\ndb0:keys=7\ndb2:keys=5\n"
+        )
+        self.assertEqual(metrics["connected_clients"], 2)
+        self.assertEqual(metrics["used_memory"], 1024)
+        self.assertEqual(metrics["keyspace_keys"], 12)
+        self.assertNotIn("db0", metrics)
+        self.assertEqual(turbovasctl.parse_redis_dbsize("bad\n5\n"), 5)
 
     def test_quality_gate_systemd_templates_are_present(self):
         root = Path(__file__).resolve().parents[2]

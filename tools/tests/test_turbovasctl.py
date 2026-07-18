@@ -1102,29 +1102,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("output_tail", json.dumps(compact))
         self.assertNotIn("logs_tail", json.dumps(compact))
 
-    def test_inventory_reports_missing_components(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            result = turbovasctl.command_inventory(root)
-            self.assertEqual(result["status"], "fail")
-            missing = [item for item in result["findings"] if item["status"] == "fail"]
-            self.assertEqual(len(missing), 10)
-
-    def test_repository_discovery_and_status_fail_closed_outside_git(self):
-        with unittest.mock.patch.object(turbovasctl, "run_git", return_value=None):
-            self.assertIsNone(turbovasctl.find_repo_root(Path("/not-a-repository")))
-            result = turbovasctl.command_status(Path("/not-a-repository"))
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(
-            {item["check"]: item["status"] for item in result["findings"]},
-            {
-                "git.repository": "fail",
-                "git.head": "fail",
-                "git.upstream": "warn",
-                "git.worktree": "fail",
-            },
-        )
-
     def assert_rust_turbovasctl_parity(
         self,
         argument_sets,
@@ -1205,27 +1182,26 @@ class TurboVASCtlTests(unittest.TestCase):
                 rust_result = invoke(rust_command, arguments, env=env)
                 self.assertEqual(rust_result.returncode, expected_exit_code, arguments)
                 payload = normalized_json(rust_result)
-                self.assertEqual(payload["status"], expected_status, arguments)
+                expected_statuses = (
+                    expected_status
+                    if isinstance(expected_status, tuple)
+                    else (expected_status,)
+                )
+                self.assertIn(payload["status"], expected_statuses, arguments)
                 self.assertEqual(payload["metadata"]["command"], arguments[0], arguments)
 
         if human_inventory:
             human_arguments = ["inventory", "--scope", "components/gsa"]
-            python_result = invoke(python_command, human_arguments)
             rust_result = invoke(rust_command, human_arguments)
-            self.assertEqual(python_result.returncode, 0)
             self.assertEqual(rust_result.returncode, 0)
-            self.assertEqual(python_result.stdout, rust_result.stdout)
+            self.assertEqual(
+                rust_result.stdout,
+                "PASS: Inventory contains 1 expected component(s).\n"
+                "[pass] component.exists: gsa: web user interface (components/gsa)\n",
+            )
 
         if non_repository_status:
             with tempfile.TemporaryDirectory() as tmp:
-                python_result = subprocess.run(
-                    python_command + ["status", "--json"],
-                    cwd=tmp,
-                    check=False,
-                    text=True,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                )
                 rust_result = subprocess.run(
                     rust_command + ["status", "--json"],
                     cwd=tmp,
@@ -1234,30 +1210,27 @@ class TurboVASCtlTests(unittest.TestCase):
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
                 )
-            self.assertEqual(python_result.returncode, 1)
             self.assertEqual(rust_result.returncode, 1)
+            payload = normalized_json(rust_result)
+            self.assertEqual(payload["status"], "fail")
+            self.assertEqual(payload["metadata"]["command"], "status")
             self.assertEqual(
-                normalized_json(python_result),
-                normalized_json(rust_result),
+                {item["check"]: item["status"] for item in payload["findings"]},
+                {
+                    "git.repository": "fail",
+                    "git.head": "fail",
+                    "git.upstream": "warn",
+                    "git.worktree": "fail",
+                },
             )
 
     def test_rust_turbovasctl_matches_python_migrated_command_contracts(self):
         self.assert_rust_turbovasctl_parity(
             (
-                ["status", "--json"],
-                ["inventory", "--json"],
-                ["inventory", "--scope", "components/gsa", "--json"],
-                ["inventory", "--scope", "definitely-invalid", "--json"],
-                ["branding-state", "--json"],
                 ["quality-gate-state", "--json"],
                 ["quality-gate-state", "--status-only", "--json"],
                 ["feed-state", "--json"],
-                ["rust-migration-state", "--json"],
-                ["runtime-plan", "--json"],
                 ["feed-copy-to-runtime", "--json"],
-                ["deps", "--json"],
-                ["deps", "gsa", "--json"],
-                ["deps", "definitely-invalid", "--json"],
                 ["runtime-feed-import-init", "--json"],
                 ["logs", "--lines", "0", "--json"],
                 ["logs", "definitely-invalid", "--lines", "1", "--json"],
@@ -1276,6 +1249,16 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["quality-gate-schedule", "--status", "--json"],
             ),
             rust_only_contracts=(
+                (["status", "--json"], 0, ("pass", "warn")),
+                (["inventory", "--json"], 0, "pass"),
+                (["inventory", "--scope", "components/gsa", "--json"], 0, "pass"),
+                (["inventory", "--scope", "definitely-invalid", "--json"], 0, "warn"),
+                (["branding-state", "--json"], 0, "pass"),
+                (["rust-migration-state", "--json"], 0, "pass"),
+                (["deps", "--json"], 0, "pass"),
+                (["deps", "gsa", "--json"], 0, "pass"),
+                (["deps", "definitely-invalid", "--json"], 1, "fail"),
+                (["runtime-plan", "--json"], 0, "warn"),
                 (["feed-generation-state", "--json"], 0, "warn"),
                 (["feed-generation-state", "--status-only", "--json"], 0, "warn"),
                 (["feed-generation-stage", "--json"], 1, "fail"),
@@ -2409,7 +2392,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2431,9 +2414,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_native_api_client_contract", source)
         self.assertIn("def command_native_api_replacement_dashboard", source)
         self.assertIn("def command_closeout_readiness", source)
-        self.assertIn("def command_rust_migration_state", source)
-
-        self.assertIn("def command_branding_state", source)
         self.assertIn("def command_runtime_log_review", source)
         self.assertIn("def command_runtime_native_api_smoke", source)
         self.assertIn('native_api_smoke.add_argument("--status-only"', source)
@@ -2458,6 +2438,7 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/scope-reports?page=0&page_size=1", source)
         self.assertIn("native-api.scope-reports.malformed-page", source)
         self.assertIn("/api/v1/scope-reports?page=abc&page_size=1", source)
+
         self.assertIn("native-api.scope-reports.oversized-page-size", source)
         self.assertIn("/api/v1/scope-reports?page_size=501", source)
         self.assertIn("def native_api_oversized_filter_path", source)
@@ -2500,6 +2481,17 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_quality_gate_state", source)
         self.assertIn("def command_quality_gate_schedule", source)
         self.assertNotIn("Use: just native-api-request -- --json --path '/api/v1/...';", justfile)
+
+    def test_rust_only_foundation_commands_have_no_python_ownership(self):
+        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        direct_recipe = 'cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml --'
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan"):
+            with self.subTest(command=command):
+                self.assertNotIn(f'subparsers.add_parser("{command}"', source)
+                self.assertNotIn(f"def command_{command.replace('-', '_')}", source)
+                self.assertIn(f"{command} *args:", justfile)
+                self.assertIn(f'{direct_recipe} {command} "$@"', justfile)
 
     def test_runtime_redis_state_is_rust_only(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
@@ -10892,20 +10884,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("fetchNativeScopes(gmp)", scope_list)
         self.assertIn("fetchNativeScope(gmp, id)", scope_details)
 
-    def test_rust_migration_state_tracks_tools_and_first_candidate(self):
-        root = Path(__file__).resolve().parents[2]
-        result = turbovasctl.command_rust_migration_state(root)
-        details = result["details"]
-        tool_names = {item["name"] for item in details["tools"]}
-        self.assertIn("bindgen", tool_names)
-        self.assertIn("c2rust", tool_names)
-        self.assertIn("cargo-llvm-cov", tool_names)
-        self.assertIn("cargo-mutants", tool_names)
-        self.assertEqual(details["first_candidate"]["c_file"], "components/gvm-libs/base/version.c")
-        self.assertFalse(details["first_candidate"]["production_replacement_allowed_in_current_slice"])
-        self.assertIn("CMake/Rust integration", "\n".join(details["first_candidate"]["production_replacement_requirements"]))
-        self.assertIn(result["status"], {"pass", "warn", "fail"})
-
     def test_native_tooling_category_keeps_scripts_and_docs_distinct(self):
         self.assertEqual(turbovasctl.native_tooling_category("tools/runtime_scope.py")[0], "required_runtime")
         self.assertEqual(turbovasctl.native_tooling_category("tools/turbovasctl")[0], "compatibility_bridge")
@@ -11209,44 +11187,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn('/api/v1/scanners/{scanner_id}/export', native_tooling)
         self.assertIn('native-api.scanner-detail', native_tooling)
 
-    def test_branding_state_separates_provenance_from_active_surfaces(self):
-        root = Path(__file__).resolve().parents[2]
-        result = turbovasctl.command_branding_state(root)
-        details = result["details"]
-        active_locale_items = [
-            item
-            for item in details["items"]
-            if item["path"] == "components/gsa/public/locales/gsa-en.json"
-            and item["category"] == "active_product_surface"
-        ]
-        technical_locale_items = [
-            item
-            for item in details["items"]
-            if item["path"] == "components/gsa/public/locales/gsa-en.json"
-            and item["category"] == "technical_doc_context"
-        ]
-        self.assertIn(result["status"], {"pass", "warn"})
-        self.assertGreater(details["by_category"]["provenance_or_non_affiliation"]["count"], 0)
-        active_paths = details["by_category"]["active_product_surface"]["paths"]
-        self.assertIn("README.md", details["by_category"]["provenance_or_non_affiliation"]["paths"])
-        self.assertEqual(active_paths, [])
-        self.assertEqual(active_locale_items, [])
-        self.assertTrue(any("OpenVAS Scanner" in item["text"] for item in technical_locale_items))
-        self.assertNotIn("components/gsa/package.json", details["by_category"]["active_product_surface"]["paths"])
-        self.assertIn("components/gsa/package.json", details["by_category"]["technical_doc_context"]["paths"])
-        self.assertEqual(details["by_category"]["unknown"]["count"], 0)
-
-    def test_branding_category_classifies_known_contexts(self):
-        self.assertEqual(turbovasctl.branding_category("README.md"), "provenance_or_non_affiliation")
-        self.assertEqual(turbovasctl.branding_category("docs/ARCHITECTURE_FLOWS.md"), "technical_doc_context")
-        self.assertEqual(turbovasctl.branding_category("components/gsa/public/locales/gsa-en.json"), "active_product_surface")
-        self.assertEqual(turbovasctl.branding_category("components/gsa/public/img/os_ipfire.svg"), "technical_doc_context")
-        self.assertEqual(turbovasctl.branding_category("components/gsa/src/web/components/icon/svg/deleted_legacy_logo.svg"), "active_product_surface")
-        self.assertEqual(turbovasctl.branding_item_category("components/gsa/package.json", ["greenbone"]), "technical_doc_context")
-        self.assertEqual(turbovasctl.branding_locale_line_category('"OpenVAS Scanner": "OpenVAS Scanner",'), "technical_doc_context")
-        self.assertEqual(turbovasctl.branding_locale_line_category('"Greenbone": "Greenbone",'), "technical_doc_context")
-        self.assertEqual(turbovasctl.branding_locale_line_category('"Greenbone Product": "Greenbone Product",'), "active_product_surface")
-
     def test_retained_json_artifacts_write_latest_history_and_prune(self):
         with tempfile.TemporaryDirectory() as tmp:
             artifact_dir = Path(tmp)
@@ -11355,11 +11295,14 @@ class TurboVASCtlTests(unittest.TestCase):
 
     def test_justfile_forwards_common_recipe_arguments(self):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        for recipe in (
+        rust_owned = {
             "status",
             "inventory",
-            "doctor",
             "deps",
+            "runtime-plan",
+        }
+        python_owned = (
+            "doctor",
             "configure",
             "build",
             "build-core-c",
@@ -11367,13 +11310,21 @@ class TurboVASCtlTests(unittest.TestCase):
             "build-ui",
             "build-python",
             "build-baseline",
-            "runtime-plan",
             "up",
             "down",
             "logs",
-        ):
+        )
+        for recipe in rust_owned | set(python_owned):
             with self.subTest(recipe=recipe):
                 self.assertIn(f"{recipe} *args:", justfile)
+        for recipe in rust_owned:
+            with self.subTest(recipe=recipe):
+                self.assertIn(
+                    f'tools/turbovasctl-rs/Cargo.toml -- {recipe} "$@"',
+                    justfile,
+                )
+        for recipe in python_owned:
+            with self.subTest(recipe=recipe):
                 self.assertIn(f'tools/turbovasctl {recipe} "$@"', justfile)
 
     def test_runtime_log_review_detects_known_regressions(self):
@@ -11864,13 +11815,6 @@ class TurboVASCtlTests(unittest.TestCase):
             nested = root / "components" / "example" / ".git"
             nested.mkdir(parents=True)
             self.assertEqual(turbovasctl.nested_git_dirs(root), ["components/example/.git"])
-
-    def test_unknown_component_dependency_check_fails(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            result = turbovasctl.command_deps(root, "missing-component")
-            self.assertEqual(result["status"], "fail")
-            self.assertEqual(result["findings"][0]["check"], "component.known")
 
     def test_cmake_paths_use_ignored_build_tree(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -16012,14 +15956,6 @@ class TurboVASCtlTests(unittest.TestCase):
             "topic read scanner/scan/info",
         ):
             self.assertIn(rule, acl)
-
-    def test_runtime_plan_json_shape(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            result = turbovasctl.command_runtime_plan(root)
-            self.assertEqual(result["status"], "warn")
-            self.assertIn("Persistent Docker runtime plan", result["summary"])
-            self.assertIn(str(root.parent / "TurboVAS-runtime"), result["artifacts"])
 
     def test_postgres_collation_databases_include_runtime_and_defaults(self):
         with tempfile.TemporaryDirectory() as tmp:

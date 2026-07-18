@@ -53,10 +53,11 @@ This path evaluates the checkout and its deterministic tooling. It does not
 download feeds, start containers, run a scan, or pretend to be a production
 installation.
 
-Prerequisites are Git, Python 3.11 or newer, and `just`. Rust/Cargo is needed
-only for the optional Rust CLI preview; Docker, compiler, Node, and component
-dependencies are reported by `doctor` and are needed for deeper build/runtime
-work.
+Prerequisites are Git, Rust/Cargo, Python 3.11 or newer, and `just`. The
+golden-path repository and inventory checks run through the Rust CLI, while
+remaining commands continue through the Python compatibility entrypoint.
+Docker, compiler, Node, and component dependencies are reported by `doctor`
+and are needed for deeper build/runtime work.
 
 ```sh
 git clone https://github.com/TheTurboForge/TurboVAS.git
@@ -74,8 +75,7 @@ reports explicit deferred-surface warnings even on a prepared host, while
 missing-tool failures are the supported setup gap list rather than an
 invitation to guess.
 
-The optional Rust CLI migration surface should match the corresponding Python
-contracts:
+The explicit Rust entrypoint exposes the complete migrated command surface:
 
 ```sh
 just turbovasctl-rust --help

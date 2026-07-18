@@ -135,20 +135,6 @@ BASELINE_TOOLS = (
     "cargo",
     "bear",
 )
-RUST_MIGRATION_TOOL_COMMANDS = (
-    ("bindgen", ("bindgen", "--version")),
-    ("cbindgen", ("cbindgen", "--version")),
-    ("c2rust", ("c2rust", "--version")),
-    ("c2rust-transpile", ("c2rust-transpile", "--version")),
-    ("cargo-llvm-cov", ("cargo", "llvm-cov", "--version")),
-    ("cargo-mutants", ("cargo", "mutants", "--version")),
-)
-RUST_MIGRATION_FIRST_CANDIDATE = {
-    "c_file": "components/gvm-libs/base/version.c",
-    "header": "components/gvm-libs/base/version.h",
-    "test_file": "components/gvm-libs/base/version_tests.c",
-    "reason": "Tiny production-adjacent C module with existing test coverage; suitable for non-production dry-run translation only.",
-}
 CORE_C_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner")
 C_SERVICES_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner", "pg-gvm", "gvmd", "gsad")
 C_BUILD_PROFILES = ("hardened",)
@@ -2302,50 +2288,6 @@ ALERT_FORBIDDEN_PAYLOAD_KEYS = frozenset(
     }
 )
 QUALITY_GATE_SCHEDULE_ENABLE_ENV = "TURBOVAS_ENABLE_QUALITY_GATE_SCHEDULE"
-BRANDING_MARKERS = ("OpenVAS", "OPENVAS", "Greenbone", "greenbone", "GSA")
-BRANDING_PATH_MARKERS = (
-    "OpenVAS",
-    "openvas",
-    "OPENVAS",
-    "Greenbone",
-    "greenbone",
-    "GSA",
-    "gsa",
-    "Enterprise_",
-)
-BRANDING_LOCALE_TECHNICAL_PHRASES = frozenset(
-    {
-        "Default OpenVAS Scan Config",
-        "Default OpenVAS Scanner",
-        "OpenVAS Scanner",
-        "OpenVASD Scanner",
-        "OpenVASD Sensor",
-        "OPENVAS COMMUNITY FEED",
-        '"Greenbone": "Greenbone"',
-        "https://www.greenbone.net/en/feed-comparison/",
-    }
-)
-BRANDING_SCAN_FILES = {
-    "README.md",
-    "UPSTREAMS.md",
-    "LICENSE_AUDIT.md",
-    "components/gsa/index.html",
-    "components/gsa/package.json",
-    "components/gsa/public/locales/gsa-en.json",
-}
-BRANDING_SCAN_PREFIXES = (
-    "docs/",
-    "components/gsa/public/img/",
-    "components/gsa/src/web/components/icon/svg/",
-)
-BRANDING_PROVENANCE_FILES = {
-    "README.md",
-    "UPSTREAMS.md",
-    "LICENSE_AUDIT.md",
-    "docs/CHANGES_FROM_UPSTREAM.md",
-    "docs/USER_MANUAL.md",
-    "docs/PUBLIC_RELEASE_READINESS.md",
-}
 QUALITY_GATE_SERVICE_NAME = "turbovas-quality-gate.service"
 LOG_REVIEW_PATTERNS: tuple[tuple[str, str, str, str], ...] = (
     ("fail", "nmap-root-privilege", r"requires root privileges|requires root|raw scans require root privileges", "Nmap/root-privilege warning found."),
@@ -5618,10 +5560,6 @@ def quality_gate_artifact_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "artifacts", "quality-gate")
 
 
-def rust_migration_artifact_dir(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "artifacts", "rust-migration")
-
-
 def native_api_artifact_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "artifacts", "native-api")
 
@@ -7768,22 +7706,6 @@ def nested_git_dirs(repo_root: Path) -> list[str]:
     return sorted(str(path.relative_to(repo_root)) for path in components.rglob(".git"))
 
 
-def selected_build_metas(component: str | None = None) -> list[BuildMeta]:
-    if component:
-        meta = BUILD_META.get(component)
-        if not meta:
-            raise KeyError(component)
-        return [meta]
-    return sorted(BUILD_META.values(), key=lambda meta: meta.order)
-
-
-def pkg_config_version(module: str, env: dict[str, str]) -> str | None:
-    result = run_command(["pkg-config", "--modversion", module], Path.cwd(), env=env)
-    if result.returncode == 0:
-        return result.stdout.strip()
-    return None
-
-
 def tool_version(program: str) -> str | None:
     probes = {
         "clang": ["clang", "--version"],
@@ -7836,42 +7758,6 @@ def python_version_finding() -> dict[str, Any]:
         else f"python3 version {version} is older than TurboVAS tooling requirement >= {required}; TOML-backed checks need Python 3.11+."
     )
     return finding(status, "tool.python-version", message, details={"version": version, "minimum": required})
-
-
-def command_status(repo_root: Path) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    if run_git(repo_root, ["rev-parse", "--is-inside-work-tree"]) != "true":
-        findings.extend(
-            [
-                finding("fail", "git.repository", f"Current directory is not inside a Git work tree: {repo_root}"),
-                finding("fail", "git.head", "Current branch and HEAD are unavailable outside a Git work tree."),
-                finding("warn", "git.upstream", "No upstream tracking branch is configured."),
-                finding("fail", "git.worktree", "Worktree state is unavailable outside a Git work tree."),
-            ]
-        )
-        return make_result("status", repo_root, "Repository status could not be collected.", findings)
-    branch = run_git(repo_root, ["branch", "--show-current"]) or "(detached or unavailable)"
-    head = run_git(repo_root, ["rev-parse", "--short", "HEAD"]) or "unavailable"
-    porcelain = run_git(repo_root, ["status", "--short"]) or ""
-    upstream = run_git(repo_root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
-    findings.append(finding("pass", "git.repository", f"Repository root: {repo_root}"))
-    findings.append(finding("pass", "git.head", f"Current branch {branch} at {head}"))
-    findings.append(finding("pass" if upstream else "warn", "git.upstream", f"Tracking upstream: {upstream}" if upstream else "No upstream tracking branch is configured."))
-    if porcelain:
-        findings.append(finding("warn", "git.worktree", "Worktree has uncommitted changes.", details={"changed_files": porcelain.splitlines()}))
-    else:
-        findings.append(finding("pass", "git.worktree", "Worktree is clean."))
-    return make_result("status", repo_root, "Repository status collected.", findings)
-
-
-def command_inventory(repo_root: Path, scope: str | None = None) -> dict[str, Any]:
-    rows = component_inventory(repo_root, scope)
-    findings: list[dict[str, Any]] = []
-    if scope and not rows:
-        findings.append(finding("warn", "inventory.scope", f"No expected components matched scope {scope}."))
-    for row in rows:
-        findings.append(finding("pass" if row["exists"] else "fail", "component.exists", f"{row['name']}: {row['role']}", row["path"]))
-    return make_result("inventory", repo_root, f"Inventory contains {len(rows)} expected component(s).", findings)
 
 
 def native_tooling_markers(path: Path, relative_path: str) -> list[str]:
@@ -13995,91 +13881,6 @@ def command_native_tooling_removal_review(
     return result
 
 
-def rust_migration_tool_state(repo_root: Path) -> list[dict[str, Any]]:
-    states: list[dict[str, Any]] = []
-    env = build_env(repo_root)
-    for name, command in RUST_MIGRATION_TOOL_COMMANDS:
-        executable = shutil.which(command[0])
-        state: dict[str, Any] = {"name": name, "command": list(command), "path": executable}
-        if executable:
-            probe = run_command(list(command), repo_root, env=env, timeout=30)
-            state["status"] = "pass" if probe.returncode == 0 else "warn"
-            state["version"] = probe.stdout.strip().splitlines()[0] if probe.stdout.strip() else None
-            state["exit_code"] = probe.returncode
-        else:
-            state["status"] = "fail"
-            state["version"] = None
-            state["exit_code"] = None
-        states.append(state)
-    return states
-
-
-def rust_toolchain_state(repo_root: Path) -> dict[str, Any]:
-    env = build_env(repo_root)
-    probes = {
-        "rustc": ["rustc", "--version"],
-        "cargo": ["cargo", "--version"],
-        "clang": ["clang", "--version"],
-        "llvm-config": ["llvm-config", "--version"],
-    }
-    state: dict[str, Any] = {}
-    for name, command in probes.items():
-        path = shutil.which(command[0])
-        item: dict[str, Any] = {"path": path}
-        if path:
-            probe = run_command(command, repo_root, env=env, timeout=30)
-            item["status"] = "pass" if probe.returncode == 0 else "warn"
-            item["version"] = probe.stdout.strip().splitlines()[0] if probe.stdout.strip() else None
-            item["exit_code"] = probe.returncode
-        else:
-            item["status"] = "fail"
-            item["version"] = None
-            item["exit_code"] = None
-        state[name] = item
-    return state
-
-
-def rust_migration_candidate_state(repo_root: Path) -> dict[str, Any]:
-    candidate = dict(RUST_MIGRATION_FIRST_CANDIDATE)
-    for key in ("c_file", "header", "test_file"):
-        path = repo_root / candidate[key]
-        candidate[f"{key}_exists"] = path.is_file()
-    candidate["production_replacement_allowed_in_current_slice"] = False
-    candidate["production_replacement_requirements"] = [
-        "CMake/Rust integration for the owning C library",
-        "exported C ABI if retained C callers continue to call the symbol",
-        "version-string injection equivalent to current GVM_LIBS_VERSION handling",
-        "preserved upstream license notices plus TurboVAS modification notice where required",
-        "existing C test parity and Rust-side tests before deleting the C implementation",
-    ]
-    return candidate
-
-
-def command_rust_migration_state(repo_root: Path) -> dict[str, Any]:
-    tools = rust_migration_tool_state(repo_root)
-    toolchain = rust_toolchain_state(repo_root)
-    candidate = rust_migration_candidate_state(repo_root)
-    scanner_workspace = repo_root / "components" / "openvas-scanner" / "rust" / "Cargo.toml"
-    artifact_dir = rust_migration_artifact_dir(repo_root)
-    findings: list[dict[str, Any]] = []
-    missing_tools = [item["name"] for item in tools if item["status"] == "fail"]
-    warning_tools = [item["name"] for item in tools if item["status"] == "warn"]
-    findings.append(finding("fail" if missing_tools else "pass", "rust-migration.tools", "All Rust migration tools are available." if not missing_tools else "Some Rust migration tools are missing.", details={"missing": missing_tools, "warnings": warning_tools, "tools": tools}))
-    failed_toolchain = [name for name, item in toolchain.items() if item["status"] == "fail"]
-    findings.append(finding("fail" if failed_toolchain else "pass", "rust-migration.toolchain", "Rust, Cargo, Clang, and LLVM config are available." if not failed_toolchain else "Rust/LLVM toolchain prerequisite is missing.", details={"missing": failed_toolchain, "toolchain": toolchain}))
-    findings.append(finding("pass" if scanner_workspace.is_file() else "warn", "rust-migration.scanner-workspace", "Inherited scanner Rust workspace exists." if scanner_workspace.is_file() else "Inherited scanner Rust workspace was not found.", str(scanner_workspace)))
-    candidate_ready = bool(candidate.get("c_file_exists") and candidate.get("header_exists") and candidate.get("test_file_exists"))
-    findings.append(finding("pass" if candidate_ready else "fail", "rust-migration.first-candidate", "First dry-run C-to-Rust candidate exists and has tests." if candidate_ready else "First dry-run C-to-Rust candidate is incomplete.", details=candidate))
-    try:
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        findings.append(finding("pass", "rust-migration.artifact-dir", "Rust migration artifact directory is ready.", str(artifact_dir)))
-    except OSError as error:
-        findings.append(finding("fail", "rust-migration.artifact-dir", f"Rust migration artifact directory is not usable: {error}", str(artifact_dir)))
-    result = make_result("rust-migration-state", repo_root, "Rust migration tooling and first dry-run candidate state collected.", findings, [str(artifact_dir)])
-    result["details"] = {"tools": tools, "toolchain": toolchain, "scanner_workspace": str(scanner_workspace), "first_candidate": candidate, "artifact_dir": str(artifact_dir)}
-    return result
-
-
 def comment_notice_supported(relative_path: str) -> bool:
     path = Path(relative_path)
     return path.name in COMMENT_NOTICE_NAMES or path.suffix in COMMENT_NOTICE_SUFFIXES
@@ -14239,114 +14040,6 @@ def tracked_feed_content_paths(repo_root: Path) -> list[str] | None:
     if tracked is None:
         return None
     return [path for path in tracked if any(path.startswith(prefix) for prefix in FEED_CONTENT_TRACKED_PREFIXES)]
-
-
-def branding_scan_candidate(relative_path: str) -> bool:
-    return relative_path in BRANDING_SCAN_FILES or any(relative_path.startswith(prefix) for prefix in BRANDING_SCAN_PREFIXES)
-
-
-def branding_markers(path: Path, relative_path: str = "") -> list[str]:
-    filename = relative_path.rsplit("/", 1)[-1]
-    markers = {marker for marker in BRANDING_PATH_MARKERS if marker in filename}
-    try:
-        text = path.read_text(encoding="utf-8", errors="ignore")
-    except OSError:
-        return sorted(markers)
-    markers.update(marker for marker in BRANDING_MARKERS if marker in text)
-    return sorted(markers)
-
-
-def branding_locale_line_category(line: str) -> str:
-    if any(phrase in line for phrase in BRANDING_LOCALE_TECHNICAL_PHRASES):
-        return "technical_doc_context"
-    return "active_product_surface"
-
-
-def branding_locale_items(path: Path, relative_path: str) -> list[dict[str, Any]]:
-    try:
-        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
-    except OSError:
-        return []
-
-    items: list[dict[str, Any]] = []
-    for line_number, line in enumerate(lines, start=1):
-        markers = [marker for marker in BRANDING_MARKERS if marker in line]
-        if not markers:
-            continue
-        items.append(
-            {
-                "path": relative_path,
-                "line": line_number,
-                "category": branding_locale_line_category(line),
-                "markers": markers,
-                "text": line.strip(),
-            }
-        )
-    return items
-
-
-def branding_category(relative_path: str) -> str:
-    if relative_path in BRANDING_PROVENANCE_FILES:
-        return "provenance_or_non_affiliation"
-    if relative_path.startswith("docs/"):
-        return "technical_doc_context"
-    if relative_path.startswith("components/gsa/public/img/os_"):
-        return "technical_doc_context"
-    if relative_path.startswith("components/gsa/src/web/components/icon/svg/"):
-        return "active_product_surface"
-    if relative_path.startswith("components/gsa/public/") or relative_path in {"components/gsa/index.html", "components/gsa/package.json"}:
-        return "active_product_surface"
-    return "unknown"
-
-
-def branding_item_category(relative_path: str, markers: list[str]) -> str:
-    if relative_path == "components/gsa/package.json" and markers == ["greenbone"]:
-        return "technical_doc_context"
-    return branding_category(relative_path)
-
-
-def branding_inventory(repo_root: Path) -> list[dict[str, Any]]:
-    tracked = git_tracked_files(repo_root) or []
-    items: list[dict[str, Any]] = []
-    for relative_path in tracked:
-        if not branding_scan_candidate(relative_path):
-            continue
-        path = repo_root / relative_path
-        if not path.is_file():
-            continue
-        if relative_path == "components/gsa/public/locales/gsa-en.json":
-            items.extend(branding_locale_items(path, relative_path))
-            continue
-        markers = branding_markers(path, relative_path)
-        if not markers:
-            continue
-        items.append({"path": relative_path, "category": branding_item_category(relative_path, markers), "markers": markers})
-    return sorted(items, key=lambda item: (item["category"], item["path"]))
-
-
-def summarize_branding(items: list[dict[str, Any]]) -> dict[str, Any]:
-    categories = ("active_product_surface", "technical_doc_context", "provenance_or_non_affiliation", "unknown")
-    by_category: dict[str, dict[str, Any]] = {}
-    for category in categories:
-        rows = [item for item in items if item["category"] == category]
-        by_category[category] = {"count": len(rows), "paths": sorted({item["path"] for item in rows})}
-    return {"total_items": len(items), "by_category": by_category}
-
-
-def command_branding_state(repo_root: Path) -> dict[str, Any]:
-    items = branding_inventory(repo_root)
-    summary = summarize_branding(items)
-    active_count = summary["by_category"]["active_product_surface"]["count"]
-    unknown_count = summary["by_category"]["unknown"]["count"]
-    findings = [
-        finding("pass", "branding.inventory", f"Classified {len(items)} branding/identity marker surface(s).", details=summary),
-        finding("warn" if active_count else "pass", "branding.active-product-surface", f"{active_count} active product marker(s) still contain inherited OpenVAS/Greenbone/GSA identity wording." if active_count else "No active product branding residue found in the scanned surfaces.", details={"paths": summary["by_category"]["active_product_surface"]["paths"]}),
-        finding("warn" if unknown_count else "pass", "branding.unknown", f"{unknown_count} branding marker surface(s) are not classified." if unknown_count else "No branding marker surfaces were left unclassified.", details={"paths": summary["by_category"]["unknown"]["paths"]}),
-        finding("pass", "branding.provenance-boundary", "OpenVAS/Greenbone wording remains allowed in provenance, non-affiliation, and technical component contexts."),
-    ]
-    result = make_result("branding-state", repo_root, "Branding and upstream-identity state collected.", findings)
-    result["details"] = {"items": items, **summary}
-    return result
 
 
 def public_readiness_finding(public_release: bool = False, mode: str = "source-public") -> dict[str, Any]:
@@ -14521,33 +14214,6 @@ def command_license_report(
     if status_only:
         result = license_status_only_result(result)
     return result
-
-
-def command_deps(repo_root: Path, component: str | None = None) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    env = build_env(repo_root)
-    try:
-        metas = selected_build_metas(component)
-    except KeyError:
-        return make_result("deps", repo_root, f"Unknown component {component}.", [finding("fail", "component.known", f"Unknown component {component}.")])
-    for meta in metas:
-        component_path = COMPONENT_BY_NAME[meta.name].path
-        findings.append(finding("pass", "build.metadata", f"{meta.name}: {meta.build_system}", component_path, {"order": meta.order, "package_hints": list(meta.package_hints)}))
-        for program in meta.programs:
-            found = shutil.which(program)
-            findings.append(finding("pass" if found else "fail", "program.available", f"{meta.name}: {program}" + (f" at {found}" if found else " not found"), details={"component": meta.name, "program": program}))
-            version = tool_version(program)
-            if version:
-                findings.append(finding("pass", "program.version", f"{meta.name}: {program} {version}", details={"component": meta.name, "program": program, "version": version}))
-        for module in meta.pkg_config:
-            version = pkg_config_version(module, env)
-            findings.append(finding("pass" if version else "fail", "pkg-config.module", f"{meta.name}: {module}" + (f" {version}" if version else " not found"), details={"component": meta.name, "module": module}))
-        if meta.build_system == "node-npm":
-            node_version = tool_version("node")
-            npm_version = tool_version("npm")
-            findings.append(finding("pass" if node_version and version_tuple(node_version) >= (22, 0) else "fail", "node.version", f"{meta.name}: node {node_version or 'not found'}; required >=22.0", details={"component": meta.name, "required": ">=22.0", "actual": node_version}))
-            findings.append(finding("pass" if npm_version and version_tuple(npm_version) >= (11, 0) else "fail", "npm.version", f"{meta.name}: npm {npm_version or 'not found'}; required >=11.0", details={"component": meta.name, "required": ">=11.0", "actual": npm_version}))
-    return make_result("deps", repo_root, "Dependency readiness checked.", findings)
 
 
 def cmake_paths(repo_root: Path, component: str, profile: str | None = None) -> tuple[Path, Path, Path]:
@@ -15077,23 +14743,6 @@ def command_build_baseline(repo_root: Path) -> dict[str, Any]:
     return command_build_chain(repo_root, "build-baseline", BASELINE_CHAIN)
 
 
-def command_runtime_plan(repo_root: Path) -> dict[str, Any]:
-    root = runtime_dir(repo_root)
-    findings = [
-        finding("pass", "runtime.compose", "Development Compose file path is defined.", str(compose_file(repo_root).relative_to(repo_root))),
-        finding("pass", "runtime.state", f"Persistent runtime state lives outside the repository at {root}.", str(root)),
-        finding("pass", "runtime.services", "Default runtime services are infrastructure: Postgres, scanner Redis, and Mosquitto.", details={"services": list(RUNTIME_SERVICES)}),
-        finding("pass", "runtime.app-services", "Experimental application services are available behind the app profile.", details={"services": list(APP_SERVICES)}),
-        finding("pass", "runtime.ports", "Infrastructure ports are loopback-only; gsad defaults to loopback but can be explicitly bound with TURBOVAS_GSAD_HOST or TURBOVAS_GSAD_HOSTS.", details={**RUNTIME_PORTS, "gsad": list(gsad_port_bindings(repo_root))}),
-        finding("pass", "runtime.scanner-redis", "OpenVAS scanner KB Redis uses a runtime Unix socket, not host TCP exposure.", str(scanner_redis_socket_path(repo_root))),
-        finding("pass", "runtime.feed-cache", "Community feed downloads use a persistent host-local cache outside the repository.", str(feed_cache_var_lib(repo_root))),
-        finding("pass", "runtime.feed-generation", "Runtime services consume only the journaled active immutable feed generation.", str(feed_runtime_root(repo_root))),
-        finding("pass", "runtime.feed-keyring", "OSPD and Notus share a persistent feed signature keyring under runtime state.", str(feed_gnupg_home(repo_root))),
-        finding("pass", "runtime.pg-gvm", "Postgres pg-gvm extension initialization is handled by just runtime-init after pg-gvm is built."),
-        finding("pass", "runtime.certs", "Certificate initialization is handled by just runtime-certs-init and persists outside the repository."),
-        finding("warn", "runtime.deferred", "Scan execution remains guarded and requires scanner capability checks."),
-    ]
-    return make_result("runtime-plan", repo_root, "Persistent Docker runtime plan collected.", findings, [str(root), str(compose_file(repo_root).relative_to(repo_root))])
 
 
 
@@ -33166,9 +32815,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
-    subparsers.add_parser("status", parents=[common], help="show repository status")
-    inventory = subparsers.add_parser("inventory", parents=[common], help="show expected component inventory")
-    inventory.add_argument("--scope", help="limit inventory to a path under the repository")
     native_api_request = subparsers.add_parser("native-api-request", parents=[common], help="perform a guarded TurboVAS native API request")
     native_api_request.add_argument("--path", required=True, help="validated /api/v1/... path plus optional query string")
     native_api_request.add_argument("--direct", action="store_true", help="call the opt-in direct native API listener with bearer auth")
@@ -33344,10 +32990,8 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_replacement_dashboard.add_argument("--status-only", action="store_true", help="emit compact dashboard details and only non-pass findings")
     closeout_readiness = subparsers.add_parser("closeout-readiness", parents=[common], help="summarize commit closeout readiness signals without running broad gates")
     closeout_readiness.add_argument("--status-only", action="store_true", help="emit compact closeout readiness details and only non-pass findings")
-    subparsers.add_parser("rust-migration-state", parents=[common], help="inspect Rust migration tooling and first C-to-Rust dry-run candidate")
     doctor = subparsers.add_parser("doctor", parents=[common], help="run structural and environment health checks")
     doctor.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe doctor checks")
-    subparsers.add_parser("branding-state", parents=[common], help="inventory visible branding and upstream-identity surfaces")
     license_report = subparsers.add_parser("license-report", parents=[common], help="check preserved license/provenance files")
     license_report.add_argument("--public-release", action="store_true", help="fail while public-release license review items remain open")
     license_report.add_argument("--mode", choices=PUBLICATION_MODES, default="source-public", help="publication mode for --public-release gating")
@@ -33356,8 +33000,6 @@ def build_parser() -> argparse.ArgumentParser:
     license_report.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe closeout checks")
     production_posture = subparsers.add_parser("production-posture-check", parents=[common], help="run the non-destructive production posture checklist")
     production_posture.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe posture checks")
-    deps = subparsers.add_parser("deps", parents=[common], help="check dependency readiness")
-    deps.add_argument("component", nargs="?", help="component name")
     configure = subparsers.add_parser("configure", parents=[common], help="configure a CMake component")
     configure.add_argument("component", help="component name")
     configure.add_argument("--profile", choices=C_BUILD_PROFILES, help="isolated C build profile")
@@ -33372,7 +33014,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("build-ui", parents=[common], help="build the web UI")
     subparsers.add_parser("build-python", parents=[common], help="build/import-check Python components")
     subparsers.add_parser("build-baseline", parents=[common], help="build the inherited stack baseline")
-    subparsers.add_parser("runtime-plan", parents=[common], help="show Docker runtime layout and deferred surfaces")
     subparsers.add_parser("up", parents=[common], help="start runtime infrastructure services")
     subparsers.add_parser("down", parents=[common], help="stop runtime infrastructure services")
     logs = subparsers.add_parser("logs", parents=[common], help="show runtime logs")
@@ -33469,13 +33110,9 @@ def main(argv: list[str] | None = None) -> int:
     cwd = Path.cwd()
     repo_root = find_repo_root(cwd)
     if repo_root is None:
-        result = command_status(cwd) if args.command == "status" else command_repository_unavailable(cwd, args.command)
+        result = command_repository_unavailable(cwd, args.command)
         return emit(result, args.json)
-    if args.command == "status":
-        result = command_status(repo_root)
-    elif args.command == "inventory":
-        result = command_inventory(repo_root, args.scope)
-    elif args.command == "native-api-request":
+    if args.command == "native-api-request":
         result = command_native_api_request(
             repo_root,
             args.path,
@@ -33720,18 +33357,12 @@ def main(argv: list[str] | None = None) -> int:
         result = command_native_api_replacement_dashboard(repo_root, status_only=args.status_only)
     elif args.command == "closeout-readiness":
         result = command_closeout_readiness(repo_root, status_only=args.status_only)
-    elif args.command == "rust-migration-state":
-        result = command_rust_migration_state(repo_root)
     elif args.command == "doctor":
         result = command_doctor(repo_root, status_only=args.status_only)
-    elif args.command == "branding-state":
-        result = command_branding_state(repo_root)
     elif args.command == "license-report":
         result = command_license_report(repo_root, public_release=args.public_release, mode=args.mode, diff_scope=args.diff_scope, modified_imported_only=args.modified_imported_only, status_only=args.status_only)
     elif args.command == "production-posture-check":
         result = command_production_posture_check(repo_root, status_only=args.status_only)
-    elif args.command == "deps":
-        result = command_deps(repo_root, args.component)
     elif args.command == "configure":
         result = command_configure(repo_root, args.component, args.profile)
     elif args.command == "build":
@@ -33746,8 +33377,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_build_python_chain(repo_root)
     elif args.command == "build-baseline":
         result = command_build_baseline(repo_root)
-    elif args.command == "runtime-plan":
-        result = command_runtime_plan(repo_root)
     elif args.command == "up":
         result = command_up(repo_root)
     elif args.command == "down":

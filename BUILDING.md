@@ -44,14 +44,16 @@ just quality-gate-schedule --status
 just production-posture-check --json
 ```
 
-Machine-readable output is available through `tools/turbovasctl`, for example:
+Machine-readable output is available through the command recipes. The recipes
+select the active Rust or Python implementation for each command; use the
+entrypoints directly only when testing a specific implementation.
 
 ```sh
-tools/turbovasctl deps --json
+just deps --json
 tools/turbovasctl build-baseline --json
 tools/turbovasctl quality-gate-state --json
 tools/turbovasctl production-posture-check --json
-tools/turbovasctl rust-migration-state --json
+just rust-migration-state --json
 tools/turbovasctl runtime-native-api-smoke --json
 ```
 

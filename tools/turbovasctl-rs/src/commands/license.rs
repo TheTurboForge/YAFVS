@@ -59,6 +59,7 @@ const ENTERPRISE_FEED_KEY_SUPPORT_SCAN_PATHS: &[&str] = &[
 #[derive(Debug, Clone)]
 struct NameStatus {
     status: String,
+    source_path: Option<String>,
     path: String,
 }
 
@@ -308,6 +309,7 @@ fn parse_name_status(output: &str) -> Vec<NameStatus> {
             let parts = line.split('\t').collect::<Vec<_>>();
             (parts.len() >= 2).then(|| NameStatus {
                 status: parts[0].to_string(),
+                source_path: (parts.len() >= 3).then(|| parts[1].to_string()),
                 path: parts[parts.len() - 1].to_string(),
             })
         })
@@ -420,6 +422,10 @@ fn modified_notice_gaps(
             || row.status.starts_with('R')
             || row.status.starts_with('C'))
             || turbovas_added.contains(&row.path)
+            || row
+                .source_path
+                .as_ref()
+                .is_some_and(|path| turbovas_added.contains(path))
         {
             continue;
         }
@@ -874,7 +880,33 @@ mod tests {
     fn name_status_uses_the_destination_path_for_renames() {
         let rows = parse_name_status("R100\told.rs\tnew.rs\nM\tother.rs\n");
         assert_eq!(rows[0].status, "R100");
+        assert_eq!(rows[0].source_path.as_deref(), Some("old.rs"));
         assert_eq!(rows[0].path, "new.rs");
+        assert_eq!(rows[1].source_path, None);
+    }
+
+    #[test]
+    fn project_created_component_file_stays_notice_exempt_after_rename() {
+        let fixture = Fixture::new();
+        let source = "components/gsa/src/TurboVASLogo.tsx";
+        let destination = "components/gsa/src/YAFVSLogo.tsx";
+        fixture.write(
+            destination,
+            "/* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> */\n",
+        );
+        let rows = parse_name_status(&format!("R100\t{source}\t{destination}\n"));
+        let exempt = BTreeSet::from([source.to_string()]);
+
+        let (missing, review) = modified_notice_gaps(
+            &fixture.root,
+            &rows,
+            "worktree",
+            &exempt,
+            &FakeRunner::default(),
+        );
+
+        assert!(missing.is_empty());
+        assert!(review.is_empty());
     }
 
     #[test]

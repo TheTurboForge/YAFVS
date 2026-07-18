@@ -37,6 +37,8 @@ pub enum CliCommand {
     QualityGateState,
     /// Show Community Feed cache and active-runtime state.
     FeedState,
+    /// Verify immutable content-addressed feed generations without changing them.
+    FeedGenerationState,
     /// Inspect Rust migration tooling and the first dry-run candidate.
     RustMigrationState,
     /// Audit native API Rust dependencies against the local advisory database.
@@ -125,6 +127,7 @@ impl CliCommand {
             Self::PathCouplingState => "path-coupling-state",
             Self::QualityGateState => "quality-gate-state",
             Self::FeedState => "feed-state",
+            Self::FeedGenerationState => "feed-generation-state",
             Self::RustMigrationState => "rust-migration-state",
             Self::NativeApiCargoAudit => "native-api-cargo-audit",
             Self::GsaNpmAudit => "gsa-npm-audit",

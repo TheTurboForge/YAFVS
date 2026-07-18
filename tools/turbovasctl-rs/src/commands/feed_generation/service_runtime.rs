@@ -472,3 +472,308 @@ fn compose_up_transient_error(output: &ProcessOutput) -> bool {
     .iter()
     .any(|fragment| combined.contains(fragment))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::VecDeque;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+
+    struct Runner {
+        outputs: Mutex<VecDeque<Option<ProcessOutput>>>,
+        commands: Mutex<Vec<Vec<String>>>,
+    }
+
+    impl Runner {
+        fn new(outputs: impl IntoIterator<Item = Option<ProcessOutput>>) -> Self {
+            Self {
+                outputs: Mutex::new(outputs.into_iter().collect()),
+                commands: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl CommandRunner for Runner {
+        fn run(&self, _program: &str, _args: &[&str]) -> Option<ProcessOutput> {
+            unreachable!("service runtime uses run_with")
+        }
+
+        fn run_with(
+            &self,
+            program: &str,
+            args: &[&str],
+            _cwd: Option<&Path>,
+            _env: Option<&BTreeMap<OsString, OsString>>,
+            _timeout: Option<Duration>,
+        ) -> Option<ProcessOutput> {
+            let mut command = vec![program.to_owned()];
+            command.extend(args.iter().map(|argument| (*argument).to_owned()));
+            self.commands.lock().unwrap().push(command);
+            self.outputs.lock().unwrap().pop_front().flatten()
+        }
+    }
+
+    fn output(success: bool, stdout: impl Into<String>) -> Option<ProcessOutput> {
+        output_with_stderr(success, stdout, "")
+    }
+
+    fn output_with_stderr(
+        success: bool,
+        stdout: impl Into<String>,
+        stderr: impl Into<String>,
+    ) -> Option<ProcessOutput> {
+        Some(ProcessOutput {
+            success,
+            exit_code: Some(if success { 0 } else { 1 }),
+            stdout: stdout.into(),
+            stderr: stderr.into(),
+        })
+    }
+
+    fn images() -> BTreeMap<String, String> {
+        APP_SERVICES
+            .iter()
+            .enumerate()
+            .map(|(index, service)| {
+                (
+                    (*service).to_owned(),
+                    format!("sha256:{}", format!("{index:x}").repeat(64)),
+                )
+            })
+            .collect()
+    }
+
+    fn fixture_repo() -> (std::path::PathBuf, std::path::PathBuf) {
+        let base = std::env::current_dir().unwrap().join(format!(
+            ".turbovasctl-service-runtime-test-{}-{}",
+            std::process::id(),
+            SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let repo = base.join("TurboVAS");
+        std::fs::create_dir_all(repo.join("compose")).unwrap();
+        (base, repo)
+    }
+
+    #[test]
+    fn remove_apps_requires_every_container_to_be_absent() {
+        let runner = Runner::new(
+            [output(true, "")]
+                .into_iter()
+                .chain(APP_SERVICES.map(|_| output(true, ""))),
+        );
+        let images = images();
+        let environment = BTreeMap::new();
+        let runtime = ServiceRuntime::new(Path::new("/repo"), &runner, &environment, &images);
+        let result = runtime.remove_apps("feed-generation.stop-app").unwrap();
+        assert_eq!(result.status, StepStatus::Pass);
+        assert!(runner.commands.lock().unwrap()[0].contains(&"rm".to_owned()));
+    }
+
+    #[test]
+    fn start_services_checks_running_state_and_pinned_images() {
+        let (base, repo) = fixture_repo();
+        let images = images();
+        let mut outputs = vec![output(true, "")];
+        for service in SCANNER_SERVICES {
+            let id = format!("abc{}", service.len());
+            outputs.push(output(true, format!("{id}\n")));
+            outputs.push(output(true, "true\n"));
+            outputs.push(output(true, format!("{id}\n")));
+            outputs.push(output(true, format!("{}\n", images.get(service).unwrap())));
+        }
+        let runner = Runner::new(outputs);
+        let environment = BTreeMap::new();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+        let result = runtime
+            .start_pinned_services(
+                &SCANNER_SERVICES,
+                "runtime.scanner-services-up",
+                Duration::from_secs(900),
+            )
+            .unwrap();
+        assert_eq!(result.status, StepStatus::Pass);
+        assert!(runner.commands.lock().unwrap()[0].contains(&"--no-build".to_owned()));
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn start_services_does_not_retry_non_transient_failure() {
+        let (base, repo) = fixture_repo();
+        let images = images();
+        let runner = Runner::new([
+            output_with_stderr(false, "", "daemon rejected request"),
+            output(true, ""),
+            output(true, ""),
+        ]);
+        let environment = BTreeMap::new();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+        let mut waits = Vec::new();
+        let result = runtime
+            .start_pinned_services_with_delays(
+                &["gvmd"],
+                "runtime.app-up",
+                Duration::from_secs(900),
+                &[Duration::ZERO, Duration::ZERO],
+                |delay| waits.push(delay),
+            )
+            .unwrap();
+        assert_eq!(result.status, StepStatus::Fail);
+        assert!(waits.is_empty());
+        assert_eq!(
+            runner
+                .commands
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|command| command.contains(&"up".to_owned()))
+                .count(),
+            1
+        );
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn start_services_retries_transient_failure_successfully() {
+        let (base, repo) = fixture_repo();
+        let images = images();
+        let id = "abc123";
+        let runner = Runner::new([
+            output_with_stderr(false, "", "No such container: stale"),
+            output(true, ""),
+            output(true, format!("{id}\n")),
+            output(true, "true\n"),
+            output(true, format!("{id}\n")),
+            output(true, format!("{}\n", images["gvmd"])),
+        ]);
+        let environment = BTreeMap::new();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+        let mut waits = Vec::new();
+        let result = runtime
+            .start_pinned_services_with_delays(
+                &["gvmd"],
+                "runtime.app-up",
+                Duration::from_secs(900),
+                &[Duration::from_secs(8), Duration::from_secs(16)],
+                |delay| waits.push(delay),
+            )
+            .unwrap();
+        assert_eq!(result.status, StepStatus::Warn);
+        assert_eq!(waits, vec![Duration::from_secs(8)]);
+        assert_eq!(
+            result.findings[0].details.as_ref().unwrap()["transient_retry"],
+            json!(true)
+        );
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn start_services_bounds_persistent_transient_retries() {
+        let (base, repo) = fixture_repo();
+        let images = images();
+        let runner = Runner::new([
+            output_with_stderr(false, "", "removal of container pending"),
+            output_with_stderr(false, "", "is already in progress"),
+            output(true, ""),
+            output_with_stderr(false, "", "No such container: stale"),
+            output(true, ""),
+            output(true, ""),
+            output(true, ""),
+        ]);
+        let environment = BTreeMap::new();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+        let mut waits = Vec::new();
+        let result = runtime
+            .start_pinned_services_with_delays(
+                &["gvmd"],
+                "runtime.app-up",
+                Duration::from_secs(900),
+                &[Duration::from_secs(8), Duration::from_secs(16)],
+                |delay| waits.push(delay),
+            )
+            .unwrap();
+        assert_eq!(result.status, StepStatus::Fail);
+        assert_eq!(waits, vec![Duration::from_secs(8), Duration::from_secs(16)]);
+        assert_eq!(
+            runner
+                .commands
+                .lock()
+                .unwrap()
+                .iter()
+                .filter(|command| command.contains(&"up".to_owned()))
+                .count(),
+            3
+        );
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn start_services_warns_when_failed_retry_settles_all_services() {
+        let (base, repo) = fixture_repo();
+        let images = images();
+        let id = "abc123";
+        let runner = Runner::new([
+            output_with_stderr(false, "", "No such container: stale"),
+            output_with_stderr(false, "", "removal of container pending"),
+            output(true, format!("{id}\n")),
+            output(true, "true\n"),
+            output(true, format!("{id}\n")),
+            output(true, "true\n"),
+            output(true, format!("{id}\n")),
+            output(true, format!("{}\n", images["gvmd"])),
+        ]);
+        let environment = BTreeMap::new();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+        let result = runtime
+            .start_pinned_services_with_delays(
+                &["gvmd"],
+                "runtime.app-up",
+                Duration::from_secs(900),
+                &[Duration::ZERO, Duration::ZERO],
+                |_| {},
+            )
+            .unwrap();
+        assert_eq!(result.status, StepStatus::Warn);
+        assert_eq!(
+            result.findings[0].details.as_ref().unwrap()["mismatched_image_services"],
+            json!([])
+        );
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn running_image_identity_rejects_a_mismatched_container() {
+        let images = images();
+        let gvmd_id = "abc123";
+        let wrong_image = format!("sha256:{}", "f".repeat(64));
+        let runner = Runner::new(
+            [
+                output(true, format!("{gvmd_id}\n")),
+                output(true, "true\n"),
+                output(true, format!("{gvmd_id}\n")),
+                output(true, format!("{wrong_image}\n")),
+            ]
+            .into_iter()
+            .chain((1..APP_SERVICES.len()).map(|_| output(true, ""))),
+        );
+        let environment = BTreeMap::new();
+        let runtime = ServiceRuntime::new(Path::new("/repo"), &runner, &environment, &images);
+        let result = runtime.running_app_image_identity().unwrap();
+        assert_eq!(result.status, StepStatus::Fail);
+        assert_eq!(
+            result.findings[0].details.as_ref().unwrap()["mismatched_services"],
+            json!(["gvmd"])
+        );
+        assert!(
+            runner
+                .commands
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|command| !command.contains(&"stop".to_owned())
+                    && !command.contains(&"rm".to_owned()))
+        );
+    }
+}

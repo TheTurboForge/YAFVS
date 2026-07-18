@@ -182,3 +182,146 @@ fn hex_sha256(bytes: &[u8]) -> String {
         .map(|byte| format!("{byte:02x}"))
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::process::ProcessOutput;
+    use std::collections::VecDeque;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+
+    struct Runner {
+        outputs: Mutex<VecDeque<Option<ProcessOutput>>>,
+        commands: Mutex<Vec<Vec<String>>>,
+    }
+
+    impl Runner {
+        fn new(outputs: impl IntoIterator<Item = Option<ProcessOutput>>) -> Self {
+            Self {
+                outputs: Mutex::new(outputs.into_iter().collect()),
+                commands: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl CommandRunner for Runner {
+        fn run(&self, _program: &str, _args: &[&str]) -> Option<ProcessOutput> {
+            unreachable!("identity helpers use run_with")
+        }
+
+        fn run_with(
+            &self,
+            program: &str,
+            args: &[&str],
+            _cwd: Option<&Path>,
+            _env: Option<&BTreeMap<OsString, OsString>>,
+            timeout: Option<Duration>,
+        ) -> Option<ProcessOutput> {
+            assert_eq!(timeout, Some(Duration::from_secs(120)));
+            let mut command = vec![program.to_owned()];
+            command.extend(args.iter().map(|argument| (*argument).to_owned()));
+            self.commands.lock().unwrap().push(command);
+            self.outputs.lock().unwrap().pop_front().flatten()
+        }
+    }
+
+    fn output(success: bool, stdout: impl Into<String>) -> Option<ProcessOutput> {
+        Some(ProcessOutput {
+            success,
+            exit_code: Some(if success { 0 } else { 1 }),
+            stdout: stdout.into(),
+            stderr: String::new(),
+        })
+    }
+
+    fn fixture_repo() -> (PathBuf, PathBuf) {
+        let base = std::env::current_dir().unwrap().join(format!(
+            ".turbovasctl-compose-identity-test-{}-{}",
+            std::process::id(),
+            SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let repo = base.join("TurboVAS");
+        std::fs::create_dir_all(repo.join("compose")).unwrap();
+        (base, repo)
+    }
+
+    fn image_ids() -> BTreeMap<String, String> {
+        APP_SERVICES
+            .iter()
+            .enumerate()
+            .map(|(index, service)| {
+                (
+                    (*service).to_owned(),
+                    format!("sha256:{}", format!("{index:x}").repeat(64)),
+                )
+            })
+            .collect()
+    }
+
+    fn rendered(ports: Value) -> String {
+        let images = image_ids();
+        let services = APP_SERVICES
+            .iter()
+            .map(|service| {
+                let mut value = json!({"image": images.get(*service).unwrap()});
+                if *service == "gsad" {
+                    value["ports"] = ports.clone();
+                }
+                ((*service).to_owned(), value)
+            })
+            .collect::<Map<_, _>>();
+        serde_json::to_string(&json!({
+            "services": services,
+            "networks": {"default": {"name": "turboväs"}},
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn compose_contract_is_stable_across_port_declaration_order() {
+        let (base, repo) = fixture_repo();
+        let first = Runner::new([output(
+            true,
+            rendered(json!([{"published": "2"}, {"published": "1"}])),
+        )]);
+        let second = Runner::new([output(
+            true,
+            rendered(json!([{"published": "1"}, {"published": "2"}])),
+        )]);
+        let environment = BTreeMap::new();
+        let images = image_ids();
+        let left = compose_contract_manifest(&repo, &first, &environment, &images).unwrap();
+        let right = compose_contract_manifest(&repo, &second, &environment, &images).unwrap();
+        assert_eq!(left, right);
+        assert_eq!(left["services"], json!(APP_SERVICES));
+        assert_eq!(
+            left["digest"],
+            "74b704d573b61db44d465f10fed6c5631206a87499994aa1fe837d0a7cbd1895"
+        );
+        let command = &first.commands.lock().unwrap()[0];
+        let override_position = command
+            .iter()
+            .position(|item| item.ends_with(OVERRIDE_PATH))
+            .unwrap();
+        let operation_position = command.iter().position(|item| item == "--profile").unwrap();
+        assert!(override_position < operation_position);
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn image_availability_requires_exact_observed_ids() {
+        let images = image_ids();
+        let outputs = APP_SERVICES.iter().map(|service| {
+            let id = images.get(*service).unwrap();
+            output(*service != "gsad", format!("{id}\n"))
+        });
+        let runner = Runner::new(outputs);
+        assert_eq!(
+            unavailable_images(Path::new("/repo"), &runner, &BTreeMap::new(), &images).unwrap(),
+            vec!["gsad"]
+        );
+    }
+}

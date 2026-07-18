@@ -78,3 +78,21 @@ fn write_escape(value: u16, output: &mut Vec<u8>) {
     output.push(HEX[((value >> 4) & 0x0f) as usize]);
     output.push(HEX[(value & 0x0f) as usize]);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn sorts_keys_and_matches_ensure_ascii_compact_strings() {
+        let value = json!({
+            "z": [true, null, "line\n"],
+            "a": {"emoji": "😀", "latin": "ä", "control": "\u{0001}"},
+        });
+        assert_eq!(
+            String::from_utf8(to_ascii_compact(&value).unwrap()).unwrap(),
+            r#"{"a":{"control":"\u0001","emoji":"\ud83d\ude00","latin":"\u00e4"},"z":[true,null,"line\n"]}"#
+        );
+    }
+}

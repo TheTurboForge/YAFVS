@@ -428,3 +428,116 @@ fn lexical_normalize(path: &Path) -> PathBuf {
     }
     output
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+    struct Fixture(PathBuf);
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+    fn fixture(name: &str) -> Fixture {
+        let root = std::env::temp_dir().join(format!(
+            "turbovas-artifact-{name}-{}-{}",
+            std::process::id(),
+            SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        for path in ROOTS {
+            fs::create_dir_all(root.join(path)).unwrap();
+        }
+        let executable = root.join(FILES[0]);
+        fs::create_dir_all(executable.parent().unwrap()).unwrap();
+        fs::write(&executable, b"openvas\n").unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+        Fixture(root)
+    }
+    #[test]
+    fn deterministic_record_digest_and_exact_manifest_shape() {
+        let fixture = fixture("deterministic");
+        for (name, content) in [("z", b"z".as_slice()), ("a", b"a".as_slice())] {
+            let path = fixture.0.join("build/prefix").join(name);
+            fs::write(&path, content).unwrap();
+            fs::set_permissions(path, fs::Permissions::from_mode(0o644)).unwrap();
+        }
+        let first = app_runtime_artifact_manifest(&fixture.0).unwrap();
+        let second = app_runtime_artifact_manifest(&fixture.0).unwrap();
+        assert_eq!(first, second);
+        assert_eq!(first["schema_version"], 1);
+        assert_eq!(first["algorithm"], "sha256");
+        assert_eq!(first["entry_count"], 3);
+        assert_eq!(first["byte_count"], 10);
+        assert_eq!(
+            first["digest"],
+            "d1bd5469a0b756fb319704fe830726c79204e459f1f7842cbf6468f67d56e568"
+        );
+        assert_eq!(
+            first["roots"],
+            serde_json::json!([
+                "build/prefix",
+                "build/venvs/ospd-openvas",
+                "build/venvs/notus-scanner",
+                "build/openvas-scanner/nasl",
+                "build/openvas-scanner/misc",
+                "components/ospd-openvas/ospd",
+                "components/ospd-openvas/ospd_openvas",
+                "components/notus-scanner/notus/scanner",
+                "build/openvas-scanner/src/openvas",
+            ])
+        );
+        assert_eq!(first.as_object().unwrap().len(), 6);
+        let record = "[\"build/prefix/a\",\"file\",420,1,\"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb\"]\n";
+        assert_eq!(
+            format!("{:x}", Sha256::digest(record.as_bytes())),
+            "0b16888fa9b108e5a58fc396055e6ae9794191e0cdc06401f5779c057e7d84e1"
+        );
+    }
+    #[test]
+    fn ignores_exact_paths_and_pytest_cache() {
+        let fixture = fixture("ignored");
+        fs::create_dir_all(fixture.0.join("build/prefix/.pytest_cache")).unwrap();
+        fs::write(fixture.0.join("build/prefix/.pytest_cache/no"), b"no").unwrap();
+        fs::create_dir_all(fixture.0.join("build/prefix/include")).unwrap();
+        fs::write(fixture.0.join("build/prefix/include/cgreen"), b"no").unwrap();
+        let manifest = app_runtime_artifact_manifest(&fixture.0).unwrap();
+        assert_eq!(manifest["entry_count"], 1);
+        assert_eq!(manifest["byte_count"], 8);
+    }
+    #[test]
+    fn hashes_file_and_symlink_identity_types() {
+        let fixture = fixture("types");
+        fs::write(fixture.0.join("build/prefix/file"), b"data").unwrap();
+        symlink("file", fixture.0.join("build/prefix/link")).unwrap();
+        let manifest = app_runtime_artifact_manifest(&fixture.0).unwrap();
+        assert_eq!(manifest["entry_count"], 3);
+        assert_eq!(manifest["byte_count"], 16);
+    }
+    #[test]
+    fn rejects_relative_and_workspace_escapes() {
+        let fixture = fixture("escape");
+        symlink("../../outside", fixture.0.join("build/prefix/escape")).unwrap();
+        assert!(
+            app_runtime_artifact_manifest(&fixture.0)
+                .unwrap_err()
+                .contains("escapes")
+        );
+        fs::remove_file(fixture.0.join("build/prefix/escape")).unwrap();
+        symlink("/workspace/owned", fixture.0.join("build/prefix/escape")).unwrap();
+        assert!(
+            app_runtime_artifact_manifest(&fixture.0)
+                .unwrap_err()
+                .contains("escapes")
+        );
+    }
+    #[test]
+    fn permits_image_owned_absolute_links() {
+        let fixture = fixture("image");
+        symlink("/usr/bin/python3", fixture.0.join("build/prefix/python")).unwrap();
+        assert!(app_runtime_artifact_manifest(&fixture.0).is_ok());
+    }
+}

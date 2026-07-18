@@ -847,3 +847,286 @@ fn adapter_error(context: impl Into<String>, error: impl std::fmt::Display) -> A
         Vec::new(),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::process::ProcessOutput;
+    use serde_json::json;
+    use std::collections::VecDeque;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+
+    struct Runner;
+    impl CommandRunner for Runner {
+        fn run(&self, _program: &str, _args: &[&str]) -> Option<ProcessOutput> {
+            None
+        }
+    }
+
+    struct QueueRunner {
+        outputs: Mutex<VecDeque<Option<ProcessOutput>>>,
+        commands: Mutex<Vec<Vec<String>>>,
+    }
+
+    impl QueueRunner {
+        fn new(outputs: impl IntoIterator<Item = Option<ProcessOutput>>) -> Self {
+            Self {
+                outputs: Mutex::new(outputs.into_iter().collect()),
+                commands: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl CommandRunner for QueueRunner {
+        fn run(&self, _program: &str, _args: &[&str]) -> Option<ProcessOutput> {
+            unreachable!("adapter runtime calls use run_with")
+        }
+
+        fn run_with(
+            &self,
+            program: &str,
+            args: &[&str],
+            _cwd: Option<&Path>,
+            _env: Option<&BTreeMap<OsString, OsString>>,
+            _timeout: Option<std::time::Duration>,
+        ) -> Option<ProcessOutput> {
+            let mut command = vec![program.to_owned()];
+            command.extend(args.iter().map(|argument| (*argument).to_owned()));
+            self.commands.lock().unwrap().push(command);
+            self.outputs.lock().unwrap().pop_front().flatten()
+        }
+    }
+
+    fn output(stdout: impl Into<String>) -> Option<ProcessOutput> {
+        Some(ProcessOutput {
+            success: true,
+            exit_code: Some(0),
+            stdout: stdout.into(),
+            stderr: String::new(),
+        })
+    }
+
+    fn identity() -> PinnedDeployment {
+        PinnedDeployment {
+            restore_gsad_hosts: Some(json!(["127.0.0.1"])),
+            app_image_ids: json!({
+                "gvmd": format!("sha256:{}", "0".repeat(64)),
+                "ospd-openvas": format!("sha256:{}", "1".repeat(64)),
+                "notus-scanner": format!("sha256:{}", "2".repeat(64)),
+                "gsad": format!("sha256:{}", "3".repeat(64)),
+                "turbovas-api": format!("sha256:{}", "4".repeat(64)),
+            }),
+            app_runtime_artifacts: json!({
+                "schema_version": 1, "algorithm": "sha256", "digest": "5".repeat(64),
+                "entry_count": 1, "byte_count": 0,
+                "roots": [
+                    "build/prefix", "build/venvs/ospd-openvas", "build/venvs/notus-scanner",
+                    "build/openvas-scanner/nasl", "build/openvas-scanner/misc",
+                    "components/ospd-openvas/ospd", "components/ospd-openvas/ospd_openvas",
+                    "components/notus-scanner/notus/scanner", "build/openvas-scanner/src/openvas"
+                ],
+            }),
+            app_compose_contract: json!({
+                "schema_version": 1, "algorithm": "sha256", "digest": "6".repeat(64),
+                "services": ["gvmd", "ospd-openvas", "notus-scanner", "gsad", "turbovas-api"],
+            }),
+        }
+    }
+
+    fn fixture_repo() -> (PathBuf, PathBuf) {
+        let base = std::env::current_dir().unwrap().join(format!(
+            ".turbovasctl-adapter-test-{}-{}",
+            std::process::id(),
+            SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let repo = base.join("TurboVAS");
+        std::fs::create_dir_all(&repo).unwrap();
+        (base, repo)
+    }
+
+    #[test]
+    fn rejects_unsafe_restore_hosts() {
+        let mut invalid = identity();
+        invalid.restore_gsad_hosts = Some(json!(["127.0.0.1,evil"]));
+        assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn writes_the_exact_transitioning_journal_shape() {
+        let (base, repo) = fixture_repo();
+        let mut adapter =
+            ConcreteTransitionAdapter::new(&repo, &Runner, BTreeMap::new(), identity()).unwrap();
+        let request = TransitionRequest {
+            action: super::super::transition::TransitionAction::Activate,
+            target: GenerationId::parse(&"a".repeat(64)).unwrap(),
+            previous: None,
+            success_rollback: None,
+            restored_rollback: None,
+            resume_existing: false,
+            recovery_only: false,
+        };
+        adapter.write_transitioning_journal(&request).unwrap();
+        let state = journal::read_activation_state(&runtime_dir(&repo))
+            .unwrap()
+            .unwrap();
+        assert_eq!(state["status"], "transitioning");
+        assert_eq!(state["target_generation_id"], "a".repeat(64));
+        assert_eq!(state["restore_gsad_hosts"], json!(["127.0.0.1"]));
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn post_stop_preflight_error_restores_the_exact_control_set() {
+        let runner = QueueRunner::new([output(""), output("abc123\n"), output("true\n")]);
+        let mut adapter = ConcreteTransitionAdapter::new(
+            Path::new("/repo"),
+            &runner,
+            BTreeMap::new(),
+            identity(),
+        )
+        .unwrap();
+        adapter.preflight_controls = vec!["gvmd".into()];
+
+        let error = adapter.restore_preflight_after_error(adapter_error(
+            "stable active scan query failed",
+            "query unavailable",
+        ));
+
+        assert!(error.message.contains("stable active scan query failed"));
+        assert!(error.findings.iter().any(|finding| {
+            finding.check == "feed-generation.control-restore" && finding.status == "pass"
+        }));
+        assert!(adapter.preflight_controls.is_empty());
+        assert!(
+            runner
+                .commands
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|command| command.contains(&"start".to_owned())
+                    && command.contains(&"gvmd".to_owned()))
+        );
+    }
+
+    #[test]
+    fn native_feed_objects_require_exact_ids_without_response_leakage() {
+        let secret = "response-secret-must-not-leak";
+        let runner = QueueRunner::new([
+            output(format!(r#"{{"id":"wrong","secret":"{secret}"}}"#)),
+            output(format!(r#"{{"id":"{IANA_TCP_UDP_PORT_LIST_ID}"}}"#)),
+        ]);
+        let adapter = ConcreteTransitionAdapter::new(
+            Path::new("/repo"),
+            &runner,
+            BTreeMap::new(),
+            identity(),
+        )
+        .unwrap();
+
+        let outcome = adapter.native_feed_objects().unwrap();
+
+        assert_eq!(outcome.status, StepStatus::Fail);
+        assert!(
+            !serde_json::to_string(&outcome.findings)
+                .unwrap()
+                .contains(secret)
+        );
+        let commands = runner.commands.lock().unwrap();
+        assert_eq!(commands.len(), 2);
+        assert!(commands[0].join(" ").contains(&format!(
+            "/api/v1/scan-configs/{FULL_AND_FAST_SCAN_CONFIG_ID}"
+        )));
+        assert!(
+            commands[1]
+                .join(" ")
+                .contains(&format!("/api/v1/port-lists/{IANA_TCP_UDP_PORT_LIST_ID}"))
+        );
+        assert!(commands.iter().all(|command| {
+            let command = command.join(" ");
+            command.contains("--max-time 10") && command.contains("--max-filesize 1048576")
+        }));
+    }
+
+    #[test]
+    fn native_feed_objects_accept_both_exact_ids() {
+        let runner = QueueRunner::new([
+            output(format!(r#"{{"id":"{FULL_AND_FAST_SCAN_CONFIG_ID}"}}"#)),
+            output(format!(r#"{{"id":"{IANA_TCP_UDP_PORT_LIST_ID}"}}"#)),
+        ]);
+        let adapter = ConcreteTransitionAdapter::new(
+            Path::new("/repo"),
+            &runner,
+            BTreeMap::new(),
+            identity(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            adapter.native_feed_objects().unwrap().status,
+            StepStatus::Pass
+        );
+    }
+
+    #[test]
+    fn pre_start_identity_error_never_starts_services() {
+        let (base, repo) = fixture_repo();
+        let runner = QueueRunner::new([]);
+        let mut adapter =
+            ConcreteTransitionAdapter::new(&repo, &runner, BTreeMap::new(), identity()).unwrap();
+
+        assert!(adapter.restart_and_verify_apps(false).is_err());
+        assert!(runner.commands.lock().unwrap().is_empty());
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn started_app_error_cleanup_preserves_evidence_and_removes_every_container() {
+        let runner = QueueRunner::new([
+            output(""),
+            output(""),
+            output(""),
+            output(""),
+            output(""),
+            output(""),
+        ]);
+        let adapter = ConcreteTransitionAdapter::new(
+            Path::new("/repo"),
+            &runner,
+            BTreeMap::new(),
+            identity(),
+        )
+        .unwrap();
+        let evidence = single_outcome(
+            StepStatus::Pass,
+            "feed-generation.restart-started",
+            "Application services were started before verification failed.",
+            json!({}),
+        );
+
+        let error = adapter.cleanup_started_apps_after_error(
+            "feed-generation.restart-error-stop",
+            adapter_error("post-start identity failed", "identity unavailable"),
+            evidence,
+        );
+
+        assert!(error.message.contains("post-start identity failed"));
+        assert!(error.findings.iter().any(|finding| {
+            finding.check == "feed-generation.restart-started" && finding.status == "pass"
+        }));
+        assert!(error.findings.iter().any(|finding| {
+            finding.check == "feed-generation.restart-error-stop" && finding.status == "pass"
+        }));
+        let commands = runner.commands.lock().unwrap();
+        assert!(commands[0].contains(&"rm".to_owned()));
+        assert_eq!(
+            commands
+                .iter()
+                .filter(|command| command.contains(&"ps".to_owned()))
+                .count(),
+            5
+        );
+    }
+}

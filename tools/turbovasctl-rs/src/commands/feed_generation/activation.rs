@@ -820,3 +820,295 @@ fn failure_with(
     )
     .with_artifacts(artifacts)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn id(value: char) -> String {
+        value.to_string().repeat(64)
+    }
+
+    fn active(current: &str, rollback: Option<&str>) -> Value {
+        json!({
+            "status": "active",
+            "current_generation_id": current,
+            "rollback_generation_id": rollback,
+        })
+    }
+
+    fn transitioning(target: &str, previous: Option<&str>, rollback: Option<&str>) -> Value {
+        json!({
+            "status": "transitioning",
+            "target_generation_id": target,
+            "previous_generation_id": previous,
+            "rollback_generation_id": rollback,
+        })
+    }
+
+    fn resolve(
+        target: &str,
+        current: Option<&str>,
+        state: Option<&Value>,
+        database: Option<&str>,
+        rollback: bool,
+        first: bool,
+        repair: bool,
+    ) -> Result<PreparedTransition, PreparationError> {
+        resolve_request(
+            GenerationId::parse(target).unwrap(),
+            current,
+            state,
+            database,
+            rollback,
+            first,
+            repair,
+        )
+    }
+
+    #[test]
+    fn first_activation_requires_explicit_acknowledgement() {
+        assert_eq!(
+            resolve(&id('a'), None, None, None, false, false, false)
+                .unwrap_err()
+                .check,
+            "feed-generation.first-activation"
+        );
+        let prepared = resolve(&id('a'), None, None, None, false, true, false).unwrap();
+        assert_eq!(prepared.request.previous, None);
+        assert_eq!(prepared.request.success_rollback, None);
+    }
+
+    #[test]
+    fn activation_preserves_current_and_prior_rollback_roles() {
+        let current = id('b');
+        let prior = id('c');
+        let state = active(&current, Some(&prior));
+        let prepared = resolve(
+            &id('a'),
+            Some(&current),
+            Some(&state),
+            Some(&current),
+            false,
+            false,
+            false,
+        )
+        .unwrap();
+        assert_eq!(prepared.request.previous.unwrap().as_str(), current);
+        assert_eq!(prepared.request.success_rollback.unwrap().as_str(), current);
+        assert_eq!(prepared.request.restored_rollback.unwrap().as_str(), prior);
+        assert!(!prepared.no_op);
+    }
+
+    #[test]
+    fn rollback_accepts_only_the_recorded_predecessor() {
+        let current = id('b');
+        let prior = id('c');
+        let state = active(&current, Some(&prior));
+        assert!(
+            resolve(
+                &id('a'),
+                Some(&current),
+                Some(&state),
+                Some(&current),
+                true,
+                false,
+                false,
+            )
+            .is_err()
+        );
+        let prepared = resolve(
+            &prior,
+            Some(&current),
+            Some(&state),
+            Some(&current),
+            true,
+            false,
+            false,
+        )
+        .unwrap();
+        assert_eq!(prepared.request.action, TransitionAction::Rollback);
+        assert_eq!(prepared.request.success_rollback.unwrap().as_str(), current);
+    }
+
+    #[test]
+    fn interrupted_transition_requires_recorded_recovery_direction() {
+        let target = id('a');
+        let previous = id('b');
+        let prior = id('c');
+        let state = transitioning(&target, Some(&previous), Some(&prior));
+        assert_eq!(
+            resolve(
+                &target,
+                Some(&target),
+                Some(&state),
+                None,
+                false,
+                false,
+                false,
+            )
+            .unwrap_err()
+            .check,
+            "feed-generation.interrupted-recovery"
+        );
+        let prepared = resolve(
+            &previous,
+            Some(&target),
+            Some(&state),
+            None,
+            true,
+            false,
+            false,
+        )
+        .unwrap();
+        assert!(prepared.request.resume_existing);
+        assert!(prepared.request.recovery_only);
+        assert_eq!(prepared.request.success_rollback.unwrap().as_str(), prior);
+    }
+
+    #[test]
+    fn interrupted_first_activation_resumes_only_with_acknowledgement() {
+        let target = id('a');
+        let state = transitioning(&target, None, None);
+        assert!(
+            resolve(
+                &target,
+                Some(&target),
+                Some(&state),
+                None,
+                false,
+                false,
+                false,
+            )
+            .is_err()
+        );
+        let prepared = resolve(
+            &target,
+            Some(&target),
+            Some(&state),
+            None,
+            false,
+            true,
+            false,
+        )
+        .unwrap();
+        assert!(prepared.request.resume_existing);
+        assert_eq!(prepared.request.previous, None);
+    }
+
+    #[test]
+    fn repair_is_scoped_to_active_target_and_keeps_prior_rollback() {
+        let current = id('a');
+        let prior = id('b');
+        let state = active(&current, Some(&prior));
+        let prepared = resolve(
+            &current,
+            Some(&current),
+            Some(&state),
+            None,
+            false,
+            false,
+            true,
+        )
+        .unwrap();
+        assert_eq!(prepared.request.success_rollback.unwrap().as_str(), prior);
+        assert!(!prepared.no_op);
+        assert!(
+            resolve(
+                &id('c'),
+                Some(&current),
+                Some(&state),
+                None,
+                false,
+                false,
+                true,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn active_state_requires_selector_and_database_agreement() {
+        let current = id('a');
+        let other = id('b');
+        let state = active(&current, None);
+        assert_eq!(
+            resolve(
+                &other,
+                Some(&other),
+                Some(&state),
+                Some(&other),
+                false,
+                false,
+                false,
+            )
+            .unwrap_err()
+            .check,
+            "feed-generation.journal-selector"
+        );
+        assert_eq!(
+            resolve(
+                &other,
+                Some(&current),
+                Some(&state),
+                Some(&other),
+                false,
+                false,
+                false,
+            )
+            .unwrap_err()
+            .check,
+            "feed-generation.database-attestation-preflight"
+        );
+    }
+
+    #[test]
+    fn matching_active_target_is_a_noop_only_without_repair() {
+        let current = id('a');
+        let state = active(&current, None);
+        assert!(
+            resolve(
+                &current,
+                Some(&current),
+                Some(&state),
+                Some(&current),
+                false,
+                false,
+                false,
+            )
+            .unwrap()
+            .no_op
+        );
+    }
+
+    #[test]
+    fn restore_hosts_prefers_recorded_state_and_requires_canonical_environment_ips() {
+        let state = json!({
+            "restore_gsad_hosts": ["192.0.2.10", "2001:db8::10"],
+        });
+        let mut environment = std::collections::BTreeMap::from([(
+            OsString::from("TURBOVAS_GSAD_HOST"),
+            OsString::from("127.0.0.1"),
+        )]);
+        let restored = restore_hosts(Some(&state), &mut environment).unwrap();
+        assert_eq!(restored, Some(state["restore_gsad_hosts"].clone()));
+        assert_eq!(
+            environment[&OsString::from("TURBOVAS_GSAD_HOST")],
+            OsString::from("192.0.2.10,2001:db8::10")
+        );
+
+        let mut environment = std::collections::BTreeMap::from([(
+            OsString::from("TURBOVAS_GSAD_HOST"),
+            OsString::from("198.51.100.4,2001:db8::4"),
+        )]);
+        assert_eq!(
+            restore_hosts(None, &mut environment).unwrap(),
+            Some(json!(["198.51.100.4", "2001:db8::4"]))
+        );
+        environment.insert(
+            OsString::from("TURBOVAS_GSAD_HOST"),
+            OsString::from("not-an-ip"),
+        );
+        assert!(restore_hosts(None, &mut environment).is_err());
+    }
+}

@@ -40,6 +40,11 @@ impl DatabaseAttestation {
         &self.generation_id
     }
 
+    #[cfg(test)]
+    fn completed_at(&self) -> &str {
+        &self.completed_at
+    }
+
     pub(super) fn as_value(&self) -> Value {
         json!({
             "schema_version": 1,
@@ -391,4 +396,179 @@ fn number(bytes: &[u8], start: usize, width: usize) -> u32 {
     bytes[start..start + width]
         .iter()
         .fold(0, |value, digit| value * 10 + u32::from(digit - b'0'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::process::ProcessOutput;
+    use std::collections::VecDeque;
+
+    const ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const TIME: &str = "2026-07-18T10:00:00+00:00";
+
+    #[derive(Default)]
+    struct FakeRunner {
+        outputs: std::sync::Mutex<VecDeque<Option<ProcessOutput>>>,
+        commands: std::sync::Mutex<Vec<Vec<String>>>,
+    }
+
+    impl FakeRunner {
+        fn with_outputs(outputs: impl IntoIterator<Item = Option<ProcessOutput>>) -> Self {
+            Self {
+                outputs: std::sync::Mutex::new(outputs.into_iter().collect()),
+                commands: std::sync::Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl CommandRunner for FakeRunner {
+        fn run(&self, _program: &str, _args: &[&str]) -> Option<ProcessOutput> {
+            unreachable!("adapter uses run_with")
+        }
+
+        fn run_with(
+            &self,
+            program: &str,
+            args: &[&str],
+            _cwd: Option<&Path>,
+            _env: Option<&std::collections::BTreeMap<std::ffi::OsString, std::ffi::OsString>>,
+            timeout: Option<std::time::Duration>,
+        ) -> Option<ProcessOutput> {
+            assert_eq!(timeout, Some(Duration::from_secs(120)));
+            let mut command = vec![program.to_owned()];
+            command.extend(args.iter().map(|value| (*value).to_owned()));
+            self.commands.lock().unwrap().push(command);
+            self.outputs.lock().unwrap().pop_front().flatten()
+        }
+    }
+
+    fn output(success: bool, stdout: &str) -> Option<ProcessOutput> {
+        Some(ProcessOutput {
+            success,
+            exit_code: success.then_some(0).or(Some(1)),
+            stdout: stdout.to_owned(),
+            stderr: String::new(),
+        })
+    }
+
+    fn encoded(value: &str) -> String {
+        value
+            .as_bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
+
+    #[test]
+    fn validates_contract_and_emits_compact_sorted_json() {
+        let attestation = DatabaseAttestation::new(ID, TIME).unwrap();
+        assert_eq!(attestation.generation_id(), ID);
+        assert_eq!(attestation.completed_at(), TIME);
+        assert_eq!(attestation.as_value()["generation_id"], ID);
+        assert_eq!(
+            attestation.as_value()["import_contract"],
+            "gvmd-nvt+gvmd-data-all+scap/v1"
+        );
+        assert_eq!(
+            attestation.canonical_json().unwrap(),
+            format!(
+                "{{\"completed_at\":\"{TIME}\",\"feed_release\":\"22.04\",\"generation_id\":\"{ID}\",\"import_contract\":\"gvmd-nvt+gvmd-data-all+scap/v1\",\"manifest_schema_version\":1,\"schema_version\":1}}"
+            )
+        );
+        assert!(DatabaseAttestation::new(&"A".repeat(64), TIME).is_err());
+        assert!(DatabaseAttestation::new(ID, "2026-02-29T10:00:00Z").is_err());
+        assert!(DatabaseAttestation::new(ID, "0000-01-01T00:00:00Z").is_err());
+        assert!(DatabaseAttestation::new(ID, "2028-02-29T10:00:00.1Z").is_ok());
+        assert!(DatabaseAttestation::new(ID, "2026-07-18T10:00:00+01:00").is_err());
+    }
+
+    #[test]
+    fn rejects_duplicate_keys_and_invalid_objects() {
+        let duplicate = format!(
+            "{{\"schema_version\":1,\"schema_version\":1,\"generation_id\":\"{ID}\",\"feed_release\":\"22.04\",\"manifest_schema_version\":1,\"import_contract\":\"gvmd-nvt+gvmd-data-all+scap/v1\",\"completed_at\":\"{TIME}\"}}"
+        );
+        assert!(parse_attestation_json(&duplicate).is_err());
+        assert!(parse_attestation_json("[]").is_err());
+        assert!(parse_attestation_json(&format!(
+            "{{\"schema_version\":1,\"generation_id\":\"{ID}\",\"feed_release\":\"22.04\",\"manifest_schema_version\":1,\"import_contract\":\"bad\",\"completed_at\":\"{TIME}\"}}"
+        ))
+        .is_err());
+    }
+
+    #[test]
+    fn read_parses_hex_and_fails_closed_on_bounds_and_output_shape() {
+        let json = DatabaseAttestation::new(ID, TIME)
+            .unwrap()
+            .canonical_json()
+            .unwrap();
+        assert_eq!(
+            parse_attestation_json(
+                &String::from_utf8(decode_hex(&encoded(&json)).unwrap()).unwrap()
+            )
+            .unwrap()
+            .generation_id(),
+            ID
+        );
+        assert!(decode_hex("0").is_err());
+        assert!(decode_hex("AA").is_err());
+        assert!(decode_hex(&"a".repeat(MAX_BYTES * 2 + 2)).is_err());
+        assert_eq!(
+            psql_single_value("NOTICE: ignored\nabc\n").unwrap(),
+            Some("abc".into())
+        );
+        assert!(psql_single_value("one\ntwo\n").is_err());
+        let runner = FakeRunner::with_outputs([output(true, "ff")]);
+        let adapter = DatabaseAttestationAdapter::new(Path::new("/srv/TurboVAS"), &runner);
+        assert_eq!(
+            adapter.read().unwrap_err(),
+            "feed generation database attestation encoding is invalid"
+        );
+    }
+
+    #[test]
+    fn read_and_write_use_expected_sql_and_require_exact_readback() {
+        let candidate = DatabaseAttestation::new(ID, TIME).unwrap();
+        let json = candidate.canonical_json().unwrap();
+        let runner = FakeRunner::with_outputs([output(true, ""), output(true, &encoded(&json))]);
+        let adapter = DatabaseAttestationAdapter::new(Path::new("/srv/TurboVAS"), &runner);
+        assert_eq!(adapter.write(ID, TIME).unwrap(), candidate);
+        let commands = runner.commands.lock().unwrap();
+        assert_eq!(commands.len(), 2);
+        assert!(commands[0].iter().any(|value| value == "exec"));
+        assert!(commands[0].iter().any(|value| value == "-T"));
+        assert!(commands[0].iter().any(|value| value == "postgres"));
+        let write = commands[0].last().unwrap();
+        assert!(write.contains(
+            "INSERT INTO public.meta (name, value) VALUES ('turbovas_feed_generation_attestation',"
+        ));
+        assert!(write.contains("ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;"));
+        let read = commands[1].last().unwrap();
+        assert!(read.contains("octet_length(value) > 4096"));
+        assert!(read.contains("encode(convert_to(value, 'UTF8'), 'hex')"));
+    }
+
+    #[test]
+    fn write_rejects_a_valid_but_different_readback() {
+        let observed = DatabaseAttestation::new(ID, "2026-07-18T10:00:01+00:00")
+            .unwrap()
+            .canonical_json()
+            .unwrap();
+        let runner =
+            FakeRunner::with_outputs([output(true, ""), output(true, &encoded(&observed))]);
+        let adapter = DatabaseAttestationAdapter::new(Path::new("/srv/TurboVAS"), &runner);
+        assert_eq!(
+            adapter.write(ID, TIME).unwrap_err(),
+            "feed generation database attestation readback mismatch"
+        );
+    }
+
+    #[test]
+    fn failures_do_not_leak_process_output_or_runtime_password() {
+        let runner = FakeRunner::with_outputs([output(false, "password=super-secret")]);
+        let adapter = DatabaseAttestationAdapter::new(Path::new("/srv/TurboVAS"), &runner);
+        let error = adapter.read().unwrap_err();
+        assert_eq!(error, "feed generation database command failed");
+        assert!(!error.contains("super-secret"));
+    }
 }

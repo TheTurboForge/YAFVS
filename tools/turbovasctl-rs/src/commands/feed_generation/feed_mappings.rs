@@ -519,3 +519,137 @@ fn competing_final_hook(path: &Path) {
 }
 #[cfg(not(test))]
 fn competing_final_hook(_: &Path) {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct Fixture {
+        root: std::path::PathBuf,
+    }
+    impl Fixture {
+        fn new() -> Self {
+            let unique = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let root = std::env::temp_dir().join(format!(
+                "turbovasctl-feed-mappings-{}-{unique}",
+                std::process::id()
+            ));
+            fs::create_dir(&root).unwrap();
+            fs::set_permissions(&root, fs::Permissions::from_mode(0o775)).unwrap();
+            Self { root }
+        }
+        fn mapping(&self, mapping: Mapping) -> std::path::PathBuf {
+            self.root.join(mapping.build_rel)
+        }
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+    fn failed(outcome: &StepOutcome) -> bool {
+        outcome.status == StepStatus::Fail
+    }
+
+    #[test]
+    fn feed_mappings_create_all_exact_runtime_targets() {
+        let fixture = Fixture::new();
+        assert!(!failed(&ensure_runtime_feed_mappings(&fixture.root)));
+        for mapping in RUNTIME_FEED_MAPPINGS {
+            assert_eq!(
+                fs::read_link(fixture.mapping(mapping)).unwrap(),
+                Path::new(mapping.target)
+            );
+        }
+    }
+    #[test]
+    fn feed_mappings_are_idempotent() {
+        let fixture = Fixture::new();
+        assert!(!failed(&ensure_runtime_feed_mappings(&fixture.root)));
+        let outcome = ensure_runtime_feed_mappings(&fixture.root);
+        assert!(!failed(&outcome));
+        assert!(
+            outcome
+                .findings
+                .iter()
+                .all(|finding| finding.status == "pass")
+        );
+    }
+    #[test]
+    fn feed_mappings_replace_stale_symlink() {
+        let fixture = Fixture::new();
+        let mapping = RUNTIME_FEED_MAPPINGS[0];
+        let stale = fixture.mapping(mapping);
+        fs::create_dir_all(stale.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink("/runtime/feeds/old", &stale).unwrap();
+        assert!(!failed(&ensure_runtime_feed_mappings(&fixture.root)));
+        assert_eq!(fs::read_link(stale).unwrap(), Path::new(mapping.target));
+    }
+    #[test]
+    fn feed_mappings_replace_an_empty_trusted_directory() {
+        let fixture = Fixture::new();
+        let mapping = RUNTIME_FEED_MAPPINGS[0];
+        let empty = fixture.mapping(mapping);
+        fs::create_dir_all(&empty).unwrap();
+
+        let outcome = ensure_runtime_feed_mappings(&fixture.root);
+
+        assert!(!failed(&outcome));
+        assert_eq!(fs::read_link(empty).unwrap(), Path::new(mapping.target));
+    }
+    #[test]
+    fn feed_mappings_refuse_regular_file_and_nonempty_directory() {
+        let fixture = Fixture::new();
+        let regular = fixture.mapping(RUNTIME_FEED_MAPPINGS[0]);
+        fs::create_dir_all(regular.parent().unwrap()).unwrap();
+        fs::write(&regular, "do not replace").unwrap();
+        let nonempty = fixture.mapping(RUNTIME_FEED_MAPPINGS[2]);
+        fs::create_dir_all(&nonempty).unwrap();
+        fs::write(nonempty.join("keep"), "do not replace").unwrap();
+        assert!(failed(&ensure_runtime_feed_mappings(&fixture.root)));
+        assert_eq!(fs::read_to_string(regular).unwrap(), "do not replace");
+        assert!(nonempty.join("keep").exists());
+    }
+    #[test]
+    fn feed_mappings_refuse_symlink_ancestor() {
+        let fixture = Fixture::new();
+        let outside = fixture.root.join("outside");
+        fs::create_dir(&outside).unwrap();
+        std::os::unix::fs::symlink(&outside, fixture.root.join("build")).unwrap();
+        assert!(failed(&ensure_runtime_feed_mappings(&fixture.root)));
+        assert!(!outside.join("var").exists());
+    }
+    #[test]
+    fn feed_mappings_refuse_a_world_writable_ancestor() {
+        let fixture = Fixture::new();
+        let build = fixture.root.join("build");
+        fs::create_dir(&build).unwrap();
+        fs::set_permissions(&build, fs::Permissions::from_mode(0o777)).unwrap();
+
+        let outcome = ensure_runtime_feed_mappings(&fixture.root);
+
+        assert!(failed(&outcome));
+        assert!(!build.join("var").exists());
+    }
+    #[test]
+    fn feed_mappings_do_not_overwrite_a_competing_final_entry() {
+        let fixture = Fixture::new();
+        let mapping = RUNTIME_FEED_MAPPINGS[0];
+        let final_path = fixture.mapping(mapping);
+        *COMPETING_FINAL_HOOK.lock().unwrap() = Some((
+            final_path.clone(),
+            Box::new({
+                let final_path = final_path.clone();
+                move || fs::write(final_path, "racer").unwrap()
+            }),
+        ));
+        assert!(failed(&ensure_runtime_feed_mappings(&fixture.root)));
+        assert_eq!(fs::read_to_string(final_path).unwrap(), "racer");
+    }
+}

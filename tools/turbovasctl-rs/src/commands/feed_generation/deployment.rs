@@ -464,3 +464,156 @@ pub(super) fn require_app_deployment_receipt(runtime: &Path) -> Result<Value, St
         )),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+
+    fn receipt() -> Value {
+        json!({
+            "schema_version": 1,
+            "image_ids": {"gvmd": format!("sha256:{}", "a".repeat(64)), "ospd-openvas": format!("sha256:{}", "b".repeat(64)), "notus-scanner": format!("sha256:{}", "c".repeat(64)), "gsad": format!("sha256:{}", "d".repeat(64)), "turbovas-api": format!("sha256:{}", "e".repeat(64))},
+            "runtime_artifacts": {"schema_version": 1, "algorithm": "sha256", "digest": "f".repeat(64), "entry_count": 1, "byte_count": 0, "roots": ARTIFACT_ROOTS},
+            "compose_contract": {"schema_version": 1, "algorithm": "sha256", "digest": "1".repeat(64), "services": APP_SERVICES},
+            "prepared_at": "2026-07-18T12:00:00+00:00"
+        })
+    }
+
+    fn runtime_fixture() -> std::path::PathBuf {
+        let runtime = std::env::current_dir().unwrap().join(format!(
+            ".turbovasctl-deployment-test-{}-{}",
+            std::process::id(),
+            SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let state = runtime.join(RECEIPT_DIR);
+        fs::create_dir_all(&state).unwrap();
+        fs::set_permissions(&state, fs::Permissions::from_mode(0o700)).unwrap();
+        runtime
+    }
+
+    fn write_receipt(runtime: &Path, value: &Value) {
+        let path = runtime.join(RECEIPT_DIR).join(RECEIPT_NAME);
+        fs::write(&path, serde_json::to_vec(value).unwrap()).unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).unwrap();
+    }
+
+    #[test]
+    fn accepts_complete_deployment_receipt() {
+        assert_eq!(
+            validate_app_deployment_receipt(&receipt()).unwrap(),
+            receipt()
+        );
+    }
+
+    #[test]
+    fn rejects_identity_drift_and_extra_fields() {
+        let mut candidate = receipt();
+        candidate["image_ids"]["gvmd"] = Value::from("sha256:upper-case-is-not-an-image-id");
+        assert_eq!(
+            validate_app_deployment_receipt(&candidate).unwrap_err(),
+            "feed activation app image identity is invalid for gvmd"
+        );
+        let mut candidate = receipt();
+        candidate
+            .as_object_mut()
+            .unwrap()
+            .insert("extra".into(), Value::Null);
+        assert_eq!(
+            validate_app_deployment_receipt(&candidate).unwrap_err(),
+            "application deployment receipt is invalid"
+        );
+    }
+
+    #[test]
+    fn rejects_artifact_and_compose_shape_drift() {
+        let mut candidate = receipt();
+        candidate["runtime_artifacts"]["roots"] = json!(["build/prefix"]);
+        assert_eq!(
+            validate_app_deployment_receipt(&candidate).unwrap_err(),
+            "feed activation runtime artifact identity is invalid"
+        );
+        let mut candidate = receipt();
+        candidate["compose_contract"]["services"] = json!(["gvmd"]);
+        assert_eq!(
+            validate_app_deployment_receipt(&candidate).unwrap_err(),
+            "application Compose execution contract is invalid"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_calendar_time_and_timezone_ranges() {
+        for prepared_at in [
+            "2026-02-29T12:00:00+00:00",
+            "2026-07-18T24:00:00+00:00",
+            "2026-07-18T12:60:00+00:00",
+            "2026-07-18T12:00:00+24:00",
+            "2026-07-18T12:00:00",
+        ] {
+            let mut candidate = receipt();
+            candidate["prepared_at"] = Value::from(prepared_at);
+            assert_eq!(
+                validate_app_deployment_receipt(&candidate).unwrap_err(),
+                "application deployment receipt timestamp is invalid"
+            );
+        }
+        let mut leap_day = receipt();
+        leap_day["prepared_at"] = Value::from("2028-02-29T12:00:00.1Z");
+        assert!(validate_app_deployment_receipt(&leap_day).is_ok());
+    }
+
+    #[test]
+    fn reads_only_owner_private_bounded_receipts() {
+        let runtime = runtime_fixture();
+        write_receipt(&runtime, &receipt());
+        assert_eq!(
+            read_app_deployment_receipt(&runtime).unwrap(),
+            Some(receipt())
+        );
+
+        let path = runtime.join(RECEIPT_DIR).join(RECEIPT_NAME);
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+        assert_eq!(
+            read_app_deployment_receipt(&runtime).unwrap_err(),
+            "private deployment receipt is unsafe"
+        );
+
+        fs::remove_file(&path).unwrap();
+        fs::write(&path, vec![b'x'; MAX_RECEIPT_BYTES + 1]).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+        assert_eq!(
+            read_app_deployment_receipt(&runtime).unwrap_err(),
+            "private deployment receipt is too large"
+        );
+        fs::remove_dir_all(runtime).unwrap();
+    }
+
+    #[test]
+    fn refuses_receipt_and_directory_symlinks() {
+        let runtime = runtime_fixture();
+        let state = runtime.join(RECEIPT_DIR);
+        let target = runtime.join("target.json");
+        fs::write(&target, serde_json::to_vec(&receipt()).unwrap()).unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o600)).unwrap();
+        symlink(&target, state.join(RECEIPT_NAME)).unwrap();
+        assert!(read_app_deployment_receipt(&runtime).is_err());
+        fs::remove_dir_all(&runtime).unwrap();
+
+        let runtime = runtime_fixture();
+        let state = runtime.join(RECEIPT_DIR);
+        fs::remove_dir(&state).unwrap();
+        let replacement = runtime.join("replacement");
+        fs::create_dir(&replacement).unwrap();
+        fs::set_permissions(&replacement, fs::Permissions::from_mode(0o700)).unwrap();
+        symlink(&replacement, &state).unwrap();
+        assert_eq!(
+            read_app_deployment_receipt(&runtime).unwrap_err(),
+            "private deployment receipt directory is unsafe"
+        );
+        fs::remove_dir_all(runtime).unwrap();
+    }
+}

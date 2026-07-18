@@ -339,6 +339,17 @@ fn required_identifier<'a>(
     }
 }
 
+#[cfg(test)]
+fn parse_source_database_version(cmake: &str) -> Option<u64> {
+    cmake.lines().find_map(|line| {
+        line.trim()
+            .strip_prefix("set(GVMD_DATABASE_VERSION ")?
+            .strip_suffix(')')?
+            .parse()
+            .ok()
+    })
+}
+
 fn parse_user_uuid(output: &str, username: &str) -> Option<String> {
     output
         .lines()
@@ -386,4 +397,222 @@ fn failed(
 
 fn finish(status: StepStatus, findings: Vec<Finding>, secret_path: &Path) -> StepOutcome {
     StepOutcome::with_evidence(status, findings, vec![secret_path.display().to_string()])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::feed_generation::deployment::APP_SERVICES;
+    use crate::process::ProcessOutput;
+    use std::collections::VecDeque;
+    use std::fs;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+
+    struct Runner {
+        outputs: Mutex<VecDeque<Option<ProcessOutput>>>,
+        commands: Mutex<Vec<Vec<String>>>,
+    }
+
+    impl Runner {
+        fn new(outputs: impl IntoIterator<Item = Option<ProcessOutput>>) -> Self {
+            Self {
+                outputs: Mutex::new(outputs.into_iter().collect()),
+                commands: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl CommandRunner for Runner {
+        fn run(&self, _: &str, _: &[&str]) -> Option<ProcessOutput> {
+            unreachable!()
+        }
+
+        fn run_with(
+            &self,
+            program: &str,
+            arguments: &[&str],
+            _: Option<&Path>,
+            _: Option<&BTreeMap<OsString, OsString>>,
+            _: Option<Duration>,
+        ) -> Option<ProcessOutput> {
+            let mut command = vec![program.to_owned()];
+            command.extend(arguments.iter().map(|argument| (*argument).to_owned()));
+            self.commands.lock().unwrap().push(command);
+            self.outputs.lock().unwrap().pop_front().flatten()
+        }
+    }
+
+    fn output(success: bool, stdout: &str) -> Option<ProcessOutput> {
+        Some(ProcessOutput {
+            success,
+            exit_code: Some(if success { 0 } else { 1 }),
+            stdout: stdout.to_owned(),
+            stderr: "private diagnostic".to_owned(),
+        })
+    }
+
+    fn fixture() -> (std::path::PathBuf, std::path::PathBuf) {
+        let root = std::env::temp_dir().join(format!(
+            "turbovasctl-manager-init-{}-{}",
+            std::process::id(),
+            SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let repo = root.join("TurboVAS");
+        fs::create_dir_all(repo.join("compose")).unwrap();
+        (root, repo)
+    }
+
+    fn environment() -> BTreeMap<OsString, OsString> {
+        BTreeMap::from([
+            (OsString::from("POSTGRES_DB"), OsString::from("turbovas")),
+            (OsString::from("POSTGRES_USER"), OsString::from("turbovas")),
+        ])
+    }
+
+    fn images() -> BTreeMap<String, String> {
+        APP_SERVICES
+            .iter()
+            .enumerate()
+            .map(|(index, service)| {
+                (
+                    (*service).to_owned(),
+                    format!("sha256:{}", format!("{index:x}").repeat(64)),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn initializes_existing_admin_with_exact_pinned_order() {
+        let (root, repo) = fixture();
+        let uuid = "11111111-2222-3333-4444-555555555555";
+        let runner = Runner::new([
+            output(true, ""),
+            output(true, &format!("{SOURCE_DATABASE_VERSION}\n")),
+            output(true, &format!("{ADMIN_USER} {uuid}\n")),
+            output(true, ""),
+            output(true, ""),
+        ]);
+        let environment = environment();
+        let images = images();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+
+        let outcome = initialize_manager(&repo, &runner, &runtime);
+
+        assert_eq!(outcome.status, StepStatus::Pass);
+        let commands = runner.commands.lock().unwrap();
+        assert_eq!(commands.len(), 5);
+        assert!(commands[0].iter().any(|argument| argument == "--migrate"));
+        assert!(commands[1].iter().any(|argument| argument == "psql"));
+        assert!(commands[2].iter().any(|argument| argument == "--get-users"));
+        assert!(
+            commands[3]
+                .iter()
+                .any(|argument| argument == "--user=admin")
+        );
+        assert!(
+            commands[4]
+                .iter()
+                .any(|argument| argument == &format!("--value={uuid}"))
+        );
+        assert!(
+            commands
+                .iter()
+                .flatten()
+                .all(|argument| argument != "--no-deps")
+        );
+        assert!(commands.iter().flatten().all(|argument| argument != "pull"));
+        assert!(
+            commands
+                .iter()
+                .flatten()
+                .any(|argument| argument == "never")
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn creates_missing_admin_then_requires_its_uuid() {
+        let (root, repo) = fixture();
+        let uuid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+        let runner = Runner::new([
+            output(true, ""),
+            output(true, &format!("{SOURCE_DATABASE_VERSION}\n")),
+            output(true, ""),
+            output(true, ""),
+            output(true, &format!("admin {uuid}\n")),
+            output(true, ""),
+            output(true, ""),
+        ]);
+        let environment = environment();
+        let images = images();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+
+        let outcome = initialize_manager(&repo, &runner, &runtime);
+
+        assert_eq!(outcome.status, StepStatus::Pass);
+        let commands = runner.commands.lock().unwrap();
+        assert_eq!(commands.len(), 7);
+        assert!(
+            commands[3]
+                .iter()
+                .any(|argument| argument == "--create-user=admin")
+        );
+        assert!(
+            commands[5]
+                .iter()
+                .any(|argument| argument == "--user=admin")
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn rejects_unsafe_database_environment_before_any_manager_command() {
+        let (root, repo) = fixture();
+        let runner = Runner::new([]);
+        let environment = BTreeMap::from([
+            (OsString::from("POSTGRES_DB"), OsString::from("--unsafe")),
+            (OsString::from("POSTGRES_USER"), OsString::from("turbovas")),
+        ]);
+        let images = images();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+
+        let outcome = initialize_manager(&repo, &runner, &runtime);
+
+        assert_eq!(outcome.status, StepStatus::Fail);
+        assert!(runner.commands.lock().unwrap().is_empty());
+        assert!(!runtime_secret_path(&repo, ADMIN_SECRET).exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn parses_only_uuid_shaped_values_associated_with_the_admin() {
+        assert_eq!(
+            parse_user_uuid(
+                "other aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\nadmin 11111111-2222-3333-4444-555555555555",
+                "admin"
+            ),
+            Some("11111111-2222-3333-4444-555555555555".to_owned())
+        );
+        assert_eq!(parse_user_uuid("admin not-a-uuid", "admin"), None);
+        assert_eq!(
+            parse_user_uuid("notadmin 11111111-2222-3333-4444-555555555555", "admin"),
+            None
+        );
+    }
+
+    #[test]
+    fn embedded_schema_version_matches_the_current_gvmd_source() {
+        let source = fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../components/gvmd/CMakeLists.txt"),
+        )
+        .unwrap();
+        assert_eq!(
+            parse_source_database_version(&source),
+            Some(SOURCE_DATABASE_VERSION)
+        );
+    }
 }

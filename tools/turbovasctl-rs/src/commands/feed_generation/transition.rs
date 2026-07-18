@@ -654,3 +654,668 @@ impl<A: TransitionAdapter> Engine<'_, A> {
         self.outcome.compensation_failure = Some(failure);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use std::collections::VecDeque;
+
+    #[derive(Clone, Debug, Eq, PartialEq)]
+    enum Event {
+        Preflight,
+        Journal,
+        RestoreControls,
+        Stop(StopReason),
+        Select(String),
+        Import(String),
+        Artifacts(bool),
+        Verify(String),
+        Attest(String),
+        Completed(CompletionKind),
+        Restart(bool),
+        Clear(String),
+        Phase(TransitionPhase),
+    }
+
+    struct MockAdapter {
+        events: Vec<Event>,
+        imports: VecDeque<StepOutcome>,
+        artifacts: VecDeque<StepOutcome>,
+        verifies: VecDeque<StepOutcome>,
+        restarts: VecDeque<StepOutcome>,
+        reported_failure: Option<TransitionStep>,
+        adapter_error: Option<(TransitionStep, AdapterError)>,
+    }
+
+    impl MockAdapter {
+        fn passing() -> Self {
+            Self {
+                events: Vec::new(),
+                imports: VecDeque::from([StepOutcome::pass()]),
+                artifacts: VecDeque::from([StepOutcome::pass()]),
+                verifies: VecDeque::from([StepOutcome::pass()]),
+                restarts: VecDeque::from([StepOutcome::pass()]),
+                reported_failure: None,
+                adapter_error: None,
+            }
+        }
+
+        fn step(&mut self, step: TransitionStep) -> Result<StepOutcome, AdapterError> {
+            if let Some(error) = self.take_error(step) {
+                return Err(error);
+            }
+            if self.reported_failure == Some(step) {
+                self.reported_failure = None;
+                return Ok(failure("mock.reported", "step reported failure"));
+            }
+            Ok(StepOutcome::pass())
+        }
+
+        fn take_error(&mut self, step: TransitionStep) -> Option<AdapterError> {
+            if self
+                .adapter_error
+                .as_ref()
+                .is_some_and(|(candidate, _)| *candidate == step)
+            {
+                self.adapter_error.take().map(|(_, error)| error)
+            } else {
+                None
+            }
+        }
+
+        fn phases(&self) -> Vec<TransitionPhase> {
+            self.events
+                .iter()
+                .filter_map(|event| match event {
+                    Event::Phase(phase) => Some(*phase),
+                    _ => None,
+                })
+                .collect()
+        }
+    }
+
+    impl TransitionAdapter for MockAdapter {
+        fn preflight(&mut self, _: &TransitionRequest) -> Result<StepOutcome, AdapterError> {
+            self.events.push(Event::Preflight);
+            self.step(TransitionStep::Preflight)
+        }
+
+        fn write_transitioning_journal(
+            &mut self,
+            _: &TransitionRequest,
+        ) -> Result<StepOutcome, AdapterError> {
+            self.events.push(Event::Journal);
+            self.step(TransitionStep::WriteTransitioningJournal)
+        }
+
+        fn restore_preflight_controls(&mut self) -> Result<StepOutcome, AdapterError> {
+            self.events.push(Event::RestoreControls);
+            self.step(TransitionStep::RestorePreflightControls)
+        }
+
+        fn stop_apps(&mut self, reason: StopReason) -> Result<StepOutcome, AdapterError> {
+            self.events.push(Event::Stop(reason));
+            let step = match reason {
+                StopReason::Forward | StopReason::TargetArtifactFailure => {
+                    TransitionStep::StopForward
+                }
+                StopReason::Compensation | StopReason::CompensationArtifactFailure => {
+                    TransitionStep::StopCompensation
+                }
+            };
+            self.step(step)
+        }
+
+        fn select_generation(
+            &mut self,
+            generation: &GenerationId,
+        ) -> Result<StepOutcome, AdapterError> {
+            self.events.push(Event::Select(generation.0.clone()));
+            let step =
+                if self.events.iter().any(|event| {
+                    matches!(event, Event::Phase(TransitionPhase::TargetImportReturned))
+                }) {
+                    TransitionStep::SelectCompensation
+                } else {
+                    TransitionStep::SelectTarget
+                };
+            self.step(step)
+        }
+
+        fn import_generation(
+            &mut self,
+            generation: &GenerationId,
+        ) -> Result<StepOutcome, AdapterError> {
+            self.events.push(Event::Import(generation.0.clone()));
+            let step = if self.events.iter().any(|event| {
+                matches!(
+                    event,
+                    Event::Phase(TransitionPhase::CompensationSelectorSelected)
+                )
+            }) {
+                TransitionStep::ImportCompensation
+            } else {
+                TransitionStep::ImportTarget
+            };
+            if let Some(error) = self.take_error(step) {
+                return Err(error);
+            }
+            Ok(self.imports.pop_front().expect("configured import outcome"))
+        }
+
+        fn runtime_artifacts_unchanged(
+            &mut self,
+            compensation: bool,
+        ) -> Result<StepOutcome, AdapterError> {
+            self.events.push(Event::Artifacts(compensation));
+            Ok(self
+                .artifacts
+                .pop_front()
+                .expect("configured artifact outcome"))
+        }
+
+        fn verify_selected_generation(
+            &mut self,
+            generation: &GenerationId,
+        ) -> Result<StepOutcome, AdapterError> {
+            self.events.push(Event::Verify(generation.0.clone()));
+            Ok(self
+                .verifies
+                .pop_front()
+                .expect("configured verification outcome"))
+        }
+
+        fn attest_database(
+            &mut self,
+            generation: &GenerationId,
+        ) -> Result<AttestationOutcome, AdapterError> {
+            self.events.push(Event::Attest(generation.0.clone()));
+            let step = if self.events.iter().any(|event| {
+                matches!(
+                    event,
+                    Event::Phase(TransitionPhase::CompensationImportReturned)
+                )
+            }) {
+                TransitionStep::AttestCompensationDatabase
+            } else {
+                TransitionStep::AttestTargetDatabase
+            };
+            self.step(step).map(|evidence| AttestationOutcome {
+                receipt: AttestationReceipt {
+                    completed_at: "2026-07-18T10:00:00+00:00".into(),
+                    details: json!({"generation_id": generation.as_str()}),
+                },
+                evidence,
+            })
+        }
+
+        fn write_completed_journal(
+            &mut self,
+            request: &CompletedJournalRequest,
+        ) -> Result<StepOutcome, AdapterError> {
+            self.events.push(Event::Completed(request.kind));
+            let step = match request.kind {
+                CompletionKind::Target => TransitionStep::WriteCompletedActivationJournal,
+                CompletionKind::Compensation => TransitionStep::WriteCompletedCompensationJournal,
+            };
+            self.step(step)
+        }
+
+        fn restart_and_verify_apps(
+            &mut self,
+            compensation: bool,
+        ) -> Result<StepOutcome, AdapterError> {
+            let required = if compensation {
+                TransitionPhase::CompensationJournalCompleted
+            } else {
+                TransitionPhase::ActivationJournalCompleted
+            };
+            assert!(matches!(self.events.last(), Some(Event::Phase(phase)) if *phase == required));
+            self.events.push(Event::Restart(compensation));
+            let step = if compensation {
+                TransitionStep::RestartCompensation
+            } else {
+                TransitionStep::RestartTarget
+            };
+            if let Some(error) = self.take_error(step) {
+                return Err(error);
+            }
+            Ok(self
+                .restarts
+                .pop_front()
+                .expect("configured restart outcome"))
+        }
+
+        fn clear_selector(&mut self, expected: &GenerationId) -> Result<StepOutcome, AdapterError> {
+            self.events.push(Event::Clear(expected.0.clone()));
+            self.step(TransitionStep::ClearFailedSelector)
+        }
+
+        fn emit_phase(&mut self, phase: TransitionPhase) {
+            self.events.push(Event::Phase(phase));
+        }
+    }
+
+    fn id(byte: char) -> GenerationId {
+        GenerationId::parse(&byte.to_string().repeat(64)).unwrap()
+    }
+
+    fn request(action: TransitionAction, previous: bool) -> TransitionRequest {
+        TransitionRequest {
+            action,
+            target: id('a'),
+            previous: previous.then(|| id('b')),
+            success_rollback: previous.then(|| id('b')),
+            restored_rollback: Some(id('c')),
+            resume_existing: false,
+            recovery_only: false,
+        }
+    }
+
+    #[test]
+    fn resumed_transition_keeps_the_existing_journal_and_skips_its_phase() {
+        let mut adapter = MockAdapter::passing();
+        let mut resumed = request(TransitionAction::Rollback, true);
+        resumed.resume_existing = true;
+        resumed.recovery_only = true;
+        let outcome = run_transition(&mut adapter, resumed);
+        assert_eq!(outcome.disposition, TransitionDisposition::Activated);
+        assert!(!adapter.events.contains(&Event::Journal));
+        assert!(
+            !outcome
+                .phases
+                .contains(&TransitionPhase::TransitionJournalRecorded)
+        );
+        assert!(matches!(
+            adapter.events.as_slice(),
+            [Event::Preflight, Event::Stop(StopReason::Forward), ..]
+        ));
+    }
+
+    fn failure(check: &str, message: &str) -> StepOutcome {
+        StepOutcome::with_evidence(
+            StepStatus::Fail,
+            vec![Finding::new("fail", check, message.into())],
+            Vec::new(),
+        )
+    }
+
+    fn forward_phases() -> Vec<TransitionPhase> {
+        vec![
+            TransitionPhase::TransitionJournalRecorded,
+            TransitionPhase::SelectorSelected,
+            TransitionPhase::TargetImportReturned,
+            TransitionPhase::DatabaseAttested,
+            TransitionPhase::ActivationJournalCompleted,
+        ]
+    }
+
+    #[test]
+    fn generation_ids_and_external_names_are_exact() {
+        assert!(GenerationId::parse(&"a".repeat(64)).is_ok());
+        assert!(GenerationId::parse(&"A".repeat(64)).is_err());
+        assert!(GenerationId::parse("short").is_err());
+        assert_eq!(TransitionAction::Rollback.as_str(), "rollback");
+        assert_eq!(
+            forward_phases()
+                .into_iter()
+                .map(TransitionPhase::as_str)
+                .collect::<Vec<_>>(),
+            [
+                "transition-journal-recorded",
+                "selector-selected",
+                "target-import-returned",
+                "database-attested",
+                "activation-journal-completed",
+            ]
+        );
+    }
+
+    #[test]
+    fn activate_and_rollback_have_exact_forward_order() {
+        for action in [TransitionAction::Activate, TransitionAction::Rollback] {
+            let mut adapter = MockAdapter::passing();
+            let outcome = run_transition(&mut adapter, request(action, true));
+            assert_eq!(outcome.status, StepStatus::Pass);
+            assert_eq!(outcome.disposition, TransitionDisposition::Activated);
+            assert_eq!(outcome.phases, forward_phases());
+            assert_eq!(adapter.phases(), forward_phases());
+            assert!(matches!(
+                adapter.events.as_slice(),
+                [
+                    ..,
+                    Event::Completed(CompletionKind::Target),
+                    Event::Phase(TransitionPhase::ActivationJournalCompleted),
+                    Event::Restart(false)
+                ]
+            ));
+        }
+    }
+
+    #[test]
+    fn early_failure_never_starts_compensation() {
+        for step in [
+            TransitionStep::Preflight,
+            TransitionStep::WriteTransitioningJournal,
+            TransitionStep::StopForward,
+            TransitionStep::SelectTarget,
+        ] {
+            let mut adapter = MockAdapter::passing();
+            adapter.reported_failure = Some(step);
+            let outcome = run_transition(&mut adapter, request(TransitionAction::Activate, true));
+            assert_eq!(outcome.status, StepStatus::Fail);
+            assert!(outcome.phases.iter().all(|phase| !matches!(
+                phase,
+                TransitionPhase::CompensationSelectorSelected
+                    | TransitionPhase::CompensationImportReturned
+                    | TransitionPhase::CompensationDatabaseAttested
+                    | TransitionPhase::CompensationJournalCompleted
+            )));
+            assert!(
+                !adapter
+                    .events
+                    .contains(&Event::Stop(StopReason::Compensation))
+            );
+        }
+    }
+
+    #[test]
+    fn preflight_precedes_journal_and_runtime_mutation() {
+        let mut adapter = MockAdapter::passing();
+        let outcome = run_transition(&mut adapter, request(TransitionAction::Activate, true));
+        assert_eq!(outcome.status, StepStatus::Pass);
+        assert!(matches!(
+            adapter.events.as_slice(),
+            [
+                Event::Preflight,
+                Event::Journal,
+                Event::Phase(TransitionPhase::TransitionJournalRecorded),
+                Event::Stop(StopReason::Forward),
+                ..
+            ]
+        ));
+    }
+
+    #[test]
+    fn journal_failure_restores_preflight_controls() {
+        let mut adapter = MockAdapter::passing();
+        adapter.reported_failure = Some(TransitionStep::WriteTransitioningJournal);
+        let outcome = run_transition(&mut adapter, request(TransitionAction::Activate, true));
+        assert_eq!(outcome.disposition, TransitionDisposition::ForwardFailed);
+        assert!(outcome.recovery_failures.is_empty());
+        assert!(matches!(
+            adapter.events.as_slice(),
+            [Event::Preflight, Event::Journal, Event::RestoreControls]
+        ));
+    }
+
+    #[test]
+    fn failed_preflight_control_restoration_requires_manual_recovery() {
+        let mut adapter = MockAdapter::passing();
+        adapter.adapter_error = Some((
+            TransitionStep::RestorePreflightControls,
+            AdapterError::with_evidence(
+                "control restoration failed",
+                vec![Finding::new(
+                    "fail",
+                    "preflight.restore",
+                    "control restoration failed".into(),
+                )],
+                Vec::new(),
+            ),
+        ));
+        adapter.reported_failure = Some(TransitionStep::WriteTransitioningJournal);
+        let outcome = run_transition(&mut adapter, request(TransitionAction::Activate, true));
+        assert_eq!(outcome.disposition, TransitionDisposition::ManualRecovery);
+        assert_eq!(outcome.recovery_failures.len(), 1);
+        assert_eq!(
+            outcome.recovery_failures[0].step,
+            TransitionStep::RestorePreflightControls
+        );
+        assert!(
+            outcome
+                .findings
+                .iter()
+                .any(|finding| finding.check == "preflight.restore")
+        );
+    }
+
+    #[test]
+    fn compensation_preserves_full_target_evidence_and_overall_failure() {
+        let target = Finding::new("fail", "target.import", "target failed".into())
+            .with_path("/target")
+            .with_details(json!({"reason":"fixture"}))
+            .with_top_findings(vec![json!({"check":"nested"})]);
+        let expected = Finding::new("fail", "target.import", "target failed".into())
+            .with_path("/target")
+            .with_details(json!({"reason":"fixture"}))
+            .with_top_findings(vec![json!({"check":"nested"})]);
+        let mut adapter = MockAdapter::passing();
+        adapter.imports = VecDeque::from([
+            StepOutcome::with_evidence(
+                StepStatus::Fail,
+                vec![target],
+                vec!["target-artifact".into()],
+            ),
+            StepOutcome::pass(),
+        ]);
+        adapter.artifacts = VecDeque::from([StepOutcome::pass()]);
+        adapter.verifies = VecDeque::from([StepOutcome::pass()]);
+        adapter.restarts = VecDeque::from([StepOutcome::pass()]);
+
+        let outcome = run_transition(&mut adapter, request(TransitionAction::Activate, true));
+        assert_eq!(outcome.status, StepStatus::Fail);
+        assert_eq!(outcome.disposition, TransitionDisposition::Restored);
+        assert_eq!(outcome.findings, vec![expected]);
+        assert_eq!(outcome.artifacts, vec!["target-artifact"]);
+        assert_eq!(
+            outcome.phases,
+            vec![
+                TransitionPhase::TransitionJournalRecorded,
+                TransitionPhase::SelectorSelected,
+                TransitionPhase::TargetImportReturned,
+                TransitionPhase::CompensationSelectorSelected,
+                TransitionPhase::CompensationImportReturned,
+                TransitionPhase::CompensationDatabaseAttested,
+                TransitionPhase::CompensationJournalCompleted,
+            ]
+        );
+    }
+
+    #[test]
+    fn first_activation_failure_clears_exact_target_and_stays_stopped() {
+        let mut adapter = MockAdapter::passing();
+        adapter.imports = VecDeque::from([failure("target.import", "failed")]);
+        adapter.artifacts.clear();
+        adapter.verifies.clear();
+        adapter.restarts.clear();
+        let outcome = run_transition(&mut adapter, request(TransitionAction::Activate, false));
+        assert_eq!(outcome.disposition, TransitionDisposition::ManualRecovery);
+        assert!(adapter.events.contains(&Event::Clear("a".repeat(64))));
+        assert!(
+            !adapter
+                .events
+                .iter()
+                .any(|event| matches!(event, Event::Restart(_)))
+        );
+    }
+
+    #[test]
+    fn artifact_identity_failure_is_manual_not_compensated() {
+        let mut adapter = MockAdapter::passing();
+        adapter.artifacts = VecDeque::from([failure("artifact", "changed")]);
+        adapter.verifies.clear();
+        adapter.restarts.clear();
+        let outcome = run_transition(&mut adapter, request(TransitionAction::Activate, true));
+        assert_eq!(outcome.disposition, TransitionDisposition::ManualRecovery);
+        assert!(
+            adapter
+                .events
+                .contains(&Event::Stop(StopReason::TargetArtifactFailure))
+        );
+        assert!(
+            !outcome
+                .phases
+                .contains(&TransitionPhase::CompensationSelectorSelected)
+        );
+    }
+
+    #[test]
+    fn durable_restart_failure_never_rolls_back() {
+        let mut adapter = MockAdapter::passing();
+        adapter.restarts = VecDeque::from([failure("restart", "failed")]);
+        let outcome = run_transition(&mut adapter, request(TransitionAction::Activate, true));
+        assert_eq!(
+            outcome.disposition,
+            TransitionDisposition::DurableButRuntimeFailed
+        );
+        assert_eq!(outcome.phases, forward_phases());
+        assert_eq!(
+            outcome.forward_failure.unwrap().step,
+            TransitionStep::RestartTarget
+        );
+        assert!(
+            !adapter
+                .events
+                .contains(&Event::Stop(StopReason::Compensation))
+        );
+        assert_eq!(
+            adapter
+                .events
+                .iter()
+                .filter(|event| matches!(event, Event::Select(_)))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn restart_warning_is_preserved_without_rollback() {
+        let warning = Finding::new("warn", "restart", "restart degraded".into())
+            .with_details(json!({"service":"gvmd"}));
+        let expected = Finding::new("warn", "restart", "restart degraded".into())
+            .with_details(json!({"service":"gvmd"}));
+        let mut adapter = MockAdapter::passing();
+        adapter.restarts = VecDeque::from([StepOutcome::with_evidence(
+            StepStatus::Warn,
+            vec![warning],
+            Vec::new(),
+        )]);
+        let outcome = run_transition(&mut adapter, request(TransitionAction::Activate, true));
+        assert_eq!(outcome.status, StepStatus::Warn);
+        assert_eq!(outcome.disposition, TransitionDisposition::Activated);
+        assert_eq!(outcome.findings, vec![expected]);
+        assert!(
+            !adapter
+                .events
+                .contains(&Event::Stop(StopReason::Compensation))
+        );
+    }
+
+    #[test]
+    fn adapter_error_preserves_complete_evidence() {
+        let finding = Finding::new("fail", "select", "uncertain".into())
+            .with_path("/selector")
+            .with_details(json!({"observed":null}));
+        let expected = Finding::new("fail", "select", "uncertain".into())
+            .with_path("/selector")
+            .with_details(json!({"observed":null}));
+        let mut adapter = MockAdapter::passing();
+        adapter.adapter_error = Some((
+            TransitionStep::SelectTarget,
+            AdapterError::with_evidence(
+                "selector uncertain",
+                vec![finding],
+                vec!["selector-artifact".into()],
+            ),
+        ));
+        let outcome = run_transition(&mut adapter, request(TransitionAction::Activate, true));
+        assert_eq!(outcome.disposition, TransitionDisposition::ManualRecovery);
+        assert_eq!(outcome.findings, vec![expected]);
+        assert_eq!(outcome.artifacts, vec!["selector-artifact"]);
+        assert_eq!(
+            outcome.forward_failure.unwrap().message,
+            "selector uncertain"
+        );
+    }
+
+    #[test]
+    fn interrupted_recovery_failure_does_not_attempt_a_second_transition() {
+        let mut adapter = MockAdapter::passing();
+        adapter.imports = VecDeque::from([failure("recovery.import", "failed")]);
+        adapter.artifacts.clear();
+        adapter.verifies.clear();
+        adapter.restarts.clear();
+        let mut recovery = request(TransitionAction::Rollback, true);
+        recovery.recovery_only = true;
+        let outcome = run_transition(&mut adapter, recovery);
+        assert_eq!(outcome.disposition, TransitionDisposition::ManualRecovery);
+        assert!(
+            !outcome
+                .phases
+                .contains(&TransitionPhase::CompensationSelectorSelected)
+        );
+        assert!(!adapter.events.contains(&Event::Clear("a".repeat(64))));
+    }
+
+    #[test]
+    fn compensation_failure_is_distinct_and_keeps_apps_stopped() {
+        let mut adapter = MockAdapter::passing();
+        adapter.imports = VecDeque::from([
+            failure("target.import", "failed"),
+            failure("compensation.import", "also failed"),
+        ]);
+        adapter.artifacts.clear();
+        adapter.verifies.clear();
+        adapter.restarts.clear();
+        let outcome = run_transition(&mut adapter, request(TransitionAction::Activate, true));
+        assert_eq!(
+            outcome.disposition,
+            TransitionDisposition::CompensationFailed
+        );
+        assert_eq!(
+            outcome.compensation_failure.unwrap().step,
+            TransitionStep::ImportCompensation
+        );
+        assert!(
+            !adapter
+                .events
+                .iter()
+                .any(|event| matches!(event, Event::Restart(_)))
+        );
+    }
+
+    #[test]
+    fn compensation_restart_failure_preserves_restored_durable_state() {
+        let mut adapter = MockAdapter::passing();
+        adapter.imports = VecDeque::from([failure("target.import", "failed"), StepOutcome::pass()]);
+        adapter.artifacts = VecDeque::from([StepOutcome::pass()]);
+        adapter.verifies = VecDeque::from([StepOutcome::pass()]);
+        adapter.restarts = VecDeque::from([failure("restart", "restored runtime failed")]);
+
+        let outcome = run_transition(&mut adapter, request(TransitionAction::Activate, true));
+        assert_eq!(outcome.status, StepStatus::Fail);
+        assert_eq!(
+            outcome.disposition,
+            TransitionDisposition::RestoredButRuntimeFailed
+        );
+        assert_eq!(
+            outcome.compensation_failure.unwrap().step,
+            TransitionStep::RestartCompensation
+        );
+        assert!(
+            outcome
+                .phases
+                .contains(&TransitionPhase::CompensationJournalCompleted)
+        );
+        assert_eq!(
+            adapter
+                .events
+                .iter()
+                .filter(|event| matches!(event, Event::Select(_)))
+                .count(),
+            2
+        );
+    }
+}

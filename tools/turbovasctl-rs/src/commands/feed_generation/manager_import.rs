@@ -166,3 +166,261 @@ fn import_finding(
     )
     .with_details(json!({"exit_code": exit_code}))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::commands::feed_generation::deployment::APP_SERVICES;
+    use crate::process::{CommandRunner, ProcessOutput};
+    use std::collections::VecDeque;
+    use std::path::Path;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+
+    struct Runner {
+        outputs: Mutex<VecDeque<Option<ProcessOutput>>>,
+        calls: Mutex<Vec<(Vec<String>, Option<Duration>)>>,
+    }
+    impl Runner {
+        fn new(outputs: impl IntoIterator<Item = Option<ProcessOutput>>) -> Self {
+            Self {
+                outputs: Mutex::new(outputs.into_iter().collect()),
+                calls: Mutex::new(Vec::new()),
+            }
+        }
+    }
+    impl CommandRunner for Runner {
+        fn run(&self, _: &str, _: &[&str]) -> Option<ProcessOutput> {
+            unreachable!()
+        }
+        fn run_with(
+            &self,
+            program: &str,
+            args: &[&str],
+            _: Option<&Path>,
+            _: Option<&BTreeMap<OsString, OsString>>,
+            timeout: Option<Duration>,
+        ) -> Option<ProcessOutput> {
+            let mut command = vec![program.to_owned()];
+            command.extend(args.iter().map(|argument| (*argument).to_owned()));
+            self.calls.lock().unwrap().push((command, timeout));
+            self.outputs.lock().unwrap().pop_front().flatten()
+        }
+    }
+    fn output(success: bool, stdout: &str) -> Option<ProcessOutput> {
+        Some(ProcessOutput {
+            success,
+            exit_code: Some(if success { 0 } else { 42 }),
+            stdout: stdout.into(),
+            stderr: "private error".into(),
+        })
+    }
+    fn environment() -> BTreeMap<OsString, OsString> {
+        BTreeMap::from([
+            (OsString::from("POSTGRES_DB"), OsString::from("gvmd")),
+            (OsString::from("POSTGRES_USER"), OsString::from("gvm")),
+        ])
+    }
+    fn images() -> BTreeMap<String, String> {
+        APP_SERVICES
+            .iter()
+            .enumerate()
+            .map(|(index, service)| {
+                (
+                    (*service).to_owned(),
+                    format!("sha256:{}", format!("{index:x}").repeat(64)),
+                )
+            })
+            .collect()
+    }
+    fn fixture_repo() -> (std::path::PathBuf, std::path::PathBuf) {
+        let base = std::env::temp_dir().join(format!(
+            "turbovas-manager-import-test-{}-{}",
+            std::process::id(),
+            SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let repo = base.join("TurboVAS");
+        std::fs::create_dir_all(&repo).unwrap();
+        (base, repo)
+    }
+
+    fn runtime<'a>(
+        repo: &'a Path,
+        runner: &'a Runner,
+        env: &'a BTreeMap<OsString, OsString>,
+        images: &'a BTreeMap<String, String>,
+    ) -> ServiceRuntime<'a> {
+        ServiceRuntime::new(repo, runner, env, images)
+    }
+    fn cleanup_outputs() -> Vec<Option<ProcessOutput>> {
+        let mut outputs = vec![output(true, "")];
+        outputs.extend(APP_SERVICES.map(|_| output(true, "")));
+        outputs
+    }
+
+    #[test]
+    fn imports_in_order_with_exact_timeout_and_arguments() {
+        let env = environment();
+        let image_ids = images();
+        let (base, repo) = fixture_repo();
+        let mut outputs = vec![
+            output(true, "private output"),
+            output(true, "private output"),
+            output(true, "private output"),
+        ];
+        outputs.extend(cleanup_outputs());
+        let runner = Runner::new(outputs);
+        let runtime = runtime(&repo, &runner, &env, &image_ids);
+        let result = import_manager_feed(&runtime);
+        assert_eq!(result.status, StepStatus::Pass);
+        let calls = runner.calls.lock().unwrap();
+        for (index, (_, step)) in IMPORTS.iter().enumerate() {
+            let (command, timeout) = &calls[index];
+            assert_eq!(command[0], "docker");
+            assert_eq!(command[1], "compose");
+            assert_eq!(command[2], "-f");
+            assert_eq!(
+                command[3],
+                repo.join("compose/dev.yaml").display().to_string()
+            );
+            assert_eq!(command[4], "-f");
+            assert_eq!(
+                command[5],
+                base.join("TurboVAS-runtime/state/feed-generation/app-images.json")
+                    .display()
+                    .to_string()
+            );
+            let start = command
+                .iter()
+                .position(|argument| argument == "--profile")
+                .unwrap();
+            let expected = [
+                "--profile",
+                "app",
+                "run",
+                "--rm",
+                "-T",
+                "--pull",
+                "never",
+                "gvmd",
+                "gvmd",
+                "--database=gvmd",
+                "--db-host=postgres",
+                "--db-port=5432",
+                "--db-user=gvm",
+                "--broker-address=mosquitto:1883",
+                "--feed-lock-path=/runtime/run/feed-update.lock",
+            ];
+            assert_eq!(&command[start..start + expected.len()], expected);
+            assert_eq!(&command[start + expected.len()..], *step);
+            assert_eq!(*timeout, Some(IMPORT_TIMEOUT));
+        }
+        assert_eq!(result.findings.len(), 4);
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn failed_step_stops_later_imports_and_removes_every_app_container() {
+        let env = environment();
+        let image_ids = images();
+        let (base, repo) = fixture_repo();
+        let mut outputs = vec![output(false, "private output")];
+        outputs.extend(cleanup_outputs());
+        let runner = Runner::new(outputs);
+        let runtime = runtime(&repo, &runner, &env, &image_ids);
+        let result = import_manager_feed(&runtime);
+        assert_eq!(result.status, StepStatus::Fail);
+        assert!(
+            result
+                .findings
+                .iter()
+                .all(|finding| !finding.message.contains("private"))
+        );
+        let calls = runner.calls.lock().unwrap();
+        assert_eq!(calls.len(), 2 + APP_SERVICES.len());
+        assert!(calls[1].0.iter().any(|argument| argument == "rm"));
+        assert_eq!(result.findings[1].check, "runtime.import-failure-stop");
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn successful_import_removes_every_app_container() {
+        let env = environment();
+        let image_ids = images();
+        let (base, repo) = fixture_repo();
+        let mut outputs = vec![
+            output(true, "private output"),
+            output(true, "private output"),
+            output(true, "private output"),
+        ];
+        outputs.extend(cleanup_outputs());
+        let runner = Runner::new(outputs);
+        let runtime = runtime(&repo, &runner, &env, &image_ids);
+        let result = import_manager_feed(&runtime);
+        assert_eq!(result.status, StepStatus::Pass);
+        assert_eq!(
+            result.findings.last().unwrap().check,
+            "runtime.import-complete-stop"
+        );
+        assert_eq!(runner.calls.lock().unwrap().len(), 4 + APP_SERVICES.len());
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn unsafe_database_or_user_is_rejected_without_running_commands() {
+        for (key, value) in [("POSTGRES_DB", "-database"), ("POSTGRES_USER", "bad\nuser")] {
+            let mut env = environment();
+            env.insert(OsString::from(key), OsString::from(value));
+            let image_ids = images();
+            let (base, repo) = fixture_repo();
+            let runner = Runner::new([]);
+            let runtime = runtime(&repo, &runner, &env, &image_ids);
+            let result = import_manager_feed(&runtime);
+            assert_eq!(result.status, StepStatus::Fail);
+            assert!(runner.calls.lock().unwrap().is_empty());
+            std::fs::remove_dir_all(base).unwrap();
+        }
+    }
+
+    #[test]
+    fn process_launch_failure_still_removes_every_app_container() {
+        let env = environment();
+        let image_ids = images();
+        let (base, repo) = fixture_repo();
+        let mut outputs = vec![None];
+        outputs.extend(cleanup_outputs());
+        let runner = Runner::new(outputs);
+        let runtime = runtime(&repo, &runner, &env, &image_ids);
+
+        let result = import_manager_feed(&runtime);
+
+        assert_eq!(result.status, StepStatus::Fail);
+        assert_eq!(result.findings[0].check, "gvmd.rebuild-nvt");
+        assert_eq!(result.findings[1].check, "runtime.import-failure-stop");
+        assert_eq!(runner.calls.lock().unwrap().len(), 2 + APP_SERVICES.len());
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn unsafe_non_unicode_identifier_is_rejected_without_running_commands() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let mut env = environment();
+        env.insert(
+            OsString::from("POSTGRES_DB"),
+            OsString::from_vec(vec![0xff]),
+        );
+        let image_ids = images();
+        let (base, repo) = fixture_repo();
+        let runner = Runner::new([]);
+        let runtime = runtime(&repo, &runner, &env, &image_ids);
+
+        let result = import_manager_feed(&runtime);
+
+        assert_eq!(result.status, StepStatus::Fail);
+        assert!(runner.calls.lock().unwrap().is_empty());
+        std::fs::remove_dir_all(base).unwrap();
+    }
+}

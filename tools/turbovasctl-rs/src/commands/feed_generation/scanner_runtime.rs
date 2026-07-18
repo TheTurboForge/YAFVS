@@ -133,3 +133,167 @@ mqtt_user = openvas\n\
 mqtt_pass = {mqtt_password}\n"
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::process::{CommandRunner, ProcessOutput};
+    use std::collections::{BTreeMap, VecDeque};
+    use std::ffi::OsString;
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+
+    fn fixture() -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "turbovasctl-scanner-runtime-{}-{}",
+            std::process::id(),
+            SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(root.join("TurboVAS")).unwrap();
+        root
+    }
+
+    struct Runner {
+        outputs: Mutex<VecDeque<Option<ProcessOutput>>>,
+        commands: Mutex<Vec<Vec<String>>>,
+    }
+
+    impl Runner {
+        fn new(outputs: impl IntoIterator<Item = Option<ProcessOutput>>) -> Self {
+            Self {
+                outputs: Mutex::new(outputs.into_iter().collect()),
+                commands: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl CommandRunner for Runner {
+        fn run(&self, _: &str, _: &[&str]) -> Option<ProcessOutput> {
+            unreachable!()
+        }
+
+        fn run_with(
+            &self,
+            program: &str,
+            arguments: &[&str],
+            _: Option<&Path>,
+            _: Option<&BTreeMap<OsString, OsString>>,
+            _: Option<Duration>,
+        ) -> Option<ProcessOutput> {
+            let mut command = vec![program.to_owned()];
+            command.extend(arguments.iter().map(|argument| (*argument).to_owned()));
+            self.commands.lock().unwrap().push(command);
+            self.outputs.lock().unwrap().pop_front().flatten()
+        }
+    }
+
+    fn output(success: bool, stdout: &str) -> Option<ProcessOutput> {
+        Some(ProcessOutput {
+            success,
+            exit_code: Some(if success { 0 } else { 1 }),
+            stdout: stdout.to_owned(),
+            stderr: "private diagnostic".to_owned(),
+        })
+    }
+
+    #[test]
+    fn renders_the_exact_python_compatible_openvas_configuration() {
+        assert_eq!(
+            render_openvas_config("private-value"),
+            "# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>\n\
+# SPDX-License-Identifier: GPL-3.0-or-later\n\
+# Generated development runtime configuration.\n\
+db_address = /runtime/run/redis-openvas/redis.sock\n\
+plugins_folder = /runtime/feeds/openvas/plugins\n\
+include_folders = /runtime/feeds/openvas/plugins\n\
+mqtt_server_uri = mosquitto:1883\n\
+mqtt_user = openvas\n\
+mqtt_pass = private-value\n"
+        );
+    }
+
+    #[test]
+    fn writes_owner_private_config_without_exposing_the_secret_in_evidence() {
+        let root = fixture();
+        let repo = root.join("TurboVAS");
+        let outcome = ensure_openvas_runtime_config(&repo);
+        assert_eq!(outcome.status, StepStatus::Pass);
+        let path = runtime_dir(&repo).join(OPENVAS_CONFIG_RELATIVE);
+        let contents = fs::read_to_string(&path).unwrap();
+        let secret = contents.rsplit_once("mqtt_pass = ").unwrap().1.trim();
+        assert!(!secret.is_empty());
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert!(
+            !serde_json::to_string(&outcome.findings)
+                .unwrap()
+                .contains(secret)
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn redis_readiness_uses_the_existing_service_and_exact_unix_socket_probe() {
+        let root = fixture();
+        let repo = root.join("TurboVAS");
+        let runner = Runner::new([
+            output(true, "abc123\n"),
+            output(true, "true\n"),
+            output(true, "PONG\n"),
+        ]);
+        let environment = BTreeMap::new();
+        let images = BTreeMap::new();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+
+        let outcome = verify_scanner_redis_with(&runtime, 1, Duration::ZERO);
+
+        assert_eq!(outcome.status, StepStatus::Pass);
+        let commands = runner.commands.lock().unwrap();
+        assert_eq!(commands.len(), 3);
+        assert!(commands[2].ends_with(&[
+            "exec".to_owned(),
+            "-T".to_owned(),
+            "redis-openvas".to_owned(),
+            "redis-cli".to_owned(),
+            "-s".to_owned(),
+            REDIS_SOCKET.to_owned(),
+            "ping".to_owned(),
+        ]));
+        assert!(commands.iter().flatten().all(|argument| argument != "up"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn redis_readiness_retries_without_leaking_process_output() {
+        let root = fixture();
+        let repo = root.join("TurboVAS");
+        let runner = Runner::new([
+            output(true, "abc123\n"),
+            output(true, "true\n"),
+            output(false, "private redis output\n"),
+            output(true, "abc123\n"),
+            output(true, "true\n"),
+            output(false, "private redis output\n"),
+        ]);
+        let environment = BTreeMap::new();
+        let images = BTreeMap::new();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+
+        let outcome = verify_scanner_redis_with(&runtime, 2, Duration::ZERO);
+
+        assert_eq!(outcome.status, StepStatus::Fail);
+        assert_eq!(runner.commands.lock().unwrap().len(), 6);
+        assert!(
+            !serde_json::to_string(&outcome.findings)
+                .unwrap()
+                .contains("private redis output")
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+}

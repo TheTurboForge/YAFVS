@@ -438,3 +438,263 @@ pub(super) fn clear_current_generation(runtime_root: &Path, expected_generation_
     let _lock = lock_store(opened.generations.as_raw_fd())?;
     clear_if_expected(opened.store.as_raw_fd(), expected_generation_id)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::tests::{cleanup_tree, valid_generation};
+    use super::*;
+    use std::fs;
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    use std::sync::Mutex;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static TEST_SERIAL: Mutex<()> = Mutex::new(());
+
+    fn cleanup(root: &Path) {
+        cleanup_tree(root);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    fn set_fault(root: &Path, restore: bool) {
+        *FAULT_PLAN.lock().unwrap() = Some(FaultPlan {
+            store: root.join("feed-store"),
+            post_replace: true,
+            restore,
+        });
+    }
+
+    #[test]
+    fn selection_succeeds_and_reports_previous_id() {
+        let _serial = TEST_SERIAL.lock().unwrap();
+        let (root, id) = valid_generation("select-success");
+        let first = select_generation(&root, &id, &Limits::default()).unwrap();
+        assert_eq!(first["previous_generation_id"], Value::Null);
+        assert_eq!(first["current_generation_id"], id);
+        let second = select_generation(&root, &id, &Limits::default()).unwrap();
+        assert_eq!(second["previous_generation_id"], id);
+        assert_eq!(second["current_generation_id"], id);
+        cleanup(&root);
+    }
+
+    #[test]
+    fn invalid_identifiers_are_rejected() {
+        let _serial = TEST_SERIAL.lock().unwrap();
+        let (root, _) = valid_generation("invalid-id");
+        assert_eq!(
+            select_generation(&root, "ABC", &Limits::default()).unwrap_err(),
+            "feed generation identifier is invalid"
+        );
+        assert_eq!(
+            clear_current_generation(&root, "ABC").unwrap_err(),
+            "expected feed generation identifier is invalid"
+        );
+        cleanup(&root);
+    }
+
+    #[test]
+    fn unsafe_selector_and_non_private_store_are_rejected() {
+        let _serial = TEST_SERIAL.lock().unwrap();
+        let (root, _) = valid_generation("unsafe-selector");
+        let store = root.join("feed-store");
+        fs::write(store.join("current"), b"unsafe").unwrap();
+        assert!(
+            read_current_generation(&root, &Limits::default())
+                .unwrap_err()
+                .contains("not a user-owned symlink")
+        );
+        fs::remove_file(store.join("current")).unwrap();
+        fs::set_permissions(&store, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(
+            read_current_generation(&root, &Limits::default()).unwrap_err(),
+            "feed generation store is not private and user-owned"
+        );
+        fs::set_permissions(&store, fs::Permissions::from_mode(0o700)).unwrap();
+        cleanup(&root);
+    }
+
+    #[test]
+    fn first_selection_can_be_cleared() {
+        let _serial = TEST_SERIAL.lock().unwrap();
+        let (root, id) = valid_generation("select-clear");
+        select_generation(&root, &id, &Limits::default()).unwrap();
+        assert_eq!(
+            read_current_generation(&root, &Limits::default())
+                .unwrap()
+                .unwrap()["generation_id"],
+            id
+        );
+        clear_current_generation(&root, &id).unwrap();
+        assert!(
+            read_current_generation(&root, &Limits::default())
+                .unwrap()
+                .is_none()
+        );
+        cleanup(&root);
+    }
+
+    #[test]
+    fn clear_rejects_a_selector_mismatch() {
+        let _serial = TEST_SERIAL.lock().unwrap();
+        let (root, id) = valid_generation("clear-mismatch");
+        select_generation(&root, &id, &Limits::default()).unwrap();
+        let other = "0000000000000000000000000000000000000000000000000000000000000000";
+        assert_eq!(
+            clear_current_generation(&root, other).unwrap_err(),
+            "current feed generation differs from the expected selector"
+        );
+        assert_eq!(
+            read_current_generation(&root, &Limits::default())
+                .unwrap()
+                .unwrap()["generation_id"],
+            id
+        );
+        cleanup(&root);
+    }
+
+    #[test]
+    fn post_replace_failure_restores_the_prior_selector() {
+        let _serial = TEST_SERIAL.lock().unwrap();
+        let (root, id) = valid_generation("restore-prior");
+        symlink(format!("generations/{id}"), root.join("feed-store/current")).unwrap();
+        set_fault(&root, false);
+        let error = select_generation(&root, &id, &Limits::default()).unwrap_err();
+        assert!(error.contains("injected post-replace selection failure"));
+        assert!(error.contains("prior selector was restored"));
+        assert_eq!(
+            read_current_generation(&root, &Limits::default())
+                .unwrap()
+                .unwrap()["generation_id"],
+            id
+        );
+        cleanup(&root);
+    }
+
+    #[test]
+    fn first_selection_failure_clears_the_selector() {
+        let _serial = TEST_SERIAL.lock().unwrap();
+        let (root, id) = valid_generation("clear-failed-first");
+        set_fault(&root, false);
+        let error = select_generation(&root, &id, &Limits::default()).unwrap_err();
+        assert!(error.contains("injected post-replace selection failure"));
+        assert!(
+            read_current_generation(&root, &Limits::default())
+                .unwrap()
+                .is_none()
+        );
+        cleanup(&root);
+    }
+
+    #[test]
+    fn restoration_failure_preserves_both_errors() {
+        let _serial = TEST_SERIAL.lock().unwrap();
+        let (root, id) = valid_generation("restore-failure");
+        symlink(format!("generations/{id}"), root.join("feed-store/current")).unwrap();
+        set_fault(&root, true);
+        let error = select_generation(&root, &id, &Limits::default()).unwrap_err();
+        assert!(error.contains("injected post-replace selection failure"));
+        assert!(error.contains("injected selector restoration failure"));
+        cleanup(&root);
+    }
+
+    #[test]
+    fn replaced_temporary_selector_is_rejected_without_unlinking_replacement() {
+        let _serial = TEST_SERIAL.lock().unwrap();
+        let (root, id) = valid_generation("temporary-replacement");
+        let store = root.join("feed-store");
+        let hook_store = store.clone();
+        let target = format!("generations/{id}");
+        *BEFORE_RENAME_HOOK.lock().unwrap() = Some(Box::new(move || {
+            let temporary = fs::read_dir(&hook_store)
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .find(|path| {
+                    path.file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .starts_with(".current-")
+                })
+                .unwrap();
+            fs::remove_file(&temporary).unwrap();
+            symlink(&target, &temporary).unwrap();
+        }));
+
+        let error = select_generation(&root, &id, &Limits::default()).unwrap_err();
+        assert!(
+            error.contains("temporary feed generation selector is unsafe"),
+            "{error}"
+        );
+        assert!(
+            error.contains("temporary selector cleanup failed"),
+            "{error}"
+        );
+        assert!(!store.join("current").exists());
+        let replacement = fs::read_dir(&store)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .find(|path| {
+                path.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with(".current-")
+            })
+            .unwrap();
+        assert_eq!(
+            fs::read_link(&replacement).unwrap(),
+            Path::new(&format!("generations/{id}"))
+        );
+        fs::remove_file(replacement).unwrap();
+        cleanup(&root);
+    }
+
+    #[test]
+    fn lock_mode_is_normalized_and_hardlinks_are_rejected() {
+        let _serial = TEST_SERIAL.lock().unwrap();
+        let (root, id) = valid_generation("lock-hardening");
+        let lock = root.join("feed-store/generations/.stage.lock");
+        fs::write(&lock, b"").unwrap();
+        fs::set_permissions(&lock, fs::Permissions::from_mode(0o644)).unwrap();
+        select_generation(&root, &id, &Limits::default()).unwrap();
+        assert_eq!(
+            fs::metadata(&lock).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        fs::remove_file(&lock).unwrap();
+
+        let outside = root.join("linked-lock");
+        fs::write(&outside, b"").unwrap();
+        fs::hard_link(&outside, &lock).unwrap();
+        let error = select_generation(&root, &id, &Limits::default()).unwrap_err();
+        assert!(
+            error.contains("owner-only single-link regular file"),
+            "{error}"
+        );
+        fs::remove_file(&lock).unwrap();
+        fs::remove_file(&outside).unwrap();
+        cleanup(&root);
+    }
+
+    #[test]
+    fn symlinked_lock_and_path_components_are_rejected() {
+        let _serial = TEST_SERIAL.lock().unwrap();
+        let (root, id) = valid_generation("symlink-rejection");
+        symlink("/tmp", root.join("feed-store/generations/.stage.lock")).unwrap();
+        assert!(
+            select_generation(&root, &id, &Limits::default())
+                .unwrap_err()
+                .contains("could not open feed generation lock")
+        );
+        fs::remove_file(root.join("feed-store/generations/.stage.lock")).unwrap();
+
+        let link = std::env::temp_dir().join(format!(
+            "turbovas-selector-link-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        symlink(&root, &link).unwrap();
+        assert!(read_current_generation(&link, &Limits::default()).is_err());
+        fs::remove_file(link).unwrap();
+        cleanup(&root);
+    }
+}

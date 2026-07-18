@@ -15687,21 +15687,6 @@ db2:keys=5,expires=0,avg_ttl=0
             self.assertEqual(turbovasctl.enterprise_feed_key_support_markers(root), [])
             self.assertEqual(turbovasctl.enterprise_feed_key_support_finding(root)["status"], "pass")
 
-    def test_feed_generation_specs_cover_all_feed_classes(self):
-        specs = turbovasctl.feed_generation_specs()
-        self.assertEqual([spec.key for spec in specs], [feed_class.key for feed_class in turbovasctl.FEED_CLASSES])
-        self.assertEqual(len(specs), 5)
-        notus = next(spec for spec in specs if spec.key == "notus")
-        self.assertEqual(
-            notus.markers,
-            ("advisories/sha256sums", "advisories/sha256sums.asc", "products/sha256sums", "products/sha256sums.asc"),
-        )
-        self.assertEqual(notus.unsigned_metadata, ("LICENSE", "LICENSE.GPLv2", "LICENSE.ODbLv1", "timestamp"))
-
-
-
-
-
     def test_feed_activation_state_is_private_atomic_and_validated(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"

@@ -41,11 +41,6 @@ if str(TOOLS_MODULE_DIR) in sys.path:
     sys.path.remove(str(TOOLS_MODULE_DIR))
 sys.path.insert(0, str(TOOLS_MODULE_DIR))
 
-from feed_generation import (  # noqa: E402
-    FeedClassSpec as GenerationFeedClassSpec,
-    FeedGenerationError,
-    read_current_generation,
-)
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - exercised by monkeypatch in tests.
@@ -3936,25 +3931,6 @@ def feed_sync_command(repo_root: Path, selftest: bool = False) -> list[str]:
         "--rsync-timeout",
         str(FEED_RSYNC_TIMEOUT_SECONDS),
     ]
-
-
-def feed_generation_specs() -> tuple[GenerationFeedClassSpec, ...]:
-    return tuple(
-        GenerationFeedClassSpec(
-            key=feed_class.key,
-            source_rel=feed_class.cache_rel,
-            runtime_rel=feed_class.runtime_rel,
-            markers=feed_class.markers,
-            signed_manifests=FEED_SIGNED_MANIFESTS.get(feed_class.key, ()),
-            signing_key_fingerprint=GREENBONE_COMMUNITY_KEY_FPR if feed_class.key in FEED_SIGNED_MANIFESTS else None,
-            unsigned_metadata=FEED_UNSIGNED_METADATA.get(feed_class.key, ()),
-        )
-        for feed_class in FEED_CLASSES
-    )
-
-
-
-
 
 
 def gsa_build_dir(repo_root: Path) -> Path:

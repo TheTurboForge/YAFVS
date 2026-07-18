@@ -631,31 +631,6 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertIn("artifacts", decoded)
             self.assertIn("metadata", decoded)
 
-    def test_command_logs_accepts_service_and_line_count(self):
-        commands: list[tuple[str, ...]] = []
-
-        def fake_run_command(command, *_args, **_kwargs):
-            commands.append(tuple(command))
-            return turbovasctl.subprocess.CompletedProcess(command, 0, "one\ntwo\nthree\n", "")
-
-        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(turbovasctl, "run_command", side_effect=fake_run_command):
-            result = turbovasctl.command_logs(Path(tmp), service="turbovas-api", lines=2)
-
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(commands[0][-4:], ("logs", "--tail", "2", "turbovas-api"))
-        details = result["findings"][0]["details"]
-        self.assertEqual(details["service"], "turbovas-api")
-        self.assertEqual(details["lines"], 2)
-        self.assertEqual(details["output_tail"], ["two", "three"])
-
-    def test_command_logs_rejects_non_positive_line_count(self):
-        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(turbovasctl, "run_command") as run_command:
-            result = turbovasctl.command_logs(Path(tmp), service="turbovas-api", lines=0)
-
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(result["findings"][0]["check"], "compose.logs.invalid_lines")
-        run_command.assert_not_called()
-
     def test_deployed_app_env_reuses_running_hosts_by_default(self):
         with unittest.mock.patch.dict(os.environ, {}, clear=True), unittest.mock.patch.object(
             turbovasctl,
@@ -1232,9 +1207,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["feed-state", "--json"],
                 ["feed-copy-to-runtime", "--json"],
                 ["runtime-feed-import-init", "--json"],
-                ["logs", "--lines", "0", "--json"],
-                ["logs", "definitely-invalid", "--lines", "1", "--json"],
-                ["logs", "--service", "definitely-invalid", "--lines", "1", "--json"],
                 ["quality-gate-schedule", "--install", "--json"],
                 ["runtime-native-api-direct-token", "--json"],
                 ["license-report", "--json"],
@@ -1259,6 +1231,9 @@ class TurboVASCtlTests(unittest.TestCase):
                 (["deps", "gsa", "--json"], 0, "pass"),
                 (["deps", "definitely-invalid", "--json"], 1, "fail"),
                 (["runtime-plan", "--json"], 0, "warn"),
+                (["logs", "--lines", "0", "--json"], 1, "fail"),
+                (["logs", "definitely-invalid", "--lines", "1", "--json"], 0, "pass"),
+                (["logs", "--service", "definitely-invalid", "--lines", "1", "--json"], 0, "pass"),
                 (["feed-generation-state", "--json"], 0, "warn"),
                 (["feed-generation-state", "--status-only", "--json"], 0, "warn"),
                 (["feed-generation-stage", "--json"], 1, "fail"),
@@ -2486,10 +2461,11 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotIn(f"def command_{command.replace('-', '_')}", source)
+                self.assertNotIn(f'args.command == "{command}"', source)
                 self.assertIn(f"{command} *args:", justfile)
                 self.assertIn(f'{direct_recipe} {command} "$@"', justfile)
 
@@ -11300,6 +11276,7 @@ class TurboVASCtlTests(unittest.TestCase):
             "inventory",
             "deps",
             "runtime-plan",
+            "logs",
         }
         python_owned = (
             "doctor",
@@ -11312,7 +11289,6 @@ class TurboVASCtlTests(unittest.TestCase):
             "build-baseline",
             "up",
             "down",
-            "logs",
         )
         for recipe in rust_owned | set(python_owned):
             with self.subTest(recipe=recipe):

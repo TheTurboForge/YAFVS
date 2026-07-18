@@ -402,7 +402,7 @@ mod tests {
     }
 
     #[test]
-    fn feed_generation_golden_recipes_run_rust_directly() {
+    fn rust_direct_recipes_do_not_route_through_python() {
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let justfile = fs::read_to_string(repo_root.join("justfile")).unwrap();
         for command in [
@@ -410,6 +410,9 @@ mod tests {
             "feed-generation-state",
             "feed-generation-activate",
             "feed-generation-rollback",
+            "runtime-db-introspect",
+            "runtime-redis-state",
+            "c-hardening-check",
         ] {
             let recipe = justfile
                 .split_once(&format!("{command} *args:\n"))

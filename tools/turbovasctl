@@ -196,14 +196,6 @@ C_HARDENING_ARTIFACT_SPECS = {
     "gsad": ("build/gsad/src/gsad",),
 }
 C_HARDENING_EXPECTED_ARTIFACT_COUNT = 20
-C_HARDENING_RETIRED_PREFIX_ARTIFACTS = (
-    "include/gvm/agent_controller",
-    "include/gvm/container_image_scanner",
-    "lib/libgvm_agent_controller.so*",
-    "lib/libgvm_container_image_scanner.so*",
-    "lib/pkgconfig/libgvm_agent_controller.pc",
-    "lib/pkgconfig/libgvm_container_image_scanner.pc",
-)
 HARDENED_REQUIRED_FEATURES = (
     "format_security",
     "fortify",
@@ -493,7 +485,6 @@ NMAP_PRIVILEGE_WARNING_PATTERNS = (
 LOG_REVIEW_TAIL_LINES = 300
 RETAINED_QUALITY_GATE_ARTIFACTS = 30
 RETAINED_PERFORMANCE_ARTIFACTS = 30
-RETAINED_C_HARDENING_ARTIFACTS = 30
 GSA_OPERATION_LOCK = "gsa-quality"
 RUNTIME_MANAGER_LOCK = "runtime-manager"
 FEED_ACTIVATION_LOCK = "feed-generation-activation"
@@ -536,6 +527,9 @@ NATIVE_TOOLING_MARKERS = (
     "gmp.",
     "gvm-cli",
 )
+NATIVE_TOOLING_MARKER_EXCLUSIONS = {
+    "tools/turbovasctl-rs/src/commands/c_hardening.rs": frozenset({"gmp."}),
+}
 NATIVE_TOOLING_PRODUCT_GVM_TOOLS_SCRIPTS = frozenset()
 NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
     "compatibility_probe": set(),
@@ -8190,13 +8184,14 @@ def command_inventory(repo_root: Path, scope: str | None = None) -> dict[str, An
     return make_result("inventory", repo_root, f"Inventory contains {len(rows)} expected component(s).", findings)
 
 
-def native_tooling_markers(path: Path) -> list[str]:
+def native_tooling_markers(path: Path, relative_path: str) -> list[str]:
     try:
         text = path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
         return []
     lower = text.lower()
-    return [marker for marker in NATIVE_TOOLING_MARKERS if marker.lower() in lower]
+    excluded = NATIVE_TOOLING_MARKER_EXCLUSIONS.get(relative_path, frozenset())
+    return [marker for marker in NATIVE_TOOLING_MARKERS if marker not in excluded and marker.lower() in lower]
 
 
 def native_tooling_category(relative_path: str) -> tuple[str, str] | None:
@@ -8243,7 +8238,7 @@ def native_tooling_inventory(repo_root: Path) -> list[dict[str, Any]]:
         path = repo_root / relative_path
         if not path.is_file():
             continue
-        markers = native_tooling_markers(path)
+        markers = native_tooling_markers(path, relative_path)
         if not markers:
             continue
         classified = native_tooling_category(relative_path)
@@ -15623,38 +15618,6 @@ def c_hardening_artifact_spec_matches(repo_root: Path, profile: str | None = Non
     }
 
 
-def c_hardening_cmake_state(repo_root: Path, component: str, profile: str | None = None) -> dict[str, Any]:
-    _, build_root, _ = cmake_paths(repo_root, component, profile)
-    cache = build_root / "CMakeCache.txt"
-    build_type: str | None = None
-    if cache.is_file():
-        try:
-            for line in cache.read_text(encoding="utf-8", errors="replace").splitlines():
-                if line.startswith("CMAKE_BUILD_TYPE:"):
-                    build_type = line.partition("=")[2] or None
-                    break
-        except OSError:
-            pass
-    return {
-        "build_dir": str(build_root.relative_to(repo_root)),
-        "build_present": build_root.is_dir(),
-        "build_type": build_type,
-        "compile_commands": str((build_root / "compile_commands.json").relative_to(repo_root)),
-        "compile_commands_present": (build_root / "compile_commands.json").is_file(),
-    }
-
-
-def c_hardening_retired_prefix_artifacts(repo_root: Path, profile: str | None = None) -> list[str]:
-    _, _, prefix = cmake_paths(repo_root, "gvm-libs", profile)
-    artifacts = {
-        str(path.relative_to(repo_root))
-        for pattern in C_HARDENING_RETIRED_PREFIX_ARTIFACTS
-        for path in prefix.glob(pattern)
-        if path.exists() or path.is_symlink()
-    }
-    return sorted(artifacts)
-
-
 def c_hardening_file_record(repo_root: Path, path: Path) -> dict[str, Any]:
     evidence = c_hardening_artifact_file_evidence(path)
     try:
@@ -15765,127 +15728,6 @@ def write_hardened_build_manifest(repo_root: Path) -> dict[str, Any]:
     return finding("pass", "build-c-services.hardening-manifest", "Hardened build manifest recorded source, toolchain, compile database, and exact ELF identities.", str(HARDENED_BUILD_MANIFEST))
 
 
-def c_hardening_property(status: str, evidence: str) -> dict[str, str]:
-    return {"status": status, "evidence": evidence}
-
-
-def c_hardening_elf_properties(
-    *,
-    component: str,
-    relative_path: str,
-    header: str,
-    program_headers: str,
-    dynamic: str,
-    symbols: str,
-    notes: str,
-) -> dict[str, Any]:
-    type_match = re.search(r"^\s*Type:\s+(\S+)", header, re.MULTILINE)
-    machine_match = re.search(r"^\s*Machine:\s+(.+?)\s*$", header, re.MULTILINE)
-    elf_type = type_match.group(1) if type_match else "unknown"
-    machine = machine_match.group(1) if machine_match else "unknown"
-    has_interpreter = " INTERP " in f" {program_headers.replace(chr(10), ' ')} " or bool(
-        re.search(r"^\s*INTERP\s", program_headers, re.MULTILINE)
-    )
-    file_name = Path(relative_path).name.lower()
-    looks_like_shared_library = ".so" in file_name
-    is_test = any(part.lower() in {"test", "tests"} for part in Path(relative_path).parts) or "test" in file_name
-    if has_interpreter or (elf_type in {"DYN", "EXEC"} and not looks_like_shared_library and component != "pg-gvm"):
-        kind = "test-executable" if is_test else "executable"
-    elif component == "pg-gvm":
-        kind = "module"
-    elif elf_type == "DYN":
-        kind = "shared-library"
-    else:
-        kind = "other"
-
-    if kind in {"executable", "test-executable"}:
-        pie = c_hardening_property(
-            "present" if elf_type == "DYN" else "missing",
-            f"ELF type is {elf_type}; executable {'has' if has_interpreter else 'does not have'} an interpreter",
-        )
-    else:
-        pie = c_hardening_property("not_applicable", f"artifact kind is {kind}")
-
-    stack_line = next((line for line in program_headers.splitlines() if "GNU_STACK" in line), None)
-    if stack_line is None:
-        nx_stack = c_hardening_property("unknown", "GNU_STACK program header was not found")
-    else:
-        stack_flags = stack_line.split()[-2] if len(stack_line.split()) >= 2 else ""
-        nx_stack = c_hardening_property(
-            "missing" if "E" in stack_flags else "present",
-            f"GNU_STACK flags are {stack_flags or 'unparsed'}",
-        )
-
-    has_relro = "GNU_RELRO" in program_headers
-    has_now = "BIND_NOW" in dynamic or bool(re.search(r"FLAGS(?:_1)?[^\n]*\bNOW\b", dynamic))
-    full_relro = c_hardening_property(
-        "present" if has_relro and has_now else "missing",
-        f"GNU_RELRO={'yes' if has_relro else 'no'}, immediate binding={'yes' if has_now else 'no'}",
-    )
-    has_textrel = "(TEXTREL)" in dynamic or bool(re.search(r"FLAGS[^\n]*\bTEXTREL\b", dynamic))
-    no_text_relocations = c_hardening_property(
-        "missing" if has_textrel else "present",
-        "dynamic section declares TEXTREL" if has_textrel else "dynamic section has no TEXTREL marker",
-    )
-    stack_symbol = "__stack_chk_fail" in symbols
-    stack_protector = c_hardening_property(
-        "unknown",
-        "__stack_chk_fail symbol reference found, but whole-artifact compiler coverage is not proven"
-        if stack_symbol
-        else "no stack-check symbol reference; compile flags and applicability are not proven",
-    )
-    fortify_match = re.search(r"\b__[A-Za-z0-9_]+_chk(?:@|\b)", symbols)
-    fortify = c_hardening_property(
-        "unknown",
-        f"fortified symbol {fortify_match.group(0)} found, but whole-artifact compiler coverage is not proven"
-        if fortify_match
-        else "no fortified libc symbol reference; applicability and compile flags are not proven",
-    )
-    if "X86-64" in machine.upper():
-        ibt = "IBT" in notes
-        shstk = "SHSTK" in notes
-        control_flow = c_hardening_property(
-            "present" if ibt and shstk else "unknown",
-            f"x86 feature notes: IBT={'yes' if ibt else 'no'}, SHSTK={'yes' if shstk else 'no'}",
-        )
-    elif "AARCH64" in machine.upper():
-        has_branch_note = "BTI" in notes or "PAC" in notes
-        control_flow = c_hardening_property(
-            "present" if has_branch_note else "unknown",
-            "AArch64 branch-protection note found" if has_branch_note else "no recognized AArch64 branch-protection note",
-        )
-    else:
-        control_flow = c_hardening_property("unsupported", f"no detector for machine {machine}")
-
-    return {
-        "component": component,
-        "path": relative_path,
-        "kind": kind,
-        "elf_type": elf_type,
-        "machine": machine,
-        "properties": {
-            "pie": pie,
-            "nx_stack": nx_stack,
-            "full_relro": full_relro,
-            "stack_protector": stack_protector,
-            "fortify": fortify,
-            "control_flow_protection": control_flow,
-            "no_text_relocations": no_text_relocations,
-        },
-    }
-
-
-def c_hardening_readelf(path: Path, *args: str) -> tuple[bool, str]:
-    result = subprocess.run(
-        ["readelf", "-W", *args, str(path)],
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
-    )
-    return result.returncode == 0, result.stdout
-
-
 def c_hardening_artifact_file_evidence(path: Path) -> dict[str, Any]:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -15897,444 +15739,6 @@ def c_hardening_artifact_file_evidence(path: Path) -> dict[str, Any]:
         "size_bytes": stat.st_size,
         "mtime_ns": stat.st_mtime_ns,
     }
-
-
-def inspect_c_hardening_artifact(repo_root: Path, component: str, path: Path) -> dict[str, Any]:
-    relative_path = str(path.relative_to(repo_root))
-    header_ok, header = c_hardening_readelf(path, "-h")
-    program_headers_ok, program_headers = c_hardening_readelf(path, "-l")
-    file_evidence = c_hardening_artifact_file_evidence(path)
-    if not header_ok or not program_headers_ok:
-        unknown = c_hardening_property("unknown", "readelf could not inspect the ELF header and program headers")
-        return {
-            "component": component,
-            "path": relative_path,
-            "kind": "unknown",
-            "elf_type": "unknown",
-            "machine": "unknown",
-            "file_evidence": file_evidence,
-            "properties": {
-                "pie": unknown,
-                "nx_stack": unknown,
-                "full_relro": unknown,
-                "stack_protector": unknown,
-                "fortify": unknown,
-                "control_flow_protection": unknown,
-                "no_text_relocations": unknown,
-            },
-        }
-    dynamic_ok, dynamic = c_hardening_readelf(path, "-d")
-    symbols_ok, symbols = c_hardening_readelf(path, "-s")
-    notes_ok, notes = c_hardening_readelf(path, "-n")
-    result = c_hardening_elf_properties(
-        component=component,
-        relative_path=relative_path,
-        header=header,
-        program_headers=program_headers,
-        dynamic=dynamic,
-        symbols=symbols,
-        notes=notes,
-    )
-    result["file_evidence"] = file_evidence
-    if not dynamic_ok:
-        evidence = c_hardening_property("unknown", "readelf could not inspect the dynamic section")
-        result["properties"]["full_relro"] = evidence
-        result["properties"]["no_text_relocations"] = evidence
-    if not symbols_ok:
-        result["properties"]["stack_protector"] = c_hardening_property(
-            "unknown", "readelf could not inspect symbols"
-        )
-        result["properties"]["fortify"] = c_hardening_property(
-            "unknown", "readelf could not inspect symbols"
-        )
-    if not notes_ok:
-        result["properties"]["control_flow_protection"] = c_hardening_property(
-            "unknown", "readelf could not inspect ELF notes"
-        )
-    return result
-
-
-def c_hardening_compile_evidence(
-    repo_root: Path,
-    component: str,
-    profile: str,
-    configuration: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    _, build, _ = cmake_paths(repo_root, component, profile)
-    database = build / "compile_commands.json"
-    database_path = str(database.relative_to(repo_root))
-    try:
-        entries = json.loads(database.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {"status": "fail", "path": database_path, "properties": {}, "entry_count": 0, "c_entry_count": 0, "validated_command_count": 0, "malformed_entry_count": 1}
-    if not isinstance(entries, list) or not entries:
-        return {"status": "fail", "path": database_path, "properties": {}, "entry_count": 0, "c_entry_count": 0, "validated_command_count": 0, "malformed_entry_count": 1}
-
-    commands: list[list[str]] = []
-    c_entry_count = 0
-    malformed_entry_count = 0
-    for entry in entries:
-        if not isinstance(entry, dict):
-            malformed_entry_count += 1
-            continue
-        source_file = entry.get("file")
-        if not isinstance(source_file, str):
-            malformed_entry_count += 1
-            continue
-        if Path(source_file).suffix.lower() != ".c":
-            continue
-        c_entry_count += 1
-        arguments = entry.get("arguments")
-        command = entry.get("command")
-        if isinstance(arguments, list) and all(isinstance(value, str) for value in arguments):
-            commands.append(arguments)
-        elif isinstance(command, str):
-            try:
-                commands.append(shlex.split(command))
-            except ValueError:
-                malformed_entry_count += 1
-        else:
-            malformed_entry_count += 1
-    if not commands or c_entry_count != len(commands):
-        return {
-            "status": "fail",
-            "path": database_path,
-            "properties": {},
-            "entry_count": len(entries),
-            "c_entry_count": c_entry_count,
-            "validated_command_count": len(commands),
-            "malformed_entry_count": malformed_entry_count,
-        }
-
-    configuration = configuration or read_json_artifact(repo_root / HARDENED_CONFIGURATION)
-    feature_evidence = configuration.get("features") if isinstance(configuration, dict) else None
-    if not isinstance(feature_evidence, dict):
-        return {
-            "status": "fail",
-            "path": database_path,
-            "properties": {},
-            "entry_count": len(entries),
-            "c_entry_count": c_entry_count,
-            "validated_command_count": len(commands),
-            "malformed_entry_count": malformed_entry_count,
-        }
-
-    def last_matching_option(command: list[str], predicate: Callable[[str], bool]) -> str | None:
-        return next((option for option in reversed(command) if predicate(option)), None)
-
-    def effective_property_evidence(
-        name: str,
-        predicate: Callable[[str], bool],
-        accepted: set[str],
-        *,
-        required: bool = True,
-    ) -> dict[str, str]:
-        feature = feature_evidence.get(name)
-        if not isinstance(feature, dict) or feature.get("status") != "present":
-            if not required and isinstance(feature, dict) and feature.get("status") == "unsupported":
-                return c_hardening_property(
-                    "unsupported",
-                    f"optional configured {name} feature is unsupported on this architecture",
-                )
-            return c_hardening_property("missing", f"required configured {name} feature is absent or unsupported")
-        effective = [last_matching_option(command, predicate) for command in commands]
-        present = all(option in accepted for option in effective)
-        observed = sorted({option or "absent" for option in effective})
-        return c_hardening_property(
-            "present" if present else "missing",
-            ("all" if present else "not all")
-            + f" {len(commands)} compilation command(s) have an accepted effective {name} option; observed: "
-            + ", ".join(observed),
-        )
-
-    optimization_options = [
-        last_matching_option(command, lambda option: bool(re.fullmatch(r"-O(?:[0-9]+|fast|g|s|z)?", option)))
-        for command in commands
-    ]
-    optimization_present = all(option == "-O2" for option in optimization_options)
-    optimization = c_hardening_property(
-        "present" if optimization_present else "missing",
-        ("all" if optimization_present else "not all")
-        + f" {len(commands)} compilation command(s) have effective -O2; observed: "
-        + ", ".join(sorted({option or "absent" for option in optimization_options})),
-    )
-    fortify_flags = feature_evidence.get("fortify", {}).get("flags", [])
-    fortify_define = next(
-        (flag for flag in reversed(fortify_flags) if isinstance(flag, str) and flag.startswith("-D_FORTIFY_SOURCE=")),
-        "",
-    )
-    fortify = effective_property_evidence(
-        "fortify",
-        lambda option: option == "-U_FORTIFY_SOURCE" or option.startswith("-D_FORTIFY_SOURCE="),
-        {fortify_define},
-    )
-    if optimization["status"] != "present" and fortify["status"] == "present":
-        fortify = c_hardening_property("missing", "Fortify define is effective, but required optimization is not effective")
-
-    architecture = configuration.get("architecture") if isinstance(configuration.get("architecture"), str) else ""
-    control_flow_required = not architecture or hardened_control_flow_required(architecture)
-    properties = {
-        "optimization": optimization,
-        "fortify": fortify,
-        "stack_protector": effective_property_evidence(
-            "stack_protector",
-            lambda option: option in {
-                "-fno-stack-protector",
-                "-fstack-protector",
-                "-fstack-protector-all",
-                "-fstack-protector-explicit",
-                "-fstack-protector-strong",
-            },
-            {"-fstack-protector-strong", "-fstack-protector-all"},
-        ),
-        "stack_clash": effective_property_evidence(
-            "stack_clash",
-            lambda option: option in {"-fstack-clash-protection", "-fno-stack-clash-protection"},
-            {"-fstack-clash-protection"},
-        ),
-        "format_security": effective_property_evidence(
-            "format_security",
-            lambda option: option in {
-                "-Werror=format-security",
-                "-Wno-error=format-security",
-                "-Wformat-security",
-                "-Wno-format-security",
-            },
-            {"-Werror=format-security"},
-        ),
-        "control_flow_protection": effective_property_evidence(
-            "control_flow_protection",
-            lambda option: option.startswith("-fcf-protection=") or option.startswith("-mbranch-protection="),
-            set(feature_evidence.get("control_flow_protection", {}).get("flags", [])),
-            required=control_flow_required,
-        ),
-    }
-    complete = malformed_entry_count == 0 and c_entry_count == len(commands)
-    accepted_statuses = {
-        name: value["status"] == "present"
-        or (name == "control_flow_protection" and not control_flow_required and value["status"] == "unsupported")
-        for name, value in properties.items()
-    }
-    return {
-        "status": "pass" if complete and all(accepted_statuses.values()) else "fail",
-        "path": database_path,
-        "command_count": len(commands),
-        "entry_count": len(entries),
-        "c_entry_count": c_entry_count,
-        "validated_command_count": len(commands),
-        "malformed_entry_count": malformed_entry_count,
-        "properties": properties,
-    }
-
-
-def c_hardening_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    details = result.get("details") if isinstance(result.get("details"), dict) else {}
-    return {
-        "status": result.get("status", "fail"),
-        "summary": result.get("summary", "C hardening baseline unavailable."),
-        "findings": [item for item in result.get("findings", []) if item.get("status") != "pass"],
-        "artifacts": result.get("artifacts", []),
-        "metadata": result.get("metadata", {}),
-        "details": {
-            "profile": details.get("profile"),
-            "source_state": details.get("source_state", {}),
-            "artifact_count": details.get("artifact_count", 0),
-            "component_artifact_counts": details.get("component_artifact_counts", {}),
-            "property_status_counts": details.get("property_status_counts", {}),
-            "compile_evidence": details.get("compile_evidence", {}),
-        },
-    }
-
-
-def c_hardening_manifest_finding(repo_root: Path, manifest: dict[str, Any] | None) -> dict[str, Any]:
-    current, error = hardened_build_manifest_payload(repo_root)
-    if manifest is None or current is None:
-        return finding(
-            "fail",
-            "c-hardening.build-manifest",
-            "Hardened build manifest is missing or current build identity cannot be collected.",
-            str(HARDENED_BUILD_MANIFEST),
-            {"error": error, "manifest_present": manifest is not None},
-        )
-    identity_keys = ("configuration", "cmake_injection", "toolchains", "compile_databases", "artifacts")
-    mismatches = [key for key in identity_keys if manifest.get(key) != current.get(key)]
-    head_matches = manifest.get("head") == current.get("head")
-    status_matches = manifest.get("source_status") == current.get("source_status")
-    source_clean = current.get("source_status") == ""
-    schema_matches = manifest.get("schema_version") == 1 and manifest.get("profile") == "hardened"
-    passed = schema_matches and head_matches and status_matches and source_clean and not mismatches
-    return finding(
-        "pass" if passed else "fail",
-        "c-hardening.build-manifest",
-        "Hardened build manifest matches the clean current source, configured toolchains, compile databases, and exact ELF artifacts."
-        if passed
-        else "Hardened build manifest does not match a clean current build identity.",
-        str(HARDENED_BUILD_MANIFEST),
-        {
-            "schema_matches": schema_matches,
-            "head_matches": head_matches,
-            "source_status_matches": status_matches,
-            "source_clean": source_clean,
-            "identity_mismatches": mismatches,
-        },
-    )
-
-
-def command_c_hardening_check(repo_root: Path, status_only: bool = False, profile: str | None = None) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    readelf = shutil.which("readelf")
-    findings.append(
-        finding(
-            "pass" if readelf else "fail",
-            "c-hardening.readelf",
-            f"readelf is available at {readelf}." if readelf else "readelf is required to inspect ELF hardening properties.",
-        )
-    )
-    retired_prefix_artifacts = c_hardening_retired_prefix_artifacts(repo_root, profile)
-    findings.append(
-        finding(
-            "fail" if retired_prefix_artifacts else "pass",
-            "c-hardening.retired-prefix-artifacts",
-            f"Found {len(retired_prefix_artifacts)} known retired C build-prefix artifact(s)."
-            if retired_prefix_artifacts
-            else "No known retired C build-prefix artifacts are present.",
-            details={"artifacts": retired_prefix_artifacts},
-        )
-    )
-    configuration = read_json_artifact(repo_root / HARDENED_CONFIGURATION) if profile == "hardened" else None
-    manifest = read_json_artifact(repo_root / HARDENED_BUILD_MANIFEST) if profile == "hardened" else None
-    if profile == "hardened":
-        findings.append(c_hardening_manifest_finding(repo_root, manifest))
-    build_state = {component: c_hardening_cmake_state(repo_root, component, profile) for component in C_SERVICES_CHAIN}
-    artifact_spec_matches = c_hardening_artifact_spec_matches(repo_root, profile)
-    artifact_pairs = c_hardening_artifact_paths(repo_root, profile) if readelf else []
-    component_counts = {component: 0 for component in C_SERVICES_CHAIN}
-    for component, _path in artifact_pairs:
-        component_counts[component] += 1
-    for component, state in build_state.items():
-        missing_patterns = [pattern for pattern, count in artifact_spec_matches[component].items() if count == 0]
-        if not state["build_present"]:
-            findings.append(finding("fail", "c-hardening.build", f"{component} has no current build directory.", state["build_dir"]))
-        elif missing_patterns:
-            findings.append(
-                finding(
-                    "fail",
-                    "c-hardening.artifact-spec",
-                    f"{component} is missing {len(missing_patterns)} declared final artifact pattern(s).",
-                    state["build_dir"],
-                    {"missing_patterns": missing_patterns},
-                )
-            )
-        elif component_counts[component] == 0:
-            findings.append(finding("fail", "c-hardening.artifacts", f"{component} has no declared final ELF artifact.", state["build_dir"]))
-        else:
-            findings.append(finding("pass", "c-hardening.artifacts", f"{component} has {component_counts[component]} final ELF artifact(s).", state["build_dir"]))
-
-    artifacts = [inspect_c_hardening_artifact(repo_root, component, path) for component, path in artifact_pairs]
-    artifact_count_status = "pass" if len(artifacts) == C_HARDENING_EXPECTED_ARTIFACT_COUNT else "fail"
-    findings.append(
-        finding(
-            artifact_count_status,
-            "c-hardening.artifact-count",
-            f"Hardening registry resolved {len(artifacts)} unique final ELF artifact(s); expected {C_HARDENING_EXPECTED_ARTIFACT_COUNT}.",
-            details={"actual": len(artifacts), "expected": C_HARDENING_EXPECTED_ARTIFACT_COUNT},
-        )
-    )
-    compile_evidence = {
-        component: c_hardening_compile_evidence(repo_root, component, profile, configuration)
-        for component in C_SERVICES_CHAIN
-    } if profile == "hardened" else {}
-    for component, evidence in compile_evidence.items():
-        findings.append(
-            finding(
-                evidence["status"],
-                "c-hardening.compile-commands",
-                component + " hardened compilation evidence is " + str(evidence["status"]) + ".",
-                evidence.get("path"),
-                {
-                    "properties": evidence.get("properties", {}),
-                    "entry_count": evidence.get("entry_count", 0),
-                    "c_entry_count": evidence.get("c_entry_count", 0),
-                    "validated_command_count": evidence.get("validated_command_count", 0),
-                    "malformed_entry_count": evidence.get("malformed_entry_count", 0),
-                },
-            )
-        )
-    property_counts = {status: 0 for status in ("present", "missing", "unsupported", "not_applicable", "unknown")}
-    runtime_missing: list[dict[str, str]] = []
-    runtime_unknown: list[dict[str, str]] = []
-    for artifact in artifacts:
-        runtime_scope = artifact["kind"] != "test-executable"
-        for property_name, value in artifact["properties"].items():
-            property_counts[value["status"]] = property_counts.get(value["status"], 0) + 1
-            row = {"path": artifact["path"], "property": property_name, "evidence": value["evidence"]}
-            if runtime_scope and value["status"] == "missing":
-                runtime_missing.append(row)
-            elif runtime_scope and value["status"] == "unknown" and not (
-                profile == "hardened" and property_name in {"stack_protector", "fortify"}
-            ):
-                runtime_unknown.append(row)
-    compile_failed = any(evidence["status"] != "pass" for evidence in compile_evidence.values())
-    baseline_status = "fail" if runtime_missing or runtime_unknown or not artifacts or compile_failed else "pass"
-    findings.append(
-        finding(
-            baseline_status,
-            "c-hardening.current-baseline",
-            f"Current ELF baseline has {len(runtime_missing)} missing and {len(runtime_unknown)} unknown runtime-artifact protection result(s).",
-            details={
-                "missing_count": len(runtime_missing),
-                "unknown_count": len(runtime_unknown),
-                "missing_examples": runtime_missing[:5],
-                "unknown_examples": runtime_unknown[:5],
-            },
-        )
-    )
-    artifact_dir = runtime_path(repo_root, "artifacts", "c-hardening") if profile is None else runtime_path(repo_root, "artifacts", "c-hardening", profile)
-    latest_path, timestamped_path = retained_json_artifact_paths(artifact_dir, "c-hardening", "c-hardening.json")
-    source_status = c_hardening_git_source_state(repo_root)
-    if source_status is None:
-        findings.append(finding("fail", "c-hardening.source-state", "Git source state could not be determined."))
-    elif source_status:
-        findings.append(
-            finding(
-                "fail",
-                "c-hardening.source-state",
-                "Tracked or untracked nonignored source changes are present; hardening evidence cannot be attributed to a clean source state.",
-            )
-        )
-    result = make_result(
-        "c-hardening-check",
-        repo_root,
-        (profile or "current")
-        + f" C hardening baseline inspected {len(artifacts)} final ELF artifact(s); {len(runtime_missing)} missing and {len(runtime_unknown)} unknown runtime protection result(s).",
-        findings,
-        [str(latest_path), str(timestamped_path)],
-    )
-    result["details"] = {
-        "schema_version": 1,
-        "profile": profile or "current",
-        "source_state": {
-            "head": run_git(repo_root, ["rev-parse", "HEAD"]),
-            "dirty": None if source_status is None else bool(source_status),
-        },
-        "toolchain": {
-            "architecture": os.uname().machine,
-            "gcc": tool_version("gcc"),
-            "clang": tool_version("clang"),
-            "cmake": tool_version("cmake"),
-            "linker": tool_version("ld"),
-            "readelf": tool_version("readelf"),
-        },
-        "build_state": build_state,
-        "artifact_count": len(artifacts),
-        "component_artifact_counts": component_counts,
-        "artifact_spec_matches": artifact_spec_matches,
-        "property_status_counts": property_counts,
-        "artifacts": artifacts,
-        "compile_evidence": compile_evidence,
-    }
-    write_retained_json_artifact(latest_path, timestamped_path, result, "c-hardening", RETAINED_C_HARDENING_ARTIFACTS)
-    return c_hardening_status_only_result(result) if status_only else result
 
 
 def _command_build_ui_unlocked(repo_root: Path) -> dict[str, Any]:
@@ -35208,9 +34612,6 @@ def build_parser() -> argparse.ArgumentParser:
     build_core_c.add_argument("--profile", choices=C_BUILD_PROFILES, help="isolated C build profile")
     build_c_services = subparsers.add_parser("build-c-services", parents=[common], help="build current C service baseline")
     build_c_services.add_argument("--profile", choices=C_BUILD_PROFILES, help="isolated C build profile")
-    c_hardening = subparsers.add_parser("c-hardening-check", parents=[common], help="inspect current final C ELF artifact hardening properties")
-    c_hardening.add_argument("--status-only", action="store_true", help="emit compact counts and only non-pass findings")
-    c_hardening.add_argument("--profile", choices=C_BUILD_PROFILES, help="inspect an isolated C build profile")
     subparsers.add_parser("build-ui", parents=[common], help="build the web UI")
     subparsers.add_parser("build-python", parents=[common], help="build/import-check Python components")
     subparsers.add_parser("build-baseline", parents=[common], help="build the inherited stack baseline")
@@ -35596,8 +34997,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_build_core_c(repo_root, args.profile)
     elif args.command == "build-c-services":
         result = command_build_c_services(repo_root, args.profile)
-    elif args.command == "c-hardening-check":
-        result = command_c_hardening_check(repo_root, status_only=args.status_only, profile=args.profile)
     elif args.command == "build-ui":
         result = command_build_ui(repo_root)
     elif args.command == "build-python":

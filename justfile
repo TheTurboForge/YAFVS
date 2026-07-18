@@ -165,7 +165,7 @@ build-c-services *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl build-c-services "$@"
 
 c-hardening-check *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl c-hardening-check "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml -- c-hardening-check "$@"
 
 build-ui *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/turbovasctl build-ui "$@"

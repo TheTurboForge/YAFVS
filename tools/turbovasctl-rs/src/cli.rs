@@ -288,6 +288,36 @@ mod tests {
     }
 
     #[test]
+    fn parses_license_report_options_and_rejects_invalid_values() {
+        assert_eq!(
+            parse_cli([
+                "license-report",
+                "--public-release",
+                "--mode",
+                "container",
+                "--diff-scope",
+                "staged",
+                "--modified-imported-only",
+                "--status-only",
+                "--json",
+            ])
+            .unwrap(),
+            Cli {
+                command: CliCommand::LicenseReport {
+                    public_release: true,
+                    mode: "container".into(),
+                    diff_scope: "staged".into(),
+                    modified_imported_only: true,
+                },
+                json: true,
+                status_only: true,
+            }
+        );
+        assert!(parse_cli(["license-report", "--mode", "unknown"]).is_err());
+        assert!(parse_cli(["license-report", "--diff-scope", "unknown"]).is_err());
+    }
+
+    #[test]
     fn parses_feed_generation_runtime_guard() {
         assert_eq!(
             parse_cli(["feed-generation-runtime-guard", "--selector-only"]).unwrap(),

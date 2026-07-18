@@ -756,6 +756,105 @@ fn no_comment_manifest() -> BTreeMap<&'static str, &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::process::ProcessOutput;
+    use std::cell::RefCell;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+
+    struct Fixture {
+        root: PathBuf,
+    }
+
+    impl Fixture {
+        fn new() -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "turbovasctl-license-{}-{}",
+                std::process::id(),
+                SEQUENCE.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir_all(&root).unwrap();
+            Self { root }
+        }
+
+        fn write(&self, relative: &str, text: &str) {
+            let path = self.root.join(relative);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, text).unwrap();
+        }
+
+        fn populate_full_report_files(&self) {
+            for component in component_specs() {
+                for license in component.licenses {
+                    self.write(&format!("{}/{}", component.path, license), "license\n");
+                }
+            }
+            for relative in no_comment_manifest().keys() {
+                self.write(relative, "{}\n");
+            }
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    #[derive(Default)]
+    struct FakeRunner {
+        calls: RefCell<Vec<Vec<String>>>,
+        baseline: String,
+        staged: String,
+        worktree: String,
+        tracked: String,
+    }
+
+    impl FakeRunner {
+        fn output(stdout: String) -> Option<ProcessOutput> {
+            Some(ProcessOutput {
+                success: true,
+                exit_code: Some(0),
+                stdout,
+                stderr: String::new(),
+            })
+        }
+    }
+
+    impl CommandRunner for FakeRunner {
+        fn run(&self, program: &str, args: &[&str]) -> Option<ProcessOutput> {
+            assert_eq!(program, "git");
+            self.calls
+                .borrow_mut()
+                .push(args.iter().map(|value| (*value).to_string()).collect());
+            let tail = &args[2..];
+            if tail == ["rev-parse", "--short", "HEAD"] {
+                return Self::output("test-head\n".to_string());
+            }
+            if tail == ["ls-files", "-z"] {
+                return Self::output(self.tracked.clone());
+            }
+            if tail.first() == Some(&"diff") {
+                if tail.contains(&"--cached") {
+                    return Self::output(self.staged.clone());
+                }
+                if tail.iter().any(|value| value.ends_with("..HEAD")) {
+                    return Self::output(self.baseline.clone());
+                }
+                return Self::output(self.worktree.clone());
+            }
+            None
+        }
+    }
+
+    fn finding<'a>(result: &'a ResultEnvelope, check: &str) -> &'a Finding {
+        result
+            .findings
+            .iter()
+            .find(|finding| finding.check == check)
+            .unwrap()
+    }
 
     #[test]
     fn comment_capable_paths_match_the_python_policy() {
@@ -776,5 +875,179 @@ mod tests {
         let rows = parse_name_status("R100\told.rs\tnew.rs\nM\tother.rs\n");
         assert_eq!(rows[0].status, "R100");
         assert_eq!(rows[0].path, "new.rs");
+    }
+
+    #[test]
+    fn modified_imported_worktree_scope_uses_exact_git_contract() {
+        let fixture = Fixture::new();
+        let relative = "components/gvmd/src/example.c";
+        fixture.write(
+            relative,
+            "/* TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. */\n",
+        );
+        let runner = FakeRunner {
+            worktree: format!("M\t{relative}\n"),
+            ..FakeRunner::default()
+        };
+        let result = command_license_report_with_runner(
+            &fixture.root,
+            false,
+            "source-public",
+            "worktree",
+            true,
+            false,
+            &runner,
+        );
+        assert_eq!(result.status, "pass");
+        assert_eq!(
+            result.details,
+            Some(json!({
+                "diff_scope": "worktree",
+                "modified_imported_only": true,
+            }))
+        );
+        let root = fixture.root.display().to_string();
+        assert_eq!(
+            runner.calls.borrow().as_slice(),
+            [
+                vec![
+                    "-C",
+                    &root,
+                    "diff",
+                    "--find-renames",
+                    "--find-copies-harder",
+                    "-l0",
+                    "--name-status",
+                    "--",
+                    "components",
+                ],
+                vec![
+                    "-C",
+                    &root,
+                    "diff",
+                    "--find-renames",
+                    "--find-copies-harder",
+                    "-l0",
+                    "--name-status",
+                    &format!("{IMPORT_BASELINE_COMMIT}..HEAD"),
+                    "--",
+                    "components",
+                ],
+                vec!["-C", &root, "rev-parse", "--short", "HEAD"],
+            ]
+        );
+    }
+
+    #[test]
+    fn missing_notice_fails_and_status_only_preserves_relative_evidence() {
+        let fixture = Fixture::new();
+        let relative = "components/gvmd/src/missing.c";
+        fixture.write(relative, "int main(void) { return 0; }\n");
+        let runner = FakeRunner {
+            worktree: format!("M\t{relative}\n"),
+            ..FakeRunner::default()
+        };
+        let result = command_license_report_with_runner(
+            &fixture.root,
+            false,
+            "source-public",
+            "worktree",
+            true,
+            true,
+            &runner,
+        );
+        assert_eq!(result.status, "fail");
+        let notice = finding(&result, "license.modified-imported-notices");
+        assert_eq!(notice.status, "fail");
+        assert_eq!(
+            notice.details.as_ref().unwrap()["missing"],
+            json!([relative])
+        );
+        assert_eq!(result.details.as_ref().unwrap()["non_pass_count"], 1);
+        assert_eq!(result.findings.len(), 1);
+    }
+
+    #[test]
+    fn non_baseline_full_report_rejects_before_diff_or_file_inventory() {
+        let fixture = Fixture::new();
+        let runner = FakeRunner::default();
+        let result = command_license_report_with_runner(
+            &fixture.root,
+            false,
+            "source-public",
+            "staged",
+            false,
+            false,
+            &runner,
+        );
+        assert_eq!(result.status, "fail");
+        assert_eq!(result.findings.len(), 1);
+        assert_eq!(result.findings[0].check, "license.diff-scope");
+        let calls = runner.calls.borrow();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(&calls[0][2..], ["rev-parse", "--short", "HEAD"]);
+    }
+
+    #[test]
+    fn full_report_covers_license_spdx_feed_marker_and_publication_contracts() {
+        let fixture = Fixture::new();
+        fixture.populate_full_report_files();
+        fixture.write("README.md", "--greenbone-enterprise-feed-key\n");
+        let baseline = no_comment_manifest()
+            .keys()
+            .map(|path| format!("M\t{path}\n"))
+            .collect::<String>();
+        let source_runner = FakeRunner {
+            baseline: baseline.clone(),
+            tracked: "feeds/openvas/plugins/tracked.nasl\0".to_string(),
+            ..FakeRunner::default()
+        };
+        let source = command_license_report_with_runner(
+            &fixture.root,
+            true,
+            "source-public",
+            "baseline",
+            false,
+            false,
+            &source_runner,
+        );
+        assert!(
+            source
+                .findings
+                .iter()
+                .filter(|item| item.check == "license.file")
+                .all(|item| item.status == "pass")
+        );
+        assert_eq!(finding(&source, "license.new-file-spdx").status, "pass");
+        assert_eq!(
+            finding(&source, "license.feed-content-tracking").status,
+            "fail"
+        );
+        assert_eq!(
+            finding(&source, "license.feed-enterprise-key-disabled").status,
+            "fail"
+        );
+        assert_eq!(
+            finding(&source, "license.public-readiness.source-public").status,
+            "pass"
+        );
+
+        let container_runner = FakeRunner {
+            baseline,
+            ..FakeRunner::default()
+        };
+        let container = command_license_report_with_runner(
+            &fixture.root,
+            true,
+            "container",
+            "baseline",
+            false,
+            false,
+            &container_runner,
+        );
+        assert_eq!(
+            finding(&container, "license.public-readiness.container").status,
+            "fail"
+        );
     }
 }

@@ -2414,70 +2414,6 @@ LOG_REVIEW_SERVICE_PATTERNS: dict[str, tuple[tuple[str, str, str, str], ...]] = 
         ("fail", "mosquitto-error", r"\berror:\s|\bfatal:\s", "Mosquitto error found in recent log tail."),
     ),
 }
-DATABASE_CORE_TABLES = (
-    "meta",
-    "users",
-    "tasks",
-    "targets",
-    "reports",
-    "results",
-    "report_hosts",
-    "hosts",
-    "credentials",
-    "port_lists",
-    "configs",
-    "scanners",
-    "schedules",
-    "filters",
-    "tags",
-    "overrides",
-    "alerts",
-)
-DATABASE_SCOPE_TABLES = (
-    "scopes",
-    "scope_targets",
-    "scope_hosts",
-    "scope_reports",
-    "scope_report_sources",
-    "scope_report_system_metrics",
-    "scope_report_vulnerability_metrics",
-)
-DATABASE_REMOVED_TABLES = (
-    "roles",
-    "groups",
-    "permissions",
-    "oci_image_targets",
-    "oci_image_targets_trash",
-    "notes",
-    "tickets",
-    "agents",
-    "agent_groups",
-    "agent_installers",
-    "audits",
-    "audit_reports",
-)
-DATA_STATE_ARTIFACT_PATHS = (
-    ("reports", "db_owned_export", ("artifacts", "reports"), True),
-    ("scope-reports", "db_owned_export", ("artifacts", "scope-reports"), True),
-    ("metrics", "db_owned_export", ("artifacts", "metrics"), True),
-    ("browser-smoke", "diagnostic_artifact", ("artifacts", "browser-smoke"), True),
-    ("browser-regression", "diagnostic_artifact", ("artifacts", "browser-regression"), True),
-    ("credential-smoke", "diagnostic_artifact", ("artifacts", "credential-smoke"), True),
-    ("full-test-scan", "diagnostic_artifact", ("artifacts", "full-test-scan"), True),
-    ("log-review", "diagnostic_artifact", ("artifacts", "log-review"), True),
-    ("quality-gate", "diagnostic_artifact", ("artifacts", "quality-gate"), True),
-    ("performance", "diagnostic_artifact", ("artifacts", "performance"), True),
-    ("native-api", "diagnostic_artifact", ("artifacts", "native-api"), True),
-    ("runtime-feeds", "feed_content", ("feeds",), False),
-    ("feed-cache", "feed_content", ("feed-cache",), False),
-    ("runtime-logs", "diagnostic_artifact", ("logs",), False),
-    ("runtime-state", "temporary_runtime_state", ("state",), False),
-)
-DATA_STATE_DB_OWNED_EXPORT_SOURCES = {
-    "reports": ("reports", "results", "report_hosts"),
-    "scope-reports": ("scope_reports", "scope_report_sources"),
-    "metrics": ("reports", "results", "report_hosts", "scope_report_system_metrics", "scope_report_vulnerability_metrics"),
-}
 GSA_FRESHNESS_SOURCE_PATHS = (
     "components/gsa/src",
     "components/gsa/public",
@@ -2803,6 +2739,68 @@ def contract_drift_status(alignment_status: Any) -> str:
 
 def make_result(command: str, repo_root: Path, summary: str, findings: list[dict[str, Any]], artifacts: list[str] | None = None) -> dict[str, Any]:
     return {"status": aggregate_status(findings), "summary": summary, "findings": findings, "artifacts": artifacts or [], "metadata": metadata(repo_root, command)}
+
+
+def rust_runtime_data_state_result(repo_root: Path) -> dict[str, Any]:
+    command = [
+        "cargo",
+        "run",
+        "--quiet",
+        "--locked",
+        "--target-dir",
+        str(repo_root / "build" / "turbovasctl-rs"),
+        "--manifest-path",
+        str(repo_root / TURBOVASCTL_RUST_CRATE / "Cargo.toml"),
+        "--",
+        "runtime-data-state",
+        "--json",
+    ]
+    try:
+        completed = run_command(command, repo_root, timeout=300)
+        stdout = completed.stdout
+        if not isinstance(stdout, str) or len(stdout.encode("utf-8")) > TURBOVASCTL_RUST_BRIDGE_MAX_OUTPUT_BYTES:
+            raise ValueError("invalid Rust runtime data-state output")
+        payload = json.loads(stdout, object_pairs_hook=reject_duplicate_json_object_keys)
+        if not isinstance(payload, dict):
+            raise ValueError("invalid Rust runtime data-state envelope")
+        status = payload.get("status")
+        findings = payload.get("findings")
+        if (
+            status not in STATUSES
+            or not isinstance(payload.get("summary"), str)
+            or not isinstance(findings, list)
+            or not isinstance(payload.get("artifacts"), list)
+            or not all(isinstance(artifact, str) for artifact in payload["artifacts"])
+            or not isinstance(payload.get("details"), dict)
+            or not isinstance(payload.get("metadata"), dict)
+            or payload["metadata"].get("command") != "runtime-data-state"
+            or completed.returncode != (1 if status == "fail" else 0)
+        ):
+            raise ValueError("invalid Rust runtime data-state envelope")
+        for item in findings:
+            if (
+                not isinstance(item, dict)
+                or item.get("status") not in STATUSES
+                or not isinstance(item.get("check"), str)
+                or not isinstance(item.get("message"), str)
+            ):
+                raise ValueError("invalid Rust runtime data-state finding")
+        if aggregate_status(findings) != status:
+            raise ValueError("invalid Rust runtime data-state aggregate status")
+        return payload
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, ValueError, UnicodeError):
+        return make_result(
+            "runtime-data-state",
+            repo_root,
+            "Rust runtime data-state diagnostic result was unavailable or invalid.",
+            [
+                finding(
+                    "fail",
+                    "data-state.rust-bridge",
+                    "Rust runtime data-state diagnostic failed closed because its result was unavailable or invalid.",
+                )
+            ],
+        )
 
 
 def command_repository_unavailable(start: Path, command: str) -> dict[str, Any]:
@@ -5651,10 +5649,6 @@ def log_review_artifact_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "artifacts", "log-review")
 
 
-def data_state_artifact_dir(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "artifacts", "data-state")
-
-
 def quality_gate_artifact_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "artifacts", "quality-gate")
 
@@ -7317,106 +7311,6 @@ def output_tail(output: str, lines: int = 80, secrets_to_redact: Iterable[str] =
     return [redact_text(line, secrets_to_redact) for line in tail]
 
 
-def path_tree_summary(path: Path, recursive: bool = True) -> dict[str, Any]:
-    summary: dict[str, Any] = {
-        "path": str(path),
-        "exists": path.exists(),
-        "kind": "missing",
-        "file_count": 0,
-        "directory_count": 0,
-        "byte_count": 0,
-        "latest_mtime": None,
-    }
-    if not path.exists():
-        return summary
-    latest = 0.0
-    if path.is_file():
-        stat = path.stat()
-        latest = stat.st_mtime
-        summary.update({"kind": "file", "file_count": 1, "byte_count": stat.st_size})
-    elif path.is_dir():
-        summary["kind"] = "directory"
-        if recursive:
-            for root, dirs, files in os.walk(path):
-                summary["directory_count"] += len(dirs)
-                for filename in files:
-                    candidate = Path(root) / filename
-                    try:
-                        stat = candidate.stat()
-                    except OSError:
-                        continue
-                    summary["file_count"] += 1
-                    summary["byte_count"] += stat.st_size
-                    latest = max(latest, stat.st_mtime)
-        else:
-            try:
-                children = list(path.iterdir())
-            except OSError:
-                children = []
-            summary["file_count"] = sum(1 for child in children if child.is_file())
-            summary["directory_count"] = sum(1 for child in children if child.is_dir())
-            try:
-                latest = max((child.stat().st_mtime for child in children), default=path.stat().st_mtime)
-            except OSError:
-                latest = path.stat().st_mtime
-    if latest:
-        summary["latest_mtime"] = datetime.fromtimestamp(latest, timezone.utc).replace(microsecond=0).isoformat()
-    return summary
-
-
-def summarize_data_outside_db(paths: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    summary: dict[str, Any] = {"by_classification": {}, "total_byte_count": 0, "total_file_count": 0}
-    for name, path_summary in paths.items():
-        classification = path_summary.get("classification", "unknown")
-        bucket = summary["by_classification"].setdefault(
-            classification,
-            {"path_count": 0, "existing_path_count": 0, "file_count": 0, "byte_count": 0, "paths": []},
-        )
-        bucket["path_count"] += 1
-        if path_summary.get("exists"):
-            bucket["existing_path_count"] += 1
-        bucket["file_count"] += int(path_summary.get("file_count") or 0)
-        bucket["byte_count"] += int(path_summary.get("byte_count") or 0)
-        bucket["paths"].append(name)
-        summary["total_file_count"] += int(path_summary.get("file_count") or 0)
-        summary["total_byte_count"] += int(path_summary.get("byte_count") or 0)
-    return summary
-
-
-def database_table_exists(database: dict[str, Any], table: str) -> bool:
-    for group in ("core_tables", "scope_tables"):
-        table_info = database.get(group, {}).get(table, {})
-        if table_info.get("exists") is True:
-            return True
-    return False
-
-
-def product_data_audit(details: dict[str, Any]) -> dict[str, Any]:
-    database = details.get("database", {})
-    paths = details.get("paths", {})
-    audit: dict[str, Any] = {
-        "db_owned_exports": {},
-        "unowned_product_data": [],
-    }
-    for name, path_summary in paths.items():
-        if path_summary.get("classification") != "db_owned_export":
-            continue
-        required_tables = DATA_STATE_DB_OWNED_EXPORT_SOURCES.get(name, ())
-        missing_tables = [table for table in required_tables if not database_table_exists(database, table)]
-        export = {
-            "exists": bool(path_summary.get("exists")),
-            "path": path_summary.get("path"),
-            "source_of_record": "gvmd/postgresql",
-            "required_tables": list(required_tables),
-            "missing_tables": missing_tables,
-        }
-        audit["db_owned_exports"][name] = export
-        if export["exists"] and missing_tables:
-            audit["unowned_product_data"].append({"path": name, "missing_tables": missing_tables})
-    audit["status"] = "warn" if audit["unowned_product_data"] else "pass"
-    return audit
-
-
 def process_step_finding(status: str, check: str, message: str, result: subprocess.CompletedProcess[str], command: list[str] | None = None) -> dict[str, Any]:
     details: dict[str, Any] = {"exit_code": result.returncode, "output_tail": output_tail(result.stdout, 100)}
     if command is not None:
@@ -7576,31 +7470,6 @@ def docker_container_state(repo_root: Path, service: str) -> dict[str, Any] | No
         state = {"inspect_output": output_tail(inspect.stdout, 40)}
     state["container_id"] = cid
     return state
-
-
-def table_presence_rows(repo_root: Path, tables: tuple[str, ...]) -> tuple[subprocess.CompletedProcess[str], dict[str, bool]]:
-    values = ",".join(f"({sql_literal(table)})" for table in tables)
-    query = f"WITH wanted(name) AS (VALUES {values}) SELECT name || '|' || (to_regclass('public.' || quote_ident(name)) IS NOT NULL) FROM wanted ORDER BY name;"
-    result = psql(repo_root, query)
-    rows: dict[str, bool] = {}
-    if result.returncode == 0:
-        for line in result.stdout.splitlines():
-            if "|" not in line:
-                continue
-            name, value = line.strip().split("|", 1)
-            rows[name] = value.strip().lower() in ("t", "true", "1")
-    return result, rows
-
-
-def table_row_count(repo_root: Path, table: str) -> int | None:
-    result = psql(repo_root, f"SELECT count(*) FROM {sql_identifier(table)};")
-    if result.returncode != 0:
-        return None
-    value = psql_value(result)
-    try:
-        return int(value)
-    except ValueError:
-        return None
 
 
 def runtime_secret_redactions(repo_root: Path) -> list[str]:
@@ -33532,66 +33401,6 @@ def command_runtime_log_review(repo_root: Path) -> dict[str, Any]:
     return result
 
 
-def command_runtime_data_state(repo_root: Path) -> dict[str, Any]:
-    artifact_dir = data_state_artifact_dir(repo_root)
-    findings: list[dict[str, Any]] = []
-    details: dict[str, Any] = {
-        "database": {"classification": "system_of_record"},
-        "paths": {},
-    }
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-
-    manager_lock = runtime_lock_status(repo_root, RUNTIME_MANAGER_LOCK)
-    details["runtime_manager_lock"] = manager_lock
-    if manager_lock["active"]:
-        findings.append(finding("warn", "data-state.runtime-manager-lock", "runtime-manager-init or another manager operation is currently active; data-state may be transient.", details={"lock": manager_lock}))
-
-    if not container_running(repo_root, "postgres"):
-        findings.append(finding("warn", "data-state.postgres", "Postgres is not running; database state is unavailable."))
-    else:
-        version = psql(repo_root, "SELECT COALESCE((SELECT value FROM meta WHERE name = 'database_version'), 'missing');")
-        db_version = psql_value(version) if version.returncode == 0 else ""
-        details["database"]["database_version"] = db_version
-        findings.append(finding("pass" if version.returncode == 0 and db_version else "fail", "data-state.database-version", f"Manager database version is {db_version or 'unknown'}.", details={"output_tail": output_tail(version.stdout, 40)}))
-
-        for label, tables, expected_present in (
-            ("core", DATABASE_CORE_TABLES, True),
-            ("scope", DATABASE_SCOPE_TABLES, True),
-            ("removed", DATABASE_REMOVED_TABLES, False),
-        ):
-            table_query, presence = table_presence_rows(repo_root, tables)
-            details["database"][f"{label}_tables"] = {table: {"exists": presence.get(table, False)} for table in tables}
-            if table_query.returncode != 0:
-                findings.append(finding("fail", f"data-state.{label}-tables", f"Could not inspect {label} table presence.", details={"output_tail": output_tail(table_query.stdout, 80)}))
-                continue
-            bad = [table for table in tables if presence.get(table, False) is not expected_present]
-            status = "fail" if bad else "pass"
-            message = f"{label} table presence matches expectation." if not bad else f"{label} table presence mismatch: {', '.join(bad)}."
-            findings.append(finding(status, f"data-state.{label}-tables", message, details={"mismatches": bad, "expected_present": expected_present}))
-            for table in tables:
-                if presence.get(table, False):
-                    details["database"][f"{label}_tables"][table]["row_count"] = table_row_count(repo_root, table)
-
-    for name, classification, parts, recursive in DATA_STATE_ARTIFACT_PATHS:
-        summary = path_tree_summary(runtime_path(repo_root, *parts), recursive=recursive)
-        summary["classification"] = classification
-        details["paths"][name] = summary
-        findings.append(finding("pass" if summary["exists"] else "warn", "data-state.path", f"{name} classified as {classification}.", summary["path"], {"summary": summary}))
-    details["data_outside_db"] = summarize_data_outside_db(details["paths"])
-    findings.append(finding("pass", "data-state.outside-db", "Non-database runtime state summary captured.", details={"summary": details["data_outside_db"]}))
-    details["product_data_audit"] = product_data_audit(details)
-    audit_status = details["product_data_audit"].get("status", "warn")
-    audit_message = "Product data exports have database sources of record."
-    if audit_status != "pass":
-        audit_message = "Product data exports are missing expected database sources of record."
-    findings.append(finding(audit_status, "data-state.product-data-audit", audit_message, details={"audit": details["product_data_audit"]}))
-
-    result = make_result("runtime-data-state", repo_root, "Runtime data-state diagnostic completed.", findings, [str(artifact_dir / "data-state.json")])
-    result["details"] = details
-    write_json_artifact(artifact_dir, "data-state.json", result)
-    return result
-
-
 def command_runtime_status(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     manager_lock = runtime_lock_status(repo_root, RUNTIME_MANAGER_LOCK)
@@ -33861,7 +33670,7 @@ def command_quality_gate(repo_root: Path, include_runtime: bool = False) -> dict
         for name, command_result in (
             ("runtime-status", command_runtime_status(repo_root)),
             ("runtime-log-review", command_runtime_log_review(repo_root)),
-            ("runtime-data-state", command_runtime_data_state(repo_root)),
+            ("runtime-data-state", rust_runtime_data_state_result(repo_root)),
         ):
             details["steps"][name] = {"status": command_result["status"], "summary": command_result["summary"], "artifacts": command_result.get("artifacts", [])}
             findings.append(finding(command_result["status"], f"quality.{name}", command_result["summary"], details={"status": command_result["status"], "artifacts": command_result.get("artifacts", [])}))
@@ -34253,7 +34062,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
     subparsers.add_parser("runtime-log-review", parents=[common], help="review recent full-stack runtime logs")
-    subparsers.add_parser("runtime-data-state", parents=[common], help="inspect database-centered runtime data state")
     security_policy = subparsers.add_parser("security-policy-check", parents=[common], help="validate security-sensitive path policy scaffolding")
     security_policy.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe security policy checks")
     native_api_cargo_audit = subparsers.add_parser("native-api-cargo-audit", parents=[common], help="audit native API Rust dependencies for known advisories")
@@ -34655,8 +34463,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_smoke(repo_root)
     elif args.command == "runtime-log-review":
         result = command_runtime_log_review(repo_root)
-    elif args.command == "runtime-data-state":
-        result = command_runtime_data_state(repo_root)
     elif args.command == "security-policy-check":
         result = command_security_policy_check(repo_root, status_only=args.status_only)
     elif args.command == "native-api-cargo-audit":

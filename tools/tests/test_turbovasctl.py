@@ -450,6 +450,103 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertEqual(observed["status"], "fail")
         self.assertIn("failed closed", observed["message"])
 
+    def test_rust_runtime_data_state_bridge_accepts_valid_envelopes(self):
+        for status, returncode in (("pass", 0), ("warn", 0), ("fail", 1)):
+            payload = {
+                "status": status,
+                "summary": "data-state summary",
+                "findings": [
+                    {
+                        "status": status,
+                        "check": "data-state.example",
+                        "message": "data-state result",
+                    }
+                ],
+                "artifacts": ["data-state.json"],
+                "details": {"database": {}},
+                "metadata": {"command": "runtime-data-state"},
+            }
+            with self.subTest(status=status), unittest.mock.patch.object(
+                turbovasctl,
+                "run_command",
+                return_value=subprocess.CompletedProcess(
+                    ["cargo"], returncode, json.dumps(payload), "ignored stderr"
+                ),
+            ) as run_command:
+                observed = turbovasctl.rust_runtime_data_state_result(Path("/tmp/TurboVAS"))
+
+            self.assertEqual(observed, payload)
+            self.assertEqual(
+                run_command.call_args.args[0],
+                [
+                    "cargo",
+                    "run",
+                    "--quiet",
+                    "--locked",
+                    "--target-dir",
+                    "/tmp/TurboVAS/build/turbovasctl-rs",
+                    "--manifest-path",
+                    "/tmp/TurboVAS/tools/turbovasctl-rs/Cargo.toml",
+                    "--",
+                    "runtime-data-state",
+                    "--json",
+                ],
+            )
+            self.assertEqual(run_command.call_args.kwargs["timeout"], 300)
+
+    def test_rust_runtime_data_state_bridge_rejects_invalid_results(self):
+        valid_item = {
+            "status": "pass",
+            "check": "data-state.example",
+            "message": "data-state result",
+        }
+        valid_payload = {
+            "status": "pass",
+            "summary": "data-state summary",
+            "findings": [valid_item],
+            "artifacts": ["data-state.json"],
+            "details": {"database": {}},
+            "metadata": {"command": "runtime-data-state"},
+        }
+        secret = "SECRET_RUST_DATA_STATE_OUTPUT"
+        cases = {
+            "invalid-json": (0, f"not-json {secret}"),
+            "duplicate-keys": (0, '{"status":"pass","status":"fail"}'),
+            "oversized-stdout": (0, " " * (turbovasctl.TURBOVASCTL_RUST_BRIDGE_MAX_OUTPUT_BYTES + 1)),
+            "wrong-metadata": (0, json.dumps({**valid_payload, "metadata": {"command": "status"}})),
+            "malformed-envelope-types": (0, json.dumps({**valid_payload, "artifacts": [1]})),
+            "malformed-finding": (0, json.dumps({**valid_payload, "findings": [{**valid_item, "message": 1}]})),
+            "aggregate-mismatch": (0, json.dumps({**valid_payload, "status": "warn"})),
+            "bad-exit-code": (1, json.dumps(valid_payload)),
+        }
+        for name, (returncode, stdout) in cases.items():
+            with self.subTest(name=name), unittest.mock.patch.object(
+                turbovasctl,
+                "run_command",
+                return_value=subprocess.CompletedProcess(
+                    ["cargo", "secret-command"], returncode, stdout, f"stderr {secret}"
+                ),
+            ):
+                observed = turbovasctl.rust_runtime_data_state_result(Path("/tmp/TurboVAS"))
+
+            self.assertEqual(observed["status"], "fail")
+            self.assertEqual(observed["metadata"]["command"], "runtime-data-state")
+            self.assertEqual(observed["findings"][0]["check"], "data-state.rust-bridge")
+            self.assertNotIn(secret, str(observed))
+            self.assertNotIn("secret-command", str(observed))
+            self.assertNotIn(stdout, str(observed))
+
+    def test_rust_runtime_data_state_bridge_handles_os_error(self):
+        secret = "SECRET_RUST_DATA_STATE_EXCEPTION"
+        with unittest.mock.patch.object(
+            turbovasctl, "run_command", side_effect=OSError(secret)
+        ):
+            observed = turbovasctl.rust_runtime_data_state_result(Path("/tmp/TurboVAS"))
+
+        self.assertEqual(observed["status"], "fail")
+        self.assertEqual(observed["findings"][0]["check"], "data-state.rust-bridge")
+        self.assertNotIn(secret, str(observed))
+
     def test_hardened_build_preflight_removes_stale_registered_artifact_and_prefix_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -1103,7 +1200,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 )
             for arguments, expected_exit_code, expected_status in rust_only_contracts:
                 env = feed_generation_env.copy()
-                if arguments[0] in {"runtime-redis-state", "runtime-db-introspect", "runtime-performance-snapshot"}:
+                if arguments[0] in {"runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot"}:
                     env["COMPOSE_PROJECT_NAME"] = "turbovasctl-parity-no-runtime"
                 rust_result = invoke(rust_command, arguments, env=env)
                 self.assertEqual(rust_result.returncode, expected_exit_code, arguments)
@@ -1197,6 +1294,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 (["feed-generation-activate", "invalid", "--json"], 1, "fail"),
                 (["feed-generation-rollback", "invalid", "--json"], 1, "fail"),
                 (["runtime-redis-state", "--json"], 0, "warn"),
+                (["runtime-data-state", "--json"], 0, "warn"),
                 (["runtime-db-introspect", "--json"], 0, "warn"),
                 (["runtime-performance-snapshot", "--json"], 0, "warn"),
                 (["c-hardening-check", "--status-only", "--json"], 1, "fail"),
@@ -2311,7 +2409,7 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"runtime-db-introspect", "runtime-performance-snapshot"}
+        rust_only_commands = {"runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2341,7 +2439,6 @@ class TurboVASCtlTests(unittest.TestCase):
 
         self.assertIn("def command_branding_state", source)
         self.assertIn("def command_runtime_log_review", source)
-        self.assertIn("def command_runtime_data_state", source)
         self.assertIn("def command_runtime_native_api_smoke", source)
         self.assertIn('native_api_smoke.add_argument("--status-only"', source)
         self.assertIn("command_runtime_native_api_smoke(repo_root, status_only=args.status_only)", source)
@@ -2425,6 +2522,14 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("def command_runtime_db_introspect", source)
         self.assertIn("runtime-db-introspect *args:", justfile)
         self.assertIn("tools/turbovasctl-rs/Cargo.toml -- runtime-db-introspect", justfile)
+
+    def test_runtime_data_state_is_rust_only(self):
+        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        self.assertNotIn('subparsers.add_parser("runtime-data-state"', source)
+        self.assertNotIn("def command_runtime_data_state", source)
+        self.assertIn("runtime-data-state *args:", justfile)
+        self.assertIn("tools/turbovasctl-rs/Cargo.toml -- runtime-data-state", justfile)
 
     def test_runtime_performance_snapshot_is_rust_only(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
@@ -11462,48 +11567,6 @@ class TurboVASCtlTests(unittest.TestCase):
             self.assertFalse(first.exists())
             self.assertTrue(second.exists())
 
-    def test_data_outside_db_summary_groups_classifications(self):
-        summary = turbovasctl.summarize_data_outside_db(
-            {
-                "reports": {"classification": "db_owned_export", "exists": True, "file_count": 2, "byte_count": 100},
-                "logs": {"classification": "diagnostic_artifact", "exists": False, "file_count": 0, "byte_count": 0},
-                "feeds": {"classification": "feed_content", "exists": True, "file_count": 3, "byte_count": 200},
-            }
-        )
-        self.assertEqual(summary["total_file_count"], 5)
-        self.assertEqual(summary["total_byte_count"], 300)
-        self.assertEqual(summary["by_classification"]["db_owned_export"]["existing_path_count"], 1)
-        self.assertEqual(summary["by_classification"]["diagnostic_artifact"]["existing_path_count"], 0)
-
-    def test_product_data_audit_passes_for_db_owned_exports_with_tables(self):
-        audit = turbovasctl.product_data_audit(
-            {
-                "database": {
-                    "core_tables": {
-                        "reports": {"exists": True},
-                        "results": {"exists": True},
-                        "report_hosts": {"exists": True},
-                    },
-                    "scope_tables": {},
-                },
-                "paths": {"reports": {"classification": "db_owned_export", "exists": True, "path": "/tmp/reports"}},
-            }
-        )
-        self.assertEqual(audit["status"], "pass")
-        self.assertEqual(audit["unowned_product_data"], [])
-        self.assertEqual(audit["db_owned_exports"]["reports"]["source_of_record"], "gvmd/postgresql")
-
-    def test_product_data_audit_warns_for_export_without_source_tables(self):
-        audit = turbovasctl.product_data_audit(
-            {
-                "database": {"core_tables": {"reports": {"exists": True}}, "scope_tables": {}},
-                "paths": {"metrics": {"classification": "db_owned_export", "exists": True, "path": "/tmp/metrics"}},
-            }
-        )
-        self.assertEqual(audit["status"], "warn")
-        self.assertEqual(audit["unowned_product_data"][0]["path"], "metrics")
-        self.assertIn("scope_report_system_metrics", audit["unowned_product_data"][0]["missing_tables"])
-
     def test_quality_gate_systemd_templates_are_present(self):
         root = Path(__file__).resolve().parents[2]
         service = root / "ops" / "systemd" / "turbovas-quality-gate.service.in"
@@ -11650,13 +11713,6 @@ class TurboVASCtlTests(unittest.TestCase):
         )
         self.assertIn("notus-feed", {match["key"] for match in notus_matches})
 
-    def test_data_state_table_sets_capture_current_schema_expectations(self):
-        self.assertIn("reports", turbovasctl.DATABASE_CORE_TABLES)
-        self.assertIn("scope_reports", turbovasctl.DATABASE_SCOPE_TABLES)
-        self.assertIn("scope_report_system_metrics", turbovasctl.DATABASE_SCOPE_TABLES)
-        self.assertIn("roles", turbovasctl.DATABASE_REMOVED_TABLES)
-        self.assertIn("agent_groups", turbovasctl.DATABASE_REMOVED_TABLES)
-
     def test_quality_gate_downgrades_known_doctor_notes_only(self):
         status, summary = turbovasctl.quality_gate_doctor_status(
             {
@@ -11718,6 +11774,8 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("command_native_tooling_state(repo_root, status_only=True)", source)
         self.assertIn("command_native_api_client_contract(repo_root, status_only=True)", source)
         self.assertIn("command_native_api_migration_matrix(repo_root, status_only=True)", source)
+        self.assertIn("(\"runtime-data-state\", rust_runtime_data_state_result(repo_root))", source)
+        self.assertNotIn("command_runtime_data_state(repo_root)", source)
 
     def test_quality_gate_includes_native_api_contract_steps(self):
         pass_result = {"status": "pass", "summary": "ok", "findings": []}
@@ -11750,7 +11808,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_build_node_unlocked", source)
         self.assertIn("quality-gate GSA checks", source)
         self.assertIn("def command_runtime_manager_init_unlocked", source)
-        self.assertIn("data-state.runtime-manager-lock", source)
 
     def test_gsa_web_fast_script_is_one_shot(self):
         package_path = Path(__file__).resolve().parents[2] / "components" / "gsa" / "package.json"

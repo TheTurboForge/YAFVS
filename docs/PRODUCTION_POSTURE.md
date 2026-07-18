@@ -48,7 +48,7 @@ controls as the scanner administration boundary.
   when the bearer-token boundary is present.
 - If direct native API access is enabled at all, is bearer auth file-backed
   through the ignored runtime secret rather than passed through
-  `TURBOVAS_API_BEARER_TOKEN` environment variables?
+  `YAFVS_API_BEARER_TOKEN` environment variables?
 - Is TLS configured with trusted certificates for the deployment context?
 - Are runtime secrets stored outside git and outside public artifacts?
 - Are feed terms understood for the chosen feed handling model?

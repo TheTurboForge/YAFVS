@@ -11,13 +11,7 @@ use std::env;
 use std::path::Path;
 
 const RUNTIME_SERVICES: [&str; 3] = ["postgres", "redis-openvas", "mosquitto"];
-const APP_SERVICES: [&str; 5] = [
-    "gvmd",
-    "ospd-openvas",
-    "notus-scanner",
-    "gsad",
-    "turbovas-api",
-];
+const APP_SERVICES: [&str; 5] = ["gvmd", "ospd-openvas", "notus-scanner", "gsad", "yafvs-api"];
 
 pub fn command_runtime_plan(repo_root: &Path) -> ResultEnvelope {
     let root = runtime_dir(repo_root);

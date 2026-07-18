@@ -109,10 +109,10 @@ native-api-rust-test *filters:
     @set -- {{filters}}; \
       if [ "${1:-}" = "--" ]; then shift; fi; \
       if [ "$#" -eq 0 ]; then \
-        cargo test --manifest-path services/turbovas-api/Cargo.toml --locked; \
+        cargo test --manifest-path services/yafvs-api/Cargo.toml --locked; \
       else \
         for filter in "$@"; do \
-          cargo test --manifest-path services/turbovas-api/Cargo.toml --locked "$filter"; \
+          cargo test --manifest-path services/yafvs-api/Cargo.toml --locked "$filter"; \
         done; \
       fi
 

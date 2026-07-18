@@ -27,16 +27,16 @@ YAFVS is moving toward typed HTTP/JSON product APIs for DB-backed report,
 scope, metric, and evidence reads:
 
 ```text
-runtime helper -> turbovas-api /api/v1 JSON contract -> YAFVS product query layer -> gvmd/PostgreSQL
-browser/GSA -> gsad same-origin /api/v1 proxy -> turbovas-api -> gvmd/PostgreSQL
-operator script -> opt-in bearer-auth direct /api/v1 listener -> turbovas-api -> gvmd/PostgreSQL
+runtime helper -> yafvs-api /api/v1 JSON contract -> YAFVS product query layer -> gvmd/PostgreSQL
+browser/GSA -> gsad same-origin /api/v1 proxy -> yafvs-api -> gvmd/PostgreSQL
+operator script -> opt-in bearer-auth direct /api/v1 listener -> yafvs-api -> gvmd/PostgreSQL
 ```
 
 The first native API work is contract-first. It must not become a REST wrapper
 around GMP/XML. GMP remains compatibility and high-consequence control plumbing
 until each product workflow has a proven native replacement with tests and
 browser/runtime coverage. See `docs/API_CONTRACT.md`,
-`docs/GMP_XML_STRANGLER.md`, and `api/openapi/turbovas-v1.yaml`.
+`docs/GMP_XML_STRANGLER.md`, and `api/openapi/yafvs-v1.yaml`.
 
 Browser-facing native reads use the authenticated same-origin `gsad` proxy while
 GSA migrates from GMP/XML. Direct scriptable API work is also active now: the

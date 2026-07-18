@@ -92,7 +92,7 @@ Checks to consider:
 
 ### Direct Native API Listener
 
-`turbovas-api` is internal by default. Development direct access is an explicit
+`yafvs-api` is internal by default. Development direct access is an explicit
 opt-in boundary: a separate bearer-auth listener can expose read-only `/api/v1`
 paths, defaulting to loopback. `/healthz` is intentionally unauthenticated for
 service checks; `/api/v1/...` must reject missing or wrong bearer tokens.

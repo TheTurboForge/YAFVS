@@ -82,7 +82,7 @@ def native_api_json(repo_root: Path, path: str) -> dict[str, Any]:
         str(repo_root / "compose" / "dev.yaml"),
         "exec",
         "-T",
-        "turbovas-api",
+        "yafvs-api",
         "curl",
         "-fsS",
         "--max-time",
@@ -118,13 +118,13 @@ def native_api_browser_proxy_delete(repo_root: Path, path: str, *, operator_name
         "TURBOVAS_SCOPE_OPERATOR_NAME",
         "-e",
         "TURBOVAS_SCOPE_DELETE_PATH",
-        "turbovas-api",
+        "yafvs-api",
         "sh",
         "-ceu",
         (
-            "test -n \"${TURBOVAS_API_BROWSER_PROXY_SECRET:-}\"; "
+            "test -n \"${YAFVS_API_BROWSER_PROXY_SECRET:-}\"; "
             "curl -sS --max-time 10 -X DELETE -w '\\n%{http_code}' "
-            "-H \"x-turbovas-browser-proxy-secret: ${TURBOVAS_API_BROWSER_PROXY_SECRET}\" "
+            "-H \"x-turbovas-browser-proxy-secret: ${YAFVS_API_BROWSER_PROXY_SECRET}\" "
             "-H \"x-turbovas-operator-name: ${TURBOVAS_SCOPE_OPERATOR_NAME}\" "
             "\"http://127.0.0.1:9080${TURBOVAS_SCOPE_DELETE_PATH}\""
         ),
@@ -177,14 +177,14 @@ def native_api_browser_proxy_json(
         "TURBOVAS_SCOPE_PATH",
         "-e",
         "TURBOVAS_SCOPE_JSON",
-        "turbovas-api",
+        "yafvs-api",
         "sh",
         "-ceu",
         (
-            "test -n \"${TURBOVAS_API_BROWSER_PROXY_SECRET:-}\"; "
+            "test -n \"${YAFVS_API_BROWSER_PROXY_SECRET:-}\"; "
             "curl -sS --max-time 10 -X \"${TURBOVAS_SCOPE_METHOD}\" -w '\\n%{http_code}' "
             "-H \"content-type: application/json\" "
-            "-H \"x-turbovas-browser-proxy-secret: ${TURBOVAS_API_BROWSER_PROXY_SECRET}\" "
+            "-H \"x-turbovas-browser-proxy-secret: ${YAFVS_API_BROWSER_PROXY_SECRET}\" "
             "-H \"x-turbovas-operator-name: ${TURBOVAS_SCOPE_OPERATOR_NAME}\" "
             "--data \"${TURBOVAS_SCOPE_JSON}\" "
             "\"http://127.0.0.1:9080${TURBOVAS_SCOPE_PATH}\""

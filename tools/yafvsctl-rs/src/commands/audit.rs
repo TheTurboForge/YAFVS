@@ -8,12 +8,12 @@ use serde_json::{Value, json};
 use std::path::Path;
 use std::time::Duration;
 
-const NATIVE_API_CRATE: &str = "services/turbovas-api";
-const NATIVE_API_LOCKFILE: &str = "services/turbovas-api/Cargo.lock";
+const NATIVE_API_CRATE: &str = "services/yafvs-api";
+const NATIVE_API_LOCKFILE: &str = "services/yafvs-api/Cargo.lock";
 const GSA_COMPONENT: &str = "components/gsa";
 const GSA_LOCKFILE: &str = "components/gsa/package-lock.json";
 const NATIVE_API_SEMGREP_CONFIG: &str = "policy/semgrep-native-api.yml";
-const NATIVE_API_SOURCE: &str = "services/turbovas-api/src";
+const NATIVE_API_SOURCE: &str = "services/yafvs-api/src";
 const OSV_LOCKFILES: [&str; 4] = [
     NATIVE_API_LOCKFILE,
     "tools/yafvsctl-rs/Cargo.lock",
@@ -1421,7 +1421,7 @@ mod tests {
         );
 
         let findings = AuditRunner::new(
-            r#"{"results":[{"check_id":"rust.security","path":"services/turbovas-api/src/main.rs","start":{"line":9},"extra":{"message":"unsafe"}}],"errors":[{"message":"rule error"}]}"#,
+            r#"{"results":[{"check_id":"rust.security","path":"services/yafvs-api/src/main.rs","start":{"line":9},"extra":{"message":"unsafe"}}],"errors":[{"message":"rule error"}]}"#,
         );
         let result = command_native_api_semgrep_audit_with(repo, true, true, &findings);
         assert_eq!(result.status, "fail");
@@ -1541,8 +1541,8 @@ mod tests {
     fn semgrep_paths_are_repository_relative() {
         let root = Path::new("/tmp/TurboVAS");
         assert_eq!(
-            compact_tool_path("/tmp/TurboVAS/services/turbovas-api/src/main.rs", root),
-            "services/turbovas-api/src/main.rs"
+            compact_tool_path("/tmp/TurboVAS/services/yafvs-api/src/main.rs", root),
+            "services/yafvs-api/src/main.rs"
         );
         assert_eq!(compact_tool_path("relative.rs", root), "relative.rs");
     }

@@ -8,7 +8,7 @@ rules:
     message: Native API code must not spawn subprocesses; keep runtime control in explicit helpers.
     paths:
       include:
-        - /services/turbovas-api/src/**/*.rs
+        - /services/yafvs-api/src/**/*.rs
     pattern-either:
       - pattern: std::process::Command::new(...)
       - pattern: tokio::process::Command::new(...)
@@ -20,7 +20,7 @@ rules:
     message: Native API code must not use unsafe Rust without a deliberate security review.
     paths:
       include:
-        - /services/turbovas-api/src/**/*.rs
+        - /services/yafvs-api/src/**/*.rs
     pattern-either:
       - pattern: unsafe { ... }
       - pattern: unsafe fn $FUNC(...) { ... }
@@ -31,7 +31,7 @@ rules:
     message: Avoid format!-built SQL in native API PostgreSQL calls; use static SQL with bind parameters.
     paths:
       include:
-        - /services/turbovas-api/src/**/*.rs
+        - /services/yafvs-api/src/**/*.rs
     pattern-either:
       - pattern: $CLIENT.query(&format!(...), ...)
       - pattern: $CLIENT.query(format!(...).as_str(), ...)

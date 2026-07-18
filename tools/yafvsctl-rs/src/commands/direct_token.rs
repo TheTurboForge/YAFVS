@@ -93,7 +93,7 @@ fn command_runtime_native_api_direct_token_with_runner(
                     "No running direct native API listener publication was detected; no live direct listener needs token reload."
                         .to_string()
                 } else {
-                    "A running direct native API listener is currently published and may still require turbovas-api restart or runtime-native-api-direct-smoke before it accepts the rotated token."
+                    "A running direct native API listener is currently published and may still require yafvs-api restart or runtime-native-api-direct-smoke before it accepts the rotated token."
                         .to_string()
                 },
             )
@@ -105,7 +105,7 @@ fn command_runtime_native_api_direct_token_with_runner(
         findings.push(Finding::new(
             "pass",
             "native-api-direct-token.reload-required",
-            "Restart turbovas-api or rerun runtime-native-api-direct-smoke before expecting any running direct listener to accept the rotated token."
+            "Restart yafvs-api or rerun runtime-native-api-direct-smoke before expecting any running direct listener to accept the rotated token."
                 .to_string(),
         ));
     }
@@ -156,11 +156,7 @@ fn current_published_bindings(repo_root: &Path, runner: &dyn CommandRunner) -> V
     let environment = runtime_environment(repo_root);
     let compose = compose_command(
         repo_root,
-        &[
-            "ps".to_string(),
-            "-q".to_string(),
-            "turbovas-api".to_string(),
-        ],
+        &["ps".to_string(), "-q".to_string(), "yafvs-api".to_string()],
     );
     let compose_args = compose.iter().map(String::as_str).collect::<Vec<_>>();
     let Some(container) = runner
@@ -487,7 +483,7 @@ mod tests {
                 &fixture.repo.join("compose/dev.yaml").display().to_string(),
                 "ps",
                 "-q",
-                "turbovas-api",
+                "yafvs-api",
             ]
         );
         assert_eq!(

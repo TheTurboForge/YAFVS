@@ -299,7 +299,7 @@ mod tests {
         assert_eq!(left["services"], json!(APP_SERVICES));
         assert_eq!(
             left["digest"],
-            "74b704d573b61db44d465f10fed6c5631206a87499994aa1fe837d0a7cbd1895"
+            "90fff5083b3b38083682ea8aa4ac4721dd7cf346ddea42812ff2cb62b97c7fde"
         );
         let command = &first.commands.lock().unwrap()[0];
         let override_position = command

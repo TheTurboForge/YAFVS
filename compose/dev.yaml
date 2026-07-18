@@ -453,7 +453,7 @@ services:
       LD_LIBRARY_PATH: /workspace/build/prefix/lib:/workspace/build/prefix/lib64
       PATH: /workspace/build/prefix/sbin:/workspace/build/prefix/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       TURBOVAS_RUNTIME_DIR: /runtime
-      TURBOVAS_API_BROWSER_PROXY_SECRET: ${TURBOVAS_API_BROWSER_PROXY_SECRET:-}
+      YAFVS_API_BROWSER_PROXY_SECRET: ${YAFVS_API_BROWSER_PROXY_SECRET:-}
     ports:
       - "${TURBOVAS_GSAD_HOST:-127.0.0.1}:19392:9392"
     volumes:
@@ -500,12 +500,12 @@ services:
         --no-redirect
         --static-content=/workspace/build/prefix/share/gvm/gsad/web
 
-  turbovas-api:
+  yafvs-api:
     profiles: ["app"]
-    image: turbovas-turbovas-api
+    image: turbovas-yafvs-api
     build:
       context: ..
-      dockerfile: docker/turbovas-api/Dockerfile
+      dockerfile: docker/yafvs-api/Dockerfile
     depends_on:
       gvmd:
         condition: service_started
@@ -513,16 +513,16 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-turbovas}:${POSTGRES_PASSWORD:-turbovas-dev}@postgres:5432/${POSTGRES_DB:-turbovas}
-      RUST_LOG: ${TURBOVAS_API_LOG:-info}
-      TURBOVAS_API_BIND: 0.0.0.0:9080
-      TURBOVAS_API_DIRECT_BIND: ${TURBOVAS_API_DIRECT_BIND:-}
-      TURBOVAS_API_BEARER_TOKEN: ${TURBOVAS_API_BEARER_TOKEN:-}
-      TURBOVAS_API_BEARER_TOKEN_FILE: ${TURBOVAS_API_BEARER_TOKEN_FILE:-}
-      TURBOVAS_API_OPERATOR_UUID: ${TURBOVAS_API_OPERATOR_UUID:-}
-      TURBOVAS_API_OPERATOR_NAME: ${TURBOVAS_API_OPERATOR_NAME:-}
-      TURBOVAS_API_DIRECT_WRITE_CONTROL: ${TURBOVAS_API_DIRECT_WRITE_CONTROL:-}
-      TURBOVAS_API_BROWSER_PROXY_SECRET: ${TURBOVAS_API_BROWSER_PROXY_SECRET:-}
-      TURBOVAS_API_GVMD_CONTROL_SOCKET: /runtime/run/gvmd/turbovas-control.sock
+      RUST_LOG: ${YAFVS_API_LOG:-info}
+      YAFVS_API_BIND: 0.0.0.0:9080
+      YAFVS_API_DIRECT_BIND: ${YAFVS_API_DIRECT_BIND:-}
+      YAFVS_API_BEARER_TOKEN: ${YAFVS_API_BEARER_TOKEN:-}
+      YAFVS_API_BEARER_TOKEN_FILE: ${YAFVS_API_BEARER_TOKEN_FILE:-}
+      YAFVS_API_OPERATOR_UUID: ${YAFVS_API_OPERATOR_UUID:-}
+      YAFVS_API_OPERATOR_NAME: ${YAFVS_API_OPERATOR_NAME:-}
+      YAFVS_API_DIRECT_WRITE_CONTROL: ${YAFVS_API_DIRECT_WRITE_CONTROL:-}
+      YAFVS_API_BROWSER_PROXY_SECRET: ${YAFVS_API_BROWSER_PROXY_SECRET:-}
+      YAFVS_API_GVMD_CONTROL_SOCKET: /runtime/run/gvmd/turbovas-control.sock
       TURBOVAS_GVMD_CONTROL_SECRET: ${TURBOVAS_GVMD_CONTROL_SECRET:-}
       TURBOVAS_FEED_METADATA_DIR: /runtime/feeds
       TURBOVAS_FEED_LOCK_DIR: /runtime/run

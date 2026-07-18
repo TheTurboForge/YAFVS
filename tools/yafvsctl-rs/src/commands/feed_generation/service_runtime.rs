@@ -15,7 +15,7 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::time::Duration;
 
-pub(super) const CONTROL_SERVICES: [&str; 3] = ["gvmd", "gsad", "turbovas-api"];
+pub(super) const CONTROL_SERVICES: [&str; 3] = ["gvmd", "gsad", "yafvs-api"];
 pub(super) const SCANNER_SERVICES: [&str; 2] = ["ospd-openvas", "notus-scanner"];
 
 pub(super) struct ServiceRuntime<'a> {

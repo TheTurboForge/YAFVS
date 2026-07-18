@@ -20,7 +20,7 @@ const MQTT_RUNTIME_SECRETS: [&str; 4] = [
     "mqtt-ospd-password",
     "mqtt-health-password",
 ];
-const BROWSER_PROXY_SECRET_ENV: &str = "TURBOVAS_API_BROWSER_PROXY_SECRET";
+const BROWSER_PROXY_SECRET_ENV: &str = "YAFVS_API_BROWSER_PROXY_SECRET";
 const BROWSER_PROXY_SECRET: &str = "native-api-browser-proxy-secret";
 const GVMD_CONTROL_SECRET_ENV: &str = "TURBOVAS_GVMD_CONTROL_SECRET";
 const GVMD_CONTROL_SECRET: &str = "gvmd-control-secret";

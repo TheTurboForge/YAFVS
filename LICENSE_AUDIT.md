@@ -21,7 +21,7 @@ Original project-created root tooling and public documentation use
 license is selected for a component-local file.
 
 Project-created service and tooling code outside imported upstream component
-trees, including `services/turbovas-api` and `tools/yafvsctl-rs`, follows
+trees, including `services/yafvs-api` and `tools/yafvsctl-rs`, follows
 this `GPL-3.0-or-later` default. Third-party Rust crate dependencies recorded
 in their tracked `Cargo.lock` files are external package dependencies, not
 vendored source. Keep the lockfiles tracked for reproducibility and run the
@@ -167,7 +167,7 @@ reason it cannot.
   preserves the relevant provenance files.
 - Review Greenbone Community Feed terms before bundling, redistributing, mirroring, or packaging feed content. YAFVS currently supports Community Feed synchronization only and deliberately does not support Greenbone Enterprise Feed subscription keys.
 - Review third-party Rust crate license and security posture for
-  `services/turbovas-api` and `tools/yafvsctl-rs` before public release,
+  `services/yafvs-api` and `tools/yafvsctl-rs` before public release,
   packaging, or distribution.
 - Define artifact-specific source publication and attribution procedures before
   binary, container, hosted-service, or feed-redistribution modes.

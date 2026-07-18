@@ -1122,13 +1122,13 @@ def native_api_browser_proxy_delete(repo_root: Path, path: str, *, operator_name
         "TURBOVAS_BROWSER_SMOKE_OPERATOR_NAME",
         "-e",
         "TURBOVAS_BROWSER_SMOKE_DELETE_PATH",
-        "turbovas-api",
+        "yafvs-api",
         "sh",
         "-ceu",
         (
-            "test -n \"${TURBOVAS_API_BROWSER_PROXY_SECRET:-}\"; "
+            "test -n \"${YAFVS_API_BROWSER_PROXY_SECRET:-}\"; "
             "curl -sS --max-time 10 -X DELETE -w '\\n%{http_code}' "
-            "-H \"x-turbovas-browser-proxy-secret: ${TURBOVAS_API_BROWSER_PROXY_SECRET}\" "
+            "-H \"x-turbovas-browser-proxy-secret: ${YAFVS_API_BROWSER_PROXY_SECRET}\" "
             "-H \"x-turbovas-operator-name: ${TURBOVAS_BROWSER_SMOKE_OPERATOR_NAME}\" "
             "\"http://127.0.0.1:9080${TURBOVAS_BROWSER_SMOKE_DELETE_PATH}\""
         ),

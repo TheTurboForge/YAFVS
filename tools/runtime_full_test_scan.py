@@ -188,7 +188,7 @@ def native_api_json(repo_root: Path, path: str) -> dict[str, Any]:
         str(repo_root / "compose" / "dev.yaml"),
         "exec",
         "-T",
-        "turbovas-api",
+        "yafvs-api",
         "curl",
         "-fsS",
         "--max-time",
@@ -242,16 +242,16 @@ def native_api_browser_proxy_json(
         "TURBOVAS_FULL_TEST_JSON",
         "-e",
         "TURBOVAS_FULL_TEST_HAS_JSON",
-        "turbovas-api",
+        "yafvs-api",
         "sh",
         "-ceu",
         (
-            "test -n \"${TURBOVAS_API_BROWSER_PROXY_SECRET:-}\"; "
+            "test -n \"${YAFVS_API_BROWSER_PROXY_SECRET:-}\"; "
             "if [ \"${TURBOVAS_FULL_TEST_HAS_JSON}\" = 1 ]; then "
             "set -- -H \"content-type: application/json\" --data \"${TURBOVAS_FULL_TEST_JSON}\"; "
             "else set --; fi; "
             "curl -sS --max-time 10 -X \"${TURBOVAS_FULL_TEST_METHOD}\" -w '\\n%{http_code}' "
-            "-H \"x-turbovas-browser-proxy-secret: ${TURBOVAS_API_BROWSER_PROXY_SECRET}\" "
+            "-H \"x-turbovas-browser-proxy-secret: ${YAFVS_API_BROWSER_PROXY_SECRET}\" "
             "-H \"x-turbovas-operator-name: ${TURBOVAS_FULL_TEST_OPERATOR_NAME}\" "
             "\"$@\" "
             "\"http://127.0.0.1:9080${TURBOVAS_FULL_TEST_PATH}\""

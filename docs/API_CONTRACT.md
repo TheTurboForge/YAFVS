@@ -115,13 +115,13 @@ host-binding posture tracked outside this development API.
   API listener. The development helper uses a read-only runtime token file by
   default instead of passing generated bearer tokens through the container
   environment. See `docs/NATIVE_API_AUTH_BOUNDARY.md`.
-- Direct operator identity: `TURBOVAS_API_OPERATOR_UUID` and
-  `TURBOVAS_API_OPERATOR_NAME` are optional for read-only direct access and
+- Direct operator identity: `YAFVS_API_OPERATOR_UUID` and
+  `YAFVS_API_OPERATOR_NAME` are optional for read-only direct access and
   required for direct write-control. A configured operator UUID is verified
   against `users` at startup and anchors owner-bearing writes.
-- Direct write-control enablement: `TURBOVAS_API_DIRECT_WRITE_CONTROL` is a
+- Direct write-control enablement: `YAFVS_API_DIRECT_WRITE_CONTROL` is a
   strict-boolean enablement flag. Truthy values require
-  `TURBOVAS_API_OPERATOR_UUID` and register only explicitly approved direct
+  `YAFVS_API_OPERATOR_UUID` and register only explicitly approved direct
   write-control routes.
 - Direct v1 method boundary: the opt-in direct listener accepts classified
   `GET` requests under `/api/v1` by default. With direct write-control enabled
@@ -136,7 +136,7 @@ host-binding posture tracked outside this development API.
   and stop, and strict New-task target replacement. Other valid-token
   non-GET requests return JSON `405 method_not_allowed`. The enforced route set
   is the `APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS` list in
-  `services/turbovas-api/src/direct_api_contract_tests.rs` plus OpenAPI
+  `services/yafvs-api/src/direct_api_contract_tests.rs` plus OpenAPI
   `x-turbovas-exposure: direct-write` metadata.
 - Direct v1 browser boundary: direct responses do not emit browser CORS access
   headers. Browser product reads and browser-relevant write routes continue
@@ -167,7 +167,7 @@ host-binding posture tracked outside this development API.
   plan preview return JSON `404 not_found` on the direct listener even though
   they remain available to internal runtime validation.
 - Direct v1 contract metadata: scriptable direct-read operations carry
-  `x-turbovas-direct: true` in `api/openapi/turbovas-v1.yaml`. The
+  `x-turbovas-direct: true` in `api/openapi/yafvs-v1.yaml`. The
   `native-tooling-state` command compares those markers with the implementation
   inventory and reports drift as `native-tooling.direct-api-contract`.
 - Exposure and migration contract metadata: boundary seed operations carry
@@ -197,7 +197,7 @@ host-binding posture tracked outside this development API.
 
 ## Contract Source
 
-The seed OpenAPI document lives at `api/openapi/turbovas-v1.yaml`. It is the
+The seed OpenAPI document lives at `api/openapi/yafvs-v1.yaml`. It is the
 source of truth for the first native API shape until a live implementation
 lands. Future endpoint work must update the OpenAPI contract and the GMP/XML
 strangler map in the same slice.
@@ -223,12 +223,12 @@ auth schemes, operation IDs, shared Error responses, and direct-read markers
 without dumping the full endpoint inventory. Use full `--json` only when
 investigating a contract mismatch.
 The direct helper validates direct listener env shape locally before access:
-`TURBOVAS_API_DIRECT_HOST` is a single host name, IPv4 address, or bracketed
-IPv6 address, `TURBOVAS_API_DIRECT_PORT` is a decimal TCP port, and
-`TURBOVAS_API_DIRECT_BIND` is `host:port` or `[ipv6]:port`. URLs, paths,
+`YAFVS_API_DIRECT_HOST` is a single host name, IPv4 address, or bracketed
+IPv6 address, `YAFVS_API_DIRECT_PORT` is a decimal TCP port, and
+`YAFVS_API_DIRECT_BIND` is `host:port` or `[ipv6]:port`. URLs, paths,
 comma-separated hosts, whitespace, and out-of-range ports are rejected before a
 direct request is sent.
-If `TURBOVAS_API_OPERATOR_NAME` is set, `TURBOVAS_API_OPERATOR_UUID` must also
+If `YAFVS_API_OPERATOR_NAME` is set, `YAFVS_API_OPERATOR_UUID` must also
 be set; malformed operator UUID/name values are rejected before a direct request
 is sent.
 

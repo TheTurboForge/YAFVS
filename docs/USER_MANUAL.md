@@ -249,25 +249,25 @@ It also has a fixed in-flight development pressure guard; hitting the cap
 returns JSON `429 too_many_requests` rather than queueing unbounded work.
 The helper creates an ignored runtime bearer-token secret and mounts it into the
 direct API container as a read-only token file. Explicit
-`TURBOVAS_API_BEARER_TOKEN` values still work as a development override, but
+`YAFVS_API_BEARER_TOKEN` values still work as a development override, but
 generated runtime secrets are not passed through the container environment.
 Use `just runtime-native-api-direct-token --json --rotate` to rotate only this
 ignored development runtime secret without printing it; rerun the direct smoke
-or restart `turbovas-api` before expecting a running direct listener to accept
+or restart `yafvs-api` before expecting a running direct listener to accept
 the rotated token.
 Direct host and port overrides are intentionally narrow: use
-`TURBOVAS_API_DIRECT_HOST` for one host name, IPv4 address, or bracketed IPv6
-address such as `[::1]`, `TURBOVAS_API_DIRECT_PORT` for one TCP port, and
-`TURBOVAS_API_DIRECT_BIND` for `host:port` or `[ipv6]:port`. Do not put URLs,
+`YAFVS_API_DIRECT_HOST` for one host name, IPv4 address, or bracketed IPv6
+address such as `[::1]`, `YAFVS_API_DIRECT_PORT` for one TCP port, and
+`YAFVS_API_DIRECT_BIND` for `host:port` or `[ipv6]:port`. Do not put URLs,
 paths, comma-separated host lists, or whitespace in these values; the helper
 rejects malformed direct settings before sending a direct request.
 Owner-bearing native writes use direct operator identity metadata: set
-`TURBOVAS_API_OPERATOR_UUID` to a real gvmd user UUID and, for audit
-readability, `TURBOVAS_API_OPERATOR_NAME`. When an operator UUID is set,
-`turbovas-api` verifies that it exists in `users` before binding the direct
+`YAFVS_API_OPERATOR_UUID` to a real gvmd user UUID and, for audit
+readability, `YAFVS_API_OPERATOR_NAME`. When an operator UUID is set,
+`yafvs-api` verifies that it exists in `users` before binding the direct
 listener. The direct write-control flag is
-`TURBOVAS_API_DIRECT_WRITE_CONTROL=1`; it is strict-boolean, requires
-`TURBOVAS_API_OPERATOR_UUID`, and currently enables only explicit contract-listed
+`YAFVS_API_DIRECT_WRITE_CONTROL=1`; it is strict-boolean, requires
+`YAFVS_API_OPERATOR_UUID`, and currently enables only explicit contract-listed
 native write/control routes for scopes, tags, filters, port lists, report
 configs, scan configs, schedules, targets, selected alert metadata, credential
 name/comment metadata, scanner metadata, task metadata, guarded task start, and

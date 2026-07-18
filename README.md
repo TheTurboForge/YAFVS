@@ -33,7 +33,7 @@ support promise, or feed redistribution.
 flowchart LR
     Operator["Trusted operator"] --> GSA["GSA through gsad"]
     GSA -->|"GMP compatibility"| GVMD["gvmd"]
-    GSA -->|"same-origin /api/v1"| API["turbovas-api"]
+    GSA -->|"same-origin /api/v1"| API["yafvs-api"]
     GVMD --> DB[("PostgreSQL")]
     API --> DB
     GVMD --> OSPD["OSPD"]
@@ -138,7 +138,7 @@ support.
 | Development runtime | [Docker Runtime](docker/runtime/README.md) |
 | Operator behavior | [User Manual](docs/USER_MANUAL.md) |
 | Data and service flows | [Architecture Flows](docs/ARCHITECTURE_FLOWS.md) |
-| Native API contract and schema | [API Contract](docs/API_CONTRACT.md) and [OpenAPI](api/openapi/turbovas-v1.yaml) |
+| Native API contract and schema | [API Contract](docs/API_CONTRACT.md) and [OpenAPI](api/openapi/yafvs-v1.yaml) |
 | Validation expectations | [Validation Standards](docs/VALIDATION_STANDARDS.md) |
 | Production and publication limits | [Production Posture](docs/PRODUCTION_POSTURE.md) and [Public Release Readiness](docs/PUBLIC_RELEASE_READINESS.md) |
 | Memory-safety direction | [Memory Safety](docs/MEMORY_SAFETY.md) and [C Hardening](docs/C_HARDENING.md) |

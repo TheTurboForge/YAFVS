@@ -152,15 +152,15 @@ HARDENED_CONTROL_FLOW_ARCHITECTURES = ("x86_64", "amd64", "aarch64", "arm64")
 HARDENED_CMAKE_INJECTION = Path("build/hardened/turbovas-hardening.cmake")
 HARDENED_CONFIGURATION = Path("build/hardened/hardening-configuration.json")
 HARDENED_BUILD_MANIFEST = Path("build/hardened/hardening-manifest.json")
-NATIVE_RUST_SERVICES = ("turbovas-api",)
+NATIVE_RUST_SERVICES = ("yafvs-api",)
 YAFVSCTL_RUST_CRATE = Path("tools/yafvsctl-rs")
 YAFVSCTL_RUST_BRIDGE_MAX_OUTPUT_BYTES = 1024 * 1024
 RUNTIME_PYTHON_CHAIN = ("greenbone-feed-sync", "ospd-openvas", "notus-scanner")
 PYTHON_CHAIN = RUNTIME_PYTHON_CHAIN
 BASELINE_CHAIN = (*C_SERVICES_CHAIN, "gsa", *RUNTIME_PYTHON_CHAIN)
 RUNTIME_SERVICES = ("postgres", "redis-openvas", "mosquitto")
-APP_SERVICES = ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "turbovas-api")
-FEED_CONTROL_SERVICES = ("gvmd", "gsad", "turbovas-api")
+APP_SERVICES = ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "yafvs-api")
+FEED_CONTROL_SERVICES = ("gvmd", "gsad", "yafvs-api")
 APP_EXECUTION_MOUNT_SERVICES = ("gvmd", "ospd-openvas", "notus-scanner", "gsad")
 APP_RUNTIME_ARTIFACT_ROOTS = (
     Path("build/prefix"),
@@ -214,7 +214,7 @@ RUNTIME_DIRS = (
     "logs/ospd",
     "logs/notus",
     "logs/gsad",
-    "logs/turbovas-api",
+    "logs/yafvs-api",
     "logs/redis-openvas",
     "logs/feed-sync",
     "logs/quality-gate",
@@ -254,23 +254,23 @@ GSAD_HOSTS_ENV = "TURBOVAS_GSAD_HOSTS"
 GSAD_PORT = "19392"
 GSAD_CONTAINER_PORT = "9392"
 APP_PORTS = {"gsad": f"${{{GSAD_HOST_ENV}:-{DEFAULT_GSAD_HOST}}}:{GSAD_PORT}:9392"}
-TURBOVAS_API_CONTAINER_PORT = "9080"
-TURBOVAS_API_DIRECT_CONTAINER_PORT = "9081"
-TURBOVAS_API_DIRECT_DEFAULT_HOST = "127.0.0.1"
-TURBOVAS_API_DIRECT_DEFAULT_PORT = "19080"
-TURBOVAS_API_DIRECT_ENV = "TURBOVAS_API_DIRECT"
-TURBOVAS_API_DIRECT_HOST_ENV = "TURBOVAS_API_DIRECT_HOST"
-TURBOVAS_API_DIRECT_PORT_ENV = "TURBOVAS_API_DIRECT_PORT"
-TURBOVAS_API_DIRECT_BIND_ENV = "TURBOVAS_API_DIRECT_BIND"
-TURBOVAS_API_BEARER_TOKEN_ENV = "TURBOVAS_API_BEARER_TOKEN"
-TURBOVAS_API_BEARER_TOKEN_FILE_ENV = "TURBOVAS_API_BEARER_TOKEN_FILE"
-TURBOVAS_API_OPERATOR_UUID_ENV = "TURBOVAS_API_OPERATOR_UUID"
-TURBOVAS_API_OPERATOR_NAME_ENV = "TURBOVAS_API_OPERATOR_NAME"
-TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV = "TURBOVAS_API_DIRECT_WRITE_CONTROL"
-TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE = "/runtime/secrets/native-api-bearer-token"
-TURBOVAS_API_BEARER_TOKEN_SECRET = "native-api-bearer-token"
-TURBOVAS_API_BROWSER_PROXY_SECRET_ENV = "TURBOVAS_API_BROWSER_PROXY_SECRET"
-TURBOVAS_API_BROWSER_PROXY_SECRET = "native-api-browser-proxy-secret"
+YAFVS_API_CONTAINER_PORT = "9080"
+YAFVS_API_DIRECT_CONTAINER_PORT = "9081"
+YAFVS_API_DIRECT_DEFAULT_HOST = "127.0.0.1"
+YAFVS_API_DIRECT_DEFAULT_PORT = "19080"
+YAFVS_API_DIRECT_ENV = "YAFVS_API_DIRECT"
+YAFVS_API_DIRECT_HOST_ENV = "YAFVS_API_DIRECT_HOST"
+YAFVS_API_DIRECT_PORT_ENV = "YAFVS_API_DIRECT_PORT"
+YAFVS_API_DIRECT_BIND_ENV = "YAFVS_API_DIRECT_BIND"
+YAFVS_API_BEARER_TOKEN_ENV = "YAFVS_API_BEARER_TOKEN"
+YAFVS_API_BEARER_TOKEN_FILE_ENV = "YAFVS_API_BEARER_TOKEN_FILE"
+YAFVS_API_OPERATOR_UUID_ENV = "YAFVS_API_OPERATOR_UUID"
+YAFVS_API_OPERATOR_NAME_ENV = "YAFVS_API_OPERATOR_NAME"
+YAFVS_API_DIRECT_WRITE_CONTROL_ENV = "YAFVS_API_DIRECT_WRITE_CONTROL"
+YAFVS_API_BEARER_TOKEN_CONTAINER_FILE = "/runtime/secrets/native-api-bearer-token"
+YAFVS_API_BEARER_TOKEN_SECRET = "native-api-bearer-token"
+YAFVS_API_BROWSER_PROXY_SECRET_ENV = "YAFVS_API_BROWSER_PROXY_SECRET"
+YAFVS_API_BROWSER_PROXY_SECRET = "native-api-browser-proxy-secret"
 TURBOVAS_GVMD_CONTROL_SECRET_ENV = "TURBOVAS_GVMD_CONTROL_SECRET"
 TURBOVAS_GVMD_CONTROL_SECRET = "gvmd-control-secret"
 TURBOVAS_MQTT_OPENVAS_PASSWORD_ENV = "TURBOVAS_MQTT_OPENVAS_PASSWORD"
@@ -307,8 +307,8 @@ TURBOVAS_MQTT_ENVIRONMENT_SERVICES = (
     "ospd-openvas",
     "notus-scanner",
 )
-TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH = 32
-TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH = 1024
+YAFVS_API_BEARER_TOKEN_MIN_LENGTH = 32
+YAFVS_API_BEARER_TOKEN_MAX_LENGTH = 1024
 UUID_VALUE_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
@@ -3782,22 +3782,22 @@ def gsad_hosts_from_env(env: dict[str, str]) -> tuple[str, ...]:
 
 
 def native_api_direct_requested(env: dict[str, str]) -> bool:
-    return env_truthy(env.get(TURBOVAS_API_DIRECT_ENV)) or any(
+    return env_truthy(env.get(YAFVS_API_DIRECT_ENV)) or any(
         env.get(name)
         for name in (
-            TURBOVAS_API_DIRECT_HOST_ENV,
-            TURBOVAS_API_DIRECT_PORT_ENV,
-            TURBOVAS_API_DIRECT_BIND_ENV,
+            YAFVS_API_DIRECT_HOST_ENV,
+            YAFVS_API_DIRECT_PORT_ENV,
+            YAFVS_API_DIRECT_BIND_ENV,
         )
     )
 
 
 def native_api_direct_host(env: dict[str, str]) -> str:
-    return env.get(TURBOVAS_API_DIRECT_HOST_ENV, TURBOVAS_API_DIRECT_DEFAULT_HOST).strip() or TURBOVAS_API_DIRECT_DEFAULT_HOST
+    return env.get(YAFVS_API_DIRECT_HOST_ENV, YAFVS_API_DIRECT_DEFAULT_HOST).strip() or YAFVS_API_DIRECT_DEFAULT_HOST
 
 
 def native_api_direct_port(env: dict[str, str]) -> str:
-    return env.get(TURBOVAS_API_DIRECT_PORT_ENV, TURBOVAS_API_DIRECT_DEFAULT_PORT).strip() or TURBOVAS_API_DIRECT_DEFAULT_PORT
+    return env.get(YAFVS_API_DIRECT_PORT_ENV, YAFVS_API_DIRECT_DEFAULT_PORT).strip() or YAFVS_API_DIRECT_DEFAULT_PORT
 
 
 def validate_native_api_direct_host_value(value: str, *, env_name: str) -> str:
@@ -3845,9 +3845,9 @@ def validate_native_api_direct_bind_value(value: str, *, env_name: str) -> str:
             raise ValueError(f"{env_name} must be host:port or [ipv6]:port")
         host, port = bind.rsplit(":", 1)
     normalized_port = validate_native_api_direct_port_value(port, env_name=env_name)
-    if normalized_port != TURBOVAS_API_DIRECT_CONTAINER_PORT:
+    if normalized_port != YAFVS_API_DIRECT_CONTAINER_PORT:
         raise ValueError(
-            f"{env_name} must use container port {TURBOVAS_API_DIRECT_CONTAINER_PORT} "
+            f"{env_name} must use container port {YAFVS_API_DIRECT_CONTAINER_PORT} "
             "when managed by yafvsctl"
         )
     return f"{validate_native_api_direct_host_value(host, env_name=env_name)}:{normalized_port}"
@@ -3875,42 +3875,42 @@ def validate_native_api_direct_write_control_value(value: str, *, env_name: str)
 def native_api_direct_config_errors(env: dict[str, str]) -> tuple[str, ...]:
     errors: list[str] = []
     for value, env_name, validator in (
-        (native_api_direct_host(env), TURBOVAS_API_DIRECT_HOST_ENV, validate_native_api_direct_host_value),
-        (native_api_direct_port(env), TURBOVAS_API_DIRECT_PORT_ENV, validate_native_api_direct_port_value),
+        (native_api_direct_host(env), YAFVS_API_DIRECT_HOST_ENV, validate_native_api_direct_host_value),
+        (native_api_direct_port(env), YAFVS_API_DIRECT_PORT_ENV, validate_native_api_direct_port_value),
     ):
         try:
             validator(value, env_name=env_name)
         except ValueError as exc:
             errors.append(str(exc))
-    direct_bind = env.get(TURBOVAS_API_DIRECT_BIND_ENV)
+    direct_bind = env.get(YAFVS_API_DIRECT_BIND_ENV)
     if direct_bind:
         try:
-            validate_native_api_direct_bind_value(direct_bind, env_name=TURBOVAS_API_DIRECT_BIND_ENV)
+            validate_native_api_direct_bind_value(direct_bind, env_name=YAFVS_API_DIRECT_BIND_ENV)
         except ValueError as exc:
             errors.append(str(exc))
-    operator_uuid = env.get(TURBOVAS_API_OPERATOR_UUID_ENV, "").strip()
-    operator_name = env.get(TURBOVAS_API_OPERATOR_NAME_ENV, "")
+    operator_uuid = env.get(YAFVS_API_OPERATOR_UUID_ENV, "").strip()
+    operator_name = env.get(YAFVS_API_OPERATOR_NAME_ENV, "")
     if operator_uuid:
         try:
-            validate_native_api_operator_uuid_value(operator_uuid, env_name=TURBOVAS_API_OPERATOR_UUID_ENV)
+            validate_native_api_operator_uuid_value(operator_uuid, env_name=YAFVS_API_OPERATOR_UUID_ENV)
         except ValueError as exc:
             errors.append(str(exc))
     elif operator_name.strip():
-        errors.append(f"{TURBOVAS_API_OPERATOR_NAME_ENV} requires {TURBOVAS_API_OPERATOR_UUID_ENV}")
+        errors.append(f"{YAFVS_API_OPERATOR_NAME_ENV} requires {YAFVS_API_OPERATOR_UUID_ENV}")
     if operator_name.strip():
         try:
-            validate_native_api_operator_name_value(operator_name, env_name=TURBOVAS_API_OPERATOR_NAME_ENV)
+            validate_native_api_operator_name_value(operator_name, env_name=YAFVS_API_OPERATOR_NAME_ENV)
         except ValueError as exc:
             errors.append(str(exc))
-    write_control = env.get(TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV, "")
+    write_control = env.get(YAFVS_API_DIRECT_WRITE_CONTROL_ENV, "")
     if write_control.strip():
         try:
             normalized_write_control = validate_native_api_direct_write_control_value(
                 write_control,
-                env_name=TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV,
+                env_name=YAFVS_API_DIRECT_WRITE_CONTROL_ENV,
             )
             if normalized_write_control in {"1", "true", "yes", "on"} and not operator_uuid:
-                errors.append(f"{TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV} requires {TURBOVAS_API_OPERATOR_UUID_ENV}")
+                errors.append(f"{YAFVS_API_DIRECT_WRITE_CONTROL_ENV} requires {YAFVS_API_OPERATOR_UUID_ENV}")
         except ValueError as exc:
             errors.append(str(exc))
     return tuple(errors)
@@ -3925,25 +3925,25 @@ def native_api_direct_config_shape_finding(env: dict[str, str], *, check: str) -
         if not errors
         else "Direct native API host, port, or bind settings are malformed.",
         details={
-            "host_env": TURBOVAS_API_DIRECT_HOST_ENV,
+            "host_env": YAFVS_API_DIRECT_HOST_ENV,
             "host": native_api_direct_host(env),
-            "port_env": TURBOVAS_API_DIRECT_PORT_ENV,
+            "port_env": YAFVS_API_DIRECT_PORT_ENV,
             "port": native_api_direct_port(env),
-            "bind_env": TURBOVAS_API_DIRECT_BIND_ENV,
-            "bind": env.get(TURBOVAS_API_DIRECT_BIND_ENV),
-            "write_control_env": TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV,
-            "write_control": env.get(TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV),
+            "bind_env": YAFVS_API_DIRECT_BIND_ENV,
+            "bind": env.get(YAFVS_API_DIRECT_BIND_ENV),
+            "write_control_env": YAFVS_API_DIRECT_WRITE_CONTROL_ENV,
+            "write_control": env.get(YAFVS_API_DIRECT_WRITE_CONTROL_ENV),
             "errors": list(errors),
         },
     )
 
 
 def native_api_direct_port_binding(env: dict[str, str]) -> str:
-    return f"{native_api_direct_host(env)}:{native_api_direct_port(env)}:{TURBOVAS_API_DIRECT_CONTAINER_PORT}"
+    return f"{native_api_direct_host(env)}:{native_api_direct_port(env)}:{YAFVS_API_DIRECT_CONTAINER_PORT}"
 
 
 def direct_api_bearer_token_is_acceptable(token: str) -> bool:
-    return TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH <= len(token) <= TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH and all(
+    return YAFVS_API_BEARER_TOKEN_MIN_LENGTH <= len(token) <= YAFVS_API_BEARER_TOKEN_MAX_LENGTH and all(
         char.isascii() and not char.isspace() and 33 <= ord(char) <= 126 for char in token
     )
 
@@ -3953,13 +3953,13 @@ def native_api_direct_base_url(env: dict[str, str]) -> str:
 
 
 def ensure_native_api_direct_runtime_env_defaults(repo_root: Path, env: dict[str, str]) -> dict[str, str]:
-    env[TURBOVAS_API_DIRECT_ENV] = "1"
-    env.setdefault(TURBOVAS_API_DIRECT_HOST_ENV, TURBOVAS_API_DIRECT_DEFAULT_HOST)
-    env.setdefault(TURBOVAS_API_DIRECT_PORT_ENV, TURBOVAS_API_DIRECT_DEFAULT_PORT)
-    env.setdefault(TURBOVAS_API_DIRECT_BIND_ENV, f"0.0.0.0:{TURBOVAS_API_DIRECT_CONTAINER_PORT}")
-    if not env.get(TURBOVAS_API_BEARER_TOKEN_ENV) and not env.get(TURBOVAS_API_BEARER_TOKEN_FILE_ENV):
-        read_or_create_runtime_secret(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
-        env[TURBOVAS_API_BEARER_TOKEN_FILE_ENV] = TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE
+    env[YAFVS_API_DIRECT_ENV] = "1"
+    env.setdefault(YAFVS_API_DIRECT_HOST_ENV, YAFVS_API_DIRECT_DEFAULT_HOST)
+    env.setdefault(YAFVS_API_DIRECT_PORT_ENV, YAFVS_API_DIRECT_DEFAULT_PORT)
+    env.setdefault(YAFVS_API_DIRECT_BIND_ENV, f"0.0.0.0:{YAFVS_API_DIRECT_CONTAINER_PORT}")
+    if not env.get(YAFVS_API_BEARER_TOKEN_ENV) and not env.get(YAFVS_API_BEARER_TOKEN_FILE_ENV):
+        read_or_create_runtime_secret(repo_root, YAFVS_API_BEARER_TOKEN_SECRET)
+        env[YAFVS_API_BEARER_TOKEN_FILE_ENV] = YAFVS_API_BEARER_TOKEN_CONTAINER_FILE
     return env
 
 
@@ -3968,15 +3968,15 @@ def native_api_direct_runtime_env(repo_root: Path) -> dict[str, str]:
 
 
 def native_api_direct_bearer_token(repo_root: Path, env: dict[str, str]) -> str:
-    token = env.get(TURBOVAS_API_BEARER_TOKEN_ENV, "")
+    token = env.get(YAFVS_API_BEARER_TOKEN_ENV, "")
     if token:
         return token
-    file_value = env.get(TURBOVAS_API_BEARER_TOKEN_FILE_ENV, "")
-    if file_value == TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE:
-        return runtime_secret_path(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET).read_text(encoding="utf-8").strip()
+    file_value = env.get(YAFVS_API_BEARER_TOKEN_FILE_ENV, "")
+    if file_value == YAFVS_API_BEARER_TOKEN_CONTAINER_FILE:
+        return runtime_secret_path(repo_root, YAFVS_API_BEARER_TOKEN_SECRET).read_text(encoding="utf-8").strip()
     if file_value:
         return Path(file_value).expanduser().read_text(encoding="utf-8").strip()
-    return runtime_secret_path(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET).read_text(encoding="utf-8").strip()
+    return runtime_secret_path(repo_root, YAFVS_API_BEARER_TOKEN_SECRET).read_text(encoding="utf-8").strip()
 
 
 def gsad_host(repo_root: Path) -> str:
@@ -4036,7 +4036,7 @@ def current_gsad_published_hosts(repo_root: Path) -> tuple[str, ...]:
 
 
 def current_native_api_direct_published_bindings(repo_root: Path) -> tuple[dict[str, str], ...]:
-    cid = container_id(repo_root, "turbovas-api")
+    cid = container_id(repo_root, "yafvs-api")
     if not cid:
         return ()
     result = run_command(["docker", "inspect", "-f", "{{json .NetworkSettings.Ports}}", cid], repo_root, env=runtime_env(repo_root))
@@ -4046,7 +4046,7 @@ def current_native_api_direct_published_bindings(repo_root: Path) -> tuple[dict[
         ports = json.loads(result.stdout)
     except json.JSONDecodeError:
         return ()
-    bindings = ports.get(f"{TURBOVAS_API_DIRECT_CONTAINER_PORT}/tcp") or []
+    bindings = ports.get(f"{YAFVS_API_DIRECT_CONTAINER_PORT}/tcp") or []
     published: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for binding in bindings:
@@ -4056,7 +4056,7 @@ def current_native_api_direct_published_bindings(repo_root: Path) -> tuple[dict[
         host_port = str(binding.get("HostPort") or "").strip()
         if not host_port or (host, host_port) in seen:
             continue
-        published.append({"host": host, "host_port": host_port, "container_port": TURBOVAS_API_DIRECT_CONTAINER_PORT})
+        published.append({"host": host, "host_port": host_port, "container_port": YAFVS_API_DIRECT_CONTAINER_PORT})
         seen.add((host, host_port))
     return tuple(published)
 
@@ -4446,36 +4446,36 @@ def native_tooling_removal_review(paths: list[str]) -> dict[str, Any]:
 
 def native_api_direct_token_sources(repo_root: Path, env: dict[str, str]) -> tuple[tuple[str, ...], Path, bool]:
     sources: list[str] = []
-    if env.get(TURBOVAS_API_BEARER_TOKEN_ENV):
+    if env.get(YAFVS_API_BEARER_TOKEN_ENV):
         sources.append("environment")
-    if env.get(TURBOVAS_API_BEARER_TOKEN_FILE_ENV):
+    if env.get(YAFVS_API_BEARER_TOKEN_FILE_ENV):
         sources.append("configured-token-file")
-    secret_path = runtime_secret_path(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
+    secret_path = runtime_secret_path(repo_root, YAFVS_API_BEARER_TOKEN_SECRET)
     secret_present = False
     try:
         secret_present = secret_path.is_file() and bool(secret_path.read_text(encoding="utf-8").strip())
     except OSError:
         pass
-    if running_service_env_value(repo_root, "turbovas-api", TURBOVAS_API_BEARER_TOKEN_ENV):
+    if running_service_env_value(repo_root, "yafvs-api", YAFVS_API_BEARER_TOKEN_ENV):
         sources.append("running-container-env")
-    running_token_file = running_service_env_value(repo_root, "turbovas-api", TURBOVAS_API_BEARER_TOKEN_FILE_ENV)
+    running_token_file = running_service_env_value(repo_root, "yafvs-api", YAFVS_API_BEARER_TOKEN_FILE_ENV)
     if running_token_file:
         sources.append("running-container-token-file")
     return tuple(sources), secret_path, secret_present
 
 
 def native_api_direct_host_token_file_path(repo_root: Path, token_file: str) -> Path:
-    if token_file == TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE:
-        return runtime_secret_path(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
+    if token_file == YAFVS_API_BEARER_TOKEN_CONTAINER_FILE:
+        return runtime_secret_path(repo_root, YAFVS_API_BEARER_TOKEN_SECRET)
     return Path(token_file).expanduser()
 
 
 def native_api_direct_token_file_metadata(repo_root: Path, env: dict[str, str]) -> dict[str, Any]:
-    configured_token_file = env.get(TURBOVAS_API_BEARER_TOKEN_FILE_ENV, "").strip()
+    configured_token_file = env.get(YAFVS_API_BEARER_TOKEN_FILE_ENV, "").strip()
     if configured_token_file:
         host_path = native_api_direct_host_token_file_path(repo_root, configured_token_file)
         metadata = runtime_secret_file_metadata(host_path)
-        source = "runtime-secret-file" if configured_token_file == TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE else "configured-token-file"
+        source = "runtime-secret-file" if configured_token_file == YAFVS_API_BEARER_TOKEN_CONTAINER_FILE else "configured-token-file"
         return {
             **metadata,
             "source": source,
@@ -4484,10 +4484,10 @@ def native_api_direct_token_file_metadata(repo_root: Path, env: dict[str, str]) 
             "host_metadata_available": True,
         }
 
-    running_token_file = running_service_env_value(repo_root, "turbovas-api", TURBOVAS_API_BEARER_TOKEN_FILE_ENV)
+    running_token_file = running_service_env_value(repo_root, "yafvs-api", YAFVS_API_BEARER_TOKEN_FILE_ENV)
     if running_token_file:
-        if running_token_file == TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE:
-            host_path = runtime_secret_path(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
+        if running_token_file == YAFVS_API_BEARER_TOKEN_CONTAINER_FILE:
+            host_path = runtime_secret_path(repo_root, YAFVS_API_BEARER_TOKEN_SECRET)
             metadata = runtime_secret_file_metadata(host_path)
             return {
                 **metadata,
@@ -4507,7 +4507,7 @@ def native_api_direct_token_file_metadata(repo_root: Path, env: dict[str, str]) 
             "host_metadata_available": False,
         }
 
-    host_path = runtime_secret_path(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
+    host_path = runtime_secret_path(repo_root, YAFVS_API_BEARER_TOKEN_SECRET)
     metadata = runtime_secret_file_metadata(host_path)
     return {
         **metadata,
@@ -4523,13 +4523,13 @@ def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | No
     findings: list[dict[str, Any]] = []
     configured = native_api_direct_requested(env)
     direct_env_names = (
-        TURBOVAS_API_DIRECT_ENV,
-        TURBOVAS_API_DIRECT_HOST_ENV,
-        TURBOVAS_API_DIRECT_PORT_ENV,
-        TURBOVAS_API_DIRECT_BIND_ENV,
-        TURBOVAS_API_OPERATOR_UUID_ENV,
-        TURBOVAS_API_OPERATOR_NAME_ENV,
-        TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV,
+        YAFVS_API_DIRECT_ENV,
+        YAFVS_API_DIRECT_HOST_ENV,
+        YAFVS_API_DIRECT_PORT_ENV,
+        YAFVS_API_DIRECT_BIND_ENV,
+        YAFVS_API_OPERATOR_UUID_ENV,
+        YAFVS_API_OPERATOR_NAME_ENV,
+        YAFVS_API_DIRECT_WRITE_CONTROL_ENV,
     )
     configured_env = [name for name in direct_env_names if env.get(name)]
     running_bindings = current_native_api_direct_published_bindings(repo_root)
@@ -4562,7 +4562,7 @@ def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | No
                     "host": configured_host,
                     "host_port": native_api_direct_port(env),
                     "host_binding": native_api_direct_port_binding(env),
-                    "container_bind": env.get(TURBOVAS_API_DIRECT_BIND_ENV),
+                    "container_bind": env.get(YAFVS_API_DIRECT_BIND_ENV),
                     "configured_env": configured_env,
                 },
             )
@@ -4601,7 +4601,7 @@ def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | No
     )
 
     token_sources, secret_path, secret_present = native_api_direct_token_sources(repo_root, env)
-    configured_token = env.get(TURBOVAS_API_BEARER_TOKEN_ENV, "")
+    configured_token = env.get(YAFVS_API_BEARER_TOKEN_ENV, "")
     configured_token_ok = direct_api_bearer_token_is_acceptable(configured_token) if configured_token else None
     secret_metadata = native_api_direct_token_file_metadata(repo_root, env)
     secret_file_used = "configured-token-file" in token_sources or "running-container-token-file" in token_sources
@@ -4612,10 +4612,10 @@ def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | No
         "token_sources": list(token_sources),
         "environment_token_used": environment_token_used,
         "secret_file_used": secret_file_used,
-        "bearer_token_env": TURBOVAS_API_BEARER_TOKEN_ENV,
-        "bearer_token_file_env": TURBOVAS_API_BEARER_TOKEN_FILE_ENV,
-        "minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH,
-        "maximum_token_length": TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH,
+        "bearer_token_env": YAFVS_API_BEARER_TOKEN_ENV,
+        "bearer_token_file_env": YAFVS_API_BEARER_TOKEN_FILE_ENV,
+        "minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH,
+        "maximum_token_length": YAFVS_API_BEARER_TOKEN_MAX_LENGTH,
         "configured_environment_token_ok": configured_token_ok,
         "runtime_secret": str(secret_path),
         "runtime_secret_present": secret_present,
@@ -4745,31 +4745,31 @@ def ensure_gsad_ports_override(repo_root: Path, env: dict[str, str] | None = Non
 
 
 def native_api_direct_ports_override_file(repo_root: Path) -> Path:
-    return repo_root / "build" / "compose" / "turbovas-api-direct.override.yaml"
+    return repo_root / "build" / "compose" / "yafvs-api-direct.override.yaml"
 
 
 def ensure_native_api_direct_ports_override(repo_root: Path, env: dict[str, str] | None = None) -> Path | None:
     env = runtime_env(repo_root) if env is None else env
     if not native_api_direct_requested(env):
         return None
-    if not env.get(TURBOVAS_API_BEARER_TOKEN_ENV) and not env.get(TURBOVAS_API_BEARER_TOKEN_FILE_ENV):
-        read_or_create_runtime_secret(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
-        env[TURBOVAS_API_BEARER_TOKEN_FILE_ENV] = TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE
+    if not env.get(YAFVS_API_BEARER_TOKEN_ENV) and not env.get(YAFVS_API_BEARER_TOKEN_FILE_ENV):
+        read_or_create_runtime_secret(repo_root, YAFVS_API_BEARER_TOKEN_SECRET)
+        env[YAFVS_API_BEARER_TOKEN_FILE_ENV] = YAFVS_API_BEARER_TOKEN_CONTAINER_FILE
     path = native_api_direct_ports_override_file(repo_root)
     path.parent.mkdir(parents=True, exist_ok=True)
-    secret_path = runtime_secret_path(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
-    token_file = env.get(TURBOVAS_API_BEARER_TOKEN_FILE_ENV, "")
+    secret_path = runtime_secret_path(repo_root, YAFVS_API_BEARER_TOKEN_SECRET)
+    token_file = env.get(YAFVS_API_BEARER_TOKEN_FILE_ENV, "")
     token_file_config = ""
     if token_file:
         token_file_config = (
             "    environment:\n"
-            f"      TURBOVAS_API_BEARER_TOKEN_FILE: {json.dumps(token_file)}\n"
+            f"      YAFVS_API_BEARER_TOKEN_FILE: {json.dumps(token_file)}\n"
             "    volumes:\n"
-            f"      - type: bind\n        source: {json.dumps(str(secret_path))}\n        target: {json.dumps(TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE)}\n        read_only: true\n"
+            f"      - type: bind\n        source: {json.dumps(str(secret_path))}\n        target: {json.dumps(YAFVS_API_BEARER_TOKEN_CONTAINER_FILE)}\n        read_only: true\n"
         )
     path.write_text(
         "services:\n"
-        "  turbovas-api:\n"
+        "  yafvs-api:\n"
         "    ports:\n"
         f"      - {json.dumps(native_api_direct_port_binding(env))}\n"
         f"{token_file_config}",
@@ -5657,9 +5657,9 @@ def runtime_env(repo_root: Path) -> dict[str, str]:
 
 def runtime_app_env(repo_root: Path) -> dict[str, str]:
     env = runtime_env(repo_root)
-    if not env.get(TURBOVAS_API_BROWSER_PROXY_SECRET_ENV):
-        secret, _created = read_or_create_runtime_secret(repo_root, TURBOVAS_API_BROWSER_PROXY_SECRET)
-        env[TURBOVAS_API_BROWSER_PROXY_SECRET_ENV] = secret
+    if not env.get(YAFVS_API_BROWSER_PROXY_SECRET_ENV):
+        secret, _created = read_or_create_runtime_secret(repo_root, YAFVS_API_BROWSER_PROXY_SECRET)
+        env[YAFVS_API_BROWSER_PROXY_SECRET_ENV] = secret
     if not env.get(TURBOVAS_GVMD_CONTROL_SECRET_ENV):
         secret, _created = read_or_create_runtime_secret(repo_root, TURBOVAS_GVMD_CONTROL_SECRET)
         env[TURBOVAS_GVMD_CONTROL_SECRET_ENV] = secret
@@ -5673,22 +5673,22 @@ def deployed_app_env(repo_root: Path) -> dict[str, str]:
         if hosts:
             env[GSAD_HOSTS_ENV] = ",".join(hosts)
     direct_setting_names = (
-        TURBOVAS_API_DIRECT_ENV,
-        TURBOVAS_API_DIRECT_HOST_ENV,
-        TURBOVAS_API_DIRECT_PORT_ENV,
-        TURBOVAS_API_DIRECT_BIND_ENV,
+        YAFVS_API_DIRECT_ENV,
+        YAFVS_API_DIRECT_HOST_ENV,
+        YAFVS_API_DIRECT_PORT_ENV,
+        YAFVS_API_DIRECT_BIND_ENV,
     )
     if not any(name in os.environ for name in direct_setting_names):
         bindings = current_native_api_direct_published_bindings(repo_root)
         if len(bindings) == 1:
             binding = bindings[0]
             ensure_native_api_direct_runtime_env_defaults(repo_root, env)
-            env[TURBOVAS_API_DIRECT_HOST_ENV] = (
+            env[YAFVS_API_DIRECT_HOST_ENV] = (
                 native_api_direct_env_host_from_published_binding(
                     binding["host"]
                 )
             )
-            env[TURBOVAS_API_DIRECT_PORT_ENV] = binding["host_port"]
+            env[YAFVS_API_DIRECT_PORT_ENV] = binding["host_port"]
     return env
 
 
@@ -7606,7 +7606,7 @@ def openapi_direct_endpoint_templates(repo_root: Path | None) -> list[str]:
         return sorted(direct_read_endpoints)
     if repo_root is None:
         return []
-    path = repo_root / "api" / "openapi" / "turbovas-v1.yaml"
+    path = repo_root / "api" / "openapi" / "yafvs-v1.yaml"
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError:
@@ -7634,7 +7634,7 @@ def openapi_direct_endpoint_templates(repo_root: Path | None) -> list[str]:
 def openapi_contract_lines(repo_root: Path | None) -> list[str]:
     if repo_root is None:
         return []
-    path = repo_root / "api" / "openapi" / "turbovas-v1.yaml"
+    path = repo_root / "api" / "openapi" / "yafvs-v1.yaml"
     try:
         return path.read_text(encoding="utf-8").splitlines()
     except OSError:
@@ -8607,7 +8607,7 @@ def openapi_schedule_create_schema_contract_drift(repo_root: Path | None, operat
 def rust_collection_contract_constants(repo_root: Path | None) -> dict[str, int | None]:
     if repo_root is None:
         return {"default_page_size": None, "max_page_size": None, "max_filter_length": None}
-    path = repo_root / "services" / "turbovas-api" / "src" / "collections.rs"
+    path = repo_root / "services" / "yafvs-api" / "src" / "collections.rs"
     try:
         source = path.read_text(encoding="utf-8")
     except OSError:
@@ -8629,8 +8629,8 @@ def rust_collection_contract_paths(repo_root: Path | None) -> list[str]:
         return []
     source = ""
     for relative_path in (
-        "services/turbovas-api/src/collection_contract_tests.rs",
-        "services/turbovas-api/src/main.rs",
+        "services/yafvs-api/src/collection_contract_tests.rs",
+        "services/yafvs-api/src/main.rs",
     ):
         try:
             source += "\n" + (repo_root / relative_path).read_text(encoding="utf-8")
@@ -8886,14 +8886,14 @@ def rust_route_to_endpoint_template(route: str) -> str:
 
 
 RUST_NATIVE_API_ROUTE_SOURCE_PATHS = (
-    "services/turbovas-api/src/read_api_routes.rs",
-    "services/turbovas-api/src/direct_api_routes.rs",
-    "services/turbovas-api/src/browser_proxy_routes.rs",
+    "services/yafvs-api/src/read_api_routes.rs",
+    "services/yafvs-api/src/direct_api_routes.rs",
+    "services/yafvs-api/src/browser_proxy_routes.rs",
 )
 RUST_NATIVE_API_ROUTE_FUNCTION_SOURCES = {
-    "native_api_router": "services/turbovas-api/src/read_api_routes.rs",
-    "direct_native_api_router": "services/turbovas-api/src/direct_api_routes.rs",
-    "browser_proxy_native_api_router": "services/turbovas-api/src/browser_proxy_routes.rs",
+    "native_api_router": "services/yafvs-api/src/read_api_routes.rs",
+    "direct_native_api_router": "services/yafvs-api/src/direct_api_routes.rs",
+    "browser_proxy_native_api_router": "services/yafvs-api/src/browser_proxy_routes.rs",
 }
 
 
@@ -9007,9 +9007,9 @@ def rust_direct_api_source(repo_root: Path | None) -> str:
     if repo_root is None:
         return ""
     for relative_path in (
-        "services/turbovas-api/src/direct_api_contract.rs",
-        "services/turbovas-api/src/direct_api.rs",
-        "services/turbovas-api/src/main.rs",
+        "services/yafvs-api/src/direct_api_contract.rs",
+        "services/yafvs-api/src/direct_api.rs",
+        "services/yafvs-api/src/main.rs",
     ):
         try:
             candidate = (repo_root / relative_path).read_text(encoding="utf-8")
@@ -9064,7 +9064,7 @@ def rust_repo_file_source(repo_root: Path | None, relative_path: str) -> str:
 
 def rust_direct_api_body_limit_summary(repo_root: Path | None) -> dict[str, Any]:
     route_source = rust_native_api_route_source(repo_root, "direct_native_api_router")
-    request_shape_source = rust_repo_file_source(repo_root, "services/turbovas-api/src/request_shapes.rs")
+    request_shape_source = rust_repo_file_source(repo_root, "services/yafvs-api/src/request_shapes.rs")
     direct_router_body = rust_source_function_body(route_source, "direct_native_api_router")
     properties = {
         "direct_router_present": bool(direct_router_body),
@@ -11792,16 +11792,16 @@ def native_tooling_status_only_findings(findings: list[dict[str, Any]]) -> list[
 
 NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
     {
-        "owner": "services/turbovas-api/src/credential_write_validation.rs",
-        "forbidden": ("services/turbovas-api/src/credential_writes.rs",),
+        "owner": "services/yafvs-api/src/credential_write_validation.rs",
+        "forbidden": ("services/yafvs-api/src/credential_writes.rs",),
         "symbols": (
             "pub(crate) struct CredentialPatchRequest",
             "pub(crate) fn validate_credential_patch_request",
         ),
     },
     {
-        "owner": "services/turbovas-api/src/credential_write_sql.rs",
-        "forbidden": ("services/turbovas-api/src/credential_writes.rs",),
+        "owner": "services/yafvs-api/src/credential_write_sql.rs",
+        "forbidden": ("services/yafvs-api/src/credential_writes.rs",),
         "symbols": (
             "pub(crate) fn credential_write_operator_owner_sql",
             "pub(crate) fn credential_write_state_sql",
@@ -11810,21 +11810,21 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/credential_write_transactions.rs",
-        "forbidden": ("services/turbovas-api/src/credential_writes.rs",),
+        "owner": "services/yafvs-api/src/credential_write_transactions.rs",
+        "forbidden": ("services/yafvs-api/src/credential_writes.rs",),
         "symbols": ("pub(crate) async fn execute_credential_patch_transaction",),
     },
     {
-        "owner": "services/turbovas-api/src/alert_write_validation.rs",
-        "forbidden": ("services/turbovas-api/src/alert_writes.rs",),
+        "owner": "services/yafvs-api/src/alert_write_validation.rs",
+        "forbidden": ("services/yafvs-api/src/alert_writes.rs",),
         "symbols": (
             "pub(crate) struct AlertPatchRequest",
             "pub(crate) fn validate_alert_patch_request",
         ),
     },
     {
-        "owner": "services/turbovas-api/src/alert_write_sql.rs",
-        "forbidden": ("services/turbovas-api/src/alert_writes.rs",),
+        "owner": "services/yafvs-api/src/alert_write_sql.rs",
+        "forbidden": ("services/yafvs-api/src/alert_writes.rs",),
         "symbols": (
             "pub(crate) fn alert_write_operator_owner_sql",
             "pub(crate) fn alert_write_state_sql",
@@ -11833,16 +11833,16 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/scanner_write_validation.rs",
-        "forbidden": ("services/turbovas-api/src/scanner_writes.rs",),
+        "owner": "services/yafvs-api/src/scanner_write_validation.rs",
+        "forbidden": ("services/yafvs-api/src/scanner_writes.rs",),
         "symbols": (
             "pub(crate) struct ScannerPatchRequest",
             "pub(crate) fn validate_scanner_patch_request",
         ),
     },
     {
-        "owner": "services/turbovas-api/src/scanner_write_sql.rs",
-        "forbidden": ("services/turbovas-api/src/scanner_writes.rs",),
+        "owner": "services/yafvs-api/src/scanner_write_sql.rs",
+        "forbidden": ("services/yafvs-api/src/scanner_writes.rs",),
         "symbols": (
             "pub(crate) fn scanner_write_operator_owner_sql",
             "pub(crate) fn scanner_write_state_sql",
@@ -11851,13 +11851,13 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/scanner_write_transactions.rs",
-        "forbidden": ("services/turbovas-api/src/scanner_writes.rs",),
+        "owner": "services/yafvs-api/src/scanner_write_transactions.rs",
+        "forbidden": ("services/yafvs-api/src/scanner_writes.rs",),
         "symbols": ("pub(crate) async fn execute_scanner_patch_transaction",),
     },
     {
-        "owner": "services/turbovas-api/src/port_list_write_validation.rs",
-        "forbidden": ("services/turbovas-api/src/port_list_writes.rs",),
+        "owner": "services/yafvs-api/src/port_list_write_validation.rs",
+        "forbidden": ("services/yafvs-api/src/port_list_writes.rs",),
         "symbols": (
             "pub(crate) struct PortListCreateRequest",
             "pub(crate) struct PortListCloneRequest",
@@ -11868,8 +11868,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/port_list_write_sql.rs",
-        "forbidden": ("services/turbovas-api/src/port_list_writes.rs",),
+        "owner": "services/yafvs-api/src/port_list_write_sql.rs",
+        "forbidden": ("services/yafvs-api/src/port_list_writes.rs",),
         "symbols": (
             "pub(crate) fn port_list_create_metadata_sql",
             "pub(crate) fn port_list_create_range_sql",
@@ -11882,8 +11882,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/port_list_write_transactions.rs",
-        "forbidden": ("services/turbovas-api/src/port_list_writes.rs",),
+        "owner": "services/yafvs-api/src/port_list_write_transactions.rs",
+        "forbidden": ("services/yafvs-api/src/port_list_writes.rs",),
         "symbols": (
             "pub(crate) async fn execute_port_list_create_transaction",
             "pub(crate) async fn execute_port_list_patch_transaction",
@@ -11894,16 +11894,16 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/schedule_write_sql.rs",
-        "forbidden": ("services/turbovas-api/src/schedule_writes.rs",),
+        "owner": "services/yafvs-api/src/schedule_write_sql.rs",
+        "forbidden": ("services/yafvs-api/src/schedule_writes.rs",),
         "symbols": (
             "pub(crate) fn schedule_write_state_sql",
             "pub(crate) fn schedule_unique_name_sql",
         ),
     },
     {
-        "owner": "services/turbovas-api/src/schedule_write_validation.rs",
-        "forbidden": ("services/turbovas-api/src/schedule_writes.rs",),
+        "owner": "services/yafvs-api/src/schedule_write_validation.rs",
+        "forbidden": ("services/yafvs-api/src/schedule_writes.rs",),
         "symbols": (
             "pub(crate) struct SchedulePatchRequest",
             "pub(crate) struct ScheduleCloneRequest",
@@ -11912,8 +11912,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/schedule_write_transactions.rs",
-        "forbidden": ("services/turbovas-api/src/schedule_writes.rs",),
+        "owner": "services/yafvs-api/src/schedule_write_transactions.rs",
+        "forbidden": ("services/yafvs-api/src/schedule_writes.rs",),
         "symbols": (
             "pub(crate) async fn execute_schedule_trash_transaction",
             "pub(crate) async fn execute_schedule_clone_transaction",
@@ -11922,8 +11922,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/filter_write_sql.rs",
-        "forbidden": ("services/turbovas-api/src/filter_writes.rs",),
+        "owner": "services/yafvs-api/src/filter_write_sql.rs",
+        "forbidden": ("services/yafvs-api/src/filter_writes.rs",),
         "symbols": (
             "pub(crate) fn filter_write_state_sql",
             "pub(crate) fn filter_unique_name_sql",
@@ -11931,8 +11931,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/filter_write_transactions.rs",
-        "forbidden": ("services/turbovas-api/src/filter_writes.rs",),
+        "owner": "services/yafvs-api/src/filter_write_transactions.rs",
+        "forbidden": ("services/yafvs-api/src/filter_writes.rs",),
         "symbols": (
             "pub(crate) async fn execute_filter_trash_transaction",
             "pub(crate) async fn execute_filter_restore_transaction",
@@ -11943,8 +11943,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/filter_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/filters.rs",),
+        "owner": "services/yafvs-api/src/filter_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/filters.rs",),
         "symbols": (
             "pub(crate) fn filter_assets_sql",
             "pub(crate) fn filter_asset_detail_sql",
@@ -11952,8 +11952,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/filter_write_validation.rs",
-        "forbidden": ("services/turbovas-api/src/filter_writes.rs",),
+        "owner": "services/yafvs-api/src/filter_write_validation.rs",
+        "forbidden": ("services/yafvs-api/src/filter_writes.rs",),
         "symbols": (
             "pub(crate) struct FilterCreateRequest",
             "pub(crate) struct FilterPatchRequest",
@@ -11964,8 +11964,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/scan_config_write_validation.rs",
-        "forbidden": ("services/turbovas-api/src/scan_config_writes.rs",),
+        "owner": "services/yafvs-api/src/scan_config_write_validation.rs",
+        "forbidden": ("services/yafvs-api/src/scan_config_writes.rs",),
         "symbols": (
             "pub(crate) struct ScanConfigPatchRequest",
             "pub(crate) struct ScanConfigCloneRequest",
@@ -11974,8 +11974,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/scan_config_write_sql.rs",
-        "forbidden": ("services/turbovas-api/src/scan_config_writes.rs",),
+        "owner": "services/yafvs-api/src/scan_config_write_sql.rs",
+        "forbidden": ("services/yafvs-api/src/scan_config_writes.rs",),
         "symbols": (
             "pub(crate) fn scan_config_write_state_sql",
             "pub(crate) fn scan_config_trash_state_sql",
@@ -11987,8 +11987,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/scan_config_write_transactions.rs",
-        "forbidden": ("services/turbovas-api/src/scan_config_writes.rs",),
+        "owner": "services/yafvs-api/src/scan_config_write_transactions.rs",
+        "forbidden": ("services/yafvs-api/src/scan_config_writes.rs",),
         "symbols": (
             "pub(crate) async fn execute_scan_config_clone_transaction",
             "pub(crate) async fn execute_scan_config_metadata_patch_transaction",
@@ -11998,31 +11998,31 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/target_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/target_handlers.rs",),
+        "owner": "services/yafvs-api/src/target_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/target_handlers.rs",),
         "symbols": ("pub(crate) fn target_sql",),
     },
     {
-        "owner": "services/turbovas-api/src/target_alive_tests.rs",
+        "owner": "services/yafvs-api/src/target_alive_tests.rs",
         "forbidden": (
-            "services/turbovas-api/src/target_write_validation.rs",
-            "services/turbovas-api/src/target_writes.rs",
+            "services/yafvs-api/src/target_write_validation.rs",
+            "services/yafvs-api/src/target_writes.rs",
         ),
         "symbols": ("pub(crate) fn validate_alive_tests",),
     },
     {
-        "owner": "services/turbovas-api/src/target_id_validation.rs",
-        "forbidden": ("services/turbovas-api/src/target_write_validation.rs",),
+        "owner": "services/yafvs-api/src/target_id_validation.rs",
+        "forbidden": ("services/yafvs-api/src/target_write_validation.rs",),
         "symbols": (
             "pub(crate) fn validate_uuid",
             "pub(crate) fn validate_optional_uuid",
         ),
     },
     {
-        "owner": "services/turbovas-api/src/target_text_validation.rs",
+        "owner": "services/yafvs-api/src/target_text_validation.rs",
         "forbidden": (
-            "services/turbovas-api/src/target_host_validation.rs",
-            "services/turbovas-api/src/target_write_validation.rs",
+            "services/yafvs-api/src/target_host_validation.rs",
+            "services/yafvs-api/src/target_write_validation.rs",
         ),
         "symbols": (
             "pub(crate) const MAX_TARGET_TEXT_BYTES",
@@ -12032,8 +12032,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/target_write_validation.rs",
-        "forbidden": ("services/turbovas-api/src/target_writes.rs",),
+        "owner": "services/yafvs-api/src/target_write_validation.rs",
+        "forbidden": ("services/yafvs-api/src/target_writes.rs",),
         "symbols": (
             "pub(crate) struct TargetCloneRequest",
             "pub(crate) struct TargetCreateRequest",
@@ -12047,8 +12047,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/target_write_sql.rs",
-        "forbidden": ("services/turbovas-api/src/target_writes.rs",),
+        "owner": "services/yafvs-api/src/target_write_sql.rs",
+        "forbidden": ("services/yafvs-api/src/target_writes.rs",),
         "symbols": (
             "pub(crate) fn target_write_operator_owner_sql",
             "pub(crate) fn target_write_state_sql",
@@ -12092,8 +12092,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/target_write_transactions.rs",
-        "forbidden": ("services/turbovas-api/src/target_writes.rs",),
+        "owner": "services/yafvs-api/src/target_write_transactions.rs",
+        "forbidden": ("services/yafvs-api/src/target_writes.rs",),
         "symbols": (
             "pub(crate) async fn execute_target_create_transaction",
             "pub(crate) async fn execute_target_clone_transaction",
@@ -12103,21 +12103,21 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/task_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/task_handlers.rs",),
+        "owner": "services/yafvs-api/src/task_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/task_handlers.rs",),
         "symbols": ("pub(crate) fn task_sql",),
     },
     {
-        "owner": "services/turbovas-api/src/task_write_validation.rs",
-        "forbidden": ("services/turbovas-api/src/task_writes.rs",),
+        "owner": "services/yafvs-api/src/task_write_validation.rs",
+        "forbidden": ("services/yafvs-api/src/task_writes.rs",),
         "symbols": (
             "pub(crate) struct TaskPatchRequest",
             "pub(crate) fn validate_task_patch_request",
         ),
     },
     {
-        "owner": "services/turbovas-api/src/task_write_sql.rs",
-        "forbidden": ("services/turbovas-api/src/task_writes.rs",),
+        "owner": "services/yafvs-api/src/task_write_sql.rs",
+        "forbidden": ("services/yafvs-api/src/task_writes.rs",),
         "symbols": (
             "pub(crate) fn task_write_operator_owner_sql",
             "pub(crate) fn task_write_state_sql",
@@ -12126,13 +12126,13 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/task_write_transactions.rs",
-        "forbidden": ("services/turbovas-api/src/task_writes.rs",),
+        "owner": "services/yafvs-api/src/task_write_transactions.rs",
+        "forbidden": ("services/yafvs-api/src/task_writes.rs",),
         "symbols": ("pub(crate) async fn execute_task_patch_transaction",),
     },
     {
-        "owner": "services/turbovas-api/src/alert_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/alerts.rs",),
+        "owner": "services/yafvs-api/src/alert_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/alerts.rs",),
         "symbols": (
             "pub(crate) fn alert_assets_sql",
             "pub(crate) fn alert_asset_detail_sql",
@@ -12140,13 +12140,13 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/alert_write_transactions.rs",
-        "forbidden": ("services/turbovas-api/src/alert_writes.rs",),
+        "owner": "services/yafvs-api/src/alert_write_transactions.rs",
+        "forbidden": ("services/yafvs-api/src/alert_writes.rs",),
         "symbols": ("pub(crate) async fn execute_alert_patch_transaction",),
     },
     {
-        "owner": "services/turbovas-api/src/credential_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/credentials.rs",),
+        "owner": "services/yafvs-api/src/credential_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/credentials.rs",),
         "symbols": (
             "pub(crate) fn credential_assets_sql",
             "pub(crate) fn credential_asset_detail_sql",
@@ -12155,24 +12155,24 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/scan_config_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/scan_configs.rs",),
+        "owner": "services/yafvs-api/src/scan_config_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/scan_configs.rs",),
         "symbols": (
             "pub(crate) fn scan_config_asset_detail_sql",
             "pub(crate) fn scan_config_task_references_sql",
         ),
     },
     {
-        "owner": "services/turbovas-api/src/operating_system_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/operating_systems.rs",),
+        "owner": "services/yafvs-api/src/operating_system_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/operating_systems.rs",),
         "symbols": (
             "pub(crate) fn operating_system_assets_sql",
             "pub(crate) fn operating_system_asset_detail_sql",
         ),
     },
     {
-        "owner": "services/turbovas-api/src/tls_certificate_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/tls_certificates.rs",),
+        "owner": "services/yafvs-api/src/tls_certificate_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/tls_certificates.rs",),
         "symbols": (
             "pub(crate) fn tls_certificate_assets_sql",
             "pub(crate) fn tls_certificate_asset_detail_sql",
@@ -12180,8 +12180,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/scanner_asset_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/scanner_assets.rs",),
+        "owner": "services/yafvs-api/src/scanner_asset_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/scanner_assets.rs",),
         "symbols": (
             "pub(crate) fn scanner_assets_sql",
             "pub(crate) fn scanner_asset_detail_sql",
@@ -12189,8 +12189,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/schedule_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/schedules.rs",),
+        "owner": "services/yafvs-api/src/schedule_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/schedules.rs",),
         "symbols": (
             "pub(crate) fn schedule_assets_sql",
             "pub(crate) fn schedule_asset_detail_sql",
@@ -12198,8 +12198,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/tag_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/tags.rs",),
+        "owner": "services/yafvs-api/src/tag_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/tags.rs",),
         "symbols": (
             "pub(crate) fn tag_assets_sql",
             "pub(crate) fn tag_asset_detail_sql",
@@ -12207,8 +12207,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/host_asset_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/host_assets.rs",),
+        "owner": "services/yafvs-api/src/host_asset_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/host_assets.rs",),
         "symbols": (
             "pub(crate) fn host_asset_identifiers_sql",
             "pub(crate) fn host_asset_operating_systems_sql",
@@ -12216,15 +12216,15 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/asset_user_tag_query_sql.rs",
+        "owner": "services/yafvs-api/src/asset_user_tag_query_sql.rs",
         "forbidden": (
-            "services/turbovas-api/src/host_assets.rs",
-            "services/turbovas-api/src/operating_systems.rs",
-            "services/turbovas-api/src/port_lists.rs",
-            "services/turbovas-api/src/scan_configs.rs",
-            "services/turbovas-api/src/scanner_assets.rs",
-            "services/turbovas-api/src/schedules.rs",
-            "services/turbovas-api/src/tls_certificates.rs",
+            "services/yafvs-api/src/host_assets.rs",
+            "services/yafvs-api/src/operating_systems.rs",
+            "services/yafvs-api/src/port_lists.rs",
+            "services/yafvs-api/src/scan_configs.rs",
+            "services/yafvs-api/src/scanner_assets.rs",
+            "services/yafvs-api/src/schedules.rs",
+            "services/yafvs-api/src/tls_certificates.rs",
         ),
         "symbols": (
             "pub(crate) fn host_user_tags_sql",
@@ -12237,8 +12237,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/port_list_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/port_lists.rs",),
+        "owner": "services/yafvs-api/src/port_list_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/port_lists.rs",),
         "symbols": (
             "pub(crate) fn port_list_assets_sql",
             "pub(crate) fn port_list_asset_detail_sql",
@@ -12247,8 +12247,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/result_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/result_payloads.rs",),
+        "owner": "services/yafvs-api/src/result_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/result_payloads.rs",),
         "symbols": (
             "pub(crate) fn result_detail_sql",
             "pub(crate) fn result_user_tags_sql",
@@ -12256,16 +12256,16 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/override_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/overrides.rs",),
+        "owner": "services/yafvs-api/src/override_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/overrides.rs",),
         "symbols": (
             "pub(crate) fn override_assets_sql",
             "pub(crate) fn override_asset_detail_sql",
         ),
     },
     {
-        "owner": "services/turbovas-api/src/report_format_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/report_formats.rs",),
+        "owner": "services/yafvs-api/src/report_format_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/report_formats.rs",),
         "symbols": (
             "pub(crate) fn report_format_assets_sql",
             "pub(crate) fn report_format_asset_detail_sql",
@@ -12275,38 +12275,38 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/report_cve_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/report_cves.rs",),
+        "owner": "services/yafvs-api/src/report_cve_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/report_cves.rs",),
         "symbols": ("pub(crate) fn report_cves_sql",),
     },
     {
-        "owner": "services/turbovas-api/src/report_port_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/report_ports.rs",),
+        "owner": "services/yafvs-api/src/report_port_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/report_ports.rs",),
         "symbols": ("pub(crate) fn report_ports_sql",),
     },
     {
-        "owner": "services/turbovas-api/src/report_tls_certificate_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/report_tls_certificates.rs",),
+        "owner": "services/yafvs-api/src/report_tls_certificate_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/report_tls_certificates.rs",),
         "symbols": ("pub(crate) fn report_tls_certificates_sql",),
     },
     {
-        "owner": "services/turbovas-api/src/report_operating_system_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/report_operating_systems.rs",),
+        "owner": "services/yafvs-api/src/report_operating_system_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/report_operating_systems.rs",),
         "symbols": ("pub(crate) fn report_operating_systems_sql",),
     },
     {
-        "owner": "services/turbovas-api/src/report_error_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/report_errors.rs",),
+        "owner": "services/yafvs-api/src/report_error_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/report_errors.rs",),
         "symbols": ("pub(crate) fn report_errors_sql",),
     },
     {
-        "owner": "services/turbovas-api/src/report_host_query_sql.rs",
-        "forbidden": ("services/turbovas-api/src/report_hosts.rs",),
+        "owner": "services/yafvs-api/src/report_host_query_sql.rs",
+        "forbidden": ("services/yafvs-api/src/report_hosts.rs",),
         "symbols": ("pub(crate) fn report_hosts_sql",),
     },
     {
-        "owner": "services/turbovas-api/src/tag_write_validation.rs",
-        "forbidden": ("services/turbovas-api/src/tag_writes.rs",),
+        "owner": "services/yafvs-api/src/tag_write_validation.rs",
+        "forbidden": ("services/yafvs-api/src/tag_writes.rs",),
         "symbols": (
             "pub(crate) struct TagCreateRequest",
             "pub(crate) struct TagPatchRequest",
@@ -12317,8 +12317,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/tag_write_sql.rs",
-        "forbidden": ("services/turbovas-api/src/tag_writes.rs",),
+        "owner": "services/yafvs-api/src/tag_write_sql.rs",
+        "forbidden": ("services/yafvs-api/src/tag_writes.rs",),
         "symbols": (
             "pub(crate) fn tag_insert_metadata_sql",
             "pub(crate) fn tag_update_metadata_sql",
@@ -12327,8 +12327,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/tag_write_transactions.rs",
-        "forbidden": ("services/turbovas-api/src/tag_write_db.rs",),
+        "owner": "services/yafvs-api/src/tag_write_transactions.rs",
+        "forbidden": ("services/yafvs-api/src/tag_write_db.rs",),
         "symbols": (
             "pub(crate) async fn execute_tag_create_transaction",
             "pub(crate) async fn execute_tag_trash_transaction",
@@ -12340,8 +12340,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/scope_write_validation.rs",
-        "forbidden": ("services/turbovas-api/src/scope_writes.rs",),
+        "owner": "services/yafvs-api/src/scope_write_validation.rs",
+        "forbidden": ("services/yafvs-api/src/scope_writes.rs",),
         "symbols": (
             "pub(crate) struct ScopeCreateRequest",
             "pub(crate) struct ScopePatchRequest",
@@ -12350,8 +12350,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/scope_write_sql.rs",
-        "forbidden": ("services/turbovas-api/src/scope_writes.rs",),
+        "owner": "services/yafvs-api/src/scope_write_sql.rs",
+        "forbidden": ("services/yafvs-api/src/scope_writes.rs",),
         "symbols": (
             "pub(crate) fn scope_insert_sql",
             "pub(crate) fn scope_update_metadata_sql",
@@ -12360,8 +12360,8 @@ NATIVE_API_MODULE_OWNERSHIP_CONTRACTS: tuple[dict[str, Any], ...] = (
         ),
     },
     {
-        "owner": "services/turbovas-api/src/scope_write_transactions.rs",
-        "forbidden": ("services/turbovas-api/src/scope_write_db.rs",),
+        "owner": "services/yafvs-api/src/scope_write_transactions.rs",
+        "forbidden": ("services/yafvs-api/src/scope_write_db.rs",),
         "symbols": (
             "pub(crate) async fn execute_scope_create_transaction",
             "pub(crate) async fn execute_scope_patch_transaction",
@@ -15788,7 +15788,7 @@ def command_runtime_report_export_native(repo_root: Path, report_id: str | None 
         findings.append(finding("pass", "runtime-report.artifact-dir", "Runtime report artifact directory is ready.", str(artifact_dir)))
     except OSError as error:
         findings.append(finding("fail", "runtime-report.artifact-dir", f"Runtime report artifact directory is not usable: {error}", str(artifact_dir)))
-    findings.append(finding("pass" if container_running(repo_root, "turbovas-api") else "fail", "native-api.container", "turbovas-api container is running." if container_running(repo_root, "turbovas-api") else "turbovas-api container is not running; start the app profile before exporting native raw-report data."))
+    findings.append(finding("pass" if container_running(repo_root, "yafvs-api") else "fail", "native-api.container", "yafvs-api container is running." if container_running(repo_root, "yafvs-api") else "yafvs-api container is not running; start the app profile before exporting native raw-report data."))
     selected_report_id = report_id
     select_result = None
     if selected_report_id is None:
@@ -15804,7 +15804,7 @@ def command_runtime_report_export_native(repo_root: Path, report_id: str | None 
             "status": "fail",
             "summary": "Runtime report export stopped at native API prerequisites.",
             "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "turbovas-api", "report_id": selected_report_id},
+            "details": {"source": "yafvs-api", "report_id": selected_report_id},
         }
         payload["artifacts"] = [write_json_artifact(artifact_dir, "export-failed.json", payload)]
         return make_result("runtime-report-export", repo_root, payload["summary"], findings, payload["artifacts"])
@@ -15819,7 +15819,7 @@ def command_runtime_report_export_native(repo_root: Path, report_id: str | None 
             "runtime-report.export-native-detail",
             "Native raw-report detail read." if detail_ok else "Native raw-report detail response was not usable.",
             detail,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/..."),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/..."),
             detail_json if isinstance(detail_json, dict) else None,
         )
     )
@@ -15831,7 +15831,7 @@ def command_runtime_report_export_native(repo_root: Path, report_id: str | None 
             "runtime-report.export-native-results",
             "Native raw-report result rows read." if rows_ok else "Native raw-report result response was not usable.",
             rows_result or detail,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../results?..."),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../results?..."),
             rows_json if isinstance(rows_json, dict) else None,
         )
     )
@@ -15840,7 +15840,7 @@ def command_runtime_report_export_native(repo_root: Path, report_id: str | None 
             "status": "fail",
             "summary": "Runtime report export failed while reading native report data.",
             "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "turbovas-api", "report_id": selected_report_id, "detail": detail_json, "results": rows_json},
+            "details": {"source": "yafvs-api", "report_id": selected_report_id, "detail": detail_json, "results": rows_json},
         }
         payload["artifacts"] = [write_json_artifact(artifact_dir, "export-failed.json", payload)]
         return make_result("runtime-report-export", repo_root, payload["summary"], findings, payload["artifacts"])
@@ -15852,7 +15852,7 @@ def command_runtime_report_export_native(repo_root: Path, report_id: str | None 
         "status": "pass" if export_complete else "warn",
         "summary": "Runtime report export read through the native API.",
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-        "details": {"source": "turbovas-api", "report_id": selected_report_id},
+        "details": {"source": "yafvs-api", "report_id": selected_report_id},
         "report": {
             "id": detail_json.get("id"),
             "name": detail_json.get("name"),
@@ -16149,7 +16149,7 @@ def command_runtime_certbund_report(
         findings.append(finding("fail", "runtime-certbund-report.selector", "Use either --report-id or --task-id, not both."))
     if output_format not in {"json", "csv"}:
         findings.append(finding("fail", "runtime-certbund-report.format", "Output format must be 'json' or 'csv'.", details={"format": output_format}))
-    findings.append(finding("pass" if container_running(repo_root, "turbovas-api") else "fail", "native-api.container", "turbovas-api container is running." if container_running(repo_root, "turbovas-api") else "turbovas-api container is not running; start the app profile before reading native CERT-Bund report data."))
+    findings.append(finding("pass" if container_running(repo_root, "yafvs-api") else "fail", "native-api.container", "yafvs-api container is running." if container_running(repo_root, "yafvs-api") else "yafvs-api container is not running; start the app profile before reading native CERT-Bund report data."))
 
     selected_report_id = report_id
     task_json: dict[str, Any] | None = None
@@ -16166,7 +16166,7 @@ def command_runtime_certbund_report(
                 "runtime-certbund-report.task-read",
                 "Native task read resolved last report." if selected_report_id else "Native task read did not resolve a last report.",
                 task_result,
-                compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tasks/..."),
+                compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tasks/..."),
                 task_json,
             )
         )
@@ -16184,7 +16184,7 @@ def command_runtime_certbund_report(
             "status": "fail",
             "summary": "Runtime CERT-Bund report stopped at native API prerequisites.",
             "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "turbovas-api", "report_id": selected_report_id, "task_id": task_id},
+            "details": {"source": "yafvs-api", "report_id": selected_report_id, "task_id": task_id},
         }
         payload["artifacts"] = [write_json_artifact(artifact_dir, "certbund-report-failed.json", payload)]
         return make_result("runtime-certbund-report", repo_root, payload["summary"], findings, payload["artifacts"])
@@ -16197,7 +16197,7 @@ def command_runtime_certbund_report(
             "runtime-certbund-report.results-read",
             "Native raw-report result rows read." if results_ok else "Native raw-report result response was not usable.",
             result_response or subprocess.CompletedProcess([], 1, "", ""),
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../results?..."),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../results?..."),
             result_json if isinstance(result_json, dict) else None,
         )
     )
@@ -16209,7 +16209,7 @@ def command_runtime_certbund_report(
             "runtime-certbund-report.hosts-read",
             "Native raw-report host rows read." if hosts_ok else "Native raw-report host response was not usable.",
             host_response or subprocess.CompletedProcess([], 1, "", ""),
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../hosts?..."),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../hosts?..."),
             host_json if isinstance(host_json, dict) else None,
         )
     )
@@ -16234,7 +16234,7 @@ def command_runtime_certbund_report(
             "status": "fail",
             "summary": "Runtime CERT-Bund report failed while reading native report data.",
             "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "turbovas-api", "report_id": selected_report_id, "task_id": task_id, "results": result_json, "hosts": host_json},
+            "details": {"source": "yafvs-api", "report_id": selected_report_id, "task_id": task_id, "results": result_json, "hosts": host_json},
         }
         payload["artifacts"] = [write_json_artifact(artifact_dir, "certbund-report-failed.json", payload)]
         return make_result("runtime-certbund-report", repo_root, payload["summary"], findings, payload["artifacts"])
@@ -16246,7 +16246,7 @@ def command_runtime_certbund_report(
         "status": "pass" if results_complete and hosts_complete and not missing_advisories else "warn",
         "summary": "Runtime CERT-Bund report read through the native API.",
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-        "details": {"source": "turbovas-api", "report_id": selected_report_id, "task_id": task_id, "task": task_json},
+        "details": {"source": "yafvs-api", "report_id": selected_report_id, "task_id": task_id, "task": task_json},
         "result_count_scanned": len(results),
         "result_total": result_total,
         "host_count_scanned": len(hosts),
@@ -16285,7 +16285,7 @@ def command_runtime_report_summary_native(repo_root: Path, report_id: str | None
         findings.append(finding("pass", "runtime-report.artifact-dir", "Runtime report artifact directory is ready.", str(artifact_dir)))
     except OSError as error:
         findings.append(finding("fail", "runtime-report.artifact-dir", f"Runtime report artifact directory is not usable: {error}", str(artifact_dir)))
-    findings.append(finding("pass" if container_running(repo_root, "turbovas-api") else "fail", "native-api.container", "turbovas-api container is running." if container_running(repo_root, "turbovas-api") else "turbovas-api container is not running; start the app profile before reading native raw-report summaries."))
+    findings.append(finding("pass" if container_running(repo_root, "yafvs-api") else "fail", "native-api.container", "yafvs-api container is running." if container_running(repo_root, "yafvs-api") else "yafvs-api container is not running; start the app profile before reading native raw-report summaries."))
     selected_report_id = report_id
     select_result = None
     if selected_report_id is None:
@@ -16301,7 +16301,7 @@ def command_runtime_report_summary_native(repo_root: Path, report_id: str | None
             "status": "fail",
             "summary": "Runtime report summary stopped at native API prerequisites.",
             "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "turbovas-api", "report_id": selected_report_id},
+            "details": {"source": "yafvs-api", "report_id": selected_report_id},
         }
         payload["artifacts"] = [write_json_artifact(artifact_dir, "summary-failed.json", payload)]
         return make_result("runtime-report-summary", repo_root, payload["summary"], findings, payload["artifacts"])
@@ -16316,7 +16316,7 @@ def command_runtime_report_summary_native(repo_root: Path, report_id: str | None
             "runtime-report.summary-native-detail",
             "Native raw-report detail read." if detail_ok else "Native raw-report detail response was not usable.",
             detail,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/..."),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/..."),
             detail_json if isinstance(detail_json, dict) else None,
         )
     )
@@ -16328,7 +16328,7 @@ def command_runtime_report_summary_native(repo_root: Path, report_id: str | None
             "runtime-report.summary-native-results",
             "Native raw-report result rows read." if rows_ok else "Native raw-report result response was not usable.",
             rows_result or detail,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../results?..."),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../results?..."),
             rows_json if isinstance(rows_json, dict) else None,
         )
     )
@@ -16337,7 +16337,7 @@ def command_runtime_report_summary_native(repo_root: Path, report_id: str | None
             "status": "fail",
             "summary": "Runtime report summary failed while reading native report data.",
             "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "turbovas-api", "report_id": selected_report_id, "detail": detail_json, "results": rows_json},
+            "details": {"source": "yafvs-api", "report_id": selected_report_id, "detail": detail_json, "results": rows_json},
         }
         payload["artifacts"] = [write_json_artifact(artifact_dir, "summary-failed.json", payload)]
         return make_result("runtime-report-summary", repo_root, payload["summary"], findings, payload["artifacts"])
@@ -16357,7 +16357,7 @@ def command_runtime_report_summary_native(repo_root: Path, report_id: str | None
         "summary": "Runtime report summary read through the native API.",
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "details": {
-            "source": "turbovas-api",
+            "source": "yafvs-api",
             "report_id": selected_report_id,
         },
         "report": {
@@ -16389,7 +16389,7 @@ def command_runtime_scope_report_summary_native(repo_root: Path) -> dict[str, An
         findings.append(finding("pass", "runtime-scope.artifact-dir", "Runtime scope artifact directory is ready.", str(artifact_dir)))
     except OSError as error:
         findings.append(finding("fail", "runtime-scope.artifact-dir", f"Runtime scope artifact directory is not usable: {error}", str(artifact_dir)))
-    findings.append(finding("pass" if container_running(repo_root, "turbovas-api") else "fail", "native-api.container", "turbovas-api container is running." if container_running(repo_root, "turbovas-api") else "turbovas-api container is not running; start the app profile before reading native scope-report summaries."))
+    findings.append(finding("pass" if container_running(repo_root, "yafvs-api") else "fail", "native-api.container", "yafvs-api container is running." if container_running(repo_root, "yafvs-api") else "yafvs-api container is not running; start the app profile before reading native scope-report summaries."))
     if aggregate_status(findings) == "fail":
         return make_result("runtime-scope-report-summary", repo_root, "Runtime scope report summary stopped at native API prerequisites.", findings, [str(artifact_dir)])
 
@@ -16399,10 +16399,10 @@ def command_runtime_scope_report_summary_native(repo_root: Path) -> dict[str, An
             "status": "fail",
             "summary": "No Organization scope report exists through the native API.",
             "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "turbovas-api", "listing": listing_json},
+            "details": {"source": "yafvs-api", "listing": listing_json},
         }
         payload["artifacts"] = [write_json_artifact(artifact_dir, "summary-failed.json", payload)]
-        findings.append(process_step_finding("fail", "runtime-scope.summary-native", payload["summary"], listing, compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports?...")))
+        findings.append(process_step_finding("fail", "runtime-scope.summary-native", payload["summary"], listing, compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports?...")))
         return make_result("runtime-scope-report-summary", repo_root, payload["summary"], findings, payload["artifacts"])
 
     payload = {
@@ -16412,7 +16412,7 @@ def command_runtime_scope_report_summary_native(repo_root: Path) -> dict[str, An
         "details": summary_details,
     }
     payload["artifacts"] = [write_json_artifact(artifact_dir, "summary.json", payload)]
-    findings.append(process_step_finding("pass", "runtime-scope.summary-native", payload["summary"], listing, compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports?...")))
+    findings.append(process_step_finding("pass", "runtime-scope.summary-native", payload["summary"], listing, compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports?...")))
     return make_result("runtime-scope-report-summary", repo_root, payload["summary"], findings, payload["artifacts"])
 
 
@@ -16429,7 +16429,7 @@ def latest_organization_scope_report_native(repo_root: Path) -> tuple[subprocess
     scope = selected["scope"]
     protection_requirement = str(selected.get("protection_requirement") or "").lower().replace(" ", "_")
     summary_details = {
-        "source": "turbovas-api",
+        "source": "yafvs-api",
         "scope": {
             "id": scope.get("id"),
             "name": scope.get("name"),
@@ -16470,14 +16470,14 @@ def native_scope_report_browser_target(repo_root: Path, check: str, success_mess
             "pass",
             check,
             success_message,
-            details={"path": scope_report_path, "results_total": scope_report.get("results_total"), "source": "turbovas-api"},
+            details={"path": scope_report_path, "results_total": scope_report.get("results_total"), "source": "yafvs-api"},
         )
     return None, False, finding(
         "warn",
         check,
         warning_message,
         details={
-            "source": "turbovas-api",
+            "source": "yafvs-api",
             "exit_code": listing.returncode,
             "listing": listing_json,
             "output_tail": output_tail(listing.stdout, 80),
@@ -16492,15 +16492,15 @@ def command_runtime_scope(repo_root: Path, action: str) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     probe = runtime_scope_probe_path(repo_root)
     artifact_dir = scope_report_artifact_dir(repo_root)
-    findings.append(finding("pass" if container_running(repo_root, "turbovas-api") else "fail", "native-api.container", "turbovas-api container is running." if container_running(repo_root, "turbovas-api") else "turbovas-api container is not running; start the app profile before reading scope reports through the native API."))
-    browser_proxy_secret = running_service_env_value(repo_root, "turbovas-api", TURBOVAS_API_BROWSER_PROXY_SECRET_ENV)
+    findings.append(finding("pass" if container_running(repo_root, "yafvs-api") else "fail", "native-api.container", "yafvs-api container is running." if container_running(repo_root, "yafvs-api") else "yafvs-api container is not running; start the app profile before reading scope reports through the native API."))
+    browser_proxy_secret = running_service_env_value(repo_root, "yafvs-api", YAFVS_API_BROWSER_PROXY_SECRET_ENV)
     findings.append(
         finding(
             "pass" if browser_proxy_secret else "fail",
             "native-api.browser-proxy-secret",
-            "turbovas-api browser-proxy secret is configured for native cleanup."
+            "yafvs-api browser-proxy secret is configured for native cleanup."
             if browser_proxy_secret
-            else "turbovas-api is running without the browser-proxy secret; refresh the app profile before runtime scope cleanup.",
+            else "yafvs-api is running without the browser-proxy secret; refresh the app profile before runtime scope cleanup.",
         )
     )
     findings.append(finding("pass" if probe.is_file() else "fail", "runtime-scope.probe", "Runtime scope helper exists." if probe.is_file() else "Runtime scope helper is missing.", str(probe.relative_to(repo_root)) if probe.exists() else str(probe)))
@@ -16639,7 +16639,7 @@ def command_runtime_report_metrics_native(repo_root: Path, report_id: str | None
         findings.append(finding("pass", "runtime-metrics.artifact-dir", "Runtime metrics artifact directory is ready.", str(artifact_dir)))
     except OSError as error:
         findings.append(finding("fail", "runtime-metrics.artifact-dir", f"Runtime metrics artifact directory is not usable: {error}", str(artifact_dir)))
-    findings.append(finding("pass" if container_running(repo_root, "turbovas-api") else "fail", "native-api.container", "turbovas-api container is running." if container_running(repo_root, "turbovas-api") else "turbovas-api container is not running; start the app profile before reading native raw-report metrics."))
+    findings.append(finding("pass" if container_running(repo_root, "yafvs-api") else "fail", "native-api.container", "yafvs-api container is running." if container_running(repo_root, "yafvs-api") else "yafvs-api container is not running; start the app profile before reading native raw-report metrics."))
     selected_report_id = report_id
     select_result = None
     if selected_report_id is None:
@@ -16655,7 +16655,7 @@ def command_runtime_report_metrics_native(repo_root: Path, report_id: str | None
             "status": "fail",
             "summary": "Runtime report metrics stopped at native API prerequisites.",
             "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "turbovas-api", "report_id": selected_report_id},
+            "details": {"source": "yafvs-api", "report_id": selected_report_id},
         }
         payload["artifacts"] = [write_json_artifact(artifact_dir, "report-metrics-failed.json", payload)]
         return make_result("runtime-report-metrics", repo_root, payload["summary"], findings, payload["artifacts"])
@@ -16669,13 +16669,13 @@ def command_runtime_report_metrics_native(repo_root: Path, report_id: str | None
         "summary": "Runtime report metrics read through the native API." if metrics_ok else "Runtime report metrics response did not include report metrics.",
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "details": {
-            "source": "turbovas-api",
+            "source": "yafvs-api",
             "report_id": selected_report_id,
             "metrics": metrics_json,
         },
     }
     payload["artifacts"] = [write_json_artifact(artifact_dir, "report-metrics.json" if metrics_ok else "report-metrics-failed.json", payload)]
-    findings.append(process_step_finding("pass" if metrics_ok else "fail", "runtime-metrics.report-native", payload["summary"], metrics, compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../metrics")))
+    findings.append(process_step_finding("pass" if metrics_ok else "fail", "runtime-metrics.report-native", payload["summary"], metrics, compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../metrics")))
     return make_result("runtime-report-metrics", repo_root, payload["summary"], findings, payload["artifacts"])
 
 
@@ -16687,7 +16687,7 @@ def command_runtime_scope_report_metrics_native(repo_root: Path, scope_report_id
         findings.append(finding("pass", "runtime-metrics.artifact-dir", "Runtime metrics artifact directory is ready.", str(artifact_dir)))
     except OSError as error:
         findings.append(finding("fail", "runtime-metrics.artifact-dir", f"Runtime metrics artifact directory is not usable: {error}", str(artifact_dir)))
-    findings.append(finding("pass" if container_running(repo_root, "turbovas-api") else "fail", "native-api.container", "turbovas-api container is running." if container_running(repo_root, "turbovas-api") else "turbovas-api container is not running; start the app profile before reading native scope-report metrics."))
+    findings.append(finding("pass" if container_running(repo_root, "yafvs-api") else "fail", "native-api.container", "yafvs-api container is running." if container_running(repo_root, "yafvs-api") else "yafvs-api container is not running; start the app profile before reading native scope-report metrics."))
     if aggregate_status(findings) == "fail":
         return make_result("runtime-scope-report-metrics", repo_root, "Runtime scope report metrics stopped at native API prerequisites.", findings, [str(artifact_dir)])
 
@@ -16702,10 +16702,10 @@ def command_runtime_scope_report_metrics_native(repo_root: Path, scope_report_id
             "status": "fail",
             "summary": "Runtime scope report metrics failed because no matching scope report was found through the native API.",
             "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "turbovas-api", "filter": filter_value, "listing": listing_json},
+            "details": {"source": "yafvs-api", "filter": filter_value, "listing": listing_json},
         }
         payload["artifacts"] = [write_json_artifact(artifact_dir, "scope-report-metrics-failed.json", payload)]
-        findings.append(process_step_finding("fail", "runtime-metrics.scope-report-native-select", payload["summary"], listing, compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports?...")))
+        findings.append(process_step_finding("fail", "runtime-metrics.scope-report-native-select", payload["summary"], listing, compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports?...")))
         return make_result("runtime-scope-report-metrics", repo_root, payload["summary"], findings, payload["artifacts"])
 
     selected_scope_id = selected["scope"]["id"]
@@ -16719,14 +16719,14 @@ def command_runtime_scope_report_metrics_native(repo_root: Path, scope_report_id
         "summary": "Runtime scope report metrics read through the native API." if metrics_ok else "Runtime scope report metrics response did not include scope report metrics.",
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "details": {
-            "source": "turbovas-api",
+            "source": "yafvs-api",
             "scope": selected.get("scope"),
             "scope_report_id": selected_scope_report_id,
             "metrics": metrics_json,
         },
     }
     payload["artifacts"] = [write_json_artifact(artifact_dir, "scope-report-metrics.json" if metrics_ok else "scope-report-metrics-failed.json", payload)]
-    findings.append(process_step_finding("pass" if metrics_ok else "fail", "runtime-metrics.scope-report-native", payload["summary"], metrics, compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../metrics")))
+    findings.append(process_step_finding("pass" if metrics_ok else "fail", "runtime-metrics.scope-report-native", payload["summary"], metrics, compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../metrics")))
     return make_result("runtime-scope-report-metrics", repo_root, payload["summary"], findings, payload["artifacts"])
 
 
@@ -17166,13 +17166,13 @@ def _command_runtime_native_api_rebuild_unlocked(repo_root: Path) -> dict[str, A
     if receipt_error is not None or receipt is None:
         return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because no verified application deployment was prepared.", findings, [str(runtime_dir(repo_root))])
 
-    build_command = compose_command(repo_root, "build", "turbovas-api", env=app_env)
+    build_command = compose_command(repo_root, "build", "yafvs-api", env=app_env)
     build = run_command(build_command, repo_root, env=app_env, timeout=1200)
-    findings.append(process_step_finding("pass" if build.returncode == 0 else "fail", "compose.turbovas-api-build", f"docker compose build turbovas-api exit code {build.returncode}.", build, build_command))
+    findings.append(process_step_finding("pass" if build.returncode == 0 else "fail", "compose.yafvs-api-build", f"docker compose build yafvs-api exit code {build.returncode}.", build, build_command))
     if build.returncode != 0:
         return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because image build failed.", findings, [str(runtime_dir(repo_root))])
     receipt, receipt_error = refresh_app_deployment_receipt_after_image_build(
-        repo_root, receipt, ("turbovas-api",), app_env=app_env
+        repo_root, receipt, ("yafvs-api",), app_env=app_env
     )
     findings.append(
         finding(
@@ -17188,11 +17188,11 @@ def _command_runtime_native_api_rebuild_unlocked(repo_root: Path) -> dict[str, A
         return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because the deployment receipt could not be refreshed.", findings, [str(runtime_dir(repo_root))])
     app_image_ids = receipt["image_ids"]
 
-    up_command = compose_command_with_app_images(repo_root, app_image_ids, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "--no-build", "--pull", "never", "turbovas-api", env=app_env)
+    up_command = compose_command_with_app_images(repo_root, app_image_ids, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "--no-build", "--pull", "never", "yafvs-api", env=app_env)
     up = run_command(up_command, repo_root, env=app_env, timeout=300)
-    findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "compose.turbovas-api-up", f"docker compose up --no-deps turbovas-api exit code {up.returncode}.", up, up_command))
+    findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "compose.yafvs-api-up", f"docker compose up --no-deps yafvs-api exit code {up.returncode}.", up, up_command))
     if up.returncode != 0:
-        return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because turbovas-api restart failed.", findings, [str(runtime_dir(repo_root))])
+        return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because yafvs-api restart failed.", findings, [str(runtime_dir(repo_root))])
 
     smoke = command_runtime_native_api_smoke(repo_root)
     findings.append(finding(smoke["status"], "native-api.smoke", smoke["summary"], details={"status": smoke["status"], "artifacts": smoke.get("artifacts", [])}))
@@ -17261,30 +17261,30 @@ def command_runtime_native_api_direct_bootstrap(repo_root: Path, status_only: bo
         env = native_api_direct_runtime_env(repo_root)
     except (OSError, UnicodeDecodeError):
         env = runtime_app_env(repo_root)
-        env[TURBOVAS_API_DIRECT_ENV] = "1"
+        env[YAFVS_API_DIRECT_ENV] = "1"
         env.setdefault(
-            TURBOVAS_API_DIRECT_HOST_ENV,
-            TURBOVAS_API_DIRECT_DEFAULT_HOST,
+            YAFVS_API_DIRECT_HOST_ENV,
+            YAFVS_API_DIRECT_DEFAULT_HOST,
         )
         env.setdefault(
-            TURBOVAS_API_DIRECT_PORT_ENV,
-            TURBOVAS_API_DIRECT_DEFAULT_PORT,
+            YAFVS_API_DIRECT_PORT_ENV,
+            YAFVS_API_DIRECT_DEFAULT_PORT,
         )
         env.setdefault(
-            TURBOVAS_API_DIRECT_BIND_ENV,
-            f"0.0.0.0:{TURBOVAS_API_DIRECT_CONTAINER_PORT}",
+            YAFVS_API_DIRECT_BIND_ENV,
+            f"0.0.0.0:{YAFVS_API_DIRECT_CONTAINER_PORT}",
         )
         env.setdefault(
-            TURBOVAS_API_BEARER_TOKEN_FILE_ENV,
-            TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE,
+            YAFVS_API_BEARER_TOKEN_FILE_ENV,
+            YAFVS_API_BEARER_TOKEN_CONTAINER_FILE,
         )
     try:
         token = native_api_direct_bearer_token(repo_root, env)
     except OSError:
         token = ""
     token_file_metadata = native_api_direct_token_file_metadata(repo_root, env)
-    token_source = "environment" if env.get(TURBOVAS_API_BEARER_TOKEN_ENV) else token_file_metadata["source"]
-    secret_path = runtime_secret_path(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
+    token_source = "environment" if env.get(YAFVS_API_BEARER_TOKEN_ENV) else token_file_metadata["source"]
+    secret_path = runtime_secret_path(repo_root, YAFVS_API_BEARER_TOKEN_SECRET)
 
     findings.append(native_api_direct_config_shape_finding(env, check="native-api-direct-bootstrap.config-shape"))
     config_errors = native_api_direct_config_errors(env)
@@ -17310,7 +17310,7 @@ def command_runtime_native_api_direct_bootstrap(repo_root: Path, status_only: bo
                 "host": host,
                 "host_port": native_api_direct_port(env),
                 "host_binding": native_api_direct_port_binding(env),
-                "container_bind": env.get(TURBOVAS_API_DIRECT_BIND_ENV),
+                "container_bind": env.get(YAFVS_API_DIRECT_BIND_ENV),
             },
         )
     )
@@ -17328,7 +17328,7 @@ def command_runtime_native_api_direct_bootstrap(repo_root: Path, status_only: bo
             token_file_metadata["host_path"] if token_source != "environment" else None,
             {
                 "token_source": token_source,
-                "minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH,
+                "minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH,
                 "runtime_secret": str(secret_path),
                 "token_file_configured_value": token_file_metadata["configured_value"],
                 "token_file_host_path": token_file_metadata["host_path"],
@@ -17345,7 +17345,7 @@ def command_runtime_native_api_direct_bootstrap(repo_root: Path, status_only: bo
     result = make_result("runtime-native-api-direct-bootstrap", repo_root, "Direct native API bootstrap guardrails checked.", findings)
     result["details"] = {
         "base_url": native_api_direct_base_url(env),
-        "direct_enabled": env.get(TURBOVAS_API_DIRECT_ENV) == "1",
+        "direct_enabled": env.get(YAFVS_API_DIRECT_ENV) == "1",
         "token_source": token_source,
         "token_value_reported": False,
     }
@@ -18659,7 +18659,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         )
     )
 
-    token_from_env = bool(base_env.get(TURBOVAS_API_BEARER_TOKEN_ENV))
+    token_from_env = bool(base_env.get(YAFVS_API_BEARER_TOKEN_ENV))
     token_source = "environment" if token_from_env else "runtime-secret-file"
     token = native_api_direct_bearer_token(repo_root, base_env)
     token_ok = direct_api_bearer_token_is_acceptable(token)
@@ -18670,7 +18670,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
             "Direct native API bearer token satisfies the minimum local strength contract."
             if token_ok
             else "Direct native API bearer token is too short or contains unsafe characters.",
-            details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH, "token_source": token_source},
+            details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH, "token_source": token_source},
         )
     )
 
@@ -18690,10 +18690,10 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
     )
 
     env = dict(base_env)
-    env[TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV] = "1"
+    env[YAFVS_API_DIRECT_WRITE_CONTROL_ENV] = "1"
     if admin_uuid:
-        env[TURBOVAS_API_OPERATOR_UUID_ENV] = admin_uuid
-        env[TURBOVAS_API_OPERATOR_NAME_ENV] = DEV_ADMIN_USER
+        env[YAFVS_API_OPERATOR_UUID_ENV] = admin_uuid
+        env[YAFVS_API_OPERATOR_NAME_ENV] = DEV_ADMIN_USER
     findings.append(native_api_direct_config_shape_finding(env, check="native-api-direct.write-control-config-shape"))
     host = native_api_direct_host(env)
     if host_is_wildcard(host):
@@ -18710,7 +18710,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
             host_status,
             "native-api-direct.write-control-host-binding",
             host_message,
-            details={"host": host, "host_port": native_api_direct_port(env), "container_bind": env.get(TURBOVAS_API_DIRECT_BIND_ENV)},
+            details={"host": host, "host_port": native_api_direct_port(env), "container_bind": env.get(YAFVS_API_DIRECT_BIND_ENV)},
         )
     )
 
@@ -18785,11 +18785,11 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.direct-write.config", f"Compose direct write-control config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
 
     if aggregate_status(findings) != "fail":
-        build = run_command(compose_command(repo_root, "build", "turbovas-api", env=env), repo_root, env=env, timeout=1200)
-        findings.append(process_step_finding("pass" if build.returncode == 0 else "fail", "compose.turbovas-api-build", f"docker compose build turbovas-api exit code {build.returncode}.", build, compose_command(repo_root, "build", "turbovas-api", env=env)))
+        build = run_command(compose_command(repo_root, "build", "yafvs-api", env=env), repo_root, env=env, timeout=1200)
+        findings.append(process_step_finding("pass" if build.returncode == 0 else "fail", "compose.yafvs-api-build", f"docker compose build yafvs-api exit code {build.returncode}.", build, compose_command(repo_root, "build", "yafvs-api", env=env)))
         if build.returncode == 0 and receipt is not None:
             receipt, receipt_error = refresh_app_deployment_receipt_after_image_build(
-                repo_root, receipt, ("turbovas-api",), app_env=base_env
+                repo_root, receipt, ("yafvs-api",), app_env=base_env
             )
             findings.append(
                 finding(
@@ -18804,10 +18804,10 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
 
     if aggregate_status(findings) != "fail":
         app_image_ids = receipt["image_ids"]
-        up_command = compose_command_with_app_images(repo_root, app_image_ids, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "--no-build", "--pull", "never", "turbovas-api", env=env)
+        up_command = compose_command_with_app_images(repo_root, app_image_ids, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "--no-build", "--pull", "never", "yafvs-api", env=env)
         up = run_command(up_command, repo_root, env=env, timeout=300)
         started_write_control = up.returncode == 0
-        findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "native-api-direct.write-control-up", f"docker compose direct write-control turbovas-api up exit code {up.returncode}.", up, up_command))
+        findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "native-api-direct.write-control-up", f"docker compose direct write-control yafvs-api up exit code {up.returncode}.", up, up_command))
 
     if aggregate_status(findings) != "fail":
         findings.append(
@@ -21552,7 +21552,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         )
 
     if started_write_control and aggregate_status(findings) == "fail":
-        log_tail = service_log_tail(repo_root, "turbovas-api", lines=160)
+        log_tail = service_log_tail(repo_root, "yafvs-api", lines=160)
         interesting_log_tail = [
             line
             for line in log_tail
@@ -21562,21 +21562,21 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
             finding(
                 "warn",
                 "native-api-direct.write-control-log-tail",
-                "Captured bounded turbovas-api log tail before restoring direct write-control posture.",
+                "Captured bounded yafvs-api log tail before restoring direct write-control posture.",
                 details={"log_tail": interesting_log_tail[-40:]},
             )
         )
 
     if started_write_control:
         restore_env = native_api_direct_runtime_env(repo_root)
-        restore_command = compose_command_with_app_images(repo_root, receipt["image_ids"], "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "--no-build", "--pull", "never", "turbovas-api", env=restore_env)
+        restore_command = compose_command_with_app_images(repo_root, receipt["image_ids"], "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "--no-build", "--pull", "never", "yafvs-api", env=restore_env)
         restore = run_command(restore_command, repo_root, env=restore_env, timeout=300)
-        findings.append(process_step_finding("pass" if restore.returncode == 0 else "fail", "native-api-direct.write-control-restore", f"docker compose restored turbovas-api direct listener with write-control disabled exit code {restore.returncode}.", restore, restore_command))
+        findings.append(process_step_finding("pass" if restore.returncode == 0 else "fail", "native-api-direct.write-control-restore", f"docker compose restored yafvs-api direct listener with write-control disabled exit code {restore.returncode}.", restore, restore_command))
 
     result = make_result("runtime-native-api-direct-write-smoke", repo_root, "Direct native API write-control smoke checks completed.", findings, [str(artifact_dir)])
     result["details"] = {
         "base_url": native_api_direct_base_url(env),
-        "container_bind": env.get(TURBOVAS_API_DIRECT_BIND_ENV),
+        "container_bind": env.get(YAFVS_API_DIRECT_BIND_ENV),
         "token_source": token_source,
         "operator_uuid_found": bool(admin_uuid),
         "temporary_scope_id": scope_id,
@@ -21648,7 +21648,7 @@ def _command_runtime_native_api_direct_smoke_unlocked(repo_root: Path, status_on
         )
     )
     content_type = (("Content-Type", "application/json"),)
-    token_from_env = bool(env.get(TURBOVAS_API_BEARER_TOKEN_ENV))
+    token_from_env = bool(env.get(YAFVS_API_BEARER_TOKEN_ENV))
     token_source = "environment" if token_from_env else "runtime-secret-file"
     token = native_api_direct_bearer_token(repo_root, env)
     findings.append(native_api_direct_config_shape_finding(env, check="native-api-direct.config-shape"))
@@ -21676,7 +21676,7 @@ def _command_runtime_native_api_direct_smoke_unlocked(repo_root: Path, status_on
             details={
                 "host": host,
                 "host_port": native_api_direct_port(env),
-                "container_bind": env.get(TURBOVAS_API_DIRECT_BIND_ENV),
+                "container_bind": env.get(YAFVS_API_DIRECT_BIND_ENV),
                 "token_source": token_source,
             },
         )
@@ -21690,7 +21690,7 @@ def _command_runtime_native_api_direct_smoke_unlocked(repo_root: Path, status_on
             if token_ok
             else "Direct native API bearer token is too short or contains unsafe characters.",
             details={
-                "minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH,
+                "minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH,
                 "token_source": token_source,
             },
         )
@@ -21705,8 +21705,8 @@ def _command_runtime_native_api_direct_smoke_unlocked(repo_root: Path, status_on
             result = direct_smoke_status_only_result(result)
         return result
 
-    build = run_command(compose_command(repo_root, "build", "turbovas-api", env=env), repo_root, env=env, timeout=1200)
-    findings.append(process_step_finding("pass" if build.returncode == 0 else "fail", "compose.turbovas-api-build", f"docker compose build turbovas-api exit code {build.returncode}.", build, compose_command(repo_root, "build", "turbovas-api", env=env)))
+    build = run_command(compose_command(repo_root, "build", "yafvs-api", env=env), repo_root, env=env, timeout=1200)
+    findings.append(process_step_finding("pass" if build.returncode == 0 else "fail", "compose.yafvs-api-build", f"docker compose build yafvs-api exit code {build.returncode}.", build, compose_command(repo_root, "build", "yafvs-api", env=env)))
     if build.returncode != 0:
         result = make_result("runtime-native-api-direct-smoke", repo_root, "Direct native API smoke stopped because image build failed.", findings, [str(artifact_dir)])
         result["details"] = {"base_url": native_api_direct_base_url(env)}
@@ -21715,7 +21715,7 @@ def _command_runtime_native_api_direct_smoke_unlocked(repo_root: Path, status_on
             result = direct_smoke_status_only_result(result)
         return result
     receipt, receipt_error = refresh_app_deployment_receipt_after_image_build(
-        repo_root, receipt, ("turbovas-api",), app_env=env
+        repo_root, receipt, ("yafvs-api",), app_env=env
     )
     findings.append(
         finding(
@@ -21734,11 +21734,11 @@ def _command_runtime_native_api_direct_smoke_unlocked(repo_root: Path, status_on
         return direct_smoke_status_only_result(result) if status_only else result
 
     app_image_ids = receipt["image_ids"]
-    up_command = compose_command_with_app_images(repo_root, app_image_ids, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "--no-build", "--pull", "never", "turbovas-api", env=env)
+    up_command = compose_command_with_app_images(repo_root, app_image_ids, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "--no-build", "--pull", "never", "yafvs-api", env=env)
     up = run_command(up_command, repo_root, env=env, timeout=300)
-    findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "compose.turbovas-api-direct-up", f"docker compose direct turbovas-api up exit code {up.returncode}.", up, up_command))
+    findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "compose.yafvs-api-direct-up", f"docker compose direct yafvs-api up exit code {up.returncode}.", up, up_command))
     if up.returncode != 0:
-        result = make_result("runtime-native-api-direct-smoke", repo_root, "Direct native API smoke stopped because turbovas-api restart failed.", findings, [str(artifact_dir)])
+        result = make_result("runtime-native-api-direct-smoke", repo_root, "Direct native API smoke stopped because yafvs-api restart failed.", findings, [str(artifact_dir)])
         result["details"] = {"base_url": native_api_direct_base_url(env)}
         write_json_artifact(artifact_dir, "native-api-direct-smoke-failed.json", result)
         if status_only:
@@ -22461,7 +22461,7 @@ def _command_runtime_native_api_direct_smoke_unlocked(repo_root: Path, status_on
     result = make_result("runtime-native-api-direct-smoke", repo_root, "Direct native API smoke checks completed.", findings, [str(artifact_dir), *internal.get("artifacts", [])])
     result["details"] = {
         "base_url": native_api_direct_base_url(env),
-        "container_bind": env.get(TURBOVAS_API_DIRECT_BIND_ENV),
+        "container_bind": env.get(YAFVS_API_DIRECT_BIND_ENV),
         "token_source": token_source,
         "direct_request_example": f"tools/yafvsctl native-api-request --direct --json --path '/api/v1/reports?page_size=1'",
     }
@@ -22587,7 +22587,7 @@ def command_runtime_app_smoke(repo_root: Path) -> dict[str, Any]:
     for base_url in gsad_base_urls(repo_root):
         gsad_http = run_command(["curl", "-kIsS", "--max-time", "10", f"{base_url}/"], repo_root, env=runtime_env(repo_root))
         findings.append(finding("pass" if gsad_http.returncode == 0 else "warn", "gsad.https", f"Configured HTTPS header probe exit code {gsad_http.returncode}.", details={"url": f"{base_url}/", "output_tail": output_tail(gsad_http.stdout, 80, [password])}))
-    if container_running(repo_root, "turbovas-api"):
+    if container_running(repo_root, "yafvs-api"):
         native_api = command_runtime_native_api_smoke(repo_root)
         findings.append(finding(native_api["status"], "native-api.smoke", native_api["summary"], details={"status": native_api["status"], "findings": native_api["findings"]}))
     return make_result("runtime-app-smoke", repo_root, "Application runtime smoke checks completed.", findings, [str(runtime_dir(repo_root))])
@@ -22610,7 +22610,7 @@ def native_api_curl(
         repo_root,
         "exec",
         "-T",
-        "turbovas-api",
+        "yafvs-api",
         "curl",
         "-fsS",
         "--max-time",
@@ -22622,7 +22622,7 @@ def native_api_curl(
         command.extend(["-H", f"{DIRECT_API_REQUEST_ID_HEADER}: {request_id}"])
     if body is not None:
         command.extend(["-H", "Content-Type: application/json", "--data-binary", "@-"])
-    command.append(f"http://127.0.0.1:{TURBOVAS_API_CONTAINER_PORT}{path}")
+    command.append(f"http://127.0.0.1:{YAFVS_API_CONTAINER_PORT}{path}")
     return run_command(
         command,
         repo_root,
@@ -22637,7 +22637,7 @@ def native_api_curl_with_http_status(repo_root: Path, path: str) -> subprocess.C
         repo_root,
         "exec",
         "-T",
-        "turbovas-api",
+        "yafvs-api",
         "curl",
         "-sS",
         "--max-time",
@@ -22645,7 +22645,7 @@ def native_api_curl_with_http_status(repo_root: Path, path: str) -> subprocess.C
         "-w",
         "\n%{http_code}",
     )
-    command.append(f"http://127.0.0.1:{TURBOVAS_API_CONTAINER_PORT}{path}")
+    command.append(f"http://127.0.0.1:{YAFVS_API_CONTAINER_PORT}{path}")
     return run_command(
         command,
         repo_root,
@@ -22727,7 +22727,7 @@ def native_api_request_display_command(
         repo_root,
         "exec",
         "-T",
-        "turbovas-api",
+        "yafvs-api",
         "curl",
         "-fsS",
         "--max-time",
@@ -22739,7 +22739,7 @@ def native_api_request_display_command(
         command.extend(["-H", f"{DIRECT_API_REQUEST_ID_HEADER}: {request_id}"])
     if body is not None:
         command.extend(["-H", "Content-Type: application/json", "--data-binary", "<redacted-body>"])
-    command.append(f"http://127.0.0.1:{TURBOVAS_API_CONTAINER_PORT}{request_path}")
+    command.append(f"http://127.0.0.1:{YAFVS_API_CONTAINER_PORT}{request_path}")
     return command
 
 
@@ -22801,7 +22801,7 @@ def command_native_api_request(
                     "fail",
                     "native-api-request.direct-token-strength",
                     "Direct native API bearer token is too short or contains unsafe characters.",
-                    details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+                    details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
                 )
             )
             return make_result("native-api-request", repo_root, "Direct native API request rejected before runtime access.", findings)
@@ -22900,7 +22900,7 @@ def command_native_start_task(
                 "fail",
                 "native-start-task.direct-token-strength",
                 "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
             )
         )
         return make_result("native-start-task", repo_root, "Direct native API task start rejected before runtime access.", findings)
@@ -23014,7 +23014,7 @@ def command_native_stop_task(
                 "fail",
                 "native-stop-task.direct-token-strength",
                 "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
             )
         )
         return make_result("native-stop-task", repo_root, "Native task stop rejected before runtime access.", findings)
@@ -23128,7 +23128,7 @@ def command_native_update_task_target(
                 "fail",
                 "native-update-task-target.direct-token-strength",
                 "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
             )
         )
         return make_result("native-update-task-target", repo_root, "Native task-target replacement rejected before runtime access.", findings)
@@ -23359,7 +23359,7 @@ def command_native_start_tasks_from_csv(
         return native_start_tasks_from_csv_status_only_result(result) if status_only else result
     token = native_api_direct_bearer_token(repo_root, env)
     if not direct_api_bearer_token_is_acceptable(token):
-        findings.append(finding("fail", "native-start-tasks-from-csv.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH}))
+        findings.append(finding("fail", "native-start-tasks-from-csv.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH}))
         result = make_result("native-start-tasks-from-csv", repo_root, "Direct native API CSV task start rejected before runtime access.", findings)
         result["details"] = details
         return native_start_tasks_from_csv_status_only_result(result) if status_only else result
@@ -23507,7 +23507,7 @@ def command_native_stop_task_batch(
                 "fail",
                 f"{check_prefix}.direct-token-strength",
                 "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
             )
         )
         result = make_result(command, repo_root, "Direct native API bulk task stop rejected before runtime access.", findings)
@@ -23921,7 +23921,7 @@ def command_native_tasks_from_csv(
                 "fail",
                 "native-tasks-from-csv.direct-token-strength",
                 "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
             )
         )
         result = make_result(
@@ -24246,7 +24246,7 @@ def command_native_verify_scanners(
                 "fail",
                 "native-verify-scanners.direct-token-strength",
                 "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
             )
         )
         return make_result("native-verify-scanners", repo_root, "Direct native API scanner verification rejected before runtime access.", findings)
@@ -24810,10 +24810,10 @@ def command_native_scan_request(
         return native_scan_new_system_result(repo_root, "Direct native API scan request rejected before runtime access.", findings, details, status_only=status_only, command=command)
     token = native_api_direct_bearer_token(repo_root, env)
     if not direct_api_bearer_token_is_acceptable(token):
-        findings.append(finding("fail", f"{command}.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH}))
+        findings.append(finding("fail", f"{command}.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH}))
         return native_scan_new_system_result(repo_root, "Direct native API scan request rejected before runtime access.", findings, details, status_only=status_only, command=command)
 
-    operator_uuid = env.get(TURBOVAS_API_OPERATOR_UUID_ENV, "").strip()
+    operator_uuid = env.get(YAFVS_API_OPERATOR_UUID_ENV, "").strip()
     preflight_findings, preflight_ok = native_scan_new_system_preflight(repo_root, port_list_id=port_list_id if host is not None else None, target_id=target_id, alert_id=alert_id, scan_config_id=scan_config_id, scanner_id=scanner_id, token=token, env=env, command=command, operator_uuid=operator_uuid)
     findings.extend(preflight_findings)
     if not preflight_ok:
@@ -25209,11 +25209,11 @@ def command_native_nvt_diagnostic_scan(
                 "fail",
                 "native-nvt-diagnostic-scan.direct-token-strength",
                 "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
             )
         )
         return native_nvt_diagnostic_result(repo_root, "Direct native diagnostic NVT scan rejected before runtime access.", findings, details, status_only=status_only)
-    operator_uuid = env.get(TURBOVAS_API_OPERATOR_UUID_ENV, "").strip()
+    operator_uuid = env.get(YAFVS_API_OPERATOR_UUID_ENV, "").strip()
     if not operator_uuid:
         findings.append(
             finding(
@@ -25691,7 +25691,7 @@ def command_native_export_report_pdf(
         return native_export_report_pdf_result(repo_root, "Direct native API PDF export rejected before runtime access.", findings, details, status_only=status_only)
     token = native_api_direct_bearer_token(repo_root, env)
     if not direct_api_bearer_token_is_acceptable(token):
-        findings.append(finding("fail", "native-export-report-pdf.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH}))
+        findings.append(finding("fail", "native-export-report-pdf.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH}))
         return native_export_report_pdf_result(repo_root, "Direct native API PDF export rejected before runtime access.", findings, details, status_only=status_only)
 
     query = urllib.parse.urlencode({"report_format_id": "c402cc3e-b531-11e1-9163-406186ea4fc5"})
@@ -25789,7 +25789,7 @@ def command_native_export_report_csv(
         return native_export_report_csv_result(repo_root, "Direct native API CSV export rejected before runtime access.", findings, details, status_only=status_only)
     token = native_api_direct_bearer_token(repo_root, env)
     if not direct_api_bearer_token_is_acceptable(token):
-        findings.append(finding("fail", "native-export-report-csv.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH}))
+        findings.append(finding("fail", "native-export-report-csv.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH}))
         return native_export_report_csv_result(repo_root, "Direct native API CSV export rejected before runtime access.", findings, details, status_only=status_only)
 
     detail_path = f"/api/v1/reports/{urllib.parse.quote(report_id)}"
@@ -26094,7 +26094,7 @@ def command_native_export_report_bundle(
         return native_report_bundle_result(repo_root, "Direct native API report bundle rejected before runtime access.", findings, details, status_only=status_only)
     token = native_api_direct_bearer_token(repo_root, env)
     if not direct_api_bearer_token_is_acceptable(token):
-        findings.append(finding("fail", "native-export-report-bundle.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH}))
+        findings.append(finding("fail", "native-export-report-bundle.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH}))
         return native_report_bundle_result(repo_root, "Direct native API report bundle rejected before runtime access.", findings, details, status_only=status_only)
 
     encoded_report_id = urllib.parse.quote(report_id)
@@ -26399,7 +26399,7 @@ def command_native_empty_trash(
                 "fail",
                 "native-empty-trash.direct-token-strength",
                 "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
             )
         )
         details["outcome"] = "rejected"
@@ -26739,7 +26739,7 @@ def command_native_delete_overrides_by_filter(
         return native_delete_overrides_result(repo_root, "Direct native API override deletion rejected before runtime access.", findings, details, status_only=status_only)
     token = native_api_direct_bearer_token(repo_root, env)
     if not direct_api_bearer_token_is_acceptable(token):
-        findings.append(finding("fail", "native-delete-overrides-by-filter.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH}))
+        findings.append(finding("fail", "native-delete-overrides-by-filter.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH}))
         return native_delete_overrides_result(repo_root, "Direct native API override deletion rejected before runtime access.", findings, details, status_only=status_only)
 
     override_ids, snapshot_error = native_override_delete_fetch_snapshot(
@@ -27011,7 +27011,7 @@ def command_native_bulk_modify_schedules(
         return native_bulk_modify_schedules_result(repo_root, "Direct native API schedule mutation rejected before runtime access.", findings, details, status_only=status_only)
     token = native_api_direct_bearer_token(repo_root, env)
     if not direct_api_bearer_token_is_acceptable(token):
-        findings.append(finding("fail", f"{command}.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH}))
+        findings.append(finding("fail", f"{command}.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH}))
         return native_bulk_modify_schedules_result(repo_root, "Direct native API schedule mutation rejected before runtime access.", findings, details, status_only=status_only)
 
     schedule_ids, snapshot_error = native_bulk_modify_schedules_fetch_snapshot(
@@ -28170,7 +28170,7 @@ def command_native_alerts_from_csv(
             findings.append(finding("fail", f"{command}.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters."))
         result = make_result(command, repo_root, "Native alert CSV operation rejected before runtime access.", findings)
         return native_alert_csv_finish(result, details, status_only=status_only)
-    operator_uuid = env.get(TURBOVAS_API_OPERATOR_UUID_ENV, "").strip()
+    operator_uuid = env.get(YAFVS_API_OPERATOR_UUID_ENV, "").strip()
     rows_to_create: list[NativeAlertCsvRow] = []
     for row in rows:
         alerts, alerts_ok = native_alert_csv_fetch_exact(repo_root, "/api/v1/alerts", row.name, token=token, env=env)
@@ -28506,7 +28506,7 @@ def command_native_schedule_import(
                 "fail",
                 f"{command}.direct-token-strength",
                 "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
             )
         )
         result = make_result(command, repo_root, f"Direct native API {source_label} schedule creation rejected before runtime access.", findings)
@@ -28853,7 +28853,7 @@ def command_native_tags_from_csv(
                 "fail",
                 "native-tags-from-csv.direct-token-strength",
                 "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
             )
         )
         result = make_result("native-tags-from-csv", repo_root, "Direct native API CSV tag creation rejected before runtime access.", findings)
@@ -29045,7 +29045,7 @@ def command_native_targets_from_host_list(
                 "fail",
                 "native-targets-from-host-list.direct-token-strength",
                 "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
             )
         )
         result = make_result("native-targets-from-host-list", repo_root, "Direct native API target creation rejected before runtime access.", findings)
@@ -29188,7 +29188,7 @@ def command_native_targets_from_csv(
                 "fail",
                 "native-targets-from-csv.direct-token-strength",
                 "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
             )
         )
         result = make_result("native-targets-from-csv", repo_root, "Direct native API CSV target creation rejected before runtime access.", findings)
@@ -29338,7 +29338,7 @@ def command_native_targets_from_xml(
                 "fail",
                 "native-targets-from-xml.direct-token-strength",
                 "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH},
+                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
             )
         )
         result = make_result("native-targets-from-xml", repo_root, "Direct native API XML target import rejected before runtime access.", findings)
@@ -29641,14 +29641,14 @@ def native_api_expected_bad_request_finding(
             repo_root,
             "exec",
             "-T",
-            "turbovas-api",
+            "yafvs-api",
             "curl",
             "-sS",
             "--max-time",
             "10",
             "-w",
             "\\n%{http_code}",
-            f"http://127.0.0.1:{TURBOVAS_API_CONTAINER_PORT}{display_path}",
+            f"http://127.0.0.1:{YAFVS_API_CONTAINER_PORT}{display_path}",
         ),
         parsed,
         summary,
@@ -29687,19 +29687,19 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
     artifact_dir = native_api_artifact_dir(repo_root)
     artifact_dir.mkdir(parents=True, exist_ok=True)
     findings: list[dict[str, Any]] = []
-    details: dict[str, Any] = {"service": "turbovas-api"}
+    details: dict[str, Any] = {"service": "yafvs-api"}
 
-    running = container_running(repo_root, "turbovas-api")
+    running = container_running(repo_root, "yafvs-api")
     findings.append(
         finding(
             "pass" if running else "fail",
             "native-api.running",
-            "turbovas-api container is running." if running else "turbovas-api container is not running; run just runtime-app-up.",
-            details={"service": "turbovas-api", "logs_tail": [] if running else service_log_tail(repo_root, "turbovas-api")},
+            "yafvs-api container is running." if running else "yafvs-api container is not running; run just runtime-app-up.",
+            details={"service": "yafvs-api", "logs_tail": [] if running else service_log_tail(repo_root, "yafvs-api")},
         )
     )
     if not running:
-        result = make_result("runtime-native-api-smoke", repo_root, "Native API smoke could not run because turbovas-api is not running.", findings, [str(artifact_dir)])
+        result = make_result("runtime-native-api-smoke", repo_root, "Native API smoke could not run because yafvs-api is not running.", findings, [str(artifact_dir)])
         result["details"] = details
         write_json_artifact(artifact_dir, "native-api-smoke.json", result)
         if status_only:
@@ -29715,7 +29715,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.healthz",
             f"Native API health probe exit code {health.returncode}.",
             health,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/healthz"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/healthz"),
             health_json,
         )
     )
@@ -29753,13 +29753,13 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             if feeds_ok
             else "Native API feed inventory probe failed or returned unexpected payload data.",
             feeds,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/feeds"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/feeds"),
             feeds_json,
             {"expected_types": sorted(expected_feed_types), "observed_types": sorted(str(item) for item in feed_item_types), **summarize_native_api_response(feeds_json)},
         )
     )
 
-    if source_file_contains(repo_root, "services/turbovas-api/src/read_api_routes.rs", '.route("/api/v1/trashcan/summary"'):
+    if source_file_contains(repo_root, "services/yafvs-api/src/read_api_routes.rs", '.route("/api/v1/trashcan/summary"'):
         trashcan_summary = native_api_curl(repo_root, "/api/v1/trashcan/summary")
         trashcan_summary_json = parse_json_output(trashcan_summary)
         details["trashcan_summary"] = summarize_native_api_response(trashcan_summary_json)
@@ -29793,7 +29793,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                 if trashcan_summary_ok
                 else "Native API Trashcan summary probe failed or returned non-summary payload data.",
                 trashcan_summary,
-                compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/trashcan/summary"),
+                compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/trashcan/summary"),
                 trashcan_summary_json,
             )
         )
@@ -29807,7 +29807,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             )
         )
 
-    if source_file_contains(repo_root, "services/turbovas-api/src/read_api_routes.rs", '.route("/api/v1/trashcan/items"'):
+    if source_file_contains(repo_root, "services/yafvs-api/src/read_api_routes.rs", '.route("/api/v1/trashcan/items"'):
         trashcan_items = native_api_curl(repo_root, "/api/v1/trashcan/items?page_size=1")
         trashcan_items_json = parse_json_output(trashcan_items)
         details["trashcan_items"] = summarize_native_api_response(trashcan_items_json)
@@ -29874,7 +29874,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                 if items_ok
                 else "Native API Trashcan item probe failed or returned non-redacted payload data.",
                 trashcan_items,
-                compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/trashcan/items?page_size=1"),
+                compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/trashcan/items?page_size=1"),
                 trashcan_items_json,
                 {
                     "unexpected_keys": unexpected_keys,
@@ -29894,7 +29894,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.scope-reports",
             f"Native API scope-report list probe exit code {reports.returncode}.",
             reports,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports?page_size=1"),
             reports_json,
         )
     )
@@ -29957,7 +29957,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.scope-report-detail",
                     f"Native API scope-report detail probe exit code {scope_report_detail.returncode}.",
                     scope_report_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports/..."),
                     scope_report_detail_json,
                 )
             )
@@ -29976,7 +29976,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.scopes",
             f"Native API scope list probe exit code {scopes.returncode}.",
             scopes,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes?page_size=1"),
             scopes_json,
         )
     )
@@ -29993,7 +29993,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.scope-detail",
                     f"Native API scope detail probe exit code {scope_detail.returncode}.",
                     scope_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/..."),
                     scope_detail_json,
                 )
             )
@@ -30012,7 +30012,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.targets",
             f"Native API target list probe exit code {targets.returncode}.",
             targets,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/targets?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/targets?page_size=1"),
             targets_json,
         )
     )
@@ -30037,7 +30037,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.target-detail",
                     f"Native API target detail probe exit code {target_detail.returncode}.",
                     target_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/targets/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/targets/..."),
                     target_detail_json,
                 )
             )
@@ -30056,7 +30056,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.tasks",
             f"Native API task list probe exit code {tasks.returncode}.",
             tasks,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tasks?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tasks?page_size=1"),
             tasks_json,
         )
     )
@@ -30073,7 +30073,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.task-detail",
                     f"Native API task detail probe exit code {task_detail.returncode}.",
                     task_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tasks/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tasks/..."),
                     task_detail_json,
                 )
             )
@@ -30092,7 +30092,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.raw-reports",
             f"Native API raw-report list probe exit code {raw_reports.returncode}.",
             raw_reports,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports?page_size=1"),
             raw_reports_json,
         )
     )
@@ -30107,7 +30107,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.vulnerabilities",
             f"Native API top-level Vulnerabilities probe exit code {vulnerabilities.returncode}.",
             vulnerabilities,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/vulnerabilities?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/vulnerabilities?page_size=1"),
             vulnerabilities_json,
         )
     )
@@ -30130,7 +30130,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.cves",
             f"Native API Security Information CVE catalog probe exit code {cves.returncode}.",
             cves,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/cves?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/cves?page_size=1"),
             cves_json,
         )
     )
@@ -30147,7 +30147,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.cve-detail",
                     f"Native API Security Information CVE detail probe exit code {cve_detail.returncode}.",
                     cve_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/cves/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/cves/..."),
                     cve_detail_json,
                 )
             )
@@ -30166,7 +30166,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.cpes",
             f"Native API Security Information CPE catalog probe exit code {cpes.returncode}.",
             cpes,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/cpes?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/cpes?page_size=1"),
             cpes_json,
         )
     )
@@ -30183,7 +30183,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.cpe-detail",
                     f"Native API Security Information CPE detail probe exit code {cpe_detail.returncode}.",
                     cpe_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/cpes/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/cpes/..."),
                     cpe_detail_json,
                 )
             )
@@ -30202,7 +30202,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.nvts",
             f"Native API Security Information NVT catalog probe exit code {nvts.returncode}.",
             nvts,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/nvts?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/nvts?page_size=1"),
             nvts_json,
         )
     )
@@ -30220,7 +30220,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.nvt-detail",
                     f"Native API Security Information NVT catalog-detail probe exit code {nvt_detail.returncode}.",
                     nvt_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/nvts/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/nvts/..."),
                     nvt_detail_json,
                 )
             )
@@ -30239,7 +30239,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.dfn-cert-advisories",
             f"Native API Security Information DFN-CERT advisory list probe exit code {dfn_cert_advisories.returncode}.",
             dfn_cert_advisories,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/dfn-cert-advisories?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/dfn-cert-advisories?page_size=1"),
             dfn_cert_advisories_json,
         )
     )
@@ -30257,7 +30257,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.dfn-cert-advisory-detail",
                     f"Native API Security Information DFN-CERT advisory catalog-detail probe exit code {dfn_cert_detail.returncode}.",
                     dfn_cert_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/dfn-cert-advisories/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/dfn-cert-advisories/..."),
                     dfn_cert_detail_json,
                 )
             )
@@ -30276,7 +30276,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.cert-bund-advisories",
             f"Native API Security Information CERT-Bund advisory list probe exit code {cert_bund_advisories.returncode}.",
             cert_bund_advisories,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/cert-bund-advisories?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/cert-bund-advisories?page_size=1"),
             cert_bund_advisories_json,
         )
     )
@@ -30294,7 +30294,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.cert-bund-advisory-detail",
                     f"Native API Security Information CERT-Bund advisory catalog-detail probe exit code {cert_bund_detail.returncode}.",
                     cert_bund_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/cert-bund-advisories/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/cert-bund-advisories/..."),
                     cert_bund_detail_json,
                 )
             )
@@ -30313,7 +30313,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.operating-systems",
             f"Native API top-level Operating Systems probe exit code {operating_systems.returncode}.",
             operating_systems,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/operating-systems?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/operating-systems?page_size=1"),
             operating_systems_json,
         )
     )
@@ -30331,7 +30331,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.operating-system-detail",
                     f"Native API top-level Operating System detail probe exit code {operating_system_detail.returncode}.",
                     operating_system_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/operating-systems/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/operating-systems/..."),
                     operating_system_detail_json,
                 )
             )
@@ -30350,7 +30350,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.hosts",
             f"Native API top-level Hosts probe exit code {hosts.returncode}.",
             hosts,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/hosts?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/hosts?page_size=1"),
             hosts_json,
         )
     )
@@ -30369,7 +30369,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.host-detail",
                     f"Native API top-level Host detail probe exit code {host_detail.returncode}.",
                     host_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/hosts/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/hosts/..."),
                     host_detail_json,
                 )
             )
@@ -30388,7 +30388,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.tls-certificates",
             f"Native API top-level TLS Certificates probe exit code {tls_certificates.returncode}.",
             tls_certificates,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tls-certificates?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tls-certificates?page_size=1"),
             tls_certificates_json,
         )
     )
@@ -30406,7 +30406,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.tls-certificate-detail",
                     f"Native API top-level TLS Certificate detail probe exit code {tls_certificate_detail.returncode}.",
                     tls_certificate_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tls-certificates/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tls-certificates/..."),
                     tls_certificate_detail_json,
                 )
             )
@@ -30425,7 +30425,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.scanners",
             f"Native API top-level Scanners probe exit code {scanners.returncode}.",
             scanners,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scanners?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scanners?page_size=1"),
             scanners_json,
         )
     )
@@ -30443,7 +30443,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.scanner-detail",
                     f"Native API top-level Scanner detail probe exit code {scanner_detail.returncode}.",
                     scanner_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scanners/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scanners/..."),
                     scanner_detail_json,
                 )
             )
@@ -30462,7 +30462,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.filters",
             f"Native API top-level Filters probe exit code {filters.returncode}.",
             filters,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/filters?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/filters?page_size=1"),
             filters_json,
         )
     )
@@ -30479,7 +30479,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.filter-detail",
                     f"Native API filter detail probe exit code {filter_detail.returncode}.",
                     filter_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/filters/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/filters/..."),
                     filter_detail_json,
                 )
             )
@@ -30510,7 +30510,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                 if alerts.returncode == 0 and alert_metadata_ok
                 else "Native API Alerts list failed or returned non-redacted alert payload data.",
                 alerts,
-                compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/alerts?page_size=1&sort=name"),
+                compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/alerts?page_size=1&sort=name"),
                 alerts_json,
                 {**alerts_summary, "forbidden_keys": forbidden_keys, "unexpected_keys": unexpected_keys},
             )
@@ -30542,7 +30542,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                         if alert_detail.returncode == 0 and alert_detail_ok
                         else "Native API Alert detail failed or returned non-redacted alert payload data.",
                         alert_detail,
-                        compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", f"http://127.0.0.1:9080{alert_detail_path}"),
+                        compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", f"http://127.0.0.1:9080{alert_detail_path}"),
                         alert_detail_json,
                         {**alert_detail_summary, "forbidden_keys": detail_forbidden_keys, "unexpected_keys": detail_unexpected_keys},
                     )
@@ -30567,7 +30567,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.tags",
             f"Native API top-level Tags probe exit code {tags.returncode}.",
             tags,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags?page_size=1"),
             tags_json,
         )
     )
@@ -30581,7 +30581,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.tag-resource-names",
             f"Native API Tag resource-name probe exit code {tag_resource_names.returncode}.",
             tag_resource_names,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags/resource-names/task?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags/resource-names/task?page_size=1"),
             tag_resource_names_json,
         )
     )
@@ -30595,7 +30595,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.tag-resource-names.alert",
             f"Native API Tag alert resource-name probe exit code {alert_tag_resource_names.returncode}.",
             alert_tag_resource_names,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags/resource-names/alert?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags/resource-names/alert?page_size=1"),
             alert_tag_resource_names_json,
         )
     )
@@ -30609,7 +30609,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.tag-resource-names.scanner",
             f"Native API Tag scanner resource-name probe exit code {scanner_tag_resource_names.returncode}.",
             scanner_tag_resource_names,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags/resource-names/scanner?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags/resource-names/scanner?page_size=1"),
             scanner_tag_resource_names_json,
         )
     )
@@ -30623,7 +30623,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.tag-resource-names.schedule",
             f"Native API Tag schedule resource-name probe exit code {schedule_tag_resource_names.returncode}.",
             schedule_tag_resource_names,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags/resource-names/schedule?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags/resource-names/schedule?page_size=1"),
             schedule_tag_resource_names_json,
         )
     )
@@ -30640,7 +30640,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.tag-detail",
                     f"Native API tag detail probe exit code {tag_detail.returncode}.",
                     tag_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tags/..."),
                     tag_detail_json,
                 )
             )
@@ -30659,7 +30659,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.overrides",
             f"Native API top-level Overrides probe exit code {overrides.returncode}.",
             overrides,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/overrides?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/overrides?page_size=1"),
             overrides_json,
         )
     )
@@ -30676,7 +30676,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.override-detail",
                     f"Native API override detail probe exit code {override_detail.returncode}.",
                     override_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/overrides/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/overrides/..."),
                     override_detail_json,
                 )
             )
@@ -30693,7 +30693,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.port-lists",
             f"Native API top-level Port Lists probe exit code {port_lists.returncode}.",
             port_lists,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/port-lists?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/port-lists?page_size=1"),
             port_lists_json,
         )
     )
@@ -30710,7 +30710,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.port-list-detail",
                     f"Native API port-list detail probe exit code {port_list_detail.returncode}.",
                     port_list_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/port-lists/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/port-lists/..."),
                     port_list_detail_json,
                 )
             )
@@ -30727,7 +30727,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.schedules",
             f"Native API top-level Schedules probe exit code {schedules.returncode}.",
             schedules,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/schedules?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/schedules?page_size=1"),
             schedules_json,
         )
     )
@@ -30744,7 +30744,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.schedule-detail",
                     f"Native API schedule detail probe exit code {schedule_detail.returncode}.",
                     schedule_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/schedules/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/schedules/..."),
                     schedule_detail_json,
                 )
             )
@@ -30761,7 +30761,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.scan-configs",
             f"Native API top-level Scan Configs probe exit code {scan_configs.returncode}.",
             scan_configs,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scan-configs?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scan-configs?page_size=1"),
             scan_configs_json,
         )
     )
@@ -30778,7 +30778,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.scan-config-detail",
                     f"Native API scan-config detail probe exit code {scan_config_detail.returncode}.",
                     scan_config_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scan-configs/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scan-configs/..."),
                     scan_config_detail_json,
                 )
             )
@@ -30792,7 +30792,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.scan-config-families",
                     f"Native API scan-config families probe exit code {scan_config_families.returncode}.",
                     scan_config_families,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scan-configs/.../families"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scan-configs/.../families"),
                     scan_config_families_json,
                 )
             )
@@ -30811,7 +30811,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
             "native-api.report-formats",
             f"Native API top-level Report Formats probe exit code {report_formats.returncode}.",
             report_formats,
-            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/report-formats?page_size=1"),
+            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/report-formats?page_size=1"),
             report_formats_json,
         )
     )
@@ -30828,7 +30828,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.report-format-detail",
                     f"Native API report-format detail probe exit code {report_format_detail.returncode}.",
                     report_format_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/report-formats/..."),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/report-formats/..."),
                     report_format_detail_json,
                 )
             )
@@ -30848,7 +30848,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.raw-report-detail",
                     f"Native API raw-report detail probe exit code {raw_report_detail.returncode}.",
                     raw_report_detail,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/...") ,
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/...") ,
                     raw_report_detail_json,
                 )
             )
@@ -30862,7 +30862,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.raw-report-results",
                     f"Native API raw-report Results probe exit code {raw_report_results.returncode}.",
                     raw_report_results,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../results?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../results?page_size=5"),
                     raw_report_results_json,
                 )
             )
@@ -30884,7 +30884,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.raw-report-lossless-results",
                     f"Native API raw-report lossless Results probe exit code {raw_report_lossless_results.returncode}.",
                     raw_report_lossless_results,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../raw-results?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../raw-results?page_size=5"),
                     raw_report_lossless_results_json,
                 )
             )
@@ -30909,7 +30909,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                             "native-api.raw-result-detail",
                             f"Native API raw-result detail probe exit code {raw_result_detail.returncode}.",
                             raw_result_detail,
-                            compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/results/..."),
+                            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/results/..."),
                             raw_result_detail_json,
                         )
                     )
@@ -30936,7 +30936,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.raw-report-hosts",
                     f"Native API raw-report Hosts probe exit code {raw_report_hosts.returncode}.",
                     raw_report_hosts,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../hosts?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../hosts?page_size=5"),
                     raw_report_hosts_json,
                 )
             )
@@ -30950,7 +30950,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.raw-report-ports",
                     f"Native API raw-report Ports probe exit code {raw_report_ports.returncode}.",
                     raw_report_ports,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../ports?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../ports?page_size=5"),
                     raw_report_ports_json,
                 )
             )
@@ -30964,7 +30964,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.raw-report-applications",
                     f"Native API raw-report Applications probe exit code {raw_report_applications.returncode}.",
                     raw_report_applications,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../applications?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../applications?page_size=5"),
                     raw_report_applications_json,
                 )
             )
@@ -30978,7 +30978,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.raw-report-operating-systems",
                     f"Native API raw-report Operating Systems probe exit code {raw_report_operating_systems.returncode}.",
                     raw_report_operating_systems,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../operating-systems?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../operating-systems?page_size=5"),
                     raw_report_operating_systems_json,
                 )
             )
@@ -30992,7 +30992,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.raw-report-cves",
                     f"Native API raw-report CVEs probe exit code {raw_report_cves.returncode}.",
                     raw_report_cves,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../cves?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../cves?page_size=5"),
                     raw_report_cves_json,
                 )
             )
@@ -31006,7 +31006,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.raw-report-tls-certificates",
                     f"Native API raw-report TLS Certificates probe exit code {raw_report_tls_certificates.returncode}.",
                     raw_report_tls_certificates,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../tls-certificates?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../tls-certificates?page_size=5"),
                     raw_report_tls_certificates_json,
                 )
             )
@@ -31020,7 +31020,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.raw-report-errors",
                     f"Native API raw-report Error Messages probe exit code {raw_report_errors.returncode}.",
                     raw_report_errors,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../errors?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../errors?page_size=5"),
                     raw_report_errors_json,
                 )
             )
@@ -31048,7 +31048,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                 "native-api.raw-report-metrics",
                 f"Native API raw-report Metrics probe exit code {raw_metrics.returncode}.",
                 raw_metrics,
-                compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../metrics"),
+                compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../metrics"),
                 raw_metrics_json,
             )
         )
@@ -31071,7 +31071,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.scope-report-results",
                     f"Native API scope-report Results probe exit code {results.returncode}.",
                     results,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../results?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../results?page_size=5"),
                     results_json,
                 )
             )
@@ -31086,7 +31086,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.scope-report-hosts",
                     f"Native API scope-report Hosts probe exit code {hosts.returncode}.",
                     hosts,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../hosts?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../hosts?page_size=5"),
                     hosts_json,
                 )
             )
@@ -31101,7 +31101,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.scope-report-ports",
                     f"Native API scope-report Ports probe exit code {ports.returncode}.",
                     ports,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../ports?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../ports?page_size=5"),
                     ports_json,
                 )
             )
@@ -31116,7 +31116,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.scope-report-applications",
                     f"Native API scope-report Applications probe exit code {applications.returncode}.",
                     applications,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../applications?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../applications?page_size=5"),
                     applications_json,
                 )
             )
@@ -31131,7 +31131,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.scope-report-operating-systems",
                     f"Native API scope-report Operating Systems probe exit code {operating_systems.returncode}.",
                     operating_systems,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../operating-systems?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../operating-systems?page_size=5"),
                     operating_systems_json,
                 )
             )
@@ -31146,7 +31146,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.scope-report-cves",
                     f"Native API scope-report CVEs probe exit code {cves.returncode}.",
                     cves,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../cves?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../cves?page_size=5"),
                     cves_json,
                 )
             )
@@ -31161,7 +31161,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.scope-report-tls-certificates",
                     f"Native API scope-report TLS Certificates probe exit code {tls_certificates.returncode}.",
                     tls_certificates,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../tls-certificates?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../tls-certificates?page_size=5"),
                     tls_certificates_json,
                 )
             )
@@ -31176,7 +31176,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.scope-report-errors",
                     f"Native API scope-report Error Messages probe exit code {errors.returncode}.",
                     errors,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../errors?page_size=5"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../errors?page_size=5"),
                     errors_json,
                 )
             )
@@ -31197,7 +31197,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.scope-report-metrics",
                     f"Native API scope-report Metrics probe exit code {metrics.returncode}.",
                     metrics,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../metrics"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../metrics"),
                     metrics_json,
                 )
             )
@@ -31219,7 +31219,7 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
                     "native-api.scope-report-retention-plan",
                     f"Native API scope-report retention-plan probe exit code {retention_plan.returncode}.",
                     retention_plan,
-                    compose_command(repo_root, "exec", "-T", "turbovas-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../retention-plan"),
+                    compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../retention-plan"),
                     retention_plan_json,
                 )
             )
@@ -31979,17 +31979,17 @@ def command_quality_gate(repo_root: Path, include_runtime: bool = False) -> dict
     details["steps"]["compose-config"] = {"exit_code": compose.returncode, "output_tail": output_tail(compose.stdout, 120)}
     findings.append(process_step_finding("pass" if compose.returncode == 0 else "fail", "quality.compose-config", f"Compose config validation exit code {compose.returncode}.", compose, compose_command_line))
 
-    api_manifest = repo_root / "services" / "turbovas-api" / "Cargo.toml"
+    api_manifest = repo_root / "services" / "yafvs-api" / "Cargo.toml"
     if api_manifest.is_file():
-        cargo_fmt_command = ["bash", "-lc", "cd services/turbovas-api && cargo fmt --check"]
+        cargo_fmt_command = ["bash", "-lc", "cd services/yafvs-api && cargo fmt --check"]
         cargo_fmt = run_command(cargo_fmt_command, repo_root, env=build_env(repo_root), timeout=120)
-        details["steps"]["turbovas-api-fmt"] = {"exit_code": cargo_fmt.returncode, "output_tail": output_tail(cargo_fmt.stdout, 120)}
-        findings.append(process_step_finding("pass" if cargo_fmt.returncode == 0 else "fail", "quality.turbovas-api-fmt", f"turbovas-api cargo fmt exit code {cargo_fmt.returncode}.", cargo_fmt, cargo_fmt_command))
+        details["steps"]["yafvs-api-fmt"] = {"exit_code": cargo_fmt.returncode, "output_tail": output_tail(cargo_fmt.stdout, 120)}
+        findings.append(process_step_finding("pass" if cargo_fmt.returncode == 0 else "fail", "quality.yafvs-api-fmt", f"yafvs-api cargo fmt exit code {cargo_fmt.returncode}.", cargo_fmt, cargo_fmt_command))
 
-        cargo_test_command = ["bash", "-lc", "cd services/turbovas-api && cargo test --locked"]
+        cargo_test_command = ["bash", "-lc", "cd services/yafvs-api && cargo test --locked"]
         cargo_test = run_command(cargo_test_command, repo_root, env=build_env(repo_root), timeout=600)
-        details["steps"]["turbovas-api-test"] = {"exit_code": cargo_test.returncode, "output_tail": output_tail(cargo_test.stdout, 160)}
-        findings.append(process_step_finding("pass" if cargo_test.returncode == 0 else "fail", "quality.turbovas-api-test", f"turbovas-api cargo test exit code {cargo_test.returncode}.", cargo_test, cargo_test_command))
+        details["steps"]["yafvs-api-test"] = {"exit_code": cargo_test.returncode, "output_tail": output_tail(cargo_test.stdout, 160)}
+        findings.append(process_step_finding("pass" if cargo_test.returncode == 0 else "fail", "quality.yafvs-api-test", f"yafvs-api cargo test exit code {cargo_test.returncode}.", cargo_test, cargo_test_command))
 
     try:
         with acquire_runtime_lock(repo_root, GSA_OPERATION_LOCK, "quality-gate GSA checks"):

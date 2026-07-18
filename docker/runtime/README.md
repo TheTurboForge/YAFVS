@@ -20,7 +20,7 @@ The experimental `app` profile adds inherited application services:
 - `ospd-openvas`, wired to the built OpenVAS scanner binary, scanner Redis Unix socket, and runtime OSP socket path
 - `notus-scanner`, wired to the active Notus feed generation and Mosquitto
 - `gsad`, exposed on `127.0.0.1:19392` by default for local HTTPS UI/API smoke checks
-- `turbovas-api`, a Rust proof service for DB-backed typed HTTP/JSON reads;
+- `yafvs-api`, a Rust proof service for DB-backed typed HTTP/JSON reads;
   internal by default, with an opt-in bearer-auth direct development listener
 
 Persistent state is stored outside the repository by default, normally in the
@@ -157,14 +157,14 @@ only into OSPD; do not copy it into tracked configuration or operator artifacts.
 a bounded raw compatibility probe and calls `get_version` without printing
 secrets or requiring a legacy Python client.
 
-`runtime-native-api-smoke` verifies the internal `turbovas-api` sidecar by
+`runtime-native-api-smoke` verifies the internal `yafvs-api` sidecar by
 querying `/healthz`, `/api/v1/scope-reports`, and the first scope report's
 DB-backed Results, Hosts, CVEs, Error Messages, and Metrics collections from
 inside the Docker network. It does not publish a host port and does not use
 GMP/XML for the tested read path.
 
 `runtime-native-api-direct-smoke` enables the opt-in direct development listener
-for `turbovas-api`, defaulting to `127.0.0.1:19080`, verifies that `/healthz`
+for `yafvs-api`, defaulting to `127.0.0.1:19080`, verifies that `/healthz`
 is reachable without a token, verifies that `/api/v1/...` rejects missing or
 wrong bearer tokens, verifies a valid bearer token, checks request-ID headers
 and absent browser CORS access headers, checks bounded direct request-shape
@@ -198,7 +198,7 @@ with `NMAP_PRIVILEGED=1` and file capabilities on `/usr/bin/nmap`.
 The current app profile reaches inherited manager-scanner connectivity:
 
 - `gvmd` creates separate GMP and native-control sockets. `gsad` receives only
-  the GMP socket mount; `turbovas-api` receives only the native-control socket
+  the GMP socket mount; `yafvs-api` receives only the native-control socket
   mount and a distinct control secret from the browser-proxy secret.
 - authenticated GMP `get_version` succeeds over the runtime Unix socket.
 - scanner Redis is reachable through `/runtime/run/redis-openvas/redis.sock`.
@@ -208,7 +208,7 @@ The current app profile reaches inherited manager-scanner connectivity:
 - `notus-scanner` starts against the active Notus feed generation.
 - `OpenVAS Default` is registered and verified by `gvmd` against the OSPD socket.
 - `gsad` serves the staged GSA web UI and responds on the configured HTTPS host binding.
-- `turbovas-api` is available inside the Docker network as the DB-first native
+- `yafvs-api` is available inside the Docker network as the DB-first native
   API proof. Direct API development access is available only through the
   explicit bearer-auth direct mode, which defaults to loopback and is not a
   production exposure model.

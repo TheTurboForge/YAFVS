@@ -130,7 +130,7 @@ impl<'a> ConcreteTransitionAdapter<'a> {
             let arguments = [
                 "exec".to_owned(),
                 "-T".to_owned(),
-                "turbovas-api".to_owned(),
+                "yafvs-api".to_owned(),
                 "curl".to_owned(),
                 "-fsS".to_owned(),
                 "--max-time".to_owned(),
@@ -917,7 +917,7 @@ mod tests {
                 "ospd-openvas": format!("sha256:{}", "1".repeat(64)),
                 "notus-scanner": format!("sha256:{}", "2".repeat(64)),
                 "gsad": format!("sha256:{}", "3".repeat(64)),
-                "turbovas-api": format!("sha256:{}", "4".repeat(64)),
+                "yafvs-api": format!("sha256:{}", "4".repeat(64)),
             }),
             app_runtime_artifacts: json!({
                 "schema_version": 1, "algorithm": "sha256", "digest": "5".repeat(64),
@@ -931,7 +931,7 @@ mod tests {
             }),
             app_compose_contract: json!({
                 "schema_version": 1, "algorithm": "sha256", "digest": "6".repeat(64),
-                "services": ["gvmd", "ospd-openvas", "notus-scanner", "gsad", "turbovas-api"],
+                "services": ["gvmd", "ospd-openvas", "notus-scanner", "gsad", "yafvs-api"],
             }),
         }
     }

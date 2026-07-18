@@ -347,13 +347,7 @@ fn final_parent_sync(parent: &OwnedFd, _path: &Path) -> Result<(), String> {
         "private journal directory after replacement",
     )
 }
-const APP_SERVICES: [&str; 5] = [
-    "gvmd",
-    "ospd-openvas",
-    "notus-scanner",
-    "gsad",
-    "turbovas-api",
-];
+const APP_SERVICES: [&str; 5] = ["gvmd", "ospd-openvas", "notus-scanner", "gsad", "yafvs-api"];
 const ARTIFACT_ROOTS: [&str; 9] = [
     "build/prefix",
     "build/venvs/ospd-openvas",

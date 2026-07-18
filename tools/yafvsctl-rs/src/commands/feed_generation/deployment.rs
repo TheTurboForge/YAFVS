@@ -18,13 +18,8 @@ use std::path::{Component, Path};
 const MAX_RECEIPT_BYTES: usize = 16 * 1024;
 const RECEIPT_DIR: &str = "state";
 const RECEIPT_NAME: &str = "app-deployment.json";
-pub(super) const APP_SERVICES: [&str; 5] = [
-    "gvmd",
-    "ospd-openvas",
-    "notus-scanner",
-    "gsad",
-    "turbovas-api",
-];
+pub(super) const APP_SERVICES: [&str; 5] =
+    ["gvmd", "ospd-openvas", "notus-scanner", "gsad", "yafvs-api"];
 const ARTIFACT_ROOTS: [&str; 9] = [
     "build/prefix",
     "build/venvs/ospd-openvas",
@@ -477,7 +472,7 @@ mod tests {
     fn receipt() -> Value {
         json!({
             "schema_version": 1,
-            "image_ids": {"gvmd": format!("sha256:{}", "a".repeat(64)), "ospd-openvas": format!("sha256:{}", "b".repeat(64)), "notus-scanner": format!("sha256:{}", "c".repeat(64)), "gsad": format!("sha256:{}", "d".repeat(64)), "turbovas-api": format!("sha256:{}", "e".repeat(64))},
+            "image_ids": {"gvmd": format!("sha256:{}", "a".repeat(64)), "ospd-openvas": format!("sha256:{}", "b".repeat(64)), "notus-scanner": format!("sha256:{}", "c".repeat(64)), "gsad": format!("sha256:{}", "d".repeat(64)), "yafvs-api": format!("sha256:{}", "e".repeat(64))},
             "runtime_artifacts": {"schema_version": 1, "algorithm": "sha256", "digest": "f".repeat(64), "entry_count": 1, "byte_count": 0, "roots": ARTIFACT_ROOTS},
             "compose_contract": {"schema_version": 1, "algorithm": "sha256", "digest": "1".repeat(64), "services": APP_SERVICES},
             "prepared_at": "2026-07-18T12:00:00+00:00"

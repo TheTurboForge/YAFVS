@@ -675,7 +675,7 @@ class YAFVSCtlTests(unittest.TestCase):
         binding = {
             "host": "127.0.0.1",
             "host_port": "19080",
-            "container_port": yafvsctl.TURBOVAS_API_DIRECT_CONTAINER_PORT,
+            "container_port": yafvsctl.YAFVS_API_DIRECT_CONTAINER_PORT,
         }
         with unittest.mock.patch.dict(os.environ, {}, clear=True), unittest.mock.patch.object(
             yafvsctl,
@@ -694,25 +694,25 @@ class YAFVSCtlTests(unittest.TestCase):
             "ensure_native_api_direct_runtime_env_defaults",
             side_effect=lambda _root, env: env.update(
                 {
-                    yafvsctl.TURBOVAS_API_DIRECT_ENV: "1",
-                    yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV: "0.0.0.0:9081",
+                    yafvsctl.YAFVS_API_DIRECT_ENV: "1",
+                    yafvsctl.YAFVS_API_DIRECT_BIND_ENV: "0.0.0.0:9081",
                 }
             )
             or env,
         ):
             env = yafvsctl.deployed_app_env(Path("/tmp"))
 
-        self.assertEqual(env[yafvsctl.TURBOVAS_API_DIRECT_ENV], "1")
-        self.assertEqual(env[yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV], "127.0.0.1")
-        self.assertEqual(env[yafvsctl.TURBOVAS_API_DIRECT_PORT_ENV], "19080")
+        self.assertEqual(env[yafvsctl.YAFVS_API_DIRECT_ENV], "1")
+        self.assertEqual(env[yafvsctl.YAFVS_API_DIRECT_HOST_ENV], "127.0.0.1")
+        self.assertEqual(env[yafvsctl.YAFVS_API_DIRECT_PORT_ENV], "19080")
 
     def test_deployed_app_env_preserves_explicit_direct_disable(self):
         with unittest.mock.patch.dict(
-            os.environ, {yafvsctl.TURBOVAS_API_DIRECT_ENV: "0"}, clear=True
+            os.environ, {yafvsctl.YAFVS_API_DIRECT_ENV: "0"}, clear=True
         ), unittest.mock.patch.object(
             yafvsctl,
             "runtime_app_env",
-            return_value={yafvsctl.TURBOVAS_API_DIRECT_ENV: "0"},
+            return_value={yafvsctl.YAFVS_API_DIRECT_ENV: "0"},
         ), unittest.mock.patch.object(
             yafvsctl,
             "current_gsad_published_hosts",
@@ -722,14 +722,14 @@ class YAFVSCtlTests(unittest.TestCase):
         ) as current_bindings:
             env = yafvsctl.deployed_app_env(Path("/tmp"))
 
-        self.assertEqual(env[yafvsctl.TURBOVAS_API_DIRECT_ENV], "0")
+        self.assertEqual(env[yafvsctl.YAFVS_API_DIRECT_ENV], "0")
         current_bindings.assert_not_called()
 
     def test_deployed_app_env_brackets_running_direct_ipv6_binding(self):
         binding = {
             "host": "::1",
             "host_port": "19080",
-            "container_port": yafvsctl.TURBOVAS_API_DIRECT_CONTAINER_PORT,
+            "container_port": yafvsctl.YAFVS_API_DIRECT_CONTAINER_PORT,
         }
         with unittest.mock.patch.dict(os.environ, {}, clear=True), unittest.mock.patch.object(
             yafvsctl,
@@ -748,15 +748,15 @@ class YAFVSCtlTests(unittest.TestCase):
             "ensure_native_api_direct_runtime_env_defaults",
             side_effect=lambda _root, env: env.update(
                 {
-                    yafvsctl.TURBOVAS_API_DIRECT_ENV: "1",
-                    yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV: "0.0.0.0:9081",
+                    yafvsctl.YAFVS_API_DIRECT_ENV: "1",
+                    yafvsctl.YAFVS_API_DIRECT_BIND_ENV: "0.0.0.0:9081",
                 }
             )
             or env,
         ):
             env = yafvsctl.deployed_app_env(Path("/tmp"))
 
-        self.assertEqual(env[yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV], "[::1]")
+        self.assertEqual(env[yafvsctl.YAFVS_API_DIRECT_HOST_ENV], "[::1]")
         self.assertEqual(
             yafvsctl.native_api_direct_port_binding(env),
             "[::1]:19080:9081",
@@ -1381,7 +1381,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("gsa.deployment-deferred", source)
 
     def test_native_scope_report_finding_counts_exclude_scanner_errors(self):
-        source = (Path(__file__).resolve().parents[2] / "services" / "turbovas-api" / "src" / "scope_reports.rs").read_text(encoding="utf-8")
+        source = (Path(__file__).resolve().parents[2] / "services" / "yafvs-api" / "src" / "scope_reports.rs").read_text(encoding="utf-8")
         self.assertIn("WHERE coalesce(r.severity, 0) != -3.0", source)
         self.assertIn("count(*) FILTER (WHERE severity = -1.0)", source)
 
@@ -1799,7 +1799,7 @@ class YAFVSCtlTests(unittest.TestCase):
         ]
         for filename, handler, source_identity in handlers:
             with self.subTest(handler=handler):
-                source = (root / "services" / "turbovas-api" / "src" / filename).read_text(encoding="utf-8")
+                source = (root / "services" / "yafvs-api" / "src" / filename).read_text(encoding="utf-8")
                 self.assertIn(handler, source)
                 self.assertIn("Path((scope_id, scope_report_id)): Path<(String, String)>", source)
                 self.assertIn("parse_uuid(&scope_id)?", source)
@@ -1851,7 +1851,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("next = gsad_http_handler_add (next, native_api_url_handler);", request_router)
         self.assertNotIn("url_handlers = gsad_http_handler_add (url_handlers, native_api_url_handler);", request_router)
         self.assertIn("gsad_native_api.c", cmake)
-        self.assertIn("DEFAULT_NATIVE_API_HOST \"turbovas-api\"", native_api)
+        self.assertIn("DEFAULT_NATIVE_API_HOST \"yafvs-api\"", native_api)
         self.assertIn("DEFAULT_NATIVE_API_PORT \"9080\"", native_api)
         self.assertIn("native_api_path_is_allowed", native_api)
         self.assertIn("/api/v1/scope-reports", native_api)
@@ -2599,9 +2599,9 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_native_api_rust_test_recipe_serializes_filters(self):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         self.assertIn('native-api-rust-test *filters:', justfile)
-        self.assertIn('cargo test --manifest-path services/turbovas-api/Cargo.toml --locked;', justfile)
+        self.assertIn('cargo test --manifest-path services/yafvs-api/Cargo.toml --locked;', justfile)
         self.assertIn('for filter in "$@"; do', justfile)
-        self.assertIn('cargo test --manifest-path services/turbovas-api/Cargo.toml --locked "$filter";', justfile)
+        self.assertIn('cargo test --manifest-path services/yafvs-api/Cargo.toml --locked "$filter";', justfile)
 
     def test_gsa_vitest_recipe_runs_from_gsa_package(self):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
@@ -2664,12 +2664,12 @@ class YAFVSCtlTests(unittest.TestCase):
             "status": "warn",
             "summary": "Native API smoke checks completed.",
             "details": {
-                "service": "turbovas-api",
+                "service": "yafvs-api",
                 "health": {"status": "ok"},
                 "large_probe_payload": {"items": list(range(100))},
             },
             "findings": [
-                yafvsctl.finding("pass", "native-api.running", "turbovas-api container is running."),
+                yafvsctl.finding("pass", "native-api.running", "yafvs-api container is running."),
                 yafvsctl.finding("pass", "native-api.healthz", "Native API health probe passed."),
                 yafvsctl.finding("warn", "native-api.scope-report-cves", "No scope reports exist yet, so the CVE collection probe was skipped."),
             ],
@@ -2679,7 +2679,7 @@ class YAFVSCtlTests(unittest.TestCase):
         compact = yafvsctl.native_api_smoke_status_only_result(result)
 
         self.assertEqual(compact["status"], "warn")
-        self.assertEqual(compact["details"]["service"], "turbovas-api")
+        self.assertEqual(compact["details"]["service"], "yafvs-api")
         self.assertEqual(compact["details"]["finding_count"], 3)
         self.assertEqual(compact["details"]["non_pass_count"], 1)
         self.assertEqual(compact["details"]["artifact_count"], 1)
@@ -2808,7 +2808,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_native_api_oversized_filter_path_reads_rust_limit(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            collections = root / "services" / "turbovas-api" / "src"
+            collections = root / "services" / "yafvs-api" / "src"
             collections.mkdir(parents=True)
             (collections / "collections.rs").write_text(
                 "pub(crate) const MAX_COLLECTION_FILTER_LENGTH: usize = 3;\n",
@@ -3038,7 +3038,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(alert_test["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(alert_test["direct_access"], "direct_write_control")
         self.assertIn("This is a real delivery action, not a validation preview.", alert_test["notes"])
-        api_source = (root / "services" / "turbovas-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
+        api_source = (root / "services" / "yafvs-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
         proxy_source = (root / "components" / "gsad" / "src" / "gsad_native_api.c").read_text(encoding="utf-8")
         alerts_api_declared = '.route("/api/v1/alerts"' in api_source
         alerts_proxy_declared = "/api/v1/alerts" in proxy_source
@@ -3549,15 +3549,15 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_native_api_module_ownership_reports_missing_and_misplaced_symbols(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            owner = root / "services" / "turbovas-api" / "src" / "owner.rs"
-            forbidden = root / "services" / "turbovas-api" / "src" / "handler.rs"
+            owner = root / "services" / "yafvs-api" / "src" / "owner.rs"
+            forbidden = root / "services" / "yafvs-api" / "src" / "handler.rs"
             owner.parent.mkdir(parents=True)
             owner.write_text("pub(crate) struct OwnedSymbol;\n", encoding="utf-8")
             forbidden.write_text("pub(crate) struct DriftedSymbol;\n", encoding="utf-8")
             contract = (
                 {
-                    "owner": "services/turbovas-api/src/owner.rs",
-                    "forbidden": ("services/turbovas-api/src/handler.rs",),
+                    "owner": "services/yafvs-api/src/owner.rs",
+                    "forbidden": ("services/yafvs-api/src/handler.rs",),
                     "symbols": ("pub(crate) struct OwnedSymbol", "pub(crate) struct DriftedSymbol"),
                 },
             )
@@ -3569,14 +3569,14 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(summary["checked_symbol_count"], 2)
         self.assertEqual(
             summary["missing_owner_symbols"],
-            [{"owner": "services/turbovas-api/src/owner.rs", "symbol": "pub(crate) struct DriftedSymbol"}],
+            [{"owner": "services/yafvs-api/src/owner.rs", "symbol": "pub(crate) struct DriftedSymbol"}],
         )
         self.assertEqual(
             summary["misplaced_symbols"],
             [
                 {
-                    "path": "services/turbovas-api/src/handler.rs",
-                    "owner": "services/turbovas-api/src/owner.rs",
+                    "path": "services/yafvs-api/src/handler.rs",
+                    "owner": "services/yafvs-api/src/owner.rs",
                     "symbol": "pub(crate) struct DriftedSymbol",
                 }
             ],
@@ -3585,7 +3585,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_openapi_direct_operation_templates_are_method_aware(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            openapi = root / "api" / "openapi" / "turbovas-v1.yaml"
+            openapi = root / "api" / "openapi" / "yafvs-v1.yaml"
             openapi.parent.mkdir(parents=True)
             openapi.write_text(
                 "paths:\n"
@@ -3760,7 +3760,7 @@ class YAFVSCtlTests(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            openapi = root / "api" / "openapi" / "turbovas-v1.yaml"
+            openapi = root / "api" / "openapi" / "yafvs-v1.yaml"
             openapi.parent.mkdir(parents=True)
             openapi.write_text(
                 "paths:\n"
@@ -3929,7 +3929,7 @@ class YAFVSCtlTests(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            openapi = root / "api" / "openapi" / "turbovas-v1.yaml"
+            openapi = root / "api" / "openapi" / "yafvs-v1.yaml"
             openapi.parent.mkdir(parents=True)
             openapi.write_text(
                 "paths:\n"
@@ -3938,7 +3938,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 "      x-turbovas-direct: true\n",
                 encoding="utf-8",
             )
-            source_dir = root / "services" / "turbovas-api" / "src"
+            source_dir = root / "services" / "yafvs-api" / "src"
             api_source = source_dir / "main.rs"
             api_contract_source = source_dir / "direct_api_contract.rs"
             routes_source = source_dir / "read_api_routes.rs"
@@ -3965,7 +3965,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 'fn direct_api_wildcard_detail_path_is_allowed(_path: &str) -> bool { false }\n',
                 encoding="utf-8",
             )
-            request_shapes = root / "services" / "turbovas-api" / "src" / "request_shapes.rs"
+            request_shapes = root / "services" / "yafvs-api" / "src" / "request_shapes.rs"
             request_shapes.write_text("", encoding="utf-8")
             summary = yafvsctl.native_api_direct_contract_summary(root, endpoints)
 
@@ -5593,7 +5593,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_native_tooling_state_reports_openapi_contract_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            openapi = root / "api" / "openapi" / "turbovas-v1.yaml"
+            openapi = root / "api" / "openapi" / "yafvs-v1.yaml"
             openapi.parent.mkdir(parents=True)
             openapi.write_text(
                 "openapi: 3.1.0\n"
@@ -5905,7 +5905,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_openapi_contract_requires_summary_and_generic_direct_exposure_parity(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            openapi = root / "api" / "openapi" / "turbovas-v1.yaml"
+            openapi = root / "api" / "openapi" / "yafvs-v1.yaml"
             openapi.parent.mkdir(parents=True)
             openapi.write_text(
                 "openapi: 3.1.0\n"
@@ -5982,7 +5982,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_openapi_contract_checks_write_control_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            openapi = root / "api" / "openapi" / "turbovas-v1.yaml"
+            openapi = root / "api" / "openapi" / "yafvs-v1.yaml"
             openapi.parent.mkdir(parents=True)
             openapi.write_text(
                 "openapi: 3.1.0\n"
@@ -6060,7 +6060,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_openapi_contract_checks_direct_write_uuid_path_parameters(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            openapi = root / "api" / "openapi" / "turbovas-v1.yaml"
+            openapi = root / "api" / "openapi" / "yafvs-v1.yaml"
             openapi.parent.mkdir(parents=True)
             openapi.write_text(
                 "openapi: 3.1.0\n"
@@ -6116,9 +6116,9 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_native_tooling_state_reports_openapi_collection_query_contract_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            openapi = root / "api" / "openapi" / "turbovas-v1.yaml"
-            collections = root / "services" / "turbovas-api" / "src" / "collections.rs"
-            main = root / "services" / "turbovas-api" / "src" / "main.rs"
+            openapi = root / "api" / "openapi" / "yafvs-v1.yaml"
+            collections = root / "services" / "yafvs-api" / "src" / "collections.rs"
+            main = root / "services" / "yafvs-api" / "src" / "main.rs"
             openapi.parent.mkdir(parents=True)
             collections.parent.mkdir(parents=True)
             collections.write_text(
@@ -6209,7 +6209,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_native_tooling_state_reports_invalid_openapi_error_schema_shape(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            openapi = root / "api" / "openapi" / "turbovas-v1.yaml"
+            openapi = root / "api" / "openapi" / "yafvs-v1.yaml"
             openapi.parent.mkdir(parents=True)
             openapi.write_text(
                 "openapi: 3.1.0\n"
@@ -6247,7 +6247,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_openapi_contract_checks_request_body_schema_shape(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            openapi = root / "api" / "openapi" / "turbovas-v1.yaml"
+            openapi = root / "api" / "openapi" / "yafvs-v1.yaml"
             openapi.parent.mkdir(parents=True)
             openapi.write_text(
                 "openapi: 3.1.0\n"
@@ -6409,7 +6409,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_openapi_contract_warns_on_auth_boundary_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
-            openapi = root / "api" / "openapi" / "turbovas-v1.yaml"
+            openapi = root / "api" / "openapi" / "yafvs-v1.yaml"
             openapi.parent.mkdir(parents=True)
             openapi.write_text(
                 "openapi: 3.1.0\n"
@@ -7083,7 +7083,7 @@ class YAFVSCtlTests(unittest.TestCase):
             raise AssertionError((method, path))
 
         with tempfile.TemporaryDirectory() as tmp:
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={yafvsctl.TURBOVAS_API_OPERATOR_UUID_ENV: ids["operator"]}), \
+            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={yafvsctl.YAFVS_API_OPERATOR_UUID_ENV: ids["operator"]}), \
                 unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
                 unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="a" * 64), \
                 unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
@@ -7148,7 +7148,7 @@ class YAFVSCtlTests(unittest.TestCase):
             raise AssertionError((method, path))
 
         with tempfile.TemporaryDirectory() as tmp:
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={yafvsctl.TURBOVAS_API_OPERATOR_UUID_ENV: ids["operator"]}), \
+            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={yafvsctl.YAFVS_API_OPERATOR_UUID_ENV: ids["operator"]}), \
                 unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
                 unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="a" * 64), \
                 unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
@@ -7242,7 +7242,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
         kwargs = {"host": "192.0.2.10"} if host_mode else {"target_id": ids["target"]}
         with tempfile.TemporaryDirectory() as tmp:
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={yafvsctl.TURBOVAS_API_OPERATOR_UUID_ENV: ids["operator"]}), \
+            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={yafvsctl.YAFVS_API_OPERATOR_UUID_ENV: ids["operator"]}), \
                 unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
                 unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="a" * 64), \
                 unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
@@ -9703,7 +9703,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 unittest.mock.patch.object(
                     yafvsctl,
                     "native_api_direct_runtime_env",
-                    return_value={yafvsctl.TURBOVAS_API_OPERATOR_UUID_ENV: operator_uuid},
+                    return_value={yafvsctl.YAFVS_API_OPERATOR_UUID_ENV: operator_uuid},
                 ),
                 unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "config", "ok")),
                 unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="a" * 64),
@@ -9764,7 +9764,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     unittest.mock.patch.object(
                         yafvsctl,
                         "native_api_direct_runtime_env",
-                        return_value={yafvsctl.TURBOVAS_API_OPERATOR_UUID_ENV: operator_uuid},
+                        return_value={yafvsctl.YAFVS_API_OPERATOR_UUID_ENV: operator_uuid},
                     ),
                     unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "config", "ok")),
                     unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="b" * 64),
@@ -10598,7 +10598,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_openapi_tracks_direct_feed_security_information_and_alert_tag_lookup_contracts(self):
         root = Path(__file__).resolve().parents[2]
-        openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
+        openapi = (root / "api" / "openapi" / "yafvs-v1.yaml").read_text(encoding="utf-8")
         contract = (root / "docs" / "API_CONTRACT.md").read_text(encoding="utf-8")
         boundary = (root / "docs" / "NATIVE_API_AUTH_BOUNDARY.md").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
@@ -10761,9 +10761,9 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_openapi_tracks_raw_report_contracts(self):
         root = Path(__file__).resolve().parents[2]
-        openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
-        route_source = (root / "services" / "turbovas-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
-        report_source = (root / "services" / "turbovas-api" / "src" / "report_payloads.rs").read_text(encoding="utf-8")
+        openapi = (root / "api" / "openapi" / "yafvs-v1.yaml").read_text(encoding="utf-8")
+        route_source = (root / "services" / "yafvs-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
+        report_source = (root / "services" / "yafvs-api" / "src" / "report_payloads.rs").read_text(encoding="utf-8")
         smoke = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
         self.assertIn("/reports:", openapi)
         self.assertIn("/reports/{report_id}:", openapi)
@@ -10785,9 +10785,9 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_openapi_tracks_scope_report_retention_preview(self):
         root = Path(__file__).resolve().parents[2]
-        openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
-        route_source = (root / "services" / "turbovas-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
-        handler_source = (root / "services" / "turbovas-api" / "src" / "scope_report_retention.rs").read_text(encoding="utf-8")
+        openapi = (root / "api" / "openapi" / "yafvs-v1.yaml").read_text(encoding="utf-8")
+        route_source = (root / "services" / "yafvs-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
+        handler_source = (root / "services" / "yafvs-api" / "src" / "scope_report_retention.rs").read_text(encoding="utf-8")
         smoke = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
         self.assertIn("/scopes/{scope_id}/reports/{scope_report_id}/retention-plan:", openapi)
         operations = {(item["method"], item["path"]): item for item in yafvsctl.openapi_contract_operations(root)}
@@ -10808,7 +10808,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_scope_report_retention_source_sql_preserves_source_identity_contract(self):
         root = Path(__file__).resolve().parents[2]
-        source = (root / "services" / "turbovas-api" / "src" / "scope_report_retention.rs").read_text(encoding="utf-8")
+        source = (root / "services" / "yafvs-api" / "src" / "scope_report_retention.rs").read_text(encoding="utf-8")
         start = "fn scope_report_retention_sources_sql() -> &'static str {"
         self.assertIn(start, source)
         body = source.split(start, 1)[1]
@@ -10831,8 +10831,8 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_openapi_tracks_scope_read_contracts(self):
         root = Path(__file__).resolve().parents[2]
-        openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
-        source = (root / "services" / "turbovas-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
+        openapi = (root / "api" / "openapi" / "yafvs-v1.yaml").read_text(encoding="utf-8")
+        source = (root / "services" / "yafvs-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
         smoke = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
         native_client = (root / "components" / "gsa" / "src" / "gmp" / "native-api" / "scopes.ts").read_text(encoding="utf-8")
         scope_list = (root / "components" / "gsa" / "src" / "web" / "pages" / "scopes" / "ScopeListPage.tsx").read_text(encoding="utf-8")
@@ -11026,7 +11026,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_openapi_tracks_scope_report_evidence_contracts(self):
         root = Path(__file__).resolve().parents[2]
-        openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
+        openapi = (root / "api" / "openapi" / "yafvs-v1.yaml").read_text(encoding="utf-8")
         plan = (root / "docs" / "NATIVE_API_PROOF_PLAN.md").read_text(encoding="utf-8")
         for suffix, schema in [
             ("ports", "PortCollection"),
@@ -11047,10 +11047,10 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_operating_system_asset_detail_contract_is_internal_and_parameterized(self):
         root = Path(__file__).resolve().parents[2]
-        openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
-        route_source = (root / "services" / "turbovas-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
-        api_source = (root / "services" / "turbovas-api" / "src" / "operating_systems.rs").read_text(encoding="utf-8")
-        query_source = (root / "services" / "turbovas-api" / "src" / "operating_system_query_sql.rs").read_text(encoding="utf-8")
+        openapi = (root / "api" / "openapi" / "yafvs-v1.yaml").read_text(encoding="utf-8")
+        route_source = (root / "services" / "yafvs-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
+        api_source = (root / "services" / "yafvs-api" / "src" / "operating_systems.rs").read_text(encoding="utf-8")
+        query_source = (root / "services" / "yafvs-api" / "src" / "operating_system_query_sql.rs").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
 
         self.assertIn('/api/v1/operating-systems/:os_id', route_source)
@@ -11067,10 +11067,10 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_host_asset_detail_contract_is_internal_bounded_and_safe_metadata_only(self):
         root = Path(__file__).resolve().parents[2]
-        openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
-        route_source = (root / "services" / "turbovas-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
-        api_source = (root / "services" / "turbovas-api" / "src" / "host_assets.rs").read_text(encoding="utf-8")
-        query_source = (root / "services" / "turbovas-api" / "src" / "host_asset_query_sql.rs").read_text(encoding="utf-8")
+        openapi = (root / "api" / "openapi" / "yafvs-v1.yaml").read_text(encoding="utf-8")
+        route_source = (root / "services" / "yafvs-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
+        api_source = (root / "services" / "yafvs-api" / "src" / "host_assets.rs").read_text(encoding="utf-8")
+        query_source = (root / "services" / "yafvs-api" / "src" / "host_asset_query_sql.rs").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
 
         self.assertIn('/api/v1/hosts/:host_id', route_source)
@@ -11097,11 +11097,11 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_tls_certificate_asset_detail_contract_is_internal_and_source_only(self):
         root = Path(__file__).resolve().parents[2]
-        openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
-        route_source = (root / "services" / "turbovas-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
-        tls_source = (root / "services" / "turbovas-api" / "src" / "tls_certificates.rs").read_text(encoding="utf-8")
-        tls_query_source = (root / "services" / "turbovas-api" / "src" / "tls_certificate_query_sql.rs").read_text(encoding="utf-8")
-        tls_payload_source = (root / "services" / "turbovas-api" / "src" / "tls_certificate_payloads.rs").read_text(encoding="utf-8")
+        openapi = (root / "api" / "openapi" / "yafvs-v1.yaml").read_text(encoding="utf-8")
+        route_source = (root / "services" / "yafvs-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
+        tls_source = (root / "services" / "yafvs-api" / "src" / "tls_certificates.rs").read_text(encoding="utf-8")
+        tls_query_source = (root / "services" / "yafvs-api" / "src" / "tls_certificate_query_sql.rs").read_text(encoding="utf-8")
+        tls_payload_source = (root / "services" / "yafvs-api" / "src" / "tls_certificate_payloads.rs").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
         tls_detail_source = tls_source.split("async fn tls_certificate_asset_detail", 1)[1].split("fn tls_certificate_sources", 1)[0]
 
@@ -11128,10 +11128,10 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_scanner_asset_detail_contract_is_internal_metadata_only(self):
         root = Path(__file__).resolve().parents[2]
-        openapi = (root / "api" / "openapi" / "turbovas-v1.yaml").read_text(encoding="utf-8")
-        route_source = (root / "services" / "turbovas-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
-        api_source = (root / "services" / "turbovas-api" / "src" / "scanner_assets.rs").read_text(encoding="utf-8")
-        query_source = (root / "services" / "turbovas-api" / "src" / "scanner_asset_query_sql.rs").read_text(encoding="utf-8")
+        openapi = (root / "api" / "openapi" / "yafvs-v1.yaml").read_text(encoding="utf-8")
+        route_source = (root / "services" / "yafvs-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
+        api_source = (root / "services" / "yafvs-api" / "src" / "scanner_assets.rs").read_text(encoding="utf-8")
+        query_source = (root / "services" / "yafvs-api" / "src" / "scanner_asset_query_sql.rs").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
         scanner_detail_source = api_source.split("async fn scanner_asset_detail", 1)[1].split("fn scanner_task_references_sql", 1)[0]
 
@@ -11815,7 +11815,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(yafvsctl.RUNTIME_SERVICES, ("postgres", "redis-openvas", "mosquitto"))
 
     def test_app_services_are_experimental_profile_services(self):
-        self.assertEqual(yafvsctl.APP_SERVICES, ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "turbovas-api"))
+        self.assertEqual(yafvsctl.APP_SERVICES, ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "yafvs-api"))
         self.assertEqual(yafvsctl.APP_EXECUTION_MOUNT_SERVICES, ("gvmd", "ospd-openvas", "notus-scanner", "gsad"))
 
     def make_app_execution_mount_fixture(self, tmp):
@@ -11948,15 +11948,15 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(yafvsctl.GSAD_HOST_ENV, "TURBOVAS_GSAD_HOST")
         self.assertEqual(yafvsctl.GSAD_HOSTS_ENV, "TURBOVAS_GSAD_HOSTS")
         self.assertEqual(yafvsctl.APP_PORTS["gsad"], "${TURBOVAS_GSAD_HOST:-127.0.0.1}:19392:9392")
-        self.assertNotIn("turbovas-api", yafvsctl.APP_PORTS)
-        self.assertEqual(yafvsctl.TURBOVAS_API_CONTAINER_PORT, "9080")
-        self.assertEqual(yafvsctl.TURBOVAS_API_DIRECT_CONTAINER_PORT, "9081")
-        self.assertEqual(yafvsctl.TURBOVAS_API_DIRECT_DEFAULT_HOST, "127.0.0.1")
-        self.assertEqual(yafvsctl.TURBOVAS_API_DIRECT_DEFAULT_PORT, "19080")
-        self.assertEqual(yafvsctl.TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH, 32)
-        self.assertEqual(yafvsctl.TURBOVAS_API_OPERATOR_UUID_ENV, "TURBOVAS_API_OPERATOR_UUID")
-        self.assertEqual(yafvsctl.TURBOVAS_API_OPERATOR_NAME_ENV, "TURBOVAS_API_OPERATOR_NAME")
-        self.assertEqual(yafvsctl.TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV, "TURBOVAS_API_DIRECT_WRITE_CONTROL")
+        self.assertNotIn("yafvs-api", yafvsctl.APP_PORTS)
+        self.assertEqual(yafvsctl.YAFVS_API_CONTAINER_PORT, "9080")
+        self.assertEqual(yafvsctl.YAFVS_API_DIRECT_CONTAINER_PORT, "9081")
+        self.assertEqual(yafvsctl.YAFVS_API_DIRECT_DEFAULT_HOST, "127.0.0.1")
+        self.assertEqual(yafvsctl.YAFVS_API_DIRECT_DEFAULT_PORT, "19080")
+        self.assertEqual(yafvsctl.YAFVS_API_BEARER_TOKEN_MIN_LENGTH, 32)
+        self.assertEqual(yafvsctl.YAFVS_API_OPERATOR_UUID_ENV, "YAFVS_API_OPERATOR_UUID")
+        self.assertEqual(yafvsctl.YAFVS_API_OPERATOR_NAME_ENV, "YAFVS_API_OPERATOR_NAME")
+        self.assertEqual(yafvsctl.YAFVS_API_DIRECT_WRITE_CONTROL_ENV, "YAFVS_API_DIRECT_WRITE_CONTROL")
         self.assertEqual(yafvsctl.DEV_ADMIN_USER, "admin")
         self.assertEqual(yafvsctl.DEV_ADMIN_PASSWORD, "admin")
 
@@ -12404,33 +12404,33 @@ class YAFVSCtlTests(unittest.TestCase):
             (root / "compose").mkdir()
             (root / "compose" / "dev.yaml").write_text("services: {}\n", encoding="utf-8")
             token_only_env = yafvsctl.runtime_env(root)
-            token_only_env[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = "secret-token"
+            token_only_env[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = "secret-token"
             self.assertFalse(yafvsctl.native_api_direct_requested(token_only_env))
             write_control_only_env = yafvsctl.runtime_env(root)
-            write_control_only_env[yafvsctl.TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV] = "1"
+            write_control_only_env[yafvsctl.YAFVS_API_DIRECT_WRITE_CONTROL_ENV] = "1"
             self.assertFalse(yafvsctl.native_api_direct_requested(write_control_only_env))
 
             direct_env = dict(token_only_env)
-            direct_env[yafvsctl.TURBOVAS_API_DIRECT_ENV] = "1"
+            direct_env[yafvsctl.YAFVS_API_DIRECT_ENV] = "1"
             command = yafvsctl.compose_command(root, "config", env=direct_env)
             override = yafvsctl.native_api_direct_ports_override_file(root)
             self.assertIn(str(override), command)
             text = override.read_text(encoding="utf-8")
             self.assertIn('"127.0.0.1:19080:9081"', text)
-            self.assertNotIn(yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV, text)
+            self.assertNotIn(yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV, text)
             self.assertNotIn("volumes:", text)
 
             file_env = yafvsctl.runtime_env(root)
-            file_env.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
-            file_env.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV, None)
-            file_env[yafvsctl.TURBOVAS_API_DIRECT_ENV] = "1"
+            file_env.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
+            file_env.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV, None)
+            file_env[yafvsctl.YAFVS_API_DIRECT_ENV] = "1"
             command = yafvsctl.compose_command(root, "config", env=file_env)
             self.assertIn(str(override), command)
             text = override.read_text(encoding="utf-8")
-            secret_path = yafvsctl.runtime_secret_path(root, yafvsctl.TURBOVAS_API_BEARER_TOKEN_SECRET)
-            self.assertIn(yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV, text)
+            secret_path = yafvsctl.runtime_secret_path(root, yafvsctl.YAFVS_API_BEARER_TOKEN_SECRET)
+            self.assertIn(yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV, text)
             self.assertIn(str(secret_path), text)
-            self.assertIn(yafvsctl.TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE, text)
+            self.assertIn(yafvsctl.YAFVS_API_BEARER_TOKEN_CONTAINER_FILE, text)
             self.assertIn("read_only: true", text)
             self.assertNotIn(secret_path.read_text(encoding="utf-8").strip(), text)
 
@@ -12438,25 +12438,25 @@ class YAFVSCtlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
-            original_token = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV)
-            original_token_file = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV)
+            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
+            original_token_file = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV)
             try:
-                yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
-                yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV, None)
+                yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
+                yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV, None)
                 env = yafvsctl.native_api_direct_runtime_env(root)
             finally:
                 if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = original_token
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
                 if original_token_file is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV] = original_token_file
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV] = original_token_file
 
-            self.assertNotIn(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, env)
-            self.assertEqual(env[yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV], yafvsctl.TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE)
-            self.assertTrue(env[yafvsctl.TURBOVAS_API_BROWSER_PROXY_SECRET_ENV])
+            self.assertNotIn(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, env)
+            self.assertEqual(env[yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV], yafvsctl.YAFVS_API_BEARER_TOKEN_CONTAINER_FILE)
+            self.assertTrue(env[yafvsctl.YAFVS_API_BROWSER_PROXY_SECRET_ENV])
             token = yafvsctl.native_api_direct_bearer_token(root, env)
             self.assertTrue(yafvsctl.direct_api_bearer_token_is_acceptable(token))
 
@@ -12466,56 +12466,56 @@ class YAFVSCtlTests(unittest.TestCase):
             root.mkdir()
             token_file = Path(tmp) / "custom-token"
             token_file.write_text("0123456789abcdef0123456789abcdef", encoding="utf-8")
-            original_token = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV)
-            original_token_file = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV)
+            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
+            original_token_file = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV)
             try:
-                yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
-                yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV] = str(token_file)
+                yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
+                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV] = str(token_file)
                 env = yafvsctl.native_api_direct_runtime_env(root)
             finally:
                 if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = original_token
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
                 if original_token_file is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV] = original_token_file
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV] = original_token_file
 
-            self.assertNotIn(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, env)
-            self.assertEqual(env[yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV], str(token_file))
+            self.assertNotIn(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, env)
+            self.assertEqual(env[yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV], str(token_file))
             self.assertEqual(yafvsctl.native_api_direct_bearer_token(root, env), "0123456789abcdef0123456789abcdef")
 
     def test_direct_native_api_config_shape_validation(self):
         valid = {
-            yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV: "127.0.0.1",
-            yafvsctl.TURBOVAS_API_DIRECT_PORT_ENV: "19080",
-            yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV: "0.0.0.0:9081",
-            yafvsctl.TURBOVAS_API_OPERATOR_UUID_ENV: "12345678-1234-1234-1234-123456789abc",
-            yafvsctl.TURBOVAS_API_OPERATOR_NAME_ENV: "admin",
+            yafvsctl.YAFVS_API_DIRECT_HOST_ENV: "127.0.0.1",
+            yafvsctl.YAFVS_API_DIRECT_PORT_ENV: "19080",
+            yafvsctl.YAFVS_API_DIRECT_BIND_ENV: "0.0.0.0:9081",
+            yafvsctl.YAFVS_API_OPERATOR_UUID_ENV: "12345678-1234-1234-1234-123456789abc",
+            yafvsctl.YAFVS_API_OPERATOR_NAME_ENV: "admin",
         }
         self.assertEqual(yafvsctl.native_api_direct_config_errors(valid), ())
         write_control = dict(valid)
-        write_control[yafvsctl.TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV] = "1"
+        write_control[yafvsctl.YAFVS_API_DIRECT_WRITE_CONTROL_ENV] = "1"
         self.assertEqual(yafvsctl.native_api_direct_config_errors(write_control), ())
         ipv6 = dict(valid)
-        ipv6[yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV] = "[::1]"
-        ipv6[yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV] = "[::]:9081"
+        ipv6[yafvsctl.YAFVS_API_DIRECT_HOST_ENV] = "[::1]"
+        ipv6[yafvsctl.YAFVS_API_DIRECT_BIND_ENV] = "[::]:9081"
         self.assertEqual(yafvsctl.native_api_direct_config_errors(ipv6), ())
 
         cases = [
-            (yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV, "http://127.0.0.1"),
-            (yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV, "127.0.0.1,100.80.139.13"),
-            (yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV, "::1"),
-            (yafvsctl.TURBOVAS_API_DIRECT_PORT_ENV, "0"),
-            (yafvsctl.TURBOVAS_API_DIRECT_PORT_ENV, "65536"),
-            (yafvsctl.TURBOVAS_API_DIRECT_PORT_ENV, "19 080"),
-            (yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV, "0.0.0.0"),
-            (yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV, "0.0.0.0:not-a-port"),
-            (yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV, "0.0.0.0:9999"),
-            (yafvsctl.TURBOVAS_API_OPERATOR_UUID_ENV, "not-a-uuid"),
-            (yafvsctl.TURBOVAS_API_OPERATOR_NAME_ENV, "admin\nroot"),
-            (yafvsctl.TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV, "maybe"),
+            (yafvsctl.YAFVS_API_DIRECT_HOST_ENV, "http://127.0.0.1"),
+            (yafvsctl.YAFVS_API_DIRECT_HOST_ENV, "127.0.0.1,100.80.139.13"),
+            (yafvsctl.YAFVS_API_DIRECT_HOST_ENV, "::1"),
+            (yafvsctl.YAFVS_API_DIRECT_PORT_ENV, "0"),
+            (yafvsctl.YAFVS_API_DIRECT_PORT_ENV, "65536"),
+            (yafvsctl.YAFVS_API_DIRECT_PORT_ENV, "19 080"),
+            (yafvsctl.YAFVS_API_DIRECT_BIND_ENV, "0.0.0.0"),
+            (yafvsctl.YAFVS_API_DIRECT_BIND_ENV, "0.0.0.0:not-a-port"),
+            (yafvsctl.YAFVS_API_DIRECT_BIND_ENV, "0.0.0.0:9999"),
+            (yafvsctl.YAFVS_API_OPERATOR_UUID_ENV, "not-a-uuid"),
+            (yafvsctl.YAFVS_API_OPERATOR_NAME_ENV, "admin\nroot"),
+            (yafvsctl.YAFVS_API_DIRECT_WRITE_CONTROL_ENV, "maybe"),
         ]
         for env_name, value in cases:
             with self.subTest(env_name=env_name, value=value):
@@ -12524,58 +12524,58 @@ class YAFVSCtlTests(unittest.TestCase):
                 self.assertTrue(yafvsctl.native_api_direct_config_errors(env))
 
         name_without_uuid = dict(valid)
-        name_without_uuid.pop(yafvsctl.TURBOVAS_API_OPERATOR_UUID_ENV)
+        name_without_uuid.pop(yafvsctl.YAFVS_API_OPERATOR_UUID_ENV)
         self.assertIn(
-            f"{yafvsctl.TURBOVAS_API_OPERATOR_NAME_ENV} requires {yafvsctl.TURBOVAS_API_OPERATOR_UUID_ENV}",
+            f"{yafvsctl.YAFVS_API_OPERATOR_NAME_ENV} requires {yafvsctl.YAFVS_API_OPERATOR_UUID_ENV}",
             yafvsctl.native_api_direct_config_errors(name_without_uuid),
         )
         write_without_uuid = dict(valid)
-        write_without_uuid.pop(yafvsctl.TURBOVAS_API_OPERATOR_UUID_ENV)
-        write_without_uuid.pop(yafvsctl.TURBOVAS_API_OPERATOR_NAME_ENV)
-        write_without_uuid[yafvsctl.TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV] = "true"
+        write_without_uuid.pop(yafvsctl.YAFVS_API_OPERATOR_UUID_ENV)
+        write_without_uuid.pop(yafvsctl.YAFVS_API_OPERATOR_NAME_ENV)
+        write_without_uuid[yafvsctl.YAFVS_API_DIRECT_WRITE_CONTROL_ENV] = "true"
         self.assertIn(
-            f"{yafvsctl.TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV} requires {yafvsctl.TURBOVAS_API_OPERATOR_UUID_ENV}",
+            f"{yafvsctl.YAFVS_API_DIRECT_WRITE_CONTROL_ENV} requires {yafvsctl.YAFVS_API_OPERATOR_UUID_ENV}",
             yafvsctl.native_api_direct_config_errors(write_without_uuid),
         )
 
         bad_bind = dict(valid)
-        bad_bind[yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV] = "0.0.0.0:9999"
+        bad_bind[yafvsctl.YAFVS_API_DIRECT_BIND_ENV] = "0.0.0.0:9999"
         self.assertIn(
-            f"{yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV} must use container port {yafvsctl.TURBOVAS_API_DIRECT_CONTAINER_PORT}",
+            f"{yafvsctl.YAFVS_API_DIRECT_BIND_ENV} must use container port {yafvsctl.YAFVS_API_DIRECT_CONTAINER_PORT}",
             yafvsctl.native_api_direct_config_errors(bad_bind)[0],
         )
 
     def test_native_api_request_direct_rejects_malformed_config_before_curl(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            original_host = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV)
-            original_token = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV)
+            original_host = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_DIRECT_HOST_ENV)
+            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
             try:
-                yafvsctl.os.environ[yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV] = "http://127.0.0.1"
-                yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = "0123456789abcdef0123456789abcdef"
+                yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_HOST_ENV] = "http://127.0.0.1"
+                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = "0123456789abcdef0123456789abcdef"
                 with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
                     result = yafvsctl.command_native_api_request(root, "/api/v1/reports?page_size=1", direct=True)
                     curl.assert_not_called()
             finally:
                 if original_host is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_DIRECT_HOST_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV] = original_host
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_HOST_ENV] = original_host
                 if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = original_token
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
         self.assertEqual(result["status"], "fail")
         finding_by_check = {item["check"]: item for item in result["findings"]}
         self.assertEqual(finding_by_check["native-api-request.direct-config-shape"]["status"], "fail")
 
     def test_direct_api_bearer_token_strength_contract(self):
-        self.assertEqual(yafvsctl.TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH, 1024)
+        self.assertEqual(yafvsctl.YAFVS_API_BEARER_TOKEN_MAX_LENGTH, 1024)
         self.assertTrue(yafvsctl.direct_api_bearer_token_is_acceptable("0123456789abcdef0123456789abcdef"))
-        self.assertTrue(yafvsctl.direct_api_bearer_token_is_acceptable("A" * yafvsctl.TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH))
+        self.assertTrue(yafvsctl.direct_api_bearer_token_is_acceptable("A" * yafvsctl.YAFVS_API_BEARER_TOKEN_MAX_LENGTH))
         for token in (
             "short-token",
-            "A" * (yafvsctl.TURBOVAS_API_BEARER_TOKEN_MAX_LENGTH + 1),
+            "A" * (yafvsctl.YAFVS_API_BEARER_TOKEN_MAX_LENGTH + 1),
             "0123456789abcdef 123456789abcdef",
             "0123456789abcdef0123456789abcde\n",
         ):
@@ -12588,7 +12588,7 @@ class YAFVSCtlTests(unittest.TestCase):
             root.mkdir()
             with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
                 result = yafvsctl.command_runtime_native_api_direct_bootstrap(root)
-            token = yafvsctl.runtime_secret_path(root, yafvsctl.TURBOVAS_API_BEARER_TOKEN_SECRET).read_text(encoding="utf-8").strip()
+            token = yafvsctl.runtime_secret_path(root, yafvsctl.YAFVS_API_BEARER_TOKEN_SECRET).read_text(encoding="utf-8").strip()
 
         rendered = json.dumps(result, sort_keys=True)
         checks = {item["check"]: item for item in result["findings"]}
@@ -12608,7 +12608,7 @@ class YAFVSCtlTests(unittest.TestCase):
             with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
                 full = yafvsctl.command_runtime_native_api_direct_bootstrap(root)
                 compact = yafvsctl.command_runtime_native_api_direct_bootstrap(root, status_only=True)
-            token = yafvsctl.runtime_secret_path(root, yafvsctl.TURBOVAS_API_BEARER_TOKEN_SECRET).read_text(encoding="utf-8").strip()
+            token = yafvsctl.runtime_secret_path(root, yafvsctl.YAFVS_API_BEARER_TOKEN_SECRET).read_text(encoding="utf-8").strip()
 
         self.assertEqual(compact["status"], "pass")
         self.assertEqual(compact["details"]["non_pass_count"], 0)
@@ -12624,7 +12624,7 @@ class YAFVSCtlTests(unittest.TestCase):
             root.mkdir()
             token_path = yafvsctl.write_runtime_secret(
                 root,
-                yafvsctl.TURBOVAS_API_BEARER_TOKEN_SECRET,
+                yafvsctl.YAFVS_API_BEARER_TOKEN_SECRET,
                 "0123456789abcdef0123456789abcdef",
             )
             token_path.chmod(0o644)
@@ -12647,7 +12647,7 @@ class YAFVSCtlTests(unittest.TestCase):
             root.mkdir()
             token_path = yafvsctl.write_runtime_secret(
                 root,
-                yafvsctl.TURBOVAS_API_BEARER_TOKEN_SECRET,
+                yafvsctl.YAFVS_API_BEARER_TOKEN_SECRET,
                 "0123456789abcdef0123456789abcdef",
             )
             token_path.chmod(0o644)
@@ -12668,22 +12668,22 @@ class YAFVSCtlTests(unittest.TestCase):
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
             token = "0123456789abcdef0123456789abcdef"
-            original_host = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV)
-            original_token = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV)
+            original_host = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_DIRECT_HOST_ENV)
+            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
             try:
-                yafvsctl.os.environ[yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV] = "192.0.2.10"
-                yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = token
+                yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_HOST_ENV] = "192.0.2.10"
+                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = token
                 with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
                     result = yafvsctl.command_runtime_native_api_direct_bootstrap(root)
             finally:
                 if original_host is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_DIRECT_HOST_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV] = original_host
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_HOST_ENV] = original_host
                 if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = original_token
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
 
         rendered = json.dumps(result, sort_keys=True)
         checks = {item["check"]: item for item in result["findings"]}
@@ -12697,22 +12697,22 @@ class YAFVSCtlTests(unittest.TestCase):
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
             token = "0123456789abcdef0123456789abcdef"
-            original_bind = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV)
-            original_token = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV)
+            original_bind = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_DIRECT_BIND_ENV)
+            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
             try:
-                yafvsctl.os.environ[yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV] = "0.0.0.0:9999"
-                yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = token
+                yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_BIND_ENV] = "0.0.0.0:9999"
+                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = token
                 with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
                     result = yafvsctl.command_runtime_native_api_direct_bootstrap(root)
             finally:
                 if original_bind is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_DIRECT_BIND_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV] = original_bind
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_BIND_ENV] = original_bind
                 if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = original_token
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
 
         rendered = json.dumps(result, sort_keys=True)
         checks = {item["check"]: item for item in result["findings"]}
@@ -12729,8 +12729,8 @@ class YAFVSCtlTests(unittest.TestCase):
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
             token = "0123456789abcdef0123456789abcdef"
-            original_bind = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV)
-            original_token = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV)
+            original_bind = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_DIRECT_BIND_ENV)
+            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
             commands: list[tuple[str, ...]] = []
 
             def fake_run_command(command, *_args, **_kwargs):
@@ -12738,19 +12738,19 @@ class YAFVSCtlTests(unittest.TestCase):
                 return yafvsctl.subprocess.CompletedProcess(command, 0, "", "")
 
             try:
-                yafvsctl.os.environ[yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV] = "0.0.0.0:9999"
-                yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = token
+                yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_BIND_ENV] = "0.0.0.0:9999"
+                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = token
                 with unittest.mock.patch.object(yafvsctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(yafvsctl, "current_gsad_published_hosts", return_value=()), unittest.mock.patch.object(yafvsctl, "active_feed_generation_finding", return_value=yafvsctl.finding("pass", "feed-generation.current", "Mock attested generation.")), unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
                     result = yafvsctl.command_runtime_native_api_direct_smoke(root)
             finally:
                 if original_bind is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_DIRECT_BIND_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV] = original_bind
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_BIND_ENV] = original_bind
                 if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = original_token
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
 
         checks = {item["check"]: item for item in result["findings"]}
         self.assertEqual(result["status"], "fail")
@@ -12766,8 +12766,8 @@ class YAFVSCtlTests(unittest.TestCase):
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
             token = "0123456789abcdef0123456789abcdef"
-            original_host = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV)
-            original_token = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV)
+            original_host = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_DIRECT_HOST_ENV)
+            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
             commands: list[tuple[str, ...]] = []
 
             def fake_run_command(command, *_args, **_kwargs):
@@ -12775,19 +12775,19 @@ class YAFVSCtlTests(unittest.TestCase):
                 return yafvsctl.subprocess.CompletedProcess(command, 0, "", "")
 
             try:
-                yafvsctl.os.environ[yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV] = "192.0.2.10"
-                yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = token
+                yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_HOST_ENV] = "192.0.2.10"
+                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = token
                 with unittest.mock.patch.object(yafvsctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(yafvsctl, "current_gsad_published_hosts", return_value=()), unittest.mock.patch.object(yafvsctl, "active_feed_generation_finding", return_value=yafvsctl.finding("pass", "feed-generation.current", "Mock attested generation.")), unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
                     result = yafvsctl.command_runtime_native_api_direct_smoke(root)
             finally:
                 if original_host is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_DIRECT_HOST_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV] = original_host
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_HOST_ENV] = original_host
                 if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = original_token
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
 
         checks = {item["check"]: item for item in result["findings"]}
         self.assertEqual(result["status"], "fail")
@@ -13043,7 +13043,7 @@ class YAFVSCtlTests(unittest.TestCase):
             task_alert_uuid = "ffffffff-ffff-ffff-ffff-ffffffffffff"
             task_tag_uuid = "abababab-abab-4bab-8bab-abababababab"
             task_updated_comment = "TurboVAS direct write smoke updated task metadata"
-            original_token = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV)
+            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
             commands: list[tuple[str, ...]] = []
             envs: list[dict[str, str]] = []
             probes: list[tuple[str, str]] = []
@@ -13504,7 +13504,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": tag_uuid, "name": payload["name"], "resource_type": "cpe", "resource_count": 1, "value": "initial", "active": True}) + "\n201", "")
                 if method == "POST" and path == "/api/v1/filters":
                     request_env = _kwargs.get("env") if isinstance(_kwargs.get("env"), dict) else {}
-                    if request_env.get(yafvsctl.TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV) != "1":
+                    if request_env.get(yafvsctl.YAFVS_API_DIRECT_WRITE_CONTROL_ENV) != "1":
                         return yafvsctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"method_not_allowed"}}\n405', "")
                     payload = json.loads(body)
                     self.assertEqual(payload["filter_type"], "task")
@@ -13806,7 +13806,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 return yafvsctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"not_found"}}\n404', "")
 
             try:
-                yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = token
+                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = token
                 receipt = {
                     "image_ids": {
                         service: "sha256:" + f"{index + 1:x}" * 64
@@ -13817,9 +13817,9 @@ class YAFVSCtlTests(unittest.TestCase):
                     result = yafvsctl.command_runtime_native_api_direct_write_smoke(root, status_only=True)
             finally:
                 if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = original_token
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
 
         checks = result["details"]["important_checks"]
         self.assertEqual(result["status"], "pass", json.dumps(result, sort_keys=True))
@@ -14033,8 +14033,8 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertTrue(any(method == "GET" for method, _path in probes))
         rendered = json.dumps(result, sort_keys=True)
         self.assertNotIn(token, rendered)
-        self.assertTrue(any(env.get(yafvsctl.TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV) == "1" for env in envs))
-        self.assertTrue(any(env.get(yafvsctl.TURBOVAS_API_DIRECT_WRITE_CONTROL_ENV) is None for env in envs))
+        self.assertTrue(any(env.get(yafvsctl.YAFVS_API_DIRECT_WRITE_CONTROL_ENV) == "1" for env in envs))
+        self.assertTrue(any(env.get(yafvsctl.YAFVS_API_DIRECT_WRITE_CONTROL_ENV) is None for env in envs))
 
     def test_direct_write_smoke_keeps_bounded_override_lifecycle_and_cleanup(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
@@ -14082,8 +14082,8 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_direct_native_api_posture_fails_broad_config_without_auth_boundary(self):
         env = {
-            yafvsctl.TURBOVAS_API_DIRECT_ENV: "1",
-            yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV: "0.0.0.0",
+            yafvsctl.YAFVS_API_DIRECT_ENV: "1",
+            yafvsctl.YAFVS_API_DIRECT_HOST_ENV: "0.0.0.0",
         }
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
@@ -14098,8 +14098,8 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_direct_native_api_posture_fails_weak_configured_token_without_leaking_value(self):
         env = {
-            yafvsctl.TURBOVAS_API_DIRECT_ENV: "1",
-            yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV: "short-token",
+            yafvsctl.YAFVS_API_DIRECT_ENV: "1",
+            yafvsctl.YAFVS_API_BEARER_TOKEN_ENV: "short-token",
         }
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
@@ -14117,9 +14117,9 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_direct_native_api_posture_fails_configured_non_loopback_even_with_auth_boundary(self):
         env = {
-            yafvsctl.TURBOVAS_API_DIRECT_ENV: "1",
-            yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV: "192.0.2.10",
-            yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV: "A" * yafvsctl.TURBOVAS_API_BEARER_TOKEN_MIN_LENGTH,
+            yafvsctl.YAFVS_API_DIRECT_ENV: "1",
+            yafvsctl.YAFVS_API_DIRECT_HOST_ENV: "192.0.2.10",
+            yafvsctl.YAFVS_API_BEARER_TOKEN_ENV: "A" * yafvsctl.YAFVS_API_BEARER_TOKEN_MIN_LENGTH,
         }
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
@@ -14134,11 +14134,11 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertTrue(by_check["production.native-api-direct.auth-boundary"]["details"]["environment_token_used"])
 
     def test_direct_native_api_posture_does_not_treat_secret_file_as_live_auth_boundary(self):
-        env = {yafvsctl.TURBOVAS_API_DIRECT_ENV: "1"}
+        env = {yafvsctl.YAFVS_API_DIRECT_ENV: "1"}
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
-            secret_path = yafvsctl.runtime_secret_path(root, yafvsctl.TURBOVAS_API_BEARER_TOKEN_SECRET)
+            secret_path = yafvsctl.runtime_secret_path(root, yafvsctl.YAFVS_API_BEARER_TOKEN_SECRET)
             secret_path.parent.mkdir(parents=True)
             secret_path.write_text("stored-secret\n", encoding="utf-8")
             with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_has_key", return_value=False), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
@@ -14151,15 +14151,15 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_direct_native_api_posture_fails_broad_runtime_secret_permissions(self):
         env = {
-            yafvsctl.TURBOVAS_API_DIRECT_ENV: "1",
-            yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV: yafvsctl.TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE,
+            yafvsctl.YAFVS_API_DIRECT_ENV: "1",
+            yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV: yafvsctl.YAFVS_API_BEARER_TOKEN_CONTAINER_FILE,
         }
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
             secret_path = yafvsctl.write_runtime_secret(
                 root,
-                yafvsctl.TURBOVAS_API_BEARER_TOKEN_SECRET,
+                yafvsctl.YAFVS_API_BEARER_TOKEN_SECRET,
                 "0123456789abcdef0123456789abcdef",
             )
             secret_path.chmod(0o664)
@@ -14172,14 +14172,14 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertFalse(auth["details"]["runtime_secret_permission_ok"])
 
     def test_direct_native_api_posture_fails_broad_configured_token_file_permissions(self):
-        env = {yafvsctl.TURBOVAS_API_DIRECT_ENV: "1"}
+        env = {yafvsctl.YAFVS_API_DIRECT_ENV: "1"}
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
             token_file = Path(tmp) / "custom-token"
             token_file.write_text("0123456789abcdef0123456789abcdef", encoding="utf-8")
             token_file.chmod(0o664)
-            env[yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV] = str(token_file)
+            env[yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV] = str(token_file)
             with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
                 findings = yafvsctl.direct_native_api_posture_findings(root, env)
 
@@ -14192,14 +14192,14 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertFalse(auth["details"]["runtime_secret_permission_ok"])
 
     def test_direct_native_api_posture_accepts_secure_configured_token_file_permissions(self):
-        env = {yafvsctl.TURBOVAS_API_DIRECT_ENV: "1"}
+        env = {yafvsctl.YAFVS_API_DIRECT_ENV: "1"}
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
             token_file = Path(tmp) / "custom-token"
             token_file.write_text("0123456789abcdef0123456789abcdef", encoding="utf-8")
             token_file.chmod(0o600)
-            env[yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV] = str(token_file)
+            env[yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV] = str(token_file)
             with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
                 findings = yafvsctl.direct_native_api_posture_findings(root, env)
 
@@ -14216,12 +14216,12 @@ class YAFVSCtlTests(unittest.TestCase):
             root.mkdir()
             yafvsctl.write_runtime_secret(
                 root,
-                yafvsctl.TURBOVAS_API_BEARER_TOKEN_SECRET,
+                yafvsctl.YAFVS_API_BEARER_TOKEN_SECRET,
                 "0123456789abcdef0123456789abcdef",
             )
             def running_env_value(_root, _service, key):
-                if key == yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV:
-                    return yafvsctl.TURBOVAS_API_BEARER_TOKEN_CONTAINER_FILE
+                if key == yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV:
+                    return yafvsctl.YAFVS_API_BEARER_TOKEN_CONTAINER_FILE
                 return None
 
             with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=running), unittest.mock.patch.object(yafvsctl, "running_service_env_value", side_effect=running_env_value):
@@ -14240,7 +14240,7 @@ class YAFVSCtlTests(unittest.TestCase):
             root.mkdir()
 
             def running_env_value(_root, _service, key):
-                if key == yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV:
+                if key == yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV:
                     return "/container-only/custom-token"
                 return None
 
@@ -14254,8 +14254,8 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_direct_native_api_posture_never_reports_bearer_token_value(self):
         env = {
-            yafvsctl.TURBOVAS_API_DIRECT_ENV: "1",
-            yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV: "super-secret-token-0123456789abcdef",
+            yafvsctl.YAFVS_API_DIRECT_ENV: "1",
+            yafvsctl.YAFVS_API_BEARER_TOKEN_ENV: "super-secret-token-0123456789abcdef",
         }
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
@@ -14275,16 +14275,16 @@ class YAFVSCtlTests(unittest.TestCase):
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
             token = "0123456789abcdef0123456789abcdef"
-            original_token = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV)
+            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
             try:
-                yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = token
+                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = token
                 with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
                     result = yafvsctl.command_runtime_native_api_direct_bootstrap(root)
             finally:
                 if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = original_token
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
 
         rendered = json.dumps(result, sort_keys=True)
         checks = {item["check"]: item for item in result["findings"]}
@@ -14302,22 +14302,22 @@ class YAFVSCtlTests(unittest.TestCase):
             token_file = Path(tmp) / "custom-token"
             token_file.write_text(token, encoding="utf-8")
             token_file.chmod(0o664)
-            original_token = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV)
-            original_token_file = yafvsctl.os.environ.get(yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV)
+            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
+            original_token_file = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV)
             try:
-                yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
-                yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV] = str(token_file)
+                yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
+                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV] = str(token_file)
                 with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
                     result = yafvsctl.command_runtime_native_api_direct_bootstrap(root)
             finally:
                 if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV] = original_token
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
                 if original_token_file is None:
-                    yafvsctl.os.environ.pop(yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV, None)
+                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV, None)
                 else:
-                    yafvsctl.os.environ[yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV] = original_token_file
+                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV] = original_token_file
 
         rendered = json.dumps(result, sort_keys=True)
         checks = {item["check"]: item for item in result["findings"]}
@@ -14330,8 +14330,8 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_direct_native_api_display_command_redacts_token(self):
         env = {
-            yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV: "127.0.0.1",
-            yafvsctl.TURBOVAS_API_DIRECT_PORT_ENV: "19080",
+            yafvsctl.YAFVS_API_DIRECT_HOST_ENV: "127.0.0.1",
+            yafvsctl.YAFVS_API_DIRECT_PORT_ENV: "19080",
         }
         command = yafvsctl.direct_native_api_display_command("/api/v1/reports?page_size=1", token="secret-token", env=env)
         rendered = " ".join(command)
@@ -14340,8 +14340,8 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_direct_native_api_display_command_includes_non_get_method(self):
         env = {
-            yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV: "127.0.0.1",
-            yafvsctl.TURBOVAS_API_DIRECT_PORT_ENV: "19080",
+            yafvsctl.YAFVS_API_DIRECT_HOST_ENV: "127.0.0.1",
+            yafvsctl.YAFVS_API_DIRECT_PORT_ENV: "19080",
         }
         command = yafvsctl.direct_native_api_display_command(
             "/api/v1/reports?page_size=1",
@@ -14355,8 +14355,8 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_direct_native_api_display_command_includes_request_id(self):
         env = {
-            yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV: "127.0.0.1",
-            yafvsctl.TURBOVAS_API_DIRECT_PORT_ENV: "19080",
+            yafvsctl.YAFVS_API_DIRECT_HOST_ENV: "127.0.0.1",
+            yafvsctl.YAFVS_API_DIRECT_PORT_ENV: "19080",
         }
         command = yafvsctl.direct_native_api_display_command(
             "/api/v1/reports?page_size=1",
@@ -14370,8 +14370,8 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_direct_native_api_display_command_redacts_body(self):
         env = {
-            yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV: "127.0.0.1",
-            yafvsctl.TURBOVAS_API_DIRECT_PORT_ENV: "19080",
+            yafvsctl.YAFVS_API_DIRECT_HOST_ENV: "127.0.0.1",
+            yafvsctl.YAFVS_API_DIRECT_PORT_ENV: "19080",
         }
         command = yafvsctl.direct_native_api_display_command(
             "/api/v1/reports?page_size=1",
@@ -14387,8 +14387,8 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_direct_native_api_curl_sends_body_over_stdin_not_process_arguments(self):
         env = {
-            yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV: "127.0.0.1",
-            yafvsctl.TURBOVAS_API_DIRECT_PORT_ENV: "19080",
+            yafvsctl.YAFVS_API_DIRECT_HOST_ENV: "127.0.0.1",
+            yafvsctl.YAFVS_API_DIRECT_PORT_ENV: "19080",
         }
         captured = {}
 
@@ -15162,7 +15162,7 @@ class YAFVSCtlTests(unittest.TestCase):
             env = yafvsctl.runtime_app_env(root)
 
             self.assertNotEqual(
-                env[yafvsctl.TURBOVAS_API_BROWSER_PROXY_SECRET_ENV],
+                env[yafvsctl.YAFVS_API_BROWSER_PROXY_SECRET_ENV],
                 env[yafvsctl.TURBOVAS_GVMD_CONTROL_SECRET_ENV],
             )
             for env_name, secret_name in yafvsctl.TURBOVAS_MQTT_RUNTIME_SECRETS:
@@ -15641,18 +15641,18 @@ class YAFVSCtlTests(unittest.TestCase):
         mosquitto = compose.split("  mosquitto:\n", 1)[1].split("\n  dev-shell:", 1)[0]
 
         self.assertIn("TURBOVAS_GVMD_CONTROL_SECRET: ${TURBOVAS_GVMD_CONTROL_SECRET:-}", compose)
-        self.assertNotIn("TURBOVAS_GVMD_CONTROL_SECRET: ${TURBOVAS_API_BROWSER_PROXY_SECRET:-}", compose)
+        self.assertNotIn("TURBOVAS_GVMD_CONTROL_SECRET: ${YAFVS_API_BROWSER_PROXY_SECRET:-}", compose)
         gvmd = compose.split("  gvmd:\n", 1)[1].split("\n  ospd-openvas:", 1)[0]
         self.assertIn("/run/ospd", gvmd)
         self.assertNotIn("source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}\n        target: /runtime", gvmd)
-        gsad = compose.split("  gsad:\n", 1)[1].split("\n  turbovas-api:", 1)[0]
-        turbovas_api = compose.split("  turbovas-api:\n", 1)[1]
+        gsad = compose.split("  gsad:\n", 1)[1].split("\n  yafvs-api:", 1)[0]
+        yafvs_api = compose.split("  yafvs-api:\n", 1)[1]
         app_services = {
             "gvmd": compose.split("  gvmd:\n", 1)[1].split("\n  ospd-openvas:", 1)[0],
             "ospd-openvas": compose.split("  ospd-openvas:\n", 1)[1].split("\n  notus-scanner:", 1)[0],
             "notus-scanner": compose.split("  notus-scanner:\n", 1)[1].split("\n  gsad:", 1)[0],
             "gsad": gsad,
-            "turbovas-api": turbovas_api,
+            "yafvs-api": yafvs_api,
         }
         broad_runtime_mount = "source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}\n        target: /runtime"
         for service, block in app_services.items():
@@ -15702,8 +15702,8 @@ class YAFVSCtlTests(unittest.TestCase):
             notus,
         )
         self.assertIn("/run/gvmd-gmp", gsad)
-        self.assertIn("/run/gvmd-control", turbovas_api)
-        self.assertNotIn("/run/gvmd-gmp", turbovas_api)
+        self.assertIn("/run/gvmd-control", yafvs_api)
+        self.assertNotIn("/run/gvmd-gmp", yafvs_api)
         self.assertIn("/run/ospd", app_services["ospd-openvas"])
         self.assertIn("/run/redis-openvas", app_services["ospd-openvas"])
         self.assertIn("/feed-store/current", app_services["ospd-openvas"])
@@ -15806,12 +15806,12 @@ class YAFVSCtlTests(unittest.TestCase):
         direct_override_path = ""
         direct_override_text = ""
         env_names = (
-            yafvsctl.TURBOVAS_API_DIRECT_ENV,
-            yafvsctl.TURBOVAS_API_DIRECT_HOST_ENV,
-            yafvsctl.TURBOVAS_API_DIRECT_PORT_ENV,
-            yafvsctl.TURBOVAS_API_DIRECT_BIND_ENV,
-            yafvsctl.TURBOVAS_API_BEARER_TOKEN_ENV,
-            yafvsctl.TURBOVAS_API_BEARER_TOKEN_FILE_ENV,
+            yafvsctl.YAFVS_API_DIRECT_ENV,
+            yafvsctl.YAFVS_API_DIRECT_HOST_ENV,
+            yafvsctl.YAFVS_API_DIRECT_PORT_ENV,
+            yafvsctl.YAFVS_API_DIRECT_BIND_ENV,
+            yafvsctl.YAFVS_API_BEARER_TOKEN_ENV,
+            yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV,
         )
         original_env = {name: yafvsctl.os.environ.get(name) for name in env_names}
         try:
@@ -15837,7 +15837,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 self.assertFalse(any(direct_override_path in command for command in calls))
 
                 calls.clear()
-                yafvsctl.os.environ[yafvsctl.TURBOVAS_API_DIRECT_ENV] = "1"
+                yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_ENV] = "1"
                 direct_result = yafvsctl.command_runtime_native_api_rebuild(root)
                 direct_override_text = direct_override.read_text(encoding="utf-8")
         finally:
@@ -15854,8 +15854,8 @@ class YAFVSCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass")
         config_commands = [command for command in calls if "config" in command]
-        build_commands = [command for command in calls if "build" in command and "turbovas-api" in command]
-        up_commands = [command for command in calls if "up" in command and "turbovas-api" in command]
+        build_commands = [command for command in calls if "build" in command and "yafvs-api" in command]
+        up_commands = [command for command in calls if "up" in command and "yafvs-api" in command]
         self.assertEqual(direct_result["status"], "pass")
         self.assertTrue(config_commands)
         self.assertTrue(build_commands)

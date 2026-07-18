@@ -10,11 +10,11 @@ scanner-administration surface.
 
 ## Current Boundary
 
-`turbovas-api` now has two development listeners:
+`yafvs-api` now has two development listeners:
 
 ```text
-browser -> gsad HTTPS/session -> gsad native API proxy -> turbovas-api internal listener -> PostgreSQL
-script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
+browser -> gsad HTTPS/session -> gsad native API proxy -> yafvs-api internal listener -> PostgreSQL
+script/curl -> opt-in direct bearer listener -> yafvs-api -> PostgreSQL
 ```
 
 - The internal listener remains the default app-network path for `gsad` and
@@ -22,7 +22,7 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
 - Direct host exposure is opt-in. The development helper publishes
   `127.0.0.1:19080` only when direct mode is requested. By default it creates
   an ignored runtime secret and passes it to the service as a read-only token
-  file through `TURBOVAS_API_BEARER_TOKEN_FILE`; `TURBOVAS_API_BEARER_TOKEN`
+  file through `YAFVS_API_BEARER_TOKEN_FILE`; `YAFVS_API_BEARER_TOKEN`
   remains an explicit environment-token override/fallback for development smoke
   only and fails production-posture/bootstrap checks when direct exposure is
   enabled.
@@ -30,14 +30,14 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   service and helper: at least 32 printable non-whitespace ASCII characters.
   Generated runtime secrets use this stronger shape by default; weak configured
   environment tokens are rejected before use.
-- Optional direct operator identity is carried by `TURBOVAS_API_OPERATOR_UUID`
-  and `TURBOVAS_API_OPERATOR_NAME`. The helper validates shape locally, and the
+- Optional direct operator identity is carried by `YAFVS_API_OPERATOR_UUID`
+  and `YAFVS_API_OPERATOR_NAME`. The helper validates shape locally, and the
   service verifies configured operator UUIDs against `users` before exposing the
   direct listener. This identity is required by direct write-control, but it
   does not authorize write routes by itself.
-- `TURBOVAS_API_DIRECT_WRITE_CONTROL` is the direct write-control enablement
+- `YAFVS_API_DIRECT_WRITE_CONTROL` is the direct write-control enablement
   flag. It accepts only strict boolean values, requires
-  `TURBOVAS_API_OPERATOR_UUID` when truthy, and currently exposes only the
+  `YAFVS_API_OPERATOR_UUID` when truthy, and currently exposes only the
   approved direct write-control route contracts for scopes, tags, filters, port
   lists, scan configs, schedules, targets, selected alert
   metadata, credential name/comment metadata, scanner metadata, task metadata,
@@ -48,7 +48,7 @@ script/curl -> opt-in direct bearer listener -> turbovas-api -> PostgreSQL
   errors for missing or wrong tokens.
 - The direct listener rejects valid-token non-GET `/api/v1` requests with JSON
   `405 method_not_allowed` unless the method/path pair is deliberately
-  registered as direct write-control and `TURBOVAS_API_DIRECT_WRITE_CONTROL` is
+  registered as direct write-control and `YAFVS_API_DIRECT_WRITE_CONTROL` is
   enabled with a verified operator identity. The current direct write surface is
   limited to explicitly approved metadata/control routes and is checked by
   OpenAPI metadata plus Rust route-contract tests. The authenticated same-origin
@@ -156,19 +156,19 @@ tools/yafvsctl native-api-request --direct --json --request-id 'operator-check-1
 secret if needed, verifies local direct host/port/bind shape, refuses wildcard or
 non-loopback host publication, checks that the runtime token secret is not
 group/world accessible when that file is used, and reports only token metadata.
-If direct exposure would use `TURBOVAS_API_BEARER_TOKEN` from the environment,
+If direct exposure would use `YAFVS_API_BEARER_TOKEN` from the environment,
 the bootstrap posture check fails and points operators back to the ignored
 runtime secret file boundary.
 It also requires helper-managed direct binds to target the fixed service
 container port `9081`, matching the Compose publication boundary. It does not
 start or expose the listener.
-When `TURBOVAS_API_OPERATOR_UUID` is present, malformed UUID or operator-name
+When `YAFVS_API_OPERATOR_UUID` is present, malformed UUID or operator-name
 values fail helper validation before the runtime is refreshed; unknown user UUIDs
 fail service startup rather than falling back to an arbitrary owner.
 
 `runtime-native-api-direct-token --rotate` rotates only the ignored development
 runtime bearer-token secret and never prints the token value. Restart
-`turbovas-api` or rerun `runtime-native-api-direct-smoke` before expecting a
+`yafvs-api` or rerun `runtime-native-api-direct-smoke` before expecting a
 running direct listener to accept the rotated token. The helper reports a
 machine-readable warning when it detects a currently published direct listener
 that may still be using the old file-backed token.
@@ -218,7 +218,7 @@ reported as local configuration failures before direct request execution.
 
 ## Remaining Hardening Questions
 
-- whether the internal `gsad` -> `turbovas-api` hop should gain mTLS, a private
+- whether the internal `gsad` -> `yafvs-api` hop should gain mTLS, a private
   proxy token, or a Unix socket;
 - how operator identity should be forwarded for audit once direct access moves
   beyond a single development bearer token;

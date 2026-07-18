@@ -264,6 +264,30 @@ mod tests {
     }
 
     #[test]
+    fn parses_and_names_direct_token_inspection_and_rotation() {
+        assert_eq!(
+            parse_cli(["runtime-native-api-direct-token"]).unwrap(),
+            Cli {
+                command: CliCommand::RuntimeNativeApiDirectToken { rotate: false },
+                json: false,
+                status_only: false,
+            }
+        );
+        assert_eq!(
+            parse_cli(["runtime-native-api-direct-token", "--rotate", "--json"]).unwrap(),
+            Cli {
+                command: CliCommand::RuntimeNativeApiDirectToken { rotate: true },
+                json: true,
+                status_only: false,
+            }
+        );
+        assert_eq!(
+            CliCommand::RuntimeNativeApiDirectToken { rotate: true }.name(),
+            "runtime-native-api-direct-token"
+        );
+    }
+
+    #[test]
     fn parses_feed_generation_runtime_guard() {
         assert_eq!(
             parse_cli(["feed-generation-runtime-guard", "--selector-only"]).unwrap(),

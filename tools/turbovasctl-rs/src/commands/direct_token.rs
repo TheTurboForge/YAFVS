@@ -242,11 +242,309 @@ fn current_published_bindings(repo_root: &Path, runner: &dyn CommandRunner) -> V
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::process::ProcessOutput;
+    use std::cell::RefCell;
+    use std::ffi::OsString;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+
+    static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+
+    struct Fixture {
+        root: PathBuf,
+        repo: PathBuf,
+    }
+
+    impl Fixture {
+        fn new() -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "turbovasctl-direct-token-{}-{}",
+                std::process::id(),
+                SEQUENCE.fetch_add(1, Ordering::Relaxed)
+            ));
+            let repo = root.join("TurboVAS");
+            fs::create_dir_all(&repo).unwrap();
+            Self { root, repo }
+        }
+
+        fn token_path(&self) -> PathBuf {
+            runtime_secret_path(&self.repo, SECRET_NAME)
+        }
+
+        fn write_token(&self, text: &str, mode: u32) {
+            let path = self.token_path();
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, text).unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct Invocation {
+        program: String,
+        args: Vec<String>,
+        cwd: Option<PathBuf>,
+        environment_present: bool,
+        timeout: Option<Duration>,
+    }
+
+    #[derive(Default)]
+    struct FakeRunner {
+        calls: RefCell<Vec<Invocation>>,
+        compose: Option<(bool, String)>,
+        inspect: Option<(bool, String)>,
+    }
+
+    impl FakeRunner {
+        fn listener(json: &str) -> Self {
+            Self {
+                compose: Some((true, "container-123\n".into())),
+                inspect: Some((true, json.into())),
+                ..Self::default()
+            }
+        }
+    }
+
+    impl CommandRunner for FakeRunner {
+        fn run(&self, _program: &str, _args: &[&str]) -> Option<ProcessOutput> {
+            Some(ProcessOutput {
+                success: true,
+                exit_code: Some(0),
+                stdout: "test-head\n".into(),
+                stderr: String::new(),
+            })
+        }
+
+        fn run_with(
+            &self,
+            program: &str,
+            args: &[&str],
+            cwd: Option<&Path>,
+            environment: Option<&std::collections::BTreeMap<OsString, OsString>>,
+            timeout: Option<Duration>,
+        ) -> Option<ProcessOutput> {
+            self.calls.borrow_mut().push(Invocation {
+                program: program.into(),
+                args: args.iter().map(|arg| (*arg).into()).collect(),
+                cwd: cwd.map(Path::to_path_buf),
+                environment_present: environment.is_some(),
+                timeout,
+            });
+            let response = match args.first().copied() {
+                Some("compose") => self.compose.clone(),
+                Some("inspect") => self.inspect.clone(),
+                _ => None,
+            }?;
+            Some(ProcessOutput {
+                success: response.0,
+                exit_code: Some(if response.0 { 0 } else { 1 }),
+                stdout: response.1,
+                stderr: String::new(),
+            })
+        }
+    }
+
+    fn finding<'a>(result: &'a ResultEnvelope, check: &str) -> &'a Finding {
+        result
+            .findings
+            .iter()
+            .find(|finding| finding.check == check)
+            .unwrap()
+    }
 
     #[test]
-    fn token_contract_rejects_whitespace_and_short_values() {
+    fn token_contract_accepts_boundaries_and_rejects_unsafe_values() {
         assert!(bearer_token_is_acceptable(&"a".repeat(32)));
+        assert!(bearer_token_is_acceptable(&"~".repeat(1024)));
         assert!(!bearer_token_is_acceptable("short"));
+        assert!(!bearer_token_is_acceptable(&"a".repeat(1025)));
         assert!(!bearer_token_is_acceptable(&format!("{} ", "a".repeat(32))));
+        assert!(!bearer_token_is_acceptable(&format!(
+            "{}\n",
+            "a".repeat(32)
+        )));
+        assert!(!bearer_token_is_acceptable(&format!("{}é", "a".repeat(31))));
+    }
+
+    #[test]
+    fn secret_metadata_never_approves_unsafe_paths() {
+        let fixture = Fixture::new();
+        assert_eq!(
+            secret_file_metadata(&fixture.token_path())["permission_ok"],
+            false
+        );
+        fixture.write_token(&"a".repeat(32), 0o600);
+        let private = secret_file_metadata(&fixture.token_path());
+        assert_eq!(private["mode"], "0600");
+        assert_eq!(private["regular_file"], true);
+        assert_eq!(private["permission_ok"], true);
+        fixture.write_token(&"a".repeat(32), 0o644);
+        let broad = secret_file_metadata(&fixture.token_path());
+        assert_eq!(broad["mode"], "0644");
+        assert_eq!(broad["permission_ok"], false);
+        let directory = fixture.root.join("directory");
+        fs::create_dir(&directory).unwrap();
+        assert_eq!(secret_file_metadata(&directory)["permission_ok"], false);
+        let link = fixture.root.join("link");
+        std::os::unix::fs::symlink(fixture.token_path(), &link).unwrap();
+        let linked = secret_file_metadata(&link);
+        assert_eq!(linked["symlink"], true);
+        assert_eq!(linked["permission_ok"], false);
+    }
+
+    #[test]
+    fn inspection_reports_missing_weak_private_and_broad_tokens_without_disclosure() {
+        for (token, mode, status) in [
+            (None, 0o600, "warn"),
+            (Some("a".repeat(31)), 0o600, "warn"),
+            (Some("a".repeat(32)), 0o600, "pass"),
+            (Some("b".repeat(32)), 0o644, "fail"),
+        ] {
+            let fixture = Fixture::new();
+            if let Some(token) = &token {
+                fixture.write_token(token, mode);
+            }
+            let result = command_runtime_native_api_direct_token_with_runner(
+                &fixture.repo,
+                false,
+                &FakeRunner::default(),
+            );
+            let secret = finding(&result, "native-api-direct-token.runtime-secret");
+            assert_eq!(secret.status, status);
+            assert_eq!(
+                secret.details.as_ref().unwrap()["token_value_reported"],
+                false
+            );
+            let output = serde_json::to_string(&result).unwrap();
+            if let Some(token) = token {
+                assert!(!output.contains(&token));
+            }
+        }
+    }
+
+    #[test]
+    fn rotation_replaces_private_value_and_requires_reload_without_listener() {
+        let fixture = Fixture::new();
+        let old = "old-token-value-that-is-long-enough";
+        fixture.write_token(old, 0o600);
+        let result = command_runtime_native_api_direct_token_with_runner(
+            &fixture.repo,
+            true,
+            &FakeRunner::default(),
+        );
+        let new = fs::read_to_string(fixture.token_path())
+            .unwrap()
+            .trim()
+            .to_string();
+        assert_ne!(new, old);
+        assert!(bearer_token_is_acceptable(&new));
+        assert_eq!(
+            secret_file_metadata(&fixture.token_path())["permission_ok"],
+            true
+        );
+        assert_eq!(result.status, "pass");
+        assert_eq!(
+            finding(&result, "native-api-direct-token.running-listener-reload").status,
+            "pass"
+        );
+        assert_eq!(
+            finding(&result, "native-api-direct-token.reload-required").status,
+            "pass"
+        );
+        let output = serde_json::to_string(&result).unwrap();
+        assert!(!output.contains(old));
+        assert!(!output.contains(&new));
+    }
+
+    #[test]
+    fn listener_detection_uses_exact_commands_and_deduplicates_bindings() {
+        let fixture = Fixture::new();
+        let runner = FakeRunner::listener(
+            r#"{"9081/tcp":[{"HostIp":"","HostPort":"19081"},{"HostIp":"0.0.0.0","HostPort":"19081"},{"HostIp":"127.0.0.1","HostPort":"29081"}]}"#,
+        );
+        assert_eq!(
+            current_published_bindings(&fixture.repo, &runner),
+            vec![
+                json!({"host":"0.0.0.0","host_port":"19081","container_port":"9081"}),
+                json!({"host":"127.0.0.1","host_port":"29081","container_port":"9081"}),
+            ]
+        );
+        let calls = runner.calls.borrow();
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].program, "docker");
+        assert_eq!(
+            calls[0].args,
+            vec![
+                "compose",
+                "-f",
+                &fixture.repo.join("compose/dev.yaml").display().to_string(),
+                "ps",
+                "-q",
+                "turbovas-api",
+            ]
+        );
+        assert_eq!(
+            calls[1].args,
+            vec![
+                "inspect",
+                "-f",
+                "{{json .NetworkSettings.Ports}}",
+                "container-123"
+            ]
+        );
+        for call in calls.iter() {
+            assert_eq!(call.cwd.as_deref(), Some(fixture.repo.as_path()));
+            assert!(call.environment_present);
+            assert_eq!(call.timeout, None);
+        }
+    }
+
+    #[test]
+    fn absent_failed_or_invalid_listener_queries_have_no_bindings() {
+        for runner in [
+            FakeRunner::default(),
+            FakeRunner {
+                compose: Some((false, "container-123\n".into())),
+                ..FakeRunner::default()
+            },
+            FakeRunner {
+                compose: Some((true, "container-123\n".into())),
+                inspect: Some((true, "not-json".into())),
+                ..FakeRunner::default()
+            },
+        ] {
+            let fixture = Fixture::new();
+            assert!(current_published_bindings(&fixture.repo, &runner).is_empty());
+        }
+    }
+
+    #[test]
+    fn rotation_warns_with_deduplicated_listener_bindings_without_token_disclosure() {
+        let fixture = Fixture::new();
+        let old = "old-token-value-that-is-long-enough";
+        fixture.write_token(old, 0o600);
+        let runner = FakeRunner::listener(
+            r#"{"9081/tcp":[{"HostIp":"127.0.0.1","HostPort":"19081"},{"HostIp":"127.0.0.1","HostPort":"19081"}]}"#,
+        );
+        let result =
+            command_runtime_native_api_direct_token_with_runner(&fixture.repo, true, &runner);
+        let listener = finding(&result, "native-api-direct-token.running-listener-reload");
+        assert_eq!(listener.status, "warn");
+        assert_eq!(
+            listener.details.as_ref().unwrap()["published_bindings"],
+            json!([{"host":"127.0.0.1","host_port":"19081","container_port":"9081"}])
+        );
+        assert_eq!(
+            listener.details.as_ref().unwrap()["token_value_reported"],
+            false
+        );
+        assert!(!serde_json::to_string(&result).unwrap().contains(old));
     }
 }

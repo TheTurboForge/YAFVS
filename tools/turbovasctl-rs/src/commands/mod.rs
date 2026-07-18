@@ -19,6 +19,7 @@ mod quality_schedule;
 mod redis;
 mod repository;
 mod runtime;
+mod runtime_data_state;
 mod runtime_lock;
 mod runtime_performance_snapshot;
 mod rust_migration;
@@ -52,6 +53,7 @@ pub use repository::{
     command_inventory, command_repository_unavailable, command_status, find_repo_root,
 };
 pub use runtime::{command_logs, command_runtime_plan};
+pub use runtime_data_state::command_runtime_data_state;
 pub use runtime_performance_snapshot::command_runtime_performance_snapshot;
 pub use rust_migration::command_rust_migration_state;
 pub use security_policy::command_security_policy_check;

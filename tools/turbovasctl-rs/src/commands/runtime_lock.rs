@@ -26,6 +26,15 @@ pub(crate) enum RuntimeLockError {
     Setup(String),
 }
 
+#[derive(Debug)]
+pub(crate) struct RuntimeLockStatus {
+    pub(crate) name: String,
+    pub(crate) active: bool,
+    pub(crate) path: PathBuf,
+    pub(crate) metadata_path: PathBuf,
+    pub(crate) metadata: Value,
+}
+
 fn validate_user_directory(path: &Path, label: &str) -> Result<(), RuntimeLockError> {
     let metadata = fs::symlink_metadata(path)
         .map_err(|error| RuntimeLockError::Setup(format!("could not inspect {label}: {error}")))?;
@@ -98,7 +107,7 @@ pub(crate) fn runtime_lock_dir(repo_root: &Path) -> PathBuf {
     runtime_dir(repo_root).join("run/locks")
 }
 
-fn lock_paths(repo_root: &Path, name: &str) -> (PathBuf, PathBuf) {
+pub(crate) fn runtime_lock_paths(repo_root: &Path, name: &str) -> (PathBuf, PathBuf) {
     let directory = runtime_lock_dir(repo_root);
     let name = safe_name(name);
     (
@@ -107,16 +116,157 @@ fn lock_paths(repo_root: &Path, name: &str) -> (PathBuf, PathBuf) {
     )
 }
 
-fn read_holder(path: &Path) -> Value {
-    let mut payload = String::new();
-    let parsed = OpenOptions::new()
+fn read_holder_checked(path: &Path) -> Result<Value, RuntimeLockError> {
+    const MAX_METADATA_BYTES: u64 = 64 * 1024;
+    let metadata = fs::symlink_metadata(path).map_err(|error| {
+        RuntimeLockError::Setup(format!("could not inspect runtime lock metadata: {error}"))
+    })?;
+    if !metadata.file_type().is_file()
+        || metadata.uid() != unsafe { libc::getuid() }
+        || metadata.nlink() != 1
+        || metadata.len() > MAX_METADATA_BYTES
+    {
+        return Err(RuntimeLockError::Setup(
+            "runtime lock metadata is not a bounded, private regular file".into(),
+        ));
+    }
+    let mut payload = Vec::with_capacity(metadata.len() as usize + 1);
+    let mut file = OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
         .open(path)
-        .and_then(|mut file| file.read_to_string(&mut payload))
-        .ok()
-        .and_then(|_| serde_json::from_str::<Value>(&payload).ok());
-    parsed.filter(Value::is_object).unwrap_or_else(|| json!({}))
+        .map_err(|error| {
+            RuntimeLockError::Setup(format!("could not open runtime lock metadata: {error}"))
+        })?;
+    std::io::Read::by_ref(&mut file)
+        .take(MAX_METADATA_BYTES + 1)
+        .read_to_end(&mut payload)
+        .map_err(|error| {
+            RuntimeLockError::Setup(format!("could not read runtime lock metadata: {error}"))
+        })?;
+    if payload.len() as u64 > MAX_METADATA_BYTES {
+        return Err(RuntimeLockError::Setup(
+            "runtime lock metadata exceeds the input limit".into(),
+        ));
+    }
+    let value = serde_json::from_slice::<Value>(&payload).map_err(|error| {
+        RuntimeLockError::Setup(format!("could not parse runtime lock metadata: {error}"))
+    })?;
+    value
+        .is_object()
+        .then_some(value)
+        .ok_or_else(|| RuntimeLockError::Setup("runtime lock metadata is not an object".into()))
+}
+
+fn read_holder(path: &Path) -> Value {
+    read_holder_checked(path).unwrap_or_else(|_| json!({}))
+}
+
+/// Inspect an existing runtime lock without creating either lock or metadata files.
+pub(crate) fn inspect_runtime_lock(
+    repo_root: &Path,
+    name: &str,
+) -> Result<RuntimeLockStatus, RuntimeLockError> {
+    let (path, metadata_path) = runtime_lock_paths(repo_root, name);
+    let runtime = runtime_dir(repo_root);
+    let run = runtime.join("run");
+    let locks = run.join("locks");
+    for (directory, label) in [
+        (runtime.as_path(), "runtime root"),
+        (run.as_path(), "runtime run directory"),
+        (locks.as_path(), "runtime lock directory"),
+    ] {
+        match fs::symlink_metadata(directory) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(RuntimeLockStatus {
+                    name: name.to_string(),
+                    active: false,
+                    path,
+                    metadata_path,
+                    metadata: json!({}),
+                });
+            }
+            Err(error) => {
+                return Err(RuntimeLockError::Setup(format!(
+                    "could not inspect {label}: {error}"
+                )));
+            }
+            Ok(metadata)
+                if !metadata.file_type().is_dir()
+                    || metadata.uid() != unsafe { libc::getuid() } =>
+            {
+                return Err(RuntimeLockError::Setup(format!(
+                    "{label} is not a real, current-user-owned directory"
+                )));
+            }
+            Ok(_) => {}
+        }
+    }
+    let lock_metadata = match fs::symlink_metadata(&path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(RuntimeLockStatus {
+                name: name.to_string(),
+                active: false,
+                path,
+                metadata_path,
+                metadata: json!({}),
+            });
+        }
+        Err(error) => {
+            return Err(RuntimeLockError::Setup(format!(
+                "could not inspect runtime lock: {error}"
+            )));
+        }
+        Ok(metadata) => metadata,
+    };
+    if !lock_metadata.file_type().is_file()
+        || lock_metadata.uid() != unsafe { libc::getuid() }
+        || lock_metadata.nlink() != 1
+    {
+        return Err(RuntimeLockError::Setup(
+            "runtime lock is not a private regular file".into(),
+        ));
+    }
+    let lock = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
+        .open(&path)
+        .map_err(|error| {
+            RuntimeLockError::Setup(format!("could not open runtime lock: {error}"))
+        })?;
+    let active = match unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } {
+        0 => {
+            unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_UN) };
+            false
+        }
+        _ => {
+            let error = std::io::Error::last_os_error();
+            if matches!(error.raw_os_error(), Some(code) if code == libc::EWOULDBLOCK || code == libc::EAGAIN)
+            {
+                true
+            } else {
+                return Err(RuntimeLockError::Setup(format!(
+                    "could not inspect runtime lock state: {error}"
+                )));
+            }
+        }
+    };
+    let metadata = match fs::symlink_metadata(&metadata_path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => json!({}),
+        Err(error) => {
+            return Err(RuntimeLockError::Setup(format!(
+                "could not inspect runtime lock metadata: {error}"
+            )));
+        }
+        Ok(_) => read_holder_checked(&metadata_path)?,
+    };
+    Ok(RuntimeLockStatus {
+        name: name.to_string(),
+        active,
+        path,
+        metadata_path,
+        metadata,
+    })
 }
 
 fn private_regular_file(file: &File, label: &str) -> Result<(u64, u64), RuntimeLockError> {
@@ -143,7 +293,7 @@ impl RuntimeOperationLock {
         operation: &str,
         timeout: Duration,
     ) -> Result<Self, RuntimeLockError> {
-        let (lock_path, metadata_path) = lock_paths(repo_root, name);
+        let (lock_path, metadata_path) = runtime_lock_paths(repo_root, name);
         prepare_lock_directory(repo_root)?;
         let lock = OpenOptions::new()
             .read(true)
@@ -266,7 +416,7 @@ mod tests {
             Duration::ZERO,
         )
         .unwrap();
-        let (_, metadata_path) = lock_paths(&repo, FEED_ACTIVATION_LOCK);
+        let (_, metadata_path) = runtime_lock_paths(&repo, FEED_ACTIVATION_LOCK);
         let metadata = read_holder(&metadata_path);
         assert_eq!(metadata["operation"], "feed-generation-stage");
 
@@ -293,7 +443,7 @@ mod tests {
     #[test]
     fn unsafe_lock_symlink_is_rejected() {
         let repo = fixture("symlink");
-        let (lock_path, _) = lock_paths(&repo, FEED_ACTIVATION_LOCK);
+        let (lock_path, _) = runtime_lock_paths(&repo, FEED_ACTIVATION_LOCK);
         fs::create_dir_all(lock_path.parent().unwrap()).unwrap();
         let target = repo.parent().unwrap().join("target");
         fs::write(&target, b"target").unwrap();
@@ -320,6 +470,31 @@ mod tests {
             Err(RuntimeLockError::Setup(_))
         ));
         assert!(target.read_dir().unwrap().next().is_none());
+        fs::remove_dir_all(repo.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn read_only_status_distinguishes_inactive_and_active_locks() {
+        let repo = fixture("status");
+        let absent = inspect_runtime_lock(&repo, "runtime-manager").unwrap();
+        assert!(!absent.active);
+        assert!(!absent.path.exists());
+
+        let lock = RuntimeOperationLock::acquire(
+            &repo,
+            "runtime-manager",
+            "runtime-data-state",
+            Duration::ZERO,
+        )
+        .unwrap();
+        let active = inspect_runtime_lock(&repo, "runtime-manager").unwrap();
+        assert!(active.active);
+        assert_eq!(active.metadata["operation"], "runtime-data-state");
+        drop(lock);
+
+        let inactive = inspect_runtime_lock(&repo, "runtime-manager").unwrap();
+        assert!(!inactive.active);
+        assert_eq!(inactive.metadata, json!({}));
         fs::remove_dir_all(repo.parent().unwrap()).unwrap();
     }
 }

@@ -106,6 +106,8 @@ pub enum CliCommand {
     RuntimeFeedImportInit,
     /// Capture a runtime performance snapshot for diagnostics.
     RuntimePerformanceSnapshot,
+    /// Classify database and non-database runtime state.
+    RuntimeDataState,
     /// Show recent runtime logs.
     Logs {
         /// Optional Compose service name.
@@ -191,6 +193,7 @@ impl CliCommand {
             Self::Deps { .. } => "deps",
             Self::RuntimeFeedImportInit => "runtime-feed-import-init",
             Self::RuntimePerformanceSnapshot => "runtime-performance-snapshot",
+            Self::RuntimeDataState => "runtime-data-state",
             Self::Logs { .. } => "logs",
             Self::LicenseReport { .. } => "license-report",
             Self::Doctor => "doctor",
@@ -239,6 +242,24 @@ mod tests {
         assert!(
             Cli::command()
                 .find_subcommand("feed-generation-runtime-guard")
+                .unwrap()
+                .is_hide_set()
+        );
+    }
+
+    #[test]
+    fn parses_visible_runtime_data_state() {
+        assert_eq!(
+            parse_cli(["runtime-data-state", "--json"]).unwrap(),
+            Cli {
+                command: CliCommand::RuntimeDataState,
+                json: true,
+                status_only: false,
+            }
+        );
+        assert!(
+            !Cli::command()
+                .find_subcommand("runtime-data-state")
                 .unwrap()
                 .is_hide_set()
         );

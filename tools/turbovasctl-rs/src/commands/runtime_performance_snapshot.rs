@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::os::unix::fs::OpenOptionsExt;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -813,7 +813,7 @@ fn parse_pipe_int_rows(output: &str) -> BTreeMap<String, i64> {
         .collect()
 }
 
-fn table_presence_rows(
+pub(crate) fn table_presence_rows(
     repo_root: &Path,
     runner: &dyn CommandRunner,
     tables: &[&str],
@@ -845,19 +845,28 @@ fn table_presence_rows(
     (output, presence)
 }
 
-fn table_row_count(repo_root: &Path, table: &str, runner: &dyn CommandRunner) -> Option<i64> {
+pub(crate) fn table_row_count_output(
+    repo_root: &Path,
+    table: &str,
+    runner: &dyn CommandRunner,
+) -> (ProcessOutput, Option<i64>) {
     let output = psql(
         repo_root,
         &format!("SELECT count(*) FROM {};", sql_identifier(table)),
         runner,
     );
-    output
+    let count = output
         .success
         .then(|| psql_value(&output.stdout).parse::<i64>().ok())
-        .flatten()
+        .flatten();
+    (output, count)
 }
 
-fn path_tree_summary(path: &Path, recursive: bool) -> Map<String, Value> {
+fn table_row_count(repo_root: &Path, table: &str, runner: &dyn CommandRunner) -> Option<i64> {
+    table_row_count_output(repo_root, table, runner).1
+}
+
+fn empty_path_tree_summary(path: &Path) -> Map<String, Value> {
     let mut summary = Map::new();
     summary.insert(
         "path".into(),
@@ -869,13 +878,22 @@ fn path_tree_summary(path: &Path, recursive: bool) -> Map<String, Value> {
     summary.insert("directory_count".into(), Value::from(0_u64));
     summary.insert("byte_count".into(), Value::from(0_u64));
     summary.insert("latest_mtime".into(), Value::Null);
+    summary
+}
+
+pub(crate) fn path_tree_summary_checked(
+    path: &Path,
+    recursive: bool,
+) -> Result<Map<String, Value>, String> {
+    let mut summary = empty_path_tree_summary(path);
 
     let metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
-        Err(_) => return summary,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(summary),
+        Err(error) => return Err(format!("could not inspect {}: {error}", path.display())),
     };
     if metadata.file_type().is_symlink() {
-        return summary;
+        return Err(format!("{} is a symbolic link", path.display()));
     }
 
     if metadata.is_file() {
@@ -891,11 +909,11 @@ fn path_tree_summary(path: &Path, recursive: bool) -> Map<String, Value> {
                 .map(Value::String)
                 .unwrap_or(Value::Null),
         );
-        return summary;
+        return Ok(summary);
     }
 
     if !metadata.is_dir() {
-        return summary;
+        return Ok(summary);
     }
 
     summary.insert("kind".into(), Value::from("directory"));
@@ -907,16 +925,14 @@ fn path_tree_summary(path: &Path, recursive: bool) -> Map<String, Value> {
 
     let mut directories = vec![path.to_path_buf()];
     while let Some(current) = directories.pop() {
-        let entries = match fs::read_dir(&current) {
-            Ok(entries) => entries,
-            Err(_) => continue,
-        };
-        for entry in entries.flatten() {
+        let entries = fs::read_dir(&current)
+            .map_err(|error| format!("could not read {}: {error}", current.display()))?;
+        for entry in entries {
+            let entry =
+                entry.map_err(|error| format!("could not read directory entry: {error}"))?;
             let child = entry.path();
-            let child_meta = match fs::symlink_metadata(&child) {
-                Ok(meta) => meta,
-                Err(_) => continue,
-            };
+            let child_meta = fs::symlink_metadata(&child)
+                .map_err(|error| format!("could not inspect {}: {error}", child.display()))?;
             if child_meta.file_type().is_symlink() {
                 continue;
             }
@@ -972,7 +988,11 @@ fn path_tree_summary(path: &Path, recursive: bool) -> Map<String, Value> {
     if let Some(value) = latest.and_then(iso_system_time) {
         summary.insert("latest_mtime".into(), Value::String(value));
     }
-    summary
+    Ok(summary)
+}
+
+fn path_tree_summary(path: &Path, recursive: bool) -> Map<String, Value> {
+    path_tree_summary_checked(path, recursive).unwrap_or_else(|_| empty_path_tree_summary(path))
 }
 
 fn largest_files(path: &Path, limit: usize) -> Vec<Map<String, Value>> {
@@ -1138,6 +1158,42 @@ fn write_new_file(path: &Path, contents: &[u8]) -> Result<(), String> {
     file.sync_all().map_err(|error| error.to_string())
 }
 
+pub(crate) fn write_secure_json_artifact(
+    path: &Path,
+    payload: &ResultEnvelope,
+) -> Result<(), String> {
+    let text = serde_json::to_string_pretty(payload)
+        .map(|text| format!("{text}\n"))
+        .map_err(|error| error.to_string())?;
+    write_secure_atomic_latest(path, text.as_bytes())
+}
+
+fn validate_secure_artifact_target(path: &Path) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "latest artifact has no parent".to_string())?;
+    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    let parent_metadata = fs::symlink_metadata(parent).map_err(|error| error.to_string())?;
+    if !parent_metadata.file_type().is_dir() || parent_metadata.uid() != unsafe { libc::getuid() } {
+        return Err("artifact directory is not a real, current-user-owned directory".into());
+    }
+    match fs::symlink_metadata(path) {
+        Ok(metadata)
+            if metadata.file_type().is_file()
+                && metadata.uid() == unsafe { libc::getuid() }
+                && metadata.nlink() == 1 => {}
+        Ok(_) => return Err("artifact target is not a private regular file".into()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.to_string()),
+    }
+    Ok(())
+}
+
+fn write_secure_atomic_latest(path: &Path, contents: &[u8]) -> Result<(), String> {
+    validate_secure_artifact_target(path)?;
+    write_atomic_latest(path, contents)
+}
+
 fn write_atomic_latest(path: &Path, contents: &[u8]) -> Result<(), String> {
     let parent = path
         .parent()
@@ -1172,7 +1228,7 @@ fn write_atomic_latest(path: &Path, contents: &[u8]) -> Result<(), String> {
     Err("could not allocate a private temporary artifact".into())
 }
 
-fn service_running(repo_root: &Path, service: &str, runner: &dyn CommandRunner) -> bool {
+pub(crate) fn service_running(repo_root: &Path, service: &str, runner: &dyn CommandRunner) -> bool {
     let ps = compose_command(repo_root, &["ps".into(), "-q".into(), service.into()]);
     let ps_output = runner
         .run_with(
@@ -1209,7 +1265,7 @@ fn service_running(repo_root: &Path, service: &str, runner: &dyn CommandRunner) 
         .is_some_and(|output| output.success && output.stdout.trim() == "true")
 }
 
-fn psql(repo_root: &Path, query: &str, runner: &dyn CommandRunner) -> ProcessOutput {
+pub(crate) fn psql(repo_root: &Path, query: &str, runner: &dyn CommandRunner) -> ProcessOutput {
     let compose = compose_command(
         repo_root,
         &[
@@ -1239,7 +1295,7 @@ fn psql(repo_root: &Path, query: &str, runner: &dyn CommandRunner) -> ProcessOut
         })
 }
 
-fn psql_value(stdout: &str) -> &str {
+pub(crate) fn psql_value(stdout: &str) -> &str {
     const IGNORED: [&str; 4] = ["WARNING:", "DETAIL:", "HINT:", "NOTICE:"];
     stdout
         .lines()
@@ -1360,7 +1416,7 @@ mod tests {
 
         let piped = parse_pipe_int_rows("reports|3\nscope|x\n");
         assert_eq!(piped.get("reports"), Some(&3));
-        assert_eq!(piped.contains_key("scope"), false);
+        assert!(!piped.contains_key("scope"));
     }
 
     #[test]
@@ -1503,7 +1559,7 @@ mod tests {
                 self.calls
                     .borrow_mut()
                     .push(args.iter().map(|value| (*value).to_string()).collect());
-                let stdout = if args.iter().any(|value| *value == "-q") {
+                let stdout = if args.contains(&"-q") {
                     "container-id\n"
                 } else if args.first() == Some(&"inspect") {
                     "true\n"
@@ -1554,7 +1610,7 @@ mod tests {
             fn run_with(
                 &self,
                 program: &str,
-                args: &[&str],
+                _args: &[&str],
                 _cwd: Option<&Path>,
                 _env: Option<&std::collections::BTreeMap<OsString, OsString>>,
                 _timeout: Option<std::time::Duration>,
@@ -1562,17 +1618,10 @@ mod tests {
                 if program != "docker" {
                     return None;
                 }
-                let stdout = if args.iter().any(|value| *value == "--no-stream") {
-                    String::new()
-                } else if args.iter().any(|value| *value == "-q") {
-                    String::new()
-                } else {
-                    String::new()
-                };
                 Some(ProcessOutput {
                     success: true,
                     exit_code: Some(0),
-                    stdout,
+                    stdout: String::new(),
                     stderr: String::new(),
                 })
             }

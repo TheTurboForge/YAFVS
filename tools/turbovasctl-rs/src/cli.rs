@@ -104,6 +104,9 @@ pub enum CliCommand {
     },
     /// Refuse standalone feed import outside guarded generation activation.
     RuntimeFeedImportInit,
+    /// Capture a runtime performance snapshot for diagnostics.
+    #[command(hide = true)]
+    RuntimePerformanceSnapshot,
     /// Show recent runtime logs.
     Logs {
         /// Optional Compose service name.
@@ -188,6 +191,7 @@ impl CliCommand {
             Self::FeedCopyToRuntime => "feed-copy-to-runtime",
             Self::Deps { .. } => "deps",
             Self::RuntimeFeedImportInit => "runtime-feed-import-init",
+            Self::RuntimePerformanceSnapshot => "runtime-performance-snapshot",
             Self::Logs { .. } => "logs",
             Self::LicenseReport { .. } => "license-report",
             Self::Doctor => "doctor",

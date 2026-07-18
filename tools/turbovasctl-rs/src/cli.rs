@@ -528,6 +528,7 @@ mod tests {
             "runtime-redis-state",
             "c-hardening-check",
             "quality-gate-schedule",
+            "runtime-native-api-direct-token",
         ] {
             let recipe = justfile
                 .split_once(&format!("{command} *args:\n"))

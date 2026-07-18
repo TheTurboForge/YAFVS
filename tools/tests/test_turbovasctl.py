@@ -1212,7 +1212,6 @@ class TurboVASCtlTests(unittest.TestCase):
                 ["quality-gate-state", "--json"],
                 ["quality-gate-state", "--status-only", "--json"],
                 ["feed-state", "--json"],
-                ["runtime-native-api-direct-token", "--json"],
                 ["license-report", "--json"],
                 ["license-report", "--status-only", "--json"],
                 ["license-report", "--public-release", "--mode", "source-public", "--json"],
@@ -1239,6 +1238,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 (["quality-gate-schedule", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["quality-gate-schedule", "--status", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["quality-gate-schedule", "--install", "--json"], 1, "fail"),
+                (["runtime-native-api-direct-token", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["feed-generation-state", "--json"], 0, "warn"),
                 (["feed-generation-state", "--status-only", "--json"], 0, "warn"),
                 (["feed-generation-stage", "--json"], 1, "fail"),
@@ -2467,7 +2467,7 @@ class TurboVASCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/turbovasctl-rs --manifest-path tools/turbovasctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "quality-gate-schedule"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "quality-gate-schedule", "runtime-native-api-direct-token"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotIn(f"def command_{command.replace('-', '_')}", source)
@@ -12580,83 +12580,6 @@ class TurboVASCtlTests(unittest.TestCase):
         ):
             with self.subTest(token=token):
                 self.assertFalse(turbovasctl.direct_api_bearer_token_is_acceptable(token))
-
-    def test_runtime_direct_token_rotation_never_reports_secret_value(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            before_path = turbovasctl.write_runtime_secret(
-                root,
-                turbovasctl.TURBOVAS_API_BEARER_TOKEN_SECRET,
-                "old-token-0123456789abcdef0123456789abcdef",
-            )
-            before = before_path.read_text(encoding="utf-8").strip()
-
-            with unittest.mock.patch.object(turbovasctl, "current_native_api_direct_published_bindings", return_value=()):
-                result = turbovasctl.command_runtime_native_api_direct_token(root, rotate=True)
-            after = before_path.read_text(encoding="utf-8").strip()
-
-        rendered = json.dumps(result, sort_keys=True)
-        self.assertEqual(result["status"], "pass")
-        self.assertNotEqual(before, after)
-        self.assertTrue(turbovasctl.direct_api_bearer_token_is_acceptable(after))
-        self.assertNotIn(before, rendered)
-        self.assertNotIn(after, rendered)
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(checks["native-api-direct-token.runtime-secret"]["details"]["token_value_reported"], False)
-        self.assertTrue(checks["native-api-direct-token.runtime-secret"]["details"]["permission_ok"])
-        self.assertEqual(checks["native-api-direct-token.running-listener-reload"]["status"], "pass")
-        self.assertIn("rerun runtime-native-api-direct-smoke", checks["native-api-direct-token.reload-required"]["message"])
-
-    def test_runtime_direct_token_rotation_warns_when_listener_is_running(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            before_path = turbovasctl.write_runtime_secret(
-                root,
-                turbovasctl.TURBOVAS_API_BEARER_TOKEN_SECRET,
-                "old-token-0123456789abcdef0123456789abcdef",
-            )
-            before = before_path.read_text(encoding="utf-8").strip()
-            running = ({"host": "127.0.0.1", "host_port": "19080", "container_port": "9081"},)
-
-            with unittest.mock.patch.object(turbovasctl, "current_native_api_direct_published_bindings", return_value=running):
-                result = turbovasctl.command_runtime_native_api_direct_token(root, rotate=True)
-            after = before_path.read_text(encoding="utf-8").strip()
-
-        rendered = json.dumps(result, sort_keys=True)
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(result["status"], "warn")
-        self.assertNotEqual(before, after)
-        self.assertNotIn(before, rendered)
-        self.assertNotIn(after, rendered)
-        reload = checks["native-api-direct-token.running-listener-reload"]
-        self.assertEqual(reload["status"], "warn")
-        self.assertEqual(reload["details"]["published_bindings"], list(running))
-        self.assertFalse(reload["details"]["token_value_reported"])
-
-    def test_runtime_direct_token_reports_broad_secret_permissions_without_leaking_value(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            token_path = turbovasctl.write_runtime_secret(
-                root,
-                turbovasctl.TURBOVAS_API_BEARER_TOKEN_SECRET,
-                "0123456789abcdef0123456789abcdef",
-            )
-            token_path.chmod(0o644)
-            token = token_path.read_text(encoding="utf-8").strip()
-
-            result = turbovasctl.command_runtime_native_api_direct_token(root, rotate=False)
-
-        rendered = json.dumps(result, sort_keys=True)
-        checks = {item["check"]: item for item in result["findings"]}
-        secret = checks["native-api-direct-token.runtime-secret"]
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(secret["status"], "fail")
-        self.assertEqual(secret["details"]["mode"], "0644")
-        self.assertFalse(secret["details"]["permission_ok"])
-        self.assertNotIn(token, rendered)
 
     def test_direct_native_api_bootstrap_creates_secret_without_reporting_value(self):
         with tempfile.TemporaryDirectory() as tmp:

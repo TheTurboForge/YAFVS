@@ -17214,74 +17214,6 @@ def command_runtime_native_api_rebuild(repo_root: Path) -> dict[str, Any]:
         )
 
 
-def command_runtime_native_api_direct_token(repo_root: Path, *, rotate: bool) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    secret_path = runtime_secret_path(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
-    if rotate:
-        rotate_runtime_secret(repo_root, TURBOVAS_API_BEARER_TOKEN_SECRET)
-        findings.append(
-            finding(
-                "pass",
-                "native-api-direct-token.rotate",
-                "Direct native API runtime bearer token was rotated without printing the secret value.",
-                str(secret_path),
-            )
-        )
-    try:
-        token = secret_path.read_text(encoding="utf-8").strip() if secret_path.is_file() else ""
-    except OSError:
-        token = ""
-    token_exists = bool(token)
-    token_ok = direct_api_bearer_token_is_acceptable(token) if token_exists else False
-    secret_metadata = runtime_secret_file_metadata(secret_path)
-    token_status = "pass" if token_exists and token_ok and secret_metadata["permission_ok"] else "warn"
-    if token_exists and token_ok and not secret_metadata["permission_ok"]:
-        token_status = "fail"
-    findings.append(
-        finding(
-            token_status,
-            "native-api-direct-token.runtime-secret",
-            "Direct native API runtime bearer token file exists, satisfies the local strength contract, and is not group/world accessible."
-            if token_status == "pass"
-            else "Direct native API runtime bearer token file is missing, weak, or group/world accessible.",
-            str(secret_path),
-            {
-                "exists": token_exists,
-                "acceptable": token_ok,
-                "secret_path": str(secret_path),
-                "mode": secret_metadata["mode"],
-                "permission_ok": secret_metadata["permission_ok"],
-                "group_or_world_accessible": secret_metadata["group_or_world_accessible"],
-                "token_value_reported": False,
-            },
-        )
-    )
-    if rotate:
-        running_bindings = current_native_api_direct_published_bindings(repo_root)
-        findings.append(
-            finding(
-                "warn" if running_bindings else "pass",
-                "native-api-direct-token.running-listener-reload",
-                "A running direct native API listener is currently published and may still require turbovas-api restart or runtime-native-api-direct-smoke before it accepts the rotated token."
-                if running_bindings
-                else "No running direct native API listener publication was detected; no live direct listener needs token reload.",
-                details={
-                    "published_bindings": list(running_bindings),
-                    "token_value_reported": False,
-                },
-            )
-        )
-        findings.append(
-            finding(
-                "pass",
-                "native-api-direct-token.reload-required",
-                "Restart turbovas-api or rerun runtime-native-api-direct-smoke before expecting any running direct listener to accept the rotated token.",
-            )
-        )
-    summary = "Direct native API runtime bearer token rotated." if rotate else "Direct native API runtime bearer token inspected."
-    return make_result("runtime-native-api-direct-token", repo_root, summary, findings)
-
-
 def direct_bootstrap_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     compact = dict(result)
     findings = result.get("findings", [])
@@ -32420,8 +32352,6 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_direct_write_smoke.add_argument("--status-only", action="store_true", help="emit compact write-smoke status and only non-pass findings for chat-safe validation")
     native_api_direct_bootstrap = subparsers.add_parser("runtime-native-api-direct-bootstrap", parents=[common], help="prepare and check opt-in direct native API bootstrap guardrails without starting the listener")
     native_api_direct_bootstrap.add_argument("--status-only", action="store_true", help="emit compact bootstrap status and only non-pass findings for chat-safe validation")
-    direct_token = subparsers.add_parser("runtime-native-api-direct-token", parents=[common], help="inspect or rotate the opt-in direct native API runtime bearer token")
-    direct_token.add_argument("--rotate", action="store_true", help="rotate the ignored runtime bearer token without printing it")
     subparsers.add_parser("runtime-native-api-rebuild", parents=[common], help="rebuild and restart only the internal TurboVAS native API sidecar")
     webui_smoke = subparsers.add_parser("runtime-webui-smoke", parents=[common], help="verify the staged GSA web UI over gsad")
     webui_smoke.add_argument("--status-only", action="store_true", help="emit compact web UI smoke status and only non-pass findings for chat-safe validation")
@@ -32789,8 +32719,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_native_api_direct_write_smoke(repo_root, status_only=args.status_only)
     elif args.command == "runtime-native-api-direct-bootstrap":
         result = command_runtime_native_api_direct_bootstrap(repo_root, status_only=args.status_only)
-    elif args.command == "runtime-native-api-direct-token":
-        result = command_runtime_native_api_direct_token(repo_root, rotate=args.rotate)
     elif args.command == "runtime-native-api-rebuild":
         result = command_runtime_native_api_rebuild(repo_root)
     elif args.command == "runtime-webui-smoke":

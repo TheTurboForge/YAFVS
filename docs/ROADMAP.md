@@ -129,6 +129,24 @@ rather than broad console access. Where hard tenant isolation is required, the
 product direction remains separate independently operated TurboVAS stacks, not
 in-application RBAC presented as a substitute for isolation.
 
+### Efficiently Isolated Deployments
+
+TurboVAS should make separate-stack isolation practical to operate. Each
+independently operated stack should keep its assets, credentials, scan state,
+findings, reports, and local treatment decisions within its own boundary.
+
+Reusable feed and vulnerability intelligence should be generated, verified,
+and maintained without requiring every isolated stack to repeat the complete
+source-update and compilation process. Stacks should consume that material
+read-only and be able to retain a verified local generation when independent
+operation, availability, or stronger separation requires it.
+
+This direction is intended to reduce the time, compute, storage, bandwidth, and
+maintenance needed to add another isolated deployment without turning several
+stacks into one multi-tenant system. The exact database, service, replication,
+and container topology remains an implementation decision rather than a
+roadmap promise.
+
 ### A Maintainable Native Platform
 
 The product surface should move toward typed TurboVAS-native HTTP/JSON and

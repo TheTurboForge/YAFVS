@@ -121,11 +121,16 @@ Python remains appropriate for build, Docker, browser, and subprocess
 orchestration, while retained inherited C is hardened and tested until a
 validated replacement is justified. The native API is being built as typed
 product contracts over PostgreSQL, not as a thin REST wrapper around GMP/XML.
+The [product-direction roadmap](docs/ROADMAP.md) connects that engineering
+direction to the vulnerability-management outcomes TurboVAS is intended to
+support.
 
 ## Documentation Map
 
 | Need | Document |
 | --- | --- |
+| Product direction and intended outcomes | [Product Direction Roadmap](docs/ROADMAP.md) |
+| Vulnerability-management operating model | [Vulnerability Management Practice](docs/VULNERABILITY_MANAGEMENT_PRACTICE.md) |
 | Commands and safety semantics | [CLI Reference](docs/CLI_REFERENCE.md) |
 | Build and dependency baseline | [Building TurboVAS](BUILDING.md) |
 | Development runtime | [Docker Runtime](docker/runtime/README.md) |

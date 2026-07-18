@@ -3,13 +3,13 @@
 
 # Product Direction Roadmap
 
-This roadmap describes the product outcomes TurboVAS is intended to support.
+This roadmap describes the product outcomes YAFVS is intended to support.
 It is not a dated release plan, a promise that a capability already exists, or
 a copy of the detailed engineering backlog. Current availability and maturity
 are documented in the [README](../README.md) and
 [User Manual](USER_MANUAL.md).
 
-TurboVAS is intended to help one trusted vulnerability-management team turn
+YAFVS is intended to help one trusted vulnerability-management team turn
 provenance-bearing technical evidence into a verified reduction in exposure.
 Its product direction follows the operating model in
 [Vulnerability Management Practice](VULNERABILITY_MANAGEMENT_PRACTICE.md):
@@ -27,7 +27,7 @@ Its product direction follows the operating model in
 
 ### Trustworthy Evidence And Coverage
 
-TurboVAS should combine evidence from the collection methods that fit the
+YAFVS should combine evidence from the collection methods that fit the
 environment, including network scanning, credentialed and uncredentialed
 checks, imported inventory, and endpoint- or agent-derived observations where
 they improve coverage.
@@ -39,8 +39,8 @@ safety.
 
 ### Inventory From Operator-Chosen Sources
 
-TurboVAS should allow operators to assess inventory collected by the methods
-that fit their environment. Potential inputs include an optional TurboVAS
+YAFVS should allow operators to assess inventory collected by the methods
+that fit their environment. Potential inputs include an optional YAFVS
 collector, operating-system and package inventories, SBOMs, container and
 artifact metadata, CMDB or endpoint-management exports, cloud inventory, and
 operator-authored transformations. The product should define precise bounded
@@ -48,7 +48,7 @@ submission formats without requiring one collection agent or endorsing every
 source that an operator chooses to use.
 
 Different inputs should converge on a common provenance-aware evidence and
-applicability path. TurboVAS should retain enough source context, coverage,
+applicability path. YAFVS should retain enough source context, coverage,
 limitations, and normalization provenance to explain the resulting assessment.
 A source may be complete for a named evidence class without claiming complete
 knowledge of an asset; omitted, failed, partial, stale, redacted, and
@@ -58,14 +58,14 @@ Imported inventory should be presented as inventory correlation rather than
 active verification. Component presence, product identity, vulnerability
 applicability, collection method, source assurance, and remediation closure
 are related but separate questions. Standards such as CycloneDX or SPDX may be
-accepted where useful, alongside a simpler TurboVAS-native format for custom
+accepted where useful, alongside a simpler YAFVS-native format for custom
 exports, but exact versions, adapters, transports, retention, and collector
 design remain implementation decisions.
 
 This capability should be designed as a bounded parser and sensitive-data
 boundary. It should minimize unnecessary host data, preserve reproducible raw
 evidence under explicit retention controls, keep imported operational data
-within the configured TurboVAS data boundary, and prevent uploaded documents
+within the configured YAFVS data boundary, and prevent uploaded documents
 from automatically triggering active checks or writing shared vulnerability
 intelligence.
 
@@ -76,7 +76,7 @@ software observations need a separate applicability step that maps the
 observed product, version, package, configuration, and vendor context to known
 vulnerabilities.
 
-TurboVAS should support both paths without pretending they have identical
+YAFVS should support both paths without pretending they have identical
 certainty. The direction includes typed evidence observations, package and
 vendor context, backport awareness, machine-readable applicability statements
 such as VEX where useful, and explicit evidence for non-applicability. Operators
@@ -85,8 +85,8 @@ supports it.
 
 ### Provenance-Aware Vulnerability Intelligence
 
-TurboVAS is intended to complement the Greenbone Community Feed with a
-versioned, signed TurboVAS Community Feed. Candidate inputs include CVE List
+YAFVS is intended to complement the Greenbone Community Feed with a
+versioned, signed YAFVS Community Feed. Candidate inputs include CVE List
 V5, vendor CSAF/VEX, CISA KEV, FIRST EPSS, NVD CPE/configuration data,
 OSV/GHSA, MITRE CWE, FIRST CVSS, and EUVD. These are starting points for
 evaluated source adoption, not a claim that every source is already integrated
@@ -96,11 +96,11 @@ Raw source records should remain separately identifiable. Normalization should
 produce provenance-bearing assertions about identity, affected and fixed
 versions, product matching, exploitation, probability, weakness, and severity
 without erasing disagreements, freshness, or source-specific terms. A compiled
-TurboVAS feed should distinguish copied source assertions, TurboVAS resolution
-and applicability logic, and independently authored TurboVAS detections.
+YAFVS feed should distinguish copied source assertions, YAFVS resolution
+and applicability logic, and independently authored YAFVS detections.
 
 The Greenbone Community Feed should remain a separately governed execution and
-detection source. TurboVAS can enrich Greenbone findings in the database, API,
+detection source. YAFVS can enrich Greenbone findings in the database, API,
 reporting, and presentation layers without rewriting Greenbone feed files.
 Source availability is not blanket republication permission: every published
 feed generation must carry machine-readable provenance and licensing, required
@@ -111,7 +111,7 @@ publication boundaries.
 
 ### Systematic Hygiene And Root-Cause Reduction
 
-TurboVAS should help operators identify patterns that are larger than one CVE
+YAFVS should help operators identify patterns that are larger than one CVE
 on one host. Useful groupings include age, recurrence, owner, platform,
 software family, support status, patchability, maintenance process, and common
 deployment source.
@@ -124,7 +124,7 @@ exposure from returning.
 ### Threat-Aware Prioritization
 
 Threat urgency should remain a separate, explainable dimension alongside
-housekeeping leverage. TurboVAS should be able to incorporate evidence such as
+housekeeping leverage. YAFVS should be able to incorporate evidence such as
 active exploitation, CISA KEV, EPSS, exploit maturity, attack exposure,
 reachability, lateral-movement potential, technical consequence, asset and
 business context, compensating controls, and detection capability.
@@ -136,7 +136,7 @@ erase old, widespread, recurring, or less fashionable vulnerability debt.
 
 ### Remediation, Verified Closure, And Recurrence
 
-TurboVAS should preserve the difference between open, mitigated, accepted,
+YAFVS should preserve the difference between open, mitigated, accepted,
 deferred, fixed-but-unverified, and verified-closed findings. Closure should
 require fresh evidence that the vulnerable condition was removed, that the
 affected asset or component is gone, or that durable applicability evidence
@@ -158,12 +158,12 @@ The operator console is for the trusted vulnerability-management team. People
 who need findings for remediation, management, audit, or compliance should
 receive controlled reports, exports, notifications, or delivery artifacts
 rather than broad console access. Where hard tenant isolation is required, the
-product direction remains separate independently operated TurboVAS stacks, not
+product direction remains separate independently operated YAFVS stacks, not
 in-application RBAC presented as a substitute for isolation.
 
 ### Efficiently Isolated Deployments
 
-TurboVAS should make separate-stack isolation practical to operate. Each
+YAFVS should make separate-stack isolation practical to operate. Each
 independently operated stack should keep its assets, credentials, scan state,
 findings, reports, and local treatment decisions within its own boundary.
 
@@ -181,7 +181,7 @@ roadmap promise.
 
 ### A Maintainable Native Platform
 
-The product surface should move toward typed TurboVAS-native HTTP/JSON and
+The product surface should move toward typed YAFVS-native HTTP/JSON and
 OpenAPI contracts over PostgreSQL. New security-sensitive backend and product
 infrastructure is Rust-first. Python remains appropriate for orchestration,
 while inherited C, GMP/XML, and Python product paths should be hardened,
@@ -216,7 +216,7 @@ same time.
 
 ## Deliberate Non-Goals
 
-The roadmap does not aim to make TurboVAS:
+The roadmap does not aim to make YAFVS:
 
 - a multi-tenant service inside one shared scanner stack;
 - a generic workflow or dashboard builder that adapts to every process;

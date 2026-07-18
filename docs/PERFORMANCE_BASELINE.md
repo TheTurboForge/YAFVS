@@ -3,7 +3,7 @@
 
 # Performance Baseline
 
-TurboVAS should optimize only after it can measure the relevant cost. The
+YAFVS should optimize only after it can measure the relevant cost. The
 current goal is not to set thresholds or chase micro-optimizations. The goal is
 to define the first repeatable baseline so future changes can answer: did this
 make report reading, scope reporting, runtime services, or scanner execution

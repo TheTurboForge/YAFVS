@@ -17,11 +17,7 @@ const Footer = styled.footer`
 `;
 
 const ProductFooter = () => {
-  return (
-    <Footer>
-      TurboVAS {VERSION} · Independent project
-    </Footer>
-  );
+  return <Footer>YAFVS {VERSION} · Independent project</Footer>;
 };
 
 export default ProductFooter;

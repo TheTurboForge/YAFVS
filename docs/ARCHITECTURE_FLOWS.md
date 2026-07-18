@@ -1,9 +1,9 @@
 <!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# TurboVAS Architecture Flows
+# YAFVS Architecture Flows
 
-TurboVAS is an OpenVAS-derived scanner system with intentionally divergent
+YAFVS is an OpenVAS-derived scanner system with intentionally divergent
 operator workflows. This document maps the practical flows that matter for
 changes, debugging, and future architecture work. It is a routing document, not
 a complete internal design reference.
@@ -23,11 +23,11 @@ tests, and public docs agree.
 
 ## Native API Direction
 
-TurboVAS is moving toward typed HTTP/JSON product APIs for DB-backed report,
+YAFVS is moving toward typed HTTP/JSON product APIs for DB-backed report,
 scope, metric, and evidence reads:
 
 ```text
-runtime helper -> turbovas-api /api/v1 JSON contract -> TurboVAS product query layer -> gvmd/PostgreSQL
+runtime helper -> turbovas-api /api/v1 JSON contract -> YAFVS product query layer -> gvmd/PostgreSQL
 browser/GSA -> gsad same-origin /api/v1 proxy -> turbovas-api -> gvmd/PostgreSQL
 operator script -> opt-in bearer-auth direct /api/v1 listener -> turbovas-api -> gvmd/PostgreSQL
 ```
@@ -54,7 +54,7 @@ target + task -> gvmd task state -> OSPD socket -> openvas-scanner/Notus -> gvmd
 
 Targets and tasks are technical evidence-collection inputs. Raw reports remain
 the authoritative evidence for what the scanner did. Scan start is guarded by
-runtime preflight and capability checks; TurboVAS must not start arbitrary scans
+runtime preflight and capability checks; YAFVS must not start arbitrary scans
 without an explicit authorized scope.
 
 ## Feed Flow
@@ -92,7 +92,7 @@ source-report stitching.
 
 ## Auth And Operator Model
 
-TurboVAS uses an operator-account model:
+YAFVS uses an operator-account model:
 
 ```text
 authenticated account -> full scanner operator rights -> per-user identity, attribution, and preferences

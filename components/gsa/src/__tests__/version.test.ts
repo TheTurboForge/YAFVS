@@ -12,7 +12,7 @@ describe('Version tests', () => {
     expect(RELEASE_VERSION.split('.').length).toEqual(2);
   });
 
-  test('TurboVAS version should use the WIP alpha series', () => {
+  test('YAFVS version should use the WIP alpha series', () => {
     expect(VERSION).toEqual('0.1.0-alpha.0');
     expect(RELEASE_VERSION).toEqual('0.1');
   });

@@ -4,86 +4,86 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import TurboVASLogo from 'web/components/img/TurboVASLogo';
+import YAFVSLogo from 'web/components/img/YAFVSLogo';
 
 export type ApplianceLogo = keyof typeof APPLIANCE_DATA;
 
 const APPLIANCE_DATA = {
   defaultVendorLabel: {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-150_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-400_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-400r2_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-450_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-450r2_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-600_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-600r2_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-650_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-650r2_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-5400_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-6500_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-ceno_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-deca_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-exa_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-peta_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-tera_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'enterprise-container.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
   'gsm-unknown_label.svg': {
-    title: 'TurboVAS',
-    component: TurboVASLogo,
+    title: 'YAFVS',
+    component: YAFVSLogo,
   },
 };
 

@@ -53,7 +53,7 @@ describe('Header tests', () => {
     expect(themeSwitch).not.toBeInTheDocument();
 
     await waitFor(() => {
-      const logo = screen.getByTestId('TurboVASLogo');
+      const logo = screen.getByTestId('YAFVSLogo');
       expect(logo).toBeVisible();
     });
 

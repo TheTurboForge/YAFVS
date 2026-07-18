@@ -1,15 +1,17 @@
 <!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# TurboVAS
+# YAFVS
 
-TurboVAS is an opinionated, OpenVAS-derived vulnerability scanner for trusted
-scanner operators. It combines guarded evidence collection, scope-based
-reporting, and an incremental native HTTP/JSON API direction in one provenance-
-preserving monorepo. It is intentionally not an OpenVAS-compatible drop-in
-replacement.
+**Yet Another Fine Vulnerability Scanner**
 
-TurboVAS is alpha-stage source, not a finished distribution. The development
+YAFVS (pronounced “yaff-vis”) is an opinionated, OpenVAS-derived vulnerability
+scanner for trusted scanner operators. It combines guarded evidence collection,
+scope-based reporting, and an incremental native HTTP/JSON API direction in one
+provenance-preserving monorepo. It is intentionally not an OpenVAS-compatible
+drop-in replacement.
+
+YAFVS is alpha-stage source, not a finished distribution. The development
 runtime and operator workflows are real and tested, but there is no binary or
 container release, hosted service, production deployment promise, feed mirror,
 support promise, or feed redistribution.
@@ -85,13 +87,13 @@ just turbovasctl-rust doctor --status-only --json
 
 A full build, feed initialization, application startup, and browser workflow
 take longer and have meaningful state and security boundaries. Continue with
-[Building TurboVAS](BUILDING.md), the
+[Building YAFVS](BUILDING.md), the
 [runtime guide](docker/runtime/README.md), and the
 [CLI reference](docs/CLI_REFERENCE.md).
 
 ## Operator And Security Boundary
 
-TurboVAS deliberately removed inherited product RBAC. This is an intentional
+YAFVS deliberately removed inherited product RBAC. This is an intentional
 trust-boundary decision, not a missing feature: one installation represents one
 trusted scanner-operator team, whose individually authenticated members share
 visibility and authority so they can continue one another's work and provide
@@ -122,7 +124,7 @@ orchestration, while retained inherited C is hardened and tested until a
 validated replacement is justified. The native API is being built as typed
 product contracts over PostgreSQL, not as a thin REST wrapper around GMP/XML.
 The [product-direction roadmap](docs/ROADMAP.md) connects that engineering
-direction to the vulnerability-management outcomes TurboVAS is intended to
+direction to the vulnerability-management outcomes YAFVS is intended to
 support.
 
 ## Documentation Map
@@ -132,7 +134,7 @@ support.
 | Product direction and intended outcomes | [Product Direction Roadmap](docs/ROADMAP.md) |
 | Vulnerability-management operating model | [Vulnerability Management Practice](docs/VULNERABILITY_MANAGEMENT_PRACTICE.md) |
 | Commands and safety semantics | [CLI Reference](docs/CLI_REFERENCE.md) |
-| Build and dependency baseline | [Building TurboVAS](BUILDING.md) |
+| Build and dependency baseline | [Building YAFVS](BUILDING.md) |
 | Development runtime | [Docker Runtime](docker/runtime/README.md) |
 | Operator behavior | [User Manual](docs/USER_MANUAL.md) |
 | Data and service flows | [Architecture Flows](docs/ARCHITECTURE_FLOWS.md) |
@@ -143,21 +145,32 @@ support.
 | Intentional upstream divergence | [Changes From Upstream](docs/CHANGES_FROM_UPSTREAM.md) |
 | Source provenance and licensing | [Upstreams](UPSTREAMS.md) and [License Audit](LICENSE_AUDIT.md) |
 
+## Name And Identity
+
+YAFVS stands for **Yet Another Fine Vulnerability Scanner**. The name is
+intentionally self-aware: vulnerability scanning is an established field, and
+YAFVS builds on useful OpenVAS scanner foundations while developing its own
+product identity, operating model, APIs, and architectural direction.
+
+YAFVS was previously developed as TurboVAS. Existing Git history, historical
+records, and truthful TurboVAS-era provenance remain under that name; the
+rename does not rewrite them.
+
 ## Relationship To Greenbone
 
 “OpenVAS-derived” describes source lineage, not product compatibility.
-TurboVAS is independent and is not affiliated with, sponsored by, or endorsed
+YAFVS is independent and is not affiliated with, sponsored by, or endorsed
 by Greenbone AG. Greenbone remains the upstream source for the imported
 components recorded in [UPSTREAMS.md](UPSTREAMS.md).
 
-TurboVAS supports Community Feed workflows only. It does not support Greenbone
+YAFVS supports Community Feed workflows only. It does not support Greenbone
 Enterprise Feed subscription keys or Enterprise Feed synchronization.
 Organizations seeking official Greenbone products, Enterprise Feed access,
 support, or services should contact Greenbone directly.
 
 ## Contributions And Security Reports
 
-Public source visibility is for transparency at this stage. TurboVAS is not
+Public source visibility is for transparency at this stage. YAFVS is not
 currently seeking external contributions and does not provide a support
 promise. Read [CONTRIBUTING.md](CONTRIBUTING.md) and
 [SECURITY.md](SECURITY.md) before opening an issue or pull request, and never

@@ -10,9 +10,9 @@ import Image from 'web/components/img/Image';
 
 describe('Image tests', () => {
   test('should render image with attributes', () => {
-    const {element} = render(<Image alt="TurboVAS" src="favicon.svg" />);
+    const {element} = render(<Image alt="YAFVS" src="favicon.svg" />);
 
-    expect(element).toHaveAttribute('alt', 'TurboVAS');
+    expect(element).toHaveAttribute('alt', 'YAFVS');
     expect(element).toHaveAttribute('src', '/img/favicon.svg');
   });
 });

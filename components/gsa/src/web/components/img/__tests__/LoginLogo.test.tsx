@@ -15,17 +15,17 @@ describe('LoginLogo tests', () => {
     });
     const {element} = render(<LoginLogo />);
 
-    expect(element).toHaveTextContent('TurboVAS');
+    expect(element).toHaveTextContent('YAFVS');
     expect(element).toHaveAttribute('data-testid', 'login-logo');
   });
 
-  test('should render TurboVAS logo when vendorLabel is set', () => {
+  test('should render YAFVS logo when vendorLabel is set', () => {
     const {render} = rendererWith({
       gmp: {settings: {vendorLabel: 'test'}},
     });
     const {element} = render(<LoginLogo />);
 
-    expect(element).toHaveTextContent('TurboVAS');
+    expect(element).toHaveTextContent('YAFVS');
     expect(element).toHaveAttribute('data-testid', 'login-logo');
   });
 });

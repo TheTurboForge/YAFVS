@@ -3,7 +3,7 @@
 
 # Security Policy
 
-TurboVAS is not production-ready. The current repository is source-readable for
+YAFVS is not production-ready. The current repository is source-readable for
 transparency and development review, not as a supported product release.
 
 ## Reporting Security Issues
@@ -12,7 +12,7 @@ Do not put secrets, customer data, real scan results, exploit details for a
 private environment, or sensitive infrastructure information into public issues
 or pull requests.
 
-At this stage, TurboVAS does not offer a public vulnerability disclosure program
+At this stage, YAFVS does not offer a public vulnerability disclosure program
 or response-time commitment. If a security-relevant issue is found, report only
 the minimum non-sensitive technical description needed to understand the class
 of problem. Maintainers may request a safer reporting path before discussing
@@ -37,7 +37,7 @@ trusted TLS, password rotation, and deployment controls are implemented.
 
 ## Memory Safety
 
-TurboVAS uses an incremental Rust-first direction for new security-sensitive
+YAFVS uses an incremental Rust-first direction for new security-sensitive
 backend functionality while retaining, hardening, removing, or replacing
 inherited C according to exposure and consequence. Memory safety is one part of
 the security posture and does not substitute for authentication, authorization,
@@ -47,6 +47,6 @@ See `docs/MEMORY_SAFETY.md` and `docs/C_HARDENING.md`.
 
 ## Relationship To Greenbone
 
-TurboVAS is independent and is not affiliated with, sponsored by, or endorsed by
+YAFVS is independent and is not affiliated with, sponsored by, or endorsed by
 Greenbone AG. For official Greenbone products and services, visit
 https://www.greenbone.net/.

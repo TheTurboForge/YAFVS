@@ -84,7 +84,7 @@ describe('Page tests', () => {
       screen.getByText(/Please wait while the feed is syncing./i),
     ).toBeInTheDocument();
     expect(screen.getByRole('contentinfo')).toBeInTheDocument(); // footer
-    expect(screen.getByText(/TurboVAS 0\.1\.0-alpha\.0/i)).toBeInTheDocument();
+    expect(screen.getByText(/YAFVS 0\.1\.0-alpha\.0/i)).toBeInTheDocument();
     expect(screen.getByText('Child Content')).toBeInTheDocument();
   });
 });

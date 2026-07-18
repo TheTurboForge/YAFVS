@@ -3,7 +3,7 @@
 
 # Scope-Based Reporting
 
-TurboVAS intentionally separates technical scan collection from operator-facing
+YAFVS intentionally separates technical scan collection from operator-facing
 reporting.
 
 Inherited OpenVAS concepts tend to make a technical target, a scan task, and a
@@ -12,7 +12,7 @@ real vulnerability management. One meaningful operational population may need
 several technical targets because of network boundaries, credential sets,
 scanner reachability, maintenance windows, port profiles, or scan constraints.
 
-TurboVAS treats those concerns as different layers.
+YAFVS treats those concerns as different layers.
 
 For operator usage, see `USER_MANUAL.md`. This document focuses on the product
 model and implementation rationale.
@@ -23,7 +23,7 @@ model and implementation rationale.
 
 A target is an evidence-collection unit.
 
-It describes how TurboVAS should collect vulnerability evidence, including
+It describes how YAFVS should collect vulnerability evidence, including
 technical details such as:
 
 - host definitions;
@@ -73,7 +73,7 @@ command starts scans or mutates feeds.
 
 ## Why Scopes Are Not Folders
 
-TurboVAS does not model scopes as a strict tree.
+YAFVS does not model scopes as a strict tree.
 
 Real environments are multi-dimensional. A single host can simultaneously be a
 Windows server, part of identity infrastructure, internally exposed, in a high
@@ -85,7 +85,7 @@ Scope membership should therefore be many-to-many.
 
 ## Organization Scope
 
-TurboVAS should provide a default global scope named `Organization`.
+YAFVS should provide a default global scope named `Organization`.
 
 The organization-level view must deduplicate assets and findings. It should not
 sum lower-level scope reports, because overlapping scopes would inflate counts.
@@ -101,7 +101,7 @@ Correct organization reporting answers questions such as:
 
 ## Protection Requirement
 
-TurboVAS uses protection requirement terminology for impact-driven reporting
+YAFVS uses protection requirement terminology for impact-driven reporting
 context.
 
 The intended operator-facing values are:
@@ -150,7 +150,7 @@ Scopes manually manage two memberships:
 The predefined `Organization` scope is global and non-deletable. It includes all
 active targets and all known hosts by definition.
 
-Generating a scope report does not start a scan. TurboVAS selects the newest
+Generating a scope report does not start a scan. YAFVS selects the newest
 completed normal scan report for each associated target and stores the selected
 source reports as snapshot provenance. Inherited import-task/report-upload
 product behavior has been removed, so scope reports aggregate scanner-produced
@@ -167,7 +167,7 @@ metric families are `CVSS Load` and `Authenticated Scan Coverage`.
 
 `CVSS Load` is calculated from vulnerability findings with positive severity,
 excluding logs, false positives, scanner execution errors, informational rows,
-and severity-zero rows. TurboVAS counts an NVT once per alive system, even if it
+and severity-zero rows. YAFVS counts an NVT once per alive system, even if it
 appears on multiple ports. A system's CVSS Load is the sum of the unique
 vulnerability scores on that system. A vulnerability's CVSS Load is its score
 multiplied by the number of affected systems. The average system load and
@@ -177,13 +177,13 @@ for the report or scope.
 `Authenticated Scan Coverage` is evidence-based: only report evidence of
 successful authenticated checks counts as authenticated. Missing target
 credentials become `No Credential Path`; configured credentials without reliable
-success or failure evidence become `Unknown`. This prevents TurboVAS from
+success or failure evidence become `Unknown`. This prevents YAFVS from
 mistaking intended authenticated scanning for proven authenticated scanning.
 
 Findings are deduplicated by host identity, NVT/OID, port, and result identity.
 The scope-report list is served through manager-side filtering, sorting, and
 pagination. Scope-report evidence collections are now served through
-TurboVAS-native JSON from PostgreSQL-backed source-report references, so
+YAFVS-native JSON from PostgreSQL-backed source-report references, so
 operators get aggregated tables with filtering, sorting, pagination, severity
 presentation, and raw evidence links without browser-side raw-report stitching.
 Raw source reports referenced by a scope report are protected from deletion so
@@ -216,7 +216,7 @@ Runtime helpers are available for development validation:
 
 ## Product Rule
 
-A target defines how TurboVAS collects evidence. A scope defines why that
+A target defines how YAFVS collects evidence. A scope defines why that
 evidence matters and how it is reported. A scope report is an aggregated report
 over the newest completed evidence for the scope's targets, while raw
 target/task reports remain the technical evidence trail.

@@ -35,11 +35,11 @@ const ExternalLink = ({children, to, ...props}: ExternalLinkProps) => {
     handleCloseDialog();
   };
 
-  const dialogTitle = _('You are leaving TurboVAS');
+  const dialogTitle = _('You are leaving YAFVS');
   const dialogText = _(
     'This dialog will open a new window for {{- to}} ' +
       'if you click on "follow link". Following this link is on your own ' +
-      'responsibility. TurboVAS does not endorse the content you will ' +
+      'responsibility. YAFVS does not endorse the content you will ' +
       'see there.',
     {to},
   );

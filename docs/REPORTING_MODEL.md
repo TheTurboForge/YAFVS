@@ -1,9 +1,9 @@
 <!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# TurboVAS Reporting Model
+# YAFVS Reporting Model
 
-TurboVAS reporting is intentionally prescriptive. The product should guide
+YAFVS reporting is intentionally prescriptive. The product should guide
 operators toward evidence quality, scope coverage, freshness, authenticated
 coverage, and drill-down to raw evidence.
 

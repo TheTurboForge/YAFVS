@@ -31,11 +31,11 @@ describe('getLogo', () => {
     'defaultVendorLabel',
   ];
 
-  test.each(testCases)('returns TurboVAS branding for %s', async logo => {
+  test.each(testCases)('returns YAFVS branding for %s', async logo => {
     render(getLogo(logo as ApplianceLogo));
     await waitFor(() => {
-      expect(screen.getByTestId('TurboVASLogo')).toBeInTheDocument();
-      expect(screen.getByText('TurboVAS')).toBeInTheDocument();
+      expect(screen.getByTestId('YAFVSLogo')).toBeInTheDocument();
+      expect(screen.getByText('YAFVS')).toBeInTheDocument();
     });
   });
 });

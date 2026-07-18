@@ -1,9 +1,9 @@
 <!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> -->
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 160" role="img" aria-label="TurboVAS">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 160" role="img" aria-label="YAFVS">
   <rect width="520" height="160" rx="18" fill="#111217"/>
   <path d="M34 34h92v16H88v76H70V50H34z" fill="#fff"/>
   <path d="M112 58h36l-38 68H90z" fill="#b11226"/>
-  <text x="190" y="88" fill="#fff" font-family="Inter,Arial,sans-serif" font-size="46" font-weight="700">TurboVAS</text>
+  <text x="190" y="88" fill="#fff" font-family="Inter,Arial,sans-serif" font-size="46" font-weight="700">YAFVS</text>
   <text x="193" y="118" fill="#aeb4bf" font-family="Inter,Arial,sans-serif" font-size="16">operator-focused vulnerability assessment</text>
 </svg>

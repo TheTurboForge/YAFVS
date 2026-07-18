@@ -3,7 +3,7 @@
 
 # Contributing
 
-TurboVAS is currently an early-stage OpenVAS-derived project. Public source
+YAFVS is currently an early-stage OpenVAS-derived project. Public source
 visibility is intended for transparency and read access while the project is
 still being shaped.
 
@@ -34,7 +34,7 @@ scrutiny. The source quality workflow is intentionally restricted and does not
 run scans, sync feeds, start the development runtime, or use repository secrets.
 
 Useful ideas are welcome as design signal, but maintainers may choose a
-different implementation to preserve TurboVAS direction, security boundaries,
+different implementation to preserve YAFVS direction, security boundaries,
 license/provenance obligations, and validation standards.
 
 ## Memory Safety
@@ -48,12 +48,12 @@ See `docs/MEMORY_SAFETY.md` for the project direction and review criteria.
 
 ## Project Direction
 
-TurboVAS intentionally diverges from upstream behavior. See
+YAFVS intentionally diverges from upstream behavior. See
 `docs/CHANGES_FROM_UPSTREAM.md` and `docs/USER_MANUAL.md` before assuming that
 an inherited OpenVAS/GVM workflow should remain supported.
 
 ## Relationship To Greenbone
 
-TurboVAS is independent and is not affiliated with, sponsored by, or endorsed by
+YAFVS is independent and is not affiliated with, sponsored by, or endorsed by
 Greenbone AG. For official Greenbone products and services, visit
 https://www.greenbone.net/.

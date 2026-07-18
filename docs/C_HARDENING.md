@@ -3,24 +3,24 @@
 
 # Retained C Hardening Strategy
 
-TurboVAS inherits security-sensitive C from OpenVAS and the wider Greenbone
+YAFVS inherits security-sensitive C from OpenVAS and the wider Greenbone
 Community Edition stack. The project removes inherited functionality it does
 not need, uses Rust by default for new security-sensitive backend work, and
 incrementally replaces high-risk C where a validated boundary makes that
 safer. C that remains must be defended and tested deliberately.
 
 Compiler flags, analysis tools, and sanitizers reduce risk; they do not make C
-memory-safe and do not prove that TurboVAS is secure.
+memory-safe and do not prove that YAFVS is secure.
 
 This strategy is guided by OpenSSF compiler-hardening guidance; official GCC,
 Clang, CMake, and GitHub CodeQL documentation; the SEI CERT C Coding Standard;
 NIST's Secure Software Development Framework; and NSA/CISA memory-safe-language
-guidance. These sources inform TurboVAS engineering choices but do not imply
+guidance. These sources inform YAFVS engineering choices but do not imply
 endorsement, certification, or complete compliance with any standard.
 
 ## Commitments
 
-TurboVAS will:
+YAFVS will:
 
 1. remove unnecessary inherited C rather than harden unused functionality;
 2. prioritize retained C by exposure and consequence, not source-line count;
@@ -32,7 +32,7 @@ TurboVAS will:
    instrumentation;
 6. use build-aware static analysis alongside broad source analysis;
 7. keep warning suppressions and analysis exclusions narrow, justified, and
-   separate from new TurboVAS code;
+   separate from new YAFVS code;
 8. record unsupported, inapplicable, and inconclusive protections honestly;
 9. preserve ordinary developer speed by separating routine, instrumented, and
    deep-analysis builds; and
@@ -78,7 +78,7 @@ privilege, and consequence. Total warning count is not a security metric.
 
 ## Incremental Adoption
 
-TurboVAS is a brownfield codebase. Hardening is introduced in bounded steps:
+YAFVS is a brownfield codebase. Hardening is introduced in bounded steps:
 
 1. inventory the current toolchain, C build baseline, produced ELF artifacts,
    and existing protections;

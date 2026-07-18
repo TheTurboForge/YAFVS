@@ -5,9 +5,9 @@
  */
 
 import styled from 'styled-components';
-import TurboVASLogo from 'web/components/img/TurboVASLogo';
+import YAFVSLogo from 'web/components/img/YAFVSLogo';
 
-const StyledLogo = styled(TurboVASLogo)`
+const StyledLogo = styled(YAFVSLogo)`
   width: 300px;
   height: 72px;
   color: #111111;

@@ -1,10 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-name: TurboVAS CodeQL configuration
+name: YAFVS CodeQL configuration
 
 query-filters:
-  # TurboVAS retains NASL DES/RC4 builtins for scanner script compatibility.
+  # YAFVS retains NASL DES/RC4 builtins for scanner script compatibility.
   # These primitives are not new product cryptography choices; higher-level
   # removal requires feed/script compatibility work rather than a local rename.
   - exclude:

@@ -9,12 +9,12 @@ import {rendererWith, screen} from 'web/testing';
 import Footer from 'web/components/structure/Footer';
 
 describe('Footer tests', () => {
-  test('should render footer with TurboVAS version and independent project label', () => {
+  test('should render footer with YAFVS version and independent project label', () => {
     const {render} = rendererWith({store: true});
 
     render(<Footer />);
 
-    expect(screen.getByText(/TurboVAS 0\.1\.0-alpha\.0/)).toBeInTheDocument();
+    expect(screen.getByText(/YAFVS 0\.1\.0-alpha\.0/)).toBeInTheDocument();
     expect(screen.getByText(/Independent project/)).toBeInTheDocument();
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });

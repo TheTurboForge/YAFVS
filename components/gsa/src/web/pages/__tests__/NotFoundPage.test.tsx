@@ -9,14 +9,14 @@ import {rendererWith, screen} from 'web/testing';
 import PageNotFound from 'web/pages/NotFoundPage';
 
 const gmp = {
-  settings: {vendorTitle: 'TurboVAS'},
+  settings: {vendorTitle: 'YAFVS'},
 };
 
 describe('PageNotFound tests', () => {
   test('renders the page title', () => {
     const {render} = rendererWith({gmp});
     render(<PageNotFound />);
-    expect(document.title).toEqual('TurboVAS - Page Not Found');
+    expect(document.title).toEqual('YAFVS - Page Not Found');
   });
 
   test('renders the main heading', () => {
@@ -27,10 +27,10 @@ describe('PageNotFound tests', () => {
     );
   });
 
-  test('renders the TurboVAS logo', () => {
+  test('renders the YAFVS logo', () => {
     const {render} = rendererWith({gmp});
     render(<PageNotFound />);
-    expect(screen.getByTestId('TurboVASLogo')).toBeInTheDocument();
+    expect(screen.getByTestId('YAFVSLogo')).toBeInTheDocument();
   });
 
   test('renders the error message', () => {

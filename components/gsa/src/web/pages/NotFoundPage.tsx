@@ -5,11 +5,11 @@
  */
 
 import styled from 'styled-components';
-import TurboVASLogo from 'web/components/img/TurboVASLogo';
+import YAFVSLogo from 'web/components/img/YAFVSLogo';
 import PageTitle from 'web/components/layout/PageTitle';
 import useTranslation from 'web/hooks/useTranslation';
 
-const NotFoundLogo = styled(TurboVASLogo)`
+const NotFoundLogo = styled(YAFVSLogo)`
   width: 300px;
   color: #111111;
   font-size: 42px;

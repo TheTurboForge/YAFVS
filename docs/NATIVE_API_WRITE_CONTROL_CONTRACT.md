@@ -3,7 +3,7 @@
 
 # Native API Write And Control Contract
 
-TurboVAS native API replacement is not limited to reads. Retained write and
+YAFVS native API replacement is not limited to reads. Retained write and
 control workflows may move to native HTTP/JSON when the slice is explicit,
 bounded, and validated.
 

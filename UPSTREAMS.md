@@ -10,14 +10,18 @@ Import method: source snapshot from local upstream cache, excluding only upstrea
 
 `pg-gvm` was added on 2026-06-01 after identifying it as a required PostgreSQL extension for `gvmd` runtime work.
 
-TurboVAS is an independent project and is not affiliated with, sponsored by, or endorsed by Greenbone AG. The Greenbone/OpenVAS repositories listed below are upstream source references for the imported components. For official Greenbone/OpenVAS vulnerability-management products, support, or services, contact Greenbone directly at https://www.greenbone.net/.
+YAFVS, previously developed as TurboVAS, is an independent project and is not
+affiliated with, sponsored by, or endorsed by Greenbone AG. The Greenbone/OpenVAS
+repositories listed below are upstream source references for the imported
+components. For official Greenbone/OpenVAS vulnerability-management products,
+support, or services, contact Greenbone directly at https://www.greenbone.net/.
 
 ## Intentional Product Divergence
 
-OpenVAS-derived describes TurboVAS source lineage and provenance; it does not
-promise product compatibility. TurboVAS is intentionally not OpenVAS-compatible
+OpenVAS-derived describes YAFVS source lineage and provenance; it does not
+promise product compatibility. YAFVS is intentionally not OpenVAS-compatible
 and is not a drop-in replacement. This is a strategic product decision, not
-accidental drift or a compatibility backlog. TurboVAS changes or removes
+accidental drift or a compatibility backlog. YAFVS changes or removes
 inherited APIs, data models, workflows, and features when doing so makes the
 scanner simpler, safer, or clearer for its operators.
 
@@ -28,7 +32,7 @@ boundaries. This is intended to avoid tying reports directly to technical target
 definitions when one operational population needs several targets because of
 network boundaries, credentials, scan constraints, or scanner reachability.
 
-TurboVAS also intentionally limits feed synchronization to the Greenbone
+YAFVS also intentionally limits feed synchronization to the Greenbone
 Community Feed. It does not support Greenbone Enterprise Feed subscription keys
 or Enterprise Feed synchronization. Feed content is runtime state, not source
 code, and must not be bundled, mirrored, packaged, or redistributed without a
@@ -58,5 +62,5 @@ The archived standalone `greenbone/ospd` repository is not imported. Current `os
 `python-gvm` (upstream commit `acf6ccf`) and `gvm-tools` (upstream commit
 `f68027a`) were imported during initial shaping, then removed after retained
 product, validation, and operator workflows moved to native HTTP/JSON. Their
-source provenance remains in repository history; neither is a current TurboVAS
+source provenance remains in repository history; neither is a current YAFVS
 component or required dependency.

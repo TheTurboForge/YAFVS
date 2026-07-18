@@ -3,7 +3,7 @@
 
 # Native API Authentication Boundary
 
-TurboVAS is adding DB-backed HTTP/JSON APIs for product reads. The API must be
+YAFVS is adding DB-backed HTTP/JSON APIs for product reads. The API must be
 scriptable without making `gsad`, GMP/XML, `python-gvm`, or `gvm-tools` required
 automation interfaces, but it must also avoid becoming an accidental unauthenticated
 scanner-administration surface.

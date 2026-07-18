@@ -1,16 +1,16 @@
 <!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# TurboVAS HTTP/JSON API Contract
+# YAFVS HTTP/JSON API Contract
 
-TurboVAS is adding typed HTTP/JSON product APIs under `/api/v1` for DB-backed
+YAFVS is adding typed HTTP/JSON product APIs under `/api/v1` for DB-backed
 operator workflows. Several read-only endpoints are already live through the
 Rust sidecar, the authenticated `gsad` browser proxy, and an opt-in direct
 bearer-token development listener. `python-gvm` and `gvm-tools` are removed;
 remaining inherited GSA, `gsad`, `gvmd`, and GMP/XML paths are explicit
 workflow-owner tails rather than required automation clients.
 
-The goal is not to wrap GMP/XML in REST. New TurboVAS product reads should be
+The goal is not to wrap GMP/XML in REST. New YAFVS product reads should be
 sourced from gvmd/PostgreSQL-owned state and should keep GMP/XML contained as a
 compatibility and control protocol while native APIs replace product workflow
 needs over time.
@@ -414,7 +414,7 @@ flags, alert backlinks, parameters, and timestamps. Report formats
 are scanner output configuration, so these endpoints stay inside the
 authenticated operator boundary. Direct scriptable
 `GET /api/v1/report-formats/{report_format_id}/export` returns the same native
-detail JSON for metadata export. TurboVAS deliberately retires custom
+detail JSON for metadata export. YAFVS deliberately retires custom
 executable report-format import, editing, verification, cloning, and deletion
 instead of reproducing those plugin semantics in the native API. Report output
 uses retained trusted built-in/feed formats or dedicated typed native export
@@ -480,7 +480,7 @@ truth.
 
 Operator CSV export composes the direct report-detail and paginated result
 projection through `native-export-report-csv`. The helper writes a deterministic
-TurboVAS result-view schema atomically and is not a hidden GMP/report-format
+YAFVS result-view schema atomically and is not a hidden GMP/report-format
 bridge.
 
 `GET /api/v1/reports/{report_id}/raw-results` is the lossless retained-result
@@ -525,7 +525,7 @@ positive-severity vulnerability metric rows only.
 - Do not confuse the `gsad` same-origin proxy with the final scriptable API
   boundary; it remains a migration bridge for browser reads.
 - Do not reintroduce the removed `python-gvm` or `gvm-tools` dependency;
-  use the native API or a bounded TurboVAS-owned helper.
+  use the native API or a bounded YAFVS-owned helper.
 - Do not recreate inherited read-only list wrappers after a native
   metadata endpoint covers the retained safe contract; for Alerts, the native
   list/detail contract is redacted metadata only, not method/event/condition

@@ -48,7 +48,7 @@ class LoginCommand extends HttpCommand {
           case 503:
             rej.setMessage(
               _(
-                'The TurboVAS manager service is not ' +
+                'The YAFVS manager service is not ' +
                   'responding. This could be due to system maintenance. ' +
                   'Please try again later, check the system status, or ' +
                   'contact your system administrator.',

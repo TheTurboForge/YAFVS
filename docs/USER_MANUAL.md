@@ -1,29 +1,29 @@
 <!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# TurboVAS User Manual
+# YAFVS User Manual
 
-TurboVAS is an independent OpenVAS-derived scanner for vulnerability management
+YAFVS is an independent OpenVAS-derived scanner for vulnerability management
 operators. OpenVAS-derived describes its source lineage, not product
-compatibility. TurboVAS is intentionally not OpenVAS-compatible and is not a
+compatibility. YAFVS is intentionally not OpenVAS-compatible and is not a
 drop-in replacement. That is a strategic product decision, not accidental
-drift. TurboVAS is not affiliated with, sponsored by, or endorsed by Greenbone
+drift. YAFVS is not affiliated with, sponsored by, or endorsed by Greenbone
 AG. Greenbone remains the upstream source for the imported OpenVAS/Greenbone
 components recorded in `../UPSTREAMS.md`; organizations looking for official
 Greenbone/OpenVAS products, support, or services should contact Greenbone
 directly at https://www.greenbone.net/.
 
-TurboVAS is currently in active alpha development. This manual describes the
+YAFVS is currently in active alpha development. This manual describes the
 current development runtime and implemented operator workflows. It is not
 production deployment guidance. See `CLI_REFERENCE.md` for the grouped command
 surface and command-specific safety notes.
 
 ## Operator Access And Security Boundary
 
-TurboVAS deliberately removed inherited product role-based access control
+YAFVS deliberately removed inherited product role-based access control
 (RBAC). This is not an accidental omission, a temporary limitation, or a
 compatibility feature waiting to be restored. It follows from the intended
-operating model: one TurboVAS installation belongs to one trusted
+operating model: one YAFVS installation belongs to one trusted
 vulnerability-management or scanner-operations team and one administrative
 trust domain.
 
@@ -44,40 +44,40 @@ not part of the operator model. Shared product authority does not automatically
 grant operating-system, database, network, or deployment access.
 
 People who only consume findings for compliance, remediation, management, or
-reporting should not receive TurboVAS console accounts. Their required
+reporting should not receive YAFVS console accounts. Their required
 information is intended to reach them automatically through controlled outbound
 reports, exports, notifications, and appliance delivery workflows—for example,
 email routed into a ticket system or files written to an approved network share.
-TurboVAS is not a vulnerability-management collaboration platform.
+YAFVS is not a vulnerability-management collaboration platform.
 
 This makes the scanner administration boundary explicit:
 
-- TurboVAS console access is restricted to trusted scanner operators.
+- YAFVS console access is restricted to trusted scanner operators.
 - All operators in one installation work in the same product-level trust
   domain and intentionally share scanner-resource visibility and authority.
 - Remediation work is delivered outward to the systems where operational teams
   already work.
-- TurboVAS does not try to model every organization's internal workflow as
+- YAFVS does not try to model every organization's internal workflow as
   in-product roles.
 - Login, network exposure, TLS, host access, backups, deployment controls,
   auditability, and credential handling are the enterprise controls around
   scanner administration.
 
-TurboVAS does not expose a product-level distinction between admin and super
+YAFVS does not expose a product-level distinction between admin and super
 admin accounts. If a person should not be allowed to administer the scanner,
-that person should not be able to log in to TurboVAS.
+that person should not be able to log in to YAFVS.
 
 ### Tenant Isolation
 
 Product-level RBAC is not hard tenant isolation. Row or UI permissions inside
 one application can hide resources while the same processes, database,
 privileged service identities, scanner workers, runtime secrets, network reach,
-and failure domain remain shared. TurboVAS therefore does not market one
+and failure domain remain shared. YAFVS therefore does not market one
 installation as a multi-tenant vulnerability-management platform.
 
 When customers, legal entities, security domains, administrative authorities,
 confidentiality boundaries, or target-network trust zones must not share
-scanner control or data, deploy separate, independently operated TurboVAS
+scanner control or data, deploy separate, independently operated YAFVS
 stacks. The stacks must separately own the database, reports and evidence,
 target and scanner credentials, tasks and queues, API and authentication
 configuration, runtime state and secrets, logs, exports, backups, scanner
@@ -108,22 +108,22 @@ production exposure model.
 ## Runtime State
 
 The Docker runtime keeps valuable state outside the repository under the
-TurboVAS runtime directory. That state includes PostgreSQL data, certificates,
+YAFVS runtime directory. That state includes PostgreSQL data, certificates,
 logs, feed cache data, runtime feed copies, scanner state, and report artifacts.
 
 Greenbone Community Feed data is handled as local runtime state, not as source
-code. TurboVAS keeps a canonical downloaded feed cache and copies known feed
+code. YAFVS keeps a canonical downloaded feed cache and copies known feed
 subtrees into the runtime feed tree for services to consume. Do not commit,
 bundle, package, or redistribute feed content unless a separate feed-terms review
 explicitly approves that use.
 
-TurboVAS supports the Greenbone Community Feed only. It does not support
+YAFVS supports the Greenbone Community Feed only. It does not support
 Greenbone Enterprise Feed subscription keys or Enterprise Feed synchronization.
 Operators who need Greenbone Enterprise Feed access, official Greenbone products,
 or vendor support should contact Greenbone directly.
 
 OpenVAS, OSPD, and Notus use runtime feed data and a persistent feed-signature
-keyring. TurboVAS does not disable feed signature verification.
+keyring. YAFVS does not disable feed signature verification.
 
 `just feed-generation-stage --json` can copy all five retained feed classes
 into one immutable, content-addressed generation. It rejects links, special
@@ -151,7 +151,7 @@ service-coordinated compensating recovery to a prior generation. This is not a
 transactional database rollback: it reimports the prior generation as explicit
 compensation and reports any failed recovery step.
 
-TurboVAS records activation progress in an owner-only durable journal. App
+YAFVS records activation progress in an owner-only durable journal. App
 startup refuses an interrupted transition or a mismatch between the journal
 and `feed-store/current`. A later interrupted transition must recover to its
 recorded predecessor with `feed-generation-rollback`; an interrupted first
@@ -181,7 +181,7 @@ partially replaced artifact tree.
 The generation boundary verifies Greenbone signatures and exact signed
 checksum coverage for NASL, Notus advisories/products, and CERT data. The
 upstream SCAP and GVMD data-object trees do not currently provide corresponding
-signed checksum manifests in the Community Feed cache; TurboVAS relies on the
+signed checksum manifests in the Community Feed cache; YAFVS relies on the
 hardened transport boundary and records their complete local hashes, but does
 not describe that as independent publisher authentication.
 
@@ -339,7 +339,7 @@ claiming a failed scan that may already be active, and reports the observed
 state for diagnosis or retry.
 
 `native-export-report-csv` replaces the inherited GMP CSV report-format script
-with a deterministic TurboVAS result-table export over direct native JSON. It
+with a deterministic YAFVS result-table export over direct native JSON. It
 preflights the exact report, paginates all result rows up to the explicit safety
 cap, writes a private same-directory temporary file, and atomically replaces the
 destination only after a complete export. Existing files require `--overwrite`.
@@ -411,7 +411,7 @@ than accepting an unverified server. Existing SSH-authenticated targets must be
 updated with verified pins after upgrading to this behavior; multiple pins for
 one IP may be supplied during controlled key rotation.
 
-Task creation is deliberately streamlined. TurboVAS does not expose inherited
+Task creation is deliberately streamlined. YAFVS does not expose inherited
 task wizards, import-task creation, task resume semantics, or per-task switches
 for alterability and asset processing. Tasks are always alterable, scan results
 are always added to assets, and old raw reports are automatically pruned by a
@@ -482,7 +482,7 @@ all references before creating or starting a scan. Delivery recipients,
 credentials, and alert configuration are not looked up or synthesized by the
 composition command.
 
-TurboVAS does not treat a raw task report as the main operator reporting unit.
+YAFVS does not treat a raw task report as the main operator reporting unit.
 Raw reports are important evidence, but they can be too tightly coupled to
 technical scan boundaries such as subnets, credentials, reachability, or scanner
 constraints, or probe capability limits.
@@ -503,7 +503,7 @@ scope's targets.
 Scope report lists and evidence rows use server-backed filtering, sorting, and
 pagination for the core reading workflow. Scope-report Results, Hosts, Ports,
 Applications, Operating Systems, CVEs, TLS Certificates, Error Messages, and
-Metrics are aggregated views backed by TurboVAS-native JSON;
+Metrics are aggregated views backed by YAFVS-native JSON;
 result rows preserve severity display and link back to the raw scan report
 evidence they were derived from. Raw report management actions that do not fit
 aggregated snapshots, such as report-composer downloads, alerts, and asset/tag
@@ -515,7 +515,7 @@ A scope is a reporting population. It describes the set of assets an operator
 wants to understand, such as an organization, a technology class, an exposure
 class, a protection requirement group, or a business service.
 
-TurboVAS provides a predefined global scope named `Organization`. It is
+YAFVS provides a predefined global scope named `Organization`. It is
 non-deletable and includes all active targets and known hosts by definition.
 
 Custom scopes manage two memberships:
@@ -529,13 +529,13 @@ Protection requirement values are:
 - `High`
 - `Very High`
 
-Generating a scope report does not start a scan. TurboVAS selects the newest
+Generating a scope report does not start a scan. YAFVS selects the newest
 completed scan report for each associated target, stores those source reports as
 snapshot provenance, deduplicates findings, and exposes coverage and freshness
 signals. Candidate hosts discovered in the source reports can be shown so an
 operator can decide whether to add them to a custom scope.
 
-Because scope reports are source-reference snapshots, TurboVAS blocks deletion
+Because scope reports are source-reference snapshots, YAFVS blocks deletion
 of a raw source report while a scope report still references it. Delete the scope
 report first if the raw evidence can intentionally be removed.
 
@@ -547,7 +547,7 @@ Raw report details and scope report details include a `Metrics` tab. The first
 snapshot metrics are `CVSS Load` and `Authenticated Scan Coverage`.
 
 `CVSS Load` is a derived burden metric, not a replacement for CVSS itself.
-TurboVAS counts each vulnerability once per alive system, even when the same NVT
+YAFVS counts each vulnerability once per alive system, even when the same NVT
 appears on several ports. It excludes logs, false positives, scanner execution
 errors, informational rows, and severity-zero rows. A system's CVSS Load is the
 sum of the unique vulnerability scores found on that system. The report or scope
@@ -555,7 +555,7 @@ average divides the total system load by the number of alive systems. The
 vulnerability view shows each NVT's score, affected-system count, total CVSS
 Load contribution, and average contribution per alive system.
 
-`Authenticated Scan Coverage` is also conservative. TurboVAS counts an alive
+`Authenticated Scan Coverage` is also conservative. YAFVS counts an alive
 system as authenticated only when the report contains evidence of successful
 authenticated checks. A configured credential alone is not treated as success.
 Systems without a credential path are shown as `No Credential Path`; systems
@@ -582,8 +582,8 @@ See `SCOPE_BASED_REPORTING.md` for the detailed scope model and
 
 ## Intentional Changes From Upstream Behavior
 
-TurboVAS is intentionally not OpenVAS-compatible. This is a strategic decision,
-not accidental drift: TurboVAS changes or removes inherited behavior when doing
+YAFVS is intentionally not OpenVAS-compatible. This is a strategic decision,
+not accidental drift: YAFVS changes or removes inherited behavior when doing
 so makes the product simpler, safer, or clearer for scanner operators. It is not
 a drop-in replacement, and upstream compatibility is not a project goal.
 
@@ -593,7 +593,7 @@ available for individual scan evidence, and scopes define the operational
 population being reported on. This supports environments where one meaningful
 reporting population requires several technical targets.
 
-The operator-only console model replaces inherited product RBAC. A TurboVAS
+The operator-only console model replaces inherited product RBAC. A YAFVS
 account is an operator account: anyone who can log in can administer the shared
 scanner estate. This is a deliberate trust-boundary decision, not an accidental
 simplification or a future compatibility goal. Individual accounts preserve
@@ -603,7 +603,7 @@ for compliance, remediation, management, and reporting belong in automated
 reports, exports, notifications, and delivery workflows rather than in broad
 console accounts.
 
-Dedicated OCI/container-image scanning was removed. TurboVAS is moving toward
+Dedicated OCI/container-image scanning was removed. YAFVS is moving toward
 inventory-based vulnerability matching, where scanner-collected and future
 user-provided inventory can feed vulnerability matching workflows without a
 separate dedicated container scanner subsystem.
@@ -618,24 +618,24 @@ and TLS Certificates. The ordinary entity list tables and detail workflows remai
 available.
 
 Inherited task wizards, import tasks/report upload, task resume, and raw
-delta-report comparison were removed. TurboVAS uses one normal task form with
+delta-report comparison were removed. YAFVS uses one normal task form with
 prescribed defaults: tasks are alterable, results are added to assets, and old
 unreferenced raw reports are pruned by retention count.
 
 The Trashcan remains available for retained resource types. It is useful as an
 operator recovery mechanism, but it only covers resource types still supported by
-TurboVAS.
+YAFVS.
 
 Legacy Agent Controller functionality, including agent groups, agent installers,
-and agent tasks, has been removed. TurboVAS keeps raw scan/report evidence,
+and agent tasks, has been removed. YAFVS keeps raw scan/report evidence,
 Notus, NASL inventory collection, runtime report summary/export helpers, and
 Docker runtime infrastructure. Future endpoint evidence or user-provided
-inventory workflows should be designed as separate TurboVAS features instead of
+inventory workflows should be designed as separate YAFVS features instead of
 preserving the inherited Agent Controller subsystem.
 
 ## License And Provenance
 
-TurboVAS preserves upstream component provenance and license files. See
+YAFVS preserves upstream component provenance and license files. See
 `../UPSTREAMS.md` for imported source snapshots and `../LICENSE_AUDIT.md` for
 current license and provenance notes.
 

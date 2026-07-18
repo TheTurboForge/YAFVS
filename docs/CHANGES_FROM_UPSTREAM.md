@@ -3,40 +3,40 @@
 
 # Changes From Upstream
 
-TurboVAS is an independent OpenVAS-derived project. It preserves upstream
+YAFVS is an independent OpenVAS-derived project. It preserves upstream
 component provenance, license records, and useful scanner behavior, but it is
 intentionally not OpenVAS-compatible and is not a drop-in replacement. This is
 a strategic product decision, not accidental drift or a compatibility backlog.
-TurboVAS changes or removes inherited APIs, data models, workflows, and features
+YAFVS changes or removes inherited APIs, data models, workflows, and features
 when doing so makes the scanner simpler, safer, or clearer for its operators.
 
-TurboVAS is not affiliated with, sponsored by, or endorsed by Greenbone AG. For
+YAFVS is not affiliated with, sponsored by, or endorsed by Greenbone AG. For
 official Greenbone/OpenVAS vulnerability-management products, support, or
 services, contact Greenbone directly at https://www.greenbone.net/.
 
 ## Visual Identity
 
-TurboVAS uses an independent visual identity to avoid confusion with upstream
+YAFVS uses an independent visual identity to avoid confusion with upstream
 Greenbone/OpenVAS projects while preserving factual upstream provenance.
-TurboVAS branding should be performance-oriented, operator-focused, readable,
-accessible, and clearly separate from upstream product branding.
+YAFVS branding should be understated, operator-focused, readable, accessible,
+and clearly separate from upstream product branding.
 
 ## Feed Model
 
-TurboVAS supports the Greenbone Community Feed only. It does not support
+YAFVS supports the Greenbone Community Feed only. It does not support
 Greenbone Enterprise Feed subscription keys or Enterprise Feed synchronization.
 Organizations that need Greenbone Enterprise Feed access, official Greenbone
 products, support, or services should contact Greenbone directly.
 
 Feed data is treated as runtime state, not source code. Development feed caches
-and runtime feed copies stay local and untracked. TurboVAS must not bundle,
+and runtime feed copies stay local and untracked. YAFVS must not bundle,
 package, mirror, or redistribute feed content without a separate feed-terms
 review.
 
 ## Reporting Model
 
 Inherited OpenVAS behavior makes raw task reports the primary reporting surface.
-TurboVAS keeps raw reports under `/reports` for technical evidence, but adds
+YAFVS keeps raw reports under `/reports` for technical evidence, but adds
 scopes as the population-level reporting layer.
 
 Scopes let operators associate several technical targets with one reporting
@@ -47,7 +47,7 @@ and provide report-like drill-down under `/scopes/reports` and
 
 ## Operator-Only Console Model
 
-TurboVAS deliberately removed the inherited product RBAC model. This is an
+YAFVS deliberately removed the inherited product RBAC model. This is an
 intentional operating and trust-boundary decision, not an accidental omission,
 a temporary simplification, or a compatibility feature planned for restoration.
 One installation represents one trusted vulnerability-management or
@@ -58,7 +58,7 @@ absences. The number of scanned assets does not determine whether an
 installation is multi-tenant.
 
 People who only consume findings for compliance, remediation, management, or
-reporting should not receive TurboVAS console accounts. Their required
+reporting should not receive YAFVS console accounts. Their required
 information should be delivered automatically through reports, exports,
 notifications, and controlled appliance delivery workflows—for example, email
 routed into a ticket system or files written to an approved network share. User
@@ -70,7 +70,7 @@ When groups require a real administrative or confidentiality boundary, they
 must use separate, independently operated stacks. That deployment boundary can
 isolate databases, reports, scanner execution, runtime secrets, networks, logs,
 exports, and backups; row or UI permissions inside one shared application and
-failure domain cannot provide the same tenant isolation. TurboVAS is not a
+failure domain cannot provide the same tenant isolation. YAFVS is not a
 multi-tenant vulnerability-management collaboration platform.
 
 The administration boundary is therefore explicit: use individual operator
@@ -82,7 +82,7 @@ Development credentials are `admin` / `admin` and are not production guidance.
 
 ## Removed Inherited Product Surfaces
 
-TurboVAS removed inherited surfaces that do not fit the current operator-first
+YAFVS removed inherited surfaces that do not fit the current operator-first
 scanner workflow:
 
 - OCI/container-image scanning;
@@ -98,7 +98,7 @@ removed or migrated where applicable.
 
 ## Retained Foundations
 
-TurboVAS still keeps the scanner fundamentals:
+YAFVS still keeps the scanner fundamentals:
 
 - normal targets, tasks, raw scan reports, results, and assets;
 - Notus and NASL inventory collection;
@@ -108,10 +108,10 @@ TurboVAS still keeps the scanner fundamentals:
 - feed validation, immutable generations, and guarded service/database activation.
 
 SSH-authenticated targets use explicit per-IP OpenSSH SHA-256 server host-key
-pins. TurboVAS refuses credentialed SSH authentication when a pin is missing,
+pins. YAFVS refuses credentialed SSH authentication when a pin is missing,
 malformed, or does not match, and permits multiple pins for controlled key
 rotation. Existing SSH-authenticated targets therefore require verified pins
 after upgrading.
 
 Future inventory onboarding and vulnerability matching should be designed as
-TurboVAS-native workflows instead of preserving removed inherited subsystems.
+YAFVS-native workflows instead of preserving removed inherited subsystems.

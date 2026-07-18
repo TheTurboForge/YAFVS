@@ -1,9 +1,9 @@
 <!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# TurboVAS Database Gravity
+# YAFVS Database Gravity
 
-TurboVAS reporting and analytics depend on deterministic, queryable state.
+YAFVS reporting and analytics depend on deterministic, queryable state.
 Product-critical data should move toward gvmd/PostgreSQL unless there is a clear
 reason to keep it as runtime state, cache, log, or artifact.
 

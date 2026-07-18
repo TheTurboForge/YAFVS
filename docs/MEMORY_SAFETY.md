@@ -3,12 +3,12 @@
 
 # Memory Safety Direction
 
-TurboVAS is incrementally reducing reliance on memory-unsafe implementation.
+YAFVS is incrementally reducing reliance on memory-unsafe implementation.
 The project inherits substantial C code from OpenVAS and the wider Greenbone
 Community Edition stack, including security-sensitive scanner, protocol,
 parsing, credential, report, and service functionality.
 
-Memory safety is one part of the broader TurboVAS security posture. It does not
+Memory safety is one part of the broader YAFVS security posture. It does not
 replace authentication, authorization, input validation, scanner safety,
 cryptographic review, deployment hardening, dependency management, or secure
 operational defaults.
@@ -20,13 +20,13 @@ use-after-free, invalid lifetime use, and many data races by default. Static
 analysis, fuzzing, compiler hardening, sanitizers, and careful review remain
 valuable for C, but they cannot provide the same language-enforced guarantees.
 
-TurboVAS's direction is informed by secure-by-design guidance, including the
+YAFVS's direction is informed by secure-by-design guidance, including the
 NSA and CISA publication [*Memory Safe Languages: Reducing Vulnerabilities in
 Modern Software Development*](https://www.nsa.gov/Press-Room/Press-Releases-Statements/Press-Release-View/Article/4223298/nsa-and-cisa-release-csi-highlighting-importance-of-memory-safe-languages-in-so/).
 That guidance recommends incremental adoption, prioritizing new and high-risk
 components, defining robust interoperability boundaries, and continuing to
 harden legacy code where immediate migration is impractical. This reference
-does not imply endorsement of TurboVAS by NSA, CISA, or the United States
+does not imply endorsement of YAFVS by NSA, CISA, or the United States
 Government.
 
 ## Development Policy
@@ -35,7 +35,7 @@ Government.
 - New C requires a concrete technical justification. A narrow change to an
   existing C subsystem may be safer than introducing a premature cross-language
   boundary or broad rewrite.
-- Functionality that TurboVAS does not retain should be deleted rather than
+- Functionality that YAFVS does not retain should be deleted rather than
   translated.
 - Migration is incremental and risk-ranked. It must preserve required behavior,
   scanner fidelity, performance, interfaces, license/provenance obligations,
@@ -49,7 +49,7 @@ Government.
 Rust is the default systems language for this direction because it combines
 memory safety without garbage collection, strong concurrency guarantees,
 predictable performance, and practical C interoperability. This is an
-engineering choice for TurboVAS, not a claim that Rust is the only suitable
+engineering choice for YAFVS, not a claim that Rust is the only suitable
 memory-safe language.
 
 ## Retained C

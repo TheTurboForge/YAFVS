@@ -3,9 +3,9 @@
 
 openapi: 3.1.0
 info:
-  title: TurboVAS Native API
+  title: YAFVS Native API
   version: 0.1.0-contract
-  description: Contract baseline for DB-backed TurboVAS product workflows. Current live operations are read-focused; future write/control operations must carry explicit safety metadata before replacing inherited GMP/XML paths. Direct listener responses include X-Request-Id for correlation.
+  description: Contract baseline for DB-backed YAFVS product workflows. Current live operations are read-focused; future write/control operations must carry explicit safety metadata before replacing inherited GMP/XML paths. Direct listener responses include X-Request-Id for correlation.
 servers:
   - url: /api/v1
   - url: http://127.0.0.1:19080/api/v1
@@ -4239,7 +4239,7 @@ paths:
       x-turbovas-maturity: live-read
       x-turbovas-replaces: user-management-list-read
       summary: List operator accounts for administration
-      description: Returns the bounded account metadata needed by the operator-only Users interface, including authentication method but never passwords, password hashes, authentication cache values, session state, or provider secrets. Every authenticated TurboVAS console user is intentionally a trusted scanner operator; this surface does not reproduce inherited per-user RBAC. The separate /users collection remains the redacted script-safe export surface.
+      description: Returns the bounded account metadata needed by the operator-only Users interface, including authentication method but never passwords, password hashes, authentication cache values, session state, or provider secrets. Every authenticated YAFVS console user is intentionally a trusted scanner operator; this surface does not reproduce inherited per-user RBAC. The separate /users collection remains the redacted script-safe export surface.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -5647,7 +5647,7 @@ paths:
       x-turbovas-replaces: native-evidence-pdf-report-download
       x-turbovas-inherited-still-owns: non-pdf-custom-report-format-config-filter-and-script-rendering
       summary: Download a native evidence PDF report
-      description: Generates an application/pdf directly from a repeatable-read snapshot of typed PostgreSQL report metadata and every retained raw evidence row, including hostless scanner error rows. This is a TurboVAS evidence export, not byte, layout, or template parity with the inherited Greenbone PDF renderer. The canonical PDF format UUID selects this retained PDF outcome; custom filters and scripts are not retained compatibility goals. The renderer uses core PDF fonts and represents non-ASCII evidence as visible ASCII \u{CODEPOINT} escapes so arbitrary scanner text cannot panic or disappear silently.
+      description: Generates an application/pdf directly from a repeatable-read snapshot of typed PostgreSQL report metadata and every retained raw evidence row, including hostless scanner error rows. This is a YAFVS evidence export, not byte, layout, or template parity with the inherited Greenbone PDF renderer. The canonical PDF format UUID selects this retained PDF outcome; custom filters and scripts are not retained compatibility goals. The renderer uses core PDF fonts and represents non-ASCII evidence as visible ASCII \u{CODEPOINT} escapes so arbitrary scanner text cannot panic or disappear silently.
       parameters:
         - $ref: '#/components/parameters/ReportId'
         - $ref: '#/components/parameters/CanonicalPdfReportFormatId'
@@ -6424,7 +6424,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: metadata-delete
       summary: Move target to trash
-      description: Direct write-control endpoint for moving an operator-owned live target to trash. Live tasks and TurboVAS scope memberships block deletion; credential links are moved as references only and credential secret material is never copied or exposed. File/host-filter input variants, task/control semantics, and credential secret material remain inherited.
+      description: Direct write-control endpoint for moving an operator-owned live target to trash. Live tasks and YAFVS scope memberships block deletion; credential links are moved as references only and credential secret material is never copied or exposed. File/host-filter input variants, task/control semantics, and credential secret material remain inherited.
       parameters:
         - $ref: '#/components/parameters/TargetId'
       responses:
@@ -6909,7 +6909,7 @@ paths:
       x-turbovas-safety-contract: write-control-v1
       x-turbovas-side-effect: scanner-control
       summary: Replace the retained configuration of a scan task
-      description: Guarded direct write-control endpoint that atomically replaces the name, comment, target, scan config, scanner, schedule, schedule periods, alerts, host ordering, asset override/QoD preferences, and scanner concurrency of an operator-owned New or alterable task. Every referenced resource is validated before mutation, alert and managed-preference sets are replaced transactionally, and fixed TurboVAS report-retention defaults remain unchanged. The action never starts a scan, but its scanner settings and any attached schedule govern future execution.
+      description: Guarded direct write-control endpoint that atomically replaces the name, comment, target, scan config, scanner, schedule, schedule periods, alerts, host ordering, asset override/QoD preferences, and scanner concurrency of an operator-owned New or alterable task. Every referenced resource is validated before mutation, alert and managed-preference sets are replaced transactionally, and fixed YAFVS report-retention defaults remain unchanged. The action never starts a scan, but its scanner settings and any attached schedule govern future execution.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       requestBody:
@@ -10740,7 +10740,7 @@ components:
           description: Whether result overrides are applied during asset processing.
         auto_delete_data:
           type: integer
-          description: Fixed TurboVAS raw-report retention count. This is read-only task state.
+          description: Fixed YAFVS raw-report retention count. This is read-only task state.
         max_checks:
           type: integer
         max_hosts:

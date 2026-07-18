@@ -1,9 +1,9 @@
 <!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# Building TurboVAS
+# Building YAFVS
 
-TurboVAS currently has a local required build baseline for:
+YAFVS currently has a local required build baseline for:
 
 - C services: `gvm-libs`, `openvas-smb`, `openvas-scanner`, `pg-gvm`, `gvmd`, `gsad`
 - Web UI: `gsa`
@@ -73,7 +73,7 @@ checking remains on the development server through the `quality-gate-schedule`
 systemd timer and retained runtime artifacts.
 
 `just production-posture-check --json` is a separate non-destructive checklist.
-It is expected to fail or warn while TurboVAS is still using development
+It is expected to fail or warn while YAFVS is still using development
 credentials, development TLS material, and a development-only Docker runtime.
 
 ## Retained C Hardening
@@ -175,7 +175,7 @@ transactional database rollback. Full-test scan commands require an explicit
 canonical `--target-cidr`, retain the `Full and fast` scan config and `All IANA
 assigned TCP and UDP` port list, and reject targets larger than 256 addresses.
 Starting a scan also requires `--confirm-authorized-target` with the exact same
-CIDR. TurboVAS does not ship a real network target or infer authorization.
+CIDR. YAFVS does not ship a real network target or infer authorization.
 
 `build-ui` stages the GSA production bundle under
 `build/prefix/share/gvm/gsad/web` and writes a development `config.js` for the

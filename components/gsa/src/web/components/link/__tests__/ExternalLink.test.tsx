@@ -34,8 +34,8 @@ describe('ExternalLink tests', () => {
     fireEvent.click(element);
     const dialog = screen.getDialog();
     expect(dialog).toBeInTheDocument();
-    expect(dialog).toHaveTextContent('You are leaving TurboVAS');
-    expect(dialog).toHaveTextContent('TurboVAS does not endorse');
+    expect(dialog).toHaveTextContent('You are leaving YAFVS');
+    expect(dialog).toHaveTextContent('YAFVS does not endorse');
   });
 
   test('should close confirmation dialog on resume click', () => {

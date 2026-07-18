@@ -3,7 +3,7 @@
 
 # Native API First Proof Plan
 
-TurboVAS proves the native HTTP/JSON direction with narrow read-only workflows
+YAFVS proves the native HTTP/JSON direction with narrow read-only workflows
 before implementing broader endpoint coverage. The first proof started with
 scope-report Hosts and now also covers all scope-report evidence tabs,
 persisted scope-report Metrics, raw report Metrics, raw report list/detail,
@@ -24,7 +24,7 @@ GET /api/v1/scopes/{scope_id}/reports/{scope_report_id}/hosts
 Why this is the best first proof:
 
 - it is read-only and does not start scans or mutate feed/scanner state;
-- it exercises core TurboVAS product semantics: scope membership, source-report
+- it exercises core YAFVS product semantics: scope membership, source-report
   provenance, evidence host coverage, missing hosts, and candidate hosts;
 - it should be backed by gvmd/PostgreSQL state already present in
   `scope_reports`, `scope_report_sources`, `scope_hosts`, `report_hosts`, and

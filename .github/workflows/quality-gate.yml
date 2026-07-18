@@ -69,7 +69,7 @@ jobs:
         run: npm ci
         working-directory: components/gsa
 
-      - name: Run TurboVAS source quality gate
+      - name: Run YAFVS source quality gate
         run: |
           TURBOVAS_RUNTIME_DIR="$RUNNER_TEMP/turbovas-runtime" \
             tools/turbovasctl quality-gate --json

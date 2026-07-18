@@ -44,7 +44,7 @@ describe('CommunityFeedUsageNotification', () => {
       },
     };
     const notificationTitle =
-      'This runtime is using the Greenbone Community Feed. Feed content, coverage, and terms are maintained separately from TurboVAS source code and should be reviewed before public release or redistribution.';
+      'This runtime is using the Greenbone Community Feed. Feed content, coverage, and terms are maintained separately from YAFVS source code and should be reviewed before public release or redistribution.';
 
     const {render} = rendererWith({gmp});
     render(<CommunityFeedUsageNotification />);

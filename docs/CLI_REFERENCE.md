@@ -1,7 +1,7 @@
 <!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# TurboVAS CLI Reference
+# YAFVS CLI Reference
 
 The root `justfile` is the normal command surface. It delegates deterministic
 implementation work to `tools/turbovasctl` and forwards additional arguments:
@@ -110,7 +110,7 @@ then prepare and deploy the new application identity explicitly.
 - `just quality-gate-state`: read retained local gate history.
 - `just quality-gate-schedule --status`: inspect the user-systemd timer.
 - `TURBOVAS_ENABLE_QUALITY_GATE_SCHEDULE=1 just quality-gate-schedule --install`:
-  explicitly opt this host into timer installation. TurboVAS assumes no
+  explicitly opt this host into timer installation. YAFVS assumes no
   hostname or user and never falls back to cron.
 - `just closeout-readiness`: summarize closeout evidence.
 - `just license-precommit`: run the fast modified-file provenance check.
@@ -252,7 +252,7 @@ not a production exposure model.
 
 ## Explicit Full-Test Scans
 
-TurboVAS ships no scan target and does not infer authorization. Supply one
+YAFVS ships no scan target and does not infer authorization. Supply one
 canonical CIDR containing at most 256 addresses:
 
 ```sh
@@ -282,5 +282,5 @@ before runtime checks or side effects. Preflight and status never start a scan.
   compatibility boundary.
 
 When a report ID is omitted, raw-report commands select the newest completed
-TurboVAS full-test report. Scope reports analyze existing completed evidence;
+YAFVS full-test report. Scope reports analyze existing completed evidence;
 they do not trigger scans.

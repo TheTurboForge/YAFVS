@@ -3,7 +3,7 @@
 
 # Trust Boundaries
 
-TurboVAS is derived from OpenVAS/GVM, but TurboVAS changes the product model:
+YAFVS is derived from OpenVAS/GVM, but YAFVS changes the product model:
 the console is for trusted scanner operators, raw scan reports remain evidence,
 and scope reports provide aggregated operator reporting. The trust boundaries
 below describe the current development architecture and the validation mindset
@@ -16,7 +16,7 @@ This document is descriptive, not a production security claim. See
 
 ### Operator Console Access
 
-TurboVAS deliberately uses an operator-only console model instead of inherited
+YAFVS deliberately uses an operator-only console model instead of inherited
 product RBAC. One installation represents one trusted scanner-operator team and
 one administrative trust domain. Asset count is independent of that boundary:
 one small team may operate a very large scanner estate.
@@ -41,7 +41,7 @@ production guidance.
 
 ### Tenant Isolation Between Stacks
 
-TurboVAS does not treat row-level or UI-level authorization inside one
+YAFVS does not treat row-level or UI-level authorization inside one
 privileged scanner application as hard tenant isolation. Such rules can leave
 the database, scanner workers, service identities, runtime secrets, network
 reachability, backups, and failure domain shared even when users see different
@@ -76,7 +76,7 @@ Checks to consider:
 ### `gsad` To `gvmd`
 
 `gsad` proxies authenticated Web UI actions to `gvmd`. This is still largely an
-inherited GMP/XML boundary. TurboVAS is moving product reads toward typed
+inherited GMP/XML boundary. YAFVS is moving product reads toward typed
 HTTP/JSON APIs, but GMP/XML remains compatibility and control plumbing for now.
 
 Changes here are high consequence because they can affect authentication,
@@ -133,7 +133,7 @@ Checks to consider:
 
 ### `gvmd` To OSPD/OpenVAS
 
-`gvmd` delegates scan execution to OSPD/OpenVAS. TurboVAS keeps this boundary
+`gvmd` delegates scan execution to OSPD/OpenVAS. YAFVS keeps this boundary
 working before challenging it. The scanner side needs raw-socket capability,
 feed-backed VT state, scanner Redis KB state, and stable process hygiene.
 
@@ -177,7 +177,7 @@ Checks to consider:
 ### Feed Cache And Active Generation
 
 The canonical downloaded feed cache is local untracked state. Runtime services
-consume only a verified, journaled active generation. TurboVAS must not bundle,
+consume only a verified, journaled active generation. YAFVS must not bundle,
 commit, or redistribute feed content without separate feed-terms review.
 
 Checks to consider:
@@ -201,7 +201,7 @@ Checks to consider:
 
 ### Public Release Boundary
 
-Publishing TurboVAS is a separate trust boundary. Public release requires
+Publishing YAFVS is a separate trust boundary. Public release requires
 license/provenance review, non-affiliation wording, production posture, secret
 handling, source-publication obligations, feed-content terms, and validation
 standards to be satisfied.

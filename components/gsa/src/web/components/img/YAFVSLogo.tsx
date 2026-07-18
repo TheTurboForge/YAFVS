@@ -21,19 +21,19 @@ const Wordmark = styled.div`
   white-space: nowrap;
 `;
 
-interface TurboVASLogoProps extends HTMLAttributes<HTMLDivElement> {
+interface YAFVSLogoProps extends HTMLAttributes<HTMLDivElement> {
   className?: string;
 }
 
-const TurboVASLogo = ({className, ...props}: TurboVASLogoProps) => (
+const YAFVSLogo = ({className, ...props}: YAFVSLogoProps) => (
   <Wordmark
-    aria-label="TurboVAS"
+    aria-label="YAFVS"
     className={className}
-    data-testid="TurboVASLogo"
+    data-testid="YAFVSLogo"
     {...props}
   >
-    TurboVAS
+    YAFVS
   </Wordmark>
 );
 
-export default TurboVASLogo;
+export default YAFVSLogo;

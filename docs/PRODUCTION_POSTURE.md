@@ -3,20 +3,20 @@
 
 # Production Posture
 
-TurboVAS is currently a private development project. The Docker runtime is a
+YAFVS is currently a private development project. The Docker runtime is a
 development runtime, not production deployment guidance.
 
 ## Security Boundary
 
-TurboVAS deliberately uses an operator-only console model instead of inherited
+YAFVS deliberately uses an operator-only console model instead of inherited
 product RBAC. One installation is one trusted scanner-operator team and one
-administrative trust domain. Anyone who can authenticate to the TurboVAS
+administrative trust domain. Anyone who can authenticate to the YAFVS
 console or an approved operator API surface can administer the shared scanner
 estate. Individual operator accounts remain required for authentication,
 attribution, revocation, preferences, and auditing; shared login credentials
 are not the model.
 
-People who should not administer the scanner should not receive TurboVAS
+People who should not administer the scanner should not receive YAFVS
 console or operator API access. Remediation stakeholders should receive
 findings through controlled outbound workflows such as reports, exports,
 notifications, ticket-system integrations, or future delivery integrations.

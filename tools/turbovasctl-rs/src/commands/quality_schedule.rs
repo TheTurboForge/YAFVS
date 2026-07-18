@@ -20,24 +20,39 @@ const TIMER: &str = "turbovas-quality-gate.timer";
 const ENABLE_ENV: &str = "TURBOVAS_ENABLE_QUALITY_GATE_SCHEDULE";
 const SHOW_PROPERTIES: &str = "--property=LoadState,UnitFileState,ActiveState,SubState,NextElapseUSecRealtime,LastTriggerUSecRealtime";
 
+#[derive(Debug, Clone)]
+struct QualityScheduleContext {
+    enabled: bool,
+    unit_dir: PathBuf,
+    runtime_dir: PathBuf,
+    log_dir: PathBuf,
+    host: String,
+    user: String,
+}
+
 pub fn command_quality_gate_schedule(repo_root: &Path, action: &str) -> ResultEnvelope {
-    command_quality_gate_schedule_with_runner(repo_root, action, &SystemCommandRunner)
+    command_quality_gate_schedule_with_runner(
+        repo_root,
+        action,
+        &SystemCommandRunner,
+        &production_context(repo_root),
+    )
 }
 
 fn command_quality_gate_schedule_with_runner(
     repo_root: &Path,
     action: &str,
     runner: &dyn CommandRunner,
+    context: &QualityScheduleContext,
 ) -> ResultEnvelope {
-    let unit_dir = systemd_user_unit_dir();
     let mut findings = Vec::new();
     let mut details = json!({
         "action": action,
-        "host": hostname(),
-        "user": env::var("USER").ok().filter(|value| !value.is_empty()).unwrap_or_else(home_name),
+        "host": context.host,
+        "user": context.user,
     });
     if action == "install" {
-        if env::var(ENABLE_ENV).ok().as_deref() != Some("1") {
+        if !context.enabled {
             return make_result(
                 metadata(repo_root, "quality-gate-schedule", runner),
                 "Quality gate schedule installation refused without explicit host opt-in."
@@ -66,12 +81,12 @@ fn command_quality_gate_schedule_with_runner(
             )
             .with_details(details);
         }
-        fs::create_dir_all(&unit_dir).expect("could not create systemd user unit directory");
-        fs::create_dir_all(quality_gate_log_dir(repo_root))
-            .expect("could not create quality gate log directory");
+        fs::create_dir_all(&context.unit_dir)
+            .expect("could not create systemd user unit directory");
+        fs::create_dir_all(&context.log_dir).expect("could not create quality gate log directory");
         for unit in UNITS {
-            let target = unit_dir.join(unit);
-            fs::write(&target, render_unit(repo_root, unit))
+            let target = context.unit_dir.join(unit);
+            fs::write(&target, render_unit(repo_root, unit, context))
                 .expect("could not write quality gate systemd unit");
             findings.push(
                 Finding::new(
@@ -134,7 +149,7 @@ fn command_quality_gate_schedule_with_runner(
         );
     }
 
-    let (status_findings, status_details) = schedule_status(runner, repo_root, &unit_dir);
+    let (status_findings, status_details) = schedule_status(runner, repo_root, context);
     findings.extend(status_findings);
     details
         .as_object_mut()
@@ -152,7 +167,7 @@ fn command_quality_gate_schedule_with_runner(
     .with_artifacts(
         UNITS
             .iter()
-            .map(|unit| unit_dir.join(unit).display().to_string())
+            .map(|unit| context.unit_dir.join(unit).display().to_string())
             .collect(),
     )
     .with_details(details)
@@ -161,7 +176,7 @@ fn command_quality_gate_schedule_with_runner(
 fn schedule_status(
     runner: &dyn CommandRunner,
     repo_root: &Path,
-    unit_dir: &Path,
+    context: &QualityScheduleContext,
 ) -> (Vec<Finding>, Value) {
     let mut findings = Vec::new();
     let mut units = Map::new();
@@ -178,7 +193,7 @@ fn schedule_status(
         &["systemctl", "--user", "status"],
     ));
     for unit in UNITS {
-        let path = unit_dir.join(unit);
+        let path = context.unit_dir.join(unit);
         let exists = path.is_file();
         findings.push(
             Finding::new(
@@ -223,7 +238,7 @@ fn schedule_status(
     let active = systemctl_user(runner, repo_root, &["is-active", TIMER], 30);
     let enabled_text = enabled.stdout.trim();
     let active_text = active.stdout.trim();
-    if unit_dir.join(TIMER).is_file() {
+    if context.unit_dir.join(TIMER).is_file() {
         findings.push(process_step_finding(
             if exit_code(&enabled) == 0 {
                 "pass"
@@ -264,9 +279,9 @@ fn schedule_status(
     (
         findings,
         json!({
-            "host": hostname(),
-            "user": env::var("USER").ok().filter(|value| !value.is_empty()).unwrap_or_else(home_name),
-            "unit_dir": unit_dir.display().to_string(),
+            "host": context.host,
+            "user": context.user,
+            "unit_dir": context.unit_dir.display().to_string(),
             "units": units,
             "systemd_user_available": exit_code(&systemd) == 0,
             "timer_enabled": enabled_text,
@@ -335,7 +350,7 @@ fn systemd_show_properties(output: &str) -> BTreeMap<String, String> {
         .collect()
 }
 
-fn render_unit(repo_root: &Path, unit: &str) -> String {
+fn render_unit(repo_root: &Path, unit: &str, context: &QualityScheduleContext) -> String {
     let template = fs::read_to_string(repo_root.join(format!("ops/systemd/{unit}.in")))
         .expect("could not read quality gate systemd template");
     let python = executable_path("python3")
@@ -345,13 +360,10 @@ fn render_unit(repo_root: &Path, unit: &str) -> String {
     template
         .replace("@REPO_ROOT@", &repo_root.display().to_string())
         .replace("@PYTHON@", &python)
-        .replace(
-            "@RUNTIME_DIR@",
-            &runtime_dir(repo_root).display().to_string(),
-        )
+        .replace("@RUNTIME_DIR@", &context.runtime_dir.display().to_string())
         .replace(
             "@QUALITY_GATE_LOG_DIR@",
-            &quality_gate_log_dir(repo_root).display().to_string(),
+            &context.log_dir.display().to_string(),
         )
 }
 
@@ -361,6 +373,20 @@ fn systemd_user_unit_dir() -> PathBuf {
 
 fn quality_gate_log_dir(repo_root: &Path) -> PathBuf {
     runtime_dir(repo_root).join("logs/quality-gate")
+}
+
+fn production_context(repo_root: &Path) -> QualityScheduleContext {
+    QualityScheduleContext {
+        enabled: env::var(ENABLE_ENV).ok().as_deref() == Some("1"),
+        unit_dir: systemd_user_unit_dir(),
+        runtime_dir: runtime_dir(repo_root),
+        log_dir: quality_gate_log_dir(repo_root),
+        host: hostname(),
+        user: env::var("USER")
+            .ok()
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(home_name),
+    }
 }
 
 fn home_dir() -> PathBuf {
@@ -395,6 +421,136 @@ fn hostname() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static TEMP_SEQUENCE: AtomicUsize = AtomicUsize::new(0);
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct RecordedCommand {
+        program: String,
+        args: Vec<String>,
+        cwd: Option<PathBuf>,
+        has_xdg_runtime_dir: bool,
+        timeout: Option<Duration>,
+    }
+
+    struct FakeCommandRunner {
+        outputs: BTreeMap<String, ProcessOutput>,
+        records: Mutex<Vec<RecordedCommand>>,
+    }
+
+    impl FakeCommandRunner {
+        fn new(outputs: BTreeMap<String, ProcessOutput>) -> Self {
+            Self {
+                outputs,
+                records: Mutex::new(Vec::new()),
+            }
+        }
+
+        fn records(&self) -> Vec<RecordedCommand> {
+            self.records.lock().unwrap().clone()
+        }
+
+        fn output(&self, args: &[&str]) -> ProcessOutput {
+            self.outputs
+                .get(&args.join(" "))
+                .cloned()
+                .unwrap_or_else(|| process_output(0, ""))
+        }
+    }
+
+    impl CommandRunner for FakeCommandRunner {
+        fn run(&self, program: &str, args: &[&str]) -> Option<ProcessOutput> {
+            self.records.lock().unwrap().push(RecordedCommand {
+                program: program.to_string(),
+                args: args.iter().map(|arg| (*arg).to_string()).collect(),
+                cwd: None,
+                has_xdg_runtime_dir: false,
+                timeout: None,
+            });
+            Some(self.output(args))
+        }
+
+        fn run_with(
+            &self,
+            program: &str,
+            args: &[&str],
+            cwd: Option<&Path>,
+            environment: Option<&BTreeMap<OsString, OsString>>,
+            timeout: Option<Duration>,
+        ) -> Option<ProcessOutput> {
+            self.records.lock().unwrap().push(RecordedCommand {
+                program: program.to_string(),
+                args: args.iter().map(|arg| (*arg).to_string()).collect(),
+                cwd: cwd.map(Path::to_path_buf),
+                has_xdg_runtime_dir: environment
+                    .is_some_and(|values| values.contains_key(&OsString::from("XDG_RUNTIME_DIR"))),
+                timeout,
+            });
+            Some(self.output(args))
+        }
+    }
+
+    struct Fixture {
+        root: PathBuf,
+        context: QualityScheduleContext,
+    }
+
+    impl Fixture {
+        fn new(enabled: bool) -> Self {
+            let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+            let root = env::temp_dir().join(format!(
+                "turbovas-quality-schedule-{}-{sequence}",
+                std::process::id()
+            ));
+            fs::create_dir_all(root.join("ops/systemd")).unwrap();
+            fs::write(
+                root.join("ops/systemd/turbovas-quality-gate.service.in"),
+                "repo=@REPO_ROOT@ runtime=@RUNTIME_DIR@ log=@QUALITY_GATE_LOG_DIR@ python=@PYTHON@",
+            )
+            .unwrap();
+            fs::write(
+                root.join("ops/systemd/turbovas-quality-gate.timer.in"),
+                "repo=@REPO_ROOT@ runtime=@RUNTIME_DIR@ log=@QUALITY_GATE_LOG_DIR@ python=@PYTHON@",
+            )
+            .unwrap();
+            Self {
+                context: QualityScheduleContext {
+                    enabled,
+                    unit_dir: root.join("units"),
+                    runtime_dir: root.join("runtime"),
+                    log_dir: root.join("logs/quality-gate"),
+                    host: "test-host".to_string(),
+                    user: "test-user".to_string(),
+                },
+                root,
+            }
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn process_output(exit_code: i32, stdout: &str) -> ProcessOutput {
+        ProcessOutput {
+            success: exit_code == 0,
+            exit_code: Some(exit_code),
+            stdout: stdout.to_string(),
+            stderr: String::new(),
+        }
+    }
+
+    fn systemctl_records(runner: &FakeCommandRunner) -> Vec<RecordedCommand> {
+        runner
+            .records()
+            .into_iter()
+            .filter(|record| record.program == "systemctl")
+            .collect()
+    }
 
     #[test]
     fn parses_systemd_show_properties() {
@@ -408,12 +564,220 @@ mod tests {
     }
 
     #[test]
-    fn install_requires_explicit_opt_in() {
-        if env::var(ENABLE_ENV).ok().as_deref() == Some("1") {
-            return;
-        }
-        let result = command_quality_gate_schedule(Path::new("/srv/TurboVAS"), "install");
+    fn install_refuses_absent_opt_in_without_commands_or_unit_writes() {
+        let fixture = Fixture::new(false);
+        let runner = FakeCommandRunner::new(BTreeMap::new());
+        let result = command_quality_gate_schedule_with_runner(
+            &fixture.root,
+            "install",
+            &runner,
+            &fixture.context,
+        );
         assert_eq!(result.status, "fail");
         assert_eq!(result.findings[0].check, "quality-gate-schedule.opt-in");
+        assert!(systemctl_records(&runner).is_empty());
+        assert!(!fixture.context.unit_dir.exists());
+    }
+
+    #[test]
+    fn install_refuses_when_user_systemd_is_unavailable() {
+        let fixture = Fixture::new(true);
+        let runner = FakeCommandRunner::new(BTreeMap::from([(
+            "--user status".to_string(),
+            process_output(1, "offline"),
+        )]));
+        let result = command_quality_gate_schedule_with_runner(
+            &fixture.root,
+            "install",
+            &runner,
+            &fixture.context,
+        );
+        assert_eq!(result.status, "fail");
+        assert_eq!(
+            result.summary,
+            "Quality gate schedule installation blocked because user-level systemd is unavailable."
+        );
+        assert_eq!(systemctl_records(&runner).len(), 1);
+        assert!(!fixture.context.unit_dir.exists());
+        assert!(!fixture.context.log_dir.exists());
+    }
+
+    #[test]
+    fn install_writes_units_and_collects_expected_status() {
+        let fixture = Fixture::new(true);
+        let runner = FakeCommandRunner::new(BTreeMap::from([
+            (
+                "--user is-enabled turbovas-quality-gate.timer".to_string(),
+                process_output(0, "enabled\n"),
+            ),
+            (
+                "--user is-active turbovas-quality-gate.timer".to_string(),
+                process_output(0, "active\n"),
+            ),
+        ]));
+        let result = command_quality_gate_schedule_with_runner(
+            &fixture.root,
+            "install",
+            &runner,
+            &fixture.context,
+        );
+        assert_eq!(result.status, "pass");
+        assert_eq!(result.summary, "Quality gate schedule install completed.");
+        assert!(fixture.context.log_dir.is_dir());
+        for unit in UNITS {
+            let rendered = fs::read_to_string(fixture.context.unit_dir.join(unit)).unwrap();
+            assert!(rendered.contains(&fixture.root.display().to_string()));
+            assert!(rendered.contains(&fixture.context.runtime_dir.display().to_string()));
+            assert!(rendered.contains(&fixture.context.log_dir.display().to_string()));
+        }
+        assert_eq!(
+            systemctl_records(&runner)
+                .iter()
+                .map(|record| (record.args.join(" "), record.timeout))
+                .collect::<Vec<_>>(),
+            vec![
+                ("--user status".to_string(), Some(Duration::from_secs(30))),
+                (
+                    "--user daemon-reload".to_string(),
+                    Some(Duration::from_secs(60))
+                ),
+                (
+                    "--user enable --now turbovas-quality-gate.timer".to_string(),
+                    Some(Duration::from_secs(60))
+                ),
+                ("--user status".to_string(), Some(Duration::from_secs(30))),
+                (
+                    format!("--user show turbovas-quality-gate.service {SHOW_PROPERTIES}"),
+                    Some(Duration::from_secs(30))
+                ),
+                (
+                    format!("--user show turbovas-quality-gate.timer {SHOW_PROPERTIES}"),
+                    Some(Duration::from_secs(30))
+                ),
+                (
+                    "--user is-enabled turbovas-quality-gate.timer".to_string(),
+                    Some(Duration::from_secs(30))
+                ),
+                (
+                    "--user is-active turbovas-quality-gate.timer".to_string(),
+                    Some(Duration::from_secs(30))
+                ),
+            ]
+        );
+        assert!(systemctl_records(&runner).iter().all(|record| {
+            record.cwd == Some(fixture.root.clone()) && record.has_xdg_runtime_dir
+        }));
+        assert_eq!(result.artifacts.len(), 2);
+        assert_eq!(result.details.as_ref().unwrap()["host"], "test-host");
+        assert_eq!(
+            result.details.as_ref().unwrap()["status"]["timer_enabled"],
+            "enabled"
+        );
+    }
+
+    #[test]
+    fn disable_reports_pass_or_warn_and_still_collects_status() {
+        for (exit_code, status) in [(0, "pass"), (1, "warn")] {
+            let fixture = Fixture::new(false);
+            fs::create_dir_all(&fixture.context.unit_dir).unwrap();
+            for unit in UNITS {
+                fs::write(fixture.context.unit_dir.join(unit), "unit").unwrap();
+            }
+            let runner = FakeCommandRunner::new(BTreeMap::from([(
+                "--user disable --now turbovas-quality-gate.timer".to_string(),
+                process_output(exit_code, "disabled\n"),
+            )]));
+            let result = command_quality_gate_schedule_with_runner(
+                &fixture.root,
+                "disable",
+                &runner,
+                &fixture.context,
+            );
+            assert_eq!(result.status, status);
+            assert!(
+                result
+                    .findings
+                    .iter()
+                    .any(|finding| finding.check == "quality-gate-schedule.systemd-user")
+            );
+            assert!(
+                systemctl_records(&runner)
+                    .iter()
+                    .any(|record| record.args.join(" ") == "--user status")
+            );
+        }
+    }
+
+    #[test]
+    fn status_reports_unit_files_states_and_timer_shape() {
+        let fixture = Fixture::new(false);
+        fs::create_dir_all(&fixture.context.unit_dir).unwrap();
+        fs::write(fixture.context.unit_dir.join(UNITS[1]), "unit").unwrap();
+        let runner = FakeCommandRunner::new(BTreeMap::from([
+            (
+                format!("--user show {} {SHOW_PROPERTIES}", UNITS[0]),
+                process_output(1, "not found"),
+            ),
+            (
+                format!("--user show {} {SHOW_PROPERTIES}", UNITS[1]),
+                process_output(0, "ActiveState=failed\nLoadState=loaded\n"),
+            ),
+            (
+                "--user is-enabled turbovas-quality-gate.timer".to_string(),
+                process_output(1, "disabled\n"),
+            ),
+            (
+                "--user is-active turbovas-quality-gate.timer".to_string(),
+                process_output(0, "active\n"),
+            ),
+        ]));
+        let result = command_quality_gate_schedule_with_runner(
+            &fixture.root,
+            "status",
+            &runner,
+            &fixture.context,
+        );
+        assert_eq!(result.status, "fail");
+        assert_eq!(result.summary, "Quality gate schedule status collected.");
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|finding| finding.check == "quality-gate-schedule.unit-state")
+        );
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|finding| finding.check == "quality-gate-schedule.unit-file"
+                    && finding.status == "warn")
+        );
+        assert!(result.findings.iter().any(|finding| {
+            finding.check == "quality-gate-schedule.enabled" && finding.status == "warn"
+        }));
+        assert!(result.findings.iter().any(|finding| {
+            finding.check == "quality-gate-schedule.active" && finding.status == "pass"
+        }));
+        assert_eq!(result.artifacts.len(), 2);
+        let details = result.details.as_ref().unwrap();
+        assert_eq!(details["status"]["units"][UNITS[0]]["exists"], false);
+        assert_eq!(details["status"]["units"][UNITS[1]]["exists"], true);
+        assert_eq!(details["status"]["timer_enabled"], "disabled");
+        assert_eq!(details["status"]["timer_active"], "active");
+    }
+
+    #[test]
+    fn unknown_action_fails_closed() {
+        let fixture = Fixture::new(true);
+        let runner = FakeCommandRunner::new(BTreeMap::new());
+        let result = command_quality_gate_schedule_with_runner(
+            &fixture.root,
+            "unexpected",
+            &runner,
+            &fixture.context,
+        );
+        assert_eq!(result.status, "fail");
+        assert_eq!(result.findings[0].check, "quality-gate-schedule.action");
+        assert!(systemctl_records(&runner).is_empty());
     }
 }

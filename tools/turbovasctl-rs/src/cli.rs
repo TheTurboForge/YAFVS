@@ -221,6 +221,49 @@ mod tests {
     use std::path::Path;
 
     #[test]
+    fn parses_quality_gate_schedule_actions_and_rejects_combinations() {
+        for (arguments, command) in [
+            (
+                vec!["quality-gate-schedule"],
+                CliCommand::QualityGateSchedule {
+                    install: false,
+                    status: false,
+                    disable: false,
+                },
+            ),
+            (
+                vec!["quality-gate-schedule", "--status"],
+                CliCommand::QualityGateSchedule {
+                    install: false,
+                    status: true,
+                    disable: false,
+                },
+            ),
+            (
+                vec!["quality-gate-schedule", "--install"],
+                CliCommand::QualityGateSchedule {
+                    install: true,
+                    status: false,
+                    disable: false,
+                },
+            ),
+            (
+                vec!["quality-gate-schedule", "--disable"],
+                CliCommand::QualityGateSchedule {
+                    install: false,
+                    status: false,
+                    disable: true,
+                },
+            ),
+        ] {
+            assert_eq!(parse_cli(arguments).unwrap().command, command);
+        }
+        assert!(parse_cli(["quality-gate-schedule", "--install", "--status"]).is_err());
+        assert!(parse_cli(["quality-gate-schedule", "--status", "--disable"]).is_err());
+        assert!(parse_cli(["quality-gate-schedule", "--install", "--disable"]).is_err());
+    }
+
+    #[test]
     fn parses_feed_generation_runtime_guard() {
         assert_eq!(
             parse_cli(["feed-generation-runtime-guard", "--selector-only"]).unwrap(),

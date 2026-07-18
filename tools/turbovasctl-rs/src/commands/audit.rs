@@ -22,16 +22,27 @@ const OSV_LOCKFILES: [&str; 4] = [
 ];
 
 pub fn command_native_api_cargo_audit(repo_root: &Path, status_only: bool) -> ResultEnvelope {
-    command_native_api_cargo_audit_with(repo_root, status_only, &SystemCommandRunner)
+    command_native_api_cargo_audit_with(
+        repo_root,
+        status_only,
+        executable_path("cargo-audit").is_some(),
+        &SystemCommandRunner,
+    )
 }
 
 pub fn command_osv_lockfile_audit(repo_root: &Path, status_only: bool) -> ResultEnvelope {
-    command_osv_lockfile_audit_with(repo_root, status_only, &SystemCommandRunner)
+    command_osv_lockfile_audit_with(
+        repo_root,
+        status_only,
+        executable_path("osv-scanner").is_some(),
+        &SystemCommandRunner,
+    )
 }
 
 fn command_osv_lockfile_audit_with(
     repo_root: &Path,
     status_only: bool,
+    tool_available: bool,
     runner: &dyn CommandRunner,
 ) -> ResultEnvelope {
     let artifacts = OSV_LOCKFILES
@@ -58,7 +69,7 @@ fn command_osv_lockfile_audit_with(
             "lockfile_count": OSV_LOCKFILES.len(),
         })),
     ];
-    if executable_path("osv-scanner").is_none() {
+    if !tool_available {
         findings.push(Finding::new(
             "warn",
             "osv-lockfile-audit.tool",
@@ -219,7 +230,12 @@ fn command_osv_lockfile_audit_with(
 }
 
 pub fn command_native_api_semgrep_audit(repo_root: &Path, status_only: bool) -> ResultEnvelope {
-    command_native_api_semgrep_audit_with(repo_root, status_only, &SystemCommandRunner)
+    command_native_api_semgrep_audit_with(
+        repo_root,
+        status_only,
+        executable_path("semgrep").is_some(),
+        &SystemCommandRunner,
+    )
 }
 
 fn osv_audit_result(
@@ -405,6 +421,7 @@ fn string_field(
 fn command_native_api_semgrep_audit_with(
     repo_root: &Path,
     status_only: bool,
+    tool_available: bool,
     runner: &dyn CommandRunner,
 ) -> ResultEnvelope {
     let config = repo_root.join(NATIVE_API_SEMGREP_CONFIG);
@@ -431,7 +448,7 @@ fn command_native_api_semgrep_audit_with(
         )
         .with_path(NATIVE_API_SOURCE),
     ];
-    if executable_path("semgrep").is_none() {
+    if !tool_available {
         findings.push(Finding::new(
             "warn",
             "native-api-semgrep-audit.tool",
@@ -578,7 +595,12 @@ fn command_native_api_semgrep_audit_with(
 }
 
 pub fn command_gsa_npm_audit(repo_root: &Path, status_only: bool) -> ResultEnvelope {
-    command_gsa_npm_audit_with(repo_root, status_only, &SystemCommandRunner)
+    command_gsa_npm_audit_with(
+        repo_root,
+        status_only,
+        executable_path("npm").is_some(),
+        &SystemCommandRunner,
+    )
 }
 
 fn semgrep_audit_result(
@@ -698,6 +720,7 @@ fn compact_tool_path(path: &str, repo_root: &Path) -> String {
 fn command_gsa_npm_audit_with(
     repo_root: &Path,
     status_only: bool,
+    tool_available: bool,
     runner: &dyn CommandRunner,
 ) -> ResultEnvelope {
     let component_dir = repo_root.join(GSA_COMPONENT);
@@ -728,7 +751,7 @@ fn command_gsa_npm_audit_with(
         )
         .with_path(GSA_LOCKFILE),
     ];
-    if executable_path("npm").is_none() {
+    if !tool_available {
         findings.push(Finding::new(
             "warn",
             "gsa-npm-audit.tool",
@@ -855,6 +878,7 @@ fn command_gsa_npm_audit_with(
 fn command_native_api_cargo_audit_with(
     repo_root: &Path,
     status_only: bool,
+    tool_available: bool,
     runner: &dyn CommandRunner,
 ) -> ResultEnvelope {
     let crate_dir = repo_root.join(NATIVE_API_CRATE);
@@ -881,7 +905,7 @@ fn command_native_api_cargo_audit_with(
         )
         .with_path(NATIVE_API_LOCKFILE),
     ];
-    if executable_path("cargo-audit").is_none() {
+    if !tool_available {
         findings.push(Finding::new(
             "warn",
             "native-api-cargo-audit.tool",
@@ -1142,6 +1166,356 @@ fn display_exit_code(exit_code: Option<i32>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::process::ProcessOutput;
+    use std::cell::RefCell;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+
+    struct TestDir(PathBuf);
+
+    impl TestDir {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "turbovasctl-audit-{}-{}",
+                std::process::id(),
+                NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    struct AuditRunner {
+        tool_output: ProcessOutput,
+        calls: RefCell<Vec<(String, Vec<String>)>>,
+    }
+
+    impl AuditRunner {
+        fn new(stdout: &str) -> Self {
+            Self {
+                tool_output: output(true, stdout),
+                calls: RefCell::new(Vec::new()),
+            }
+        }
+
+        fn audit_calls(&self) -> Vec<(String, Vec<String>)> {
+            self.calls
+                .borrow()
+                .iter()
+                .filter(|(program, _)| program != "git")
+                .cloned()
+                .collect()
+        }
+    }
+
+    impl CommandRunner for AuditRunner {
+        fn run(&self, program: &str, args: &[&str]) -> Option<ProcessOutput> {
+            self.calls.borrow_mut().push((
+                program.to_string(),
+                args.iter()
+                    .map(|argument| (*argument).to_string())
+                    .collect(),
+            ));
+            Some(if program == "git" {
+                output(true, "audit-test-head\n")
+            } else {
+                self.tool_output.clone()
+            })
+        }
+    }
+
+    fn output(success: bool, stdout: &str) -> ProcessOutput {
+        ProcessOutput {
+            success,
+            exit_code: Some(if success { 0 } else { 1 }),
+            stdout: stdout.to_string(),
+            stderr: String::new(),
+        }
+    }
+
+    fn audit_repo() -> TestDir {
+        let temporary = TestDir::new();
+        let repo = temporary.path();
+        for lockfile in OSV_LOCKFILES {
+            let path = repo.join(lockfile);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, "{}\n").unwrap();
+        }
+        fs::create_dir_all(repo.join(NATIVE_API_SOURCE)).unwrap();
+        let config = repo.join(NATIVE_API_SEMGREP_CONFIG);
+        fs::create_dir_all(config.parent().unwrap()).unwrap();
+        fs::write(config, "rules: []\n").unwrap();
+        temporary
+    }
+
+    fn assert_metadata(result: &ResultEnvelope, command: &str) {
+        assert_eq!(result.metadata.command, command);
+        assert_eq!(result.metadata.head.as_deref(), Some("audit-test-head"));
+    }
+
+    fn has_finding(result: &ResultEnvelope, check: &str, status: &str) -> bool {
+        result
+            .findings
+            .iter()
+            .any(|finding| finding.check == check && finding.status == status)
+    }
+
+    #[test]
+    fn cargo_audit_command_paths_are_deterministic() {
+        let temporary = audit_repo();
+        let repo = temporary.path();
+        let unavailable = AuditRunner::new("{}");
+        let result = command_native_api_cargo_audit_with(repo, false, false, &unavailable);
+        assert_eq!(result.status, "warn");
+        assert!(has_finding(&result, "native-api-cargo-audit.tool", "warn"));
+        assert!(unavailable.audit_calls().is_empty());
+
+        let malformed = AuditRunner::new("not json");
+        let result = command_native_api_cargo_audit_with(repo, false, true, &malformed);
+        assert_eq!(result.status, "fail");
+        assert!(has_finding(&result, "native-api-cargo-audit.parse", "fail"));
+
+        let clean = AuditRunner::new(
+            r#"{"vulnerabilities":{"count":0},"warnings":{},"database":{"advisory-count":7},"lockfile":{"dependency-count":3}}"#,
+        );
+        let result = command_native_api_cargo_audit_with(repo, true, true, &clean);
+        assert_eq!(result.status, "pass");
+        assert_metadata(&result, "native-api-cargo-audit");
+        assert_eq!(
+            result.findings[0].check,
+            "native-api-cargo-audit.status-only"
+        );
+        assert_eq!(result.details.as_ref().unwrap()["vulnerability_count"], 0);
+        assert_eq!(
+            clean.audit_calls(),
+            vec![(
+                "cargo".to_string(),
+                vec!["audit", "--no-fetch", "--stale", "--json", "--quiet"]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+            )]
+        );
+
+        let vulnerable = AuditRunner::new(
+            r#"{"vulnerabilities":{"count":2},"warnings":{},"database":{},"lockfile":{}}"#,
+        );
+        let result = command_native_api_cargo_audit_with(repo, true, true, &vulnerable);
+        assert_eq!(result.status, "fail");
+        assert!(has_finding(
+            &result,
+            "native-api-cargo-audit.vulnerabilities",
+            "fail"
+        ));
+        assert_eq!(result.details.as_ref().unwrap()["vulnerability_count"], 2);
+        assert_eq!(result.details.as_ref().unwrap()["non_pass_count"], 1);
+    }
+
+    #[test]
+    fn npm_audit_command_paths_are_deterministic() {
+        let temporary = audit_repo();
+        let repo = temporary.path();
+        let unavailable = AuditRunner::new("{}");
+        let result = command_gsa_npm_audit_with(repo, false, false, &unavailable);
+        assert_eq!(result.status, "warn");
+        assert!(has_finding(&result, "gsa-npm-audit.tool", "warn"));
+        assert!(unavailable.audit_calls().is_empty());
+
+        let malformed = AuditRunner::new("not json");
+        let result = command_gsa_npm_audit_with(repo, false, true, &malformed);
+        assert_eq!(result.status, "fail");
+        assert!(has_finding(&result, "gsa-npm-audit.parse", "fail"));
+
+        let clean = AuditRunner::new(
+            r#"{"metadata":{"vulnerabilities":{"high":0,"critical":0,"total":0},"dependencies":{"total":12}}}"#,
+        );
+        let result = command_gsa_npm_audit_with(repo, true, true, &clean);
+        assert_eq!(result.status, "pass");
+        assert_metadata(&result, "gsa-npm-audit");
+        assert_eq!(result.findings[0].check, "gsa-npm-audit.status-only");
+        assert_eq!(result.details.as_ref().unwrap()["dependency_count"], 12);
+        assert_eq!(
+            clean.audit_calls(),
+            vec![(
+                "npm".to_string(),
+                vec!["audit", "--audit-level=high", "--json", "--offline"]
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect(),
+            )]
+        );
+
+        let vulnerable = AuditRunner::new(
+            r#"{"metadata":{"vulnerabilities":{"high":1,"critical":2,"total":3},"dependencies":{"total":12}}}"#,
+        );
+        let result = command_gsa_npm_audit_with(repo, true, true, &vulnerable);
+        assert_eq!(result.status, "fail");
+        assert!(has_finding(&result, "gsa-npm-audit.high-critical", "fail"));
+        assert_eq!(result.details.as_ref().unwrap()["high_count"], 1);
+        assert_eq!(result.details.as_ref().unwrap()["critical_count"], 2);
+        assert_eq!(result.details.as_ref().unwrap()["non_pass_count"], 1);
+    }
+
+    #[test]
+    fn semgrep_audit_command_paths_are_deterministic() {
+        let temporary = audit_repo();
+        let repo = temporary.path();
+        let unavailable = AuditRunner::new("{}");
+        let result = command_native_api_semgrep_audit_with(repo, false, false, &unavailable);
+        assert_eq!(result.status, "warn");
+        assert!(has_finding(
+            &result,
+            "native-api-semgrep-audit.tool",
+            "warn"
+        ));
+        assert!(unavailable.audit_calls().is_empty());
+
+        let malformed = AuditRunner::new("not json");
+        let result = command_native_api_semgrep_audit_with(repo, false, true, &malformed);
+        assert_eq!(result.status, "fail");
+        assert!(has_finding(
+            &result,
+            "native-api-semgrep-audit.parse",
+            "fail"
+        ));
+
+        let clean = AuditRunner::new(r#"{"results":[],"errors":[]}"#);
+        let result = command_native_api_semgrep_audit_with(repo, true, true, &clean);
+        assert_eq!(result.status, "pass");
+        assert_metadata(&result, "native-api-semgrep-audit");
+        assert_eq!(
+            result.findings[0].check,
+            "native-api-semgrep-audit.status-only"
+        );
+        assert_eq!(result.details.as_ref().unwrap()["result_count"], 0);
+        assert_eq!(
+            clean.audit_calls(),
+            vec![(
+                "semgrep".to_string(),
+                vec![
+                    "--quiet",
+                    "--config",
+                    NATIVE_API_SEMGREP_CONFIG,
+                    "--json",
+                    "--error",
+                    "--metrics=off",
+                    NATIVE_API_SOURCE,
+                ]
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+            )]
+        );
+
+        let findings = AuditRunner::new(
+            r#"{"results":[{"check_id":"rust.security","path":"services/turbovas-api/src/main.rs","start":{"line":9},"extra":{"message":"unsafe"}}],"errors":[{"message":"rule error"}]}"#,
+        );
+        let result = command_native_api_semgrep_audit_with(repo, true, true, &findings);
+        assert_eq!(result.status, "fail");
+        assert!(has_finding(
+            &result,
+            "native-api-semgrep-audit.findings",
+            "fail"
+        ));
+        assert!(has_finding(
+            &result,
+            "native-api-semgrep-audit.errors",
+            "fail"
+        ));
+        assert_eq!(result.details.as_ref().unwrap()["result_count"], 1);
+        assert_eq!(result.details.as_ref().unwrap()["error_count"], 1);
+        assert_eq!(result.details.as_ref().unwrap()["non_pass_count"], 2);
+    }
+
+    #[test]
+    fn osv_audit_command_paths_are_deterministic() {
+        let temporary = audit_repo();
+        let repo = temporary.path();
+        let unavailable = AuditRunner::new("{}");
+        let result = command_osv_lockfile_audit_with(repo, false, false, &unavailable);
+        assert_eq!(result.status, "warn");
+        assert!(has_finding(&result, "osv-lockfile-audit.tool", "warn"));
+        assert!(unavailable.audit_calls().is_empty());
+
+        let malformed = AuditRunner::new("not json");
+        let result = command_osv_lockfile_audit_with(repo, false, true, &malformed);
+        assert_eq!(result.status, "fail");
+        assert!(has_finding(&result, "osv-lockfile-audit.parse", "fail"));
+
+        let clean = AuditRunner::new(r#"{"results":[]}"#);
+        let result = command_osv_lockfile_audit_with(repo, true, true, &clean);
+        assert_eq!(result.status, "pass");
+        assert_metadata(&result, "osv-lockfile-audit");
+        assert_eq!(result.findings[0].check, "osv-lockfile-audit.status-only");
+        assert_eq!(result.details.as_ref().unwrap()["vulnerability_count"], 0);
+        assert_eq!(
+            clean.audit_calls(),
+            vec![(
+                "osv-scanner".to_string(),
+                vec![
+                    "scan",
+                    "source",
+                    "--format",
+                    "json",
+                    "--verbosity",
+                    "error",
+                    "--lockfile",
+                    NATIVE_API_LOCKFILE,
+                    "--lockfile",
+                    "tools/turbovasctl-rs/Cargo.lock",
+                    "--lockfile",
+                    "components/openvas-scanner/rust/Cargo.lock",
+                    "--lockfile",
+                    GSA_LOCKFILE,
+                ]
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+            )]
+        );
+
+        let lower = AuditRunner::new(
+            r#"{"results":[{"packages":[{"package":{"name":"low","ecosystem":"crates.io","version":"1"},"vulnerabilities":[{"id":"GHSA-low","database_specific":{"severity":"low"}}]}]}]}"#,
+        );
+        let result = command_osv_lockfile_audit_with(repo, true, true, &lower);
+        assert_eq!(result.status, "warn");
+        assert!(has_finding(
+            &result,
+            "osv-lockfile-audit.vulnerabilities",
+            "warn"
+        ));
+        assert_eq!(result.details.as_ref().unwrap()["vulnerability_count"], 1);
+        assert_eq!(result.details.as_ref().unwrap()["non_pass_count"], 1);
+
+        let severe = AuditRunner::new(
+            r#"{"results":[{"packages":[{"package":{"name":"high","ecosystem":"crates.io","version":"1"},"vulnerabilities":[{"id":"GHSA-high","database_specific":{"severity":"high"}}]}]}]}"#,
+        );
+        let result = command_osv_lockfile_audit_with(repo, true, true, &severe);
+        assert_eq!(result.status, "fail");
+        assert!(has_finding(
+            &result,
+            "osv-lockfile-audit.high-critical",
+            "fail"
+        ));
+        assert_eq!(
+            result.details.as_ref().unwrap()["high_or_critical_count"],
+            1
+        );
+        assert_eq!(result.details.as_ref().unwrap()["non_pass_count"], 1);
+    }
 
     #[test]
     fn counts_warning_arrays_only() {

@@ -2496,30 +2496,6 @@ DATABASE_REMOVED_TABLES = (
     "audits",
     "audit_reports",
 )
-DB_INTROSPECT_TABLES = tuple(("public", table) for table in (*DATABASE_CORE_TABLES, *DATABASE_SCOPE_TABLES)) + (
-    ("public", "nvts"),
-    ("public", "cves"),
-    ("public", "cpes"),
-    ("cert", "cert_bund_advs"),
-    ("cert", "cert_bund_cves"),
-    ("cert", "dfn_cert_advs"),
-    ("cert", "dfn_cert_cves"),
-)
-DB_INTROSPECT_COLUMNS = (
-    ("public", "meta", "name"),
-    ("public", "meta", "value"),
-    ("public", "reports", "id"),
-    ("public", "reports", "task"),
-    ("public", "results", "id"),
-    ("public", "results", "report"),
-    ("public", "tasks", "id"),
-    ("public", "targets", "id"),
-    ("public", "scopes", "id"),
-    ("public", "scope_reports", "id"),
-    ("cert", "cert_bund_advs", "uuid"),
-    ("cert", "dfn_cert_advs", "uuid"),
-)
-DB_INTROSPECT_ALLOWED_SCHEMAS = frozenset({"public", "cert", "scap"})
 DATA_STATE_ARTIFACT_PATHS = (
     ("reports", "db_owned_export", ("artifacts", "reports"), True),
     ("scope-reports", "db_owned_export", ("artifacts", "scope-reports"), True),
@@ -5046,88 +5022,6 @@ def parse_container_started_at(value: Any) -> float | None:
     except ValueError:
         return None
     return parsed.timestamp()
-
-
-def qualified_table_name(schema: str, table: str) -> str:
-    return f"{sql_identifier(schema)}.{sql_identifier(table)}"
-
-
-def qualified_table_row_count(repo_root: Path, schema: str, table: str) -> int | None:
-    result = psql(repo_root, f"SELECT count(*) FROM {qualified_table_name(schema, table)};")
-    if result.returncode != 0:
-        return None
-    value = psql_value(result)
-    try:
-        return int(value)
-    except ValueError:
-        return None
-
-
-def introspection_table_presence(repo_root: Path) -> tuple[subprocess.CompletedProcess[str], dict[str, bool]]:
-    values = ",".join(f"({sql_literal(schema)}, {sql_literal(table)})" for schema, table in DB_INTROSPECT_TABLES)
-    query = (
-        f"WITH wanted(schema_name, table_name) AS (VALUES {values}) "
-        "SELECT wanted.schema_name || '.' || wanted.table_name || '|' || (tables.table_name IS NOT NULL) "
-        "FROM wanted LEFT JOIN information_schema.tables tables "
-        "ON tables.table_schema = wanted.schema_name AND tables.table_name = wanted.table_name "
-        "ORDER BY wanted.schema_name, wanted.table_name;"
-    )
-    result = psql(repo_root, query)
-    rows: dict[str, bool] = {}
-    if result.returncode == 0:
-        for line in result.stdout.splitlines():
-            if "|" not in line:
-                continue
-            name, value = line.strip().split("|", 1)
-            rows[name] = value.strip().lower() in ("t", "true", "1")
-    return result, rows
-
-
-def introspection_table_columns(repo_root: Path, requests: Iterable[tuple[str, str]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    results: list[dict[str, Any]] = []
-    findings: list[dict[str, Any]] = []
-    for schema, table in requests:
-        query = (
-            "SELECT column_name || '|' || data_type || '|' || is_nullable "
-            "FROM information_schema.columns "
-            f"WHERE table_schema = {sql_literal(schema)} AND table_name = {sql_literal(table)} "
-            "ORDER BY ordinal_position;"
-        )
-        result = psql(repo_root, query)
-        key = f"{schema}.{table}"
-        columns: list[dict[str, str]] = []
-        if result.returncode == 0:
-            for line in result.stdout.splitlines():
-                parts = line.split("|", 2)
-                if len(parts) != 3:
-                    continue
-                columns.append({"name": parts[0], "data_type": parts[1], "is_nullable": parts[2]})
-            results.append({"table": key, "exists": bool(columns), "columns": columns})
-            findings.append(finding("pass" if columns else "warn", "db-introspect.requested-columns", f"Column catalog captured for {key}." if columns else f"No columns found for {key}.", details={"table": key, "column_count": len(columns)}))
-        else:
-            results.append({"table": key, "exists": False, "columns": []})
-            findings.append(finding("fail", "db-introspect.requested-columns", f"Column catalog query failed for {key}.", details={"table": key, "output_tail": output_tail(result.stdout, 80)}))
-    return results, findings
-
-
-def introspection_column_presence(repo_root: Path) -> tuple[subprocess.CompletedProcess[str], dict[str, bool]]:
-    values = ",".join(f"({sql_literal(schema)}, {sql_literal(table)}, {sql_literal(column)})" for schema, table, column in DB_INTROSPECT_COLUMNS)
-    query = (
-        f"WITH wanted(schema_name, table_name, column_name) AS (VALUES {values}) "
-        "SELECT wanted.schema_name || '.' || wanted.table_name || '.' || wanted.column_name || '|' || (columns.column_name IS NOT NULL) "
-        "FROM wanted LEFT JOIN information_schema.columns columns "
-        "ON columns.table_schema = wanted.schema_name AND columns.table_name = wanted.table_name AND columns.column_name = wanted.column_name "
-        "ORDER BY wanted.schema_name, wanted.table_name, wanted.column_name;"
-    )
-    result = psql(repo_root, query)
-    rows: dict[str, bool] = {}
-    if result.returncode == 0:
-        for line in result.stdout.splitlines():
-            if "|" not in line:
-                continue
-            name, value = line.strip().split("|", 1)
-            rows[name] = value.strip().lower() in ("t", "true", "1")
-    return result, rows
 
 
 def runtime_gsa_freshness_findings(repo_root: Path) -> list[dict[str, Any]]:
@@ -7907,19 +7801,6 @@ def sql_identifier(identifier: str) -> str:
 
 def sql_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
-
-
-def parse_safe_schema_table(value: str) -> tuple[str, str]:
-    parts = value.split(".")
-    if len(parts) != 2:
-        raise ValueError("expected schema.table")
-    schema, table = (part.strip() for part in parts)
-    identifier_pattern = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-    if schema not in DB_INTROSPECT_ALLOWED_SCHEMAS:
-        raise ValueError(f"schema {schema!r} is not allowed")
-    if not identifier_pattern.fullmatch(table):
-        raise ValueError("table must be a simple SQL identifier")
-    return schema, table
 
 
 def postgres_ready(repo_root: Path) -> subprocess.CompletedProcess[str]:
@@ -34561,109 +34442,6 @@ def command_runtime_data_state(repo_root: Path) -> dict[str, Any]:
     return result
 
 
-def runtime_db_introspect_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    compact = dict(result)
-    findings = result.get("findings", [])
-    non_pass = [compact_doctor_finding(item) for item in findings if item.get("status") != "pass"]
-    details = result.get("details", {}) if isinstance(result.get("details"), dict) else {}
-    database = details.get("database", {}) if isinstance(details.get("database"), dict) else {}
-    schemas = details.get("schemas", {}) if isinstance(details.get("schemas"), dict) else {}
-    tables = details.get("tables", {}) if isinstance(details.get("tables"), dict) else {}
-    columns = details.get("columns", {}) if isinstance(details.get("columns"), dict) else {}
-    requested_columns = details.get("requested_columns", []) if isinstance(details.get("requested_columns"), list) else []
-    compact["details"] = {
-        "database_name": database.get("name"),
-        "manager_database_version": database.get("manager_database_version"),
-        "schema_count": len(schemas),
-        "missing_schema_count": sum(1 for item in schemas.values() if isinstance(item, dict) and not item.get("exists")),
-        "table_count": len(tables),
-        "existing_table_count": sum(1 for item in tables.values() if isinstance(item, dict) and item.get("exists")),
-        "column_count": len(columns),
-        "existing_column_count": sum(1 for item in columns.values() if isinstance(item, dict) and item.get("exists")),
-        "requested_column_table_count": len(requested_columns),
-        "finding_count": len(findings),
-        "non_pass_count": len(non_pass),
-    }
-    compact["findings"] = non_pass or [
-        finding(
-            "pass",
-            "runtime-db-introspect.status-only",
-            "Runtime database introspection passed; no non-pass findings.",
-        )
-    ]
-    return compact
-
-
-def command_runtime_db_introspect(repo_root: Path, status_only: bool = False, columns_for: Sequence[str] = ()) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    details: dict[str, Any] = {"database": {}, "schemas": {}, "tables": {}, "columns": {}, "requested_columns": []}
-    requested_column_tables: list[tuple[str, str]] = []
-    for request in columns_for:
-        try:
-            parsed = parse_safe_schema_table(request)
-        except ValueError as error:
-            findings.append(finding("fail", "db-introspect.columns-for-shape", str(error), details={"input": request}))
-            continue
-        if parsed not in requested_column_tables:
-            requested_column_tables.append(parsed)
-    if not container_running(repo_root, "postgres"):
-        findings.append(finding("warn", "db-introspect.postgres", "Postgres is not running; database introspection is unavailable."))
-        result = make_result("runtime-db-introspect", repo_root, "Runtime database introspection could not inspect Postgres.", findings)
-        result["details"] = details
-        if status_only:
-            result = runtime_db_introspect_status_only_result(result)
-        return result
-
-    identity = psql(repo_root, "SELECT current_database() || '|' || current_user || '|' || session_user;")
-    if identity.returncode == 0 and "|" in psql_value(identity):
-        database, current_user, session_user = psql_value(identity).split("|", 2)
-        details["database"].update({"name": database, "current_user": current_user, "session_user": session_user})
-        findings.append(finding("pass", "db-introspect.identity", "Database identity captured.", details={"database": details["database"]}))
-    else:
-        findings.append(finding("fail", "db-introspect.identity", "Database identity query failed.", details={"output_tail": output_tail(identity.stdout, 80)}))
-
-    version = psql(repo_root, "SELECT COALESCE((SELECT value FROM meta WHERE name = 'database_version'), 'missing');")
-    db_version = psql_value(version) if version.returncode == 0 else ""
-    details["database"]["manager_database_version"] = db_version
-    findings.append(finding("pass" if version.returncode == 0 and db_version else "fail", "db-introspect.database-version", f"Manager database version is {db_version or 'unknown'}.", details={"output_tail": output_tail(version.stdout, 40)}))
-
-    schemas = psql(repo_root, "SELECT schema_name FROM information_schema.schemata WHERE schema_name IN ('public', 'cert') ORDER BY schema_name;")
-    schema_names = {line.strip() for line in schemas.stdout.splitlines() if line.strip()} if schemas.returncode == 0 else set()
-    details["schemas"] = {schema: {"exists": schema in schema_names} for schema in ("public", "cert")}
-    missing_schemas = [schema for schema, info in details["schemas"].items() if not info["exists"]]
-    findings.append(finding("pass" if schemas.returncode == 0 and not missing_schemas else "warn", "db-introspect.schemas", "Expected database schemas are present." if not missing_schemas else f"Missing expected schemas: {', '.join(missing_schemas)}.", details={"schemas": details["schemas"], "output_tail": output_tail(schemas.stdout, 40)}))
-
-    table_query, table_presence = introspection_table_presence(repo_root)
-    if table_query.returncode == 0:
-        for schema, table in DB_INTROSPECT_TABLES:
-            key = f"{schema}.{table}"
-            exists = table_presence.get(key, False)
-            details["tables"][key] = {"exists": exists}
-            if exists:
-                details["tables"][key]["row_count"] = qualified_table_row_count(repo_root, schema, table)
-        findings.append(finding("pass", "db-introspect.tables", "Fixed database table catalog captured.", details={"table_count": len(details["tables"])}))
-    else:
-        findings.append(finding("fail", "db-introspect.tables", "Fixed database table catalog query failed.", details={"output_tail": output_tail(table_query.stdout, 80)}))
-
-    column_query, column_presence = introspection_column_presence(repo_root)
-    if column_query.returncode == 0:
-        details["columns"] = {key: {"exists": exists} for key, exists in column_presence.items()}
-        findings.append(finding("pass", "db-introspect.columns", "Fixed database column catalog captured.", details={"column_count": len(details["columns"])}))
-    else:
-        findings.append(finding("fail", "db-introspect.columns", "Fixed database column catalog query failed.", details={"output_tail": output_tail(column_query.stdout, 80)}))
-
-    if requested_column_tables:
-        requested_columns, requested_findings = introspection_table_columns(repo_root, requested_column_tables)
-        details["requested_columns"] = requested_columns
-        findings.extend(requested_findings)
-
-    result = make_result("runtime-db-introspect", repo_root, "Runtime database introspection completed.", findings)
-    result["details"] = details
-    if status_only:
-        result = runtime_db_introspect_status_only_result(result)
-    return result
-
-
 def scanner_redis_cli(repo_root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
     return exec_in_service(repo_root, "redis-openvas", ["redis-cli", "-s", "/run/redis-openvas/redis.sock", *args])
 
@@ -35489,9 +35267,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
     subparsers.add_parser("runtime-log-review", parents=[common], help="review recent full-stack runtime logs")
     subparsers.add_parser("runtime-data-state", parents=[common], help="inspect database-centered runtime data state")
-    db_introspect = subparsers.add_parser("runtime-db-introspect", parents=[common], help="inspect fixed read-only database catalog facts")
-    db_introspect.add_argument("--status-only", action="store_true", help="emit compact catalog counts and only non-pass findings for chat-safe DB scouting")
-    db_introspect.add_argument("--columns-for", action="append", default=[], metavar="SCHEMA.TABLE", help="include read-only information_schema columns for a safe schema.table identifier")
     subparsers.add_parser("runtime-performance-snapshot", parents=[common], help="capture a lightweight runtime performance snapshot")
     security_policy = subparsers.add_parser("security-policy-check", parents=[common], help="validate security-sensitive path policy scaffolding")
     security_policy.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe security policy checks")
@@ -35898,8 +35673,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_log_review(repo_root)
     elif args.command == "runtime-data-state":
         result = command_runtime_data_state(repo_root)
-    elif args.command == "runtime-db-introspect":
-        result = command_runtime_db_introspect(repo_root, status_only=args.status_only, columns_for=args.columns_for)
     elif args.command == "runtime-performance-snapshot":
         result = command_runtime_performance_snapshot(repo_root)
     elif args.command == "security-policy-check":

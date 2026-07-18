@@ -1406,7 +1406,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 )
             for arguments, expected_exit_code, expected_status in rust_only_contracts:
                 env = feed_generation_env.copy()
-                if arguments[0] == "runtime-redis-state":
+                if arguments[0] in {"runtime-redis-state", "runtime-db-introspect"}:
                     env["COMPOSE_PROJECT_NAME"] = "turbovasctl-parity-no-runtime"
                 rust_result = invoke(rust_command, arguments, env=env)
                 self.assertEqual(rust_result.returncode, expected_exit_code, arguments)
@@ -1500,6 +1500,7 @@ class TurboVASCtlTests(unittest.TestCase):
                 (["feed-generation-activate", "invalid", "--json"], 1, "fail"),
                 (["feed-generation-rollback", "invalid", "--json"], 1, "fail"),
                 (["runtime-redis-state", "--json"], 0, "warn"),
+                (["runtime-db-introspect", "--json"], 0, "warn"),
             ),
             complete_surface=True,
             human_inventory=True,
@@ -2611,7 +2612,10 @@ class TurboVASCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        rust_only_commands = {"runtime-db-introspect"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+            if command in rust_only_commands:
+                continue
             with self.subTest(command=command):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
@@ -2639,7 +2643,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertIn("def command_branding_state", source)
         self.assertIn("def command_runtime_log_review", source)
         self.assertIn("def command_runtime_data_state", source)
-        self.assertIn("def command_runtime_db_introspect", source)
         self.assertIn("def command_runtime_performance_snapshot", source)
         self.assertIn("def command_runtime_native_api_smoke", source)
         self.assertIn('native_api_smoke.add_argument("--status-only"', source)
@@ -2716,6 +2719,14 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("def command_runtime_redis_state", source)
         self.assertIn("runtime-redis-state *args:", justfile)
         self.assertIn("tools/turbovasctl-rs/Cargo.toml -- runtime-redis-state", justfile)
+
+    def test_runtime_db_introspect_is_rust_only(self):
+        source = (Path(__file__).resolve().parents[1] / "turbovasctl").read_text(encoding="utf-8")
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        self.assertNotIn('subparsers.add_parser("runtime-db-introspect"', source)
+        self.assertNotIn("def command_runtime_db_introspect", source)
+        self.assertIn("runtime-db-introspect *args:", justfile)
+        self.assertIn("tools/turbovasctl-rs/Cargo.toml -- runtime-db-introspect", justfile)
 
     def test_native_api_cargo_audit_status_only_summarizes_clean_audit(self):
         payload = {
@@ -16746,172 +16757,6 @@ class TurboVASCtlTests(unittest.TestCase):
         self.assertNotIn("--build", up_commands[-1])
         self.assertTrue(all(direct_override_path in command for command in config_commands + build_commands + up_commands))
         self.assertIn('"127.0.0.1:19080:9081"', direct_override_text)
-
-    def test_runtime_db_introspect_uses_fixed_catalog_queries(self):
-        calls = []
-        original_psql = turbovasctl.psql
-        original_running = turbovasctl.container_running
-
-        def fake_psql(_root, sql, database=None):
-            calls.append(sql)
-            if "current_database()" in sql:
-                return turbovasctl.subprocess.CompletedProcess([], 0, "turbovas|turbovas|turbovas\n", "")
-            if "database_version" in sql:
-                return turbovasctl.subprocess.CompletedProcess([], 0, "283\n", "")
-            if "information_schema.schemata" in sql:
-                return turbovasctl.subprocess.CompletedProcess([], 0, "cert\npublic\n", "")
-            if "information_schema.tables" in sql:
-                rows = "\n".join(f"{schema}.{table}|t" for schema, table in turbovasctl.DB_INTROSPECT_TABLES)
-                return turbovasctl.subprocess.CompletedProcess([], 0, rows + "\n", "")
-            if "information_schema.columns" in sql:
-                rows = "\n".join(f"{schema}.{table}.{column}|t" for schema, table, column in turbovasctl.DB_INTROSPECT_COLUMNS)
-                return turbovasctl.subprocess.CompletedProcess([], 0, rows + "\n", "")
-            if "SELECT count(*)" in sql:
-                return turbovasctl.subprocess.CompletedProcess([], 0, "7\n", "")
-            return turbovasctl.subprocess.CompletedProcess([], 1, "unexpected\n", "")
-
-        try:
-            turbovasctl.psql = fake_psql
-            turbovasctl.container_running = lambda _root, service: service == "postgres"
-            with tempfile.TemporaryDirectory() as tmp:
-                root = Path(tmp) / "TurboVAS"
-                root.mkdir()
-                result = turbovasctl.command_runtime_db_introspect(root)
-        finally:
-            turbovasctl.psql = original_psql
-            turbovasctl.container_running = original_running
-
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["details"]["database"]["manager_database_version"], "283")
-        self.assertTrue(result["details"]["tables"]["public.meta"]["exists"])
-        self.assertEqual(result["details"]["tables"]["public.meta"]["row_count"], 7)
-        self.assertTrue(any("information_schema.tables" in sql for sql in calls))
-        self.assertTrue(any("information_schema.columns" in sql for sql in calls))
-        self.assertFalse(any(";" in sql.rstrip(";") for sql in calls))
-
-    def test_runtime_db_introspect_status_only_is_chat_safe(self):
-        original_psql = turbovasctl.psql
-        original_running = turbovasctl.container_running
-
-        def fake_psql(_root, sql, database=None):
-            if "current_database()" in sql:
-                return turbovasctl.subprocess.CompletedProcess([], 0, "turbovas|turbovas|turbovas\n", "")
-            if "database_version" in sql:
-                return turbovasctl.subprocess.CompletedProcess([], 0, "283\n", "")
-            if "information_schema.schemata" in sql:
-                return turbovasctl.subprocess.CompletedProcess([], 0, "cert\npublic\n", "")
-            if "information_schema.tables" in sql:
-                rows = "\n".join(f"{schema}.{table}|t" for schema, table in turbovasctl.DB_INTROSPECT_TABLES)
-                return turbovasctl.subprocess.CompletedProcess([], 0, rows + "\n", "")
-            if "information_schema.columns" in sql:
-                rows = "\n".join(f"{schema}.{table}.{column}|t" for schema, table, column in turbovasctl.DB_INTROSPECT_COLUMNS)
-                return turbovasctl.subprocess.CompletedProcess([], 0, rows + "\n", "")
-            if "SELECT count(*)" in sql:
-                return turbovasctl.subprocess.CompletedProcess([], 0, "7\n", "")
-            return turbovasctl.subprocess.CompletedProcess([], 1, "unexpected\n", "")
-
-        try:
-            turbovasctl.psql = fake_psql
-            turbovasctl.container_running = lambda _root, service: service == "postgres"
-            with tempfile.TemporaryDirectory() as tmp:
-                root = Path(tmp) / "TurboVAS"
-                root.mkdir()
-                full = turbovasctl.command_runtime_db_introspect(root)
-                compact = turbovasctl.command_runtime_db_introspect(root, status_only=True)
-        finally:
-            turbovasctl.psql = original_psql
-            turbovasctl.container_running = original_running
-
-        self.assertEqual(compact["status"], "pass")
-        self.assertEqual(compact["details"]["manager_database_version"], "283")
-        self.assertEqual(compact["details"]["table_count"], len(turbovasctl.DB_INTROSPECT_TABLES))
-        self.assertEqual(compact["details"]["column_count"], len(turbovasctl.DB_INTROSPECT_COLUMNS))
-        self.assertEqual(compact["details"]["non_pass_count"], 0)
-        self.assertEqual(compact["findings"][0]["check"], "runtime-db-introspect.status-only")
-        self.assertLess(len(json.dumps(compact)), len(json.dumps(full)))
-
-    def test_runtime_db_introspect_columns_for_uses_safe_information_schema_lookup(self):
-        calls = []
-        original_psql = turbovasctl.psql
-        original_running = turbovasctl.container_running
-
-        def fake_psql(_root, sql, database=None):
-            calls.append(sql)
-            if "current_database()" in sql:
-                return turbovasctl.subprocess.CompletedProcess([], 0, "turbovas|turbovas|turbovas\n", "")
-            if "database_version" in sql:
-                return turbovasctl.subprocess.CompletedProcess([], 0, "283\n", "")
-            if "information_schema.schemata" in sql:
-                return turbovasctl.subprocess.CompletedProcess([], 0, "cert\npublic\n", "")
-            if "information_schema.tables" in sql:
-                rows = "\n".join(f"{schema}.{table}|t" for schema, table in turbovasctl.DB_INTROSPECT_TABLES)
-                return turbovasctl.subprocess.CompletedProcess([], 0, rows + "\n", "")
-            if "column_name || '|' || data_type" in sql:
-                return turbovasctl.subprocess.CompletedProcess([], 0, "id|integer|NO\nowner|integer|YES\n", "")
-            if "information_schema.columns" in sql:
-                rows = "\n".join(f"{schema}.{table}.{column}|t" for schema, table, column in turbovasctl.DB_INTROSPECT_COLUMNS)
-                return turbovasctl.subprocess.CompletedProcess([], 0, rows + "\n", "")
-            if "SELECT count(*)" in sql:
-                return turbovasctl.subprocess.CompletedProcess([], 0, "7\n", "")
-            return turbovasctl.subprocess.CompletedProcess([], 1, "unexpected\n", "")
-
-        try:
-            turbovasctl.psql = fake_psql
-            turbovasctl.container_running = lambda _root, service: service == "postgres"
-            with tempfile.TemporaryDirectory() as tmp:
-                root = Path(tmp) / "TurboVAS"
-                root.mkdir()
-                result = turbovasctl.command_runtime_db_introspect(
-                    root,
-                    columns_for=["public.targets", "public.targets"],
-                )
-        finally:
-            turbovasctl.psql = original_psql
-            turbovasctl.container_running = original_running
-
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(len(result["details"]["requested_columns"]), 1)
-        requested = result["details"]["requested_columns"][0]
-        self.assertEqual(requested["table"], "public.targets")
-        self.assertEqual([column["name"] for column in requested["columns"]], ["id", "owner"])
-        requested_queries = [sql for sql in calls if "column_name || '|' || data_type" in sql]
-        self.assertEqual(len(requested_queries), 1)
-        self.assertIn("table_schema = 'public'", requested_queries[0])
-        self.assertIn("table_name = 'targets'", requested_queries[0])
-        self.assertNotIn("DROP", requested_queries[0])
-
-    def test_runtime_db_introspect_columns_for_rejects_unsafe_identifiers(self):
-        original_running = turbovasctl.container_running
-        original_psql = turbovasctl.psql
-        try:
-            turbovasctl.container_running = lambda _root, service: service == "postgres"
-            turbovasctl.psql = lambda *_args, **_kwargs: turbovasctl.subprocess.CompletedProcess([], 1, "unexpected\n", "")
-            with tempfile.TemporaryDirectory() as tmp:
-                root = Path(tmp) / "TurboVAS"
-                root.mkdir()
-                result = turbovasctl.command_runtime_db_introspect(
-                    root,
-                    columns_for=["public.targets;DROP", "private.targets", "targets"],
-                )
-        finally:
-            turbovasctl.container_running = original_running
-            turbovasctl.psql = original_psql
-
-        self.assertEqual(result["status"], "fail")
-        failures = [finding for finding in result["findings"] if finding["check"] == "db-introspect.columns-for-shape"]
-        self.assertEqual(len(failures), 3)
-        self.assertEqual(result["details"]["requested_columns"], [])
-
-    def test_runtime_db_introspect_status_only_keeps_postgres_warning(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            with unittest.mock.patch.object(turbovasctl, "container_running", return_value=False):
-                compact = turbovasctl.command_runtime_db_introspect(root, status_only=True)
-
-        self.assertEqual(compact["status"], "warn")
-        self.assertEqual(compact["details"]["non_pass_count"], 1)
-        self.assertEqual(compact["findings"][0]["check"], "db-introspect.postgres")
 
     def test_gmp_smoke_parse_version_accepts_text_and_element(self):
         self.assertEqual(runtime_gmp_smoke.parse_version("<get_version_response><version>22.7</version></get_version_response>"), "22.7")

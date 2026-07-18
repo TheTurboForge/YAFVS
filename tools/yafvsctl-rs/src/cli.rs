@@ -526,9 +526,6 @@ mod tests {
         let command_names = Cli::command()
             .get_subcommands()
             .filter(|command| !command.is_hide_set())
-            // The destructive runtime identity migration is intentionally not
-            // listed in public documentation until its operator rollout.
-            .filter(|command| command.get_name() != "runtime-identity-migrate")
             .map(|command| command.get_name().to_string())
             .collect::<Vec<_>>();
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");

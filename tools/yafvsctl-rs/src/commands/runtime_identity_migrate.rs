@@ -4,7 +4,6 @@
 //! Fail-closed, atomic migration of the local runtime directory identity.
 
 use super::common::metadata;
-use super::compose::{compose_command, runtime_environment};
 use crate::process::{CommandRunner, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
 use serde_json::json;
@@ -15,8 +14,7 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::Path;
 use std::time::Duration;
 
-const MAX_ENTRIES: u64 = 1_000_000;
-const COMPOSE_TIMEOUT: Duration = Duration::from_secs(5);
+const DOCKER_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
@@ -27,24 +25,16 @@ enum State {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Snapshot {
+struct RootIdentity {
     device: u64,
     inode: u64,
-    files: u64,
-    directories: u64,
-    symlinks: u64,
-    bytes: u64,
 }
 
-impl Snapshot {
+impl RootIdentity {
     fn details(&self) -> serde_json::Value {
         json!({
             "device": self.device,
             "inode": self.inode,
-            "files": self.files,
-            "directories": self.directories,
-            "symlinks": self.symlinks,
-            "regular_file_bytes": self.bytes,
         })
     }
 }
@@ -106,26 +96,26 @@ fn command_with(
         }
         State::Ready => {}
     }
-    let before = match snapshot(&old) {
-        Ok(snapshot) => snapshot,
+    let before = match root_identity(&old) {
+        Ok(identity) => identity,
         Err(error) => {
             return failure_paths(
                 repo_root,
                 &old,
                 &new,
-                format!("source snapshot failed: {error}"),
+                format!("source identity check failed: {error}"),
             );
         }
     };
-    if let Err(error) = inspect_locks(&old) {
-        return failure_paths(
-            repo_root,
-            &old,
-            &new,
-            format!("runtime lock inspection failed: {error}"),
-        );
-    }
     if !apply {
+        if let Err(error) = hold_inactive_locks(&old) {
+            return failure_paths(
+                repo_root,
+                &old,
+                &new,
+                format!("runtime lock inspection failed: {error}"),
+            );
+        }
         return result(
             repo_root,
             "pass",
@@ -135,13 +125,54 @@ fn command_with(
             Some(before),
         );
     }
-    if let Err(error) = ensure_compose_stopped(repo_root, runner) {
+    if let Err(error) = ensure_docker_empty(repo_root, runner) {
         return failure_paths(
             repo_root,
             &old,
             &new,
-            format!("Docker Compose safety check failed: {error}"),
+            format!("Docker safety check failed: {error}"),
         );
+    }
+    // Keep every existing operation lock exclusively held through the rename.
+    // This closes the ordinary lifecycle-operation race without creating new
+    // state inside the directory being renamed.
+    let _locks = match hold_inactive_locks(&old) {
+        Ok(locks) => locks,
+        Err(error) => {
+            return failure_paths(
+                repo_root,
+                &old,
+                &new,
+                format!("runtime lock inspection failed: {error}"),
+            );
+        }
+    };
+    if let Err(error) = ensure_docker_empty(repo_root, runner) {
+        return failure_paths(
+            repo_root,
+            &old,
+            &new,
+            format!("final Docker safety check failed: {error}"),
+        );
+    }
+    match root_identity(&old) {
+        Ok(identity) if identity == before => {}
+        Ok(_) => {
+            return failure_paths(
+                repo_root,
+                &old,
+                &new,
+                "source device/inode changed during migration preflight",
+            );
+        }
+        Err(error) => {
+            return failure_paths(
+                repo_root,
+                &old,
+                &new,
+                format!("final source identity check failed: {error}"),
+            );
+        }
     }
     if let Err(error) = fs::rename(&old, &new) {
         return failure_paths(
@@ -154,16 +185,19 @@ fn command_with(
     let verification = (|| -> Result<(), String> {
         fsync_parent(parent).map_err(|error| format!("parent fsync failed: {error}"))?;
         hook.after_rename(&new)?;
-        if fs::symlink_metadata(&old).is_ok() {
-            return Err("old runtime directory remains after rename".to_string());
+        match fs::symlink_metadata(&old) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Ok(_) => return Err("old runtime path remains after rename".to_string()),
+            Err(error) => {
+                return Err(format!(
+                    "could not verify removal of old runtime path: {error}"
+                ));
+            }
         }
-        let after =
-            snapshot(&new).map_err(|error| format!("destination snapshot failed: {error}"))?;
-        if after.device != before.device || after.inode != before.inode {
-            return Err("destination device/inode differs from source".to_string());
-        }
+        let after = root_identity(&new)
+            .map_err(|error| format!("destination identity check failed: {error}"))?;
         if after != before {
-            return Err("destination snapshot differs from source".to_string());
+            return Err("destination device/inode differs from source".to_string());
         }
         Ok(())
     })();
@@ -219,7 +253,7 @@ fn root_is_valid(path: &Path) -> Result<bool, String> {
     Ok(true)
 }
 
-fn snapshot(root: &Path) -> Result<Snapshot, String> {
+fn root_identity(root: &Path) -> Result<RootIdentity, String> {
     let root_meta = fs::symlink_metadata(root).map_err(|error| error.to_string())?;
     // SAFETY: getuid has no preconditions and does not dereference memory.
     if root_meta.file_type().is_symlink()
@@ -231,61 +265,20 @@ fn snapshot(root: &Path) -> Result<Snapshot, String> {
             root.display()
         ));
     }
-    let mut snapshot = Snapshot {
+    Ok(RootIdentity {
         device: root_meta.dev(),
         inode: root_meta.ino(),
-        files: 0,
-        directories: 1,
-        symlinks: 0,
-        bytes: 0,
-    };
-    snapshot_walk(root, &mut snapshot)?;
-    Ok(snapshot)
+    })
 }
 
-fn snapshot_walk(directory: &Path, snapshot: &mut Snapshot) -> Result<(), String> {
-    for entry in
-        fs::read_dir(directory).map_err(|error| format!("{}: {error}", directory.display()))?
-    {
-        let entry = entry.map_err(|error| error.to_string())?;
-        let path = entry.path();
-        let metadata =
-            fs::symlink_metadata(&path).map_err(|error| format!("{}: {error}", path.display()))?;
-        if metadata.file_type().is_symlink() {
-            increment(&mut snapshot.symlinks)?;
-        } else if metadata.is_dir() {
-            increment(&mut snapshot.directories)?;
-            snapshot_walk(&path, snapshot)?;
-        } else if metadata.is_file() {
-            increment(&mut snapshot.files)?;
-            snapshot.bytes = snapshot
-                .bytes
-                .checked_add(metadata.len())
-                .ok_or("regular-file byte count overflow")?;
-        } else {
-            return Err(format!("{} has unsupported file type", path.display()));
-        }
-    }
-    Ok(())
-}
-
-fn increment(value: &mut u64) -> Result<(), String> {
-    *value = value.checked_add(1).ok_or("entry count overflow")?;
-    if *value > MAX_ENTRIES {
-        return Err(format!(
-            "entry count exceeds bounded limit of {MAX_ENTRIES}"
-        ));
-    }
-    Ok(())
-}
-
-fn inspect_locks(root: &Path) -> Result<(), String> {
+fn hold_inactive_locks(root: &Path) -> Result<Vec<File>, String> {
     let locks = root.join("run/locks");
     let entries = match fs::read_dir(&locks) {
         Ok(entries) => entries,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(error) => return Err(format!("{}: {error}", locks.display())),
     };
+    let mut held = Vec::new();
     for entry in entries {
         let entry = entry.map_err(|error| error.to_string())?;
         let path = entry.path();
@@ -293,13 +286,13 @@ fn inspect_locks(root: &Path) -> Result<(), String> {
             .extension()
             .is_some_and(|extension| extension == "lock")
         {
-            inspect_lock(&path)?;
+            held.push(hold_lock(&path)?);
         }
     }
-    Ok(())
+    Ok(held)
 }
 
-fn inspect_lock(path: &Path) -> Result<(), String> {
+fn hold_lock(path: &Path) -> Result<File, String> {
     let metadata =
         fs::symlink_metadata(path).map_err(|error| format!("{}: {error}", path.display()))?;
     // SAFETY: getuid has no preconditions and does not dereference memory.
@@ -315,8 +308,7 @@ fn inspect_lock(path: &Path) -> Result<(), String> {
     }
     let file = OpenOptions::new()
         .read(true)
-        .write(true)
-        .custom_flags(libc::O_NOFOLLOW)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
         .open(path)
         .map_err(|error| format!("{}: {error}", path.display()))?;
     let opened = file.metadata().map_err(|error| error.to_string())?;
@@ -337,34 +329,26 @@ fn inspect_lock(path: &Path) -> Result<(), String> {
         }
         return Err(format!("{} flock check failed: {error}", path.display()));
     }
-    // SAFETY: see flock call above; unlock is best effort before closing the file.
-    if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_UN) } != 0 {
-        return Err(format!(
-            "{} could not be unlocked: {}",
-            path.display(),
-            io::Error::last_os_error()
-        ));
-    }
-    Ok(())
+    Ok(file)
 }
 
-fn ensure_compose_stopped(repo_root: &Path, runner: &dyn CommandRunner) -> Result<(), String> {
-    let command = compose_command(repo_root, &["ps".into(), "-q".into()]);
-    let arguments: Vec<&str> = command.iter().map(String::as_str).collect();
+fn ensure_docker_empty(repo_root: &Path, runner: &dyn CommandRunner) -> Result<(), String> {
     let output = runner
         .run_with(
             "docker",
-            &arguments,
+            &["ps", "-aq"],
             Some(repo_root),
-            Some(&runtime_environment(repo_root)),
-            Some(COMPOSE_TIMEOUT),
+            None,
+            Some(DOCKER_TIMEOUT),
         )
-        .ok_or("could not start bounded docker compose ps -q check")?;
+        .ok_or("could not start bounded docker ps -aq check")?;
     if !output.success {
-        return Err("bounded docker compose ps -q check did not complete successfully".to_string());
+        return Err("bounded docker ps -aq check did not complete successfully".to_string());
     }
     if !output.stdout.trim().is_empty() {
-        return Err("one or more Compose containers are running".to_string());
+        return Err(
+            "one or more Docker containers still exist; remove them before migration".to_string(),
+        );
     }
     Ok(())
 }
@@ -381,7 +365,10 @@ fn rollback(old: &Path, new: &Path) -> String {
                 && !metadata.file_type().is_symlink() =>
         {
             match fs::rename(new, old) {
-                Ok(()) => "succeeded".to_string(),
+                Ok(()) => match old.parent().and_then(|parent| fsync_parent(parent).ok()) {
+                    Some(()) => "succeeded".to_string(),
+                    None => "renamed back, but parent fsync failed".to_string(),
+                },
                 Err(error) => format!("failed: {error}"),
             }
         }
@@ -405,12 +392,12 @@ fn result(
     summary: &str,
     old: &Path,
     new: &Path,
-    snapshot: Option<Snapshot>,
+    identity: Option<RootIdentity>,
 ) -> ResultEnvelope {
     let finding = Finding::new(status, "runtime_identity_migrate", summary.to_string())
         .with_details(json!({
             "source_path": old, "destination_path": new,
-            "snapshot": snapshot.map(|snapshot| snapshot.details()),
+            "root_identity": identity.map(|identity| identity.details()),
         }));
     make_result(
         metadata(repo_root, "runtime-identity-migrate", &SystemCommandRunner),
@@ -562,26 +549,26 @@ mod tests {
         cleanup(parent);
     }
     #[test]
-    fn apply_preserves_identity_and_snapshot() {
+    fn apply_preserves_root_identity() {
         let (parent, repo, old) = fixture();
-        let before = snapshot(&old).unwrap();
+        let before = root_identity(&old).unwrap();
         let result = command_with(&repo, true, &runner(true, ""), &NoopHook);
         let new = parent.join("YAFVS-runtime");
         assert_eq!(result.status, "pass");
         assert!(!old.exists());
-        assert_eq!(snapshot(&new).unwrap(), before);
+        assert_eq!(root_identity(&new).unwrap(), before);
         cleanup(parent);
     }
-    struct CorruptHook;
-    impl PostRenameHook for CorruptHook {
-        fn after_rename(&self, new: &Path) -> Result<(), String> {
-            fs::write(new.join("extra"), b"x").map_err(|error| error.to_string())
+    struct FailHook;
+    impl PostRenameHook for FailHook {
+        fn after_rename(&self, _: &Path) -> Result<(), String> {
+            Err("injected post-rename failure".to_string())
         }
     }
     #[test]
     fn verification_failure_rolls_back_when_unambiguous() {
         let (parent, repo, old) = fixture();
-        let result = command_with(&repo, true, &runner(true, ""), &CorruptHook);
+        let result = command_with(&repo, true, &runner(true, ""), &FailHook);
         assert_eq!(result.status, "fail");
         assert!(old.exists());
         assert!(!parent.join("YAFVS-runtime").exists());

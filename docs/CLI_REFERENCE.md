@@ -32,7 +32,7 @@ not use a failure exit code; `fail` exits non-zero.
 - `just rust-migration-state`: inspect C-to-Rust tooling and the current proof
   candidate.
 
-The incremental Rust command spine currently implements 30 parity-tested
+The incremental Rust command spine currently implements 31 parity-tested
 subcommands. Python remains canonical only for commands not listed in this
 mechanically checked block while the normal `just` recipes continue to provide
 a stable front door:
@@ -50,6 +50,7 @@ inventory
 branding-state
 path-coupling-state
 runtime-redis-state
+runtime-identity-migrate
 runtime-db-introspect
 c-hardening-check
 quality-gate-state
@@ -198,6 +199,10 @@ them with direct database or protocol mutations.
 - `just runtime-db-introspect`: inspect bounded database structure.
 - `just runtime-performance-snapshot`: record thresholdless runtime metrics.
 - `just runtime-redis-state`: inspect scanner Redis boundaries.
+- `just yafvsctl-rust runtime-identity-migrate`: plan the guarded, atomic
+  one-time rename of a sibling `TurboVAS-runtime` directory to
+  `YAFVS-runtime`; add `--apply` only after all Docker containers have been
+  removed and a pre-migration `runtime-data-state` artifact has been retained.
 
 `tools/yafvsctl` supplies the current absolute checkout path to Compose.
 Direct `docker compose` use must set `TURBOVAS_REPO_MOUNT_PATH` explicitly.

@@ -37,6 +37,38 @@ confidence, and links to raw evidence. Missing, stale, failed, or ambiguous
 collection must remain visible as uncertainty rather than being interpreted as
 safety.
 
+### Inventory From Operator-Chosen Sources
+
+TurboVAS should allow operators to assess inventory collected by the methods
+that fit their environment. Potential inputs include an optional TurboVAS
+collector, operating-system and package inventories, SBOMs, container and
+artifact metadata, CMDB or endpoint-management exports, cloud inventory, and
+operator-authored transformations. The product should define precise bounded
+submission formats without requiring one collection agent or endorsing every
+source that an operator chooses to use.
+
+Different inputs should converge on a common provenance-aware evidence and
+applicability path. TurboVAS should retain enough source context, coverage,
+limitations, and normalization provenance to explain the resulting assessment.
+A source may be complete for a named evidence class without claiming complete
+knowledge of an asset; omitted, failed, partial, stale, redacted, and
+conflicting data must remain distinguishable.
+
+Imported inventory should be presented as inventory correlation rather than
+active verification. Component presence, product identity, vulnerability
+applicability, collection method, source assurance, and remediation closure
+are related but separate questions. Standards such as CycloneDX or SPDX may be
+accepted where useful, alongside a simpler TurboVAS-native format for custom
+exports, but exact versions, adapters, transports, retention, and collector
+design remain implementation decisions.
+
+This capability should be designed as a bounded parser and sensitive-data
+boundary. It should minimize unnecessary host data, preserve reproducible raw
+evidence under explicit retention controls, keep imported operational data
+within the configured TurboVAS data boundary, and prevent uploaded documents
+from automatically triggering active checks or writing shared vulnerability
+intelligence.
+
 ### Applicability-Aware Findings
 
 Active checks can often identify a vulnerability directly. Inventory and

@@ -35,6 +35,12 @@ pub enum CliCommand {
     PathCouplingState,
     /// Inspect Redis dependency and runtime boundary state.
     RuntimeRedisState,
+    /// Plan or apply the atomic TurboVAS runtime identity migration.
+    RuntimeIdentityMigrate {
+        /// Perform the rename after all safety checks pass.
+        #[arg(long)]
+        apply: bool,
+    },
     /// Inspect fixed read-only database catalog facts.
     RuntimeDbIntrospect {
         /// Include information_schema columns for a safe schema.table identifier.
@@ -172,6 +178,7 @@ impl CliCommand {
             Self::BrandingState => "branding-state",
             Self::PathCouplingState => "path-coupling-state",
             Self::RuntimeRedisState => "runtime-redis-state",
+            Self::RuntimeIdentityMigrate { .. } => "runtime-identity-migrate",
             Self::RuntimeDbIntrospect { .. } => "runtime-db-introspect",
             Self::CHardeningCheck { .. } => "c-hardening-check",
             Self::CHardeningManifestWrite => "c-hardening-manifest-write",
@@ -519,6 +526,9 @@ mod tests {
         let command_names = Cli::command()
             .get_subcommands()
             .filter(|command| !command.is_hide_set())
+            // The destructive runtime identity migration is intentionally not
+            // listed in public documentation until its operator rollout.
+            .filter(|command| command.get_name() != "runtime-identity-migrate")
             .map(|command| command.get_name().to_string())
             .collect::<Vec<_>>();
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");

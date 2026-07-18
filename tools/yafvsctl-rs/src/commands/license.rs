@@ -96,12 +96,18 @@ pub(crate) fn command_license_report_with_runner(
         let rows = git_name_status_for_scope(runner, repo_root, diff_scope, &["components"]);
         let baseline_rows =
             git_name_status(runner, repo_root, IMPORT_BASELINE_COMMIT, &["components"]);
+        let mut notice_exempt = notice_exempt_paths(baseline_rows.as_deref());
+        if diff_scope == "worktree" {
+            let staged = git_name_status_for_scope(runner, repo_root, "staged", &["components"]);
+            extend_rename_exemptions(&mut notice_exempt, staged.as_deref());
+        }
+        extend_rename_exemptions(&mut notice_exempt, rows.as_deref());
         let findings = modified_imported_license_findings(
             repo_root,
             rows.as_deref(),
             diff_scope,
             diff_scope == "baseline",
-            &notice_exempt_paths(baseline_rows.as_deref()),
+            &notice_exempt,
             runner,
         );
         let mut result = make_result(
@@ -175,17 +181,28 @@ pub(crate) fn command_license_report_with_runner(
             format!("Could not compare against import baseline {IMPORT_BASELINE_COMMIT}."),
         )),
     }
-    for scope in ["staged", "worktree"] {
-        let transient = git_name_status_for_scope(runner, repo_root, scope, &["components"]);
-        findings.extend(modified_imported_license_findings(
-            repo_root,
-            transient.as_deref(),
-            scope,
-            false,
-            &notice_exempt,
-            runner,
-        ));
-    }
+    let staged = git_name_status_for_scope(runner, repo_root, "staged", &["components"]);
+    let mut staged_exempt = notice_exempt.clone();
+    extend_rename_exemptions(&mut staged_exempt, staged.as_deref());
+    findings.extend(modified_imported_license_findings(
+        repo_root,
+        staged.as_deref(),
+        "staged",
+        false,
+        &staged_exempt,
+        runner,
+    ));
+    let worktree = git_name_status_for_scope(runner, repo_root, "worktree", &["components"]);
+    let mut worktree_exempt = staged_exempt;
+    extend_rename_exemptions(&mut worktree_exempt, worktree.as_deref());
+    findings.extend(modified_imported_license_findings(
+        repo_root,
+        worktree.as_deref(),
+        "worktree",
+        false,
+        &worktree_exempt,
+        runner,
+    ));
 
     match all_rows.as_deref() {
         Some(rows) => {
@@ -255,6 +272,19 @@ pub(crate) fn command_license_report_with_runner(
         result = license_status_only_result(result);
     }
     result
+}
+
+fn extend_rename_exemptions(exempt: &mut BTreeSet<String>, rows: Option<&[NameStatus]>) {
+    for row in rows.unwrap_or_default() {
+        if (row.status.starts_with('R') || row.status.starts_with('C'))
+            && row
+                .source_path
+                .as_ref()
+                .is_some_and(|source| exempt.contains(source))
+        {
+            exempt.insert(row.path.clone());
+        }
+    }
 }
 
 fn git_name_status(
@@ -910,6 +940,21 @@ mod tests {
     }
 
     #[test]
+    fn staged_rename_exemption_carries_into_worktree_modification() {
+        let source = "components/gvmd/src/turbovas_control.c";
+        let destination = "components/gvmd/src/yafvs_control.c";
+        let staged = parse_name_status(&format!("R100\t{source}\t{destination}\n"));
+        let mut exempt = BTreeSet::from([source.to_string()]);
+
+        extend_rename_exemptions(&mut exempt, Some(&staged));
+
+        assert_eq!(
+            exempt,
+            BTreeSet::from([source.to_string(), destination.to_string()])
+        );
+    }
+
+    #[test]
     fn modified_imported_worktree_scope_uses_exact_git_contract() {
         let fixture = Fixture::new();
         let relative = "components/gvmd/src/example.c";
@@ -962,6 +1007,18 @@ mod tests {
                     "-l0",
                     "--name-status",
                     &format!("{IMPORT_BASELINE_COMMIT}..HEAD"),
+                    "--",
+                    "components",
+                ],
+                vec![
+                    "-C",
+                    &root,
+                    "diff",
+                    "--find-renames",
+                    "--find-copies-harder",
+                    "-l0",
+                    "--cached",
+                    "--name-status",
                     "--",
                     "components",
                 ],

@@ -13,8 +13,8 @@ use tokio::{
 use crate::errors::ApiError;
 
 const GVMD_CONTROL_SOCKET_ENV: &str = "YAFVS_API_GVMD_CONTROL_SOCKET";
-const GVMD_CONTROL_SECRET_ENV: &str = "TURBOVAS_GVMD_CONTROL_SECRET";
-const DEFAULT_GVMD_CONTROL_SOCKET: &str = "/runtime/run/gvmd/turbovas-control.sock";
+const GVMD_CONTROL_SECRET_ENV: &str = "YAFVS_GVMD_CONTROL_SECRET";
+const DEFAULT_GVMD_CONTROL_SOCKET: &str = "/runtime/run/gvmd/yafvs-control.sock";
 const MIN_CONTROL_SECRET_BYTES: usize = 32;
 const MAX_CONTROL_SECRET_BYTES: usize = 128;
 const CONTROL_SOCKET_IO_TIMEOUT: Duration = Duration::from_secs(5);

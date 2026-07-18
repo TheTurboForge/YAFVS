@@ -36,7 +36,7 @@ const MANAGE_SQL_REPORT_FORMATS_C: &str =
     include_str!("../../../components/gvmd/src/manage_sql_report_formats.c");
 const ALERT_QUERY_SQL: &str = include_str!("alert_query_sql.rs");
 const ALERT_WRITES: &str = include_str!("alert_writes.rs");
-const TURBOVAS_CONTROL_C: &str = include_str!("../../../components/gvmd/src/turbovas_control.c");
+const YAFVS_CONTROL_C: &str = include_str!("../../../components/gvmd/src/yafvs_control.c");
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -235,7 +235,7 @@ fn retired_alert_method_holes_are_removed_full_stack_without_renumbering() {
         "invalid_tp_tls",
     ] {
         assert!(
-            !TURBOVAS_CONTROL_C.contains(status),
+            !YAFVS_CONTROL_C.contains(status),
             "control-plane status mapping still contains {status}"
         );
     }
@@ -708,20 +708,20 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
 #[test]
 fn native_scp_alert_create_contract_is_explicitly_parsed_scrubbed_and_direct_write_documented() {
     let parser = inherited_function(
-        TURBOVAS_CONTROL_C,
-        "turbovas_control_parse_alert_scp_create_request",
+        YAFVS_CONTROL_C,
+        "yafvs_control_parse_alert_scp_create_request",
     );
     for required in [
-        "TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND",
-        "turbovas_control_parse_authenticated_prefix",
-        "TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES",
-        "TURBOVAS_CONTROL_ALERT_SCP_PORT_MAX_BYTES",
-        "turbovas_control_uuid_is_valid (alert->credential_uuid)",
-        "turbovas_control_uuid_is_valid (alert->report_format_uuid)",
-        "turbovas_control_alert_scp_port_is_valid (alert->port)",
+        "YAFVS_CONTROL_ALERT_SCP_CREATE_COMMAND",
+        "yafvs_control_parse_authenticated_prefix",
+        "YAFVS_CONTROL_ALERT_UUID_MAX_BYTES",
+        "YAFVS_CONTROL_ALERT_SCP_PORT_MAX_BYTES",
+        "yafvs_control_uuid_is_valid (alert->credential_uuid)",
+        "yafvs_control_uuid_is_valid (alert->report_format_uuid)",
+        "yafvs_control_alert_scp_port_is_valid (alert->port)",
         "alert->known_hosts, strlen (alert->known_hosts), TRUE",
         "alert->path, strlen (alert->path), FALSE",
-        "turbovas_control_alert_scp_create_request_clear (alert)",
+        "yafvs_control_alert_scp_create_request_clear (alert)",
     ] {
         assert!(
             parser.contains(required),
@@ -729,9 +729,9 @@ fn native_scp_alert_create_contract_is_explicitly_parsed_scrubbed_and_direct_wri
         );
     }
 
-    let create = inherited_function(TURBOVAS_CONTROL_C, "turbovas_control_create_alert_scp");
+    let create = inherited_function(YAFVS_CONTROL_C, "yafvs_control_create_alert_scp");
     for required in [
-        "turbovas_control_start_operator_session (operator_uuid)",
+        "yafvs_control_start_operator_session (operator_uuid)",
         "scp_credential",
         "scp_host",
         "scp_port",
@@ -739,8 +739,8 @@ fn native_scp_alert_create_contract_is_explicitly_parsed_scrubbed_and_direct_wri
         "scp_path",
         "scp_report_format",
         "create_alert_scp_with_report_refs",
-        "turbovas_control_secure_array_free (method_data)",
-        "turbovas_control_finish_operator_session ()",
+        "yafvs_control_secure_array_free (method_data)",
+        "yafvs_control_finish_operator_session ()",
     ] {
         assert!(
             create.contains(required),
@@ -748,10 +748,10 @@ fn native_scp_alert_create_contract_is_explicitly_parsed_scrubbed_and_direct_wri
         );
     }
     assert!(
-        TURBOVAS_CONTROL_C
-            .contains("turbovas_control_alert_scp_create_request_clear (&scp_alert_request)")
+        YAFVS_CONTROL_C
+            .contains("yafvs_control_alert_scp_create_request_clear (&scp_alert_request)")
     );
-    assert!(TURBOVAS_CONTROL_C.contains("turbovas_control_secure_clear (request, request_len)"));
+    assert!(YAFVS_CONTROL_C.contains("yafvs_control_secure_clear (request, request_len)"));
 
     let create_path = openapi_path_block("/alerts");
     let create = openapi_operation_block(&create_path, "post");

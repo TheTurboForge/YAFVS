@@ -5,10 +5,10 @@
 
 /**
  * @file
- * @brief Private TurboVAS control listener.
+ * @brief Private YAFVS control listener.
  */
 
-#include "turbovas_control.h"
+#include "yafvs_control.h"
 
 #include "gmp_base.h"
 #include "manage.h"
@@ -39,136 +39,136 @@
 #undef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "md   control"
 
-#define TURBOVAS_CONTROL_SECRET_ENV "TURBOVAS_GVMD_CONTROL_SECRET"
-#define TURBOVAS_CONTROL_SECRET_MIN_BYTES 32
-#define TURBOVAS_CONTROL_SECRET_MAX_BYTES 128
-#define TURBOVAS_CONTROL_STOP_MAX_REQUEST_BYTES 256
-#define TURBOVAS_CONTROL_MAX_REQUEST_BYTES 65536
-#define TURBOVAS_CONTROL_MAX_RESPONSE_BYTES 64
-#define TURBOVAS_CONTROL_TIMEOUT_SECONDS 5
-#define TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND "trash-empty "
-#define TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND) - 1)
-#define TURBOVAS_CONTROL_TRASH_EMPTY_SNAPSHOT_DIGEST_LENGTH 64
-#define TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND "schedule-create "
-#define TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND "schedule-modify "
-#define TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND) - 1)
-#define TURBOVAS_CONTROL_SCHEDULE_NAME_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_SCHEDULE_COMMENT_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_SCHEDULE_TIMEZONE_MAX_BYTES 256
-#define TURBOVAS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES 32768
-#define TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND "credential-create "
-#define TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_CREDENTIAL_NAME_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_CREDENTIAL_COMMENT_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_CREDENTIAL_LOGIN_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_CREDENTIAL_SECRET_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_CREDENTIAL_PRIVATE_KEY_MAX_BYTES 32768
-#define TURBOVAS_CONTROL_CREDENTIAL_TYPE_UP "up"
-#define TURBOVAS_CONTROL_CREDENTIAL_TYPE_USK "usk"
-#define TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND "alert-email-create "
-#define TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_ALERT_START_TASK_CREATE_COMMAND \
+#define YAFVS_CONTROL_SECRET_ENV "YAFVS_GVMD_CONTROL_SECRET"
+#define YAFVS_CONTROL_SECRET_MIN_BYTES 32
+#define YAFVS_CONTROL_SECRET_MAX_BYTES 128
+#define YAFVS_CONTROL_STOP_MAX_REQUEST_BYTES 256
+#define YAFVS_CONTROL_MAX_REQUEST_BYTES 65536
+#define YAFVS_CONTROL_MAX_RESPONSE_BYTES 64
+#define YAFVS_CONTROL_TIMEOUT_SECONDS 5
+#define YAFVS_CONTROL_TRASH_EMPTY_COMMAND "trash-empty "
+#define YAFVS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_TRASH_EMPTY_COMMAND) - 1)
+#define YAFVS_CONTROL_TRASH_EMPTY_SNAPSHOT_DIGEST_LENGTH 64
+#define YAFVS_CONTROL_SCHEDULE_CREATE_COMMAND "schedule-create "
+#define YAFVS_CONTROL_SCHEDULE_CREATE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_SCHEDULE_CREATE_COMMAND) - 1)
+#define YAFVS_CONTROL_SCHEDULE_MODIFY_COMMAND "schedule-modify "
+#define YAFVS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_SCHEDULE_MODIFY_COMMAND) - 1)
+#define YAFVS_CONTROL_SCHEDULE_NAME_MAX_BYTES 4096
+#define YAFVS_CONTROL_SCHEDULE_COMMENT_MAX_BYTES 4096
+#define YAFVS_CONTROL_SCHEDULE_TIMEZONE_MAX_BYTES 256
+#define YAFVS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES 32768
+#define YAFVS_CONTROL_CREDENTIAL_CREATE_COMMAND "credential-create "
+#define YAFVS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_CREDENTIAL_CREATE_COMMAND) - 1)
+#define YAFVS_CONTROL_CREDENTIAL_NAME_MAX_BYTES 4096
+#define YAFVS_CONTROL_CREDENTIAL_COMMENT_MAX_BYTES 4096
+#define YAFVS_CONTROL_CREDENTIAL_LOGIN_MAX_BYTES 4096
+#define YAFVS_CONTROL_CREDENTIAL_SECRET_MAX_BYTES 4096
+#define YAFVS_CONTROL_CREDENTIAL_PRIVATE_KEY_MAX_BYTES 32768
+#define YAFVS_CONTROL_CREDENTIAL_TYPE_UP "up"
+#define YAFVS_CONTROL_CREDENTIAL_TYPE_USK "usk"
+#define YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND "alert-email-create "
+#define YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND) - 1)
+#define YAFVS_CONTROL_ALERT_START_TASK_CREATE_COMMAND \
   "alert-start-task-create "
-#define TURBOVAS_CONTROL_ALERT_START_TASK_CREATE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_ALERT_START_TASK_CREATE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_ALERT_TEST_COMMAND "alert-test "
-#define TURBOVAS_CONTROL_ALERT_TEST_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_ALERT_TEST_COMMAND) - 1)
-#define TURBOVAS_CONTROL_ALERT_DELIVER_REPORT_COMMAND \
+#define YAFVS_CONTROL_ALERT_START_TASK_CREATE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_ALERT_START_TASK_CREATE_COMMAND) - 1)
+#define YAFVS_CONTROL_ALERT_TEST_COMMAND "alert-test "
+#define YAFVS_CONTROL_ALERT_TEST_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_ALERT_TEST_COMMAND) - 1)
+#define YAFVS_CONTROL_ALERT_DELIVER_REPORT_COMMAND \
   "alert-deliver-report "
-#define TURBOVAS_CONTROL_ALERT_DELIVER_REPORT_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_ALERT_DELIVER_REPORT_COMMAND) - 1)
-#define TURBOVAS_CONTROL_ALERT_DELIVERY_FILTER_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_ALERT_COMMENT_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_ALERT_STATUS_MAX_BYTES 32
-#define TURBOVAS_CONTROL_ALERT_ADDRESS_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_ALERT_SUBJECT_MAX_BYTES 80
-#define TURBOVAS_CONTROL_ALERT_MESSAGE_MAX_BYTES 2000
-#define TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES 36
-#define TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND "alert-smb-create "
-#define TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND "alert-scp-create "
-#define TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND "alert-syslog-create "
-#define TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND "alert-snmp-create "
-#define TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_ALERT_SMB_PATH_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_ALERT_SMB_PROTOCOL_MAX_BYTES 4
-#define TURBOVAS_CONTROL_ALERT_SCP_PORT_MAX_BYTES 5
-#define TURBOVAS_CONTROL_ALERT_SCP_HOST_MAX_BYTES 253
-#define TURBOVAS_CONTROL_ALERT_SCP_TEXT_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_ALERT_SNMP_AGENT_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_ALERT_SNMP_COMMUNITY_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND \
+#define YAFVS_CONTROL_ALERT_DELIVER_REPORT_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_ALERT_DELIVER_REPORT_COMMAND) - 1)
+#define YAFVS_CONTROL_ALERT_DELIVERY_FILTER_MAX_BYTES 4096
+#define YAFVS_CONTROL_ALERT_NAME_MAX_BYTES 4096
+#define YAFVS_CONTROL_ALERT_COMMENT_MAX_BYTES 4096
+#define YAFVS_CONTROL_ALERT_STATUS_MAX_BYTES 32
+#define YAFVS_CONTROL_ALERT_ADDRESS_MAX_BYTES 4096
+#define YAFVS_CONTROL_ALERT_SUBJECT_MAX_BYTES 80
+#define YAFVS_CONTROL_ALERT_MESSAGE_MAX_BYTES 2000
+#define YAFVS_CONTROL_ALERT_UUID_MAX_BYTES 36
+#define YAFVS_CONTROL_ALERT_SMB_CREATE_COMMAND "alert-smb-create "
+#define YAFVS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_ALERT_SMB_CREATE_COMMAND) - 1)
+#define YAFVS_CONTROL_ALERT_SCP_CREATE_COMMAND "alert-scp-create "
+#define YAFVS_CONTROL_ALERT_SCP_CREATE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_ALERT_SCP_CREATE_COMMAND) - 1)
+#define YAFVS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND "alert-syslog-create "
+#define YAFVS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND) - 1)
+#define YAFVS_CONTROL_ALERT_SNMP_CREATE_COMMAND "alert-snmp-create "
+#define YAFVS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_ALERT_SNMP_CREATE_COMMAND) - 1)
+#define YAFVS_CONTROL_ALERT_SMB_PATH_MAX_BYTES 4096
+#define YAFVS_CONTROL_ALERT_SMB_PROTOCOL_MAX_BYTES 4
+#define YAFVS_CONTROL_ALERT_SCP_PORT_MAX_BYTES 5
+#define YAFVS_CONTROL_ALERT_SCP_HOST_MAX_BYTES 253
+#define YAFVS_CONTROL_ALERT_SCP_TEXT_MAX_BYTES 4096
+#define YAFVS_CONTROL_ALERT_SNMP_AGENT_MAX_BYTES 4096
+#define YAFVS_CONTROL_ALERT_SNMP_COMMUNITY_MAX_BYTES 4096
+#define YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND \
   "scan-config-nvt-diagnostic "
-#define TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND) - 1)
-#define TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_MAX_REQUEST_BYTES 512
-#define TURBOVAS_CONTROL_NVT_OID_MAX_BYTES 128
-#define TURBOVAS_CONTROL_TAG_CREATE_COMMAND "tag-create "
-#define TURBOVAS_CONTROL_TAG_CREATE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_TAG_CREATE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_TAG_MODIFY_COMMAND "tag-modify "
-#define TURBOVAS_CONTROL_TAG_MODIFY_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_TAG_MODIFY_COMMAND) - 1)
-#define TURBOVAS_CONTROL_TAG_RESOURCE_TYPE_MAX_BYTES 128
-#define TURBOVAS_CONTROL_TAG_TEXT_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_TAG_RESOURCE_ID_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_TAG_RESOURCE_IDS_MAX_BYTES 32768
-#define TURBOVAS_CONTROL_TAG_RESOURCE_IDS_MAX 200
-#define TURBOVAS_CONTROL_TAG_FILTER_MAX_BYTES 16384
-#define TURBOVAS_CONTROL_TASK_CLONE_COMMAND "task-clone "
-#define TURBOVAS_CONTROL_TASK_CLONE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_TASK_CLONE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND \
+#define YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND) - 1)
+#define YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_MAX_REQUEST_BYTES 512
+#define YAFVS_CONTROL_NVT_OID_MAX_BYTES 128
+#define YAFVS_CONTROL_TAG_CREATE_COMMAND "tag-create "
+#define YAFVS_CONTROL_TAG_CREATE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_TAG_CREATE_COMMAND) - 1)
+#define YAFVS_CONTROL_TAG_MODIFY_COMMAND "tag-modify "
+#define YAFVS_CONTROL_TAG_MODIFY_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_TAG_MODIFY_COMMAND) - 1)
+#define YAFVS_CONTROL_TAG_RESOURCE_TYPE_MAX_BYTES 128
+#define YAFVS_CONTROL_TAG_TEXT_MAX_BYTES 4096
+#define YAFVS_CONTROL_TAG_RESOURCE_ID_MAX_BYTES 4096
+#define YAFVS_CONTROL_TAG_RESOURCE_IDS_MAX_BYTES 32768
+#define YAFVS_CONTROL_TAG_RESOURCE_IDS_MAX 200
+#define YAFVS_CONTROL_TAG_FILTER_MAX_BYTES 16384
+#define YAFVS_CONTROL_TASK_CLONE_COMMAND "task-clone "
+#define YAFVS_CONTROL_TASK_CLONE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_TASK_CLONE_COMMAND) - 1)
+#define YAFVS_CONTROL_USER_PASSWORD_CHANGE_COMMAND \
   "user-password-change "
-#define TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_USER_PASSWORD_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_USER_CREATE_COMMAND "user-create "
-#define TURBOVAS_CONTROL_USER_CREATE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_USER_CREATE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_USER_MODIFY_COMMAND "user-modify "
-#define TURBOVAS_CONTROL_USER_MODIFY_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_USER_MODIFY_COMMAND) - 1)
-#define TURBOVAS_CONTROL_USER_DELETE_COMMAND "user-delete "
-#define TURBOVAS_CONTROL_USER_DELETE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_USER_DELETE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_USER_CLONE_COMMAND "user-clone "
-#define TURBOVAS_CONTROL_USER_CLONE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_USER_CLONE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_USER_NAME_MAX_BYTES 256
-#define TURBOVAS_CONTROL_USER_COMMENT_MAX_BYTES 4096
-#define TURBOVAS_CONTROL_USER_METHOD_MAX_BYTES 16
-#define TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND \
+#define YAFVS_CONTROL_USER_PASSWORD_CHANGE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_USER_PASSWORD_CHANGE_COMMAND) - 1)
+#define YAFVS_CONTROL_USER_PASSWORD_MAX_BYTES 4096
+#define YAFVS_CONTROL_USER_CREATE_COMMAND "user-create "
+#define YAFVS_CONTROL_USER_CREATE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_USER_CREATE_COMMAND) - 1)
+#define YAFVS_CONTROL_USER_MODIFY_COMMAND "user-modify "
+#define YAFVS_CONTROL_USER_MODIFY_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_USER_MODIFY_COMMAND) - 1)
+#define YAFVS_CONTROL_USER_DELETE_COMMAND "user-delete "
+#define YAFVS_CONTROL_USER_DELETE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_USER_DELETE_COMMAND) - 1)
+#define YAFVS_CONTROL_USER_CLONE_COMMAND "user-clone "
+#define YAFVS_CONTROL_USER_CLONE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_USER_CLONE_COMMAND) - 1)
+#define YAFVS_CONTROL_USER_NAME_MAX_BYTES 256
+#define YAFVS_CONTROL_USER_COMMENT_MAX_BYTES 4096
+#define YAFVS_CONTROL_USER_METHOD_MAX_BYTES 16
+#define YAFVS_CONTROL_USER_SETTING_MODIFY_COMMAND \
   "user-setting-modify "
-#define TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND) - 1)
-#define TURBOVAS_CONTROL_USER_SETTING_VALUE_MAX_BYTES 32768
-#define TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND "auth-settings-read "
-#define TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND) - 1)
-#define TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND \
+#define YAFVS_CONTROL_USER_SETTING_MODIFY_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_USER_SETTING_MODIFY_COMMAND) - 1)
+#define YAFVS_CONTROL_USER_SETTING_VALUE_MAX_BYTES 32768
+#define YAFVS_CONTROL_AUTH_SETTINGS_READ_COMMAND "auth-settings-read "
+#define YAFVS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_AUTH_SETTINGS_READ_COMMAND) - 1)
+#define YAFVS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND \
   "auth-settings-ldap-write "
-#define TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND \
+#define YAFVS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND) - 1)
+#define YAFVS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND \
   "auth-settings-radius-write "
-#define TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH \
-  (sizeof (TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND) - 1)
-#define TURBOVAS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES 32768
+#define YAFVS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH \
+  (sizeof (YAFVS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND) - 1)
+#define YAFVS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES 32768
 
 typedef struct
 {
@@ -176,7 +176,7 @@ typedef struct
   gchar *comment;
   gchar *timezone;
   gchar *icalendar;
-} turbovas_control_schedule_create_request_t;
+} yafvs_control_schedule_create_request_t;
 
 typedef struct
 {
@@ -184,7 +184,7 @@ typedef struct
   gchar *comment;
   gchar *timezone;
   gchar *icalendar;
-} turbovas_control_schedule_modify_request_t;
+} yafvs_control_schedule_modify_request_t;
 
 typedef struct
 {
@@ -194,7 +194,7 @@ typedef struct
   gchar *login;
   gchar *secret;
   gchar *private_key;
-} turbovas_control_credential_create_request_t;
+} yafvs_control_credential_create_request_t;
 
 typedef struct
 {
@@ -209,7 +209,7 @@ typedef struct
   gchar *message;
   gboolean active;
   unsigned int notice;
-} turbovas_control_alert_email_create_request_t;
+} yafvs_control_alert_email_create_request_t;
 
 typedef struct
 {
@@ -218,7 +218,7 @@ typedef struct
   gchar *status;
   char task_uuid[37];
   gboolean active;
-} turbovas_control_alert_start_task_create_request_t;
+} yafvs_control_alert_start_task_create_request_t;
 
 typedef struct
 {
@@ -226,7 +226,7 @@ typedef struct
   char report_uuid[37];
   char filter_uuid[37];
   gchar *filter;
-} turbovas_control_alert_deliver_report_request_t;
+} yafvs_control_alert_deliver_report_request_t;
 
 typedef struct
 {
@@ -239,7 +239,7 @@ typedef struct
   gchar *report_format_uuid;
   gchar *max_protocol;
   gboolean active;
-} turbovas_control_alert_smb_create_request_t;
+} yafvs_control_alert_smb_create_request_t;
 
 typedef struct
 {
@@ -253,7 +253,7 @@ typedef struct
   gchar *path;
   gchar *report_format_uuid;
   gboolean active;
-} turbovas_control_alert_scp_create_request_t;
+} yafvs_control_alert_scp_create_request_t;
 
 typedef struct
 {
@@ -261,7 +261,7 @@ typedef struct
   gchar *comment;
   gchar *status;
   gboolean active;
-} turbovas_control_alert_syslog_create_request_t;
+} yafvs_control_alert_syslog_create_request_t;
 
 typedef struct
 {
@@ -272,7 +272,7 @@ typedef struct
   gchar *community;
   gchar *message;
   gboolean active;
-} turbovas_control_alert_snmp_create_request_t;
+} yafvs_control_alert_snmp_create_request_t;
 
 typedef struct
 {
@@ -283,7 +283,7 @@ typedef struct
   array_t *resource_ids;
   gchar *resource_filter;
   gboolean active;
-} turbovas_control_tag_create_request_t;
+} yafvs_control_tag_create_request_t;
 
 typedef struct
 {
@@ -295,43 +295,43 @@ typedef struct
   gchar *resource_filter;
   gchar *resources_action;
   gchar *active;
-} turbovas_control_tag_modify_request_t;
+} yafvs_control_tag_modify_request_t;
 
 typedef struct
 {
   gchar *old_password;
   gchar *new_password;
-} turbovas_control_user_password_change_request_t;
+} yafvs_control_user_password_change_request_t;
 
 typedef struct
 {
-  char method[TURBOVAS_CONTROL_USER_METHOD_MAX_BYTES];
+  char method[YAFVS_CONTROL_USER_METHOD_MAX_BYTES];
   gchar *name;
   gchar *comment;
   gchar *password;
-} turbovas_control_user_create_request_t;
+} yafvs_control_user_create_request_t;
 
 typedef struct
 {
   char target_uuid[37];
-  char method[TURBOVAS_CONTROL_USER_METHOD_MAX_BYTES];
+  char method[YAFVS_CONTROL_USER_METHOD_MAX_BYTES];
   gchar *name;
   gchar *comment;
   gchar *password;
-} turbovas_control_user_modify_request_t;
+} yafvs_control_user_modify_request_t;
 
 typedef struct
 {
   char target_uuid[37];
   char inheritor_uuid[37];
-} turbovas_control_user_delete_request_t;
+} yafvs_control_user_delete_request_t;
 
 typedef struct
 {
   gboolean timezone;
   char setting_uuid[37];
   gchar *value;
-} turbovas_control_user_setting_modify_request_t;
+} yafvs_control_user_setting_modify_request_t;
 
 typedef struct
 {
@@ -341,79 +341,79 @@ typedef struct
   int allow_plaintext;
   int ldaps_only;
   gchar *cacert;
-} turbovas_control_auth_settings_ldap_request_t;
+} yafvs_control_auth_settings_ldap_request_t;
 
 typedef struct
 {
   int enabled;
   gchar *host;
   gchar *secret;
-} turbovas_control_auth_settings_radius_request_t;
+} yafvs_control_auth_settings_radius_request_t;
 
 static gboolean
-turbovas_control_decode_base64_field (const char *, size_t, size_t, gboolean,
+yafvs_control_decode_base64_field (const char *, size_t, size_t, gboolean,
                                       gchar **);
 
 static gboolean
-turbovas_control_next_field (const char **, const char *, const char **,
+yafvs_control_next_field (const char **, const char *, const char **,
                              size_t *);
 
 static gboolean
-turbovas_control_parse_authenticated_prefix (
+yafvs_control_parse_authenticated_prefix (
   const char *, size_t, const char *, size_t, const char *, size_t, char[37],
   const char **, const char **);
 
 static gboolean
-turbovas_control_text_has_allowed_controls (const gchar *, gsize, gboolean);
+yafvs_control_text_has_allowed_controls (const gchar *, gsize, gboolean);
 
 static void
-turbovas_control_secure_free (gchar *);
+yafvs_control_secure_free (gchar *);
 
 static void
-turbovas_control_secure_clear (void *, size_t);
+yafvs_control_secure_clear (void *, size_t);
 
 static gboolean
-turbovas_control_alert_status_is_valid (const char *);
+yafvs_control_alert_status_is_valid (const char *);
 
 static gboolean
-turbovas_control_optional_uuid_is_valid (const char *);
+yafvs_control_optional_uuid_is_valid (const char *);
 
 static gboolean
-turbovas_control_secret_matches (const char *, size_t, const char *, size_t);
+yafvs_control_secret_matches (const char *, size_t, const char *, size_t);
 
 static gboolean
-turbovas_control_uuid_is_valid (const char *);
+yafvs_control_uuid_is_valid (const char *);
 
 static void
-turbovas_control_array_add_data (array_t *, const char *, const char *);
+yafvs_control_array_add_data (array_t *, const char *, const char *);
 
 static void
-turbovas_control_secure_array_free (array_t *);
+yafvs_control_secure_array_free (array_t *);
 
 static gboolean
-turbovas_control_user_method_from_field (const char *, size_t,
-                                          char[TURBOVAS_CONTROL_USER_METHOD_MAX_BYTES]);
+yafvs_control_user_method_from_field (const char *, size_t,
+                                          char[YAFVS_CONTROL_USER_METHOD_MAX_BYTES]);
 
 static gboolean
-turbovas_control_user_method_is_valid (const char *);
+yafvs_control_user_method_is_valid (const char *);
 
 static gboolean
-turbovas_control_decode_user_password_field (const char *, size_t, gchar **);
+yafvs_control_decode_user_password_field (const char *, size_t, gchar **);
 
 static gboolean
-turbovas_control_decode_user_comment_field (const char *, size_t, gchar **);
+yafvs_control_decode_user_comment_field (const char *, size_t, gchar **);
 
 static gboolean
-turbovas_control_decode_required_base64_text (const char *, size_t, size_t,
+yafvs_control_decode_required_base64_text (const char *, size_t, size_t,
                                                gchar **);
 
 static gboolean
-turbovas_control_secret_is_valid (const char *secret, size_t secret_len)
+yafvs_control_secret_is_valid (const char *secret, size_t secret_len)
 {
   size_t i;
 
-  if (secret == NULL || secret_len < TURBOVAS_CONTROL_SECRET_MIN_BYTES
-      || secret_len > TURBOVAS_CONTROL_SECRET_MAX_BYTES)
+  if (secret == NULL || secret_len < YAFVS_CONTROL_SECRET_MIN_BYTES
+      || secret_len > YAFVS_CONTROL_SECRET_MAX_BYTES)
     return FALSE;
 
   for (i = 0; i < secret_len; i++)
@@ -425,73 +425,73 @@ turbovas_control_secret_is_valid (const char *secret, size_t secret_len)
 }
 
 static void
-turbovas_control_auth_settings_ldap_request_clear (
-  turbovas_control_auth_settings_ldap_request_t *request)
+yafvs_control_auth_settings_ldap_request_clear (
+  yafvs_control_auth_settings_ldap_request_t *request)
 {
-  turbovas_control_secure_free (request->host);
-  turbovas_control_secure_free (request->authdn);
-  turbovas_control_secure_free (request->cacert);
+  yafvs_control_secure_free (request->host);
+  yafvs_control_secure_free (request->authdn);
+  yafvs_control_secure_free (request->cacert);
   memset (request, 0, sizeof (*request));
 }
 
 static void
-turbovas_control_auth_settings_radius_request_clear (
-  turbovas_control_auth_settings_radius_request_t *request)
+yafvs_control_auth_settings_radius_request_clear (
+  yafvs_control_auth_settings_radius_request_t *request)
 {
-  turbovas_control_secure_free (request->host);
-  turbovas_control_secure_free (request->secret);
+  yafvs_control_secure_free (request->host);
+  yafvs_control_secure_free (request->secret);
   memset (request, 0, sizeof (*request));
 }
 
 static void
-turbovas_control_user_setting_modify_request_clear (
-  turbovas_control_user_setting_modify_request_t *request)
+yafvs_control_user_setting_modify_request_clear (
+  yafvs_control_user_setting_modify_request_t *request)
 {
-  turbovas_control_secure_clear (request->setting_uuid,
+  yafvs_control_secure_clear (request->setting_uuid,
                                  sizeof (request->setting_uuid));
-  turbovas_control_secure_free (request->value);
+  yafvs_control_secure_free (request->value);
   memset (request, 0, sizeof (*request));
 }
 
 static void
-turbovas_control_user_password_change_request_clear (
-  turbovas_control_user_password_change_request_t *request)
+yafvs_control_user_password_change_request_clear (
+  yafvs_control_user_password_change_request_t *request)
 {
-  turbovas_control_secure_free (request->old_password);
-  turbovas_control_secure_free (request->new_password);
+  yafvs_control_secure_free (request->old_password);
+  yafvs_control_secure_free (request->new_password);
   memset (request, 0, sizeof (*request));
 }
 
 static void
-turbovas_control_user_create_request_clear (
-  turbovas_control_user_create_request_t *request)
+yafvs_control_user_create_request_clear (
+  yafvs_control_user_create_request_t *request)
 {
   g_free (request->name);
   g_free (request->comment);
-  turbovas_control_secure_free (request->password);
+  yafvs_control_secure_free (request->password);
   memset (request, 0, sizeof (*request));
 }
 
 static void
-turbovas_control_user_modify_request_clear (
-  turbovas_control_user_modify_request_t *request)
+yafvs_control_user_modify_request_clear (
+  yafvs_control_user_modify_request_t *request)
 {
-  turbovas_control_secure_clear (request->target_uuid,
+  yafvs_control_secure_clear (request->target_uuid,
                                  sizeof (request->target_uuid));
   g_free (request->name);
   g_free (request->comment);
-  turbovas_control_secure_free (request->password);
+  yafvs_control_secure_free (request->password);
   memset (request, 0, sizeof (*request));
 }
 
 static gboolean
-turbovas_control_user_method_from_field (
+yafvs_control_user_method_from_field (
   const char *field, size_t field_len,
-  char method[TURBOVAS_CONTROL_USER_METHOD_MAX_BYTES])
+  char method[YAFVS_CONTROL_USER_METHOD_MAX_BYTES])
 {
   size_t index;
 
-  if (field_len == 0 || field_len >= TURBOVAS_CONTROL_USER_METHOD_MAX_BYTES)
+  if (field_len == 0 || field_len >= YAFVS_CONTROL_USER_METHOD_MAX_BYTES)
     return FALSE;
   for (index = 0; index < field_len; index++)
     if (!g_ascii_islower (field[index]) && field[index] != '_')
@@ -503,7 +503,7 @@ turbovas_control_user_method_from_field (
 }
 
 static gboolean
-turbovas_control_user_method_is_valid (const char *method)
+yafvs_control_user_method_is_valid (const char *method)
 {
   return strcmp (method, "file") == 0
          || strcmp (method, "ldap_connect") == 0
@@ -511,7 +511,7 @@ turbovas_control_user_method_is_valid (const char *method)
 }
 
 static gboolean
-turbovas_control_decode_user_comment_field (const char *field,
+yafvs_control_decode_user_comment_field (const char *field,
                                              size_t field_len,
                                              gchar **comment)
 {
@@ -521,15 +521,15 @@ turbovas_control_decode_user_comment_field (const char *field,
       return TRUE;
     }
 
-  return turbovas_control_decode_base64_field (
-           field, field_len, TURBOVAS_CONTROL_USER_COMMENT_MAX_BYTES, FALSE,
+  return yafvs_control_decode_base64_field (
+           field, field_len, YAFVS_CONTROL_USER_COMMENT_MAX_BYTES, FALSE,
            comment)
-         && turbovas_control_text_has_allowed_controls (
+         && yafvs_control_text_has_allowed_controls (
               *comment, strlen (*comment), FALSE);
 }
 
 static gboolean
-turbovas_control_decode_user_password_field (const char *field,
+yafvs_control_decode_user_password_field (const char *field,
                                               size_t field_len,
                                               gchar **password)
 {
@@ -539,15 +539,15 @@ turbovas_control_decode_user_password_field (const char *field,
       return TRUE;
     }
 
-  return turbovas_control_decode_base64_field (
-           field, field_len, TURBOVAS_CONTROL_USER_PASSWORD_MAX_BYTES, FALSE,
+  return yafvs_control_decode_base64_field (
+           field, field_len, YAFVS_CONTROL_USER_PASSWORD_MAX_BYTES, FALSE,
            password)
-         && turbovas_control_text_has_allowed_controls (
+         && yafvs_control_text_has_allowed_controls (
               *password, strlen (*password), FALSE);
 }
 
 static gboolean
-turbovas_control_decode_required_base64_text (const char *field,
+yafvs_control_decode_required_base64_text (const char *field,
                                                size_t field_len,
                                                size_t max_decoded_len,
                                                gchar **decoded)
@@ -558,45 +558,45 @@ turbovas_control_decode_required_base64_text (const char *field,
       return TRUE;
     }
 
-  return turbovas_control_decode_base64_field (
+  return yafvs_control_decode_base64_field (
     field, field_len, max_decoded_len, TRUE, decoded);
 }
 
 static gboolean
-turbovas_control_parse_user_create_request (
+yafvs_control_parse_user_create_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
-  turbovas_control_user_create_request_t *user_request)
+  yafvs_control_user_create_request_t *user_request)
 {
   const char *cursor;
   const char *end;
   const char *field;
   size_t field_len;
 
-  if (!turbovas_control_parse_authenticated_prefix (
-        request, request_len, TURBOVAS_CONTROL_USER_CREATE_COMMAND,
-        TURBOVAS_CONTROL_USER_CREATE_COMMAND_LENGTH, expected_secret,
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_USER_CREATE_COMMAND,
+        YAFVS_CONTROL_USER_CREATE_COMMAND_LENGTH, expected_secret,
         expected_secret_len, operator_uuid, &cursor, &end))
     return FALSE;
 
-  if (!turbovas_control_next_field (&cursor, end, &field, &field_len)
-      || !turbovas_control_user_method_from_field (field, field_len,
+  if (!yafvs_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_user_method_from_field (field, field_len,
                                                     user_request->method)
-      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
-      || !turbovas_control_decode_base64_field (
-           field, field_len, TURBOVAS_CONTROL_USER_NAME_MAX_BYTES, TRUE,
+      || !yafvs_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_decode_base64_field (
+           field, field_len, YAFVS_CONTROL_USER_NAME_MAX_BYTES, TRUE,
            &user_request->name)
-      || !turbovas_control_text_has_allowed_controls (
+      || !yafvs_control_text_has_allowed_controls (
            user_request->name, strlen (user_request->name), FALSE)
-      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
-      || !turbovas_control_decode_user_comment_field (
+      || !yafvs_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_decode_user_comment_field (
            field, field_len, &user_request->comment)
-      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_next_field (&cursor, end, &field, &field_len)
       || cursor != end
-      || !turbovas_control_decode_user_password_field (
+      || !yafvs_control_decode_user_password_field (
            field, field_len, &user_request->password))
     {
-      turbovas_control_user_create_request_clear (user_request);
+      yafvs_control_user_create_request_clear (user_request);
       return FALSE;
     }
 
@@ -604,45 +604,45 @@ turbovas_control_parse_user_create_request (
 }
 
 static gboolean
-turbovas_control_parse_user_modify_request (
+yafvs_control_parse_user_modify_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
-  turbovas_control_user_modify_request_t *user_request)
+  yafvs_control_user_modify_request_t *user_request)
 {
   const char *cursor;
   const char *end;
   const char *field;
   size_t field_len;
 
-  if (!turbovas_control_parse_authenticated_prefix (
-        request, request_len, TURBOVAS_CONTROL_USER_MODIFY_COMMAND,
-        TURBOVAS_CONTROL_USER_MODIFY_COMMAND_LENGTH, expected_secret,
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_USER_MODIFY_COMMAND,
+        YAFVS_CONTROL_USER_MODIFY_COMMAND_LENGTH, expected_secret,
         expected_secret_len, operator_uuid, &cursor, &end)
-      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_next_field (&cursor, end, &field, &field_len)
       || field_len != 36)
     return FALSE;
 
   memcpy (user_request->target_uuid, field, field_len);
   user_request->target_uuid[36] = '\0';
-  if (!turbovas_control_uuid_is_valid (user_request->target_uuid)
-      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
-      || !turbovas_control_user_method_from_field (field, field_len,
+  if (!yafvs_control_uuid_is_valid (user_request->target_uuid)
+      || !yafvs_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_user_method_from_field (field, field_len,
                                                     user_request->method)
-      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
-      || !turbovas_control_decode_base64_field (
-           field, field_len, TURBOVAS_CONTROL_USER_NAME_MAX_BYTES, TRUE,
+      || !yafvs_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_decode_base64_field (
+           field, field_len, YAFVS_CONTROL_USER_NAME_MAX_BYTES, TRUE,
            &user_request->name)
-      || !turbovas_control_text_has_allowed_controls (
+      || !yafvs_control_text_has_allowed_controls (
            user_request->name, strlen (user_request->name), FALSE)
-      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
-      || !turbovas_control_decode_user_comment_field (
+      || !yafvs_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_decode_user_comment_field (
            field, field_len, &user_request->comment)
-      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_next_field (&cursor, end, &field, &field_len)
       || cursor != end
-      || !turbovas_control_decode_user_password_field (
+      || !yafvs_control_decode_user_password_field (
            field, field_len, &user_request->password))
     {
-      turbovas_control_user_modify_request_clear (user_request);
+      yafvs_control_user_modify_request_clear (user_request);
       return FALSE;
     }
 
@@ -650,31 +650,31 @@ turbovas_control_parse_user_modify_request (
 }
 
 static gboolean
-turbovas_control_parse_user_delete_request (
+yafvs_control_parse_user_delete_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
-  turbovas_control_user_delete_request_t *user_request)
+  yafvs_control_user_delete_request_t *user_request)
 {
   const char *cursor;
   const char *end;
   const char *field;
   size_t field_len;
 
-  if (!turbovas_control_parse_authenticated_prefix (
-        request, request_len, TURBOVAS_CONTROL_USER_DELETE_COMMAND,
-        TURBOVAS_CONTROL_USER_DELETE_COMMAND_LENGTH, expected_secret,
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_USER_DELETE_COMMAND,
+        YAFVS_CONTROL_USER_DELETE_COMMAND_LENGTH, expected_secret,
         expected_secret_len, operator_uuid, &cursor, &end)
-      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_next_field (&cursor, end, &field, &field_len)
       || field_len != 36)
     return FALSE;
 
   memcpy (user_request->target_uuid, field, field_len);
   user_request->target_uuid[36] = '\0';
-  if (!turbovas_control_uuid_is_valid (user_request->target_uuid)
-      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+  if (!yafvs_control_uuid_is_valid (user_request->target_uuid)
+      || !yafvs_control_next_field (&cursor, end, &field, &field_len)
       || cursor != end)
     {
-      turbovas_control_secure_clear (user_request, sizeof (*user_request));
+      yafvs_control_secure_clear (user_request, sizeof (*user_request));
       return FALSE;
     }
 
@@ -682,14 +682,14 @@ turbovas_control_parse_user_delete_request (
     return TRUE;
   if (field_len != 36)
     {
-      turbovas_control_secure_clear (user_request, sizeof (*user_request));
+      yafvs_control_secure_clear (user_request, sizeof (*user_request));
       return FALSE;
     }
   memcpy (user_request->inheritor_uuid, field, field_len);
   user_request->inheritor_uuid[36] = '\0';
-  if (!turbovas_control_uuid_is_valid (user_request->inheritor_uuid))
+  if (!yafvs_control_uuid_is_valid (user_request->inheritor_uuid))
     {
-      turbovas_control_secure_clear (user_request, sizeof (*user_request));
+      yafvs_control_secure_clear (user_request, sizeof (*user_request));
       return FALSE;
     }
 
@@ -697,59 +697,59 @@ turbovas_control_parse_user_delete_request (
 }
 
 static gboolean
-turbovas_control_parse_user_clone_request (
+yafvs_control_parse_user_clone_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37], char source_uuid[37])
 {
   const char *cursor;
   const char *end;
 
-  if (!turbovas_control_parse_authenticated_prefix (
-        request, request_len, TURBOVAS_CONTROL_USER_CLONE_COMMAND,
-        TURBOVAS_CONTROL_USER_CLONE_COMMAND_LENGTH, expected_secret,
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_USER_CLONE_COMMAND,
+        YAFVS_CONTROL_USER_CLONE_COMMAND_LENGTH, expected_secret,
         expected_secret_len, operator_uuid, &cursor, &end)
       || (size_t) (end - cursor) != 36)
     return FALSE;
 
   memcpy (source_uuid, cursor, 36);
   source_uuid[36] = '\0';
-  return turbovas_control_uuid_is_valid (source_uuid);
+  return yafvs_control_uuid_is_valid (source_uuid);
 }
 
 static gboolean
-turbovas_control_parse_user_password_change_request (
+yafvs_control_parse_user_password_change_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
-  turbovas_control_user_password_change_request_t *password_request)
+  yafvs_control_user_password_change_request_t *password_request)
 {
   const char *cursor;
   const char *end;
   const char *field;
   size_t field_len;
 
-  if (!turbovas_control_parse_authenticated_prefix (
-        request, request_len, TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND,
-        TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND_LENGTH, expected_secret,
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_USER_PASSWORD_CHANGE_COMMAND,
+        YAFVS_CONTROL_USER_PASSWORD_CHANGE_COMMAND_LENGTH, expected_secret,
         expected_secret_len, operator_uuid, &cursor, &end))
     return FALSE;
 
-  if (!turbovas_control_next_field (&cursor, end, &field, &field_len)
-      || !turbovas_control_decode_base64_field (
-           field, field_len, TURBOVAS_CONTROL_USER_PASSWORD_MAX_BYTES, TRUE,
+  if (!yafvs_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_decode_base64_field (
+           field, field_len, YAFVS_CONTROL_USER_PASSWORD_MAX_BYTES, TRUE,
            &password_request->old_password)
-      || !turbovas_control_text_has_allowed_controls (
+      || !yafvs_control_text_has_allowed_controls (
            password_request->old_password,
            strlen (password_request->old_password), FALSE)
-      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_next_field (&cursor, end, &field, &field_len)
       || cursor != end
-      || !turbovas_control_decode_base64_field (
-           field, field_len, TURBOVAS_CONTROL_USER_PASSWORD_MAX_BYTES, TRUE,
+      || !yafvs_control_decode_base64_field (
+           field, field_len, YAFVS_CONTROL_USER_PASSWORD_MAX_BYTES, TRUE,
            &password_request->new_password)
-      || !turbovas_control_text_has_allowed_controls (
+      || !yafvs_control_text_has_allowed_controls (
            password_request->new_password,
            strlen (password_request->new_password), FALSE))
     {
-      turbovas_control_user_password_change_request_clear (password_request);
+      yafvs_control_user_password_change_request_clear (password_request);
       return FALSE;
     }
 
@@ -757,13 +757,13 @@ turbovas_control_parse_user_password_change_request (
 }
 
 static const char *
-turbovas_control_user_create_response (
+yafvs_control_user_create_response (
   int result, const char *uuid,
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES])
 {
-  if (result == 0 && uuid && turbovas_control_uuid_is_valid (uuid))
+  if (result == 0 && uuid && yafvs_control_uuid_is_valid (uuid))
     {
-      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+      g_snprintf (response, YAFVS_CONTROL_MAX_RESPONSE_BYTES,
                   "0 created %s\n", uuid);
       return response;
     }
@@ -782,7 +782,7 @@ turbovas_control_user_create_response (
 }
 
 static const char *
-turbovas_control_user_modify_response (int result)
+yafvs_control_user_modify_response (int result)
 {
   switch (result)
     {
@@ -802,7 +802,7 @@ turbovas_control_user_modify_response (int result)
 }
 
 static const char *
-turbovas_control_user_delete_response (int result)
+yafvs_control_user_delete_response (int result)
 {
   switch (result)
     {
@@ -819,13 +819,13 @@ turbovas_control_user_delete_response (int result)
 }
 
 static const char *
-turbovas_control_user_clone_response (
+yafvs_control_user_clone_response (
   int result, const char *uuid,
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES])
 {
-  if (result == 0 && uuid && turbovas_control_uuid_is_valid (uuid))
+  if (result == 0 && uuid && yafvs_control_uuid_is_valid (uuid))
     {
-      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+      g_snprintf (response, YAFVS_CONTROL_MAX_RESPONSE_BYTES,
                   "0 created %s\n", uuid);
       return response;
     }
@@ -842,10 +842,10 @@ turbovas_control_user_clone_response (
 }
 
 static gboolean
-turbovas_control_parse_user_setting_modify_request (
+yafvs_control_parse_user_setting_modify_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
-  turbovas_control_user_setting_modify_request_t *setting_request)
+  yafvs_control_user_setting_modify_request_t *setting_request)
 {
   const char *cursor;
   const char *end;
@@ -858,11 +858,11 @@ turbovas_control_parse_user_setting_modify_request (
   size_t value_len;
   gboolean timezone;
 
-  if (!turbovas_control_parse_authenticated_prefix (
-        request, request_len, TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND,
-        TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND_LENGTH, expected_secret,
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_USER_SETTING_MODIFY_COMMAND,
+        YAFVS_CONTROL_USER_SETTING_MODIFY_COMMAND_LENGTH, expected_secret,
         expected_secret_len, operator_uuid, &cursor, &end)
-      || !turbovas_control_next_field (&cursor, end, &kind, &kind_len)
+      || !yafvs_control_next_field (&cursor, end, &kind, &kind_len)
       || cursor > end)
     return FALSE;
 
@@ -890,18 +890,18 @@ turbovas_control_parse_user_setting_modify_request (
         return FALSE;
       memcpy (setting_request->setting_uuid, identifier, identifier_len);
       setting_request->setting_uuid[identifier_len] = '\0';
-      if (!turbovas_control_uuid_is_valid (setting_request->setting_uuid))
+      if (!yafvs_control_uuid_is_valid (setting_request->setting_uuid))
         {
-          turbovas_control_user_setting_modify_request_clear (setting_request);
+          yafvs_control_user_setting_modify_request_clear (setting_request);
           return FALSE;
         }
     }
 
-  if (!turbovas_control_decode_base64_field (
-        value, value_len, TURBOVAS_CONTROL_USER_SETTING_VALUE_MAX_BYTES, FALSE,
+  if (!yafvs_control_decode_base64_field (
+        value, value_len, YAFVS_CONTROL_USER_SETTING_VALUE_MAX_BYTES, FALSE,
         &setting_request->value))
     {
-      turbovas_control_user_setting_modify_request_clear (setting_request);
+      yafvs_control_user_setting_modify_request_clear (setting_request);
       return FALSE;
     }
 
@@ -910,7 +910,7 @@ turbovas_control_parse_user_setting_modify_request (
 }
 
 static gboolean
-turbovas_control_text_has_allowed_controls (const gchar *text, gsize text_len,
+yafvs_control_text_has_allowed_controls (const gchar *text, gsize text_len,
                                              gboolean icalendar)
 {
   const gchar *cursor = text;
@@ -933,7 +933,7 @@ turbovas_control_text_has_allowed_controls (const gchar *text, gsize text_len,
 }
 
 static const char *
-turbovas_control_user_setting_modify_response (int result)
+yafvs_control_user_setting_modify_response (int result)
 {
   switch (result)
     {
@@ -955,7 +955,7 @@ turbovas_control_user_setting_modify_response (int result)
 }
 
 static const char *
-turbovas_control_user_password_change_response (int result)
+yafvs_control_user_password_change_response (int result)
 {
   switch (result)
     {
@@ -977,7 +977,7 @@ turbovas_control_user_password_change_response (int result)
 }
 
 static gboolean
-turbovas_control_decode_schedule_modify_field (const char *value,
+yafvs_control_decode_schedule_modify_field (const char *value,
                                                 size_t value_len,
                                                 size_t max_decoded_len,
                                                 gboolean icalendar,
@@ -989,11 +989,11 @@ turbovas_control_decode_schedule_modify_field (const char *value,
       return TRUE;
     }
   if (value_len == 0 || value[0] != '+'
-      || !turbovas_control_decode_base64_field (
+      || !yafvs_control_decode_base64_field (
            value + 1, value_len - 1, max_decoded_len, FALSE, decoded_out))
     return FALSE;
 
-  if (!turbovas_control_text_has_allowed_controls (*decoded_out,
+  if (!yafvs_control_text_has_allowed_controls (*decoded_out,
                                                    strlen (*decoded_out),
                                                    icalendar))
     {
@@ -1006,7 +1006,7 @@ turbovas_control_decode_schedule_modify_field (const char *value,
 }
 
 static gboolean
-turbovas_control_parse_authenticated_prefix (
+yafvs_control_parse_authenticated_prefix (
   const char *request, size_t request_len, const char *command,
   size_t command_len, const char *expected_secret, size_t expected_secret_len,
   char operator_uuid[37], const char **cursor_out, const char **end_out)
@@ -1017,12 +1017,12 @@ turbovas_control_parse_authenticated_prefix (
   const char *secret_end;
   size_t secret_len;
 
-  if (request == NULL || request_len >= TURBOVAS_CONTROL_MAX_REQUEST_BYTES
-      || request_len < command_len + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1
+  if (request == NULL || request_len >= YAFVS_CONTROL_MAX_REQUEST_BYTES
+      || request_len < command_len + YAFVS_CONTROL_SECRET_MIN_BYTES + 1
                            + 37
       || memcmp (request, command, command_len)
       || request[request_len - 1] != '\n'
-      || !turbovas_control_secret_is_valid (expected_secret,
+      || !yafvs_control_secret_is_valid (expected_secret,
                                              expected_secret_len))
     return FALSE;
 
@@ -1032,8 +1032,8 @@ turbovas_control_parse_authenticated_prefix (
   if (secret_end == NULL)
     return FALSE;
   secret_len = (size_t) (secret_end - secret);
-  if (!turbovas_control_secret_is_valid (secret, secret_len)
-      || !turbovas_control_secret_matches (secret, secret_len,
+  if (!yafvs_control_secret_is_valid (secret, secret_len)
+      || !yafvs_control_secret_matches (secret, secret_len,
                                             expected_secret,
                                             expected_secret_len))
     return FALSE;
@@ -1043,7 +1043,7 @@ turbovas_control_parse_authenticated_prefix (
     return FALSE;
   memcpy (operator_uuid, operator_start, 36);
   operator_uuid[36] = '\0';
-  if (!turbovas_control_uuid_is_valid (operator_uuid))
+  if (!yafvs_control_uuid_is_valid (operator_uuid))
     return FALSE;
 
   if ((size_t) (end - operator_start) == 36)
@@ -1057,7 +1057,7 @@ turbovas_control_parse_authenticated_prefix (
 }
 
 static gboolean
-turbovas_control_boolean_field (const char *field, size_t field_len,
+yafvs_control_boolean_field (const char *field, size_t field_len,
                                 int *value)
 {
   if (field_len != 1 || (field[0] != '0' && field[0] != '1'))
@@ -1068,25 +1068,25 @@ turbovas_control_boolean_field (const char *field, size_t field_len,
 }
 
 static gboolean
-turbovas_control_parse_auth_settings_read_request (
+yafvs_control_parse_auth_settings_read_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37])
 {
   const char *cursor;
   const char *end;
 
-  return turbovas_control_parse_authenticated_prefix (
-           request, request_len, TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND,
-           TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH, expected_secret,
+  return yafvs_control_parse_authenticated_prefix (
+           request, request_len, YAFVS_CONTROL_AUTH_SETTINGS_READ_COMMAND,
+           YAFVS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH, expected_secret,
            expected_secret_len, operator_uuid, &cursor, &end)
          && cursor == end && request[request_len - 2] != ' ';
 }
 
 static gboolean
-turbovas_control_parse_auth_settings_ldap_write_request (
+yafvs_control_parse_auth_settings_ldap_write_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
-  turbovas_control_auth_settings_ldap_request_t *settings)
+  yafvs_control_auth_settings_ldap_request_t *settings)
 {
   const char *cursor;
   const char *end;
@@ -1095,55 +1095,55 @@ turbovas_control_parse_auth_settings_ldap_write_request (
   gboolean valid;
 
   memset (settings, 0, sizeof (*settings));
-  if (!turbovas_control_parse_authenticated_prefix (
+  if (!yafvs_control_parse_authenticated_prefix (
         request, request_len,
-        TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND,
-        TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH,
+        YAFVS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND,
+        YAFVS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH,
         expected_secret, expected_secret_len, operator_uuid, &cursor, &end))
     return FALSE;
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_boolean_field (field, field_len,
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_boolean_field (field, field_len,
                                              &settings->enabled)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_required_base64_text (
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_required_base64_text (
                field, field_len, MANAGE_AUTH_SETTINGS_HOST_MAX_BYTES,
                &settings->host)
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_text_has_allowed_controls (
                settings->host, strlen (settings->host), FALSE)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_required_base64_text (
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_required_base64_text (
                field, field_len, MANAGE_AUTH_SETTINGS_AUTH_DN_MAX_BYTES,
                &settings->authdn)
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_text_has_allowed_controls (
                settings->authdn, strlen (settings->authdn), FALSE)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_boolean_field (field, field_len,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_boolean_field (field, field_len,
                                              &settings->allow_plaintext)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_boolean_field (field, field_len,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_boolean_field (field, field_len,
                                              &settings->ldaps_only)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
           && cursor == end;
   if (valid && field_len == 1 && field[0] == '-')
     settings->cacert = NULL;
   else if (valid)
-    valid = turbovas_control_decode_base64_field (
+    valid = yafvs_control_decode_base64_field (
               field, field_len, MANAGE_AUTH_SETTINGS_CERT_MAX_BYTES, TRUE,
               &settings->cacert)
-            && turbovas_control_text_has_allowed_controls (
+            && yafvs_control_text_has_allowed_controls (
                  settings->cacert, strlen (settings->cacert), TRUE);
 
   if (!valid)
-    turbovas_control_auth_settings_ldap_request_clear (settings);
+    yafvs_control_auth_settings_ldap_request_clear (settings);
   return valid;
 }
 
 static gboolean
-turbovas_control_parse_auth_settings_radius_write_request (
+yafvs_control_parse_auth_settings_radius_write_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
-  turbovas_control_auth_settings_radius_request_t *settings)
+  yafvs_control_auth_settings_radius_request_t *settings)
 {
   const char *cursor;
   const char *end;
@@ -1152,52 +1152,52 @@ turbovas_control_parse_auth_settings_radius_write_request (
   gboolean valid;
 
   memset (settings, 0, sizeof (*settings));
-  if (!turbovas_control_parse_authenticated_prefix (
+  if (!yafvs_control_parse_authenticated_prefix (
         request, request_len,
-        TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND,
-        TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH,
+        YAFVS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND,
+        YAFVS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH,
         expected_secret, expected_secret_len, operator_uuid, &cursor, &end))
     return FALSE;
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_boolean_field (field, field_len,
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_boolean_field (field, field_len,
                                              &settings->enabled)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_required_base64_text (
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_required_base64_text (
                field, field_len, MANAGE_AUTH_SETTINGS_HOST_MAX_BYTES,
                &settings->host)
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_text_has_allowed_controls (
                settings->host, strlen (settings->host), FALSE)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
           && cursor == end;
   if (valid && field_len == 1 && field[0] == '-')
     settings->secret = NULL;
   else if (valid)
-    valid = turbovas_control_decode_base64_field (
+    valid = yafvs_control_decode_base64_field (
               field, field_len, MANAGE_AUTH_SETTINGS_RADIUS_SECRET_MAX_BYTES,
               TRUE, &settings->secret)
-            && turbovas_control_text_has_allowed_controls (
+            && yafvs_control_text_has_allowed_controls (
                  settings->secret, strlen (settings->secret), FALSE);
 
   if (!valid)
-    turbovas_control_auth_settings_radius_request_clear (settings);
+    yafvs_control_auth_settings_radius_request_clear (settings);
   return valid;
 }
 
 static gboolean
-turbovas_control_decode_tag_text_field (const char *value, size_t value_len,
+yafvs_control_decode_tag_text_field (const char *value, size_t value_len,
                                          size_t max_decoded_len,
                                          gboolean required,
                                          gchar **decoded_out)
 {
-  return turbovas_control_decode_base64_field (
+  return yafvs_control_decode_base64_field (
            value, value_len, max_decoded_len, required, decoded_out)
-         && turbovas_control_text_has_allowed_controls (
+         && yafvs_control_text_has_allowed_controls (
               *decoded_out, strlen (*decoded_out), FALSE);
 }
 
 static gboolean
-turbovas_control_tag_resource_ids_from_field (const char *value,
+yafvs_control_tag_resource_ids_from_field (const char *value,
                                                size_t value_len,
                                                array_t **resource_ids_out)
 {
@@ -1207,8 +1207,8 @@ turbovas_control_tag_resource_ids_from_field (const char *value,
   guint count = 0;
   gboolean valid = FALSE;
 
-  if (!turbovas_control_decode_base64_field (
-        value, value_len, TURBOVAS_CONTROL_TAG_RESOURCE_IDS_MAX_BYTES, FALSE,
+  if (!yafvs_control_decode_base64_field (
+        value, value_len, YAFVS_CONTROL_TAG_RESOURCE_IDS_MAX_BYTES, FALSE,
         &decoded))
     return FALSE;
 
@@ -1225,10 +1225,10 @@ turbovas_control_tag_resource_ids_from_field (const char *value,
   for (guint index = 0; parts[index]; index++)
     {
       size_t length = strlen (parts[index]);
-      if (length == 0 || length > TURBOVAS_CONTROL_TAG_RESOURCE_ID_MAX_BYTES
-          || ++count > TURBOVAS_CONTROL_TAG_RESOURCE_IDS_MAX
+      if (length == 0 || length > YAFVS_CONTROL_TAG_RESOURCE_ID_MAX_BYTES
+          || ++count > YAFVS_CONTROL_TAG_RESOURCE_IDS_MAX
           || !g_utf8_validate (parts[index], -1, NULL)
-          || !turbovas_control_text_has_allowed_controls (
+          || !yafvs_control_text_has_allowed_controls (
                parts[index], length, FALSE))
         goto cleanup;
       array_add (resource_ids, g_strdup (parts[index]));
@@ -1246,8 +1246,8 @@ cleanup:
 }
 
 static void
-turbovas_control_tag_create_request_clear (
-  turbovas_control_tag_create_request_t *request)
+yafvs_control_tag_create_request_clear (
+  yafvs_control_tag_create_request_t *request)
 {
   g_free (request->name);
   g_free (request->comment);
@@ -1259,24 +1259,24 @@ turbovas_control_tag_create_request_clear (
 }
 
 static void
-turbovas_control_alert_scp_create_request_clear (
-  turbovas_control_alert_scp_create_request_t *request)
+yafvs_control_alert_scp_create_request_clear (
+  yafvs_control_alert_scp_create_request_t *request)
 {
-  turbovas_control_secure_free (request->name);
-  turbovas_control_secure_free (request->comment);
-  turbovas_control_secure_free (request->status);
-  turbovas_control_secure_free (request->credential_uuid);
-  turbovas_control_secure_free (request->host);
-  turbovas_control_secure_free (request->port);
-  turbovas_control_secure_free (request->known_hosts);
-  turbovas_control_secure_free (request->path);
-  turbovas_control_secure_free (request->report_format_uuid);
+  yafvs_control_secure_free (request->name);
+  yafvs_control_secure_free (request->comment);
+  yafvs_control_secure_free (request->status);
+  yafvs_control_secure_free (request->credential_uuid);
+  yafvs_control_secure_free (request->host);
+  yafvs_control_secure_free (request->port);
+  yafvs_control_secure_free (request->known_hosts);
+  yafvs_control_secure_free (request->path);
+  yafvs_control_secure_free (request->report_format_uuid);
   memset (request, 0, sizeof (*request));
 }
 
 static void
-turbovas_control_alert_syslog_create_request_clear (
-  turbovas_control_alert_syslog_create_request_t *request)
+yafvs_control_alert_syslog_create_request_clear (
+  yafvs_control_alert_syslog_create_request_t *request)
 {
   g_free (request->name);
   g_free (request->comment);
@@ -1285,21 +1285,21 @@ turbovas_control_alert_syslog_create_request_clear (
 }
 
 static void
-turbovas_control_alert_snmp_create_request_clear (
-  turbovas_control_alert_snmp_create_request_t *request)
+yafvs_control_alert_snmp_create_request_clear (
+  yafvs_control_alert_snmp_create_request_t *request)
 {
-  turbovas_control_secure_free (request->name);
-  turbovas_control_secure_free (request->comment);
-  turbovas_control_secure_free (request->status);
-  turbovas_control_secure_free (request->agent);
-  turbovas_control_secure_free (request->community);
-  turbovas_control_secure_free (request->message);
+  yafvs_control_secure_free (request->name);
+  yafvs_control_secure_free (request->comment);
+  yafvs_control_secure_free (request->status);
+  yafvs_control_secure_free (request->agent);
+  yafvs_control_secure_free (request->community);
+  yafvs_control_secure_free (request->message);
   memset (request, 0, sizeof (*request));
 }
 
 static void
-turbovas_control_tag_modify_request_clear (
-  turbovas_control_tag_modify_request_t *request)
+yafvs_control_tag_modify_request_clear (
+  yafvs_control_tag_modify_request_t *request)
 {
   g_free (request->name);
   g_free (request->comment);
@@ -1313,7 +1313,7 @@ turbovas_control_tag_modify_request_clear (
 }
 
 static gboolean
-turbovas_control_secret_matches (const char *candidate,
+yafvs_control_secret_matches (const char *candidate,
                                   size_t candidate_len,
                                   const char *expected,
                                   size_t expected_len)
@@ -1321,12 +1321,12 @@ turbovas_control_secret_matches (const char *candidate,
   volatile unsigned char difference;
   size_t i;
 
-  if (candidate_len > TURBOVAS_CONTROL_SECRET_MAX_BYTES
-      || expected_len > TURBOVAS_CONTROL_SECRET_MAX_BYTES)
+  if (candidate_len > YAFVS_CONTROL_SECRET_MAX_BYTES
+      || expected_len > YAFVS_CONTROL_SECRET_MAX_BYTES)
     return FALSE;
 
   difference = (unsigned char) (candidate_len ^ expected_len);
-  for (i = 0; i < TURBOVAS_CONTROL_SECRET_MAX_BYTES; i++)
+  for (i = 0; i < YAFVS_CONTROL_SECRET_MAX_BYTES; i++)
     {
       unsigned char candidate_byte =
         i < candidate_len ? (unsigned char) candidate[i] : 0;
@@ -1340,17 +1340,17 @@ turbovas_control_secret_matches (const char *candidate,
 }
 
 static gboolean
-turbovas_control_configured_secret (const char **secret, size_t *secret_len)
+yafvs_control_configured_secret (const char **secret, size_t *secret_len)
 {
-  const char *configured = g_getenv (TURBOVAS_CONTROL_SECRET_ENV);
+  const char *configured = g_getenv (YAFVS_CONTROL_SECRET_ENV);
   size_t configured_len;
 
   if (configured == NULL)
     return FALSE;
 
   configured_len = strnlen (configured,
-                            TURBOVAS_CONTROL_SECRET_MAX_BYTES + 1);
-  if (!turbovas_control_secret_is_valid (configured, configured_len))
+                            YAFVS_CONTROL_SECRET_MAX_BYTES + 1);
+  if (!yafvs_control_secret_is_valid (configured, configured_len))
     return FALSE;
 
   *secret = configured;
@@ -1359,7 +1359,7 @@ turbovas_control_configured_secret (const char **secret, size_t *secret_len)
 }
 
 static gboolean
-turbovas_control_uuid_is_valid (const char *uuid)
+yafvs_control_uuid_is_valid (const char *uuid)
 {
   size_t i;
 
@@ -1381,13 +1381,13 @@ turbovas_control_uuid_is_valid (const char *uuid)
 }
 
 static gboolean
-turbovas_control_nvt_oid_is_valid (const char *oid, size_t oid_len)
+yafvs_control_nvt_oid_is_valid (const char *oid, size_t oid_len)
 {
   size_t index;
   gboolean previous_was_dot = TRUE;
 
   if (oid == NULL || oid_len == 0
-      || oid_len > TURBOVAS_CONTROL_NVT_OID_MAX_BYTES)
+      || oid_len > YAFVS_CONTROL_NVT_OID_MAX_BYTES)
     return FALSE;
 
   for (index = 0; index < oid_len; index++)
@@ -1408,10 +1408,10 @@ turbovas_control_nvt_oid_is_valid (const char *oid, size_t oid_len)
 }
 
 static gboolean
-turbovas_control_parse_scan_config_nvt_diagnostic_request (
+yafvs_control_parse_scan_config_nvt_diagnostic_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37], char config_uuid[37],
-  char nvt_oid[TURBOVAS_CONTROL_NVT_OID_MAX_BYTES + 1])
+  char nvt_oid[YAFVS_CONTROL_NVT_OID_MAX_BYTES + 1])
 {
   const char *cursor;
   const char *end;
@@ -1420,42 +1420,42 @@ turbovas_control_parse_scan_config_nvt_diagnostic_request (
 
   if (request == NULL
       || request_len
-           > TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_MAX_REQUEST_BYTES
+           > YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_MAX_REQUEST_BYTES
       || request_len
-           < TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH
-               + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1 + 36 + 1 + 36 + 1
+           < YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH
+               + YAFVS_CONTROL_SECRET_MIN_BYTES + 1 + 36 + 1 + 36 + 1
                + 1 + 1
-      || memcmp (request, TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND,
-                 TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH)
+      || memcmp (request, YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND,
+                 YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH)
       || request[request_len - 1] != '\n'
-      || !turbovas_control_secret_is_valid (expected_secret,
+      || !yafvs_control_secret_is_valid (expected_secret,
                                             expected_secret_len))
     return FALSE;
 
   cursor =
-    request + TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH;
+    request + YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH;
   end = request + request_len - 1;
-  if (!turbovas_control_next_field (&cursor, end, &field, &field_len)
-      || !turbovas_control_secret_is_valid (field, field_len)
-      || !turbovas_control_secret_matches (
+  if (!yafvs_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_secret_is_valid (field, field_len)
+      || !yafvs_control_secret_matches (
            field, field_len, expected_secret, expected_secret_len))
     return FALSE;
-  if (!turbovas_control_next_field (&cursor, end, &field, &field_len)
+  if (!yafvs_control_next_field (&cursor, end, &field, &field_len)
       || field_len != 36)
     return FALSE;
   memcpy (operator_uuid, field, field_len);
   operator_uuid[36] = '\0';
-  if (!turbovas_control_uuid_is_valid (operator_uuid))
+  if (!yafvs_control_uuid_is_valid (operator_uuid))
     return FALSE;
-  if (!turbovas_control_next_field (&cursor, end, &field, &field_len)
+  if (!yafvs_control_next_field (&cursor, end, &field, &field_len)
       || field_len != 36)
     return FALSE;
   memcpy (config_uuid, field, field_len);
   config_uuid[36] = '\0';
-  if (!turbovas_control_uuid_is_valid (config_uuid))
+  if (!yafvs_control_uuid_is_valid (config_uuid))
     return FALSE;
-  if (!turbovas_control_next_field (&cursor, end, &field, &field_len)
-      || cursor != end || !turbovas_control_nvt_oid_is_valid (field, field_len))
+  if (!yafvs_control_next_field (&cursor, end, &field, &field_len)
+      || cursor != end || !yafvs_control_nvt_oid_is_valid (field, field_len))
     return FALSE;
   memcpy (nvt_oid, field, field_len);
   nvt_oid[field_len] = '\0';
@@ -1464,7 +1464,7 @@ turbovas_control_parse_scan_config_nvt_diagnostic_request (
 }
 
 static gboolean
-turbovas_control_parse_request (const char *request, size_t request_len,
+yafvs_control_parse_request (const char *request, size_t request_len,
                                 const char *expected_secret,
                                 size_t expected_secret_len,
                                 char operator_uuid[37], char task_uuid[37])
@@ -1475,11 +1475,11 @@ turbovas_control_parse_request (const char *request, size_t request_len,
   const char *task_start;
   size_t secret_len;
 
-  if (request_len > TURBOVAS_CONTROL_STOP_MAX_REQUEST_BYTES
-      || request_len < 80 + TURBOVAS_CONTROL_SECRET_MIN_BYTES
+  if (request_len > YAFVS_CONTROL_STOP_MAX_REQUEST_BYTES
+      || request_len < 80 + YAFVS_CONTROL_SECRET_MIN_BYTES
       || memcmp (request, "stop ", 5)
       || request[request_len - 1] != '\n'
-      || !turbovas_control_secret_is_valid (expected_secret,
+      || !yafvs_control_secret_is_valid (expected_secret,
                                             expected_secret_len))
     return FALSE;
 
@@ -1488,8 +1488,8 @@ turbovas_control_parse_request (const char *request, size_t request_len,
   if (secret_end == NULL)
     return FALSE;
   secret_len = (size_t) (secret_end - secret);
-  if (!turbovas_control_secret_is_valid (secret, secret_len)
-      || !turbovas_control_secret_matches (secret, secret_len,
+  if (!yafvs_control_secret_is_valid (secret, secret_len)
+      || !yafvs_control_secret_matches (secret, secret_len,
                                            expected_secret,
                                            expected_secret_len))
     return FALSE;
@@ -1505,12 +1505,12 @@ turbovas_control_parse_request (const char *request, size_t request_len,
   memcpy (task_uuid, task_start, 36);
   task_uuid[36] = '\0';
 
-  return turbovas_control_uuid_is_valid (operator_uuid)
-         && turbovas_control_uuid_is_valid (task_uuid);
+  return yafvs_control_uuid_is_valid (operator_uuid)
+         && yafvs_control_uuid_is_valid (task_uuid);
 }
 
 static gboolean
-turbovas_control_parse_nonnegative_int64 (const char *value, size_t value_len,
+yafvs_control_parse_nonnegative_int64 (const char *value, size_t value_len,
                                           gint64 *parsed)
 {
   guint64 total = 0;
@@ -1536,12 +1536,12 @@ turbovas_control_parse_nonnegative_int64 (const char *value, size_t value_len,
 }
 
 static gboolean
-turbovas_control_snapshot_digest_is_valid (const char *value, size_t value_len)
+yafvs_control_snapshot_digest_is_valid (const char *value, size_t value_len)
 {
   size_t index;
 
   if (value == NULL
-      || value_len != TURBOVAS_CONTROL_TRASH_EMPTY_SNAPSHOT_DIGEST_LENGTH)
+      || value_len != YAFVS_CONTROL_TRASH_EMPTY_SNAPSHOT_DIGEST_LENGTH)
     return FALSE;
   for (index = 0; index < value_len; index++)
     if (!g_ascii_isdigit (value[index])
@@ -1551,7 +1551,7 @@ turbovas_control_snapshot_digest_is_valid (const char *value, size_t value_len)
 }
 
 static gboolean
-turbovas_control_parse_trash_empty_request
+yafvs_control_parse_trash_empty_request
   (const char *request, size_t request_len, const char *expected_secret,
    size_t expected_secret_len, char operator_uuid[37], gint64 *expected_total,
    char expected_snapshot_digest[65])
@@ -1566,26 +1566,26 @@ turbovas_control_parse_trash_empty_request
 
   if (request == NULL || expected_total == NULL
       || expected_snapshot_digest == NULL
-      || request_len > TURBOVAS_CONTROL_STOP_MAX_REQUEST_BYTES
+      || request_len > YAFVS_CONTROL_STOP_MAX_REQUEST_BYTES
       || request_len
-           < TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH
-               + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1 + 36 + 1 + 1 + 1
-               + TURBOVAS_CONTROL_TRASH_EMPTY_SNAPSHOT_DIGEST_LENGTH + 1
-      || memcmp (request, TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND,
-                 TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH)
+           < YAFVS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH
+               + YAFVS_CONTROL_SECRET_MIN_BYTES + 1 + 36 + 1 + 1 + 1
+               + YAFVS_CONTROL_TRASH_EMPTY_SNAPSHOT_DIGEST_LENGTH + 1
+      || memcmp (request, YAFVS_CONTROL_TRASH_EMPTY_COMMAND,
+                 YAFVS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH)
       || request[request_len - 1] != '\n'
-      || !turbovas_control_secret_is_valid (expected_secret,
+      || !yafvs_control_secret_is_valid (expected_secret,
                                             expected_secret_len))
     return FALSE;
 
   end = request + request_len - 1;
-  secret = request + TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH;
+  secret = request + YAFVS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH;
   secret_end = memchr (secret, ' ', (size_t) (end - secret));
   if (secret_end == NULL)
     return FALSE;
   secret_len = (size_t) (secret_end - secret);
-  if (!turbovas_control_secret_is_valid (secret, secret_len)
-      || !turbovas_control_secret_matches (secret, secret_len,
+  if (!yafvs_control_secret_is_valid (secret, secret_len)
+      || !yafvs_control_secret_matches (secret, secret_len,
                                            expected_secret,
                                            expected_secret_len))
     return FALSE;
@@ -1595,27 +1595,27 @@ turbovas_control_parse_trash_empty_request
     return FALSE;
   memcpy (operator_uuid, operator_start, 36);
   operator_uuid[36] = '\0';
-  if (!turbovas_control_uuid_is_valid (operator_uuid))
+  if (!yafvs_control_uuid_is_valid (operator_uuid))
     return FALSE;
 
   total_start = operator_start + 37;
   total_end = memchr (total_start, ' ', (size_t) (end - total_start));
   if (total_end == NULL
-      || !turbovas_control_parse_nonnegative_int64 (
+      || !yafvs_control_parse_nonnegative_int64 (
         total_start, (size_t) (total_end - total_start), expected_total)
-      || !turbovas_control_snapshot_digest_is_valid (
+      || !yafvs_control_snapshot_digest_is_valid (
         total_end + 1, (size_t) (end - (total_end + 1))))
     return FALSE;
   memcpy (expected_snapshot_digest, total_end + 1,
-          TURBOVAS_CONTROL_TRASH_EMPTY_SNAPSHOT_DIGEST_LENGTH);
+          YAFVS_CONTROL_TRASH_EMPTY_SNAPSHOT_DIGEST_LENGTH);
   expected_snapshot_digest[
-    TURBOVAS_CONTROL_TRASH_EMPTY_SNAPSHOT_DIGEST_LENGTH] = '\0';
+    YAFVS_CONTROL_TRASH_EMPTY_SNAPSHOT_DIGEST_LENGTH] = '\0';
   return TRUE;
 }
 
 static void
-turbovas_control_schedule_create_request_clear
-  (turbovas_control_schedule_create_request_t *request)
+yafvs_control_schedule_create_request_clear
+  (yafvs_control_schedule_create_request_t *request)
 {
   g_free (request->name);
   g_free (request->comment);
@@ -1625,36 +1625,36 @@ turbovas_control_schedule_create_request_clear
 }
 
 static void
-turbovas_control_alert_smb_create_request_clear (
-  turbovas_control_alert_smb_create_request_t *request)
+yafvs_control_alert_smb_create_request_clear (
+  yafvs_control_alert_smb_create_request_t *request)
 {
-  turbovas_control_secure_free (request->name);
-  turbovas_control_secure_free (request->comment);
-  turbovas_control_secure_free (request->status);
-  turbovas_control_secure_free (request->credential_uuid);
-  turbovas_control_secure_free (request->share_path);
-  turbovas_control_secure_free (request->file_path);
-  turbovas_control_secure_free (request->report_format_uuid);
-  turbovas_control_secure_free (request->max_protocol);
+  yafvs_control_secure_free (request->name);
+  yafvs_control_secure_free (request->comment);
+  yafvs_control_secure_free (request->status);
+  yafvs_control_secure_free (request->credential_uuid);
+  yafvs_control_secure_free (request->share_path);
+  yafvs_control_secure_free (request->file_path);
+  yafvs_control_secure_free (request->report_format_uuid);
+  yafvs_control_secure_free (request->max_protocol);
   memset (request, 0, sizeof (*request));
 }
 
 static const char *
-turbovas_control_trash_empty_response
+yafvs_control_trash_empty_response
   (int result, gint64 actual,
-   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+   char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES])
 {
   const char *status;
 
   if (result == 0)
     {
-      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+      g_snprintf (response, YAFVS_CONTROL_MAX_RESPONSE_BYTES,
                   "0 emptied %" G_GINT64_FORMAT "\n", actual);
       return response;
     }
   if (result == 1)
     {
-      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+      g_snprintf (response, YAFVS_CONTROL_MAX_RESPONSE_BYTES,
                   "1 expected-snapshot-mismatch %" G_GINT64_FORMAT "\n",
                   actual);
       return response;
@@ -1673,21 +1673,21 @@ turbovas_control_trash_empty_response
         break;
     }
 
-  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  g_strlcpy (response, status, YAFVS_CONTROL_MAX_RESPONSE_BYTES);
   return response;
 }
 
 static const char *
-turbovas_control_tag_create_response (
+yafvs_control_tag_create_response (
   int result, const char *created_uuid,
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES])
 {
   const char *status;
 
   if (result == 0 && created_uuid
-      && turbovas_control_uuid_is_valid (created_uuid))
+      && yafvs_control_uuid_is_valid (created_uuid))
     {
-      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+      g_snprintf (response, YAFVS_CONTROL_MAX_RESPONSE_BYTES,
                   "0 created %s\n", created_uuid);
       return response;
     }
@@ -1716,13 +1716,13 @@ turbovas_control_tag_create_response (
         status = "-1 internal\n";
         break;
     }
-  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  g_strlcpy (response, status, YAFVS_CONTROL_MAX_RESPONSE_BYTES);
   return response;
 }
 
 static const char *
-turbovas_control_tag_modify_response (
-  int result, char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+yafvs_control_tag_modify_response (
+  int result, char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES])
 {
   const char *status;
 
@@ -1756,12 +1756,12 @@ turbovas_control_tag_modify_response (
         status = "-1 internal\n";
         break;
     }
-  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  g_strlcpy (response, status, YAFVS_CONTROL_MAX_RESPONSE_BYTES);
   return response;
 }
 
 static void
-turbovas_control_log_trash_empty_audit (const char *operator_uuid,
+yafvs_control_log_trash_empty_audit (const char *operator_uuid,
                                          gint64 expected_total,
                                          gint64 actual_total, int result)
 {
@@ -1798,35 +1798,35 @@ turbovas_control_log_trash_empty_audit (const char *operator_uuid,
 }
 
 static void
-turbovas_control_alert_email_create_request_clear
-  (turbovas_control_alert_email_create_request_t *request)
+yafvs_control_alert_email_create_request_clear
+  (yafvs_control_alert_email_create_request_t *request)
 {
   g_free (request->name);
   g_free (request->comment);
   g_free (request->status);
-  turbovas_control_secure_free (request->to_address);
-  turbovas_control_secure_free (request->from_address);
-  turbovas_control_secure_free (request->subject);
-  turbovas_control_secure_free (request->recipient_credential_uuid);
-  turbovas_control_secure_free (request->report_format_uuid);
-  turbovas_control_secure_free (request->message);
+  yafvs_control_secure_free (request->to_address);
+  yafvs_control_secure_free (request->from_address);
+  yafvs_control_secure_free (request->subject);
+  yafvs_control_secure_free (request->recipient_credential_uuid);
+  yafvs_control_secure_free (request->report_format_uuid);
+  yafvs_control_secure_free (request->message);
   memset (request, 0, sizeof (*request));
 }
 
 static void
-turbovas_control_alert_start_task_create_request_clear (
-  turbovas_control_alert_start_task_create_request_t *request)
+yafvs_control_alert_start_task_create_request_clear (
+  yafvs_control_alert_start_task_create_request_t *request)
 {
   g_free (request->name);
   g_free (request->comment);
   g_free (request->status);
-  turbovas_control_secure_clear (request->task_uuid,
+  yafvs_control_secure_clear (request->task_uuid,
                                  sizeof (request->task_uuid));
   memset (request, 0, sizeof (*request));
 }
 
 static void
-turbovas_control_secure_clear (void *value, size_t length)
+yafvs_control_secure_clear (void *value, size_t length)
 {
   volatile unsigned char *cursor = value;
 
@@ -1838,30 +1838,30 @@ turbovas_control_secure_clear (void *value, size_t length)
 }
 
 static void
-turbovas_control_secure_free (gchar *value)
+yafvs_control_secure_free (gchar *value)
 {
   if (value == NULL)
     return;
 
-  turbovas_control_secure_clear (value, strlen (value));
+  yafvs_control_secure_clear (value, strlen (value));
   g_free (value);
 }
 
 static void
-turbovas_control_credential_create_request_clear
-  (turbovas_control_credential_create_request_t *request)
+yafvs_control_credential_create_request_clear
+  (yafvs_control_credential_create_request_t *request)
 {
   g_free (request->credential_type);
   g_free (request->name);
   g_free (request->comment);
   g_free (request->login);
-  turbovas_control_secure_free (request->secret);
-  turbovas_control_secure_free (request->private_key);
+  yafvs_control_secure_free (request->secret);
+  yafvs_control_secure_free (request->private_key);
   memset (request, 0, sizeof (*request));
 }
 
 static gboolean
-turbovas_control_decode_base64_field (const char *value, size_t value_len,
+yafvs_control_decode_base64_field (const char *value, size_t value_len,
                                       size_t max_decoded_len,
                                       gboolean required, gchar **decoded_out)
 {
@@ -1896,9 +1896,9 @@ turbovas_control_decode_base64_field (const char *value, size_t value_len,
     *decoded_out = g_strndup ((const gchar *) decoded, decoded_len);
 
   if (canonical)
-    turbovas_control_secure_clear (canonical, strlen (canonical));
-  turbovas_control_secure_clear (decoded, decoded_len);
-  turbovas_control_secure_clear (encoded, encoded_len);
+    yafvs_control_secure_clear (canonical, strlen (canonical));
+  yafvs_control_secure_clear (decoded, decoded_len);
+  yafvs_control_secure_clear (encoded, encoded_len);
   g_free (canonical);
   g_free (decoded);
   g_free (encoded);
@@ -1906,7 +1906,7 @@ turbovas_control_decode_base64_field (const char *value, size_t value_len,
 }
 
 static gboolean
-turbovas_control_smb_max_protocol_is_valid (const char *max_protocol)
+yafvs_control_smb_max_protocol_is_valid (const char *max_protocol)
 {
   return max_protocol[0] == '\0' || strcmp (max_protocol, "NT1") == 0
          || strcmp (max_protocol, "SMB2") == 0
@@ -1914,10 +1914,10 @@ turbovas_control_smb_max_protocol_is_valid (const char *max_protocol)
 }
 
 static gboolean
-turbovas_control_parse_alert_smb_create_request (
+yafvs_control_parse_alert_smb_create_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
-  turbovas_control_alert_smb_create_request_t *alert)
+  yafvs_control_alert_smb_create_request_t *alert)
 {
   const char *cursor;
   const char *end;
@@ -1930,24 +1930,24 @@ turbovas_control_parse_alert_smb_create_request (
   gboolean valid;
 
   memset (alert, 0, sizeof (*alert));
-  if (request == NULL || request_len >= TURBOVAS_CONTROL_MAX_REQUEST_BYTES
-      || request_len < TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH
-                         + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1 + 37 + 1
-      || memcmp (request, TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND,
-                 TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH)
+  if (request == NULL || request_len >= YAFVS_CONTROL_MAX_REQUEST_BYTES
+      || request_len < YAFVS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH
+                         + YAFVS_CONTROL_SECRET_MIN_BYTES + 1 + 37 + 1
+      || memcmp (request, YAFVS_CONTROL_ALERT_SMB_CREATE_COMMAND,
+                 YAFVS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH)
       || request[request_len - 1] != '\n'
-      || !turbovas_control_secret_is_valid (expected_secret,
+      || !yafvs_control_secret_is_valid (expected_secret,
                                             expected_secret_len))
     return FALSE;
 
   end = request + request_len - 1;
-  secret = request + TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH;
+  secret = request + YAFVS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH;
   secret_end = memchr (secret, ' ', (size_t) (end - secret));
   if (secret_end == NULL)
     return FALSE;
   secret_len = (size_t) (secret_end - secret);
-  if (!turbovas_control_secret_is_valid (secret, secret_len)
-      || !turbovas_control_secret_matches (secret, secret_len, expected_secret,
+  if (!yafvs_control_secret_is_valid (secret, secret_len)
+      || !yafvs_control_secret_matches (secret, secret_len, expected_secret,
                                            expected_secret_len))
     return FALSE;
 
@@ -1956,74 +1956,74 @@ turbovas_control_parse_alert_smb_create_request (
     return FALSE;
   memcpy (operator_uuid, operator_start, 36);
   operator_uuid[36] = '\0';
-  if (!turbovas_control_uuid_is_valid (operator_uuid))
+  if (!yafvs_control_uuid_is_valid (operator_uuid))
     return FALSE;
 
   cursor = operator_start + 37;
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
           && field_len == 1 && (field[0] == '0' || field[0] == '1');
   if (!valid)
     return FALSE;
   alert->active = field[0] == '1';
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
             &alert->name)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_COMMENT_MAX_BYTES, FALSE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_COMMENT_MAX_BYTES, FALSE,
             &alert->comment)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
             &alert->status)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_UUID_MAX_BYTES, TRUE,
             &alert->credential_uuid)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_SMB_PATH_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_SMB_PATH_MAX_BYTES, TRUE,
             &alert->share_path)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_SMB_PATH_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_SMB_PATH_MAX_BYTES, TRUE,
             &alert->file_path)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_UUID_MAX_BYTES, TRUE,
             &alert->report_format_uuid)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_SMB_PROTOCOL_MAX_BYTES,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_SMB_PROTOCOL_MAX_BYTES,
             FALSE, &alert->max_protocol)
           && cursor == end;
   if (valid)
     valid =
-      turbovas_control_alert_status_is_valid (alert->status)
-      && turbovas_control_uuid_is_valid (alert->credential_uuid)
-      && turbovas_control_uuid_is_valid (alert->report_format_uuid)
-      && turbovas_control_smb_max_protocol_is_valid (alert->max_protocol)
-      && turbovas_control_text_has_allowed_controls (
+      yafvs_control_alert_status_is_valid (alert->status)
+      && yafvs_control_uuid_is_valid (alert->credential_uuid)
+      && yafvs_control_uuid_is_valid (alert->report_format_uuid)
+      && yafvs_control_smb_max_protocol_is_valid (alert->max_protocol)
+      && yafvs_control_text_has_allowed_controls (
         alert->name, strlen (alert->name), FALSE)
-      && turbovas_control_text_has_allowed_controls (
+      && yafvs_control_text_has_allowed_controls (
         alert->comment, strlen (alert->comment), FALSE)
-      && turbovas_control_text_has_allowed_controls (
+      && yafvs_control_text_has_allowed_controls (
         alert->share_path, strlen (alert->share_path), FALSE)
-      && turbovas_control_text_has_allowed_controls (
+      && yafvs_control_text_has_allowed_controls (
         alert->file_path, strlen (alert->file_path), FALSE);
   if (!valid)
-    turbovas_control_alert_smb_create_request_clear (alert);
+    yafvs_control_alert_smb_create_request_clear (alert);
 
   return valid;
 }
 
 static gboolean
-turbovas_control_parse_alert_start_task_create_request (
+yafvs_control_parse_alert_start_task_create_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
-  turbovas_control_alert_start_task_create_request_t *alert)
+  yafvs_control_alert_start_task_create_request_t *alert)
 {
   const char *cursor;
   const char *end;
@@ -2032,51 +2032,51 @@ turbovas_control_parse_alert_start_task_create_request (
   gboolean valid;
 
   memset (alert, 0, sizeof (*alert));
-  if (!turbovas_control_parse_authenticated_prefix (
-        request, request_len, TURBOVAS_CONTROL_ALERT_START_TASK_CREATE_COMMAND,
-        TURBOVAS_CONTROL_ALERT_START_TASK_CREATE_COMMAND_LENGTH,
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_ALERT_START_TASK_CREATE_COMMAND,
+        YAFVS_CONTROL_ALERT_START_TASK_CREATE_COMMAND_LENGTH,
         expected_secret, expected_secret_len, operator_uuid, &cursor, &end))
     return FALSE;
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
           && field_len == 1 && (field[0] == '0' || field[0] == '1');
   if (!valid)
     return FALSE;
   alert->active = field[0] == '1';
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
             &alert->name)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_COMMENT_MAX_BYTES, FALSE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_COMMENT_MAX_BYTES, FALSE,
             &alert->comment)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
             &alert->status)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
           && field_len == 36 && cursor == end;
   if (valid)
     {
       memcpy (alert->task_uuid, field, 36);
       alert->task_uuid[36] = '\0';
-      valid = turbovas_control_alert_status_is_valid (alert->status)
-              && turbovas_control_uuid_is_valid (alert->task_uuid)
-              && turbovas_control_text_has_allowed_controls (
+      valid = yafvs_control_alert_status_is_valid (alert->status)
+              && yafvs_control_uuid_is_valid (alert->task_uuid)
+              && yafvs_control_text_has_allowed_controls (
                 alert->name, strlen (alert->name), FALSE)
-              && turbovas_control_text_has_allowed_controls (
+              && yafvs_control_text_has_allowed_controls (
                 alert->comment, strlen (alert->comment), FALSE);
     }
   if (!valid)
-    turbovas_control_alert_start_task_create_request_clear (alert);
+    yafvs_control_alert_start_task_create_request_clear (alert);
 
   return valid;
 }
 
 static gboolean
-turbovas_control_parse_alert_test_request (
+yafvs_control_parse_alert_test_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37], char alert_uuid[37])
 {
@@ -2085,32 +2085,32 @@ turbovas_control_parse_alert_test_request (
   const char *field;
   size_t field_len;
 
-  if (!turbovas_control_parse_authenticated_prefix (
-        request, request_len, TURBOVAS_CONTROL_ALERT_TEST_COMMAND,
-        TURBOVAS_CONTROL_ALERT_TEST_COMMAND_LENGTH, expected_secret,
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_ALERT_TEST_COMMAND,
+        YAFVS_CONTROL_ALERT_TEST_COMMAND_LENGTH, expected_secret,
         expected_secret_len, operator_uuid, &cursor, &end)
-      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_next_field (&cursor, end, &field, &field_len)
       || field_len != 36 || cursor != end)
     return FALSE;
 
   memcpy (alert_uuid, field, 36);
   alert_uuid[36] = '\0';
-  return turbovas_control_uuid_is_valid (alert_uuid);
+  return yafvs_control_uuid_is_valid (alert_uuid);
 }
 
 static void
-turbovas_control_alert_deliver_report_request_clear (
-  turbovas_control_alert_deliver_report_request_t *request)
+yafvs_control_alert_deliver_report_request_clear (
+  yafvs_control_alert_deliver_report_request_t *request)
 {
-  turbovas_control_secure_free (request->filter);
-  turbovas_control_secure_clear (request, sizeof (*request));
+  yafvs_control_secure_free (request->filter);
+  yafvs_control_secure_clear (request, sizeof (*request));
 }
 
 static gboolean
-turbovas_control_parse_alert_deliver_report_request (
+yafvs_control_parse_alert_deliver_report_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
-  turbovas_control_alert_deliver_report_request_t *delivery)
+  yafvs_control_alert_deliver_report_request_t *delivery)
 {
   const char *cursor;
   const char *end;
@@ -2119,17 +2119,17 @@ turbovas_control_parse_alert_deliver_report_request (
   gboolean valid;
 
   memset (delivery, 0, sizeof (*delivery));
-  if (!turbovas_control_parse_authenticated_prefix (
-        request, request_len, TURBOVAS_CONTROL_ALERT_DELIVER_REPORT_COMMAND,
-        TURBOVAS_CONTROL_ALERT_DELIVER_REPORT_COMMAND_LENGTH, expected_secret,
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_ALERT_DELIVER_REPORT_COMMAND,
+        YAFVS_CONTROL_ALERT_DELIVER_REPORT_COMMAND_LENGTH, expected_secret,
         expected_secret_len, operator_uuid, &cursor, &end)
-      || !turbovas_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_next_field (&cursor, end, &field, &field_len)
       || field_len != 36)
     return FALSE;
   memcpy (delivery->alert_uuid, field, 36);
   delivery->alert_uuid[36] = '\0';
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
           && field_len == 36;
   if (valid)
     {
@@ -2137,16 +2137,16 @@ turbovas_control_parse_alert_deliver_report_request (
       delivery->report_uuid[36] = '\0';
     }
   valid = valid
-          && turbovas_control_next_field (&cursor, end, &field, &field_len);
+          && yafvs_control_next_field (&cursor, end, &field, &field_len);
   if (valid && field_len == 1 && field[0] == '-')
     delivery->filter = g_strdup ("");
   else if (valid)
-    valid = turbovas_control_decode_base64_field (
-      field, field_len, TURBOVAS_CONTROL_ALERT_DELIVERY_FILTER_MAX_BYTES,
+    valid = yafvs_control_decode_base64_field (
+      field, field_len, YAFVS_CONTROL_ALERT_DELIVERY_FILTER_MAX_BYTES,
       TRUE, &delivery->filter);
 
   valid = valid
-          && turbovas_control_next_field (&cursor, end, &field, &field_len);
+          && yafvs_control_next_field (&cursor, end, &field, &field_len);
   if (valid && field_len == 1 && field[0] == '-')
     delivery->filter_uuid[0] = '\0';
   else if (valid && field_len == 36)
@@ -2158,21 +2158,21 @@ turbovas_control_parse_alert_deliver_report_request (
     valid = FALSE;
 
   valid = valid && cursor == end
-          && turbovas_control_uuid_is_valid (delivery->alert_uuid)
-          && turbovas_control_uuid_is_valid (delivery->report_uuid)
+          && yafvs_control_uuid_is_valid (delivery->alert_uuid)
+          && yafvs_control_uuid_is_valid (delivery->report_uuid)
           && (delivery->filter_uuid[0] == '\0'
-              || turbovas_control_uuid_is_valid (delivery->filter_uuid))
+              || yafvs_control_uuid_is_valid (delivery->filter_uuid))
           && (delivery->filter[0] == '\0'
               || delivery->filter_uuid[0] == '\0')
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_text_has_allowed_controls (
             delivery->filter, strlen (delivery->filter), FALSE);
   if (!valid)
-    turbovas_control_alert_deliver_report_request_clear (delivery);
+    yafvs_control_alert_deliver_report_request_clear (delivery);
   return valid;
 }
 
 static gboolean
-turbovas_control_alert_status_is_valid (const char *status)
+yafvs_control_alert_status_is_valid (const char *status)
 {
   static const char *allowed[] = {
     "Delete Requested",
@@ -2201,7 +2201,7 @@ turbovas_control_alert_status_is_valid (const char *status)
 }
 
 static const char *
-turbovas_control_alert_deliver_report_response (int result)
+yafvs_control_alert_deliver_report_response (int result)
 {
   switch (result)
     {
@@ -2217,7 +2217,7 @@ turbovas_control_alert_deliver_report_response (int result)
 }
 
 static gboolean
-turbovas_control_alert_scp_port_is_valid (const char *port)
+yafvs_control_alert_scp_port_is_valid (const char *port)
 {
   unsigned long value;
   char *end = NULL;
@@ -2233,10 +2233,10 @@ turbovas_control_alert_scp_port_is_valid (const char *port)
 }
 
 static gboolean
-turbovas_control_parse_alert_scp_create_request (
+yafvs_control_parse_alert_scp_create_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
-  turbovas_control_alert_scp_create_request_t *alert)
+  yafvs_control_alert_scp_create_request_t *alert)
 {
   const char *cursor;
   const char *end;
@@ -2245,80 +2245,80 @@ turbovas_control_parse_alert_scp_create_request (
   gboolean valid;
 
   memset (alert, 0, sizeof (*alert));
-  if (!turbovas_control_parse_authenticated_prefix (
-        request, request_len, TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND,
-        TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND_LENGTH, expected_secret,
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_ALERT_SCP_CREATE_COMMAND,
+        YAFVS_CONTROL_ALERT_SCP_CREATE_COMMAND_LENGTH, expected_secret,
         expected_secret_len, operator_uuid, &cursor, &end))
     return FALSE;
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
           && field_len == 1 && (field[0] == '0' || field[0] == '1');
   if (!valid)
     return FALSE;
   alert->active = field[0] == '1';
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
             &alert->name)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_COMMENT_MAX_BYTES, FALSE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_COMMENT_MAX_BYTES, FALSE,
             &alert->comment)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
             &alert->status)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_UUID_MAX_BYTES, TRUE,
             &alert->credential_uuid)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_SCP_HOST_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_SCP_HOST_MAX_BYTES, TRUE,
             &alert->host)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_SCP_PORT_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_SCP_PORT_MAX_BYTES, TRUE,
             &alert->port)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_SCP_TEXT_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_SCP_TEXT_MAX_BYTES, TRUE,
             &alert->known_hosts)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_SCP_TEXT_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_SCP_TEXT_MAX_BYTES, TRUE,
             &alert->path)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_UUID_MAX_BYTES, TRUE,
             &alert->report_format_uuid)
           && cursor == end
-          && turbovas_control_alert_status_is_valid (alert->status)
-          && turbovas_control_uuid_is_valid (alert->credential_uuid)
-          && turbovas_control_uuid_is_valid (alert->report_format_uuid)
-          && turbovas_control_alert_scp_port_is_valid (alert->port)
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_alert_status_is_valid (alert->status)
+          && yafvs_control_uuid_is_valid (alert->credential_uuid)
+          && yafvs_control_uuid_is_valid (alert->report_format_uuid)
+          && yafvs_control_alert_scp_port_is_valid (alert->port)
+          && yafvs_control_text_has_allowed_controls (
             alert->name, strlen (alert->name), FALSE)
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_text_has_allowed_controls (
             alert->comment, strlen (alert->comment), FALSE)
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_text_has_allowed_controls (
             alert->host, strlen (alert->host), FALSE)
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_text_has_allowed_controls (
             alert->known_hosts, strlen (alert->known_hosts), TRUE)
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_text_has_allowed_controls (
             alert->path, strlen (alert->path), FALSE);
   if (!valid)
-    turbovas_control_alert_scp_create_request_clear (alert);
+    yafvs_control_alert_scp_create_request_clear (alert);
 
   return valid;
 }
 
 static gboolean
-turbovas_control_parse_alert_syslog_create_request (
+yafvs_control_parse_alert_syslog_create_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
-  turbovas_control_alert_syslog_create_request_t *alert)
+  yafvs_control_alert_syslog_create_request_t *alert)
 {
   const char *cursor;
   const char *end;
@@ -2327,47 +2327,47 @@ turbovas_control_parse_alert_syslog_create_request (
   gboolean valid;
 
   memset (alert, 0, sizeof (*alert));
-  if (!turbovas_control_parse_authenticated_prefix (
-        request, request_len, TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND,
-        TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH, expected_secret,
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND,
+        YAFVS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH, expected_secret,
         expected_secret_len, operator_uuid, &cursor, &end))
     return FALSE;
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
           && field_len == 1 && (field[0] == '0' || field[0] == '1');
   if (!valid)
     return FALSE;
   alert->active = field[0] == '1';
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
             &alert->name)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_COMMENT_MAX_BYTES, FALSE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_COMMENT_MAX_BYTES, FALSE,
             &alert->comment)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
             &alert->status)
           && cursor == end
-          && turbovas_control_alert_status_is_valid (alert->status)
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_alert_status_is_valid (alert->status)
+          && yafvs_control_text_has_allowed_controls (
             alert->name, strlen (alert->name), FALSE)
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_text_has_allowed_controls (
             alert->comment, strlen (alert->comment), FALSE);
   if (!valid)
-    turbovas_control_alert_syslog_create_request_clear (alert);
+    yafvs_control_alert_syslog_create_request_clear (alert);
 
   return valid;
 }
 
 static gboolean
-turbovas_control_parse_alert_snmp_create_request (
+yafvs_control_parse_alert_snmp_create_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
-  turbovas_control_alert_snmp_create_request_t *alert)
+  yafvs_control_alert_snmp_create_request_t *alert)
 {
   const char *cursor;
   const char *end;
@@ -2376,71 +2376,71 @@ turbovas_control_parse_alert_snmp_create_request (
   gboolean valid;
 
   memset (alert, 0, sizeof (*alert));
-  if (!turbovas_control_parse_authenticated_prefix (
-        request, request_len, TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND,
-        TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH, expected_secret,
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_ALERT_SNMP_CREATE_COMMAND,
+        YAFVS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH, expected_secret,
         expected_secret_len, operator_uuid, &cursor, &end))
     return FALSE;
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
           && field_len == 1 && (field[0] == '0' || field[0] == '1');
   if (!valid)
     return FALSE;
   alert->active = field[0] == '1';
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
             &alert->name)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_COMMENT_MAX_BYTES, FALSE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_COMMENT_MAX_BYTES, FALSE,
             &alert->comment)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
             &alert->status)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_SNMP_AGENT_MAX_BYTES,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_SNMP_AGENT_MAX_BYTES,
             TRUE, &alert->agent)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_SNMP_COMMUNITY_MAX_BYTES,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_SNMP_COMMUNITY_MAX_BYTES,
             TRUE, &alert->community)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field (
-            field, field_len, TURBOVAS_CONTROL_ALERT_MESSAGE_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field (
+            field, field_len, YAFVS_CONTROL_ALERT_MESSAGE_MAX_BYTES, TRUE,
             &alert->message)
           && cursor == end
-          && turbovas_control_alert_status_is_valid (alert->status)
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_alert_status_is_valid (alert->status)
+          && yafvs_control_text_has_allowed_controls (
             alert->name, strlen (alert->name), FALSE)
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_text_has_allowed_controls (
             alert->comment, strlen (alert->comment), FALSE)
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_text_has_allowed_controls (
             alert->agent, strlen (alert->agent), FALSE)
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_text_has_allowed_controls (
             alert->community, strlen (alert->community), FALSE)
-          && turbovas_control_text_has_allowed_controls (
+          && yafvs_control_text_has_allowed_controls (
             alert->message, strlen (alert->message), TRUE);
   if (!valid)
-    turbovas_control_alert_snmp_create_request_clear (alert);
+    yafvs_control_alert_snmp_create_request_clear (alert);
 
   return valid;
 }
 
 static gboolean
-turbovas_control_optional_uuid_is_valid (const char *uuid)
+yafvs_control_optional_uuid_is_valid (const char *uuid)
 {
-  return uuid[0] == '\0' || turbovas_control_uuid_is_valid (uuid);
+  return uuid[0] == '\0' || yafvs_control_uuid_is_valid (uuid);
 }
 
 static gboolean
-turbovas_control_parse_alert_email_create_request
+yafvs_control_parse_alert_email_create_request
   (const char *request, size_t request_len, const char *expected_secret,
    size_t expected_secret_len, char operator_uuid[37],
-   turbovas_control_alert_email_create_request_t *alert)
+   yafvs_control_alert_email_create_request_t *alert)
 {
   const char *cursor;
   const char *end;
@@ -2454,24 +2454,24 @@ turbovas_control_parse_alert_email_create_request
 
   memset (alert, 0, sizeof (*alert));
   if (request == NULL
-      || request_len >= TURBOVAS_CONTROL_MAX_REQUEST_BYTES
-      || request_len < TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH
-                       + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1 + 37 + 1
-      || memcmp (request, TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
-                 TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH)
+      || request_len >= YAFVS_CONTROL_MAX_REQUEST_BYTES
+      || request_len < YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH
+                       + YAFVS_CONTROL_SECRET_MIN_BYTES + 1 + 37 + 1
+      || memcmp (request, YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
+                 YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH)
       || request[request_len - 1] != '\n'
-      || !turbovas_control_secret_is_valid (expected_secret,
+      || !yafvs_control_secret_is_valid (expected_secret,
                                             expected_secret_len))
     return FALSE;
 
   end = request + request_len - 1;
-  secret = request + TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH;
+  secret = request + YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH;
   secret_end = memchr (secret, ' ', (size_t) (end - secret));
   if (secret_end == NULL)
     return FALSE;
   secret_len = (size_t) (secret_end - secret);
-  if (!turbovas_control_secret_is_valid (secret, secret_len)
-      || !turbovas_control_secret_matches (secret, secret_len,
+  if (!yafvs_control_secret_is_valid (secret, secret_len)
+      || !yafvs_control_secret_matches (secret, secret_len,
                                            expected_secret,
                                            expected_secret_len))
     return FALSE;
@@ -2481,79 +2481,79 @@ turbovas_control_parse_alert_email_create_request
     return FALSE;
   memcpy (operator_uuid, operator_start, 36);
   operator_uuid[36] = '\0';
-  if (!turbovas_control_uuid_is_valid (operator_uuid))
+  if (!yafvs_control_uuid_is_valid (operator_uuid))
     return FALSE;
 
   cursor = operator_start + 37;
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
           && field_len == 1 && (field[0] == '0' || field[0] == '1');
   if (!valid)
     return FALSE;
   alert->active = field[0] == '1';
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
-               (field, field_len, TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
+               (field, field_len, YAFVS_CONTROL_ALERT_NAME_MAX_BYTES, TRUE,
                 &alert->name)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
-               (field, field_len, TURBOVAS_CONTROL_ALERT_COMMENT_MAX_BYTES,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
+               (field, field_len, YAFVS_CONTROL_ALERT_COMMENT_MAX_BYTES,
                 FALSE, &alert->comment)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
-               (field, field_len, TURBOVAS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
+               (field, field_len, YAFVS_CONTROL_ALERT_STATUS_MAX_BYTES, TRUE,
                 &alert->status)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
-               (field, field_len, TURBOVAS_CONTROL_ALERT_ADDRESS_MAX_BYTES,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
+               (field, field_len, YAFVS_CONTROL_ALERT_ADDRESS_MAX_BYTES,
                 TRUE, &alert->to_address)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
-               (field, field_len, TURBOVAS_CONTROL_ALERT_ADDRESS_MAX_BYTES,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
+               (field, field_len, YAFVS_CONTROL_ALERT_ADDRESS_MAX_BYTES,
                 FALSE, &alert->from_address)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
-               (field, field_len, TURBOVAS_CONTROL_ALERT_SUBJECT_MAX_BYTES,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
+               (field, field_len, YAFVS_CONTROL_ALERT_SUBJECT_MAX_BYTES,
                 TRUE, &alert->subject)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
           && field_len == 1 && field[0] >= '0' && field[0] <= '2';
   if (!valid)
     {
-      turbovas_control_alert_email_create_request_clear (alert);
+      yafvs_control_alert_email_create_request_clear (alert);
       return FALSE;
     }
   alert->notice = (unsigned int) (field[0] - '0');
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
-               (field, field_len, TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES, FALSE,
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
+               (field, field_len, YAFVS_CONTROL_ALERT_UUID_MAX_BYTES, FALSE,
                 &alert->recipient_credential_uuid)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
-               (field, field_len, TURBOVAS_CONTROL_ALERT_UUID_MAX_BYTES, FALSE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
+               (field, field_len, YAFVS_CONTROL_ALERT_UUID_MAX_BYTES, FALSE,
                 &alert->report_format_uuid)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
-               (field, field_len, TURBOVAS_CONTROL_ALERT_MESSAGE_MAX_BYTES,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
+               (field, field_len, YAFVS_CONTROL_ALERT_MESSAGE_MAX_BYTES,
                 FALSE, &alert->message)
           && cursor == end
-          && turbovas_control_alert_status_is_valid (alert->status)
-          && turbovas_control_optional_uuid_is_valid
+          && yafvs_control_alert_status_is_valid (alert->status)
+          && yafvs_control_optional_uuid_is_valid
                (alert->recipient_credential_uuid)
-          && turbovas_control_optional_uuid_is_valid (alert->report_format_uuid)
+          && yafvs_control_optional_uuid_is_valid (alert->report_format_uuid)
           && ((alert->notice == 1
                && alert->report_format_uuid[0] == '\0')
               || (alert->notice != 1
                   && alert->report_format_uuid[0] != '\0'));
   if (!valid)
-    turbovas_control_alert_email_create_request_clear (alert);
+    yafvs_control_alert_email_create_request_clear (alert);
 
   return valid;
 }
 
 static void
-turbovas_control_schedule_modify_request_clear
-  (turbovas_control_schedule_modify_request_t *request)
+yafvs_control_schedule_modify_request_clear
+  (yafvs_control_schedule_modify_request_t *request)
 {
   g_free (request->name);
   g_free (request->comment);
@@ -2563,10 +2563,10 @@ turbovas_control_schedule_modify_request_clear
 }
 
 static gboolean
-turbovas_control_parse_schedule_modify_request
+yafvs_control_parse_schedule_modify_request
   (const char *request, size_t request_len, const char *expected_secret,
    size_t expected_secret_len, char operator_uuid[37], char schedule_uuid[37],
-   turbovas_control_schedule_modify_request_t *schedule)
+   yafvs_control_schedule_modify_request_t *schedule)
 {
   const char *cursor;
   const char *end;
@@ -2581,24 +2581,24 @@ turbovas_control_parse_schedule_modify_request
 
   memset (schedule, 0, sizeof (*schedule));
   if (request == NULL
-      || request_len > TURBOVAS_CONTROL_MAX_REQUEST_BYTES
-      || request_len < TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH
-                       + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1 + 37 + 37
-      || memcmp (request, TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND,
-                 TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH)
+      || request_len > YAFVS_CONTROL_MAX_REQUEST_BYTES
+      || request_len < YAFVS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH
+                       + YAFVS_CONTROL_SECRET_MIN_BYTES + 1 + 37 + 37
+      || memcmp (request, YAFVS_CONTROL_SCHEDULE_MODIFY_COMMAND,
+                 YAFVS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH)
       || request[request_len - 1] != '\n'
-      || !turbovas_control_secret_is_valid (expected_secret,
+      || !yafvs_control_secret_is_valid (expected_secret,
                                             expected_secret_len))
     return FALSE;
 
   end = request + request_len - 1;
-  secret = request + TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH;
+  secret = request + YAFVS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH;
   secret_end = memchr (secret, ' ', (size_t) (end - secret));
   if (secret_end == NULL)
     return FALSE;
   secret_len = (size_t) (secret_end - secret);
-  if (!turbovas_control_secret_is_valid (secret, secret_len)
-      || !turbovas_control_secret_matches (secret, secret_len,
+  if (!yafvs_control_secret_is_valid (secret, secret_len)
+      || !yafvs_control_secret_matches (secret, secret_len,
                                            expected_secret,
                                            expected_secret_len))
     return FALSE;
@@ -2608,7 +2608,7 @@ turbovas_control_parse_schedule_modify_request
     return FALSE;
   memcpy (operator_uuid, operator_start, 36);
   operator_uuid[36] = '\0';
-  if (!turbovas_control_uuid_is_valid (operator_uuid))
+  if (!yafvs_control_uuid_is_valid (operator_uuid))
     return FALSE;
 
   schedule_start = operator_start + 37;
@@ -2616,39 +2616,39 @@ turbovas_control_parse_schedule_modify_request
     return FALSE;
   memcpy (schedule_uuid, schedule_start, 36);
   schedule_uuid[36] = '\0';
-  if (!turbovas_control_uuid_is_valid (schedule_uuid))
+  if (!yafvs_control_uuid_is_valid (schedule_uuid))
     return FALSE;
 
   cursor = schedule_start + 37;
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_schedule_modify_field
-               (field, field_len, TURBOVAS_CONTROL_SCHEDULE_NAME_MAX_BYTES,
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_schedule_modify_field
+               (field, field_len, YAFVS_CONTROL_SCHEDULE_NAME_MAX_BYTES,
                 FALSE, &schedule->name)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_schedule_modify_field
-               (field, field_len, TURBOVAS_CONTROL_SCHEDULE_COMMENT_MAX_BYTES,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_schedule_modify_field
+               (field, field_len, YAFVS_CONTROL_SCHEDULE_COMMENT_MAX_BYTES,
                 FALSE, &schedule->comment)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_schedule_modify_field
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_schedule_modify_field
                (field, field_len,
-                TURBOVAS_CONTROL_SCHEDULE_TIMEZONE_MAX_BYTES, FALSE,
+                YAFVS_CONTROL_SCHEDULE_TIMEZONE_MAX_BYTES, FALSE,
                 &schedule->timezone)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_schedule_modify_field
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_schedule_modify_field
                (field, field_len,
-                TURBOVAS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES, TRUE,
+                YAFVS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES, TRUE,
                 &schedule->icalendar)
           && cursor == end
           && (schedule->name || schedule->comment || schedule->timezone
               || schedule->icalendar);
   if (!valid)
-    turbovas_control_schedule_modify_request_clear (schedule);
+    yafvs_control_schedule_modify_request_clear (schedule);
 
   return valid;
 }
 
 static gboolean
-turbovas_control_next_field (const char **cursor, const char *end,
+yafvs_control_next_field (const char **cursor, const char *end,
                              const char **field, size_t *field_len)
 {
   const char *separator;
@@ -2674,30 +2674,30 @@ turbovas_control_next_field (const char **cursor, const char *end,
 }
 
 static gboolean
-turbovas_control_parse_task_clone_request (
+yafvs_control_parse_task_clone_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37], char task_uuid[37])
 {
   const char *cursor;
   const char *end;
 
-  if (!turbovas_control_parse_authenticated_prefix (
-        request, request_len, TURBOVAS_CONTROL_TASK_CLONE_COMMAND,
-        TURBOVAS_CONTROL_TASK_CLONE_COMMAND_LENGTH, expected_secret,
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_TASK_CLONE_COMMAND,
+        YAFVS_CONTROL_TASK_CLONE_COMMAND_LENGTH, expected_secret,
         expected_secret_len, operator_uuid, &cursor, &end)
       || (size_t) (end - cursor) != 36)
     return FALSE;
 
   memcpy (task_uuid, cursor, 36);
   task_uuid[36] = '\0';
-  return turbovas_control_uuid_is_valid (task_uuid);
+  return yafvs_control_uuid_is_valid (task_uuid);
 }
 
 static gboolean
-turbovas_control_parse_tag_create_request (
+yafvs_control_parse_tag_create_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37],
-  turbovas_control_tag_create_request_t *tag)
+  yafvs_control_tag_create_request_t *tag)
 {
   const char *cursor;
   const char *end;
@@ -2706,40 +2706,40 @@ turbovas_control_parse_tag_create_request (
   gboolean valid;
 
   memset (tag, 0, sizeof (*tag));
-  if (!turbovas_control_parse_authenticated_prefix (
-        request, request_len, TURBOVAS_CONTROL_TAG_CREATE_COMMAND,
-        TURBOVAS_CONTROL_TAG_CREATE_COMMAND_LENGTH, expected_secret,
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_TAG_CREATE_COMMAND,
+        YAFVS_CONTROL_TAG_CREATE_COMMAND_LENGTH, expected_secret,
         expected_secret_len, operator_uuid, &cursor, &end))
     return FALSE;
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
           && field_len == 1 && (field[0] == '0' || field[0] == '1');
   if (!valid)
     return FALSE;
   tag->active = field[0] == '1';
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_tag_text_field (
-               field, field_len, TURBOVAS_CONTROL_TAG_RESOURCE_TYPE_MAX_BYTES,
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_tag_text_field (
+               field, field_len, YAFVS_CONTROL_TAG_RESOURCE_TYPE_MAX_BYTES,
                TRUE, &tag->resource_type)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_tag_text_field (
-               field, field_len, TURBOVAS_CONTROL_TAG_TEXT_MAX_BYTES, TRUE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_tag_text_field (
+               field, field_len, YAFVS_CONTROL_TAG_TEXT_MAX_BYTES, TRUE,
                &tag->name)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_tag_text_field (
-               field, field_len, TURBOVAS_CONTROL_TAG_TEXT_MAX_BYTES, FALSE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_tag_text_field (
+               field, field_len, YAFVS_CONTROL_TAG_TEXT_MAX_BYTES, FALSE,
                &tag->comment)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_tag_text_field (
-               field, field_len, TURBOVAS_CONTROL_TAG_TEXT_MAX_BYTES, FALSE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_tag_text_field (
+               field, field_len, YAFVS_CONTROL_TAG_TEXT_MAX_BYTES, FALSE,
                &tag->value)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_tag_resource_ids_from_field (
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_tag_resource_ids_from_field (
                field, field_len, &tag->resource_ids)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_tag_text_field (
-               field, field_len, TURBOVAS_CONTROL_TAG_FILTER_MAX_BYTES, FALSE,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_tag_text_field (
+               field, field_len, YAFVS_CONTROL_TAG_FILTER_MAX_BYTES, FALSE,
                &tag->resource_filter)
           && cursor == end
           && strcasecmp (tag->resource_type, "tag") != 0
@@ -2748,25 +2748,25 @@ turbovas_control_parse_tag_create_request (
           && !(g_ptr_array_index (tag->resource_ids, 0) != NULL
                && tag->resource_filter[0] != '\0');
   if (!valid)
-    turbovas_control_tag_create_request_clear (tag);
+    yafvs_control_tag_create_request_clear (tag);
   return valid;
 }
 
 static gboolean
-turbovas_control_decode_tag_modify_field (const char *field,
+yafvs_control_decode_tag_modify_field (const char *field,
                                            size_t field_len,
                                            size_t max_decoded_len,
                                            gchar **decoded_out)
 {
-  return turbovas_control_decode_schedule_modify_field (
+  return yafvs_control_decode_schedule_modify_field (
     field, field_len, max_decoded_len, FALSE, decoded_out);
 }
 
 static gboolean
-turbovas_control_parse_tag_modify_request (
+yafvs_control_parse_tag_modify_request (
   const char *request, size_t request_len, const char *expected_secret,
   size_t expected_secret_len, char operator_uuid[37], char tag_uuid[37],
-  turbovas_control_tag_modify_request_t *tag)
+  yafvs_control_tag_modify_request_t *tag)
 {
   const char *cursor;
   const char *end;
@@ -2779,9 +2779,9 @@ turbovas_control_parse_tag_modify_request (
   gboolean valid;
 
   memset (tag, 0, sizeof (*tag));
-  if (!turbovas_control_parse_authenticated_prefix (
-        request, request_len, TURBOVAS_CONTROL_TAG_MODIFY_COMMAND,
-        TURBOVAS_CONTROL_TAG_MODIFY_COMMAND_LENGTH, expected_secret,
+  if (!yafvs_control_parse_authenticated_prefix (
+        request, request_len, YAFVS_CONTROL_TAG_MODIFY_COMMAND,
+        YAFVS_CONTROL_TAG_MODIFY_COMMAND_LENGTH, expected_secret,
         expected_secret_len, operator_uuid, &cursor, &end))
     return FALSE;
 
@@ -2790,23 +2790,23 @@ turbovas_control_parse_tag_modify_request (
     return FALSE;
   memcpy (tag_uuid, tag_start, 36);
   tag_uuid[36] = '\0';
-  if (!turbovas_control_uuid_is_valid (tag_uuid))
+  if (!yafvs_control_uuid_is_valid (tag_uuid))
     return FALSE;
   cursor = tag_start + 37;
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_tag_modify_field (
-               field, field_len, TURBOVAS_CONTROL_TAG_TEXT_MAX_BYTES,
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_tag_modify_field (
+               field, field_len, YAFVS_CONTROL_TAG_TEXT_MAX_BYTES,
                &tag->name)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_tag_modify_field (
-               field, field_len, TURBOVAS_CONTROL_TAG_TEXT_MAX_BYTES,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_tag_modify_field (
+               field, field_len, YAFVS_CONTROL_TAG_TEXT_MAX_BYTES,
                &tag->comment)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_tag_modify_field (
-               field, field_len, TURBOVAS_CONTROL_TAG_TEXT_MAX_BYTES,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_tag_modify_field (
+               field, field_len, YAFVS_CONTROL_TAG_TEXT_MAX_BYTES,
                &tag->value)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len);
+          && yafvs_control_next_field (&cursor, end, &field, &field_len);
   if (!valid)
     goto invalid;
   if (field_len == 1 && field[0] == '-')
@@ -2816,11 +2816,11 @@ turbovas_control_parse_tag_modify_request (
   else
     goto invalid;
 
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_tag_modify_field (
-               field, field_len, TURBOVAS_CONTROL_TAG_RESOURCE_TYPE_MAX_BYTES,
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_tag_modify_field (
+               field, field_len, YAFVS_CONTROL_TAG_RESOURCE_TYPE_MAX_BYTES,
                &tag->resource_type)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len);
+          && yafvs_control_next_field (&cursor, end, &field, &field_len);
   if (!valid)
     goto invalid;
   if (field_len == 1 && field[0] == '-')
@@ -2832,19 +2832,19 @@ turbovas_control_parse_tag_modify_request (
   else
     goto invalid;
 
-  if (!turbovas_control_next_field (&cursor, end, &field, &field_len))
+  if (!yafvs_control_next_field (&cursor, end, &field, &field_len))
     goto invalid;
   if (!(field_len == 1 && field[0] == '-'))
     {
       if (field_len == 0 || field[0] != '+'
-          || !turbovas_control_tag_resource_ids_from_field (
+          || !yafvs_control_tag_resource_ids_from_field (
                field + 1, field_len - 1, &tag->resource_ids))
         goto invalid;
     }
 
-  if (!turbovas_control_next_field (&cursor, end, &field, &field_len)
-      || !turbovas_control_decode_tag_modify_field (
-           field, field_len, TURBOVAS_CONTROL_TAG_FILTER_MAX_BYTES,
+  if (!yafvs_control_next_field (&cursor, end, &field, &field_len)
+      || !yafvs_control_decode_tag_modify_field (
+           field, field_len, YAFVS_CONTROL_TAG_FILTER_MAX_BYTES,
            &tag->resource_filter)
       || cursor != end)
     goto invalid;
@@ -2880,15 +2880,15 @@ turbovas_control_parse_tag_modify_request (
     return TRUE;
 
 invalid:
-  turbovas_control_tag_modify_request_clear (tag);
+  yafvs_control_tag_modify_request_clear (tag);
   return FALSE;
 }
 
 static gboolean
-turbovas_control_parse_schedule_create_request
+yafvs_control_parse_schedule_create_request
   (const char *request, size_t request_len, const char *expected_secret,
    size_t expected_secret_len, char operator_uuid[37],
-   turbovas_control_schedule_create_request_t *schedule)
+   yafvs_control_schedule_create_request_t *schedule)
 {
   const char *cursor;
   const char *end;
@@ -2902,24 +2902,24 @@ turbovas_control_parse_schedule_create_request
 
   memset (schedule, 0, sizeof (*schedule));
   if (request == NULL
-      || request_len > TURBOVAS_CONTROL_MAX_REQUEST_BYTES
-      || request_len < TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND_LENGTH
-                       + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1 + 37
-      || memcmp (request, TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND,
-                 TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND_LENGTH)
+      || request_len > YAFVS_CONTROL_MAX_REQUEST_BYTES
+      || request_len < YAFVS_CONTROL_SCHEDULE_CREATE_COMMAND_LENGTH
+                       + YAFVS_CONTROL_SECRET_MIN_BYTES + 1 + 37
+      || memcmp (request, YAFVS_CONTROL_SCHEDULE_CREATE_COMMAND,
+                 YAFVS_CONTROL_SCHEDULE_CREATE_COMMAND_LENGTH)
       || request[request_len - 1] != '\n'
-      || !turbovas_control_secret_is_valid (expected_secret,
+      || !yafvs_control_secret_is_valid (expected_secret,
                                             expected_secret_len))
     return FALSE;
 
   end = request + request_len - 1;
-  secret = request + TURBOVAS_CONTROL_SCHEDULE_CREATE_COMMAND_LENGTH;
+  secret = request + YAFVS_CONTROL_SCHEDULE_CREATE_COMMAND_LENGTH;
   secret_end = memchr (secret, ' ', (size_t) (end - secret));
   if (secret_end == NULL)
     return FALSE;
   secret_len = (size_t) (secret_end - secret);
-  if (!turbovas_control_secret_is_valid (secret, secret_len)
-      || !turbovas_control_secret_matches (secret, secret_len,
+  if (!yafvs_control_secret_is_valid (secret, secret_len)
+      || !yafvs_control_secret_matches (secret, secret_len,
                                            expected_secret,
                                            expected_secret_len))
     return FALSE;
@@ -2929,40 +2929,40 @@ turbovas_control_parse_schedule_create_request
     return FALSE;
   memcpy (operator_uuid, operator_start, 36);
   operator_uuid[36] = '\0';
-  if (!turbovas_control_uuid_is_valid (operator_uuid))
+  if (!yafvs_control_uuid_is_valid (operator_uuid))
     return FALSE;
 
   cursor = operator_start + 37;
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
-               (field, field_len, TURBOVAS_CONTROL_SCHEDULE_NAME_MAX_BYTES,
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
+               (field, field_len, YAFVS_CONTROL_SCHEDULE_NAME_MAX_BYTES,
                 TRUE, &schedule->name)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
-               (field, field_len, TURBOVAS_CONTROL_SCHEDULE_COMMENT_MAX_BYTES,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
+               (field, field_len, YAFVS_CONTROL_SCHEDULE_COMMENT_MAX_BYTES,
                 FALSE, &schedule->comment)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
                (field, field_len,
-                TURBOVAS_CONTROL_SCHEDULE_TIMEZONE_MAX_BYTES, FALSE,
+                YAFVS_CONTROL_SCHEDULE_TIMEZONE_MAX_BYTES, FALSE,
                 &schedule->timezone)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
                (field, field_len,
-                TURBOVAS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES, TRUE,
+                YAFVS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES, TRUE,
                 &schedule->icalendar)
           && cursor == end;
   if (!valid)
-    turbovas_control_schedule_create_request_clear (schedule);
+    yafvs_control_schedule_create_request_clear (schedule);
 
   return valid;
 }
 
 static gboolean
-turbovas_control_parse_credential_create_request
+yafvs_control_parse_credential_create_request
   (const char *request, size_t request_len, const char *expected_secret,
    size_t expected_secret_len, char operator_uuid[37],
-   turbovas_control_credential_create_request_t *credential)
+   yafvs_control_credential_create_request_t *credential)
 {
   const char *cursor;
   const char *end;
@@ -2977,24 +2977,24 @@ turbovas_control_parse_credential_create_request
 
   memset (credential, 0, sizeof (*credential));
   if (request == NULL
-      || request_len > TURBOVAS_CONTROL_MAX_REQUEST_BYTES
-      || request_len < TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH
-                       + TURBOVAS_CONTROL_SECRET_MIN_BYTES + 1 + 37 + 1
-      || memcmp (request, TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND,
-                 TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH)
+      || request_len > YAFVS_CONTROL_MAX_REQUEST_BYTES
+      || request_len < YAFVS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH
+                       + YAFVS_CONTROL_SECRET_MIN_BYTES + 1 + 37 + 1
+      || memcmp (request, YAFVS_CONTROL_CREDENTIAL_CREATE_COMMAND,
+                 YAFVS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH)
       || request[request_len - 1] != '\n'
-      || !turbovas_control_secret_is_valid (expected_secret,
+      || !yafvs_control_secret_is_valid (expected_secret,
                                             expected_secret_len))
     return FALSE;
 
   end = request + request_len - 1;
-  secret = request + TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH;
+  secret = request + YAFVS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH;
   secret_end = memchr (secret, ' ', (size_t) (end - secret));
   if (secret_end == NULL)
     return FALSE;
   secret_len = (size_t) (secret_end - secret);
-  if (!turbovas_control_secret_is_valid (secret, secret_len)
-      || !turbovas_control_secret_matches (secret, secret_len,
+  if (!yafvs_control_secret_is_valid (secret, secret_len)
+      || !yafvs_control_secret_matches (secret, secret_len,
                                            expected_secret,
                                            expected_secret_len))
     return FALSE;
@@ -3004,66 +3004,66 @@ turbovas_control_parse_credential_create_request
     return FALSE;
   memcpy (operator_uuid, operator_start, 36);
   operator_uuid[36] = '\0';
-  if (!turbovas_control_uuid_is_valid (operator_uuid))
+  if (!yafvs_control_uuid_is_valid (operator_uuid))
     return FALSE;
 
   cursor = operator_start + 37;
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && ((field_len == strlen (TURBOVAS_CONTROL_CREDENTIAL_TYPE_UP)
-               && memcmp (field, TURBOVAS_CONTROL_CREDENTIAL_TYPE_UP,
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && ((field_len == strlen (YAFVS_CONTROL_CREDENTIAL_TYPE_UP)
+               && memcmp (field, YAFVS_CONTROL_CREDENTIAL_TYPE_UP,
                           field_len) == 0)
-              || (field_len == strlen (TURBOVAS_CONTROL_CREDENTIAL_TYPE_USK)
-                  && memcmp (field, TURBOVAS_CONTROL_CREDENTIAL_TYPE_USK,
+              || (field_len == strlen (YAFVS_CONTROL_CREDENTIAL_TYPE_USK)
+                  && memcmp (field, YAFVS_CONTROL_CREDENTIAL_TYPE_USK,
                              field_len) == 0));
   if (!valid)
     return FALSE;
 
   credential->credential_type = g_strndup (field, field_len);
   is_up = strcmp (credential->credential_type,
-                  TURBOVAS_CONTROL_CREDENTIAL_TYPE_UP) == 0;
-  valid = turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
-               (field, field_len, TURBOVAS_CONTROL_CREDENTIAL_NAME_MAX_BYTES,
+                  YAFVS_CONTROL_CREDENTIAL_TYPE_UP) == 0;
+  valid = yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
+               (field, field_len, YAFVS_CONTROL_CREDENTIAL_NAME_MAX_BYTES,
                 TRUE, &credential->name)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
                (field, field_len,
-                TURBOVAS_CONTROL_CREDENTIAL_COMMENT_MAX_BYTES, FALSE,
+                YAFVS_CONTROL_CREDENTIAL_COMMENT_MAX_BYTES, FALSE,
                 &credential->comment)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
-               (field, field_len, TURBOVAS_CONTROL_CREDENTIAL_LOGIN_MAX_BYTES,
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
+               (field, field_len, YAFVS_CONTROL_CREDENTIAL_LOGIN_MAX_BYTES,
                 TRUE, &credential->login)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
                (field, field_len,
-                TURBOVAS_CONTROL_CREDENTIAL_SECRET_MAX_BYTES, is_up,
+                YAFVS_CONTROL_CREDENTIAL_SECRET_MAX_BYTES, is_up,
                 &credential->secret)
-          && turbovas_control_next_field (&cursor, end, &field, &field_len)
-          && turbovas_control_decode_base64_field
+          && yafvs_control_next_field (&cursor, end, &field, &field_len)
+          && yafvs_control_decode_base64_field
                (field, field_len,
-                TURBOVAS_CONTROL_CREDENTIAL_PRIVATE_KEY_MAX_BYTES, !is_up,
+                YAFVS_CONTROL_CREDENTIAL_PRIVATE_KEY_MAX_BYTES, !is_up,
                 &credential->private_key)
           && cursor == end
           && (is_up ? credential->private_key[0] == '\0'
                     : credential->private_key[0] != '\0')
-          && turbovas_control_text_has_allowed_controls
+          && yafvs_control_text_has_allowed_controls
                (credential->name, strlen (credential->name), FALSE)
-          && turbovas_control_text_has_allowed_controls
+          && yafvs_control_text_has_allowed_controls
                (credential->comment, strlen (credential->comment), FALSE)
-          && turbovas_control_text_has_allowed_controls
+          && yafvs_control_text_has_allowed_controls
                (credential->login, strlen (credential->login), FALSE)
-          && turbovas_control_text_has_allowed_controls
+          && yafvs_control_text_has_allowed_controls
                (credential->private_key, strlen (credential->private_key),
                 TRUE);
   if (!valid)
-    turbovas_control_credential_create_request_clear (credential);
+    yafvs_control_credential_create_request_clear (credential);
 
   return valid;
 }
 
 static const char *
-turbovas_control_response (int result)
+yafvs_control_response (int result)
 {
   switch (result)
     {
@@ -3091,15 +3091,15 @@ turbovas_control_response (int result)
 }
 
 static const char *
-turbovas_control_schedule_create_response
+yafvs_control_schedule_create_response
   (int result, const char *uuid,
-   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+   char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES])
 {
   const char *status;
 
-  if (result == 0 && uuid && turbovas_control_uuid_is_valid (uuid))
+  if (result == 0 && uuid && yafvs_control_uuid_is_valid (uuid))
     {
-      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+      g_snprintf (response, YAFVS_CONTROL_MAX_RESPONSE_BYTES,
                   "0 created %s\n", uuid);
       return response;
     }
@@ -3123,20 +3123,20 @@ turbovas_control_schedule_create_response
         break;
     }
 
-  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  g_strlcpy (response, status, YAFVS_CONTROL_MAX_RESPONSE_BYTES);
   return response;
 }
 
 static const char *
-turbovas_control_alert_create_response (
+yafvs_control_alert_create_response (
   int result, const char *uuid,
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES])
 {
   const char *status;
 
-  if (result == 0 && uuid && turbovas_control_uuid_is_valid (uuid))
+  if (result == 0 && uuid && yafvs_control_uuid_is_valid (uuid))
     {
-      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+      g_snprintf (response, YAFVS_CONTROL_MAX_RESPONSE_BYTES,
                   "0 created %s\n", uuid);
       return response;
     }
@@ -3176,20 +3176,20 @@ turbovas_control_alert_create_response (
       default: status = "-1 internal\n"; break;
     }
 
-  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  g_strlcpy (response, status, YAFVS_CONTROL_MAX_RESPONSE_BYTES);
   return response;
 }
 
 static const char *
-turbovas_control_alert_start_task_create_response (
+yafvs_control_alert_start_task_create_response (
   int result, const char *uuid,
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES])
 {
   const char *status;
 
-  if (result == 0 && uuid && turbovas_control_uuid_is_valid (uuid))
+  if (result == 0 && uuid && yafvs_control_uuid_is_valid (uuid))
     {
-      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+      g_snprintf (response, YAFVS_CONTROL_MAX_RESPONSE_BYTES,
                   "0 created %s\n", uuid);
       return response;
     }
@@ -3216,12 +3216,12 @@ turbovas_control_alert_start_task_create_response (
       break;
     }
 
-  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  g_strlcpy (response, status, YAFVS_CONTROL_MAX_RESPONSE_BYTES);
   return response;
 }
 
 static const char *
-turbovas_control_alert_test_response (int result)
+yafvs_control_alert_test_response (int result)
 {
   switch (result)
     {
@@ -3237,15 +3237,15 @@ turbovas_control_alert_test_response (int result)
 }
 
 static const char *
-turbovas_control_credential_create_response
+yafvs_control_credential_create_response
   (int result, const char *uuid,
-   char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+   char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES])
 {
   const char *status;
 
-  if (result == 0 && uuid && turbovas_control_uuid_is_valid (uuid))
+  if (result == 0 && uuid && yafvs_control_uuid_is_valid (uuid))
     {
-      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+      g_snprintf (response, YAFVS_CONTROL_MAX_RESPONSE_BYTES,
                   "0 created %s\n", uuid);
       return response;
     }
@@ -3281,13 +3281,13 @@ turbovas_control_credential_create_response
         break;
     }
 
-  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  g_strlcpy (response, status, YAFVS_CONTROL_MAX_RESPONSE_BYTES);
   return response;
 }
 
 static const char *
-turbovas_control_schedule_modify_response
-  (int result, char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+yafvs_control_schedule_modify_response
+  (int result, char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES])
 {
   const char *status;
 
@@ -3321,12 +3321,12 @@ turbovas_control_schedule_modify_response
         break;
     }
 
-  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  g_strlcpy (response, status, YAFVS_CONTROL_MAX_RESPONSE_BYTES);
   return response;
 }
 
 static const char *
-turbovas_control_scan_config_nvt_diagnostic_response (int result)
+yafvs_control_scan_config_nvt_diagnostic_response (int result)
 {
   switch (result)
     {
@@ -3345,15 +3345,15 @@ turbovas_control_scan_config_nvt_diagnostic_response (int result)
 }
 
 static const char *
-turbovas_control_task_clone_response (
+yafvs_control_task_clone_response (
   int result, const char *uuid,
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES])
 {
   const char *status;
 
-  if (result == 0 && uuid && turbovas_control_uuid_is_valid (uuid))
+  if (result == 0 && uuid && yafvs_control_uuid_is_valid (uuid))
     {
-      g_snprintf (response, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES,
+      g_snprintf (response, YAFVS_CONTROL_MAX_RESPONSE_BYTES,
                   "0 created %s\n", uuid);
       return response;
     }
@@ -3380,12 +3380,12 @@ turbovas_control_task_clone_response (
       break;
     }
 
-  g_strlcpy (response, status, TURBOVAS_CONTROL_MAX_RESPONSE_BYTES);
+  g_strlcpy (response, status, YAFVS_CONTROL_MAX_RESPONSE_BYTES);
   return response;
 }
 
 static gchar *
-turbovas_control_auth_settings_optional_base64 (const gchar *value)
+yafvs_control_auth_settings_optional_base64 (const gchar *value)
 {
   if (value == NULL || value[0] == '\0')
     return g_strdup ("-");
@@ -3394,7 +3394,7 @@ turbovas_control_auth_settings_optional_base64 (const gchar *value)
 }
 
 static gchar *
-turbovas_control_auth_settings_read_response (
+yafvs_control_auth_settings_read_response (
   const manage_auth_settings_t *settings)
 {
   gchar *activation_64;
@@ -3423,20 +3423,20 @@ turbovas_control_auth_settings_read_response (
     return NULL;
 
   host_64 =
-    turbovas_control_auth_settings_optional_base64 (settings->ldap_host);
+    yafvs_control_auth_settings_optional_base64 (settings->ldap_host);
   authdn_64 =
-    turbovas_control_auth_settings_optional_base64 (settings->ldap_authdn);
+    yafvs_control_auth_settings_optional_base64 (settings->ldap_authdn);
   radius_host_64 =
-    turbovas_control_auth_settings_optional_base64 (settings->radius_host);
-  sha256_64 = turbovas_control_auth_settings_optional_base64 (
+    yafvs_control_auth_settings_optional_base64 (settings->radius_host);
+  sha256_64 = yafvs_control_auth_settings_optional_base64 (
     settings->ldap_cert_present ? settings->ldap_cert_sha256 : NULL);
-  issuer_64 = turbovas_control_auth_settings_optional_base64 (
+  issuer_64 = yafvs_control_auth_settings_optional_base64 (
     settings->ldap_cert_present ? settings->ldap_cert_issuer : NULL);
-  activation_64 = turbovas_control_auth_settings_optional_base64 (
+  activation_64 = yafvs_control_auth_settings_optional_base64 (
     settings->ldap_cert_present ? settings->ldap_cert_activation : NULL);
-  expiration_64 = turbovas_control_auth_settings_optional_base64 (
+  expiration_64 = yafvs_control_auth_settings_optional_base64 (
     settings->ldap_cert_present ? settings->ldap_cert_expiration : NULL);
-  time_status_64 = turbovas_control_auth_settings_optional_base64 (
+  time_status_64 = yafvs_control_auth_settings_optional_base64 (
     settings->ldap_cert_present ? settings->ldap_cert_time_status : NULL);
 
   response = g_strdup_printf (
@@ -3447,25 +3447,25 @@ turbovas_control_auth_settings_read_response (
     expiration_64, time_status_64, settings->radius_available,
     settings->radius_enabled, radius_host_64,
     settings->radius_secret_configured);
-  if (strlen (response) >= TURBOVAS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES)
+  if (strlen (response) >= YAFVS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES)
     {
-      turbovas_control_secure_free (response);
+      yafvs_control_secure_free (response);
       response = NULL;
     }
 
-  turbovas_control_secure_free (host_64);
-  turbovas_control_secure_free (authdn_64);
-  turbovas_control_secure_free (radius_host_64);
-  turbovas_control_secure_free (sha256_64);
-  turbovas_control_secure_free (issuer_64);
-  turbovas_control_secure_free (activation_64);
-  turbovas_control_secure_free (expiration_64);
-  turbovas_control_secure_free (time_status_64);
+  yafvs_control_secure_free (host_64);
+  yafvs_control_secure_free (authdn_64);
+  yafvs_control_secure_free (radius_host_64);
+  yafvs_control_secure_free (sha256_64);
+  yafvs_control_secure_free (issuer_64);
+  yafvs_control_secure_free (activation_64);
+  yafvs_control_secure_free (expiration_64);
+  yafvs_control_secure_free (time_status_64);
   return response;
 }
 
 static const char *
-turbovas_control_auth_settings_response (int result)
+yafvs_control_auth_settings_response (int result)
 {
   switch (result)
     {
@@ -3485,7 +3485,7 @@ turbovas_control_auth_settings_response (int result)
 }
 
 static gboolean
-turbovas_control_write_all (int socket, const char *response)
+yafvs_control_write_all (int socket, const char *response)
 {
   size_t length = strlen (response);
   size_t written = 0;
@@ -3508,17 +3508,17 @@ turbovas_control_write_all (int socket, const char *response)
 }
 
 static gboolean
-turbovas_control_read_request
-  (int socket, char request[TURBOVAS_CONTROL_MAX_REQUEST_BYTES + 1],
+yafvs_control_read_request
+  (int socket, char request[YAFVS_CONTROL_MAX_REQUEST_BYTES + 1],
                                size_t *request_len)
 {
   size_t length = 0;
   *request_len = 0;
 
-  while (length < TURBOVAS_CONTROL_MAX_REQUEST_BYTES)
+  while (length < YAFVS_CONTROL_MAX_REQUEST_BYTES)
     {
       ssize_t ret = read (socket, request + length,
-                          TURBOVAS_CONTROL_MAX_REQUEST_BYTES - length);
+                          YAFVS_CONTROL_MAX_REQUEST_BYTES - length);
       char *newline;
 
       if (ret > 0)
@@ -3542,9 +3542,9 @@ turbovas_control_read_request
 }
 
 static void
-turbovas_control_set_timeouts (int socket)
+yafvs_control_set_timeouts (int socket)
 {
-  struct timeval timeout = { TURBOVAS_CONTROL_TIMEOUT_SECONDS, 0 };
+  struct timeval timeout = { YAFVS_CONTROL_TIMEOUT_SECONDS, 0 };
 
   if (setsockopt (socket, SOL_SOCKET, SO_RCVTIMEO, &timeout,
                   sizeof (timeout)) == -1)
@@ -3557,7 +3557,7 @@ turbovas_control_set_timeouts (int socket)
 }
 
 static gboolean
-turbovas_control_start_operator_session (const char *operator_uuid)
+yafvs_control_start_operator_session (const char *operator_uuid)
 {
   gchar *operator_uuid_copy;
   gchar *operator_name;
@@ -3580,7 +3580,7 @@ turbovas_control_start_operator_session (const char *operator_uuid)
 }
 
 static void
-turbovas_control_finish_operator_session (void)
+yafvs_control_finish_operator_session (void)
 {
   g_free (current_credentials.username);
   g_free (current_credentials.uuid);
@@ -3590,89 +3590,89 @@ turbovas_control_finish_operator_session (void)
 }
 
 static int
-turbovas_control_read_auth_settings (const char *operator_uuid,
+yafvs_control_read_auth_settings (const char *operator_uuid,
                                      gchar **response)
 {
   manage_auth_settings_t settings = {0};
   int result;
 
   *response = NULL;
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   result = manage_auth_settings_read (&settings);
   if (result == MANAGE_AUTH_SETTINGS_OK)
     {
-      *response = turbovas_control_auth_settings_read_response (&settings);
+      *response = yafvs_control_auth_settings_read_response (&settings);
       if (*response == NULL)
         result = MANAGE_AUTH_SETTINGS_INTERNAL_ERROR;
     }
 
   manage_auth_settings_clear (&settings);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_write_ldap_auth_settings (
+yafvs_control_write_ldap_auth_settings (
   const char *operator_uuid,
-  const turbovas_control_auth_settings_ldap_request_t *settings)
+  const yafvs_control_auth_settings_ldap_request_t *settings)
 {
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   result = manage_auth_settings_write_ldap (
     settings->enabled, settings->host, settings->authdn,
     settings->allow_plaintext, settings->ldaps_only, settings->cacert);
 
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_write_radius_auth_settings (
+yafvs_control_write_radius_auth_settings (
   const char *operator_uuid,
-  const turbovas_control_auth_settings_radius_request_t *settings)
+  const yafvs_control_auth_settings_radius_request_t *settings)
 {
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   result = manage_auth_settings_write_radius (
     settings->enabled, settings->host, settings->secret);
 
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_stop_task (const char *operator_uuid, const char *task_uuid)
+yafvs_control_stop_task (const char *operator_uuid, const char *task_uuid)
 {
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   result = stop_task (task_uuid);
 
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
 
   return result;
 }
 
 static int
-turbovas_control_modify_user_setting (
+yafvs_control_modify_user_setting (
   const char *operator_uuid,
-  const turbovas_control_user_setting_modify_request_t *request)
+  const yafvs_control_user_setting_modify_request_t *request)
 {
   gchar *error_description = NULL;
   gchar *value_64;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return MODIFY_SETTING_RESULT_PERMISSION_DENIED;
 
   value_64 = g_base64_encode ((const guchar *) request->value,
@@ -3680,20 +3680,20 @@ turbovas_control_modify_user_setting (
   result = modify_setting (request->timezone ? NULL : request->setting_uuid,
                            request->timezone ? "Timezone" : NULL, value_64,
                            &error_description);
-  turbovas_control_secure_free (value_64);
-  turbovas_control_secure_free (error_description);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_secure_free (value_64);
+  yafvs_control_secure_free (error_description);
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_change_user_password (
+yafvs_control_change_user_password (
   const char *operator_uuid,
-  const turbovas_control_user_password_change_request_t *request)
+  const yafvs_control_user_password_change_request_t *request)
 {
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   result = current_user_change_password (request->old_password,
@@ -3703,14 +3703,14 @@ turbovas_control_change_user_password (
   else
     log_event_fail ("user", "User", operator_uuid, "password changed");
 
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_create_user (
+yafvs_control_create_user (
   const char *operator_uuid,
-  const turbovas_control_user_create_request_t *request,
+  const yafvs_control_user_create_request_t *request,
   char created_uuid[37])
 {
   array_t *allowed_methods;
@@ -3721,10 +3721,10 @@ turbovas_control_create_user (
   int result;
 
   created_uuid[0] = '\0';
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
-  if (!turbovas_control_user_method_is_valid (request->method))
+  if (!yafvs_control_user_method_is_valid (request->method))
     result = 4;
   else if (validate_username (request->name) != 0)
     result = 2;
@@ -3735,7 +3735,7 @@ turbovas_control_create_user (
            && (password_error = gvm_validate_password (request->password,
                                                         request->name)) != NULL)
     {
-      turbovas_control_secure_free (password_error);
+      yafvs_control_secure_free (password_error);
       result = 3;
     }
   else
@@ -3752,7 +3752,7 @@ turbovas_control_create_user (
         {
           case 0:
             uuid = user_uuid (user);
-            if (uuid && turbovas_control_uuid_is_valid (uuid))
+            if (uuid && yafvs_control_uuid_is_valid (uuid))
               {
                 g_strlcpy (created_uuid, uuid, 37);
                 result = 0;
@@ -3768,14 +3768,14 @@ turbovas_control_create_user (
         }
     }
 
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_modify_user (
+yafvs_control_modify_user (
   const char *operator_uuid,
-  const turbovas_control_user_modify_request_t *request)
+  const yafvs_control_user_modify_request_t *request)
 {
   array_t *allowed_methods;
   gchar *current_name;
@@ -3784,10 +3784,10 @@ turbovas_control_modify_user (
   int native_result;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
-  if (!turbovas_control_user_method_is_valid (request->method))
+  if (!yafvs_control_user_method_is_valid (request->method))
     result = 7;
   else
     {
@@ -3805,7 +3805,7 @@ turbovas_control_modify_user (
                    && (password_error = gvm_validate_password (
                          request->password, current_name)) != NULL)
             {
-              turbovas_control_secure_free (password_error);
+              yafvs_control_secure_free (password_error);
               result = 4;
             }
           else
@@ -3836,19 +3836,19 @@ turbovas_control_modify_user (
       g_free (current_name);
     }
 
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_delete_user (
+yafvs_control_delete_user (
   const char *operator_uuid,
-  const turbovas_control_user_delete_request_t *request)
+  const yafvs_control_user_delete_request_t *request)
 {
   int native_result;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   native_result = delete_user (
@@ -3866,12 +3866,12 @@ turbovas_control_delete_user (
       default: result = -1; break;
     }
 
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_clone_user (const char *operator_uuid,
+yafvs_control_clone_user (const char *operator_uuid,
                              const char *source_user_uuid,
                              char created_uuid[37])
 {
@@ -3881,7 +3881,7 @@ turbovas_control_clone_user (const char *operator_uuid,
   int result;
 
   created_uuid[0] = '\0';
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   result = copy_user (NULL, NULL, source_user_uuid, &new_user);
@@ -3889,7 +3889,7 @@ turbovas_control_clone_user (const char *operator_uuid,
     {
       committed = TRUE;
       uuid = user_uuid (new_user);
-      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+      if (uuid == NULL || !yafvs_control_uuid_is_valid (uuid))
         {
           g_warning ("%s: user clone committed but UUID lookup failed",
                      __func__);
@@ -3908,12 +3908,12 @@ turbovas_control_clone_user (const char *operator_uuid,
     log_event_fail ("user", "User", source_user_uuid, "created");
 
   free (uuid);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_clone_task (const char *operator_uuid,
+yafvs_control_clone_task (const char *operator_uuid,
                              const char *source_task_uuid,
                              char created_uuid[37])
 {
@@ -3922,7 +3922,7 @@ turbovas_control_clone_task (const char *operator_uuid,
   gboolean committed = FALSE;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   result = copy_task (NULL, NULL, source_task_uuid, -1, &new_task);
@@ -3930,7 +3930,7 @@ turbovas_control_clone_task (const char *operator_uuid,
     {
       committed = TRUE;
       task_uuid (new_task, &uuid);
-      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+      if (uuid == NULL || !yafvs_control_uuid_is_valid (uuid))
         {
           g_warning ("%s: task clone committed but UUID lookup failed",
                      __func__);
@@ -3949,14 +3949,14 @@ turbovas_control_clone_task (const char *operator_uuid,
     log_event_fail ("task", "Task", source_task_uuid, "created");
 
   free (uuid);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_create_alert_smb (
+yafvs_control_create_alert_smb (
   const char *operator_uuid,
-  const turbovas_control_alert_smb_create_request_t *request,
+  const yafvs_control_alert_smb_create_request_t *request,
   char created_uuid[37])
 {
   array_t *condition_data = NULL;
@@ -3968,23 +3968,23 @@ turbovas_control_create_alert_smb (
   gboolean committed = FALSE;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   condition_data = make_array ();
   event_data = make_array ();
   method_data = make_array ();
-  turbovas_control_array_add_data (event_data, "status", request->status);
-  turbovas_control_array_add_data (method_data, "smb_credential",
+  yafvs_control_array_add_data (event_data, "status", request->status);
+  yafvs_control_array_add_data (method_data, "smb_credential",
                                    request->credential_uuid);
-  turbovas_control_array_add_data (method_data, "smb_share_path",
+  yafvs_control_array_add_data (method_data, "smb_share_path",
                                    request->share_path);
-  turbovas_control_array_add_data (method_data, "smb_file_path",
+  yafvs_control_array_add_data (method_data, "smb_file_path",
                                    request->file_path);
-  turbovas_control_array_add_data (method_data, "smb_report_format",
+  yafvs_control_array_add_data (method_data, "smb_report_format",
                                    request->report_format_uuid);
   if (request->max_protocol[0])
-    turbovas_control_array_add_data (method_data, "smb_max_protocol",
+    yafvs_control_array_add_data (method_data, "smb_max_protocol",
                                      request->max_protocol);
   array_terminate (condition_data);
   array_terminate (event_data);
@@ -3997,7 +3997,7 @@ turbovas_control_create_alert_smb (
     {
       committed = TRUE;
       uuid = alert_uuid (alert);
-      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+      if (uuid == NULL || !yafvs_control_uuid_is_valid (uuid))
         {
           g_warning ("%s: alert creation committed but UUID lookup failed",
                      __func__);
@@ -4016,17 +4016,17 @@ turbovas_control_create_alert_smb (
     log_event_fail ("alert", "Alert", NULL, "created");
 
   free (uuid);
-  turbovas_control_secure_array_free (condition_data);
-  turbovas_control_secure_array_free (event_data);
-  turbovas_control_secure_array_free (method_data);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_secure_array_free (condition_data);
+  yafvs_control_secure_array_free (event_data);
+  yafvs_control_secure_array_free (method_data);
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_create_alert_scp (
+yafvs_control_create_alert_scp (
   const char *operator_uuid,
-  const turbovas_control_alert_scp_create_request_t *request,
+  const yafvs_control_alert_scp_create_request_t *request,
   char created_uuid[37])
 {
   array_t *condition_data = NULL;
@@ -4038,21 +4038,21 @@ turbovas_control_create_alert_scp (
   gboolean committed = FALSE;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   condition_data = make_array ();
   event_data = make_array ();
   method_data = make_array ();
-  turbovas_control_array_add_data (event_data, "status", request->status);
-  turbovas_control_array_add_data (method_data, "scp_credential",
+  yafvs_control_array_add_data (event_data, "status", request->status);
+  yafvs_control_array_add_data (method_data, "scp_credential",
                                    request->credential_uuid);
-  turbovas_control_array_add_data (method_data, "scp_host", request->host);
-  turbovas_control_array_add_data (method_data, "scp_port", request->port);
-  turbovas_control_array_add_data (method_data, "scp_known_hosts",
+  yafvs_control_array_add_data (method_data, "scp_host", request->host);
+  yafvs_control_array_add_data (method_data, "scp_port", request->port);
+  yafvs_control_array_add_data (method_data, "scp_known_hosts",
                                    request->known_hosts);
-  turbovas_control_array_add_data (method_data, "scp_path", request->path);
-  turbovas_control_array_add_data (method_data, "scp_report_format",
+  yafvs_control_array_add_data (method_data, "scp_path", request->path);
+  yafvs_control_array_add_data (method_data, "scp_report_format",
                                    request->report_format_uuid);
   array_terminate (condition_data);
   array_terminate (event_data);
@@ -4065,7 +4065,7 @@ turbovas_control_create_alert_scp (
     {
       committed = TRUE;
       uuid = alert_uuid (alert);
-      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+      if (uuid == NULL || !yafvs_control_uuid_is_valid (uuid))
         {
           g_warning ("%s: alert creation committed but UUID lookup failed",
                      __func__);
@@ -4084,15 +4084,15 @@ turbovas_control_create_alert_scp (
     log_event_fail ("alert", "Alert", NULL, "created");
 
   free (uuid);
-  turbovas_control_secure_array_free (condition_data);
-  turbovas_control_secure_array_free (event_data);
-  turbovas_control_secure_array_free (method_data);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_secure_array_free (condition_data);
+  yafvs_control_secure_array_free (event_data);
+  yafvs_control_secure_array_free (method_data);
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_create_alert_fixed (
+yafvs_control_create_alert_fixed (
   const char *operator_uuid, const char *name, const char *comment,
   gboolean active, const char *status, alert_method_t method,
   const char *const method_names[], const char *const method_values[],
@@ -4108,15 +4108,15 @@ turbovas_control_create_alert_fixed (
   size_t index;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   condition_data = make_array ();
   event_data = make_array ();
   method_data = make_array ();
-  turbovas_control_array_add_data (event_data, "status", status);
+  yafvs_control_array_add_data (event_data, "status", status);
   for (index = 0; index < method_value_count; index++)
-    turbovas_control_array_add_data (method_data, method_names[index],
+    yafvs_control_array_add_data (method_data, method_names[index],
                                      method_values[index]);
   array_terminate (condition_data);
   array_terminate (event_data);
@@ -4129,7 +4129,7 @@ turbovas_control_create_alert_fixed (
     {
       committed = TRUE;
       uuid = alert_uuid (alert);
-      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+      if (uuid == NULL || !yafvs_control_uuid_is_valid (uuid))
         {
           g_warning ("%s: alert creation committed but UUID lookup failed",
                      __func__);
@@ -4148,17 +4148,17 @@ turbovas_control_create_alert_fixed (
     log_event_fail ("alert", "Alert", NULL, "created");
 
   free (uuid);
-  turbovas_control_secure_array_free (condition_data);
-  turbovas_control_secure_array_free (event_data);
-  turbovas_control_secure_array_free (method_data);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_secure_array_free (condition_data);
+  yafvs_control_secure_array_free (event_data);
+  yafvs_control_secure_array_free (method_data);
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_create_alert_start_task (
+yafvs_control_create_alert_start_task (
   const char *operator_uuid,
-  const turbovas_control_alert_start_task_create_request_t *request,
+  const yafvs_control_alert_start_task_create_request_t *request,
   char created_uuid[37])
 {
   array_t *condition_data = NULL;
@@ -4169,12 +4169,12 @@ turbovas_control_create_alert_start_task (
   gboolean committed = FALSE;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   condition_data = make_array ();
   event_data = make_array ();
-  turbovas_control_array_add_data (event_data, "status", request->status);
+  yafvs_control_array_add_data (event_data, "status", request->status);
   array_terminate (condition_data);
   array_terminate (event_data);
 
@@ -4185,7 +4185,7 @@ turbovas_control_create_alert_start_task (
     {
       committed = TRUE;
       uuid = alert_uuid (alert);
-      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+      if (uuid == NULL || !yafvs_control_uuid_is_valid (uuid))
         {
           g_warning ("%s: alert creation committed but UUID lookup failed",
                      __func__);
@@ -4204,19 +4204,19 @@ turbovas_control_create_alert_start_task (
     log_event_fail ("alert", "Alert", NULL, "created");
 
   free (uuid);
-  turbovas_control_secure_array_free (condition_data);
-  turbovas_control_secure_array_free (event_data);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_secure_array_free (condition_data);
+  yafvs_control_secure_array_free (event_data);
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_test_alert (const char *operator_uuid, const char *alert_uuid)
+yafvs_control_test_alert (const char *operator_uuid, const char *alert_uuid)
 {
   gchar *script_message = NULL;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   result = manage_test_alert (alert_uuid, &script_message);
@@ -4225,21 +4225,21 @@ turbovas_control_test_alert (const char *operator_uuid, const char *alert_uuid)
   else
     log_event_fail ("alert", "Alert", alert_uuid, "tested");
 
-  turbovas_control_secure_free (script_message);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_secure_free (script_message);
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static gboolean
-turbovas_control_filter_has_rows (const char *filter)
+yafvs_control_filter_has_rows (const char *filter)
 {
   return g_str_has_prefix (filter, "rows=") || strstr (filter, " rows=") != NULL;
 }
 
 static int
-turbovas_control_deliver_alert_report (
+yafvs_control_deliver_alert_report (
   const char *operator_uuid,
-  const turbovas_control_alert_deliver_report_request_t *request)
+  const yafvs_control_alert_deliver_report_request_t *request)
 {
   static const char *default_filter =
     "first=1 rows=-1 result_hosts_only=0 apply_overrides=1 overrides=1 "
@@ -4250,7 +4250,7 @@ turbovas_control_deliver_alert_report (
   report_t report = 0;
   int result = -1;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   if (find_alert_with_permission (request->alert_uuid, &alert, "get_alerts"))
@@ -4290,7 +4290,7 @@ turbovas_control_deliver_alert_report (
     get.filter =
       g_strdup (request->filter[0] ? request->filter : default_filter);
 
-  if (!turbovas_control_filter_has_rows (get.filter))
+  if (!yafvs_control_filter_has_rows (get.filter))
     {
       gchar *with_rows = g_strdup_printf (
         "%s rows=%d", get.filter,
@@ -4317,29 +4317,29 @@ cleanup:
   else
     log_event_fail ("alert", "Alert", request->alert_uuid, "delivered");
   get_data_reset (&get);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_create_alert_syslog (
+yafvs_control_create_alert_syslog (
   const char *operator_uuid,
-  const turbovas_control_alert_syslog_create_request_t *request,
+  const yafvs_control_alert_syslog_create_request_t *request,
   char created_uuid[37])
 {
   static const char *method_names[] = { "submethod" };
   static const char *method_values[] = { "syslog" };
 
-  return turbovas_control_create_alert_fixed (
+  return yafvs_control_create_alert_fixed (
     operator_uuid, request->name, request->comment, request->active,
     request->status, ALERT_METHOD_SYSLOG, method_names, method_values,
     G_N_ELEMENTS (method_names), created_uuid);
 }
 
 static int
-turbovas_control_create_alert_snmp (
+yafvs_control_create_alert_snmp (
   const char *operator_uuid,
-  const turbovas_control_alert_snmp_create_request_t *request,
+  const yafvs_control_alert_snmp_create_request_t *request,
   char created_uuid[37])
 {
   static const char *method_names[] = {
@@ -4353,34 +4353,34 @@ turbovas_control_create_alert_snmp (
     request->message,
   };
 
-  return turbovas_control_create_alert_fixed (
+  return yafvs_control_create_alert_fixed (
     operator_uuid, request->name, request->comment, request->active,
     request->status, ALERT_METHOD_SNMP, method_names, method_values,
     G_N_ELEMENTS (method_names), created_uuid);
 }
 
 static int
-turbovas_control_empty_trash (const char *operator_uuid, gint64 expected_total,
+yafvs_control_empty_trash (const char *operator_uuid, gint64 expected_total,
                               const char *expected_snapshot_digest,
                               gint64 *actual_total)
 {
   long long int actual = 0;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 3;
 
   result = manage_empty_trashcan_confirmed ((long long int) expected_total,
                                             expected_snapshot_digest, &actual);
   *actual_total = (gint64) actual;
-  turbovas_control_log_trash_empty_audit (operator_uuid, expected_total,
+  yafvs_control_log_trash_empty_audit (operator_uuid, expected_total,
                                            *actual_total, result);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static void
-turbovas_control_array_add_data (array_t *array, const char *name,
+yafvs_control_array_add_data (array_t *array, const char *name,
                                  const char *value)
 {
   size_t name_len = strlen (name);
@@ -4393,7 +4393,7 @@ turbovas_control_array_add_data (array_t *array, const char *name,
 }
 
 static void
-turbovas_control_secure_array_free (array_t *array)
+yafvs_control_secure_array_free (array_t *array)
 {
   guint index;
 
@@ -4410,15 +4410,15 @@ turbovas_control_secure_array_free (array_t *array)
         continue;
       name_len = strlen (item);
       value_len = strlen (item + name_len + 1);
-      turbovas_control_secure_clear (item, name_len + value_len + 2);
+      yafvs_control_secure_clear (item, name_len + value_len + 2);
     }
   array_free (array);
 }
 
 static int
-turbovas_control_create_alert_email
+yafvs_control_create_alert_email
   (const char *operator_uuid,
-   const turbovas_control_alert_email_create_request_t *request,
+   const yafvs_control_alert_email_create_request_t *request,
    char created_uuid[37])
 {
   array_t *condition_data = NULL;
@@ -4431,35 +4431,35 @@ turbovas_control_create_alert_email
   gboolean committed = FALSE;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   condition_data = make_array ();
   event_data = make_array ();
   method_data = make_array ();
-  turbovas_control_array_add_data (event_data, "status", request->status);
-  turbovas_control_array_add_data (method_data, "to_address",
+  yafvs_control_array_add_data (event_data, "status", request->status);
+  yafvs_control_array_add_data (method_data, "to_address",
                                    request->to_address);
   if (request->from_address[0])
-    turbovas_control_array_add_data (method_data, "from_address",
+    yafvs_control_array_add_data (method_data, "from_address",
                                      request->from_address);
-  turbovas_control_array_add_data (method_data, "subject", request->subject);
-  turbovas_control_array_add_data (method_data, "notice", notice);
+  yafvs_control_array_add_data (method_data, "subject", request->subject);
+  yafvs_control_array_add_data (method_data, "notice", notice);
   if (request->recipient_credential_uuid[0])
-    turbovas_control_array_add_data (method_data, "recipient_credential",
+    yafvs_control_array_add_data (method_data, "recipient_credential",
                                      request->recipient_credential_uuid);
   if (request->notice == 0)
     {
-      turbovas_control_array_add_data (method_data, "notice_report_format",
+      yafvs_control_array_add_data (method_data, "notice_report_format",
                                        request->report_format_uuid);
     }
   else if (request->notice == 2)
     {
-      turbovas_control_array_add_data (method_data, "notice_attach_format",
+      yafvs_control_array_add_data (method_data, "notice_attach_format",
                                        request->report_format_uuid);
     }
   if (request->message[0])
-    turbovas_control_array_add_data (method_data, "message", request->message);
+    yafvs_control_array_add_data (method_data, "message", request->message);
   array_terminate (condition_data);
   array_terminate (event_data);
   array_terminate (method_data);
@@ -4472,7 +4472,7 @@ turbovas_control_create_alert_email
     {
       committed = TRUE;
       uuid = alert_uuid (alert);
-      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+      if (uuid == NULL || !yafvs_control_uuid_is_valid (uuid))
         {
           g_warning ("%s: alert creation committed but UUID lookup failed",
                      __func__);
@@ -4491,17 +4491,17 @@ turbovas_control_create_alert_email
     log_event_fail ("alert", "Alert", NULL, "created");
 
   free (uuid);
-  turbovas_control_secure_array_free (condition_data);
-  turbovas_control_secure_array_free (event_data);
-  turbovas_control_secure_array_free (method_data);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_secure_array_free (condition_data);
+  yafvs_control_secure_array_free (event_data);
+  yafvs_control_secure_array_free (method_data);
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_create_schedule
+yafvs_control_create_schedule
   (const char *operator_uuid,
-   const turbovas_control_schedule_create_request_t *request,
+   const yafvs_control_schedule_create_request_t *request,
    char created_uuid[37])
 {
   gchar *ical_error = NULL;
@@ -4509,7 +4509,7 @@ turbovas_control_create_schedule
   schedule_t schedule = 0;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   result = create_schedule (request->name, request->comment,
@@ -4518,7 +4518,7 @@ turbovas_control_create_schedule
   if (result == 0)
     {
       uuid = schedule_uuid (schedule);
-      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+      if (uuid == NULL || !yafvs_control_uuid_is_valid (uuid))
         result = -1;
       else
         {
@@ -4529,14 +4529,14 @@ turbovas_control_create_schedule
 
   free (uuid);
   g_free (ical_error);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_create_credential
+yafvs_control_create_credential
   (const char *operator_uuid,
-   const turbovas_control_credential_create_request_t *request,
+   const yafvs_control_credential_create_request_t *request,
    char created_uuid[37])
 {
   char *uuid = NULL;
@@ -4544,11 +4544,11 @@ turbovas_control_create_credential
   credential_t credential = 0;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   key_private = strcmp (request->credential_type,
-                        TURBOVAS_CONTROL_CREDENTIAL_TYPE_USK) == 0
+                        YAFVS_CONTROL_CREDENTIAL_TYPE_USK) == 0
                   ? request->private_key : NULL;
   result = create_credential (request->name, request->comment,
                               request->login, request->secret, key_private,
@@ -4558,7 +4558,7 @@ turbovas_control_create_credential
   if (result == 0)
     {
       uuid = credential_uuid (credential);
-      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+      if (uuid == NULL || !yafvs_control_uuid_is_valid (uuid))
         result = -1;
       else
         {
@@ -4568,19 +4568,19 @@ turbovas_control_create_credential
     }
 
   free (uuid);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_modify_schedule
+yafvs_control_modify_schedule
   (const char *operator_uuid, const char *schedule_uuid,
-   const turbovas_control_schedule_modify_request_t *request)
+   const yafvs_control_schedule_modify_request_t *request)
 {
   gchar *ical_error = NULL;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   result = modify_schedule (schedule_uuid, request->name, request->comment,
@@ -4588,14 +4588,14 @@ turbovas_control_modify_schedule
                             &ical_error);
 
   g_free (ical_error);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_create_tag (
+yafvs_control_create_tag (
   const char *operator_uuid,
-  const turbovas_control_tag_create_request_t *request,
+  const yafvs_control_tag_create_request_t *request,
   char created_uuid[37])
 {
   gchar *error_extra = NULL;
@@ -4603,7 +4603,7 @@ turbovas_control_create_tag (
   tag_t tag = 0;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   result = create_tag (
@@ -4613,7 +4613,7 @@ turbovas_control_create_tag (
   if (result == 0)
     {
       uuid = tag_uuid (tag);
-      if (uuid == NULL || !turbovas_control_uuid_is_valid (uuid))
+      if (uuid == NULL || !yafvs_control_uuid_is_valid (uuid))
         {
           g_warning ("%s: tag creation committed but UUID lookup failed",
                      __func__);
@@ -4632,19 +4632,19 @@ turbovas_control_create_tag (
 
   free (uuid);
   g_free (error_extra);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_modify_tag (
+yafvs_control_modify_tag (
   const char *operator_uuid, const char *tag_uuid,
-  const turbovas_control_tag_modify_request_t *request)
+  const yafvs_control_tag_modify_request_t *request)
 {
   gchar *error_extra = NULL;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   result = modify_tag (
@@ -4657,12 +4657,12 @@ turbovas_control_modify_tag (
     log_event_fail ("tag", "Tag", tag_uuid, "modified");
 
   g_free (error_extra);
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static int
-turbovas_control_configure_diagnostic_nvt (const char *operator_uuid,
+yafvs_control_configure_diagnostic_nvt (const char *operator_uuid,
                                            const char *config_uuid,
                                            const char *nvt_oid)
 {
@@ -4670,7 +4670,7 @@ turbovas_control_configure_diagnostic_nvt (const char *operator_uuid,
   gboolean committed = FALSE;
   int result;
 
-  if (!turbovas_control_start_operator_session (operator_uuid))
+  if (!yafvs_control_start_operator_session (operator_uuid))
     return 99;
 
   result = manage_configure_diagnostic_nvt (config_uuid, nvt_oid, &changed,
@@ -4680,14 +4680,14 @@ turbovas_control_configure_diagnostic_nvt (const char *operator_uuid,
   else
     log_event_fail ("config", "Scan Config", config_uuid, "modified");
 
-  turbovas_control_finish_operator_session ();
+  yafvs_control_finish_operator_session ();
   return result;
 }
 
 static void
-turbovas_control_serve_client (int client_socket)
+yafvs_control_serve_client (int client_socket)
 {
-  char request[TURBOVAS_CONTROL_MAX_REQUEST_BYTES + 1];
+  char request[YAFVS_CONTROL_MAX_REQUEST_BYTES + 1];
   char operator_uuid[37];
   char expected_snapshot_digest[65];
   char alert_uuid[37];
@@ -4697,8 +4697,8 @@ turbovas_control_serve_client (int client_socket)
   char tag_uuid[37];
   char task_uuid[37];
   char source_user_uuid[37];
-  char nvt_oid[TURBOVAS_CONTROL_NVT_OID_MAX_BYTES + 1];
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+  char nvt_oid[YAFVS_CONTROL_NVT_OID_MAX_BYTES + 1];
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES];
   gchar *allocated_response = NULL;
   const char *expected_secret;
   const char *result_response;
@@ -4707,558 +4707,558 @@ turbovas_control_serve_client (int client_socket)
   size_t expected_secret_len;
   size_t request_len = 0;
   int result = -1;
-  turbovas_control_schedule_create_request_t schedule_request = {0};
-  turbovas_control_schedule_modify_request_t schedule_modify_request = {0};
-  turbovas_control_credential_create_request_t credential_request = {0};
-  turbovas_control_alert_email_create_request_t alert_request = {0};
-  turbovas_control_alert_deliver_report_request_t alert_delivery_request = {0};
-  turbovas_control_alert_smb_create_request_t smb_alert_request = {0};
-  turbovas_control_alert_start_task_create_request_t start_task_alert_request =
+  yafvs_control_schedule_create_request_t schedule_request = {0};
+  yafvs_control_schedule_modify_request_t schedule_modify_request = {0};
+  yafvs_control_credential_create_request_t credential_request = {0};
+  yafvs_control_alert_email_create_request_t alert_request = {0};
+  yafvs_control_alert_deliver_report_request_t alert_delivery_request = {0};
+  yafvs_control_alert_smb_create_request_t smb_alert_request = {0};
+  yafvs_control_alert_start_task_create_request_t start_task_alert_request =
     {0};
-  turbovas_control_alert_scp_create_request_t scp_alert_request = {0};
-  turbovas_control_alert_syslog_create_request_t syslog_alert_request = {0};
-  turbovas_control_alert_snmp_create_request_t snmp_alert_request = {0};
-  turbovas_control_tag_create_request_t tag_create_request = {0};
-  turbovas_control_tag_modify_request_t tag_modify_request = {0};
-  turbovas_control_user_password_change_request_t password_change_request = {0};
-  turbovas_control_user_create_request_t user_create_request = {0};
-  turbovas_control_user_modify_request_t user_modify_request = {0};
-  turbovas_control_user_delete_request_t user_delete_request = {0};
-  turbovas_control_user_setting_modify_request_t setting_modify_request = {0};
-  turbovas_control_auth_settings_ldap_request_t ldap_settings_request = {0};
-  turbovas_control_auth_settings_radius_request_t radius_settings_request = {0};
+  yafvs_control_alert_scp_create_request_t scp_alert_request = {0};
+  yafvs_control_alert_syslog_create_request_t syslog_alert_request = {0};
+  yafvs_control_alert_snmp_create_request_t snmp_alert_request = {0};
+  yafvs_control_tag_create_request_t tag_create_request = {0};
+  yafvs_control_tag_modify_request_t tag_modify_request = {0};
+  yafvs_control_user_password_change_request_t password_change_request = {0};
+  yafvs_control_user_create_request_t user_create_request = {0};
+  yafvs_control_user_modify_request_t user_modify_request = {0};
+  yafvs_control_user_delete_request_t user_delete_request = {0};
+  yafvs_control_user_setting_modify_request_t setting_modify_request = {0};
+  yafvs_control_auth_settings_ldap_request_t ldap_settings_request = {0};
+  yafvs_control_auth_settings_radius_request_t radius_settings_request = {0};
   memset (request, 0, sizeof (request));
 
-  turbovas_control_set_timeouts (client_socket);
-  if (turbovas_control_configured_secret (&expected_secret,
+  yafvs_control_set_timeouts (client_socket);
+  if (yafvs_control_configured_secret (&expected_secret,
                                           &expected_secret_len)
-      && turbovas_control_read_request (client_socket, request, &request_len))
+      && yafvs_control_read_request (client_socket, request, &request_len))
     {
-      if (turbovas_control_parse_auth_settings_read_request (
+      if (yafvs_control_parse_auth_settings_read_request (
             request, request_len, expected_secret, expected_secret_len,
             operator_uuid))
         {
-          result = turbovas_control_read_auth_settings (
+          result = yafvs_control_read_auth_settings (
             operator_uuid, &allocated_response);
           result_response =
             result == MANAGE_AUTH_SETTINGS_OK
               ? allocated_response
-              : turbovas_control_auth_settings_response (result);
+              : yafvs_control_auth_settings_response (result);
         }
       else if (
-        request_len >= TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH
-        && memcmp (request, TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND,
-                   TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH) == 0)
-        result_response = turbovas_control_auth_settings_response (-2);
-      else if (turbovas_control_parse_auth_settings_ldap_write_request (
+        request_len >= YAFVS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH
+        && memcmp (request, YAFVS_CONTROL_AUTH_SETTINGS_READ_COMMAND,
+                   YAFVS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH) == 0)
+        result_response = yafvs_control_auth_settings_response (-2);
+      else if (yafvs_control_parse_auth_settings_ldap_write_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, &ldap_settings_request))
         {
-          result = turbovas_control_write_ldap_auth_settings (
+          result = yafvs_control_write_ldap_auth_settings (
             operator_uuid, &ldap_settings_request);
-          result_response = turbovas_control_auth_settings_response (result);
+          result_response = yafvs_control_auth_settings_response (result);
         }
       else if (
-        request_len >= TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH
+        request_len >= YAFVS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH
         && memcmp (
-             request, TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND,
-             TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH) == 0)
-        result_response = turbovas_control_auth_settings_response (-2);
-      else if (turbovas_control_parse_auth_settings_radius_write_request (
+             request, YAFVS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND,
+             YAFVS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH) == 0)
+        result_response = yafvs_control_auth_settings_response (-2);
+      else if (yafvs_control_parse_auth_settings_radius_write_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, &radius_settings_request))
         {
-          result = turbovas_control_write_radius_auth_settings (
+          result = yafvs_control_write_radius_auth_settings (
             operator_uuid, &radius_settings_request);
-          result_response = turbovas_control_auth_settings_response (result);
+          result_response = yafvs_control_auth_settings_response (result);
         }
       else if (
         request_len
-          >= TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH
+          >= YAFVS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH
         && memcmp (
-             request, TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND,
-             TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH) == 0)
-        result_response = turbovas_control_auth_settings_response (-2);
-      else if (turbovas_control_parse_user_create_request (
+             request, YAFVS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND,
+             YAFVS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH) == 0)
+        result_response = yafvs_control_auth_settings_response (-2);
+      else if (yafvs_control_parse_user_create_request (
             request, request_len, expected_secret, expected_secret_len,
             operator_uuid, &user_create_request))
         {
-          result = turbovas_control_create_user (operator_uuid,
+          result = yafvs_control_create_user (operator_uuid,
                                                  &user_create_request,
                                                  created_uuid);
-          result_response = turbovas_control_user_create_response (
+          result_response = yafvs_control_user_create_response (
             result, created_uuid, response);
         }
-      else if (request_len >= TURBOVAS_CONTROL_USER_CREATE_COMMAND_LENGTH
-               && memcmp (request, TURBOVAS_CONTROL_USER_CREATE_COMMAND,
-                          TURBOVAS_CONTROL_USER_CREATE_COMMAND_LENGTH) == 0)
-        result_response = turbovas_control_user_create_response (-2, NULL,
+      else if (request_len >= YAFVS_CONTROL_USER_CREATE_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_USER_CREATE_COMMAND,
+                          YAFVS_CONTROL_USER_CREATE_COMMAND_LENGTH) == 0)
+        result_response = yafvs_control_user_create_response (-2, NULL,
                                                                  response);
-      else if (turbovas_control_parse_user_modify_request (
+      else if (yafvs_control_parse_user_modify_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, &user_modify_request))
         {
-          result = turbovas_control_modify_user (operator_uuid,
+          result = yafvs_control_modify_user (operator_uuid,
                                                  &user_modify_request);
-          result_response = turbovas_control_user_modify_response (result);
+          result_response = yafvs_control_user_modify_response (result);
         }
-      else if (request_len >= TURBOVAS_CONTROL_USER_MODIFY_COMMAND_LENGTH
-               && memcmp (request, TURBOVAS_CONTROL_USER_MODIFY_COMMAND,
-                          TURBOVAS_CONTROL_USER_MODIFY_COMMAND_LENGTH) == 0)
-        result_response = turbovas_control_user_modify_response (-2);
-      else if (turbovas_control_parse_user_delete_request (
+      else if (request_len >= YAFVS_CONTROL_USER_MODIFY_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_USER_MODIFY_COMMAND,
+                          YAFVS_CONTROL_USER_MODIFY_COMMAND_LENGTH) == 0)
+        result_response = yafvs_control_user_modify_response (-2);
+      else if (yafvs_control_parse_user_delete_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, &user_delete_request))
         {
-          result = turbovas_control_delete_user (operator_uuid,
+          result = yafvs_control_delete_user (operator_uuid,
                                                  &user_delete_request);
-          result_response = turbovas_control_user_delete_response (result);
+          result_response = yafvs_control_user_delete_response (result);
         }
-      else if (request_len >= TURBOVAS_CONTROL_USER_DELETE_COMMAND_LENGTH
-               && memcmp (request, TURBOVAS_CONTROL_USER_DELETE_COMMAND,
-                          TURBOVAS_CONTROL_USER_DELETE_COMMAND_LENGTH) == 0)
-        result_response = turbovas_control_user_delete_response (-2);
-      else if (turbovas_control_parse_user_clone_request (
+      else if (request_len >= YAFVS_CONTROL_USER_DELETE_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_USER_DELETE_COMMAND,
+                          YAFVS_CONTROL_USER_DELETE_COMMAND_LENGTH) == 0)
+        result_response = yafvs_control_user_delete_response (-2);
+      else if (yafvs_control_parse_user_clone_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, source_user_uuid))
         {
-          result = turbovas_control_clone_user (operator_uuid,
+          result = yafvs_control_clone_user (operator_uuid,
                                                 source_user_uuid,
                                                 created_uuid);
-          result_response = turbovas_control_user_clone_response (
+          result_response = yafvs_control_user_clone_response (
             result, created_uuid, response);
         }
-      else if (request_len >= TURBOVAS_CONTROL_USER_CLONE_COMMAND_LENGTH
-               && memcmp (request, TURBOVAS_CONTROL_USER_CLONE_COMMAND,
-                          TURBOVAS_CONTROL_USER_CLONE_COMMAND_LENGTH) == 0)
-        result_response = turbovas_control_user_clone_response (-2, NULL,
+      else if (request_len >= YAFVS_CONTROL_USER_CLONE_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_USER_CLONE_COMMAND,
+                          YAFVS_CONTROL_USER_CLONE_COMMAND_LENGTH) == 0)
+        result_response = yafvs_control_user_clone_response (-2, NULL,
                                                                  response);
-      else if (turbovas_control_parse_user_password_change_request (
+      else if (yafvs_control_parse_user_password_change_request (
             request, request_len, expected_secret, expected_secret_len,
             operator_uuid, &password_change_request))
         {
-          result = turbovas_control_change_user_password (
+          result = yafvs_control_change_user_password (
             operator_uuid, &password_change_request);
           result_response =
-            turbovas_control_user_password_change_response (result);
+            yafvs_control_user_password_change_response (result);
         }
       else if (
-        request_len >= TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND_LENGTH
-        && memcmp (request, TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND,
-                   TURBOVAS_CONTROL_USER_PASSWORD_CHANGE_COMMAND_LENGTH) == 0)
-        result_response = turbovas_control_user_password_change_response (-2);
-      else if (turbovas_control_parse_user_setting_modify_request (
+        request_len >= YAFVS_CONTROL_USER_PASSWORD_CHANGE_COMMAND_LENGTH
+        && memcmp (request, YAFVS_CONTROL_USER_PASSWORD_CHANGE_COMMAND,
+                   YAFVS_CONTROL_USER_PASSWORD_CHANGE_COMMAND_LENGTH) == 0)
+        result_response = yafvs_control_user_password_change_response (-2);
+      else if (yafvs_control_parse_user_setting_modify_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, &setting_modify_request))
         {
-          result = turbovas_control_modify_user_setting (
+          result = yafvs_control_modify_user_setting (
             operator_uuid, &setting_modify_request);
           result_response =
-            turbovas_control_user_setting_modify_response (result);
+            yafvs_control_user_setting_modify_response (result);
         }
       else if (
-        request_len >= TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND_LENGTH
-        && memcmp (request, TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND,
-                   TURBOVAS_CONTROL_USER_SETTING_MODIFY_COMMAND_LENGTH) == 0)
-        result_response = turbovas_control_user_setting_modify_response (-2);
-      else if (turbovas_control_parse_scan_config_nvt_diagnostic_request (
+        request_len >= YAFVS_CONTROL_USER_SETTING_MODIFY_COMMAND_LENGTH
+        && memcmp (request, YAFVS_CONTROL_USER_SETTING_MODIFY_COMMAND,
+                   YAFVS_CONTROL_USER_SETTING_MODIFY_COMMAND_LENGTH) == 0)
+        result_response = yafvs_control_user_setting_modify_response (-2);
+      else if (yafvs_control_parse_scan_config_nvt_diagnostic_request (
             request, request_len, expected_secret, expected_secret_len,
             operator_uuid, config_uuid, nvt_oid))
         {
-          result = turbovas_control_configure_diagnostic_nvt (
+          result = yafvs_control_configure_diagnostic_nvt (
             operator_uuid, config_uuid, nvt_oid);
           result_response =
-            turbovas_control_scan_config_nvt_diagnostic_response (result);
+            yafvs_control_scan_config_nvt_diagnostic_response (result);
         }
       else if (
         request_len
-          >= TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH
+          >= YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH
         && memcmp (
-             request, TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND,
-             TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH)
+             request, YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND,
+             YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH)
              == 0)
         result_response =
-          turbovas_control_scan_config_nvt_diagnostic_response (-2);
-      else if (turbovas_control_parse_trash_empty_request
+          yafvs_control_scan_config_nvt_diagnostic_response (-2);
+      else if (yafvs_control_parse_trash_empty_request
             (request, request_len, expected_secret, expected_secret_len,
              operator_uuid, &expected_total, expected_snapshot_digest))
         {
-          result = turbovas_control_empty_trash (operator_uuid,
+          result = yafvs_control_empty_trash (operator_uuid,
                                                   expected_total,
                                                   expected_snapshot_digest,
                                                   &actual_total);
-          result_response = turbovas_control_trash_empty_response
+          result_response = yafvs_control_trash_empty_response
                               (result, actual_total, response);
         }
-      else if (request_len >= TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH
-               && memcmp (request, TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND,
-                          TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH) == 0)
-        result_response = turbovas_control_trash_empty_response (-1, 0,
+      else if (request_len >= YAFVS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_TRASH_EMPTY_COMMAND,
+                          YAFVS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH) == 0)
+        result_response = yafvs_control_trash_empty_response (-1, 0,
                                                                   response);
-      else if (turbovas_control_parse_tag_create_request (
+      else if (yafvs_control_parse_tag_create_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, &tag_create_request))
         {
-          result = turbovas_control_create_tag (
+          result = yafvs_control_create_tag (
             operator_uuid, &tag_create_request, created_uuid);
-          result_response = turbovas_control_tag_create_response (
+          result_response = yafvs_control_tag_create_response (
             result, created_uuid, response);
         }
-      else if (request_len >= TURBOVAS_CONTROL_TAG_CREATE_COMMAND_LENGTH
-               && memcmp (request, TURBOVAS_CONTROL_TAG_CREATE_COMMAND,
-                          TURBOVAS_CONTROL_TAG_CREATE_COMMAND_LENGTH) == 0)
+      else if (request_len >= YAFVS_CONTROL_TAG_CREATE_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_TAG_CREATE_COMMAND,
+                          YAFVS_CONTROL_TAG_CREATE_COMMAND_LENGTH) == 0)
         result_response =
-          turbovas_control_tag_create_response (-2, NULL, response);
-      else if (turbovas_control_parse_tag_modify_request (
+          yafvs_control_tag_create_response (-2, NULL, response);
+      else if (yafvs_control_parse_tag_modify_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, tag_uuid, &tag_modify_request))
         {
-          result = turbovas_control_modify_tag (
+          result = yafvs_control_modify_tag (
             operator_uuid, tag_uuid, &tag_modify_request);
           result_response =
-            turbovas_control_tag_modify_response (result, response);
+            yafvs_control_tag_modify_response (result, response);
         }
-      else if (request_len >= TURBOVAS_CONTROL_TAG_MODIFY_COMMAND_LENGTH
-               && memcmp (request, TURBOVAS_CONTROL_TAG_MODIFY_COMMAND,
-                          TURBOVAS_CONTROL_TAG_MODIFY_COMMAND_LENGTH) == 0)
-        result_response = turbovas_control_tag_modify_response (-2, response);
-      else if (turbovas_control_parse_task_clone_request (
+      else if (request_len >= YAFVS_CONTROL_TAG_MODIFY_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_TAG_MODIFY_COMMAND,
+                          YAFVS_CONTROL_TAG_MODIFY_COMMAND_LENGTH) == 0)
+        result_response = yafvs_control_tag_modify_response (-2, response);
+      else if (yafvs_control_parse_task_clone_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, task_uuid))
         {
-          result = turbovas_control_clone_task (operator_uuid, task_uuid,
+          result = yafvs_control_clone_task (operator_uuid, task_uuid,
                                                 created_uuid);
-          result_response = turbovas_control_task_clone_response (
+          result_response = yafvs_control_task_clone_response (
             result, created_uuid, response);
         }
-      else if (request_len >= TURBOVAS_CONTROL_TASK_CLONE_COMMAND_LENGTH
-               && memcmp (request, TURBOVAS_CONTROL_TASK_CLONE_COMMAND,
-                          TURBOVAS_CONTROL_TASK_CLONE_COMMAND_LENGTH)
+      else if (request_len >= YAFVS_CONTROL_TASK_CLONE_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_TASK_CLONE_COMMAND,
+                          YAFVS_CONTROL_TASK_CLONE_COMMAND_LENGTH)
                     == 0)
         result_response =
-          turbovas_control_task_clone_response (-2, NULL, response);
-      else if (turbovas_control_parse_request (request, request_len,
+          yafvs_control_task_clone_response (-2, NULL, response);
+      else if (yafvs_control_parse_request (request, request_len,
                                           expected_secret,
                                           expected_secret_len,
                                           operator_uuid, task_uuid))
         {
-          result = turbovas_control_stop_task (operator_uuid, task_uuid);
-          result_response = turbovas_control_response (result);
+          result = yafvs_control_stop_task (operator_uuid, task_uuid);
+          result_response = yafvs_control_response (result);
         }
-      else if (turbovas_control_parse_schedule_create_request
+      else if (yafvs_control_parse_schedule_create_request
                  (request, request_len, expected_secret, expected_secret_len,
                   operator_uuid, &schedule_request))
         {
-          result = turbovas_control_create_schedule (operator_uuid,
+          result = yafvs_control_create_schedule (operator_uuid,
                                                       &schedule_request,
                                                       created_uuid);
-          result_response = turbovas_control_schedule_create_response
+          result_response = yafvs_control_schedule_create_response
                               (result, created_uuid, response);
         }
-      else if (turbovas_control_parse_credential_create_request
+      else if (yafvs_control_parse_credential_create_request
                  (request, request_len, expected_secret, expected_secret_len,
                   operator_uuid, &credential_request))
         {
-          result = turbovas_control_create_credential (operator_uuid,
+          result = yafvs_control_create_credential (operator_uuid,
                                                         &credential_request,
                                                         created_uuid);
-          result_response = turbovas_control_credential_create_response
+          result_response = yafvs_control_credential_create_response
                               (result, created_uuid, response);
         }
-      else if (turbovas_control_parse_schedule_modify_request
+      else if (yafvs_control_parse_schedule_modify_request
                  (request, request_len, expected_secret, expected_secret_len,
                   operator_uuid, schedule_uuid, &schedule_modify_request))
         {
-          result = turbovas_control_modify_schedule (operator_uuid,
+          result = yafvs_control_modify_schedule (operator_uuid,
                                                       schedule_uuid,
                                                       &schedule_modify_request);
-          result_response = turbovas_control_schedule_modify_response
+          result_response = yafvs_control_schedule_modify_response
                               (result, response);
         }
-      else if (turbovas_control_parse_alert_email_create_request
+      else if (yafvs_control_parse_alert_email_create_request
                  (request, request_len, expected_secret, expected_secret_len,
                   operator_uuid, &alert_request))
         {
-          result = turbovas_control_create_alert_email (operator_uuid,
+          result = yafvs_control_create_alert_email (operator_uuid,
                                                         &alert_request,
                                                         created_uuid);
-          result_response = turbovas_control_alert_create_response (
+          result_response = yafvs_control_alert_create_response (
             result, created_uuid, response);
         }
       else if (request_len
-                 >= TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH
+                 >= YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH
                && memcmp (request,
-                          TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
-                          TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH)
+                          YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
+                          YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH)
                     == 0)
         result_response =
-          turbovas_control_alert_create_response (-2, NULL, response);
-      else if (turbovas_control_parse_alert_start_task_create_request (
+          yafvs_control_alert_create_response (-2, NULL, response);
+      else if (yafvs_control_parse_alert_start_task_create_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, &start_task_alert_request))
         {
-          result = turbovas_control_create_alert_start_task (
+          result = yafvs_control_create_alert_start_task (
             operator_uuid, &start_task_alert_request, created_uuid);
-          result_response = turbovas_control_alert_start_task_create_response (
+          result_response = yafvs_control_alert_start_task_create_response (
             result, created_uuid, response);
         }
       else if (request_len
-                 >= TURBOVAS_CONTROL_ALERT_START_TASK_CREATE_COMMAND_LENGTH
+                 >= YAFVS_CONTROL_ALERT_START_TASK_CREATE_COMMAND_LENGTH
                && memcmp (
-                    request, TURBOVAS_CONTROL_ALERT_START_TASK_CREATE_COMMAND,
-                    TURBOVAS_CONTROL_ALERT_START_TASK_CREATE_COMMAND_LENGTH)
+                    request, YAFVS_CONTROL_ALERT_START_TASK_CREATE_COMMAND,
+                    YAFVS_CONTROL_ALERT_START_TASK_CREATE_COMMAND_LENGTH)
                     == 0)
-        result_response = turbovas_control_alert_start_task_create_response (
+        result_response = yafvs_control_alert_start_task_create_response (
           -2, NULL, response);
-      else if (turbovas_control_parse_alert_deliver_report_request (
+      else if (yafvs_control_parse_alert_deliver_report_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, &alert_delivery_request))
         {
-          result = turbovas_control_deliver_alert_report (
+          result = yafvs_control_deliver_alert_report (
             operator_uuid, &alert_delivery_request);
           result_response =
-            turbovas_control_alert_deliver_report_response (result);
+            yafvs_control_alert_deliver_report_response (result);
         }
       else if (
-        request_len >= TURBOVAS_CONTROL_ALERT_DELIVER_REPORT_COMMAND_LENGTH
-        && memcmp (request, TURBOVAS_CONTROL_ALERT_DELIVER_REPORT_COMMAND,
-                   TURBOVAS_CONTROL_ALERT_DELIVER_REPORT_COMMAND_LENGTH)
+        request_len >= YAFVS_CONTROL_ALERT_DELIVER_REPORT_COMMAND_LENGTH
+        && memcmp (request, YAFVS_CONTROL_ALERT_DELIVER_REPORT_COMMAND,
+                   YAFVS_CONTROL_ALERT_DELIVER_REPORT_COMMAND_LENGTH)
              == 0)
         result_response = "-2 malformed\n";
-      else if (turbovas_control_parse_alert_test_request (
+      else if (yafvs_control_parse_alert_test_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, alert_uuid))
         {
-          result = turbovas_control_test_alert (operator_uuid, alert_uuid);
-          result_response = turbovas_control_alert_test_response (result);
+          result = yafvs_control_test_alert (operator_uuid, alert_uuid);
+          result_response = yafvs_control_alert_test_response (result);
         }
-      else if (request_len >= TURBOVAS_CONTROL_ALERT_TEST_COMMAND_LENGTH
-               && memcmp (request, TURBOVAS_CONTROL_ALERT_TEST_COMMAND,
-                          TURBOVAS_CONTROL_ALERT_TEST_COMMAND_LENGTH) == 0)
+      else if (request_len >= YAFVS_CONTROL_ALERT_TEST_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_ALERT_TEST_COMMAND,
+                          YAFVS_CONTROL_ALERT_TEST_COMMAND_LENGTH) == 0)
         result_response = "-2 malformed\n";
-      else if (turbovas_control_parse_alert_syslog_create_request (
+      else if (yafvs_control_parse_alert_syslog_create_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, &syslog_alert_request))
         {
-          result = turbovas_control_create_alert_syslog (
+          result = yafvs_control_create_alert_syslog (
             operator_uuid, &syslog_alert_request, created_uuid);
-          result_response = turbovas_control_alert_create_response (
+          result_response = yafvs_control_alert_create_response (
             result, created_uuid, response);
         }
       else if (request_len
-                 >= TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH
-               && memcmp (request, TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND,
-                          TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH)
+                 >= YAFVS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND,
+                          YAFVS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH)
                     == 0)
         result_response =
-          turbovas_control_alert_create_response (-2, NULL, response);
-      else if (turbovas_control_parse_alert_snmp_create_request (
+          yafvs_control_alert_create_response (-2, NULL, response);
+      else if (yafvs_control_parse_alert_snmp_create_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, &snmp_alert_request))
         {
-          result = turbovas_control_create_alert_snmp (
+          result = yafvs_control_create_alert_snmp (
             operator_uuid, &snmp_alert_request, created_uuid);
-          result_response = turbovas_control_alert_create_response (
+          result_response = yafvs_control_alert_create_response (
             result, created_uuid, response);
         }
-      else if (request_len >= TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH
-               && memcmp (request, TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND,
-                          TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH)
+      else if (request_len >= YAFVS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_ALERT_SNMP_CREATE_COMMAND,
+                          YAFVS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH)
                     == 0)
         result_response =
-          turbovas_control_alert_create_response (-2, NULL, response);
-      else if (turbovas_control_parse_alert_scp_create_request (
+          yafvs_control_alert_create_response (-2, NULL, response);
+      else if (yafvs_control_parse_alert_scp_create_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, &scp_alert_request))
         {
-          result = turbovas_control_create_alert_scp (
+          result = yafvs_control_create_alert_scp (
             operator_uuid, &scp_alert_request, created_uuid);
-          result_response = turbovas_control_alert_create_response (
+          result_response = yafvs_control_alert_create_response (
             result, created_uuid, response);
         }
-      else if (request_len >= TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND_LENGTH
-               && memcmp (request, TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND,
-                          TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND_LENGTH)
+      else if (request_len >= YAFVS_CONTROL_ALERT_SCP_CREATE_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_ALERT_SCP_CREATE_COMMAND,
+                          YAFVS_CONTROL_ALERT_SCP_CREATE_COMMAND_LENGTH)
                     == 0)
         result_response =
-          turbovas_control_alert_create_response (-2, NULL, response);
-      else if (turbovas_control_parse_alert_smb_create_request (
+          yafvs_control_alert_create_response (-2, NULL, response);
+      else if (yafvs_control_parse_alert_smb_create_request (
                  request, request_len, expected_secret, expected_secret_len,
                  operator_uuid, &smb_alert_request))
         {
-          result = turbovas_control_create_alert_smb (
+          result = yafvs_control_create_alert_smb (
             operator_uuid, &smb_alert_request, created_uuid);
-          result_response = turbovas_control_alert_create_response (
+          result_response = yafvs_control_alert_create_response (
             result, created_uuid, response);
         }
-      else if (request_len >= TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH
-               && memcmp (request, TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND,
-                          TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH)
+      else if (request_len >= YAFVS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_ALERT_SMB_CREATE_COMMAND,
+                          YAFVS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH)
                     == 0)
         result_response =
-          turbovas_control_alert_create_response (-2, NULL, response);
-      else if (request_len >= TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH
-               && memcmp (request, TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND,
-                          TURBOVAS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH)
+          yafvs_control_alert_create_response (-2, NULL, response);
+      else if (request_len >= YAFVS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_SCHEDULE_MODIFY_COMMAND,
+                          YAFVS_CONTROL_SCHEDULE_MODIFY_COMMAND_LENGTH)
                     == 0)
-        result_response = turbovas_control_schedule_modify_response (-2,
+        result_response = yafvs_control_schedule_modify_response (-2,
                                                                       response);
-      else if (request_len >= TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH
-               && memcmp (request, TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND,
-                          TURBOVAS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH)
+      else if (request_len >= YAFVS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH
+               && memcmp (request, YAFVS_CONTROL_CREDENTIAL_CREATE_COMMAND,
+                          YAFVS_CONTROL_CREDENTIAL_CREATE_COMMAND_LENGTH)
                     == 0)
-        result_response = turbovas_control_credential_create_response (-2,
+        result_response = yafvs_control_credential_create_response (-2,
                                                                         NULL,
                                                                         response);
       else
-        result_response = turbovas_control_response (result);
+        result_response = yafvs_control_response (result);
     }
   else if (
-    request_len >= TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH
-    && memcmp (request, TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND,
-               TURBOVAS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH) == 0)
-    result_response = turbovas_control_auth_settings_response (-2);
+    request_len >= YAFVS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH
+    && memcmp (request, YAFVS_CONTROL_AUTH_SETTINGS_READ_COMMAND,
+               YAFVS_CONTROL_AUTH_SETTINGS_READ_COMMAND_LENGTH) == 0)
+    result_response = yafvs_control_auth_settings_response (-2);
   else if (
-    request_len >= TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH
-    && memcmp (request, TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND,
-               TURBOVAS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH) == 0)
-    result_response = turbovas_control_auth_settings_response (-2);
+    request_len >= YAFVS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH
+    && memcmp (request, YAFVS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND,
+               YAFVS_CONTROL_AUTH_SETTINGS_LDAP_WRITE_COMMAND_LENGTH) == 0)
+    result_response = yafvs_control_auth_settings_response (-2);
   else if (
-    request_len >= TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH
-    && memcmp (request, TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND,
-               TURBOVAS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH)
+    request_len >= YAFVS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH
+    && memcmp (request, YAFVS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND,
+               YAFVS_CONTROL_AUTH_SETTINGS_RADIUS_WRITE_COMMAND_LENGTH)
          == 0)
-    result_response = turbovas_control_auth_settings_response (-2);
+    result_response = yafvs_control_auth_settings_response (-2);
   else if (
-    request_len >= TURBOVAS_CONTROL_USER_CREATE_COMMAND_LENGTH
-    && memcmp (request, TURBOVAS_CONTROL_USER_CREATE_COMMAND,
-               TURBOVAS_CONTROL_USER_CREATE_COMMAND_LENGTH) == 0)
-    result_response = turbovas_control_user_create_response (-2, NULL,
+    request_len >= YAFVS_CONTROL_USER_CREATE_COMMAND_LENGTH
+    && memcmp (request, YAFVS_CONTROL_USER_CREATE_COMMAND,
+               YAFVS_CONTROL_USER_CREATE_COMMAND_LENGTH) == 0)
+    result_response = yafvs_control_user_create_response (-2, NULL,
                                                               response);
-  else if (request_len >= TURBOVAS_CONTROL_USER_MODIFY_COMMAND_LENGTH
-           && memcmp (request, TURBOVAS_CONTROL_USER_MODIFY_COMMAND,
-                      TURBOVAS_CONTROL_USER_MODIFY_COMMAND_LENGTH) == 0)
-    result_response = turbovas_control_user_modify_response (-2);
-  else if (request_len >= TURBOVAS_CONTROL_USER_DELETE_COMMAND_LENGTH
-           && memcmp (request, TURBOVAS_CONTROL_USER_DELETE_COMMAND,
-                      TURBOVAS_CONTROL_USER_DELETE_COMMAND_LENGTH) == 0)
-    result_response = turbovas_control_user_delete_response (-2);
-  else if (request_len >= TURBOVAS_CONTROL_USER_CLONE_COMMAND_LENGTH
-           && memcmp (request, TURBOVAS_CONTROL_USER_CLONE_COMMAND,
-                      TURBOVAS_CONTROL_USER_CLONE_COMMAND_LENGTH) == 0)
-    result_response = turbovas_control_user_clone_response (-2, NULL,
+  else if (request_len >= YAFVS_CONTROL_USER_MODIFY_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_USER_MODIFY_COMMAND,
+                      YAFVS_CONTROL_USER_MODIFY_COMMAND_LENGTH) == 0)
+    result_response = yafvs_control_user_modify_response (-2);
+  else if (request_len >= YAFVS_CONTROL_USER_DELETE_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_USER_DELETE_COMMAND,
+                      YAFVS_CONTROL_USER_DELETE_COMMAND_LENGTH) == 0)
+    result_response = yafvs_control_user_delete_response (-2);
+  else if (request_len >= YAFVS_CONTROL_USER_CLONE_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_USER_CLONE_COMMAND,
+                      YAFVS_CONTROL_USER_CLONE_COMMAND_LENGTH) == 0)
+    result_response = yafvs_control_user_clone_response (-2, NULL,
                                                              response);
   else if (
-    request_len >= TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH
-    && memcmp (request, TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND,
-               TURBOVAS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH)
+    request_len >= YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH
+    && memcmp (request, YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND,
+               YAFVS_CONTROL_SCAN_CONFIG_NVT_DIAGNOSTIC_COMMAND_LENGTH)
          == 0)
     result_response =
-      turbovas_control_scan_config_nvt_diagnostic_response (-2);
-  else if (request_len >= TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH
-           && memcmp (request, TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND,
-                      TURBOVAS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH) == 0)
-    result_response = turbovas_control_trash_empty_response (-1, 0, response);
-  else if (request_len >= TURBOVAS_CONTROL_TAG_CREATE_COMMAND_LENGTH
-           && memcmp (request, TURBOVAS_CONTROL_TAG_CREATE_COMMAND,
-                      TURBOVAS_CONTROL_TAG_CREATE_COMMAND_LENGTH) == 0)
+      yafvs_control_scan_config_nvt_diagnostic_response (-2);
+  else if (request_len >= YAFVS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_TRASH_EMPTY_COMMAND,
+                      YAFVS_CONTROL_TRASH_EMPTY_COMMAND_LENGTH) == 0)
+    result_response = yafvs_control_trash_empty_response (-1, 0, response);
+  else if (request_len >= YAFVS_CONTROL_TAG_CREATE_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_TAG_CREATE_COMMAND,
+                      YAFVS_CONTROL_TAG_CREATE_COMMAND_LENGTH) == 0)
     result_response =
-      turbovas_control_tag_create_response (-2, NULL, response);
-  else if (request_len >= TURBOVAS_CONTROL_TAG_MODIFY_COMMAND_LENGTH
-           && memcmp (request, TURBOVAS_CONTROL_TAG_MODIFY_COMMAND,
-                      TURBOVAS_CONTROL_TAG_MODIFY_COMMAND_LENGTH) == 0)
-    result_response = turbovas_control_tag_modify_response (-2, response);
-  else if (request_len >= TURBOVAS_CONTROL_TASK_CLONE_COMMAND_LENGTH
-           && memcmp (request, TURBOVAS_CONTROL_TASK_CLONE_COMMAND,
-                      TURBOVAS_CONTROL_TASK_CLONE_COMMAND_LENGTH)
+      yafvs_control_tag_create_response (-2, NULL, response);
+  else if (request_len >= YAFVS_CONTROL_TAG_MODIFY_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_TAG_MODIFY_COMMAND,
+                      YAFVS_CONTROL_TAG_MODIFY_COMMAND_LENGTH) == 0)
+    result_response = yafvs_control_tag_modify_response (-2, response);
+  else if (request_len >= YAFVS_CONTROL_TASK_CLONE_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_TASK_CLONE_COMMAND,
+                      YAFVS_CONTROL_TASK_CLONE_COMMAND_LENGTH)
                 == 0)
-    result_response = turbovas_control_task_clone_response (-2, NULL, response);
-  else if (request_len >= TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH
-           && memcmp (request, TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
-                      TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH)
+    result_response = yafvs_control_task_clone_response (-2, NULL, response);
+  else if (request_len >= YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
+                      YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH)
                 == 0)
     result_response =
-      turbovas_control_alert_create_response (-2, NULL, response);
+      yafvs_control_alert_create_response (-2, NULL, response);
   else if (request_len
-             >= TURBOVAS_CONTROL_ALERT_START_TASK_CREATE_COMMAND_LENGTH
-           && memcmp (request, TURBOVAS_CONTROL_ALERT_START_TASK_CREATE_COMMAND,
-                      TURBOVAS_CONTROL_ALERT_START_TASK_CREATE_COMMAND_LENGTH)
+             >= YAFVS_CONTROL_ALERT_START_TASK_CREATE_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_ALERT_START_TASK_CREATE_COMMAND,
+                      YAFVS_CONTROL_ALERT_START_TASK_CREATE_COMMAND_LENGTH)
                 == 0)
     result_response =
-      turbovas_control_alert_start_task_create_response (-2, NULL, response);
+      yafvs_control_alert_start_task_create_response (-2, NULL, response);
   else if (
-    request_len >= TURBOVAS_CONTROL_ALERT_DELIVER_REPORT_COMMAND_LENGTH
-    && memcmp (request, TURBOVAS_CONTROL_ALERT_DELIVER_REPORT_COMMAND,
-               TURBOVAS_CONTROL_ALERT_DELIVER_REPORT_COMMAND_LENGTH)
+    request_len >= YAFVS_CONTROL_ALERT_DELIVER_REPORT_COMMAND_LENGTH
+    && memcmp (request, YAFVS_CONTROL_ALERT_DELIVER_REPORT_COMMAND,
+               YAFVS_CONTROL_ALERT_DELIVER_REPORT_COMMAND_LENGTH)
          == 0)
     result_response = "-2 malformed\n";
-  else if (request_len >= TURBOVAS_CONTROL_ALERT_TEST_COMMAND_LENGTH
-           && memcmp (request, TURBOVAS_CONTROL_ALERT_TEST_COMMAND,
-                      TURBOVAS_CONTROL_ALERT_TEST_COMMAND_LENGTH) == 0)
+  else if (request_len >= YAFVS_CONTROL_ALERT_TEST_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_ALERT_TEST_COMMAND,
+                      YAFVS_CONTROL_ALERT_TEST_COMMAND_LENGTH) == 0)
     result_response = "-2 malformed\n";
-  else if (request_len >= TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND_LENGTH
-           && memcmp (request, TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND,
-                      TURBOVAS_CONTROL_ALERT_SCP_CREATE_COMMAND_LENGTH)
+  else if (request_len >= YAFVS_CONTROL_ALERT_SCP_CREATE_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_ALERT_SCP_CREATE_COMMAND,
+                      YAFVS_CONTROL_ALERT_SCP_CREATE_COMMAND_LENGTH)
                 == 0)
     result_response =
-      turbovas_control_alert_create_response (-2, NULL, response);
-  else if (request_len >= TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH
-           && memcmp (request, TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND,
-                      TURBOVAS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH)
+      yafvs_control_alert_create_response (-2, NULL, response);
+  else if (request_len >= YAFVS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND,
+                      YAFVS_CONTROL_ALERT_SYSLOG_CREATE_COMMAND_LENGTH)
                 == 0)
     result_response =
-      turbovas_control_alert_create_response (-2, NULL, response);
-  else if (request_len >= TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH
-           && memcmp (request, TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND,
-                      TURBOVAS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH)
+      yafvs_control_alert_create_response (-2, NULL, response);
+  else if (request_len >= YAFVS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_ALERT_SNMP_CREATE_COMMAND,
+                      YAFVS_CONTROL_ALERT_SNMP_CREATE_COMMAND_LENGTH)
                 == 0)
     result_response =
-      turbovas_control_alert_create_response (-2, NULL, response);
-  else if (request_len >= TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH
-           && memcmp (request, TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND,
-                      TURBOVAS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH)
+      yafvs_control_alert_create_response (-2, NULL, response);
+  else if (request_len >= YAFVS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH
+           && memcmp (request, YAFVS_CONTROL_ALERT_SMB_CREATE_COMMAND,
+                      YAFVS_CONTROL_ALERT_SMB_CREATE_COMMAND_LENGTH)
                 == 0)
     result_response =
-      turbovas_control_alert_create_response (-2, NULL, response);
+      yafvs_control_alert_create_response (-2, NULL, response);
   else
-    result_response = turbovas_control_response (result);
+    result_response = yafvs_control_response (result);
 
-  (void) turbovas_control_write_all (client_socket,
+  (void) yafvs_control_write_all (client_socket,
                                       result_response);
-  turbovas_control_schedule_create_request_clear (&schedule_request);
-  turbovas_control_schedule_modify_request_clear (&schedule_modify_request);
-  turbovas_control_credential_create_request_clear (&credential_request);
-  turbovas_control_alert_email_create_request_clear (&alert_request);
-  turbovas_control_alert_deliver_report_request_clear (
+  yafvs_control_schedule_create_request_clear (&schedule_request);
+  yafvs_control_schedule_modify_request_clear (&schedule_modify_request);
+  yafvs_control_credential_create_request_clear (&credential_request);
+  yafvs_control_alert_email_create_request_clear (&alert_request);
+  yafvs_control_alert_deliver_report_request_clear (
     &alert_delivery_request);
-  turbovas_control_alert_smb_create_request_clear (&smb_alert_request);
-  turbovas_control_alert_start_task_create_request_clear (
+  yafvs_control_alert_smb_create_request_clear (&smb_alert_request);
+  yafvs_control_alert_start_task_create_request_clear (
     &start_task_alert_request);
-  turbovas_control_alert_scp_create_request_clear (&scp_alert_request);
-  turbovas_control_secure_clear (alert_uuid, sizeof (alert_uuid));
-  turbovas_control_alert_syslog_create_request_clear (&syslog_alert_request);
-  turbovas_control_alert_snmp_create_request_clear (&snmp_alert_request);
-  turbovas_control_tag_create_request_clear (&tag_create_request);
-  turbovas_control_tag_modify_request_clear (&tag_modify_request);
-  turbovas_control_user_password_change_request_clear (
+  yafvs_control_alert_scp_create_request_clear (&scp_alert_request);
+  yafvs_control_secure_clear (alert_uuid, sizeof (alert_uuid));
+  yafvs_control_alert_syslog_create_request_clear (&syslog_alert_request);
+  yafvs_control_alert_snmp_create_request_clear (&snmp_alert_request);
+  yafvs_control_tag_create_request_clear (&tag_create_request);
+  yafvs_control_tag_modify_request_clear (&tag_modify_request);
+  yafvs_control_user_password_change_request_clear (
     &password_change_request);
-  turbovas_control_user_create_request_clear (&user_create_request);
-  turbovas_control_user_modify_request_clear (&user_modify_request);
-  turbovas_control_secure_clear (&user_delete_request,
+  yafvs_control_user_create_request_clear (&user_create_request);
+  yafvs_control_user_modify_request_clear (&user_modify_request);
+  yafvs_control_secure_clear (&user_delete_request,
                                  sizeof (user_delete_request));
-  turbovas_control_user_setting_modify_request_clear (&setting_modify_request);
-  turbovas_control_auth_settings_ldap_request_clear (&ldap_settings_request);
-  turbovas_control_auth_settings_radius_request_clear (
+  yafvs_control_user_setting_modify_request_clear (&setting_modify_request);
+  yafvs_control_auth_settings_ldap_request_clear (&ldap_settings_request);
+  yafvs_control_auth_settings_radius_request_clear (
     &radius_settings_request);
-  turbovas_control_secure_free (allocated_response);
-  if (request_len <= TURBOVAS_CONTROL_MAX_REQUEST_BYTES)
+  yafvs_control_secure_free (allocated_response);
+  if (request_len <= YAFVS_CONTROL_MAX_REQUEST_BYTES)
     {
-      turbovas_control_secure_clear (request, request_len);
+      yafvs_control_secure_clear (request, request_len);
     }
 }
 
 void
-turbovas_control_accept_and_fork (int server_socket, int manager_socket,
+yafvs_control_accept_and_fork (int server_socket, int manager_socket,
                                   int manager_socket_2,
                                   sigset_t *sigmask_normal)
 {
@@ -5298,7 +5298,7 @@ turbovas_control_accept_and_fork (int server_socket, int manager_socket,
   if (manager_socket_2 > -1 && manager_socket_2 != server_socket
       && manager_socket_2 != manager_socket)
     close (manager_socket_2);
-  turbovas_control_serve_client (client_socket);
+  yafvs_control_serve_client (client_socket);
   close (client_socket);
   _exit (EXIT_SUCCESS);
 }

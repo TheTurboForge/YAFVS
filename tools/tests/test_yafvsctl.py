@@ -11648,6 +11648,24 @@ class YAFVSCtlTests(unittest.TestCase):
             ]],
         )
 
+    def test_license_rename_exemptions_follow_staged_rename_into_worktree(self):
+        source = "components/gvmd/src/turbovas_control.c"
+        destination = "components/gvmd/src/yafvs_control.c"
+
+        def fake_run_git(_repo_root, args):
+            if "--cached" in args:
+                return f"R100\t{source}\t{destination}\n"
+            return f"M\t{destination}\n"
+
+        with unittest.mock.patch.object(yafvsctl, "run_git", side_effect=fake_run_git):
+            exempt = yafvsctl.modified_imported_notice_exempt_paths_for_scope(
+                Path("/tmp/repo"),
+                "worktree",
+                [("A", source)],
+            )
+
+        self.assertEqual(exempt, {source, destination})
+
     def test_license_report_modified_imported_only_uses_diff_scope(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -15163,7 +15181,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
             self.assertNotEqual(
                 env[yafvsctl.YAFVS_API_BROWSER_PROXY_SECRET_ENV],
-                env[yafvsctl.TURBOVAS_GVMD_CONTROL_SECRET_ENV],
+                env[yafvsctl.YAFVS_GVMD_CONTROL_SECRET_ENV],
             )
             for env_name, secret_name in yafvsctl.TURBOVAS_MQTT_RUNTIME_SECRETS:
                 self.assertNotIn(env_name, env)
@@ -15640,8 +15658,8 @@ class YAFVSCtlTests(unittest.TestCase):
         dev_shell = compose.split("  dev-shell:\n", 1)[1].split("\n  gvmd:", 1)[0]
         mosquitto = compose.split("  mosquitto:\n", 1)[1].split("\n  dev-shell:", 1)[0]
 
-        self.assertIn("TURBOVAS_GVMD_CONTROL_SECRET: ${TURBOVAS_GVMD_CONTROL_SECRET:-}", compose)
-        self.assertNotIn("TURBOVAS_GVMD_CONTROL_SECRET: ${YAFVS_API_BROWSER_PROXY_SECRET:-}", compose)
+        self.assertIn("YAFVS_GVMD_CONTROL_SECRET: ${YAFVS_GVMD_CONTROL_SECRET:-}", compose)
+        self.assertNotIn("YAFVS_GVMD_CONTROL_SECRET: ${YAFVS_API_BROWSER_PROXY_SECRET:-}", compose)
         gvmd = compose.split("  gvmd:\n", 1)[1].split("\n  ospd-openvas:", 1)[0]
         self.assertIn("/run/ospd", gvmd)
         self.assertNotIn("source: ${TURBOVAS_RUNTIME_DIR:-../../TurboVAS-runtime}\n        target: /runtime", gvmd)

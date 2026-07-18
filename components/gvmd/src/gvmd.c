@@ -104,7 +104,7 @@
 #include "manage_users.h"
 #include "gmpd.h"
 #include "gvmd_config.h"
-#include "turbovas_control.h"
+#include "yafvs_control.h"
 #include "utils.h"
 
 #ifdef GIT_REV_AVAILABLE
@@ -213,7 +213,7 @@ static int manager_socket_2 = -1;
 /**
  * @brief Optional private TurboVAS task-stop control socket.
  */
-static int turbovas_control_socket = -1;
+static int yafvs_control_socket = -1;
 
 #if LOG
 /**
@@ -964,10 +964,10 @@ cleanup ()
       close (manager_socket_2);
       manager_socket_2 = -1;
     }
-  if (turbovas_control_socket > -1)
+  if (yafvs_control_socket > -1)
     {
-      close (turbovas_control_socket);
-      turbovas_control_socket = -1;
+      close (yafvs_control_socket);
+      yafvs_control_socket = -1;
     }
 
 #if LOG
@@ -1906,20 +1906,20 @@ serve_and_schedule ()
       FD_SET (manager_socket, &readfds);
       if (manager_socket_2 > -1)
         FD_SET (manager_socket_2, &readfds);
-      if (turbovas_control_socket > -1)
-        FD_SET (turbovas_control_socket, &readfds);
+      if (yafvs_control_socket > -1)
+        FD_SET (yafvs_control_socket, &readfds);
 
       FD_ZERO (&exceptfds);
       FD_SET (manager_socket, &exceptfds);
       if (manager_socket_2 > -1)
         FD_SET (manager_socket_2, &exceptfds);
-      if (turbovas_control_socket > -1)
-        FD_SET (turbovas_control_socket, &exceptfds);
+      if (yafvs_control_socket > -1)
+        FD_SET (yafvs_control_socket, &exceptfds);
       nfds = manager_socket + 1;
       if (manager_socket_2 >= nfds)
         nfds = manager_socket_2 + 1;
-      if (turbovas_control_socket >= nfds)
-        nfds = turbovas_control_socket + 1;
+      if (yafvs_control_socket >= nfds)
+        nfds = yafvs_control_socket + 1;
 
       if (termination_signal)
         {
@@ -1964,10 +1964,10 @@ serve_and_schedule ()
               gvm_close_sentry ();
               exit (EXIT_FAILURE);
             }
-          if ((turbovas_control_socket > -1)
-              && FD_ISSET (turbovas_control_socket, &exceptfds))
+          if ((yafvs_control_socket > -1)
+              && FD_ISSET (yafvs_control_socket, &exceptfds))
             {
-              g_critical ("%s: exception in select (TurboVAS control)",
+              g_critical ("%s: exception in select (YAFVS control)",
                           __func__);
               gvm_close_sentry ();
               exit (EXIT_FAILURE);
@@ -1976,9 +1976,9 @@ serve_and_schedule ()
             accept_and_maybe_fork (manager_socket, sigmask_normal);
           if ((manager_socket_2 > -1) && FD_ISSET (manager_socket_2, &readfds))
             accept_and_maybe_fork (manager_socket_2, sigmask_normal);
-          if ((turbovas_control_socket > -1)
-              && FD_ISSET (turbovas_control_socket, &readfds))
-            turbovas_control_accept_and_fork (turbovas_control_socket,
+          if ((yafvs_control_socket > -1)
+              && FD_ISSET (yafvs_control_socket, &readfds))
+            yafvs_control_accept_and_fork (yafvs_control_socket,
                                               manager_socket,
                                               manager_socket_2,
                                               sigmask_normal);
@@ -2377,7 +2377,7 @@ gvmd (int argc, char** argv, char *env[])
   static int vt_ref_insert_size = VT_REF_INSERT_SIZE_DEFAULT;
   static int vt_sev_insert_size = VT_SEV_INSERT_SIZE_DEFAULT;
   static gchar *vt_verification_collation = NULL;
-  static gchar *turbovas_control_socket_path = NULL;
+  static gchar *yafvs_control_socket_path = NULL;
 
 
   GString *full_disable_commands = g_string_new ("");
@@ -2800,8 +2800,8 @@ gvmd (int argc, char** argv, char *env[])
           &manager_address_string_unix,
           "Listen on UNIX socket at <filename>.",
           "<filename>" },
-        { "turbovas-control-socket", '\0', 0, G_OPTION_ARG_FILENAME,
-          &turbovas_control_socket_path,
+        { "yafvs-control-socket", '\0', 0, G_OPTION_ARG_FILENAME,
+          &yafvs_control_socket_path,
           "Listen for private TurboVAS task-stop control requests at <filename>.",
           "<filename>" },
         { "user", '\0', 0, G_OPTION_ARG_STRING,
@@ -3994,14 +3994,14 @@ gvmd (int argc, char** argv, char *env[])
                       NULL,
                       &manager_socket_2))
     return EXIT_FAILURE;
-  if (turbovas_control_socket_path
-      && manager_listen (turbovas_control_socket_path,
+  if (yafvs_control_socket_path
+      && manager_listen (yafvs_control_socket_path,
                          NULL,
                          NULL,
                          listen_owner,
                          listen_group,
                          listen_mode,
-                         &turbovas_control_socket))
+                         &yafvs_control_socket))
     return EXIT_FAILURE;
 
   /* Initialise the process for manage_schedule. */

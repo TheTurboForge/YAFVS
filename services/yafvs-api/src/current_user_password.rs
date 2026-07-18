@@ -283,14 +283,14 @@ mod tests {
 
     #[test]
     fn gvmd_password_change_is_verified_atomic_and_cache_invalidating() {
-        let control = include_str!("../../../components/gvmd/src/turbovas_control.c");
+        let control = include_str!("../../../components/gvmd/src/yafvs_control.c");
         let users = include_str!("../../../components/gvmd/src/manage_sql_users.c");
 
         for required in [
-            "turbovas_control_parse_user_password_change_request",
-            "turbovas_control_change_user_password",
+            "yafvs_control_parse_user_password_change_request",
+            "yafvs_control_change_user_password",
             "current_user_change_password (request->old_password",
-            "turbovas_control_user_password_change_request_clear",
+            "yafvs_control_user_password_change_request_clear",
         ] {
             assert!(
                 control.contains(required),

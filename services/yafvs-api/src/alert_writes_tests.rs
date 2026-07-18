@@ -457,12 +457,12 @@ fn email_and_smb_alert_references_are_locked_inside_create_transactions() {
             < delete_user.find("information_schema.columns").unwrap()
     );
 
-    let control = include_str!("../../../components/gvmd/src/turbovas_control.c");
+    let control = include_str!("../../../components/gvmd/src/yafvs_control.c");
     let control_create = control
-        .split_once("turbovas_control_create_alert_email")
+        .split_once("yafvs_control_create_alert_email")
         .unwrap()
         .1
-        .split_once("turbovas_control_create_schedule")
+        .split_once("yafvs_control_create_schedule")
         .unwrap()
         .0;
     assert!(control_create.contains("create_alert_email_with_report_refs"));

@@ -256,7 +256,7 @@ set(
   ipc.c
   lsc_user.c
   lsc_crypt.c
-  turbovas_control.c
+  yafvs_control.c
   utils.c
 )
 
@@ -452,7 +452,7 @@ set(
   $<TARGET_OBJECTS:all-manage-sql-obj>
   $<TARGET_OBJECTS:all-sql-obj>
 )
-add_unit_test(turbovas-control "${ALL_OBJECTS}" "${ALL_MISC_SRC}")
+add_unit_test(yafvs-control "${ALL_OBJECTS}" "${ALL_MISC_SRC}")
 
 set(
   ALL_OBJECTS
@@ -492,13 +492,13 @@ set_target_properties(
 )
 
 set_target_properties(
-  turbovas-control-test
+  yafvs-control-test
   PROPERTIES
     LINK_FLAGS
       "-Wl,-wrap,user_name,-wrap,user_auth_method,-wrap,user_uuid,-wrap,create_user,-wrap,modify_user,-wrap,delete_user,-wrap,reinit_manage_process,-wrap,manage_session_init,-wrap,stop_task,-wrap,copy_task,-wrap,task_uuid,-wrap,create_schedule,-wrap,modify_schedule,-wrap,modify_setting,-wrap,schedule_uuid,-wrap,create_tag,-wrap,modify_tag,-wrap,tag_uuid,-wrap,create_credential,-wrap,credential_uuid,-wrap,create_alert_task_status_changed,-wrap,create_alert_start_task_with_task_ref,-wrap,create_alert_email_with_report_refs,-wrap,create_alert_smb_with_report_refs,-wrap,create_alert_scp_with_report_refs,-wrap,alert_uuid,-wrap,log_event,-wrap,log_event_fail,-wrap,cleanup_manage_process,-wrap,manage_empty_trashcan_confirmed,-wrap,manage_configure_diagnostic_nvt,-wrap,manage_test_alert,-wrap,find_alert_with_permission,-wrap,find_report_with_permission,-wrap,find_filter_with_permission,-wrap,filter_term,-wrap,alert_method,-wrap,manage_send_report,-wrap,sql_begin_immediate,-wrap,sql_int64,-wrap,sql_string,-wrap,sql,-wrap,sql_ps_sensitive,-wrap,sql_last_insert_id,-wrap,sql_rollback,-wrap,sql_commit,-wrap,acl_user_may,-wrap,find_task_with_permission,-wrap,find_credential_with_permission,-wrap,credential_type,-wrap,credential_value,-wrap,find_report_format_with_permission,-wrap,resource_with_name_exists"
 )
 target_compile_options(
-  turbovas-control-test
+  yafvs-control-test
   PRIVATE
     "-Wno-redundant-decls"
 )

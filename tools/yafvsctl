@@ -271,8 +271,8 @@ YAFVS_API_BEARER_TOKEN_CONTAINER_FILE = "/runtime/secrets/native-api-bearer-toke
 YAFVS_API_BEARER_TOKEN_SECRET = "native-api-bearer-token"
 YAFVS_API_BROWSER_PROXY_SECRET_ENV = "YAFVS_API_BROWSER_PROXY_SECRET"
 YAFVS_API_BROWSER_PROXY_SECRET = "native-api-browser-proxy-secret"
-TURBOVAS_GVMD_CONTROL_SECRET_ENV = "TURBOVAS_GVMD_CONTROL_SECRET"
-TURBOVAS_GVMD_CONTROL_SECRET = "gvmd-control-secret"
+YAFVS_GVMD_CONTROL_SECRET_ENV = "YAFVS_GVMD_CONTROL_SECRET"
+YAFVS_GVMD_CONTROL_SECRET = "gvmd-control-secret"
 TURBOVAS_MQTT_OPENVAS_PASSWORD_ENV = "TURBOVAS_MQTT_OPENVAS_PASSWORD"
 TURBOVAS_MQTT_NOTUS_PASSWORD_ENV = "TURBOVAS_MQTT_NOTUS_PASSWORD"
 TURBOVAS_MQTT_OSPD_PASSWORD_ENV = "TURBOVAS_MQTT_OSPD_PASSWORD"
@@ -2528,6 +2528,40 @@ def git_name_status(repo_root: Path, base: str, pathspecs: tuple[str, ...] = ())
     return rows
 
 
+def git_rename_sources_for_diff_scope(
+    repo_root: Path,
+    diff_scope: str,
+    pathspecs: tuple[str, ...] = (),
+) -> dict[str, str] | None:
+    if diff_scope == "baseline":
+        args = [
+            "diff",
+            "--find-renames",
+            "--find-copies-harder",
+            "-l0",
+            "--name-status",
+            f"{IMPORT_BASELINE_COMMIT}..HEAD",
+        ]
+    elif diff_scope == "staged":
+        args = ["diff", "--find-renames", "--find-copies-harder", "-l0", "--cached", "--name-status"]
+    elif diff_scope == "worktree":
+        args = ["diff", "--find-renames", "--find-copies-harder", "-l0", "--name-status"]
+    else:
+        return None
+    if pathspecs:
+        args.append("--")
+        args.extend(pathspecs)
+    output = run_git(repo_root, args)
+    if output is None:
+        return None
+    sources: dict[str, str] = {}
+    for line in output.splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 3 and parts[0].startswith(("R", "C")):
+            sources[parts[-1]] = parts[-2]
+    return sources
+
+
 def git_name_status_for_diff_scope(repo_root: Path, diff_scope: str, pathspecs: tuple[str, ...] = ()) -> list[tuple[str, str]] | None:
     if diff_scope == "baseline":
         return git_name_status(repo_root, IMPORT_BASELINE_COMMIT, pathspecs)
@@ -2606,6 +2640,25 @@ def metadata(repo_root: Path, command: str) -> dict[str, Any]:
         "repo_root": str(repo_root),
         "head": run_git(repo_root, ["rev-parse", "--short", "HEAD"]),
     }
+
+
+def modified_imported_notice_exempt_paths_for_scope(
+    repo_root: Path,
+    diff_scope: str,
+    baseline_rows: list[tuple[str, str]] | None,
+) -> set[str]:
+    exempt = modified_imported_notice_exempt_paths(baseline_rows)
+    scopes = ("staged", "worktree") if diff_scope == "worktree" else (diff_scope,)
+    for scope in scopes:
+        if scope == "baseline":
+            continue
+        rename_sources = git_rename_sources_for_diff_scope(repo_root, scope, ("components",))
+        if rename_sources is None:
+            continue
+        for destination, source in rename_sources.items():
+            if source in exempt:
+                exempt.add(destination)
+    return exempt
 
 
 def status_rank(status: str) -> int:
@@ -5660,9 +5713,9 @@ def runtime_app_env(repo_root: Path) -> dict[str, str]:
     if not env.get(YAFVS_API_BROWSER_PROXY_SECRET_ENV):
         secret, _created = read_or_create_runtime_secret(repo_root, YAFVS_API_BROWSER_PROXY_SECRET)
         env[YAFVS_API_BROWSER_PROXY_SECRET_ENV] = secret
-    if not env.get(TURBOVAS_GVMD_CONTROL_SECRET_ENV):
-        secret, _created = read_or_create_runtime_secret(repo_root, TURBOVAS_GVMD_CONTROL_SECRET)
-        env[TURBOVAS_GVMD_CONTROL_SECRET_ENV] = secret
+    if not env.get(YAFVS_GVMD_CONTROL_SECRET_ENV):
+        secret, _created = read_or_create_runtime_secret(repo_root, YAFVS_GVMD_CONTROL_SECRET)
+        env[YAFVS_GVMD_CONTROL_SECRET_ENV] = secret
     return env
 
 
@@ -13851,7 +13904,11 @@ def command_license_report(
                 rows,
                 diff_scope=diff_scope,
                 check_manifest_stale=diff_scope == "baseline",
-                turbovas_added=modified_imported_notice_exempt_paths(baseline_rows),
+                turbovas_added=modified_imported_notice_exempt_paths_for_scope(
+                    repo_root,
+                    diff_scope,
+                    baseline_rows,
+                ),
             )
         )
         result = make_result("license-report", repo_root, "Modified imported file license/provenance checks completed.", findings)
@@ -13902,7 +13959,11 @@ def command_license_report(
                 transient_rows,
                 diff_scope=transient_scope,
                 check_manifest_stale=False,
-                turbovas_added=notice_exempt,
+                turbovas_added=modified_imported_notice_exempt_paths_for_scope(
+                    repo_root,
+                    transient_scope,
+                    rows,
+                ),
             )
         )
 
@@ -17111,7 +17172,7 @@ def _command_runtime_app_up_unlocked(repo_root: Path, status_only: bool = False)
     for service in APP_SERVICES:
         running = container_running(repo_root, service)
         findings.append(finding("pass" if running else "warn", "runtime.app.running", f"{service} container is {'running' if running else 'not running'}.", details={"service": service, "logs_tail": [] if running else service_log_tail(repo_root, service)}))
-    control_socket = runtime_dir(repo_root) / "run" / "gvmd-control" / "turbovas-control.sock"
+    control_socket = runtime_dir(repo_root) / "run" / "gvmd-control" / "yafvs-control.sock"
     wait_for_socket(control_socket, timeout_seconds=20)
     findings.append(
         socket_readiness_finding(

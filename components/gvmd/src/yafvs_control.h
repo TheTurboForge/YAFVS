@@ -5,11 +5,11 @@
 
 /**
  * @file
- * @brief Private TurboVAS control listener.
+ * @brief Private YAFVS control listener.
  */
 
-#ifndef _GVMD_TURBOVAS_CONTROL_H
-#define _GVMD_TURBOVAS_CONTROL_H
+#ifndef _GVMD_YAFVS_CONTROL_H
+#define _GVMD_YAFVS_CONTROL_H
 
 #include <signal.h>
 
@@ -55,6 +55,6 @@
  */
 
 void
-turbovas_control_accept_and_fork (int, int, int, sigset_t *);
+yafvs_control_accept_and_fork (int, int, int, sigset_t *);
 
-#endif /* not _GVMD_TURBOVAS_CONTROL_H */
+#endif /* not _GVMD_YAFVS_CONTROL_H */

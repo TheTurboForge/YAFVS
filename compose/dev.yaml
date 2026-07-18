@@ -192,7 +192,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-turbovas}
       POSTGRES_DB: ${POSTGRES_DB:-turbovas}
       TURBOVAS_RUNTIME_DIR: /runtime
-      TURBOVAS_GVMD_CONTROL_SECRET: ${TURBOVAS_GVMD_CONTROL_SECRET:-}
+      YAFVS_GVMD_CONTROL_SECRET: ${YAFVS_GVMD_CONTROL_SECRET:-}
     volumes:
       - type: bind
         source: ..
@@ -245,7 +245,7 @@ services:
       - -lc
       - >
         mkdir -p /runtime/run/gvmd-gmp /runtime/run/gvmd-control /runtime/logs/gvmd &&
-        rm -f /runtime/run/gvmd-gmp/gvmd.sock /runtime/run/gvmd-control/turbovas-control.sock &&
+        rm -f /runtime/run/gvmd-gmp/gvmd.sock /runtime/run/gvmd-control/yafvs-control.sock &&
         exec gvmd --foreground
         --database="$${POSTGRES_DB:-turbovas}"
         --db-host=postgres
@@ -256,7 +256,7 @@ services:
         --scan-queue
         --max-active-scan-handlers=1
         --unix-socket=/runtime/run/gvmd-gmp/gvmd.sock
-        --turbovas-control-socket=/runtime/run/gvmd-control/turbovas-control.sock
+        --yafvs-control-socket=/runtime/run/gvmd-control/yafvs-control.sock
         --listen-mode=0660
 
   ospd-openvas:
@@ -522,8 +522,8 @@ services:
       YAFVS_API_OPERATOR_NAME: ${YAFVS_API_OPERATOR_NAME:-}
       YAFVS_API_DIRECT_WRITE_CONTROL: ${YAFVS_API_DIRECT_WRITE_CONTROL:-}
       YAFVS_API_BROWSER_PROXY_SECRET: ${YAFVS_API_BROWSER_PROXY_SECRET:-}
-      YAFVS_API_GVMD_CONTROL_SOCKET: /runtime/run/gvmd/turbovas-control.sock
-      TURBOVAS_GVMD_CONTROL_SECRET: ${TURBOVAS_GVMD_CONTROL_SECRET:-}
+      YAFVS_API_GVMD_CONTROL_SOCKET: /runtime/run/gvmd/yafvs-control.sock
+      YAFVS_GVMD_CONTROL_SECRET: ${YAFVS_GVMD_CONTROL_SECRET:-}
       TURBOVAS_FEED_METADATA_DIR: /runtime/feeds
       TURBOVAS_FEED_LOCK_DIR: /runtime/run
     volumes:

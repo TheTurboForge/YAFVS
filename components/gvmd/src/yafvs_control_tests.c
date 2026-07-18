@@ -3,16 +3,16 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-#define copy_user turbovas_control_test_copy_user
-#define g_log_structured turbovas_control_test_log_structured
+#define copy_user yafvs_control_test_copy_user
+#define g_log_structured yafvs_control_test_log_structured
 #define manage_auth_settings_clear \
-  turbovas_control_test_manage_auth_settings_clear
-#define manage_auth_settings_read turbovas_control_test_manage_auth_settings_read
+  yafvs_control_test_manage_auth_settings_clear
+#define manage_auth_settings_read yafvs_control_test_manage_auth_settings_read
 #define manage_auth_settings_write_ldap \
-  turbovas_control_test_manage_auth_settings_write_ldap
+  yafvs_control_test_manage_auth_settings_write_ldap
 #define manage_auth_settings_write_radius \
-  turbovas_control_test_manage_auth_settings_write_radius
-#include "turbovas_control.c"
+  yafvs_control_test_manage_auth_settings_write_radius
+#include "yafvs_control.c"
 #undef manage_auth_settings_write_radius
 #undef manage_auth_settings_write_ldap
 #undef manage_auth_settings_read
@@ -31,9 +31,9 @@
 #define TEST_DIAGNOSTIC_PING_OID "1.3.6.1.4.1.25623.1.0.100315"
 #define TEST_DIAGNOSTIC_PREREQUISITE_FAMILY "Port scanners"
 
-Describe (turbovas_control);
-BeforeEach (turbovas_control) {}
-AfterEach (turbovas_control) {}
+Describe (yafvs_control);
+BeforeEach (yafvs_control) {}
+AfterEach (yafvs_control) {}
 
 static int cleanup_calls;
 static int alert_test_calls;
@@ -182,7 +182,7 @@ static gchar *trash_empty_audit_outcome;
 static gboolean auth_settings_empty_required;
 
 manage_auth_settings_result_t
-turbovas_control_test_manage_auth_settings_read (
+yafvs_control_test_manage_auth_settings_read (
   manage_auth_settings_t *settings)
 {
   assert_that (current_credentials.uuid,
@@ -216,7 +216,7 @@ turbovas_control_test_manage_auth_settings_read (
 }
 
 void
-turbovas_control_test_manage_auth_settings_clear (
+yafvs_control_test_manage_auth_settings_clear (
   manage_auth_settings_t *settings)
 {
   g_clear_pointer (&settings->ldap_host, g_free);
@@ -231,7 +231,7 @@ turbovas_control_test_manage_auth_settings_clear (
 }
 
 manage_auth_settings_result_t
-turbovas_control_test_manage_auth_settings_write_ldap (
+yafvs_control_test_manage_auth_settings_write_ldap (
   int enabled, const gchar *host, const gchar *authdn, int allow_plaintext,
   int ldaps_only, const gchar *cacert)
 {
@@ -252,7 +252,7 @@ turbovas_control_test_manage_auth_settings_write_ldap (
 }
 
 manage_auth_settings_result_t
-turbovas_control_test_manage_auth_settings_write_radius (
+yafvs_control_test_manage_auth_settings_write_radius (
   int enabled, const gchar *host, const gchar *secret)
 {
   assert_that (current_credentials.uuid,
@@ -298,7 +298,7 @@ __wrap_modify_setting (const gchar *uuid, const gchar *name,
 }
 
 void
-turbovas_control_test_log_structured (const gchar *log_domain,
+yafvs_control_test_log_structured (const gchar *log_domain,
                                       GLogLevelFlags log_level, ...)
 {
   const gchar *format;
@@ -424,7 +424,7 @@ __wrap_create_user (const gchar *name, const gchar *password,
 }
 
 int
-turbovas_control_test_copy_user (const char *name, const char *comment,
+yafvs_control_test_copy_user (const char *name, const char *comment,
                                  const char *user_id, user_t *new_user)
 {
   assert_that (current_credentials.uuid,
@@ -439,10 +439,10 @@ turbovas_control_test_copy_user (const char *name, const char *comment,
   return clone_user_result;
 }
 
-Ensure (turbovas_control,
+Ensure (yafvs_control,
         reports_committed_user_create_when_uuid_lookup_fails)
 {
-  turbovas_control_user_create_request_t create = {0};
+  yafvs_control_user_create_request_t create = {0};
   char created_uuid[37];
 
   create_user_result = 0;
@@ -452,13 +452,13 @@ Ensure (turbovas_control,
   create.name = g_strdup ("created");
   create.comment = g_strdup ("comment");
 
-  assert_that (turbovas_control_create_user (
+  assert_that (yafvs_control_create_user (
                  "123e4567-e89b-12d3-a456-426614174000", &create,
                  created_uuid), is_equal_to (-3));
   assert_that (created_uuid, is_equal_to_string (""));
 
   user_uuid_lookup_fails = FALSE;
-  turbovas_control_user_create_request_clear (&create);
+  yafvs_control_user_create_request_clear (&create);
 }
 
 int
@@ -1790,7 +1790,7 @@ __real_create_alert_start_task_with_task_ref (const char *, const char *,
 
 static ssize_t
 dispatch_trash_empty_request (const char *request,
-                              char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES])
+                              char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES])
 {
   int sockets[2];
   ssize_t response_len;
@@ -1799,9 +1799,9 @@ dispatch_trash_empty_request (const char *request,
   assert_that (write (sockets[0], request, strlen (request)),
                is_equal_to ((ssize_t) strlen (request)));
   assert_that (shutdown (sockets[0], SHUT_WR), is_equal_to (0));
-  turbovas_control_serve_client (sockets[1]);
+  yafvs_control_serve_client (sockets[1]);
   response_len = read (sockets[0], response,
-                       TURBOVAS_CONTROL_MAX_RESPONSE_BYTES - 1);
+                       YAFVS_CONTROL_MAX_RESPONSE_BYTES - 1);
   close (sockets[0]);
   close (sockets[1]);
 
@@ -1811,7 +1811,7 @@ dispatch_trash_empty_request (const char *request,
 static ssize_t
 dispatch_auth_settings_request (
   const char *request,
-  char response[TURBOVAS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES])
+  char response[YAFVS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES])
 {
   int sockets[2];
   ssize_t response_len;
@@ -1820,10 +1820,10 @@ dispatch_auth_settings_request (
   assert_that (write (sockets[0], request, strlen (request)),
                is_equal_to ((ssize_t) strlen (request)));
   assert_that (shutdown (sockets[0], SHUT_WR), is_equal_to (0));
-  turbovas_control_serve_client (sockets[1]);
+  yafvs_control_serve_client (sockets[1]);
   response_len =
     read (sockets[0], response,
-          TURBOVAS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES - 1);
+          YAFVS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES - 1);
   close (sockets[0]);
   close (sockets[1]);
   return response_len;
@@ -1849,7 +1849,7 @@ reset_auth_settings_test (void)
   mock_operator_name = "operator";
 }
 
-Ensure (turbovas_control, parses_strict_auth_settings_frames)
+Ensure (yafvs_control, parses_strict_auth_settings_frames)
 {
   const char *read_request =
     "auth-settings-read " TEST_CONTROL_SECRET " "
@@ -1864,17 +1864,17 @@ Ensure (turbovas_control, parses_strict_auth_settings_frames)
     "auth-settings-radius-write " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 1 "
     "cmFkaXVzLmV4YW1wbGU= c2VjcmV0\n";
-  turbovas_control_auth_settings_ldap_request_t ldap = {0};
-  turbovas_control_auth_settings_radius_request_t radius = {0};
+  yafvs_control_auth_settings_ldap_request_t ldap = {0};
+  yafvs_control_auth_settings_radius_request_t radius = {0};
   char operator_uuid[37];
 
-  assert_that (turbovas_control_parse_auth_settings_read_request (
+  assert_that (yafvs_control_parse_auth_settings_read_request (
                  read_request, strlen (read_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid), is_true);
   assert_that (operator_uuid,
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174000"));
 
-  assert_that (turbovas_control_parse_auth_settings_ldap_write_request (
+  assert_that (yafvs_control_parse_auth_settings_ldap_write_request (
                  empty_ldap_request, strlen (empty_ldap_request),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, &ldap), is_true);
@@ -1884,26 +1884,26 @@ Ensure (turbovas_control, parses_strict_auth_settings_frames)
   assert_that (ldap.allow_plaintext, is_equal_to (1));
   assert_that (ldap.ldaps_only, is_equal_to (0));
   assert_that (ldap.cacert, is_null);
-  turbovas_control_auth_settings_ldap_request_clear (&ldap);
+  yafvs_control_auth_settings_ldap_request_clear (&ldap);
 
-  assert_that (turbovas_control_parse_auth_settings_radius_write_request (
+  assert_that (yafvs_control_parse_auth_settings_radius_write_request (
                  empty_radius_request, strlen (empty_radius_request),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, &radius), is_true);
   assert_that (radius.host, is_equal_to_string (""));
   assert_that (radius.secret, is_null);
-  turbovas_control_auth_settings_radius_request_clear (&radius);
+  yafvs_control_auth_settings_radius_request_clear (&radius);
 
-  assert_that (turbovas_control_parse_auth_settings_radius_write_request (
+  assert_that (yafvs_control_parse_auth_settings_radius_write_request (
                  radius_request, strlen (radius_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &radius),
                is_true);
   assert_that (radius.host, is_equal_to_string ("radius.example"));
   assert_that (radius.secret, is_equal_to_string ("secret"));
-  turbovas_control_auth_settings_radius_request_clear (&radius);
+  yafvs_control_auth_settings_radius_request_clear (&radius);
 }
 
-Ensure (turbovas_control, rejects_malformed_auth_settings_frames)
+Ensure (yafvs_control, rejects_malformed_auth_settings_frames)
 {
   static const char *requests[] = {
     "auth-settings-read " TEST_CONTROL_SECRET " "
@@ -1918,32 +1918,32 @@ Ensure (turbovas_control, rejects_malformed_auth_settings_frames)
     "auth-settings-radius-write " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 1 cmFkaXVz= c2VjcmV0\n",
   };
-  turbovas_control_auth_settings_ldap_request_t ldap = {0};
-  turbovas_control_auth_settings_radius_request_t radius = {0};
+  yafvs_control_auth_settings_ldap_request_t ldap = {0};
+  yafvs_control_auth_settings_radius_request_t radius = {0};
   char operator_uuid[37];
 
-  assert_that (turbovas_control_parse_auth_settings_read_request (
+  assert_that (yafvs_control_parse_auth_settings_read_request (
                  requests[0], strlen (requests[0]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid), is_false);
-  assert_that (turbovas_control_parse_auth_settings_ldap_write_request (
+  assert_that (yafvs_control_parse_auth_settings_ldap_write_request (
                  requests[1], strlen (requests[1]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &ldap),
                is_false);
-  assert_that (turbovas_control_parse_auth_settings_ldap_write_request (
+  assert_that (yafvs_control_parse_auth_settings_ldap_write_request (
                  requests[2], strlen (requests[2]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &ldap),
                is_false);
-  assert_that (turbovas_control_parse_auth_settings_radius_write_request (
+  assert_that (yafvs_control_parse_auth_settings_radius_write_request (
                  requests[3], strlen (requests[3]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &radius),
                is_false);
-  assert_that (turbovas_control_parse_auth_settings_radius_write_request (
+  assert_that (yafvs_control_parse_auth_settings_radius_write_request (
                  requests[4], strlen (requests[4]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &radius),
                is_false);
 }
 
-Ensure (turbovas_control, maps_auth_settings_responses)
+Ensure (yafvs_control, maps_auth_settings_responses)
 {
   manage_auth_settings_t empty = {
     .ldap_host = "",
@@ -1952,34 +1952,34 @@ Ensure (turbovas_control, maps_auth_settings_responses)
   };
   gchar *read_response;
 
-  read_response = turbovas_control_auth_settings_read_response (&empty);
+  read_response = yafvs_control_auth_settings_read_response (&empty);
   assert_that (
     read_response,
     is_equal_to_string (
       "0 settings 0 0 - - 0 0 0 - - - - - 0 0 - 0\n"));
-  turbovas_control_secure_free (read_response);
+  yafvs_control_secure_free (read_response);
 
-  assert_that (turbovas_control_auth_settings_response (0),
+  assert_that (yafvs_control_auth_settings_response (0),
                is_equal_to_string ("0 updated\n"));
-  assert_that (turbovas_control_auth_settings_response (1),
+  assert_that (yafvs_control_auth_settings_response (1),
                is_equal_to_string ("1 invalid-auth-dn\n"));
-  assert_that (turbovas_control_auth_settings_response (2),
+  assert_that (yafvs_control_auth_settings_response (2),
                is_equal_to_string ("2 invalid-certificate\n"));
-  assert_that (turbovas_control_auth_settings_response (3),
+  assert_that (yafvs_control_auth_settings_response (3),
                is_equal_to_string ("3 provider-unavailable\n"));
-  assert_that (turbovas_control_auth_settings_response (4),
+  assert_that (yafvs_control_auth_settings_response (4),
                is_equal_to_string ("4 encryption-failed\n"));
-  assert_that (turbovas_control_auth_settings_response (99),
+  assert_that (yafvs_control_auth_settings_response (99),
                is_equal_to_string ("99 permission-denied\n"));
-  assert_that (turbovas_control_auth_settings_response (-2),
+  assert_that (yafvs_control_auth_settings_response (-2),
                is_equal_to_string ("-2 invalid-request\n"));
-  assert_that (turbovas_control_auth_settings_response (-1),
+  assert_that (yafvs_control_auth_settings_response (-1),
                is_equal_to_string ("-1 internal-error\n"));
 }
 
-Ensure (turbovas_control, runs_auth_settings_in_authorized_operator_session)
+Ensure (yafvs_control, runs_auth_settings_in_authorized_operator_session)
 {
-  turbovas_control_auth_settings_ldap_request_t ldap = {
+  yafvs_control_auth_settings_ldap_request_t ldap = {
     .enabled = 1,
     .host = "ldap.example",
     .authdn = "uid=%s,dc=example",
@@ -1987,7 +1987,7 @@ Ensure (turbovas_control, runs_auth_settings_in_authorized_operator_session)
     .ldaps_only = 1,
     .cacert = "certificate",
   };
-  turbovas_control_auth_settings_radius_request_t radius = {
+  yafvs_control_auth_settings_radius_request_t radius = {
     .enabled = 0,
     .host = "radius.example",
     .secret = "secret",
@@ -1995,16 +1995,16 @@ Ensure (turbovas_control, runs_auth_settings_in_authorized_operator_session)
   gchar *response = NULL;
 
   reset_auth_settings_test ();
-  assert_that (turbovas_control_read_auth_settings (
+  assert_that (yafvs_control_read_auth_settings (
                  "123e4567-e89b-12d3-a456-426614174000", &response),
                is_equal_to (MANAGE_AUTH_SETTINGS_OK));
   assert_that (auth_settings_read_calls, is_equal_to (1));
   assert_that (response, contains_string ("0 settings 1 1 "));
   assert_that (strstr (response, "certificate"), is_null);
   assert_that (strstr (response, "secret"), is_null);
-  turbovas_control_secure_free (response);
+  yafvs_control_secure_free (response);
 
-  assert_that (turbovas_control_write_ldap_auth_settings (
+  assert_that (yafvs_control_write_ldap_auth_settings (
                  "123e4567-e89b-12d3-a456-426614174000", &ldap),
                is_equal_to (MANAGE_AUTH_SETTINGS_OK));
   assert_that (auth_settings_ldap_write_calls, is_equal_to (1));
@@ -2012,7 +2012,7 @@ Ensure (turbovas_control, runs_auth_settings_in_authorized_operator_session)
   assert_that (received_authdn, is_equal_to_string ("uid=%s,dc=example"));
   assert_that (received_auth_cacert, is_equal_to_string ("certificate"));
 
-  assert_that (turbovas_control_write_radius_auth_settings (
+  assert_that (yafvs_control_write_radius_auth_settings (
                  "123e4567-e89b-12d3-a456-426614174000", &radius),
                is_equal_to (MANAGE_AUTH_SETTINGS_OK));
   assert_that (auth_settings_radius_write_calls, is_equal_to (1));
@@ -2023,7 +2023,7 @@ Ensure (turbovas_control, runs_auth_settings_in_authorized_operator_session)
   reset_auth_settings_test ();
 }
 
-Ensure (turbovas_control, round_trips_empty_auth_settings_fields)
+Ensure (yafvs_control, round_trips_empty_auth_settings_fields)
 {
   const char *ldap_request =
     "auth-settings-ldap-write " TEST_CONTROL_SECRET " "
@@ -2031,13 +2031,13 @@ Ensure (turbovas_control, round_trips_empty_auth_settings_fields)
   const char *read_request =
     "auth-settings-read " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000\n";
-  char response[TURBOVAS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES] = {0};
+  char response[YAFVS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES] = {0};
   ssize_t response_len;
 
   reset_auth_settings_test ();
   auth_settings_ldap_write_result = MANAGE_AUTH_SETTINGS_INVALID_AUTH_DN;
   assert_that (
-    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+    g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
   response_len = dispatch_auth_settings_request (ldap_request, response);
   response[response_len] = '\0';
   assert_that (response, is_equal_to_string ("1 invalid-auth-dn\n"));
@@ -2050,11 +2050,11 @@ Ensure (turbovas_control, round_trips_empty_auth_settings_fields)
   assert_that (g_str_has_prefix (response,
                                  "0 settings 1 1 - - 0 1 1 "), is_true);
   assert_that (g_str_has_suffix (response, " 1 0 - 1\n"), is_true);
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
   reset_auth_settings_test ();
 }
 
-Ensure (turbovas_control, rejects_unknown_auth_settings_operator_and_malformed_frame)
+Ensure (yafvs_control, rejects_unknown_auth_settings_operator_and_malformed_frame)
 {
   const char *read_request =
     "auth-settings-read " TEST_CONTROL_SECRET " "
@@ -2062,13 +2062,13 @@ Ensure (turbovas_control, rejects_unknown_auth_settings_operator_and_malformed_f
   const char *malformed =
     "auth-settings-radius-write " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 1 bad= -\n";
-  char response[TURBOVAS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES] = {0};
+  char response[YAFVS_CONTROL_AUTH_SETTINGS_MAX_RESPONSE_BYTES] = {0};
   ssize_t response_len;
 
   reset_auth_settings_test ();
   mock_operator_name = NULL;
   assert_that (
-    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+    g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
   response_len = dispatch_auth_settings_request (read_request, response);
   response[response_len] = '\0';
   assert_that (response, is_equal_to_string ("99 permission-denied\n"));
@@ -2078,7 +2078,7 @@ Ensure (turbovas_control, rejects_unknown_auth_settings_operator_and_malformed_f
   response_len = dispatch_auth_settings_request (malformed, response);
   response[response_len] = '\0';
   assert_that (response, is_equal_to_string ("-2 invalid-request\n"));
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
   reset_auth_settings_test ();
 }
 
@@ -2100,7 +2100,7 @@ assert_trash_empty_structured_audit (const char *message, const char *outcome,
                is_null);
 }
 
-Ensure (turbovas_control, accepts_strict_bounded_trash_empty_request)
+Ensure (yafvs_control, accepts_strict_bounded_trash_empty_request)
 {
   const char *request =
     "trash-empty " TEST_CONTROL_SECRET " "
@@ -2110,7 +2110,7 @@ Ensure (turbovas_control, accepts_strict_bounded_trash_empty_request)
   char expected_snapshot_digest[65];
   gint64 expected_total = -1;
 
-  assert_that (turbovas_control_parse_trash_empty_request (
+  assert_that (yafvs_control_parse_trash_empty_request (
                  request, strlen (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid,
                  &expected_total, expected_snapshot_digest),
@@ -2122,7 +2122,7 @@ Ensure (turbovas_control, accepts_strict_bounded_trash_empty_request)
                is_equal_to_string (TEST_TRASH_SNAPSHOT_DIGEST));
 }
 
-Ensure (turbovas_control, rejects_malformed_trash_empty_requests)
+Ensure (yafvs_control, rejects_malformed_trash_empty_requests)
 {
   const char *invalid[] = {
     "trash-empty " TEST_CONTROL_SECRET " "
@@ -2144,36 +2144,36 @@ Ensure (turbovas_control, rejects_malformed_trash_empty_requests)
   size_t index;
 
   for (index = 0; index < G_N_ELEMENTS (invalid); index++)
-    assert_that (turbovas_control_parse_trash_empty_request (
+    assert_that (yafvs_control_parse_trash_empty_request (
                    invalid[index], strlen (invalid[index]),
                    TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                    operator_uuid, &expected_total, expected_snapshot_digest),
                  is_false);
 }
 
-Ensure (turbovas_control, maps_trash_empty_contract_responses)
+Ensure (yafvs_control, maps_trash_empty_contract_responses)
 {
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES];
 
-  assert_that (turbovas_control_trash_empty_response (0, 7, response),
+  assert_that (yafvs_control_trash_empty_response (0, 7, response),
                is_equal_to_string ("0 emptied 7\n"));
-  assert_that (turbovas_control_trash_empty_response (1, 8, response),
+  assert_that (yafvs_control_trash_empty_response (1, 8, response),
                is_equal_to_string ("1 expected-snapshot-mismatch 8\n"));
-  assert_that (turbovas_control_trash_empty_response (2, 0, response),
+  assert_that (yafvs_control_trash_empty_response (2, 0, response),
                is_equal_to_string ("2 forbidden\n"));
-  assert_that (turbovas_control_trash_empty_response (3, 0, response),
+  assert_that (yafvs_control_trash_empty_response (3, 0, response),
                is_equal_to_string ("3 operator-not-found\n"));
-  assert_that (turbovas_control_trash_empty_response (-1, 0, response),
+  assert_that (yafvs_control_trash_empty_response (-1, 0, response),
                is_equal_to_string ("-1 error\n"));
 }
 
-Ensure (turbovas_control, dispatches_trash_count_mismatch)
+Ensure (yafvs_control, dispatches_trash_count_mismatch)
 {
   const char *request =
     "trash-empty " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 4 "
     TEST_TRASH_SNAPSHOT_DIGEST "\n";
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
   ssize_t response_len;
 
   cleanup_calls = 0;
@@ -2186,7 +2186,7 @@ Ensure (turbovas_control, dispatches_trash_count_mismatch)
   mock_operator_name = "operator";
   reset_trash_empty_audit ();
 
-  assert_that (g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
+  assert_that (g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
                          TRUE),
                is_true);
   response_len = dispatch_trash_empty_request (request, response);
@@ -2208,17 +2208,17 @@ Ensure (turbovas_control, dispatches_trash_count_mismatch)
   assert_trash_empty_structured_audit ("Trashcan empty request rejected",
                                        "expected-snapshot-mismatch", "4", "5");
 
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
   reset_trash_empty_audit ();
 }
 
-Ensure (turbovas_control, audits_successful_trash_empty)
+Ensure (yafvs_control, audits_successful_trash_empty)
 {
   const char *request =
     "trash-empty " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 5 "
     TEST_TRASH_SNAPSHOT_DIGEST "\n";
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
   ssize_t response_len;
 
   cleanup_calls = 0;
@@ -2231,7 +2231,7 @@ Ensure (turbovas_control, audits_successful_trash_empty)
   mock_operator_name = "operator";
   reset_trash_empty_audit ();
 
-  assert_that (g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
+  assert_that (g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
                          TRUE),
                is_true);
   response_len = dispatch_trash_empty_request (request, response);
@@ -2251,11 +2251,11 @@ Ensure (turbovas_control, audits_successful_trash_empty)
   assert_trash_empty_structured_audit ("Trashcan emptied", "emptied", "5",
                                        "5");
 
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
   reset_trash_empty_audit ();
 }
 
-Ensure (turbovas_control, audits_trash_empty_failures)
+Ensure (yafvs_control, audits_trash_empty_failures)
 {
   static const struct
   {
@@ -2272,13 +2272,13 @@ Ensure (turbovas_control, audits_trash_empty_failures)
     TEST_TRASH_SNAPSHOT_DIGEST "\n";
   size_t index;
 
-  assert_that (g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
+  assert_that (g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
                          TRUE),
                is_true);
 
   for (index = 0; index < G_N_ELEMENTS (cases); index++)
     {
-      char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+      char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
       ssize_t response_len;
 
       cleanup_calls = 0;
@@ -2310,16 +2310,16 @@ Ensure (turbovas_control, audits_trash_empty_failures)
       reset_trash_empty_audit ();
     }
 
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
 }
 
-Ensure (turbovas_control, does_not_audit_missing_trash_operator)
+Ensure (yafvs_control, does_not_audit_missing_trash_operator)
 {
   const char *request =
     "trash-empty " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 5 "
     TEST_TRASH_SNAPSHOT_DIGEST "\n";
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
   ssize_t response_len;
 
   cleanup_calls = 0;
@@ -2329,7 +2329,7 @@ Ensure (turbovas_control, does_not_audit_missing_trash_operator)
   mock_operator_name = NULL;
   reset_trash_empty_audit ();
 
-  assert_that (g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
+  assert_that (g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
                          TRUE),
                is_true);
   response_len = dispatch_trash_empty_request (request, response);
@@ -2347,11 +2347,11 @@ Ensure (turbovas_control, does_not_audit_missing_trash_operator)
   assert_that (trash_empty_audit_fail_calls, is_equal_to (0));
   assert_that (trash_empty_structured_audit_calls, is_equal_to (0));
 
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
   reset_trash_empty_audit ();
 }
 
-Ensure (turbovas_control, locks_before_count_and_skips_delete_on_mismatch)
+Ensure (yafvs_control, locks_before_count_and_skips_delete_on_mismatch)
 {
   static const char *base_tables[] = {
     "alerts_trash", "configs_trash", "credentials_trash", "filters_trash",
@@ -2399,7 +2399,7 @@ Ensure (turbovas_control, locks_before_count_and_skips_delete_on_mismatch)
   current_credentials.uuid = NULL;
 }
 
-Ensure (turbovas_control, accepts_canonical_schedule_create_request)
+Ensure (yafvs_control, accepts_canonical_schedule_create_request)
 {
   const char *calendar = "BEGIN:VCALENDAR\nEND:VCALENDAR\n";
   const char *timezone = "Europe/Berlin";
@@ -2412,9 +2412,9 @@ Ensure (turbovas_control, accepts_canonical_schedule_create_request)
     "123e4567-e89b-12d3-a456-426614174000 "
     "TmlnaHRseQ==  %s %s\n", timezone_b64, calendar_b64);
   char operator_uuid[37];
-  turbovas_control_schedule_create_request_t schedule = {0};
+  yafvs_control_schedule_create_request_t schedule = {0};
 
-  assert_that (turbovas_control_parse_schedule_create_request (
+  assert_that (yafvs_control_parse_schedule_create_request (
                  request, strlen (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &schedule),
                is_true);
@@ -2425,17 +2425,17 @@ Ensure (turbovas_control, accepts_canonical_schedule_create_request)
   assert_that (schedule.timezone, is_equal_to_string (timezone));
   assert_that (schedule.icalendar, is_equal_to_string (calendar));
 
-  turbovas_control_schedule_create_request_clear (&schedule);
+  yafvs_control_schedule_create_request_clear (&schedule);
   g_free (request);
   g_free (timezone_b64);
   g_free (calendar_b64);
 }
 
-Ensure (turbovas_control, accepts_maximum_schedule_fields)
+Ensure (yafvs_control, accepts_maximum_schedule_fields)
 {
-  gchar *name = g_strnfill (TURBOVAS_CONTROL_SCHEDULE_NAME_MAX_BYTES, 'n');
+  gchar *name = g_strnfill (YAFVS_CONTROL_SCHEDULE_NAME_MAX_BYTES, 'n');
   gchar *icalendar = g_strnfill (
-    TURBOVAS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES, 'i');
+    YAFVS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES, 'i');
   gchar *name_b64 = g_base64_encode ((const guchar *) name, strlen (name));
   gchar *icalendar_b64 = g_base64_encode ((const guchar *) icalendar,
                                            strlen (icalendar));
@@ -2444,18 +2444,18 @@ Ensure (turbovas_control, accepts_maximum_schedule_fields)
     "123e4567-e89b-12d3-a456-426614174000 "
     "%s   %s\n", name_b64, icalendar_b64);
   char operator_uuid[37];
-  turbovas_control_schedule_create_request_t schedule = {0};
+  yafvs_control_schedule_create_request_t schedule = {0};
 
-  assert_that (turbovas_control_parse_schedule_create_request (
+  assert_that (yafvs_control_parse_schedule_create_request (
                  request, strlen (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &schedule),
                is_true);
   assert_that (strlen (schedule.name),
-               is_equal_to (TURBOVAS_CONTROL_SCHEDULE_NAME_MAX_BYTES));
+               is_equal_to (YAFVS_CONTROL_SCHEDULE_NAME_MAX_BYTES));
   assert_that (strlen (schedule.icalendar),
-               is_equal_to (TURBOVAS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES));
+               is_equal_to (YAFVS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES));
 
-  turbovas_control_schedule_create_request_clear (&schedule);
+  yafvs_control_schedule_create_request_clear (&schedule);
   g_free (request);
   g_free (icalendar_b64);
   g_free (name_b64);
@@ -2463,12 +2463,12 @@ Ensure (turbovas_control, accepts_maximum_schedule_fields)
   g_free (name);
 }
 
-Ensure (turbovas_control, rejects_noncanonical_or_oversized_schedule_fields)
+Ensure (yafvs_control, rejects_noncanonical_or_oversized_schedule_fields)
 {
   gchar *oversized_name = g_strnfill (
-    TURBOVAS_CONTROL_SCHEDULE_NAME_MAX_BYTES + 1, 'a');
+    YAFVS_CONTROL_SCHEDULE_NAME_MAX_BYTES + 1, 'a');
   gchar *oversized_icalendar = g_strnfill (
-    TURBOVAS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES + 1, 'i');
+    YAFVS_CONTROL_SCHEDULE_ICALENDAR_MAX_BYTES + 1, 'i');
   gchar *oversized_name_b64 = g_base64_encode ((const guchar *) oversized_name,
                                                 strlen (oversized_name));
   gchar *oversized_icalendar_b64 = g_base64_encode (
@@ -2486,27 +2486,27 @@ Ensure (turbovas_control, rejects_noncanonical_or_oversized_schedule_fields)
     "123e4567-e89b-12d3-a456-426614174000 "
     "TmlnaHRseQ==   %s\n", oversized_icalendar_b64);
   gchar *overlong_request = g_strnfill (
-    TURBOVAS_CONTROL_MAX_REQUEST_BYTES + 1, 'x');
+    YAFVS_CONTROL_MAX_REQUEST_BYTES + 1, 'x');
   char operator_uuid[37];
-  turbovas_control_schedule_create_request_t schedule = {0};
+  yafvs_control_schedule_create_request_t schedule = {0};
 
-  assert_that (turbovas_control_parse_schedule_create_request (
+  assert_that (yafvs_control_parse_schedule_create_request (
                  invalid_request, strlen (invalid_request),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, &schedule),
                is_false);
-  assert_that (turbovas_control_parse_schedule_create_request (
+  assert_that (yafvs_control_parse_schedule_create_request (
                  oversized_request, strlen (oversized_request),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, &schedule),
                is_false);
-  assert_that (turbovas_control_parse_schedule_create_request (
+  assert_that (yafvs_control_parse_schedule_create_request (
                  oversized_icalendar_request,
                  strlen (oversized_icalendar_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &schedule),
                is_false);
-  assert_that (turbovas_control_parse_schedule_create_request (
-                 overlong_request, TURBOVAS_CONTROL_MAX_REQUEST_BYTES + 1,
+  assert_that (yafvs_control_parse_schedule_create_request (
+                 overlong_request, YAFVS_CONTROL_MAX_REQUEST_BYTES + 1,
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, &schedule),
                is_false);
@@ -2521,9 +2521,9 @@ Ensure (turbovas_control, rejects_noncanonical_or_oversized_schedule_fields)
   g_free (oversized_name);
 }
 
-Ensure (turbovas_control, creates_schedule_in_operator_session)
+Ensure (yafvs_control, creates_schedule_in_operator_session)
 {
-  const turbovas_control_schedule_create_request_t request = {
+  const yafvs_control_schedule_create_request_t request = {
     .name = "Nightly",
     .comment = "",
     .timezone = "Europe/Berlin",
@@ -2538,7 +2538,7 @@ Ensure (turbovas_control, creates_schedule_in_operator_session)
   session_init_calls = 0;
   mock_operator_name = "operator";
 
-  assert_that (turbovas_control_create_schedule (
+  assert_that (yafvs_control_create_schedule (
                  "123e4567-e89b-12d3-a456-426614174000", &request,
                  created_uuid),
                is_equal_to (0));
@@ -2730,7 +2730,7 @@ test_alert_smb_create_request (const char *active, const char *name,
   return request;
 }
 
-Ensure (turbovas_control, parses_canonical_bounded_alert_email_request)
+Ensure (yafvs_control, parses_canonical_bounded_alert_email_request)
 {
   static const char *statuses[] = {
     "Delete Requested", "Ultimate Delete Requested",
@@ -2749,9 +2749,9 @@ Ensure (turbovas_control, parses_canonical_bounded_alert_email_request)
         "1", "Email alert", "comment", statuses[index], "ops@example.com",
         "sender@example.com", "subject", "0", recipient, format,
         "", "Line one\nLine two");
-      turbovas_control_alert_email_create_request_t alert = {0};
+      yafvs_control_alert_email_create_request_t alert = {0};
 
-      assert_that (turbovas_control_parse_alert_email_create_request (
+      assert_that (yafvs_control_parse_alert_email_create_request (
                      request, strlen (request), TEST_CONTROL_SECRET,
                      strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
                    is_true);
@@ -2768,12 +2768,12 @@ Ensure (turbovas_control, parses_canonical_bounded_alert_email_request)
       assert_that (alert.report_format_uuid, is_equal_to_string (format));
       assert_that (alert.message,
                    is_equal_to_string ("Line one\nLine two"));
-      turbovas_control_alert_email_create_request_clear (&alert);
+      yafvs_control_alert_email_create_request_clear (&alert);
       g_free (request);
     }
 }
 
-Ensure (turbovas_control, enforces_alert_email_notice_mode_semantics)
+Ensure (yafvs_control, enforces_alert_email_notice_mode_semantics)
 {
   const char *format = "123e4567-e89b-12d3-a456-426614174011";
   const char *report_notices[] = {"0", "2"};
@@ -2781,17 +2781,17 @@ Ensure (turbovas_control, enforces_alert_email_notice_mode_semantics)
   gchar *invalid[5];
   char operator_uuid[37];
   size_t index;
-  turbovas_control_alert_email_create_request_t alert = {0};
+  yafvs_control_alert_email_create_request_t alert = {0};
 
   request = test_alert_email_create_request (
     "1", "Simple", "", "Running", "ops@example.com", "", "subject", "1",
     "", "", "", "simple message");
-  assert_that (turbovas_control_parse_alert_email_create_request (
+  assert_that (yafvs_control_parse_alert_email_create_request (
                  request, strlen (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
                is_true);
   assert_that (alert.message, is_equal_to_string ("simple message"));
-  turbovas_control_alert_email_create_request_clear (&alert);
+  yafvs_control_alert_email_create_request_clear (&alert);
   g_free (request);
 
   for (index = 0; index < G_N_ELEMENTS (report_notices); index++)
@@ -2799,11 +2799,11 @@ Ensure (turbovas_control, enforces_alert_email_notice_mode_semantics)
       request = test_alert_email_create_request (
         "1", "Report", "", "Running", "ops@example.com", "", "subject",
         report_notices[index], "", format, "", "");
-      assert_that (turbovas_control_parse_alert_email_create_request (
+      assert_that (yafvs_control_parse_alert_email_create_request (
                      request, strlen (request), TEST_CONTROL_SECRET,
                      strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
                    is_true);
-      turbovas_control_alert_email_create_request_clear (&alert);
+      yafvs_control_alert_email_create_request_clear (&alert);
       g_free (request);
     }
 
@@ -2824,7 +2824,7 @@ Ensure (turbovas_control, enforces_alert_email_notice_mode_semantics)
     "subject", "2", "", "", "", "");
   for (index = 0; index < G_N_ELEMENTS (invalid); index++)
     {
-      assert_that (turbovas_control_parse_alert_email_create_request (
+      assert_that (yafvs_control_parse_alert_email_create_request (
                      invalid[index], strlen (invalid[index]),
                      TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                      operator_uuid, &alert),
@@ -2833,64 +2833,64 @@ Ensure (turbovas_control, enforces_alert_email_notice_mode_semantics)
     }
 }
 
-Ensure (turbovas_control, returns_malformed_for_truncated_alert_frame)
+Ensure (yafvs_control, returns_malformed_for_truncated_alert_frame)
 {
   const char *partial = "alert-email-create " TEST_CONTROL_SECRET " partial";
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
   int sockets[2];
   ssize_t response_len;
 
   assert_that (socketpair (AF_UNIX, SOCK_STREAM, 0, sockets), is_equal_to (0));
-  assert_that (g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
+  assert_that (g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET,
                          TRUE),
                is_true);
   assert_that (write (sockets[0], partial, strlen (partial)),
                is_equal_to ((ssize_t) strlen (partial)));
   assert_that (shutdown (sockets[0], SHUT_WR), is_equal_to (0));
-  turbovas_control_serve_client (sockets[1]);
+  yafvs_control_serve_client (sockets[1]);
   response_len = read (sockets[0], response, sizeof (response) - 1);
   assert_that (response_len, is_equal_to ((ssize_t) strlen ("-2 malformed\n")));
   assert_that (response, is_equal_to_string ("-2 malformed\n"));
   close (sockets[0]);
   close (sockets[1]);
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
 }
 
-Ensure (turbovas_control, enforces_alert_email_canonicalization_and_bounds)
+Ensure (yafvs_control, enforces_alert_email_canonicalization_and_bounds)
 {
-  gchar *max_name = g_strnfill (TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES, 'n');
+  gchar *max_name = g_strnfill (YAFVS_CONTROL_ALERT_NAME_MAX_BYTES, 'n');
   gchar *max_comment =
-    g_strnfill (TURBOVAS_CONTROL_ALERT_COMMENT_MAX_BYTES, 'c');
-  gchar *max_to = g_strnfill (TURBOVAS_CONTROL_ALERT_ADDRESS_MAX_BYTES, 't');
+    g_strnfill (YAFVS_CONTROL_ALERT_COMMENT_MAX_BYTES, 'c');
+  gchar *max_to = g_strnfill (YAFVS_CONTROL_ALERT_ADDRESS_MAX_BYTES, 't');
   gchar *max_from =
-    g_strnfill (TURBOVAS_CONTROL_ALERT_ADDRESS_MAX_BYTES, 'f');
+    g_strnfill (YAFVS_CONTROL_ALERT_ADDRESS_MAX_BYTES, 'f');
   gchar *max_subject =
-    g_strnfill (TURBOVAS_CONTROL_ALERT_SUBJECT_MAX_BYTES, 's');
+    g_strnfill (YAFVS_CONTROL_ALERT_SUBJECT_MAX_BYTES, 's');
   gchar *max_message =
-    g_strnfill (TURBOVAS_CONTROL_ALERT_MESSAGE_MAX_BYTES, 'm');
+    g_strnfill (YAFVS_CONTROL_ALERT_MESSAGE_MAX_BYTES, 'm');
   gchar *oversized_name =
-    g_strnfill (TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES + 1, 'n');
+    g_strnfill (YAFVS_CONTROL_ALERT_NAME_MAX_BYTES + 1, 'n');
   gchar *oversized_subject =
-    g_strnfill (TURBOVAS_CONTROL_ALERT_SUBJECT_MAX_BYTES + 1, 's');
+    g_strnfill (YAFVS_CONTROL_ALERT_SUBJECT_MAX_BYTES + 1, 's');
   gchar *oversized_message =
-    g_strnfill (TURBOVAS_CONTROL_ALERT_MESSAGE_MAX_BYTES + 1, 'm');
+    g_strnfill (YAFVS_CONTROL_ALERT_MESSAGE_MAX_BYTES + 1, 'm');
   gchar *requests[6];
-  char full_frame[TURBOVAS_CONTROL_MAX_REQUEST_BYTES];
+  char full_frame[YAFVS_CONTROL_MAX_REQUEST_BYTES];
   char operator_uuid[37];
   size_t index;
-  turbovas_control_alert_email_create_request_t alert = {0};
+  yafvs_control_alert_email_create_request_t alert = {0};
 
   requests[0] = test_alert_email_create_request (
     "0", max_name, max_comment, "Running", max_to, max_from, max_subject, "2",
     "", "123e4567-e89b-12d3-a456-426614174011",
     "123e4567-e89b-12d3-a456-426614174012", max_message);
   assert_that (strlen (requests[0]),
-               is_less_than (TURBOVAS_CONTROL_MAX_REQUEST_BYTES));
-  assert_that (turbovas_control_parse_alert_email_create_request (
+               is_less_than (YAFVS_CONTROL_MAX_REQUEST_BYTES));
+  assert_that (yafvs_control_parse_alert_email_create_request (
                  requests[0], strlen (requests[0]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
                is_true);
-  turbovas_control_alert_email_create_request_clear (&alert);
+  yafvs_control_alert_email_create_request_clear (&alert);
 
   requests[1] = test_alert_email_create_request (
     "0", oversized_name, "", "Running", "ops@example.com", "", "", "1", "",
@@ -2909,16 +2909,16 @@ Ensure (turbovas_control, enforces_alert_email_canonicalization_and_bounds)
     "123e4567-e89b-12d3-a456-426614174000 1 QQ Q29tbWVudA== UnVubmluZw== "
     "b3BzQGV4YW1wbGUuY29t   1    \n");
   for (index = 1; index < G_N_ELEMENTS (requests); index++)
-    assert_that (turbovas_control_parse_alert_email_create_request (
+    assert_that (yafvs_control_parse_alert_email_create_request (
                    requests[index], strlen (requests[index]),
                    TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                    operator_uuid, &alert),
                  is_false);
   memset (full_frame, 'x', sizeof (full_frame));
-  memcpy (full_frame, TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
-          TURBOVAS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH);
+  memcpy (full_frame, YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND,
+          YAFVS_CONTROL_ALERT_EMAIL_CREATE_COMMAND_LENGTH);
   full_frame[sizeof (full_frame) - 1] = '\n';
-  assert_that (turbovas_control_parse_alert_email_create_request (
+  assert_that (yafvs_control_parse_alert_email_create_request (
                  full_frame, sizeof (full_frame), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
                is_false);
@@ -2936,9 +2936,9 @@ Ensure (turbovas_control, enforces_alert_email_canonicalization_and_bounds)
   g_free (oversized_message);
 }
 
-Ensure (turbovas_control, maps_alert_email_arrays_session_and_success_audit)
+Ensure (yafvs_control, maps_alert_email_arrays_session_and_success_audit)
 {
-  const turbovas_control_alert_email_create_request_t request = {
+  const yafvs_control_alert_email_create_request_t request = {
     .name = "Email alert",
     .comment = "comment",
     .status = "Running",
@@ -2962,7 +2962,7 @@ Ensure (turbovas_control, maps_alert_email_arrays_session_and_success_audit)
   audit_success_calls = 0;
   mock_operator_name = "operator";
 
-  assert_that (turbovas_control_create_alert_email (
+  assert_that (yafvs_control_create_alert_email (
                  "123e4567-e89b-12d3-a456-426614174000", &request,
                  created_uuid),
                is_equal_to (0));
@@ -2997,9 +2997,9 @@ Ensure (turbovas_control, maps_alert_email_arrays_session_and_success_audit)
   assert_that (current_credentials.username, is_null);
 }
 
-Ensure (turbovas_control, maps_selected_attach_message_and_failure_audit)
+Ensure (yafvs_control, maps_selected_attach_message_and_failure_audit)
 {
-  const turbovas_control_alert_email_create_request_t request = {
+  const yafvs_control_alert_email_create_request_t request = {
     .name = "Attach alert", .comment = "", .status = "Done",
     .to_address = "ops@example.com", .from_address = "", .subject = "subject",
     .recipient_credential_uuid = "",
@@ -3014,7 +3014,7 @@ Ensure (turbovas_control, maps_selected_attach_message_and_failure_audit)
   audit_success_calls = 0;
   mock_operator_name = "operator";
 
-  assert_that (turbovas_control_create_alert_email (
+  assert_that (yafvs_control_create_alert_email (
                  "123e4567-e89b-12d3-a456-426614174000", &request,
                  created_uuid),
                is_equal_to (2));
@@ -3029,9 +3029,9 @@ Ensure (turbovas_control, maps_selected_attach_message_and_failure_audit)
   assert_that (audit_fail_calls, is_equal_to (1));
 }
 
-Ensure (turbovas_control, maps_simple_notice_without_report_selectors)
+Ensure (yafvs_control, maps_simple_notice_without_report_selectors)
 {
-  const turbovas_control_alert_email_create_request_t request = {
+  const yafvs_control_alert_email_create_request_t request = {
     .name = "Simple alert", .comment = "", .status = "Stopped",
     .to_address = "ops@example.com", .from_address = "", .subject = "subject",
     .recipient_credential_uuid = "", .report_format_uuid = "",
@@ -3044,7 +3044,7 @@ Ensure (turbovas_control, maps_simple_notice_without_report_selectors)
   audit_fail_calls = 0;
   audit_success_calls = 0;
   mock_operator_name = "operator";
-  assert_that (turbovas_control_create_alert_email (
+  assert_that (yafvs_control_create_alert_email (
                  "123e4567-e89b-12d3-a456-426614174000", &request,
                  created_uuid),
                is_equal_to (0));
@@ -3058,9 +3058,9 @@ Ensure (turbovas_control, maps_simple_notice_without_report_selectors)
   assert_that (audit_fail_calls, is_equal_to (0));
 }
 
-Ensure (turbovas_control, omits_empty_optional_report_method_data)
+Ensure (yafvs_control, omits_empty_optional_report_method_data)
 {
-  const turbovas_control_alert_email_create_request_t request = {
+  const yafvs_control_alert_email_create_request_t request = {
     .name = "Include alert", .comment = "", .status = "Done",
     .to_address = "ops@example.com", .from_address = "", .subject = "subject",
     .recipient_credential_uuid = "",
@@ -3073,7 +3073,7 @@ Ensure (turbovas_control, omits_empty_optional_report_method_data)
   audit_fail_calls = 0;
   audit_success_calls = 0;
   mock_operator_name = "operator";
-  assert_that (turbovas_control_create_alert_email (
+  assert_that (yafvs_control_create_alert_email (
                  "123e4567-e89b-12d3-a456-426614174000", &request,
                  created_uuid),
                is_equal_to (0));
@@ -3084,9 +3084,9 @@ Ensure (turbovas_control, omits_empty_optional_report_method_data)
   assert_that (received_message, is_null);
 }
 
-Ensure (turbovas_control, rejects_missing_alert_operator_before_authority)
+Ensure (yafvs_control, rejects_missing_alert_operator_before_authority)
 {
-  const turbovas_control_alert_email_create_request_t request = {
+  const yafvs_control_alert_email_create_request_t request = {
     .name = "Email alert", .comment = "", .status = "Running",
     .to_address = "ops@example.com", .from_address = "", .subject = "subject",
     .recipient_credential_uuid = "", .report_format_uuid = "",
@@ -3100,7 +3100,7 @@ Ensure (turbovas_control, rejects_missing_alert_operator_before_authority)
   session_init_calls = 0;
   audit_fail_calls = 0;
   mock_operator_name = NULL;
-  assert_that (turbovas_control_create_alert_email (
+  assert_that (yafvs_control_create_alert_email (
                  "123e4567-e89b-12d3-a456-426614174000", &request,
                  created_uuid),
                is_equal_to (99));
@@ -3111,9 +3111,9 @@ Ensure (turbovas_control, rejects_missing_alert_operator_before_authority)
   assert_that (session_init_calls, is_equal_to (0));
 }
 
-Ensure (turbovas_control, maps_atomic_unavailable_alert_report_format)
+Ensure (yafvs_control, maps_atomic_unavailable_alert_report_format)
 {
-  const turbovas_control_alert_email_create_request_t request = {
+  const yafvs_control_alert_email_create_request_t request = {
     .name = "Include alert", .comment = "", .status = "Done",
     .to_address = "ops@example.com", .from_address = "", .subject = "subject",
     .recipient_credential_uuid = "",
@@ -3129,7 +3129,7 @@ Ensure (turbovas_control, maps_atomic_unavailable_alert_report_format)
   create_alert_result = 90;
   mock_operator_name = "operator";
 
-  assert_that (turbovas_control_create_alert_email (
+  assert_that (yafvs_control_create_alert_email (
                  "123e4567-e89b-12d3-a456-426614174000", &request,
                  created_uuid),
                is_equal_to (90));
@@ -3142,9 +3142,9 @@ Ensure (turbovas_control, maps_atomic_unavailable_alert_report_format)
   assert_that (current_credentials.username, is_null);
 }
 
-Ensure (turbovas_control, reports_postcommit_alert_uuid_failure_without_failed_audit)
+Ensure (yafvs_control, reports_postcommit_alert_uuid_failure_without_failed_audit)
 {
-  const turbovas_control_alert_email_create_request_t request = {
+  const yafvs_control_alert_email_create_request_t request = {
     .name = "Simple alert", .comment = "", .status = "Done",
     .to_address = "ops@example.com", .from_address = "", .subject = "subject",
     .recipient_credential_uuid = "", .report_format_uuid = "",
@@ -3161,7 +3161,7 @@ Ensure (turbovas_control, reports_postcommit_alert_uuid_failure_without_failed_a
   audit_success_calls = 0;
   mock_operator_name = "operator";
 
-  assert_that (turbovas_control_create_alert_email (
+  assert_that (yafvs_control_create_alert_email (
                  "123e4567-e89b-12d3-a456-426614174000", &request,
                  created_uuid),
                is_equal_to (-3));
@@ -3175,9 +3175,9 @@ Ensure (turbovas_control, reports_postcommit_alert_uuid_failure_without_failed_a
   alert_uuid_lookup_fails = FALSE;
 }
 
-Ensure (turbovas_control, rejects_missing_alert_smb_operator_before_authority)
+Ensure (yafvs_control, rejects_missing_alert_smb_operator_before_authority)
 {
-  const turbovas_control_alert_smb_create_request_t request = {
+  const yafvs_control_alert_smb_create_request_t request = {
     .name = "SMB alert",
     .comment = "",
     .status = "Done",
@@ -3197,7 +3197,7 @@ Ensure (turbovas_control, rejects_missing_alert_smb_operator_before_authority)
   audit_fail_calls = 0;
   mock_operator_name = NULL;
   assert_that (
-    turbovas_control_create_alert_smb ("123e4567-e89b-12d3-a456-426614174000",
+    yafvs_control_create_alert_smb ("123e4567-e89b-12d3-a456-426614174000",
                                        &request, created_uuid),
     is_equal_to (99));
   assert_that (create_alert_calls, is_equal_to (0));
@@ -3209,7 +3209,7 @@ Ensure (turbovas_control, rejects_missing_alert_smb_operator_before_authority)
   assert_that (current_credentials.username, is_null);
 }
 
-Ensure (turbovas_control, maps_every_alert_create_response)
+Ensure (yafvs_control, maps_every_alert_create_response)
 {
   static const struct
   {
@@ -3235,26 +3235,26 @@ Ensure (turbovas_control, maps_every_alert_create_response)
     {-3, "-3 committed_indeterminate\n"}, {-2, "-2 malformed\n"},
     {-1, "-1 internal\n"},
   };
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES];
   size_t index;
 
   assert_that (
-    turbovas_control_alert_create_response (
+    yafvs_control_alert_create_response (
       0, "123e4567-e89b-12d3-a456-426614174004", response),
     is_equal_to_string ("0 created 123e4567-e89b-12d3-a456-426614174004\n"));
-  assert_that (turbovas_control_alert_create_response (0, NULL, response),
+  assert_that (yafvs_control_alert_create_response (0, NULL, response),
                is_equal_to_string ("-1 internal\n"));
   for (index = 0; index < G_N_ELEMENTS (cases); index++)
     {
       assert_that (strlen (cases[index].response),
-                   is_less_than (TURBOVAS_CONTROL_MAX_RESPONSE_BYTES));
-      assert_that (turbovas_control_alert_create_response (cases[index].result,
+                   is_less_than (YAFVS_CONTROL_MAX_RESPONSE_BYTES));
+      assert_that (yafvs_control_alert_create_response (cases[index].result,
                                                            NULL, response),
                    is_equal_to_string (cases[index].response));
     }
 }
 
-Ensure (turbovas_control, parses_syslog_and_required_snmp_alert_requests)
+Ensure (yafvs_control, parses_syslog_and_required_snmp_alert_requests)
 {
   gchar *syslog_request = test_alert_syslog_create_request (
     "1", "Syslog alert", "retained", "Done");
@@ -3262,19 +3262,19 @@ Ensure (turbovas_control, parses_syslog_and_required_snmp_alert_requests)
     "0", "SNMP alert", "retained", "Running", "snmp.example.test",
     "private-community", "Task {{status}}");
   char operator_uuid[37];
-  turbovas_control_alert_syslog_create_request_t syslog_alert = {0};
-  turbovas_control_alert_snmp_create_request_t snmp_alert = {0};
+  yafvs_control_alert_syslog_create_request_t syslog_alert = {0};
+  yafvs_control_alert_snmp_create_request_t snmp_alert = {0};
 
-  assert_that (turbovas_control_parse_alert_syslog_create_request (
+  assert_that (yafvs_control_parse_alert_syslog_create_request (
                  syslog_request, strlen (syslog_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &syslog_alert),
                is_true);
   assert_that (syslog_alert.active, is_true);
   assert_that (syslog_alert.name, is_equal_to_string ("Syslog alert"));
   assert_that (syslog_alert.status, is_equal_to_string ("Done"));
-  turbovas_control_alert_syslog_create_request_clear (&syslog_alert);
+  yafvs_control_alert_syslog_create_request_clear (&syslog_alert);
 
-  assert_that (turbovas_control_parse_alert_snmp_create_request (
+  assert_that (yafvs_control_parse_alert_snmp_create_request (
                  snmp_request, strlen (snmp_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &snmp_alert),
                is_true);
@@ -3284,12 +3284,12 @@ Ensure (turbovas_control, parses_syslog_and_required_snmp_alert_requests)
                is_equal_to_string ("private-community"));
   assert_that (snmp_alert.message,
                is_equal_to_string ("Task {{status}}"));
-  turbovas_control_alert_snmp_create_request_clear (&snmp_alert);
+  yafvs_control_alert_snmp_create_request_clear (&snmp_alert);
   g_free (syslog_request);
   g_free (snmp_request);
 }
 
-Ensure (turbovas_control, rejects_malformed_or_empty_snmp_alert_payloads)
+Ensure (yafvs_control, rejects_malformed_or_empty_snmp_alert_payloads)
 {
   gchar *invalid[] = {
     test_alert_snmp_create_request (
@@ -3312,11 +3312,11 @@ Ensure (turbovas_control, rejects_malformed_or_empty_snmp_alert_payloads)
   };
   char operator_uuid[37];
   size_t index;
-  turbovas_control_alert_snmp_create_request_t alert = {0};
+  yafvs_control_alert_snmp_create_request_t alert = {0};
 
   for (index = 0; index < G_N_ELEMENTS (invalid); index++)
     {
-      assert_that (turbovas_control_parse_alert_snmp_create_request (
+      assert_that (yafvs_control_parse_alert_snmp_create_request (
                      invalid[index], strlen (invalid[index]),
                      TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                      operator_uuid, &alert),
@@ -3325,13 +3325,13 @@ Ensure (turbovas_control, rejects_malformed_or_empty_snmp_alert_payloads)
     }
 }
 
-Ensure (turbovas_control, maps_fixed_syslog_and_snmp_alert_creation)
+Ensure (yafvs_control, maps_fixed_syslog_and_snmp_alert_creation)
 {
-  const turbovas_control_alert_syslog_create_request_t syslog_request = {
+  const yafvs_control_alert_syslog_create_request_t syslog_request = {
     .name = "Syslog alert", .comment = "retained", .status = "Done",
     .active = TRUE,
   };
-  const turbovas_control_alert_snmp_create_request_t snmp_request = {
+  const yafvs_control_alert_snmp_create_request_t snmp_request = {
     .name = "SNMP alert", .comment = "retained", .status = "Running",
     .agent = "snmp.example.test", .community = "private-community",
     .message = "Task {{status}}", .active = FALSE,
@@ -3345,7 +3345,7 @@ Ensure (turbovas_control, maps_fixed_syslog_and_snmp_alert_creation)
   audit_success_calls = 0;
   mock_operator_name = "operator";
 
-  assert_that (turbovas_control_create_alert_syslog (
+  assert_that (yafvs_control_create_alert_syslog (
                  "123e4567-e89b-12d3-a456-426614174000", &syslog_request,
                  created_uuid),
                is_equal_to (0));
@@ -3360,7 +3360,7 @@ Ensure (turbovas_control, maps_fixed_syslog_and_snmp_alert_creation)
   assert_that (received_syslog_submethod, is_equal_to_string ("syslog"));
   assert_that (audit_success_calls, is_equal_to (1));
 
-  assert_that (turbovas_control_create_alert_snmp (
+  assert_that (yafvs_control_create_alert_snmp (
                  "123e4567-e89b-12d3-a456-426614174000", &snmp_request,
                  created_uuid),
                is_equal_to (0));
@@ -3378,9 +3378,9 @@ Ensure (turbovas_control, maps_fixed_syslog_and_snmp_alert_creation)
   assert_that (audit_fail_calls, is_equal_to (0));
 }
 
-Ensure (turbovas_control, rejects_missing_snmp_owner_and_maps_alert_errors)
+Ensure (yafvs_control, rejects_missing_snmp_owner_and_maps_alert_errors)
 {
-  const turbovas_control_alert_snmp_create_request_t request = {
+  const yafvs_control_alert_snmp_create_request_t request = {
     .name = "SNMP alert", .comment = "", .status = "Done",
     .agent = "snmp.example.test", .community = "private-community",
     .message = "Task {{status}}", .active = TRUE,
@@ -3391,7 +3391,7 @@ Ensure (turbovas_control, rejects_missing_snmp_owner_and_maps_alert_errors)
   create_alert_calls = 0;
   audit_fail_calls = 0;
   mock_operator_name = NULL;
-  assert_that (turbovas_control_create_alert_snmp (
+  assert_that (yafvs_control_create_alert_snmp (
                  "123e4567-e89b-12d3-a456-426614174000", &request,
                  created_uuid),
                is_equal_to (99));
@@ -3402,7 +3402,7 @@ Ensure (turbovas_control, rejects_missing_snmp_owner_and_maps_alert_errors)
   create_alert_result = 99;
   audit_fail_calls = 0;
   mock_operator_name = "operator";
-  assert_that (turbovas_control_create_alert_snmp (
+  assert_that (yafvs_control_create_alert_snmp (
                  "123e4567-e89b-12d3-a456-426614174000", &request,
                  created_uuid),
                is_equal_to (99));
@@ -3410,16 +3410,16 @@ Ensure (turbovas_control, rejects_missing_snmp_owner_and_maps_alert_errors)
   create_alert_result = 0;
 }
 
-Ensure (turbovas_control, parses_strict_start_task_alert_frame)
+Ensure (yafvs_control, parses_strict_start_task_alert_frame)
 {
   gchar *request = test_alert_start_task_create_request (
     "1", "Start follow-up", "operator-only", "Done",
     "123e4567-e89b-12d3-a456-426614174020");
   char operator_uuid[37];
-  turbovas_control_alert_start_task_create_request_t alert = {0};
+  yafvs_control_alert_start_task_create_request_t alert = {0};
 
   assert_that (ALERT_METHOD_START_TASK, is_equal_to (4));
-  assert_that (turbovas_control_parse_alert_start_task_create_request (
+  assert_that (yafvs_control_parse_alert_start_task_create_request (
                  request, strlen (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
                is_true);
@@ -3431,14 +3431,14 @@ Ensure (turbovas_control, parses_strict_start_task_alert_frame)
   assert_that (alert.status, is_equal_to_string ("Done"));
   assert_that (alert.task_uuid,
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174020"));
-  turbovas_control_alert_start_task_create_request_clear (&alert);
+  yafvs_control_alert_start_task_create_request_clear (&alert);
   g_free (request);
 }
 
-Ensure (turbovas_control, rejects_bad_uuid_and_malformed_start_task_alerts)
+Ensure (yafvs_control, rejects_bad_uuid_and_malformed_start_task_alerts)
 {
   gchar *oversized =
-    g_strnfill (TURBOVAS_CONTROL_ALERT_NAME_MAX_BYTES + 1, 'x');
+    g_strnfill (YAFVS_CONTROL_ALERT_NAME_MAX_BYTES + 1, 'x');
   gchar *requests[] = {
     test_alert_start_task_create_request ("1", "Start follow-up", "", "Done",
                                           "not-a-task-uuid"),
@@ -3455,11 +3455,11 @@ Ensure (turbovas_control, rejects_bad_uuid_and_malformed_start_task_alerts)
               "123e4567-e89b-12d3-a456-426614174020 extra\n"),
   };
   char operator_uuid[37];
-  turbovas_control_alert_start_task_create_request_t alert = {0};
+  yafvs_control_alert_start_task_create_request_t alert = {0};
 
   for (size_t index = 0; index < G_N_ELEMENTS (requests); index++)
     {
-      assert_that (turbovas_control_parse_alert_start_task_create_request (
+      assert_that (yafvs_control_parse_alert_start_task_create_request (
                      requests[index], strlen (requests[index]),
                      TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                      operator_uuid, &alert),
@@ -3469,9 +3469,9 @@ Ensure (turbovas_control, rejects_bad_uuid_and_malformed_start_task_alerts)
   g_free (oversized);
 }
 
-Ensure (turbovas_control, maps_start_task_alert_creation_and_commit_status)
+Ensure (yafvs_control, maps_start_task_alert_creation_and_commit_status)
 {
-  const turbovas_control_alert_start_task_create_request_t request = {
+  const yafvs_control_alert_start_task_create_request_t request = {
     .name = "Start follow-up",
     .comment = "operator-only",
     .status = "Done",
@@ -3489,7 +3489,7 @@ Ensure (turbovas_control, maps_start_task_alert_creation_and_commit_status)
   mock_operator_name = "operator";
 
   assert_that (
-    turbovas_control_create_alert_start_task (
+    yafvs_control_create_alert_start_task (
       "123e4567-e89b-12d3-a456-426614174000", &request, created_uuid),
     is_equal_to (0));
   assert_that (created_uuid,
@@ -3508,7 +3508,7 @@ Ensure (turbovas_control, maps_start_task_alert_creation_and_commit_status)
 
   alert_uuid_lookup_fails = TRUE;
   assert_that (
-    turbovas_control_create_alert_start_task (
+    yafvs_control_create_alert_start_task (
       "123e4567-e89b-12d3-a456-426614174000", &request, created_uuid),
     is_equal_to (-3));
   assert_that (audit_success_calls, is_equal_to (2));
@@ -3528,12 +3528,12 @@ capture_control_log (const gchar *domain, GLogLevelFlags level,
   assert_that (strstr (message, "alert-start-task-create"), is_null);
 }
 
-Ensure (turbovas_control, classifies_start_task_frames_without_logging_them)
+Ensure (yafvs_control, classifies_start_task_frames_without_logging_them)
 {
   const char *request =
     "alert-start-task-create " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 private-control-frame\n";
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
   unsigned int log_calls = 0;
   guint handler;
   ssize_t response_len;
@@ -3541,9 +3541,9 @@ Ensure (turbovas_control, classifies_start_task_frames_without_logging_them)
   handler = g_log_set_handler (G_LOG_DOMAIN, G_LOG_LEVEL_MASK,
                                capture_control_log, &log_calls);
   assert_that (
-    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+    g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
   response_len = dispatch_trash_empty_request (request, response);
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
   g_log_remove_handler (G_LOG_DOMAIN, handler);
 
   assert_that (response_len, is_equal_to (strlen ("-2 malformed\n")));
@@ -3563,22 +3563,22 @@ call_real_alert_start_task_create (void)
 
   current_credentials.uuid = g_strdup ("123e4567-e89b-12d3-a456-426614174000");
   current_credentials.username = g_strdup ("operator");
-  turbovas_control_array_add_data (event_data, "status", "Done");
+  yafvs_control_array_add_data (event_data, "status", "Done");
   array_terminate (condition_data);
   array_terminate (event_data);
 
   result = __real_create_alert_start_task_with_task_ref (
     "Start follow-up", "operator-only", "1", event_data, condition_data,
     "123e4567-e89b-12d3-a456-426614174020", &alert);
-  turbovas_control_secure_array_free (condition_data);
-  turbovas_control_secure_array_free (event_data);
+  yafvs_control_secure_array_free (condition_data);
+  yafvs_control_secure_array_free (event_data);
   g_clear_pointer (&current_credentials.uuid, g_free);
   g_clear_pointer (&current_credentials.username, g_free);
   alert_start_task_db_active = FALSE;
   return result;
 }
 
-Ensure (turbovas_control, locks_start_task_reference_and_commits_atomically)
+Ensure (yafvs_control, locks_start_task_reference_and_commits_atomically)
 {
   static const enum alert_start_task_db_event expected[] = {
     ALERT_START_TASK_DB_BEGIN,         ALERT_START_TASK_DB_ACL,
@@ -3596,7 +3596,7 @@ Ensure (turbovas_control, locks_start_task_reference_and_commits_atomically)
                is_equal_to (0));
 }
 
-Ensure (turbovas_control, rejects_unauthorized_missing_and_duplicate_start_task)
+Ensure (yafvs_control, rejects_unauthorized_missing_and_duplicate_start_task)
 {
   reset_alert_start_task_db ();
   alert_start_task_db_acl = FALSE;
@@ -3624,60 +3624,60 @@ Ensure (turbovas_control, rejects_unauthorized_missing_and_duplicate_start_task)
   assert_that (alert_start_task_db_method_inserts, is_equal_to (0));
 }
 
-Ensure (turbovas_control, maps_start_task_alert_responses)
+Ensure (yafvs_control, maps_start_task_alert_responses)
 {
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES];
 
   assert_that (
-    turbovas_control_alert_start_task_create_response (
+    yafvs_control_alert_start_task_create_response (
       0, "123e4567-e89b-12d3-a456-426614174004", response),
     is_equal_to_string ("0 created 123e4567-e89b-12d3-a456-426614174004\n"));
   assert_that (
-    turbovas_control_alert_start_task_create_response (1, NULL, response),
+    yafvs_control_alert_start_task_create_response (1, NULL, response),
     is_equal_to_string ("1 exists\n"));
   assert_that (
-    turbovas_control_alert_start_task_create_response (3, NULL, response),
+    yafvs_control_alert_start_task_create_response (3, NULL, response),
     is_equal_to_string ("3 task_not_found\n"));
   assert_that (
-    turbovas_control_alert_start_task_create_response (99, NULL, response),
+    yafvs_control_alert_start_task_create_response (99, NULL, response),
     is_equal_to_string ("99 forbidden\n"));
   assert_that (
-    turbovas_control_alert_start_task_create_response (-3, NULL, response),
+    yafvs_control_alert_start_task_create_response (-3, NULL, response),
     is_equal_to_string ("-3 committed_indeterminate\n"));
   assert_that (
-    turbovas_control_alert_start_task_create_response (-2, NULL, response),
+    yafvs_control_alert_start_task_create_response (-2, NULL, response),
     is_equal_to_string ("-2 malformed\n"));
 }
 
-Ensure (turbovas_control, maps_schedule_create_responses)
+Ensure (yafvs_control, maps_schedule_create_responses)
 {
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES];
 
-  assert_that (turbovas_control_schedule_create_response (
+  assert_that (yafvs_control_schedule_create_response (
                  0, "123e4567-e89b-12d3-a456-426614174002", response),
                is_equal_to_string ("0 created 123e4567-e89b-12d3-a456-426614174002\n"));
-  assert_that (turbovas_control_schedule_create_response (1, NULL, response),
+  assert_that (yafvs_control_schedule_create_response (1, NULL, response),
                is_equal_to_string ("1 exists\n"));
-  assert_that (turbovas_control_schedule_create_response (3, NULL, response),
+  assert_that (yafvs_control_schedule_create_response (3, NULL, response),
                is_equal_to_string ("3 invalid_ical\n"));
-  assert_that (turbovas_control_schedule_create_response (4, NULL, response),
+  assert_that (yafvs_control_schedule_create_response (4, NULL, response),
                is_equal_to_string ("4 invalid_timezone\n"));
-  assert_that (turbovas_control_schedule_create_response (99, NULL, response),
+  assert_that (yafvs_control_schedule_create_response (99, NULL, response),
                is_equal_to_string ("99 forbidden\n"));
-  assert_that (turbovas_control_schedule_create_response (-1, NULL, response),
+  assert_that (yafvs_control_schedule_create_response (-1, NULL, response),
                is_equal_to_string ("-1 internal\n"));
 }
 
-Ensure (turbovas_control, accepts_username_password_credential_create_request)
+Ensure (yafvs_control, accepts_username_password_credential_create_request)
 {
   const char *request =
     "credential-create " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 up "
     "Q1NWIG9wZXJhdG9y QnVsayBpbXBvcnQ= cm9iZXJ0 c2VjcmV0IA== \n";
   char operator_uuid[37];
-  turbovas_control_credential_create_request_t credential = {0};
+  yafvs_control_credential_create_request_t credential = {0};
 
-  assert_that (turbovas_control_parse_credential_create_request (
+  assert_that (yafvs_control_parse_credential_create_request (
                  request, strlen (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &credential),
                is_true);
@@ -3690,10 +3690,10 @@ Ensure (turbovas_control, accepts_username_password_credential_create_request)
   assert_that (credential.secret, is_equal_to_string ("secret "));
   assert_that (credential.private_key, is_equal_to_string (""));
 
-  turbovas_control_credential_create_request_clear (&credential);
+  yafvs_control_credential_create_request_clear (&credential);
 }
 
-Ensure (turbovas_control, accepts_ssh_key_credential_create_request)
+Ensure (yafvs_control, accepts_ssh_key_credential_create_request)
 {
   const char *request =
     "credential-create " TEST_CONTROL_SECRET " "
@@ -3701,9 +3701,9 @@ Ensure (turbovas_control, accepts_ssh_key_credential_create_request)
     "U1NIIG9wZXJhdG9y  cm9iZXJ0  "
     "LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCg==\n";
   char operator_uuid[37];
-  turbovas_control_credential_create_request_t credential = {0};
+  yafvs_control_credential_create_request_t credential = {0};
 
-  assert_that (turbovas_control_parse_credential_create_request (
+  assert_that (yafvs_control_parse_credential_create_request (
                  request, strlen (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &credential),
                is_true);
@@ -3715,10 +3715,10 @@ Ensure (turbovas_control, accepts_ssh_key_credential_create_request)
   assert_that (credential.private_key,
                is_equal_to_string ("-----BEGIN PRIVATE KEY-----\n"));
 
-  turbovas_control_credential_create_request_clear (&credential);
+  yafvs_control_credential_create_request_clear (&credential);
 }
 
-Ensure (turbovas_control, rejects_malformed_credential_create_requests)
+Ensure (yafvs_control, rejects_malformed_credential_create_requests)
 {
   const char *bad_type =
     "credential-create " TEST_CONTROL_SECRET " "
@@ -3737,31 +3737,31 @@ Ensure (turbovas_control, rejects_malformed_credential_create_requests)
     "123e4567-e89b-12d3-a456-426614174000 usk "
     "TmFtZQ==  cm9iZXJ0  \n";
   char operator_uuid[37];
-  turbovas_control_credential_create_request_t credential = {0};
+  yafvs_control_credential_create_request_t credential = {0};
 
-  assert_that (turbovas_control_parse_credential_create_request (
+  assert_that (yafvs_control_parse_credential_create_request (
                  bad_type, strlen (bad_type), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &credential),
                is_false);
-  assert_that (turbovas_control_parse_credential_create_request (
+  assert_that (yafvs_control_parse_credential_create_request (
                  missing_password, strlen (missing_password),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, &credential),
                is_false);
-  assert_that (turbovas_control_parse_credential_create_request (
+  assert_that (yafvs_control_parse_credential_create_request (
                  up_with_key, strlen (up_with_key), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &credential),
                is_false);
-  assert_that (turbovas_control_parse_credential_create_request (
+  assert_that (yafvs_control_parse_credential_create_request (
                  ssh_without_key, strlen (ssh_without_key),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, &credential),
                is_false);
 }
 
-Ensure (turbovas_control, creates_credential_in_operator_session)
+Ensure (yafvs_control, creates_credential_in_operator_session)
 {
-  const turbovas_control_credential_create_request_t request = {
+  const yafvs_control_credential_create_request_t request = {
     .credential_type = "usk",
     .name = "SSH operator",
     .comment = "Bulk import",
@@ -3778,7 +3778,7 @@ Ensure (turbovas_control, creates_credential_in_operator_session)
   session_init_calls = 0;
   mock_operator_name = "operator";
 
-  assert_that (turbovas_control_create_credential (
+  assert_that (yafvs_control_create_credential (
                  "123e4567-e89b-12d3-a456-426614174000", &request,
                  created_uuid),
                is_equal_to (0));
@@ -3799,36 +3799,36 @@ Ensure (turbovas_control, creates_credential_in_operator_session)
   assert_that (current_credentials.username, is_null);
 }
 
-Ensure (turbovas_control, maps_credential_create_responses)
+Ensure (yafvs_control, maps_credential_create_responses)
 {
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES];
 
-  assert_that (turbovas_control_credential_create_response (
+  assert_that (yafvs_control_credential_create_response (
                  0, "123e4567-e89b-12d3-a456-426614174003", response),
                is_equal_to_string
                  ("0 created 123e4567-e89b-12d3-a456-426614174003\n"));
-  assert_that (turbovas_control_credential_create_response (1, NULL, response),
+  assert_that (yafvs_control_credential_create_response (1, NULL, response),
                is_equal_to_string ("1 exists\n"));
-  assert_that (turbovas_control_credential_create_response (2, NULL, response),
+  assert_that (yafvs_control_credential_create_response (2, NULL, response),
                is_equal_to_string ("2 invalid_login\n"));
-  assert_that (turbovas_control_credential_create_response (3, NULL, response),
+  assert_that (yafvs_control_credential_create_response (3, NULL, response),
                is_equal_to_string ("3 invalid_key\n"));
-  assert_that (turbovas_control_credential_create_response (5, NULL, response),
+  assert_that (yafvs_control_credential_create_response (5, NULL, response),
                is_equal_to_string ("5 login_required\n"));
-  assert_that (turbovas_control_credential_create_response (6, NULL, response),
+  assert_that (yafvs_control_credential_create_response (6, NULL, response),
                is_equal_to_string ("6 password_required\n"));
-  assert_that (turbovas_control_credential_create_response (7, NULL, response),
+  assert_that (yafvs_control_credential_create_response (7, NULL, response),
                is_equal_to_string ("7 key_required\n"));
-  assert_that (turbovas_control_credential_create_response (-2, NULL, response),
+  assert_that (yafvs_control_credential_create_response (-2, NULL, response),
                is_equal_to_string ("-2 malformed\n"));
-  assert_that (turbovas_control_credential_create_response (99, NULL, response),
+  assert_that (yafvs_control_credential_create_response (99, NULL, response),
                is_equal_to_string ("99 forbidden\n"));
 }
 
-Ensure (turbovas_control, tracks_partial_request_length_and_clears_secrets)
+Ensure (yafvs_control, tracks_partial_request_length_and_clears_secrets)
 {
   const char *partial = "credential-create partial-secret cGFzc3dvcmQ=";
-  char request[TURBOVAS_CONTROL_MAX_REQUEST_BYTES + 1] = {0};
+  char request[YAFVS_CONTROL_MAX_REQUEST_BYTES + 1] = {0};
   gchar *sensitive = g_strdup ("secret-copy");
   size_t request_len = 999;
   int sockets[2];
@@ -3838,26 +3838,26 @@ Ensure (turbovas_control, tracks_partial_request_length_and_clears_secrets)
   assert_that (write (sockets[0], partial, strlen (partial)),
                is_equal_to ((ssize_t) strlen (partial)));
   close (sockets[0]);
-  assert_that (turbovas_control_read_request (sockets[1], request,
+  assert_that (yafvs_control_read_request (sockets[1], request,
                                                &request_len),
                is_false);
   close (sockets[1]);
   assert_that (request_len, is_equal_to (strlen (partial)));
   assert_that (memcmp (request, partial, request_len), is_equal_to (0));
 
-  turbovas_control_secure_clear (request, request_len);
+  yafvs_control_secure_clear (request, request_len);
   for (i = 0; i < request_len; i++)
     assert_that (request[i], is_equal_to (0));
 
-  turbovas_control_secure_clear (sensitive, strlen (sensitive));
+  yafvs_control_secure_clear (sensitive, strlen (sensitive));
   for (i = 0; i < strlen ("secret-copy"); i++)
     assert_that (sensitive[i], is_equal_to (0));
   g_free (sensitive);
 }
 
-Ensure (turbovas_control, rejects_nonexistent_credential_operator_before_create)
+Ensure (yafvs_control, rejects_nonexistent_credential_operator_before_create)
 {
-  const turbovas_control_credential_create_request_t request = {
+  const yafvs_control_credential_create_request_t request = {
     .credential_type = "up",
     .name = "Operator",
     .comment = "",
@@ -3873,7 +3873,7 @@ Ensure (turbovas_control, rejects_nonexistent_credential_operator_before_create)
   session_init_calls = 0;
   mock_operator_name = NULL;
 
-  assert_that (turbovas_control_create_credential (
+  assert_that (yafvs_control_create_credential (
                  "123e4567-e89b-12d3-a456-426614174000", &request,
                  created_uuid),
                is_equal_to (99));
@@ -3883,7 +3883,7 @@ Ensure (turbovas_control, rejects_nonexistent_credential_operator_before_create)
   assert_that (session_init_calls, is_equal_to (0));
 }
 
-Ensure (turbovas_control, accepts_schedule_modify_presence_and_empty_tokens)
+Ensure (yafvs_control, accepts_schedule_modify_presence_and_empty_tokens)
 {
   const char *calendar = "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n";
   gchar *calendar_b64 = g_base64_encode ((const guchar *) calendar,
@@ -3895,9 +3895,9 @@ Ensure (turbovas_control, accepts_schedule_modify_presence_and_empty_tokens)
     "+TmV3IG5hbWU= + - +%s\n", calendar_b64);
   char operator_uuid[37];
   char schedule_uuid[37];
-  turbovas_control_schedule_modify_request_t schedule = {0};
+  yafvs_control_schedule_modify_request_t schedule = {0};
 
-  assert_that (turbovas_control_parse_schedule_modify_request (
+  assert_that (yafvs_control_parse_schedule_modify_request (
                  request, strlen (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, schedule_uuid,
                  &schedule),
@@ -3911,12 +3911,12 @@ Ensure (turbovas_control, accepts_schedule_modify_presence_and_empty_tokens)
   assert_that (schedule.timezone, is_null);
   assert_that (schedule.icalendar, is_equal_to_string (calendar));
 
-  turbovas_control_schedule_modify_request_clear (&schedule);
+  yafvs_control_schedule_modify_request_clear (&schedule);
   g_free (request);
   g_free (calendar_b64);
 }
 
-Ensure (turbovas_control, rejects_malformed_or_unauthenticated_schedule_modify)
+Ensure (yafvs_control, rejects_malformed_or_unauthenticated_schedule_modify)
 {
   const char *extra =
     "schedule-modify " TEST_CONTROL_SECRET " "
@@ -3952,7 +3952,7 @@ Ensure (turbovas_control, rejects_malformed_or_unauthenticated_schedule_modify)
   gchar *control_name_request;
   char operator_uuid[37];
   char schedule_uuid[37];
-  turbovas_control_schedule_modify_request_t schedule = {0};
+  yafvs_control_schedule_modify_request_t schedule = {0};
 
   control_name_b64 = g_base64_encode ((const guchar *) "line\nname", 9);
   control_name_request = g_strdup_printf (
@@ -3961,37 +3961,37 @@ Ensure (turbovas_control, rejects_malformed_or_unauthenticated_schedule_modify)
     "123e4567-e89b-12d3-a456-426614174001 +%s - - +QQ==\n",
     control_name_b64);
 
-  assert_that (turbovas_control_parse_schedule_modify_request (
+  assert_that (yafvs_control_parse_schedule_modify_request (
                  extra, strlen (extra), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, schedule_uuid,
                  &schedule),
                is_false);
-  assert_that (turbovas_control_parse_schedule_modify_request (
+  assert_that (yafvs_control_parse_schedule_modify_request (
                  bare_base64, strlen (bare_base64), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, schedule_uuid,
                  &schedule),
                is_false);
-  assert_that (turbovas_control_parse_schedule_modify_request (
+  assert_that (yafvs_control_parse_schedule_modify_request (
                  noncanonical_base64, strlen (noncanonical_base64),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, schedule_uuid, &schedule),
                is_false);
-  assert_that (turbovas_control_parse_schedule_modify_request (
+  assert_that (yafvs_control_parse_schedule_modify_request (
                  wrong_secret, strlen (wrong_secret), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, schedule_uuid,
                  &schedule),
                is_false);
-  assert_that (turbovas_control_parse_schedule_modify_request (
+  assert_that (yafvs_control_parse_schedule_modify_request (
                  invalid_uuid, strlen (invalid_uuid), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, schedule_uuid,
                  &schedule),
                is_false);
-  assert_that (turbovas_control_parse_schedule_modify_request (
+  assert_that (yafvs_control_parse_schedule_modify_request (
                  all_absent, strlen (all_absent), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, schedule_uuid,
                  &schedule),
                is_false);
-  assert_that (turbovas_control_parse_schedule_modify_request (
+  assert_that (yafvs_control_parse_schedule_modify_request (
                  control_name_request, strlen (control_name_request),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, schedule_uuid, &schedule),
@@ -4001,7 +4001,7 @@ Ensure (turbovas_control, rejects_malformed_or_unauthenticated_schedule_modify)
   g_free (control_name_b64);
 }
 
-Ensure (turbovas_control, rejects_invalid_schedule_modify_field_bytes)
+Ensure (yafvs_control, rejects_invalid_schedule_modify_field_bytes)
 {
   const char *prefix =
     "schedule-modify " TEST_CONTROL_SECRET " "
@@ -4012,7 +4012,7 @@ Ensure (turbovas_control, rejects_invalid_schedule_modify_field_bytes)
   gchar *invalid_utf8_b64 = g_base64_encode ((const guchar *) invalid_utf8,
                                               sizeof (invalid_utf8));
   gchar *oversized_name = g_strnfill (
-    TURBOVAS_CONTROL_SCHEDULE_NAME_MAX_BYTES + 1, 'n');
+    YAFVS_CONTROL_SCHEDULE_NAME_MAX_BYTES + 1, 'n');
   gchar *oversized_name_b64 = g_base64_encode (
     (const guchar *) oversized_name, strlen (oversized_name));
   gchar *nul_request = g_strdup_printf ("%s+%s - - +QQ==\n", prefix,
@@ -4025,24 +4025,24 @@ Ensure (turbovas_control, rejects_invalid_schedule_modify_field_bytes)
                                                       prefix);
   char operator_uuid[37];
   char schedule_uuid[37];
-  turbovas_control_schedule_modify_request_t schedule = {0};
+  yafvs_control_schedule_modify_request_t schedule = {0};
 
-  assert_that (turbovas_control_parse_schedule_modify_request (
+  assert_that (yafvs_control_parse_schedule_modify_request (
                  nul_request, strlen (nul_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, schedule_uuid,
                  &schedule),
                is_false);
-  assert_that (turbovas_control_parse_schedule_modify_request (
+  assert_that (yafvs_control_parse_schedule_modify_request (
                  invalid_utf8_request, strlen (invalid_utf8_request),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, schedule_uuid, &schedule),
                is_false);
-  assert_that (turbovas_control_parse_schedule_modify_request (
+  assert_that (yafvs_control_parse_schedule_modify_request (
                  oversized_request, strlen (oversized_request),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, schedule_uuid, &schedule),
                is_false);
-  assert_that (turbovas_control_parse_schedule_modify_request (
+  assert_that (yafvs_control_parse_schedule_modify_request (
                  calendar_control_request, strlen (calendar_control_request),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, schedule_uuid, &schedule),
@@ -4058,7 +4058,7 @@ Ensure (turbovas_control, rejects_invalid_schedule_modify_field_bytes)
   g_free (nul_b64);
 }
 
-Ensure (turbovas_control, distinguishes_absent_and_empty_schedule_modify_calendar)
+Ensure (yafvs_control, distinguishes_absent_and_empty_schedule_modify_calendar)
 {
   const char *absent_request =
     "schedule-modify " TEST_CONTROL_SECRET " "
@@ -4070,8 +4070,8 @@ Ensure (turbovas_control, distinguishes_absent_and_empty_schedule_modify_calenda
     "123e4567-e89b-12d3-a456-426614174001 - +bWV0YWRhdGE= - +\n";
   char operator_uuid[37];
   char schedule_uuid[37];
-  turbovas_control_schedule_modify_request_t absent = {0};
-  turbovas_control_schedule_modify_request_t empty = {0};
+  yafvs_control_schedule_modify_request_t absent = {0};
+  yafvs_control_schedule_modify_request_t empty = {0};
 
   cleanup_calls = 0;
   reinit_calls = 0;
@@ -4080,27 +4080,27 @@ Ensure (turbovas_control, distinguishes_absent_and_empty_schedule_modify_calenda
   modify_schedule_result = 0;
   mock_operator_name = "operator";
 
-  assert_that (turbovas_control_parse_schedule_modify_request (
+  assert_that (yafvs_control_parse_schedule_modify_request (
                  absent_request, strlen (absent_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, schedule_uuid,
                  &absent),
                is_true);
   assert_that (absent.comment, is_equal_to_string ("metadata"));
   assert_that (absent.icalendar, is_null);
-  assert_that (turbovas_control_modify_schedule (operator_uuid, schedule_uuid,
+  assert_that (yafvs_control_modify_schedule (operator_uuid, schedule_uuid,
                                                  &absent),
                is_equal_to (0));
   assert_that (received_icalendar, is_null);
 
   modify_schedule_result = 6;
-  assert_that (turbovas_control_parse_schedule_modify_request (
+  assert_that (yafvs_control_parse_schedule_modify_request (
                  empty_request, strlen (empty_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, schedule_uuid,
                  &empty),
                is_true);
   assert_that (empty.comment, is_equal_to_string ("metadata"));
   assert_that (empty.icalendar, is_equal_to_string (""));
-  assert_that (turbovas_control_modify_schedule (operator_uuid, schedule_uuid,
+  assert_that (yafvs_control_modify_schedule (operator_uuid, schedule_uuid,
                                                  &empty),
                is_equal_to (6));
   assert_that (received_icalendar, is_equal_to_string (""));
@@ -4109,13 +4109,13 @@ Ensure (turbovas_control, distinguishes_absent_and_empty_schedule_modify_calenda
   assert_that (modify_schedule_calls, is_equal_to (2));
   assert_that (cleanup_calls, is_equal_to (2));
 
-  turbovas_control_schedule_modify_request_clear (&empty);
-  turbovas_control_schedule_modify_request_clear (&absent);
+  yafvs_control_schedule_modify_request_clear (&empty);
+  yafvs_control_schedule_modify_request_clear (&absent);
 }
 
-Ensure (turbovas_control, modifies_schedule_in_operator_session)
+Ensure (yafvs_control, modifies_schedule_in_operator_session)
 {
-  const turbovas_control_schedule_modify_request_t request = {
+  const yafvs_control_schedule_modify_request_t request = {
     .name = NULL,
     .comment = "",
     .timezone = "Europe/Berlin",
@@ -4129,7 +4129,7 @@ Ensure (turbovas_control, modifies_schedule_in_operator_session)
   session_init_calls = 0;
   mock_operator_name = "operator";
 
-  assert_that (turbovas_control_modify_schedule (
+  assert_that (yafvs_control_modify_schedule (
                  "123e4567-e89b-12d3-a456-426614174000",
                  "123e4567-e89b-12d3-a456-426614174001", &request),
                is_equal_to (0));
@@ -4147,25 +4147,25 @@ Ensure (turbovas_control, modifies_schedule_in_operator_session)
   assert_that (current_credentials.username, is_null);
 }
 
-Ensure (turbovas_control, maps_schedule_modify_responses)
+Ensure (yafvs_control, maps_schedule_modify_responses)
 {
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES];
 
-  assert_that (turbovas_control_schedule_modify_response (0, response),
+  assert_that (yafvs_control_schedule_modify_response (0, response),
                is_equal_to_string ("0 modified\n"));
-  assert_that (turbovas_control_schedule_modify_response (1, response),
+  assert_that (yafvs_control_schedule_modify_response (1, response),
                is_equal_to_string ("1 not_found\n"));
-  assert_that (turbovas_control_schedule_modify_response (2, response),
+  assert_that (yafvs_control_schedule_modify_response (2, response),
                is_equal_to_string ("2 duplicate\n"));
-  assert_that (turbovas_control_schedule_modify_response (6, response),
+  assert_that (yafvs_control_schedule_modify_response (6, response),
                is_equal_to_string ("6 invalid_ical\n"));
-  assert_that (turbovas_control_schedule_modify_response (7, response),
+  assert_that (yafvs_control_schedule_modify_response (7, response),
                is_equal_to_string ("7 invalid_timezone\n"));
-  assert_that (turbovas_control_schedule_modify_response (99, response),
+  assert_that (yafvs_control_schedule_modify_response (99, response),
                is_equal_to_string ("99 forbidden\n"));
-  assert_that (turbovas_control_schedule_modify_response (-2, response),
+  assert_that (yafvs_control_schedule_modify_response (-2, response),
                is_equal_to_string ("-2 malformed\n"));
-  assert_that (turbovas_control_schedule_modify_response (-1, response),
+  assert_that (yafvs_control_schedule_modify_response (-1, response),
                is_equal_to_string ("-1 internal\n"));
 }
 
@@ -4200,7 +4200,7 @@ __wrap_task_uuid (task_t task, char **uuid)
   return 0;
 }
 
-Ensure (turbovas_control, parses_canonical_task_clone_request)
+Ensure (yafvs_control, parses_canonical_task_clone_request)
 {
   const char *request = "task-clone " TEST_CONTROL_SECRET " "
                         "123e4567-e89b-12d3-a456-426614174000 "
@@ -4208,7 +4208,7 @@ Ensure (turbovas_control, parses_canonical_task_clone_request)
   char operator_uuid[37];
   char task_uuid[37];
 
-  assert_that (turbovas_control_parse_task_clone_request (
+  assert_that (yafvs_control_parse_task_clone_request (
                  request, strlen (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, task_uuid),
                is_true);
@@ -4218,7 +4218,7 @@ Ensure (turbovas_control, parses_canonical_task_clone_request)
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
 }
 
-Ensure (turbovas_control, rejects_malformed_task_clone_requests)
+Ensure (yafvs_control, rejects_malformed_task_clone_requests)
 {
   const char *extra = "task-clone " TEST_CONTROL_SECRET " "
                       "123e4567-e89b-12d3-a456-426614174000 "
@@ -4229,17 +4229,17 @@ Ensure (turbovas_control, rejects_malformed_task_clone_requests)
   char operator_uuid[37];
   char task_uuid[37];
 
-  assert_that (turbovas_control_parse_task_clone_request (
+  assert_that (yafvs_control_parse_task_clone_request (
                  extra, strlen (extra), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, task_uuid),
                is_false);
-  assert_that (turbovas_control_parse_task_clone_request (
+  assert_that (yafvs_control_parse_task_clone_request (
                  wrong_secret, strlen (wrong_secret), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, task_uuid),
                is_false);
 }
 
-Ensure (turbovas_control, clones_task_in_operator_session_and_audits)
+Ensure (yafvs_control, clones_task_in_operator_session_and_audits)
 {
   char created_uuid[37] = {0};
 
@@ -4254,7 +4254,7 @@ Ensure (turbovas_control, clones_task_in_operator_session_and_audits)
   reinit_calls = 0;
   g_clear_pointer (&received_audit_uuid, g_free);
 
-  assert_that (turbovas_control_clone_task (
+  assert_that (yafvs_control_clone_task (
                  "123e4567-e89b-12d3-a456-426614174000",
                  "123e4567-e89b-12d3-a456-426614174001", created_uuid),
                is_equal_to (0));
@@ -4269,7 +4269,7 @@ Ensure (turbovas_control, clones_task_in_operator_session_and_audits)
   assert_that (current_credentials.username, is_null);
 
   clone_task_result = 2;
-  assert_that (turbovas_control_clone_task (
+  assert_that (yafvs_control_clone_task (
                  "123e4567-e89b-12d3-a456-426614174000",
                  "123e4567-e89b-12d3-a456-426614174001", created_uuid),
                is_equal_to (2));
@@ -4277,7 +4277,7 @@ Ensure (turbovas_control, clones_task_in_operator_session_and_audits)
 
   clone_task_result = 0;
   task_uuid_lookup_fails = TRUE;
-  assert_that (turbovas_control_clone_task (
+  assert_that (yafvs_control_clone_task (
                  "123e4567-e89b-12d3-a456-426614174000",
                  "123e4567-e89b-12d3-a456-426614174001", created_uuid),
                is_equal_to (-3));
@@ -4285,23 +4285,23 @@ Ensure (turbovas_control, clones_task_in_operator_session_and_audits)
   assert_that (task_audit_fail_calls, is_equal_to (1));
 }
 
-Ensure (turbovas_control, maps_task_clone_responses)
+Ensure (yafvs_control, maps_task_clone_responses)
 {
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES];
 
   assert_that (
-    turbovas_control_task_clone_response (
+    yafvs_control_task_clone_response (
       0, "123e4567-e89b-12d3-a456-426614174006", response),
     is_equal_to_string ("0 created 123e4567-e89b-12d3-a456-426614174006\n"));
-  assert_that (turbovas_control_task_clone_response (1, NULL, response),
+  assert_that (yafvs_control_task_clone_response (1, NULL, response),
                is_equal_to_string ("1 duplicate\n"));
-  assert_that (turbovas_control_task_clone_response (2, NULL, response),
+  assert_that (yafvs_control_task_clone_response (2, NULL, response),
                is_equal_to_string ("2 not_found\n"));
-  assert_that (turbovas_control_task_clone_response (99, NULL, response),
+  assert_that (yafvs_control_task_clone_response (99, NULL, response),
                is_equal_to_string ("99 forbidden\n"));
-  assert_that (turbovas_control_task_clone_response (-3, NULL, response),
+  assert_that (yafvs_control_task_clone_response (-3, NULL, response),
                is_equal_to_string ("-3 committed_indeterminate\n"));
-  assert_that (turbovas_control_task_clone_response (-2, NULL, response),
+  assert_that (yafvs_control_task_clone_response (-2, NULL, response),
                is_equal_to_string ("-2 malformed\n"));
 }
 
@@ -4312,7 +4312,7 @@ __wrap_cleanup_manage_process (gboolean full)
   cleanup_calls++;
 }
 
-Ensure (turbovas_control, accepts_exact_authenticated_stop_request)
+Ensure (yafvs_control, accepts_exact_authenticated_stop_request)
 {
   const char *request =
     "stop " TEST_CONTROL_SECRET " "
@@ -4321,7 +4321,7 @@ Ensure (turbovas_control, accepts_exact_authenticated_stop_request)
   char operator_uuid[37];
   char task_uuid[37];
 
-  assert_that (turbovas_control_parse_request (request, strlen (request),
+  assert_that (yafvs_control_parse_request (request, strlen (request),
                                                TEST_CONTROL_SECRET,
                                                strlen (TEST_CONTROL_SECRET),
                                                operator_uuid, task_uuid),
@@ -4332,7 +4332,7 @@ Ensure (turbovas_control, accepts_exact_authenticated_stop_request)
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
 }
 
-Ensure (turbovas_control, rejects_noncanonical_or_extra_requests)
+Ensure (yafvs_control, rejects_noncanonical_or_extra_requests)
 {
   const char *extra =
     "stop " TEST_CONTROL_SECRET " "
@@ -4342,29 +4342,29 @@ Ensure (turbovas_control, rejects_noncanonical_or_extra_requests)
     "stop " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 "
     "123e4567-e89b-12d3-a456-42661417400z\n";
-  char request[TURBOVAS_CONTROL_MAX_REQUEST_BYTES + 1];
+  char request[YAFVS_CONTROL_MAX_REQUEST_BYTES + 1];
   char operator_uuid[37];
   char task_uuid[37];
 
-  assert_that (turbovas_control_parse_request (extra, strlen (extra),
+  assert_that (yafvs_control_parse_request (extra, strlen (extra),
                                                TEST_CONTROL_SECRET,
                                                strlen (TEST_CONTROL_SECRET),
                                                operator_uuid, task_uuid),
                is_false);
-  assert_that (turbovas_control_parse_request (invalid_uuid,
+  assert_that (yafvs_control_parse_request (invalid_uuid,
                                                strlen (invalid_uuid),
                                                TEST_CONTROL_SECRET,
                                                strlen (TEST_CONTROL_SECRET),
                                                operator_uuid, task_uuid),
                is_false);
   memset (request, 'x', sizeof (request));
-  assert_that (turbovas_control_parse_request (
+  assert_that (yafvs_control_parse_request (
                  request, sizeof (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, task_uuid),
                is_false);
 }
 
-Ensure (turbovas_control, rejects_missing_weak_or_incorrect_secrets)
+Ensure (yafvs_control, rejects_missing_weak_or_incorrect_secrets)
 {
   const char *request =
     "stop " TEST_CONTROL_SECRET " "
@@ -4373,53 +4373,53 @@ Ensure (turbovas_control, rejects_missing_weak_or_incorrect_secrets)
   char operator_uuid[37];
   char task_uuid[37];
 
-  assert_that (turbovas_control_secret_is_valid (NULL, 0), is_false);
-  assert_that (turbovas_control_secret_is_valid ("too-short", 9), is_false);
-  assert_that (turbovas_control_secret_is_valid (TEST_CONTROL_SECRET,
+  assert_that (yafvs_control_secret_is_valid (NULL, 0), is_false);
+  assert_that (yafvs_control_secret_is_valid ("too-short", 9), is_false);
+  assert_that (yafvs_control_secret_is_valid (TEST_CONTROL_SECRET,
                                                  strlen (TEST_CONTROL_SECRET)),
                is_true);
-  assert_that (turbovas_control_secret_is_valid (
+  assert_that (yafvs_control_secret_is_valid (
                  "0123456789abcdef0123456789abcde!", 32),
                is_false);
-  assert_that (turbovas_control_parse_request (
+  assert_that (yafvs_control_parse_request (
                  request, strlen (request), NULL, 0,
                  operator_uuid, task_uuid),
                is_false);
-  assert_that (turbovas_control_parse_request (
+  assert_that (yafvs_control_parse_request (
                  request, strlen (request), "too-short", 9,
                  operator_uuid, task_uuid),
                is_false);
-  assert_that (turbovas_control_parse_request (
+  assert_that (yafvs_control_parse_request (
                  request, strlen (request),
                  "fedcba9876543210fedcba9876543210", 32,
                  operator_uuid, task_uuid),
                is_false);
 }
 
-Ensure (turbovas_control, maps_only_protocol_responses)
+Ensure (yafvs_control, maps_only_protocol_responses)
 {
-  assert_that (turbovas_control_response (0), is_equal_to_string ("0 stopped\n"));
-  assert_that (turbovas_control_response (2),
+  assert_that (yafvs_control_response (0), is_equal_to_string ("0 stopped\n"));
+  assert_that (yafvs_control_response (2),
                is_equal_to_string ("2 inactive\n"));
-  assert_that (turbovas_control_response (1),
+  assert_that (yafvs_control_response (1),
                is_equal_to_string ("1 requested\n"));
-  assert_that (turbovas_control_response (3),
+  assert_that (yafvs_control_response (3),
                is_equal_to_string ("3 not_found\n"));
-  assert_that (turbovas_control_response (99),
+  assert_that (yafvs_control_response (99),
                is_equal_to_string ("99 forbidden\n"));
-  assert_that (turbovas_control_response (-1),
+  assert_that (yafvs_control_response (-1),
                is_equal_to_string ("-1 internal\n"));
-  assert_that (turbovas_control_response (-2),
+  assert_that (yafvs_control_response (-2),
                is_equal_to_string ("-2 scanner_status\n"));
-  assert_that (turbovas_control_response (-3),
+  assert_that (yafvs_control_response (-3),
                is_equal_to_string ("-3 scanner_stop\n"));
-  assert_that (turbovas_control_response (-4),
+  assert_that (yafvs_control_response (-4),
                is_equal_to_string ("-4 scanner_delete\n"));
-  assert_that (turbovas_control_response (-5),
+  assert_that (yafvs_control_response (-5),
                is_equal_to_string ("-5 scanner_verify\n"));
 }
 
-Ensure (turbovas_control, parses_canonical_bounded_alert_smb_requests)
+Ensure (yafvs_control, parses_canonical_bounded_alert_smb_requests)
 {
   static const char *protocols[] = {"", "NT1", "SMB2", "SMB3"};
   char operator_uuid[37];
@@ -4432,9 +4432,9 @@ Ensure (turbovas_control, parses_canonical_bounded_alert_smb_requests)
         "123e4567-e89b-12d3-a456-426614174010", "\\\\fileserver\\reports",
         "scan/report.pdf", "123e4567-e89b-12d3-a456-426614174011",
         index ? "123e4567-e89b-12d3-a456-426614174012" : "", protocols[index]);
-      turbovas_control_alert_smb_create_request_t alert = {0};
+      yafvs_control_alert_smb_create_request_t alert = {0};
 
-      assert_that (turbovas_control_parse_alert_smb_create_request (
+      assert_that (yafvs_control_parse_alert_smb_create_request (
                      request, strlen (request), TEST_CONTROL_SECRET,
                      strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
                    is_true);
@@ -4450,19 +4450,19 @@ Ensure (turbovas_control, parses_canonical_bounded_alert_smb_requests)
       assert_that (alert.file_path, is_equal_to_string ("scan/report.pdf"));
       assert_that (alert.max_protocol, is_equal_to_string (protocols[index]));
       assert_that (alert.active, is_true);
-      turbovas_control_alert_smb_create_request_clear (&alert);
+      yafvs_control_alert_smb_create_request_clear (&alert);
       g_free (request);
     }
 }
 
-Ensure (turbovas_control, rejects_malformed_or_oversized_alert_smb_requests)
+Ensure (yafvs_control, rejects_malformed_or_oversized_alert_smb_requests)
 {
   gchar *oversized_path =
-    g_strnfill (TURBOVAS_CONTROL_ALERT_SMB_PATH_MAX_BYTES + 1, 'x');
+    g_strnfill (YAFVS_CONTROL_ALERT_SMB_PATH_MAX_BYTES + 1, 'x');
   gchar *requests[8];
   char operator_uuid[37];
   size_t index;
-  turbovas_control_alert_smb_create_request_t alert = {0};
+  yafvs_control_alert_smb_create_request_t alert = {0};
 
   requests[0] = test_alert_smb_create_request (
     "2", "SMB alert", "", "Done", "123e4567-e89b-12d3-a456-426614174010",
@@ -4496,7 +4496,7 @@ Ensure (turbovas_control, rejects_malformed_or_oversized_alert_smb_requests)
 
   for (index = 0; index < G_N_ELEMENTS (requests); index++)
     {
-      assert_that (turbovas_control_parse_alert_smb_create_request (
+      assert_that (yafvs_control_parse_alert_smb_create_request (
                      requests[index], strlen (requests[index]),
                      TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                      operator_uuid, &alert),
@@ -4506,9 +4506,9 @@ Ensure (turbovas_control, rejects_malformed_or_oversized_alert_smb_requests)
   g_free (oversized_path);
 }
 
-Ensure (turbovas_control, maps_alert_smb_arrays_session_and_success_audit)
+Ensure (yafvs_control, maps_alert_smb_arrays_session_and_success_audit)
 {
-  const turbovas_control_alert_smb_create_request_t request = {
+  const yafvs_control_alert_smb_create_request_t request = {
     .name = "SMB alert",
     .comment = "private delivery",
     .status = "Done",
@@ -4532,7 +4532,7 @@ Ensure (turbovas_control, maps_alert_smb_arrays_session_and_success_audit)
   mock_operator_name = "operator";
 
   assert_that (
-    turbovas_control_create_alert_smb ("123e4567-e89b-12d3-a456-426614174000",
+    yafvs_control_create_alert_smb ("123e4567-e89b-12d3-a456-426614174000",
                                        &request, created_uuid),
     is_equal_to (0));
   assert_that (created_uuid,
@@ -4560,9 +4560,9 @@ Ensure (turbovas_control, maps_alert_smb_arrays_session_and_success_audit)
   assert_that (current_credentials.username, is_null);
 }
 
-Ensure (turbovas_control, audits_alert_smb_failure_and_cleans_session)
+Ensure (yafvs_control, audits_alert_smb_failure_and_cleans_session)
 {
-  const turbovas_control_alert_smb_create_request_t request = {
+  const yafvs_control_alert_smb_create_request_t request = {
     .name = "SMB alert",
     .comment = "",
     .status = "Done",
@@ -4582,7 +4582,7 @@ Ensure (turbovas_control, audits_alert_smb_failure_and_cleans_session)
   audit_success_calls = 0;
   mock_operator_name = "operator";
   assert_that (
-    turbovas_control_create_alert_smb ("123e4567-e89b-12d3-a456-426614174000",
+    yafvs_control_create_alert_smb ("123e4567-e89b-12d3-a456-426614174000",
                                        &request, created_uuid),
     is_equal_to (41));
   assert_that (received_smb_max_protocol, is_null);
@@ -4593,9 +4593,9 @@ Ensure (turbovas_control, audits_alert_smb_failure_and_cleans_session)
   assert_that (current_credentials.username, is_null);
 }
 
-Ensure (turbovas_control, preserves_alert_smb_postcommit_indeterminate_audit)
+Ensure (yafvs_control, preserves_alert_smb_postcommit_indeterminate_audit)
 {
-  const turbovas_control_alert_smb_create_request_t request = {
+  const yafvs_control_alert_smb_create_request_t request = {
     .name = "SMB alert",
     .comment = "",
     .status = "Done",
@@ -4615,7 +4615,7 @@ Ensure (turbovas_control, preserves_alert_smb_postcommit_indeterminate_audit)
   audit_success_calls = 0;
   mock_operator_name = "operator";
   assert_that (
-    turbovas_control_create_alert_smb ("123e4567-e89b-12d3-a456-426614174000",
+    yafvs_control_create_alert_smb ("123e4567-e89b-12d3-a456-426614174000",
                                        &request, created_uuid),
     is_equal_to (-3));
   assert_that (audit_success_calls, is_equal_to (1));
@@ -4639,14 +4639,14 @@ call_real_alert_smb_create (const char *share_path, const char *file_path,
 
   current_credentials.uuid = g_strdup ("123e4567-e89b-12d3-a456-426614174000");
   current_credentials.username = g_strdup ("operator");
-  turbovas_control_array_add_data (event_data, "status", "Done");
-  turbovas_control_array_add_data (method_data, "smb_credential",
+  yafvs_control_array_add_data (event_data, "status", "Done");
+  yafvs_control_array_add_data (method_data, "smb_credential",
                                    "123e4567-e89b-12d3-a456-426614174010");
-  turbovas_control_array_add_data (method_data, "smb_share_path", share_path);
-  turbovas_control_array_add_data (method_data, "smb_file_path", file_path);
-  turbovas_control_array_add_data (method_data, "smb_report_format",
+  yafvs_control_array_add_data (method_data, "smb_share_path", share_path);
+  yafvs_control_array_add_data (method_data, "smb_file_path", file_path);
+  yafvs_control_array_add_data (method_data, "smb_report_format",
                                    "123e4567-e89b-12d3-a456-426614174011");
-  turbovas_control_array_add_data (method_data, "smb_max_protocol", "SMB3");
+  yafvs_control_array_add_data (method_data, "smb_max_protocol", "SMB3");
   array_terminate (condition_data);
   array_terminate (event_data);
   array_terminate (method_data);
@@ -4655,16 +4655,16 @@ call_real_alert_smb_create (const char *share_path, const char *file_path,
     "SMB alert", "private delivery", "1", event_data, condition_data,
     method_data, "123e4567-e89b-12d3-a456-426614174010",
     alert_smb_db_report_format_uuid, &alert);
-  turbovas_control_secure_array_free (condition_data);
-  turbovas_control_secure_array_free (event_data);
-  turbovas_control_secure_array_free (method_data);
+  yafvs_control_secure_array_free (condition_data);
+  yafvs_control_secure_array_free (event_data);
+  yafvs_control_secure_array_free (method_data);
   g_clear_pointer (&current_credentials.uuid, g_free);
   g_clear_pointer (&current_credentials.username, g_free);
   alert_smb_db_active = FALSE;
   return result;
 }
 
-Ensure (turbovas_control, locks_alert_smb_references_and_commits_atomically)
+Ensure (yafvs_control, locks_alert_smb_references_and_commits_atomically)
 {
   reset_alert_smb_db ();
   assert_that (
@@ -4689,7 +4689,7 @@ Ensure (turbovas_control, locks_alert_smb_references_and_commits_atomically)
   assert_that (alert_smb_db_method_inserts, is_equal_to (5));
 }
 
-Ensure (turbovas_control, rejects_alert_smb_reference_failures_atomically)
+Ensure (yafvs_control, rejects_alert_smb_reference_failures_atomically)
 {
   reset_alert_smb_db ();
   alert_smb_db_acl = FALSE;
@@ -4744,7 +4744,7 @@ Ensure (turbovas_control, rejects_alert_smb_reference_failures_atomically)
 
 }
 
-Ensure (turbovas_control, preserves_authoritative_alert_smb_validation)
+Ensure (yafvs_control, preserves_authoritative_alert_smb_validation)
 {
   reset_alert_smb_db ();
   alert_smb_db_credential_username = "bad@name";
@@ -4810,24 +4810,24 @@ Ensure (turbovas_control, preserves_authoritative_alert_smb_validation)
                is_equal_to (0));
 }
 
-Ensure (turbovas_control, dispatches_malformed_alert_smb_without_payload)
+Ensure (yafvs_control, dispatches_malformed_alert_smb_without_payload)
 {
   const char *request = "alert-smb-create " TEST_CONTROL_SECRET " "
                         "123e4567-e89b-12d3-a456-426614174000 private-path\n";
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
   ssize_t response_len;
 
   assert_that (
-    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+    g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
   response_len = dispatch_trash_empty_request (request, response);
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
   assert_that (response_len, is_equal_to (strlen ("-2 malformed\n")));
   response[response_len] = '\0';
   assert_that (response, is_equal_to_string ("-2 malformed\n"));
   assert_that (strstr (response, "private-path"), is_null);
 }
 
-Ensure (turbovas_control, parses_canonical_bounded_alert_scp_requests)
+Ensure (yafvs_control, parses_canonical_bounded_alert_scp_requests)
 {
   gchar *request = test_alert_scp_create_request (
     "1", "SCP alert", "private delivery", "Done",
@@ -4835,9 +4835,9 @@ Ensure (turbovas_control, parses_canonical_bounded_alert_scp_requests)
     "scp.example.test ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKey",
     "/var/reports/scan.pdf", "123e4567-e89b-12d3-a456-426614174011");
   char operator_uuid[37];
-  turbovas_control_alert_scp_create_request_t alert = {0};
+  yafvs_control_alert_scp_create_request_t alert = {0};
 
-  assert_that (turbovas_control_parse_alert_scp_create_request (
+  assert_that (yafvs_control_parse_alert_scp_create_request (
                  request, strlen (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &alert),
                is_true);
@@ -4857,14 +4857,14 @@ Ensure (turbovas_control, parses_canonical_bounded_alert_scp_requests)
   assert_that (alert.report_format_uuid,
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174011"));
   assert_that (alert.active, is_true);
-  turbovas_control_alert_scp_create_request_clear (&alert);
+  yafvs_control_alert_scp_create_request_clear (&alert);
   g_free (request);
 }
 
-Ensure (turbovas_control, rejects_malformed_or_oversized_alert_scp_requests)
+Ensure (yafvs_control, rejects_malformed_or_oversized_alert_scp_requests)
 {
   gchar *oversized =
-    g_strnfill (TURBOVAS_CONTROL_ALERT_SCP_HOST_MAX_BYTES + 1, 'x');
+    g_strnfill (YAFVS_CONTROL_ALERT_SCP_HOST_MAX_BYTES + 1, 'x');
   gchar *requests[] = {
     test_alert_scp_create_request (
       "2", "SCP alert", "", "Done",
@@ -4905,11 +4905,11 @@ Ensure (turbovas_control, rejects_malformed_or_oversized_alert_scp_requests)
   };
   char operator_uuid[37];
   size_t index;
-  turbovas_control_alert_scp_create_request_t alert = {0};
+  yafvs_control_alert_scp_create_request_t alert = {0};
 
   for (index = 0; index < G_N_ELEMENTS (requests); index++)
     {
-      assert_that (turbovas_control_parse_alert_scp_create_request (
+      assert_that (yafvs_control_parse_alert_scp_create_request (
                      requests[index], strlen (requests[index]),
                      TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                      operator_uuid, &alert),
@@ -4919,9 +4919,9 @@ Ensure (turbovas_control, rejects_malformed_or_oversized_alert_scp_requests)
   g_free (oversized);
 }
 
-Ensure (turbovas_control, maps_alert_scp_arrays_session_and_success_audit)
+Ensure (yafvs_control, maps_alert_scp_arrays_session_and_success_audit)
 {
-  const turbovas_control_alert_scp_create_request_t request = {
+  const yafvs_control_alert_scp_create_request_t request = {
     .name = "SCP alert",
     .comment = "private delivery",
     .status = "Done",
@@ -4944,7 +4944,7 @@ Ensure (turbovas_control, maps_alert_scp_arrays_session_and_success_audit)
   mock_operator_name = "operator";
 
   assert_that (
-    turbovas_control_create_alert_scp ("123e4567-e89b-12d3-a456-426614174000",
+    yafvs_control_create_alert_scp ("123e4567-e89b-12d3-a456-426614174000",
                                        &request, created_uuid),
     is_equal_to (0));
   assert_that (created_uuid,
@@ -4973,14 +4973,14 @@ Ensure (turbovas_control, maps_alert_scp_arrays_session_and_success_audit)
   assert_that (current_credentials.username, is_null);
 }
 
-Ensure (turbovas_control, dispatches_alert_scp_errors_without_secrets)
+Ensure (yafvs_control, dispatches_alert_scp_errors_without_secrets)
 {
   gchar *request = test_alert_scp_create_request (
     "0", "SCP alert", "private delivery", "Done",
     "123e4567-e89b-12d3-a456-426614174010", "private-scp-host", "22",
     "private-known-host", "/private/path",
     "123e4567-e89b-12d3-a456-426614174011");
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
   ssize_t response_len;
 
   cleanup_calls = 0;
@@ -4990,9 +4990,9 @@ Ensure (turbovas_control, dispatches_alert_scp_errors_without_secrets)
   audit_success_calls = 0;
   mock_operator_name = "operator";
   assert_that (
-    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+    g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
   response_len = dispatch_trash_empty_request (request, response);
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
   assert_that (response_len, is_equal_to (strlen ("16 invalid_scp_port\n")));
   assert_that (response, is_equal_to_string ("16 invalid_scp_port\n"));
   assert_that (create_alert_calls, is_equal_to (1));
@@ -5005,17 +5005,17 @@ Ensure (turbovas_control, dispatches_alert_scp_errors_without_secrets)
   g_free (request);
 }
 
-Ensure (turbovas_control, dispatches_malformed_alert_scp_without_payload)
+Ensure (yafvs_control, dispatches_malformed_alert_scp_without_payload)
 {
   const char *request = "alert-scp-create " TEST_CONTROL_SECRET " "
                         "123e4567-e89b-12d3-a456-426614174000 private-scp-path\n";
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
   ssize_t response_len;
 
   assert_that (
-    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+    g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
   response_len = dispatch_trash_empty_request (request, response);
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
   assert_that (response_len, is_equal_to (strlen ("-2 malformed\n")));
   response[response_len] = '\0';
   assert_that (response, is_equal_to_string ("-2 malformed\n"));
@@ -5023,7 +5023,7 @@ Ensure (turbovas_control, dispatches_malformed_alert_scp_without_payload)
   assert_that (strstr (response, "private-scp-path"), is_null);
 }
 
-Ensure (turbovas_control, rejects_nonexistent_operator_before_session_setup)
+Ensure (yafvs_control, rejects_nonexistent_operator_before_session_setup)
 {
   cleanup_calls = 0;
   reinit_calls = 0;
@@ -5031,7 +5031,7 @@ Ensure (turbovas_control, rejects_nonexistent_operator_before_session_setup)
   stop_task_calls = 0;
   mock_operator_name = NULL;
 
-  assert_that (turbovas_control_stop_task (
+  assert_that (yafvs_control_stop_task (
                  "123e4567-e89b-12d3-a456-426614174000",
                  "123e4567-e89b-12d3-a456-426614174001"),
                is_equal_to (99));
@@ -5043,7 +5043,7 @@ Ensure (turbovas_control, rejects_nonexistent_operator_before_session_setup)
   assert_that (current_credentials.username, is_null);
 }
 
-Ensure (turbovas_control, parses_bounded_diagnostic_nvt_request)
+Ensure (yafvs_control, parses_bounded_diagnostic_nvt_request)
 {
   const char *request =
     "scan-config-nvt-diagnostic " TEST_CONTROL_SECRET " "
@@ -5052,9 +5052,9 @@ Ensure (turbovas_control, parses_bounded_diagnostic_nvt_request)
     "1.3.6.1.4.1.25623.1.0.900001\n";
   char operator_uuid[37];
   char config_uuid[37];
-  char nvt_oid[TURBOVAS_CONTROL_NVT_OID_MAX_BYTES + 1];
+  char nvt_oid[YAFVS_CONTROL_NVT_OID_MAX_BYTES + 1];
 
-  assert_that (turbovas_control_parse_scan_config_nvt_diagnostic_request (
+  assert_that (yafvs_control_parse_scan_config_nvt_diagnostic_request (
                  request, strlen (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, config_uuid,
                  nvt_oid),
@@ -5067,7 +5067,7 @@ Ensure (turbovas_control, parses_bounded_diagnostic_nvt_request)
                is_equal_to_string ("1.3.6.1.4.1.25623.1.0.900001"));
 }
 
-Ensure (turbovas_control, rejects_malformed_diagnostic_nvt_requests)
+Ensure (yafvs_control, rejects_malformed_diagnostic_nvt_requests)
 {
   const char *requests[] = {
     "scan-config-nvt-diagnostic wrong-secret "
@@ -5087,7 +5087,7 @@ Ensure (turbovas_control, rejects_malformed_diagnostic_nvt_requests)
     "123e4567-e89b-12d3-a456-426614174001 1.3.6.1 extra\n",
   };
   gchar *oversized_oid =
-    g_strnfill (TURBOVAS_CONTROL_NVT_OID_MAX_BYTES + 1, '1');
+    g_strnfill (YAFVS_CONTROL_NVT_OID_MAX_BYTES + 1, '1');
   gchar *oversized_request = g_strdup_printf (
     "scan-config-nvt-diagnostic " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 "
@@ -5095,16 +5095,16 @@ Ensure (turbovas_control, rejects_malformed_diagnostic_nvt_requests)
     oversized_oid);
   char operator_uuid[37];
   char config_uuid[37];
-  char nvt_oid[TURBOVAS_CONTROL_NVT_OID_MAX_BYTES + 1];
+  char nvt_oid[YAFVS_CONTROL_NVT_OID_MAX_BYTES + 1];
   size_t index;
 
   for (index = 0; index < G_N_ELEMENTS (requests); index++)
-    assert_that (turbovas_control_parse_scan_config_nvt_diagnostic_request (
+    assert_that (yafvs_control_parse_scan_config_nvt_diagnostic_request (
                    requests[index], strlen (requests[index]),
                    TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                    operator_uuid, config_uuid, nvt_oid),
                  is_false);
-  assert_that (turbovas_control_parse_scan_config_nvt_diagnostic_request (
+  assert_that (yafvs_control_parse_scan_config_nvt_diagnostic_request (
                  oversized_request, strlen (oversized_request),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, config_uuid, nvt_oid),
@@ -5114,7 +5114,7 @@ Ensure (turbovas_control, rejects_malformed_diagnostic_nvt_requests)
   g_free (oversized_oid);
 }
 
-Ensure (turbovas_control, maps_diagnostic_nvt_responses)
+Ensure (yafvs_control, maps_diagnostic_nvt_responses)
 {
   static const struct
   {
@@ -5138,12 +5138,12 @@ Ensure (turbovas_control, maps_diagnostic_nvt_responses)
 
   for (index = 0; index < G_N_ELEMENTS (cases); index++)
     assert_that (
-      turbovas_control_scan_config_nvt_diagnostic_response (
+      yafvs_control_scan_config_nvt_diagnostic_response (
         cases[index].result),
       is_equal_to_string (cases[index].response));
 }
 
-Ensure (turbovas_control, runs_diagnostic_nvt_in_operator_session_and_audits)
+Ensure (yafvs_control, runs_diagnostic_nvt_in_operator_session_and_audits)
 {
   const char *operator_uuid = "123e4567-e89b-12d3-a456-426614174000";
   const char *config_uuid = "123e4567-e89b-12d3-a456-426614174001";
@@ -5160,20 +5160,20 @@ Ensure (turbovas_control, runs_diagnostic_nvt_in_operator_session_and_audits)
   diagnostic_control_result = 0;
   diagnostic_control_changed = TRUE;
   diagnostic_control_committed = TRUE;
-  assert_that (turbovas_control_configure_diagnostic_nvt (
+  assert_that (yafvs_control_configure_diagnostic_nvt (
                  operator_uuid, config_uuid, nvt_oid),
                is_equal_to (0));
 
   diagnostic_control_result = -3;
   diagnostic_control_committed = TRUE;
-  assert_that (turbovas_control_configure_diagnostic_nvt (
+  assert_that (yafvs_control_configure_diagnostic_nvt (
                  operator_uuid, config_uuid, nvt_oid),
                is_equal_to (-3));
 
   diagnostic_control_result = 1;
   diagnostic_control_changed = FALSE;
   diagnostic_control_committed = FALSE;
-  assert_that (turbovas_control_configure_diagnostic_nvt (
+  assert_that (yafvs_control_configure_diagnostic_nvt (
                  operator_uuid, config_uuid, nvt_oid),
                is_equal_to (1));
 
@@ -5190,20 +5190,20 @@ Ensure (turbovas_control, runs_diagnostic_nvt_in_operator_session_and_audits)
   assert_that (current_credentials.username, is_null);
 }
 
-Ensure (turbovas_control, dispatches_malformed_diagnostic_nvt_frame)
+Ensure (yafvs_control, dispatches_malformed_diagnostic_nvt_frame)
 {
   const char *request =
     "scan-config-nvt-diagnostic " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 "
     "123e4567-e89b-12d3-a456-426614174001 1..3\n";
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES];
   ssize_t response_len;
 
   diagnostic_control_calls = 0;
   assert_that (
-    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+    g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
   response_len = dispatch_trash_empty_request (request, response);
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
   assert_that (response_len, is_equal_to (strlen ("-2 malformed\n")));
   response[response_len] = '\0';
   assert_that (response, is_equal_to_string ("-2 malformed\n"));
@@ -5228,7 +5228,7 @@ run_real_diagnostic_nvt (const char *nvt_oid, gboolean *changed,
   return result;
 }
 
-Ensure (turbovas_control, atomically_configures_diagnostic_nvt_and_cache)
+Ensure (yafvs_control, atomically_configures_diagnostic_nvt_and_cache)
 {
   const char *nvt_oid = "1.3.6.1.4.1.25623.1.0.900001";
   static const enum diagnostic_db_event expected[] = {
@@ -5259,7 +5259,7 @@ Ensure (turbovas_control, atomically_configures_diagnostic_nvt_and_cache)
   diagnostic_db_active = FALSE;
 }
 
-Ensure (turbovas_control, retries_identical_diagnostic_state_idempotently)
+Ensure (yafvs_control, retries_identical_diagnostic_state_idempotently)
 {
   const char *nvt_oid = "1.3.6.1.4.1.25623.1.0.900001";
   static const enum diagnostic_db_event expected[] = {
@@ -5285,7 +5285,7 @@ Ensure (turbovas_control, retries_identical_diagnostic_state_idempotently)
   diagnostic_db_active = FALSE;
 }
 
-Ensure (turbovas_control, deduplicates_requested_diagnostic_prerequisite)
+Ensure (yafvs_control, deduplicates_requested_diagnostic_prerequisite)
 {
   gboolean changed = FALSE;
   gboolean committed = FALSE;
@@ -5300,7 +5300,7 @@ Ensure (turbovas_control, deduplicates_requested_diagnostic_prerequisite)
   diagnostic_db_active = FALSE;
 }
 
-Ensure (turbovas_control, rejects_unsafe_diagnostic_config_states)
+Ensure (yafvs_control, rejects_unsafe_diagnostic_config_states)
 {
   const char *nvt_oid = "1.3.6.1.4.1.25623.1.0.900001";
   gboolean changed;
@@ -5362,7 +5362,7 @@ Ensure (turbovas_control, rejects_unsafe_diagnostic_config_states)
   diagnostic_db_active = FALSE;
 }
 
-Ensure (turbovas_control, reports_indeterminate_after_diagnostic_commit)
+Ensure (yafvs_control, reports_indeterminate_after_diagnostic_commit)
 {
   const char *nvt_oid = "1.3.6.1.4.1.25623.1.0.900001";
   gboolean changed = FALSE;
@@ -5388,7 +5388,7 @@ test_tag_base64 (const char *value)
   return g_base64_encode ((const guchar *) value, strlen (value));
 }
 
-Ensure (turbovas_control, parses_canonical_tag_create_requests)
+Ensure (yafvs_control, parses_canonical_tag_create_requests)
 {
   gchar *resource_type = test_tag_base64 ("task");
   gchar *name = test_tag_base64 ("Critical systems");
@@ -5406,9 +5406,9 @@ Ensure (turbovas_control, parses_canonical_tag_create_requests)
     "123e4567-e89b-12d3-a456-426614174000 1 %s %s %s %s  %s\n",
     resource_type, name, comment, value, filter);
   char operator_uuid[37];
-  turbovas_control_tag_create_request_t tag = {0};
+  yafvs_control_tag_create_request_t tag = {0};
 
-  assert_that (turbovas_control_parse_tag_create_request (
+  assert_that (yafvs_control_parse_tag_create_request (
                  explicit_request, strlen (explicit_request),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, &tag),
@@ -5424,9 +5424,9 @@ Ensure (turbovas_control, parses_canonical_tag_create_requests)
                is_equal_to_string (
                  "123e4567-e89b-12d3-a456-426614174002"));
   assert_that (tag.resource_filter, is_equal_to_string (""));
-  turbovas_control_tag_create_request_clear (&tag);
+  yafvs_control_tag_create_request_clear (&tag);
 
-  assert_that (turbovas_control_parse_tag_create_request (
+  assert_that (yafvs_control_parse_tag_create_request (
                  filter_request, strlen (filter_request),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, &tag),
@@ -5434,7 +5434,7 @@ Ensure (turbovas_control, parses_canonical_tag_create_requests)
   assert_that (g_ptr_array_index (tag.resource_ids, 0), is_null);
   assert_that (tag.resource_filter,
                is_equal_to_string ("rows=-1 name~production"));
-  turbovas_control_tag_create_request_clear (&tag);
+  yafvs_control_tag_create_request_clear (&tag);
 
   g_free (filter_request);
   g_free (explicit_request);
@@ -5446,7 +5446,7 @@ Ensure (turbovas_control, parses_canonical_tag_create_requests)
   g_free (resource_type);
 }
 
-Ensure (turbovas_control, rejects_ambiguous_or_malformed_tag_create_requests)
+Ensure (yafvs_control, rejects_ambiguous_or_malformed_tag_create_requests)
 {
   gchar *resource_type = test_tag_base64 ("task");
   gchar *name = test_tag_base64 ("Critical systems");
@@ -5462,13 +5462,13 @@ Ensure (turbovas_control, rejects_ambiguous_or_malformed_tag_create_requests)
     "123e4567-e89b-12d3-a456-426614174000 1 %s %s    \n",
     resource_type, name);
   char operator_uuid[37];
-  turbovas_control_tag_create_request_t tag = {0};
+  yafvs_control_tag_create_request_t tag = {0};
 
-  assert_that (turbovas_control_parse_tag_create_request (
+  assert_that (yafvs_control_parse_tag_create_request (
                  ambiguous, strlen (ambiguous), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &tag),
                is_false);
-  assert_that (turbovas_control_parse_tag_create_request (
+  assert_that (yafvs_control_parse_tag_create_request (
                  bad_secret, strlen (bad_secret), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &tag),
                is_false);
@@ -5481,7 +5481,7 @@ Ensure (turbovas_control, rejects_ambiguous_or_malformed_tag_create_requests)
   g_free (resource_type);
 }
 
-Ensure (turbovas_control, parses_atomic_tag_modify_and_empty_set)
+Ensure (yafvs_control, parses_atomic_tag_modify_and_empty_set)
 {
   gchar *name = test_tag_base64 ("Renamed");
   gchar *resource_type = test_tag_base64 ("target");
@@ -5497,9 +5497,9 @@ Ensure (turbovas_control, parses_atomic_tag_modify_and_empty_set)
     "123e4567-e89b-12d3-a456-426614174001 - - - - - set + -\n");
   char operator_uuid[37];
   char tag_uuid[37];
-  turbovas_control_tag_modify_request_t tag = {0};
+  yafvs_control_tag_modify_request_t tag = {0};
 
-  assert_that (turbovas_control_parse_tag_modify_request (
+  assert_that (yafvs_control_parse_tag_modify_request (
                  request, strlen (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, tag_uuid,
                  &tag),
@@ -5516,9 +5516,9 @@ Ensure (turbovas_control, parses_atomic_tag_modify_and_empty_set)
   assert_that (g_ptr_array_index (tag.resource_ids, 0), is_null);
   assert_that (tag.resource_filter,
                is_equal_to_string ("rows=-1 name~production"));
-  turbovas_control_tag_modify_request_clear (&tag);
+  yafvs_control_tag_modify_request_clear (&tag);
 
-  assert_that (turbovas_control_parse_tag_modify_request (
+  assert_that (yafvs_control_parse_tag_modify_request (
                  clear_request, strlen (clear_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, tag_uuid,
                  &tag),
@@ -5526,7 +5526,7 @@ Ensure (turbovas_control, parses_atomic_tag_modify_and_empty_set)
   assert_that (tag.resource_ids, is_not_null);
   assert_that (g_ptr_array_index (tag.resource_ids, 0), is_null);
   assert_that (tag.resource_filter, is_null);
-  turbovas_control_tag_modify_request_clear (&tag);
+  yafvs_control_tag_modify_request_clear (&tag);
 
   g_free (clear_request);
   g_free (request);
@@ -5535,7 +5535,7 @@ Ensure (turbovas_control, parses_atomic_tag_modify_and_empty_set)
   g_free (name);
 }
 
-Ensure (turbovas_control, rejects_unsafe_tag_resource_type_mutation)
+Ensure (yafvs_control, rejects_unsafe_tag_resource_type_mutation)
 {
   gchar *resource_type = test_tag_base64 ("target");
   gchar *request = g_strdup_printf (
@@ -5545,9 +5545,9 @@ Ensure (turbovas_control, rejects_unsafe_tag_resource_type_mutation)
     resource_type);
   char operator_uuid[37];
   char tag_uuid[37];
-  turbovas_control_tag_modify_request_t tag = {0};
+  yafvs_control_tag_modify_request_t tag = {0};
 
-  assert_that (turbovas_control_parse_tag_modify_request (
+  assert_that (yafvs_control_parse_tag_modify_request (
                  request, strlen (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, tag_uuid,
                  &tag),
@@ -5557,11 +5557,11 @@ Ensure (turbovas_control, rejects_unsafe_tag_resource_type_mutation)
   g_free (resource_type);
 }
 
-Ensure (turbovas_control, runs_tag_mutations_in_operator_session_and_audits)
+Ensure (yafvs_control, runs_tag_mutations_in_operator_session_and_audits)
 {
   array_t *resource_ids = make_array ();
   char created_uuid[37];
-  const turbovas_control_tag_create_request_t create_request = {
+  const yafvs_control_tag_create_request_t create_request = {
     .name = "Critical systems",
     .comment = "Owned by operations",
     .value = "priority",
@@ -5570,7 +5570,7 @@ Ensure (turbovas_control, runs_tag_mutations_in_operator_session_and_audits)
     .resource_filter = "rows=-1 name~production",
     .active = TRUE,
   };
-  const turbovas_control_tag_modify_request_t modify_request = {
+  const yafvs_control_tag_modify_request_t modify_request = {
     .name = "Renamed",
     .resources_action = "set",
     .resource_ids = resource_ids,
@@ -5587,7 +5587,7 @@ Ensure (turbovas_control, runs_tag_mutations_in_operator_session_and_audits)
   tag_audit_success_calls = 0;
   mock_operator_name = "operator";
 
-  assert_that (turbovas_control_create_tag (
+  assert_that (yafvs_control_create_tag (
                  "123e4567-e89b-12d3-a456-426614174000", &create_request,
                  created_uuid),
                is_equal_to (0));
@@ -5599,7 +5599,7 @@ Ensure (turbovas_control, runs_tag_mutations_in_operator_session_and_audits)
   assert_that (received_tag_resource_filter,
                is_equal_to_string (create_request.resource_filter));
 
-  assert_that (turbovas_control_modify_tag (
+  assert_that (yafvs_control_modify_tag (
                  "123e4567-e89b-12d3-a456-426614174000",
                  "123e4567-e89b-12d3-a456-426614174001", &modify_request),
                is_equal_to (0));
@@ -5611,27 +5611,27 @@ Ensure (turbovas_control, runs_tag_mutations_in_operator_session_and_audits)
   array_free (resource_ids);
 }
 
-Ensure (turbovas_control, maps_tag_control_responses)
+Ensure (yafvs_control, maps_tag_control_responses)
 {
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES];
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES];
 
-  assert_that (turbovas_control_tag_create_response (
+  assert_that (yafvs_control_tag_create_response (
                  0, "123e4567-e89b-12d3-a456-426614174005", response),
                is_equal_to_string (
                  "0 created 123e4567-e89b-12d3-a456-426614174005\n"));
-  assert_that (turbovas_control_tag_create_response (2, NULL, response),
+  assert_that (yafvs_control_tag_create_response (2, NULL, response),
                is_equal_to_string ("2 no_resources\n"));
-  assert_that (turbovas_control_tag_create_response (-3, NULL, response),
+  assert_that (yafvs_control_tag_create_response (-3, NULL, response),
                is_equal_to_string ("-3 committed_indeterminate\n"));
-  assert_that (turbovas_control_tag_modify_response (0, response),
+  assert_that (yafvs_control_tag_modify_response (0, response),
                is_equal_to_string ("0 modified\n"));
-  assert_that (turbovas_control_tag_modify_response (4, response),
+  assert_that (yafvs_control_tag_modify_response (4, response),
                is_equal_to_string ("4 resource_not_found\n"));
-  assert_that (turbovas_control_tag_modify_response (-2, response),
+  assert_that (yafvs_control_tag_modify_response (-2, response),
                is_equal_to_string ("-2 malformed\n"));
 }
 
-Ensure (turbovas_control, parses_strict_authenticated_alert_test_frames)
+Ensure (yafvs_control, parses_strict_authenticated_alert_test_frames)
 {
   const char *request =
     "alert-test " TEST_CONTROL_SECRET " "
@@ -5655,7 +5655,7 @@ Ensure (turbovas_control, parses_strict_authenticated_alert_test_frames)
   char alert_uuid[37];
   size_t index;
 
-  assert_that (turbovas_control_parse_alert_test_request (
+  assert_that (yafvs_control_parse_alert_test_request (
                  request, strlen (request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, alert_uuid),
                is_true);
@@ -5665,14 +5665,14 @@ Ensure (turbovas_control, parses_strict_authenticated_alert_test_frames)
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
 
   for (index = 0; index < G_N_ELEMENTS (malformed); index++)
-    assert_that (turbovas_control_parse_alert_test_request (
+    assert_that (yafvs_control_parse_alert_test_request (
                    malformed[index], strlen (malformed[index]),
                    TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                    operator_uuid, alert_uuid),
                  is_false);
 }
 
-Ensure (turbovas_control, maps_alert_test_responses_without_malformed_overlap)
+Ensure (yafvs_control, maps_alert_test_responses_without_malformed_overlap)
 {
   static const struct
   {
@@ -5692,11 +5692,11 @@ Ensure (turbovas_control, maps_alert_test_responses_without_malformed_overlap)
   size_t index;
 
   for (index = 0; index < G_N_ELEMENTS (cases); index++)
-    assert_that (turbovas_control_alert_test_response (cases[index].result),
+    assert_that (yafvs_control_alert_test_response (cases[index].result),
                  is_equal_to_string (cases[index].response));
 }
 
-Ensure (turbovas_control, parses_strict_alert_report_delivery_frames)
+Ensure (yafvs_control, parses_strict_alert_report_delivery_frames)
 {
   const char *filter_request =
     "alert-deliver-report " TEST_CONTROL_SECRET " "
@@ -5725,10 +5725,10 @@ Ensure (turbovas_control, parses_strict_alert_report_delivery_frames)
     "123e4567-e89b-12d3-a456-426614174002 not-base64 -\n",
   };
   char operator_uuid[37];
-  turbovas_control_alert_deliver_report_request_t delivery = {0};
+  yafvs_control_alert_deliver_report_request_t delivery = {0};
   size_t index;
 
-  assert_that (turbovas_control_parse_alert_deliver_report_request (
+  assert_that (yafvs_control_parse_alert_deliver_report_request (
                  filter_request, strlen (filter_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &delivery),
                is_true);
@@ -5740,9 +5740,9 @@ Ensure (turbovas_control, parses_strict_alert_report_delivery_frames)
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174002"));
   assert_that (delivery.filter, is_equal_to_string ("severity>7"));
   assert_that (delivery.filter_uuid, is_equal_to_string (""));
-  turbovas_control_alert_deliver_report_request_clear (&delivery);
+  yafvs_control_alert_deliver_report_request_clear (&delivery);
 
-  assert_that (turbovas_control_parse_alert_deliver_report_request (
+  assert_that (yafvs_control_parse_alert_deliver_report_request (
                  filter_id_request, strlen (filter_id_request),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, &delivery),
@@ -5750,17 +5750,17 @@ Ensure (turbovas_control, parses_strict_alert_report_delivery_frames)
   assert_that (delivery.filter, is_equal_to_string (""));
   assert_that (delivery.filter_uuid,
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174003"));
-  turbovas_control_alert_deliver_report_request_clear (&delivery);
+  yafvs_control_alert_deliver_report_request_clear (&delivery);
 
   for (index = 0; index < G_N_ELEMENTS (malformed); index++)
-    assert_that (turbovas_control_parse_alert_deliver_report_request (
+    assert_that (yafvs_control_parse_alert_deliver_report_request (
                    malformed[index], strlen (malformed[index]),
                    TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                    operator_uuid, &delivery),
                  is_false);
 }
 
-Ensure (turbovas_control, maps_alert_report_delivery_responses)
+Ensure (yafvs_control, maps_alert_report_delivery_responses)
 {
   static const struct
   {
@@ -5781,14 +5781,14 @@ Ensure (turbovas_control, maps_alert_report_delivery_responses)
 
   for (index = 0; index < G_N_ELEMENTS (cases); index++)
     assert_that (
-      turbovas_control_alert_deliver_report_response (cases[index].result),
+      yafvs_control_alert_deliver_report_response (cases[index].result),
       is_equal_to_string (cases[index].response));
 }
 
-Ensure (turbovas_control, delivers_report_in_operator_session_and_audits)
+Ensure (yafvs_control, delivers_report_in_operator_session_and_audits)
 {
   const char *operator_uuid = "123e4567-e89b-12d3-a456-426614174000";
-  turbovas_control_alert_deliver_report_request_t delivery = {
+  yafvs_control_alert_deliver_report_request_t delivery = {
     .alert_uuid = "123e4567-e89b-12d3-a456-426614174001",
     .report_uuid = "123e4567-e89b-12d3-a456-426614174002",
     .filter = "severity>7",
@@ -5816,7 +5816,7 @@ Ensure (turbovas_control, delivers_report_in_operator_session_and_audits)
   received_alert_delivery_filter = g_strdup ("severity>7 rows=1000");
 
   assert_that (
-    turbovas_control_deliver_alert_report (operator_uuid, &delivery),
+    yafvs_control_deliver_alert_report (operator_uuid, &delivery),
     is_equal_to (0));
   assert_that (alert_delivery_calls, is_equal_to (1));
   assert_that (alert_delivery_audit_success_calls, is_equal_to (1));
@@ -5834,7 +5834,7 @@ Ensure (turbovas_control, delivers_report_in_operator_session_and_audits)
   received_alert_delivery_filter_uuid = g_strdup (delivery.filter_uuid);
   alert_delivery_result = -4;
   assert_that (
-    turbovas_control_deliver_alert_report (operator_uuid, &delivery),
+    yafvs_control_deliver_alert_report (operator_uuid, &delivery),
     is_equal_to (3));
   assert_that (alert_delivery_calls, is_equal_to (2));
   assert_that (alert_delivery_audit_fail_calls, is_equal_to (1));
@@ -5842,14 +5842,14 @@ Ensure (turbovas_control, delivers_report_in_operator_session_and_audits)
   alert_delivery_report_exists = FALSE;
   g_clear_pointer (&received_alert_delivery_filter_uuid, g_free);
   assert_that (
-    turbovas_control_deliver_alert_report (operator_uuid, &delivery),
+    yafvs_control_deliver_alert_report (operator_uuid, &delivery),
     is_equal_to (2));
   assert_that (alert_delivery_calls, is_equal_to (2));
   assert_that (alert_delivery_audit_fail_calls, is_equal_to (2));
 
   mock_operator_name = NULL;
   assert_that (
-    turbovas_control_deliver_alert_report (operator_uuid, &delivery),
+    yafvs_control_deliver_alert_report (operator_uuid, &delivery),
     is_equal_to (99));
   assert_that (alert_delivery_calls, is_equal_to (2));
   alert_delivery_active = FALSE;
@@ -5858,7 +5858,7 @@ Ensure (turbovas_control, delivers_report_in_operator_session_and_audits)
   g_clear_pointer (&received_alert_delivery_filter, g_free);
 }
 
-Ensure (turbovas_control, tests_alert_in_operator_session_audits_and_scrubs)
+Ensure (yafvs_control, tests_alert_in_operator_session_audits_and_scrubs)
 {
   const char *operator_uuid = "123e4567-e89b-12d3-a456-426614174000";
   const char *alert_uuid = "123e4567-e89b-12d3-a456-426614174001";
@@ -5874,7 +5874,7 @@ Ensure (turbovas_control, tests_alert_in_operator_session_audits_and_scrubs)
   mock_operator_name = "operator";
   g_clear_pointer (&received_alert_test_uuid, g_free);
 
-  assert_that (turbovas_control_test_alert (operator_uuid, alert_uuid),
+  assert_that (yafvs_control_test_alert (operator_uuid, alert_uuid),
                is_equal_to (0));
   assert_that (alert_test_calls, is_equal_to (1));
   assert_that (alert_test_audit_success_calls, is_equal_to (1));
@@ -5887,14 +5887,14 @@ Ensure (turbovas_control, tests_alert_in_operator_session_audits_and_scrubs)
   assert_that (current_credentials.username, is_null);
 
   alert_test_result = -5;
-  assert_that (turbovas_control_test_alert (operator_uuid, alert_uuid),
+  assert_that (yafvs_control_test_alert (operator_uuid, alert_uuid),
                is_equal_to (-5));
   assert_that (alert_test_calls, is_equal_to (2));
   assert_that (alert_test_audit_success_calls, is_equal_to (1));
   assert_that (alert_test_audit_fail_calls, is_equal_to (1));
 
   mock_operator_name = NULL;
-  assert_that (turbovas_control_test_alert (operator_uuid, alert_uuid),
+  assert_that (yafvs_control_test_alert (operator_uuid, alert_uuid),
                is_equal_to (99));
   assert_that (alert_test_calls, is_equal_to (2));
   assert_that (alert_test_audit_fail_calls, is_equal_to (1));
@@ -5902,7 +5902,7 @@ Ensure (turbovas_control, tests_alert_in_operator_session_audits_and_scrubs)
   alert_test_script_message = NULL;
 }
 
-Ensure (turbovas_control, dispatches_alert_test_without_sensitive_response_data)
+Ensure (yafvs_control, dispatches_alert_test_without_sensitive_response_data)
 {
   const char *request =
     "alert-test " TEST_CONTROL_SECRET " "
@@ -5912,7 +5912,7 @@ Ensure (turbovas_control, dispatches_alert_test_without_sensitive_response_data)
     "alert-test " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 "
     "123e4567-e89b-12d3-a456-426614174001 extra\n";
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
   ssize_t response_len;
 
   alert_test_calls = 0;
@@ -5921,9 +5921,9 @@ Ensure (turbovas_control, dispatches_alert_test_without_sensitive_response_data)
   alert_test_audit_fail_calls = 0;
   mock_operator_name = "operator";
   assert_that (
-    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+    g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
   response_len = dispatch_trash_empty_request (request, response);
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
   assert_that (response_len, is_equal_to (strlen ("-5 delivery_failed\n")));
   assert_that (response, is_equal_to_string ("-5 delivery_failed\n"));
   assert_that (alert_test_calls, is_equal_to (1));
@@ -5936,9 +5936,9 @@ Ensure (turbovas_control, dispatches_alert_test_without_sensitive_response_data)
   assert_that (strstr (response, alert_test_script_message), is_null);
 
   assert_that (
-    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+    g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
   response_len = dispatch_trash_empty_request (malformed, response);
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
   assert_that (response_len, is_equal_to (strlen ("-2 malformed\n")));
   response[response_len] = '\0';
   assert_that (response, is_equal_to_string ("-2 malformed\n"));
@@ -5946,7 +5946,7 @@ Ensure (turbovas_control, dispatches_alert_test_without_sensitive_response_data)
   alert_test_script_message = NULL;
 }
 
-Ensure (turbovas_control, parses_strict_user_setting_modify_frames)
+Ensure (yafvs_control, parses_strict_user_setting_modify_frames)
 {
   const char *id_request =
     "user-setting-modify " TEST_CONTROL_SECRET " "
@@ -5961,9 +5961,9 @@ Ensure (turbovas_control, parses_strict_user_setting_modify_frames)
     "123e4567-e89b-12d3-a456-426614174000 id "
     "123e4567-e89b-12d3-a456-426614174001 \n";
   char operator_uuid[37];
-  turbovas_control_user_setting_modify_request_t setting = {0};
+  yafvs_control_user_setting_modify_request_t setting = {0};
 
-  assert_that (turbovas_control_parse_user_setting_modify_request (
+  assert_that (yafvs_control_parse_user_setting_modify_request (
                  id_request, strlen (id_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &setting),
                is_true);
@@ -5973,9 +5973,9 @@ Ensure (turbovas_control, parses_strict_user_setting_modify_frames)
   assert_that (setting.setting_uuid,
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
   assert_that (setting.value, is_equal_to_string ("filter"));
-  turbovas_control_user_setting_modify_request_clear (&setting);
+  yafvs_control_user_setting_modify_request_clear (&setting);
 
-  assert_that (turbovas_control_parse_user_setting_modify_request (
+  assert_that (yafvs_control_parse_user_setting_modify_request (
                  timezone_request, strlen (timezone_request),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, &setting),
@@ -5983,17 +5983,17 @@ Ensure (turbovas_control, parses_strict_user_setting_modify_frames)
   assert_that (setting.timezone, is_true);
   assert_that (setting.setting_uuid, is_equal_to_string (""));
   assert_that (setting.value, is_equal_to_string ("Europe/Berlin"));
-  turbovas_control_user_setting_modify_request_clear (&setting);
+  yafvs_control_user_setting_modify_request_clear (&setting);
 
-  assert_that (turbovas_control_parse_user_setting_modify_request (
+  assert_that (yafvs_control_parse_user_setting_modify_request (
                  empty_request, strlen (empty_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &setting),
                is_true);
   assert_that (setting.value, is_equal_to_string (""));
-  turbovas_control_user_setting_modify_request_clear (&setting);
+  yafvs_control_user_setting_modify_request_clear (&setting);
 }
 
-Ensure (turbovas_control, rejects_malformed_user_setting_modify_frames)
+Ensure (yafvs_control, rejects_malformed_user_setting_modify_frames)
 {
   const char *invalid[] = {
     "user-setting-modify wrongsecretwrongsecretwrongsecret12 "
@@ -6022,71 +6022,71 @@ Ensure (turbovas_control, rejects_malformed_user_setting_modify_frames)
     "123e4567-e89b-12d3-a456-426614174001\n",
   };
   char operator_uuid[37];
-  turbovas_control_user_setting_modify_request_t setting = {0};
+  yafvs_control_user_setting_modify_request_t setting = {0};
   guchar *oversized_value;
   gchar *oversized_64;
   gchar *oversized_request;
   size_t index;
 
   for (index = 0; index < G_N_ELEMENTS (invalid); index++)
-    assert_that (turbovas_control_parse_user_setting_modify_request (
+    assert_that (yafvs_control_parse_user_setting_modify_request (
                    invalid[index], strlen (invalid[index]),
                    TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                    operator_uuid, &setting),
                  is_false);
 
-  oversized_value = g_malloc (TURBOVAS_CONTROL_USER_SETTING_VALUE_MAX_BYTES
+  oversized_value = g_malloc (YAFVS_CONTROL_USER_SETTING_VALUE_MAX_BYTES
                               + 1);
   memset (oversized_value, 'x',
-          TURBOVAS_CONTROL_USER_SETTING_VALUE_MAX_BYTES + 1);
+          YAFVS_CONTROL_USER_SETTING_VALUE_MAX_BYTES + 1);
   oversized_64 = g_base64_encode (
-    oversized_value, TURBOVAS_CONTROL_USER_SETTING_VALUE_MAX_BYTES + 1);
+    oversized_value, YAFVS_CONTROL_USER_SETTING_VALUE_MAX_BYTES + 1);
   oversized_request = g_strdup_printf (
     "user-setting-modify %s 123e4567-e89b-12d3-a456-426614174000 id "
     "123e4567-e89b-12d3-a456-426614174001 %s\n",
     TEST_CONTROL_SECRET, oversized_64);
-  assert_that (turbovas_control_parse_user_setting_modify_request (
+  assert_that (yafvs_control_parse_user_setting_modify_request (
                  oversized_request, strlen (oversized_request),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, &setting),
                is_false);
-  turbovas_control_secure_clear (oversized_value,
-                                 TURBOVAS_CONTROL_USER_SETTING_VALUE_MAX_BYTES
+  yafvs_control_secure_clear (oversized_value,
+                                 YAFVS_CONTROL_USER_SETTING_VALUE_MAX_BYTES
                                    + 1);
   g_free (oversized_value);
-  turbovas_control_secure_free (oversized_64);
-  turbovas_control_secure_free (oversized_request);
+  yafvs_control_secure_free (oversized_64);
+  yafvs_control_secure_free (oversized_request);
 }
 
-Ensure (turbovas_control, maps_user_setting_modify_responses)
+Ensure (yafvs_control, maps_user_setting_modify_responses)
 {
-  assert_that (turbovas_control_user_setting_modify_response (
+  assert_that (yafvs_control_user_setting_modify_response (
                  MODIFY_SETTING_RESULT_OK),
                is_equal_to_string ("0 modified\n"));
-  assert_that (turbovas_control_user_setting_modify_response (
+  assert_that (yafvs_control_user_setting_modify_response (
                  MODIFY_SETTING_RESULT_NOT_FOUND),
                is_equal_to_string ("1 not_found\n"));
-  assert_that (turbovas_control_user_setting_modify_response (
+  assert_that (yafvs_control_user_setting_modify_response (
                  MODIFY_SETTING_RESULT_SYNTAX_ERROR),
                is_equal_to_string ("2 invalid_value\n"));
-  assert_that (turbovas_control_user_setting_modify_response (
+  assert_that (yafvs_control_user_setting_modify_response (
                  MODIFY_SETTING_RESULT_FEATURE_DISABLED),
                is_equal_to_string ("3 feature_disabled\n"));
-  assert_that (turbovas_control_user_setting_modify_response (
+  assert_that (yafvs_control_user_setting_modify_response (
                  MODIFY_SETTING_RESULT_PERMISSION_DENIED),
                is_equal_to_string ("99 forbidden\n"));
-  assert_that (turbovas_control_user_setting_modify_response (-2),
+  assert_that (yafvs_control_user_setting_modify_response (-2),
                is_equal_to_string ("-2 malformed\n"));
-  assert_that (turbovas_control_user_setting_modify_response (
+  assert_that (yafvs_control_user_setting_modify_response (
                  MODIFY_SETTING_RESULT_ERROR),
                is_equal_to_string ("-1 internal\n"));
-  assert_that (turbovas_control_user_setting_modify_response (55),
+  assert_that (yafvs_control_user_setting_modify_response (55),
                is_equal_to_string ("-1 internal\n"));
 }
 
-Ensure (turbovas_control, modifies_user_settings_in_operator_session)
+Ensure (yafvs_control, modifies_user_settings_in_operator_session)
 {
-  turbovas_control_user_setting_modify_request_t request = {
+  yafvs_control_user_setting_modify_request_t request = {
     .timezone = FALSE,
     .setting_uuid = "123e4567-e89b-12d3-a456-426614174001",
     .value = "filter",
@@ -6099,7 +6099,7 @@ Ensure (turbovas_control, modifies_user_settings_in_operator_session)
   modify_setting_result = MODIFY_SETTING_RESULT_OK;
   mock_operator_name = "operator";
 
-  assert_that (turbovas_control_modify_user_setting (
+  assert_that (yafvs_control_modify_user_setting (
                  "123e4567-e89b-12d3-a456-426614174000", &request),
                is_equal_to (MODIFY_SETTING_RESULT_OK));
   assert_that (modify_setting_calls, is_equal_to (1));
@@ -6117,7 +6117,7 @@ Ensure (turbovas_control, modifies_user_settings_in_operator_session)
   request.setting_uuid[0] = '\0';
   request.value = "Europe/Berlin";
   modify_setting_result = MODIFY_SETTING_RESULT_SYNTAX_ERROR;
-  assert_that (turbovas_control_modify_user_setting (
+  assert_that (yafvs_control_modify_user_setting (
                  "123e4567-e89b-12d3-a456-426614174000", &request),
                is_equal_to (MODIFY_SETTING_RESULT_SYNTAX_ERROR));
   assert_that (modify_setting_calls, is_equal_to (2));
@@ -6128,14 +6128,14 @@ Ensure (turbovas_control, modifies_user_settings_in_operator_session)
   assert_that (cleanup_calls, is_equal_to (2));
 
   mock_operator_name = NULL;
-  assert_that (turbovas_control_modify_user_setting (
+  assert_that (yafvs_control_modify_user_setting (
                  "123e4567-e89b-12d3-a456-426614174000", &request),
                is_equal_to (MODIFY_SETTING_RESULT_PERMISSION_DENIED));
   assert_that (modify_setting_calls, is_equal_to (2));
   assert_that (cleanup_calls, is_equal_to (3));
 }
 
-Ensure (turbovas_control, dispatches_user_setting_results_and_rejects_bad_frames)
+Ensure (yafvs_control, dispatches_user_setting_results_and_rejects_bad_frames)
 {
   static const struct
   {
@@ -6161,10 +6161,10 @@ Ensure (turbovas_control, dispatches_user_setting_results_and_rejects_bad_frames
   modify_setting_calls = 0;
   mock_operator_name = "operator";
   assert_that (
-    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+    g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
   for (index = 0; index < G_N_ELEMENTS (cases); index++)
     {
-      char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+      char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
       ssize_t response_len;
 
       modify_setting_result = cases[index].result;
@@ -6180,7 +6180,7 @@ Ensure (turbovas_control, dispatches_user_setting_results_and_rejects_bad_frames
                is_equal_to ((int) G_N_ELEMENTS (cases)));
 
   {
-    char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+    char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
     ssize_t response_len = dispatch_trash_empty_request (malformed, response);
     response[response_len] = '\0';
     assert_that (response, is_equal_to_string ("-2 malformed\n"));
@@ -6190,20 +6190,20 @@ Ensure (turbovas_control, dispatches_user_setting_results_and_rejects_bad_frames
 
   mock_operator_name = NULL;
   {
-    char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+    char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
     ssize_t response_len = dispatch_trash_empty_request (request, response);
     response[response_len] = '\0';
     assert_that (response, is_equal_to_string ("99 forbidden\n"));
     assert_that (modify_setting_calls,
                  is_equal_to ((int) G_N_ELEMENTS (cases)));
   }
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
   g_clear_pointer (&received_setting_uuid, g_free);
   g_clear_pointer (&received_setting_name, g_free);
   g_clear_pointer (&received_setting_value_64, g_free);
 }
 
-Ensure (turbovas_control, parses_bounded_user_management_frames)
+Ensure (yafvs_control, parses_bounded_user_management_frames)
 {
   const char *clone_request =
     "user-clone " TEST_CONTROL_SECRET " "
@@ -6224,11 +6224,11 @@ Ensure (turbovas_control, parses_bounded_user_management_frames)
     "123e4567-e89b-12d3-a456-426614174001 -\n";
   char operator_uuid[37];
   char source_user_uuid[37];
-  turbovas_control_user_create_request_t create = {0};
-  turbovas_control_user_modify_request_t modify = {0};
-  turbovas_control_user_delete_request_t delete_request_data = {0};
+  yafvs_control_user_create_request_t create = {0};
+  yafvs_control_user_modify_request_t modify = {0};
+  yafvs_control_user_delete_request_t delete_request_data = {0};
 
-  assert_that (turbovas_control_parse_user_create_request (
+  assert_that (yafvs_control_parse_user_create_request (
                  create_request, strlen (create_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &create), is_true);
   assert_that (operator_uuid,
@@ -6237,9 +6237,9 @@ Ensure (turbovas_control, parses_bounded_user_management_frames)
   assert_that (create.name, is_equal_to_string ("User"));
   assert_that (create.comment, is_equal_to_string ("Comment"));
   assert_that (create.password, is_equal_to_string ("Secret"));
-  turbovas_control_user_create_request_clear (&create);
+  yafvs_control_user_create_request_clear (&create);
 
-  assert_that (turbovas_control_parse_user_modify_request (
+  assert_that (yafvs_control_parse_user_modify_request (
                  modify_request, strlen (modify_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &modify), is_true);
   assert_that (modify.target_uuid,
@@ -6247,19 +6247,19 @@ Ensure (turbovas_control, parses_bounded_user_management_frames)
   assert_that (modify.method, is_equal_to_string ("radius_connect"));
   assert_that (modify.comment, is_equal_to_string (""));
   assert_that (modify.password, is_null);
-  turbovas_control_user_modify_request_clear (&modify);
+  yafvs_control_user_modify_request_clear (&modify);
 
-  assert_that (turbovas_control_parse_user_delete_request (
+  assert_that (yafvs_control_parse_user_delete_request (
                  delete_request, strlen (delete_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid,
                  &delete_request_data), is_true);
   assert_that (delete_request_data.target_uuid,
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
   assert_that (delete_request_data.inheritor_uuid, is_equal_to_string (""));
-  turbovas_control_secure_clear (&delete_request_data,
+  yafvs_control_secure_clear (&delete_request_data,
                                  sizeof (delete_request_data));
 
-  assert_that (turbovas_control_parse_user_clone_request (
+  assert_that (yafvs_control_parse_user_clone_request (
                  clone_request, strlen (clone_request), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid,
                  source_user_uuid), is_true);
@@ -6269,7 +6269,7 @@ Ensure (turbovas_control, parses_bounded_user_management_frames)
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174001"));
 }
 
-Ensure (turbovas_control, rejects_malformed_or_unauthenticated_user_management_frames)
+Ensure (yafvs_control, rejects_malformed_or_unauthenticated_user_management_frames)
 {
   const char *invalid[] = {
     "user-create badsecretbadsecretbadsecretbadsec "
@@ -6305,153 +6305,153 @@ Ensure (turbovas_control, rejects_malformed_or_unauthenticated_user_management_f
   gchar *oversized_request;
   char operator_uuid[37];
   char source_user_uuid[37];
-  turbovas_control_user_create_request_t create = {0};
-  turbovas_control_user_modify_request_t modify = {0};
-  turbovas_control_user_delete_request_t delete_request_data = {0};
+  yafvs_control_user_create_request_t create = {0};
+  yafvs_control_user_modify_request_t modify = {0};
+  yafvs_control_user_delete_request_t delete_request_data = {0};
 
-  assert_that (turbovas_control_parse_user_create_request (
+  assert_that (yafvs_control_parse_user_create_request (
                  invalid[0], strlen (invalid[0]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &create), is_false);
-  assert_that (turbovas_control_parse_user_create_request (
+  assert_that (yafvs_control_parse_user_create_request (
                  invalid[1], strlen (invalid[1]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &create), is_false);
-  assert_that (turbovas_control_parse_user_create_request (
+  assert_that (yafvs_control_parse_user_create_request (
                  invalid[2], strlen (invalid[2]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &create), is_false);
-  assert_that (turbovas_control_parse_user_modify_request (
+  assert_that (yafvs_control_parse_user_modify_request (
                  invalid[3], strlen (invalid[3]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid, &modify), is_false);
-  assert_that (turbovas_control_parse_user_delete_request (
+  assert_that (yafvs_control_parse_user_delete_request (
                  invalid[4], strlen (invalid[4]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid,
                  &delete_request_data), is_false);
-  assert_that (turbovas_control_parse_user_delete_request (
+  assert_that (yafvs_control_parse_user_delete_request (
                  invalid[5], strlen (invalid[5]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid,
                  &delete_request_data), is_false);
-  assert_that (turbovas_control_parse_user_clone_request (
+  assert_that (yafvs_control_parse_user_clone_request (
                  invalid[6], strlen (invalid[6]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid,
                  source_user_uuid), is_false);
-  assert_that (turbovas_control_parse_user_clone_request (
+  assert_that (yafvs_control_parse_user_clone_request (
                  invalid[7], strlen (invalid[7]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid,
                  source_user_uuid), is_false);
-  assert_that (turbovas_control_parse_user_clone_request (
+  assert_that (yafvs_control_parse_user_clone_request (
                  invalid[8], strlen (invalid[8]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid,
                  source_user_uuid), is_false);
-  assert_that (turbovas_control_parse_user_clone_request (
+  assert_that (yafvs_control_parse_user_clone_request (
                  invalid[9], strlen (invalid[9]), TEST_CONTROL_SECRET,
                  strlen (TEST_CONTROL_SECRET), operator_uuid,
                  source_user_uuid), is_false);
 
-  oversized_name = g_malloc (TURBOVAS_CONTROL_USER_NAME_MAX_BYTES + 1);
-  memset (oversized_name, 'u', TURBOVAS_CONTROL_USER_NAME_MAX_BYTES + 1);
+  oversized_name = g_malloc (YAFVS_CONTROL_USER_NAME_MAX_BYTES + 1);
+  memset (oversized_name, 'u', YAFVS_CONTROL_USER_NAME_MAX_BYTES + 1);
   oversized_name_64 = g_base64_encode (
-    oversized_name, TURBOVAS_CONTROL_USER_NAME_MAX_BYTES + 1);
+    oversized_name, YAFVS_CONTROL_USER_NAME_MAX_BYTES + 1);
   oversized_request = g_strdup_printf (
     "user-create %s 123e4567-e89b-12d3-a456-426614174000 file %s Qw== -\\n",
     TEST_CONTROL_SECRET, oversized_name_64);
-  assert_that (turbovas_control_parse_user_create_request (
+  assert_that (yafvs_control_parse_user_create_request (
                  oversized_request, strlen (oversized_request),
                  TEST_CONTROL_SECRET, strlen (TEST_CONTROL_SECRET),
                  operator_uuid, &create), is_false);
-  turbovas_control_secure_clear (oversized_name,
-                                 TURBOVAS_CONTROL_USER_NAME_MAX_BYTES + 1);
+  yafvs_control_secure_clear (oversized_name,
+                                 YAFVS_CONTROL_USER_NAME_MAX_BYTES + 1);
   g_free (oversized_name);
   g_free (oversized_name_64);
   g_free (oversized_request);
 }
 
-Ensure (turbovas_control, maps_authoritative_user_management_responses)
+Ensure (yafvs_control, maps_authoritative_user_management_responses)
 {
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
 
-  assert_that (turbovas_control_user_create_response (
+  assert_that (yafvs_control_user_create_response (
                  0, "123e4567-e89b-12d3-a456-426614174001", response),
                is_equal_to_string (
                  "0 created 123e4567-e89b-12d3-a456-426614174001\n"));
-  assert_that (turbovas_control_user_create_response (1, NULL, response),
+  assert_that (yafvs_control_user_create_response (1, NULL, response),
                is_equal_to_string ("1 exists\n"));
-  assert_that (turbovas_control_user_create_response (2, NULL, response),
+  assert_that (yafvs_control_user_create_response (2, NULL, response),
                is_equal_to_string ("2 invalid_name\n"));
-  assert_that (turbovas_control_user_create_response (3, NULL, response),
+  assert_that (yafvs_control_user_create_response (3, NULL, response),
                is_equal_to_string ("3 password_rejected\n"));
-  assert_that (turbovas_control_user_create_response (4, NULL, response),
+  assert_that (yafvs_control_user_create_response (4, NULL, response),
                is_equal_to_string ("4 invalid_method\n"));
-  assert_that (turbovas_control_user_create_response (99, NULL, response),
+  assert_that (yafvs_control_user_create_response (99, NULL, response),
                is_equal_to_string ("99 forbidden\n"));
-  assert_that (turbovas_control_user_create_response (-3, NULL, response),
+  assert_that (yafvs_control_user_create_response (-3, NULL, response),
                is_equal_to_string ("-3 committed_indeterminate\n"));
-  assert_that (turbovas_control_user_create_response (-2, NULL, response),
+  assert_that (yafvs_control_user_create_response (-2, NULL, response),
                is_equal_to_string ("-2 malformed\n"));
-  assert_that (turbovas_control_user_create_response (-1, NULL, response),
+  assert_that (yafvs_control_user_create_response (-1, NULL, response),
                is_equal_to_string ("-1 internal\n"));
 
-  assert_that (turbovas_control_user_modify_response (0),
+  assert_that (yafvs_control_user_modify_response (0),
                is_equal_to_string ("0 modified\n"));
-  assert_that (turbovas_control_user_modify_response (1),
+  assert_that (yafvs_control_user_modify_response (1),
                is_equal_to_string ("1 not_found\n"));
-  assert_that (turbovas_control_user_modify_response (2),
+  assert_that (yafvs_control_user_modify_response (2),
                is_equal_to_string ("2 invalid_name\n"));
-  assert_that (turbovas_control_user_modify_response (3),
+  assert_that (yafvs_control_user_modify_response (3),
                is_equal_to_string ("3 exists\n"));
-  assert_that (turbovas_control_user_modify_response (4),
+  assert_that (yafvs_control_user_modify_response (4),
                is_equal_to_string ("4 password_rejected\n"));
-  assert_that (turbovas_control_user_modify_response (5),
+  assert_that (yafvs_control_user_modify_response (5),
                is_equal_to_string ("5 password_required\n"));
-  assert_that (turbovas_control_user_modify_response (6),
+  assert_that (yafvs_control_user_modify_response (6),
                is_equal_to_string ("6 self_mutation\n"));
-  assert_that (turbovas_control_user_modify_response (7),
+  assert_that (yafvs_control_user_modify_response (7),
                is_equal_to_string ("7 invalid_method\n"));
-  assert_that (turbovas_control_user_modify_response (99),
+  assert_that (yafvs_control_user_modify_response (99),
                is_equal_to_string ("99 forbidden\n"));
-  assert_that (turbovas_control_user_modify_response (-3),
+  assert_that (yafvs_control_user_modify_response (-3),
                is_equal_to_string ("-3 committed_indeterminate\n"));
-  assert_that (turbovas_control_user_modify_response (-2),
+  assert_that (yafvs_control_user_modify_response (-2),
                is_equal_to_string ("-2 malformed\n"));
-  assert_that (turbovas_control_user_modify_response (-1),
+  assert_that (yafvs_control_user_modify_response (-1),
                is_equal_to_string ("-1 internal\n"));
 
-  assert_that (turbovas_control_user_delete_response (0),
+  assert_that (yafvs_control_user_delete_response (0),
                is_equal_to_string ("0 deleted\n"));
-  assert_that (turbovas_control_user_delete_response (1),
+  assert_that (yafvs_control_user_delete_response (1),
                is_equal_to_string ("1 not_found\n"));
-  assert_that (turbovas_control_user_delete_response (2),
+  assert_that (yafvs_control_user_delete_response (2),
                is_equal_to_string ("2 current_user\n"));
-  assert_that (turbovas_control_user_delete_response (3),
+  assert_that (yafvs_control_user_delete_response (3),
                is_equal_to_string ("3 inheritor_not_found\n"));
-  assert_that (turbovas_control_user_delete_response (4),
+  assert_that (yafvs_control_user_delete_response (4),
                is_equal_to_string ("4 same_inheritor\n"));
-  assert_that (turbovas_control_user_delete_response (5),
+  assert_that (yafvs_control_user_delete_response (5),
                is_equal_to_string ("5 last_user\n"));
-  assert_that (turbovas_control_user_delete_response (99),
+  assert_that (yafvs_control_user_delete_response (99),
                is_equal_to_string ("99 forbidden\n"));
-  assert_that (turbovas_control_user_delete_response (-2),
+  assert_that (yafvs_control_user_delete_response (-2),
                is_equal_to_string ("-2 malformed\n"));
-  assert_that (turbovas_control_user_delete_response (-1),
+  assert_that (yafvs_control_user_delete_response (-1),
                is_equal_to_string ("-1 internal\n"));
 
-  assert_that (turbovas_control_user_clone_response (
+  assert_that (yafvs_control_user_clone_response (
                  0, "123e4567-e89b-12d3-a456-426614174001", response),
                is_equal_to_string (
                  "0 created 123e4567-e89b-12d3-a456-426614174001\n"));
-  assert_that (turbovas_control_user_clone_response (1, NULL, response),
+  assert_that (yafvs_control_user_clone_response (1, NULL, response),
                is_equal_to_string ("1 duplicate\n"));
-  assert_that (turbovas_control_user_clone_response (2, NULL, response),
+  assert_that (yafvs_control_user_clone_response (2, NULL, response),
                is_equal_to_string ("2 not_found\n"));
-  assert_that (turbovas_control_user_clone_response (99, NULL, response),
+  assert_that (yafvs_control_user_clone_response (99, NULL, response),
                is_equal_to_string ("99 forbidden\n"));
-  assert_that (turbovas_control_user_clone_response (-3, NULL, response),
+  assert_that (yafvs_control_user_clone_response (-3, NULL, response),
                is_equal_to_string ("-3 committed_indeterminate\n"));
-  assert_that (turbovas_control_user_clone_response (-2, NULL, response),
+  assert_that (yafvs_control_user_clone_response (-2, NULL, response),
                is_equal_to_string ("-2 malformed\n"));
-  assert_that (turbovas_control_user_clone_response (-1, NULL, response),
+  assert_that (yafvs_control_user_clone_response (-1, NULL, response),
                is_equal_to_string ("-1 internal\n"));
 }
 
-Ensure (turbovas_control,
+Ensure (yafvs_control,
         clones_user_in_operator_session_and_reports_indeterminate_commit)
 {
   const char *operator_uuid = "123e4567-e89b-12d3-a456-426614174000";
@@ -6468,7 +6468,7 @@ Ensure (turbovas_control,
   mock_operator_name = "operator";
   user_uuid_lookup_fails = FALSE;
 
-  assert_that (turbovas_control_clone_user (operator_uuid, source_user_uuid,
+  assert_that (yafvs_control_clone_user (operator_uuid, source_user_uuid,
                                              created_uuid), is_equal_to (0));
   assert_that (created_uuid,
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174003"));
@@ -6480,7 +6480,7 @@ Ensure (turbovas_control,
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174003"));
 
   user_uuid_lookup_fails = TRUE;
-  assert_that (turbovas_control_clone_user (operator_uuid, source_user_uuid,
+  assert_that (yafvs_control_clone_user (operator_uuid, source_user_uuid,
                                              created_uuid), is_equal_to (-3));
   assert_that (created_uuid, is_equal_to_string (""));
   assert_that (clone_user_audit_success_calls, is_equal_to (2));
@@ -6488,7 +6488,7 @@ Ensure (turbovas_control,
 
   user_uuid_lookup_fails = FALSE;
   clone_user_result = 2;
-  assert_that (turbovas_control_clone_user (operator_uuid, source_user_uuid,
+  assert_that (yafvs_control_clone_user (operator_uuid, source_user_uuid,
                                              created_uuid), is_equal_to (2));
   assert_that (clone_user_audit_fail_calls, is_equal_to (1));
   assert_that (received_audit_uuid, is_equal_to_string (source_user_uuid));
@@ -6501,11 +6501,11 @@ Ensure (turbovas_control,
   g_clear_pointer (&received_user_target_uuid, g_free);
 }
 
-Ensure (turbovas_control, runs_native_user_management_in_operator_sessions)
+Ensure (yafvs_control, runs_native_user_management_in_operator_sessions)
 {
-  turbovas_control_user_create_request_t create = {0};
-  turbovas_control_user_modify_request_t modify = {0};
-  turbovas_control_user_delete_request_t delete_request_data = {0};
+  yafvs_control_user_create_request_t create = {0};
+  yafvs_control_user_modify_request_t modify = {0};
+  yafvs_control_user_delete_request_t delete_request_data = {0};
   char created_uuid[37];
 
   cleanup_calls = 0;
@@ -6524,21 +6524,21 @@ Ensure (turbovas_control, runs_native_user_management_in_operator_sessions)
   g_strlcpy (create.method, "ldap_connect", sizeof (create.method));
   create.name = g_strdup ("created");
   create.comment = g_strdup ("comment");
-  assert_that (turbovas_control_create_user (
+  assert_that (yafvs_control_create_user (
                  "123e4567-e89b-12d3-a456-426614174000", &create,
                  created_uuid), is_equal_to (0));
   assert_that (created_uuid,
                is_equal_to_string ("123e4567-e89b-12d3-a456-426614174003"));
   assert_that (create_user_calls, is_equal_to (1));
   assert_that (received_user_method, is_equal_to_string ("ldap_connect"));
-  turbovas_control_user_create_request_clear (&create);
+  yafvs_control_user_create_request_clear (&create);
 
   g_strlcpy (modify.target_uuid, "123e4567-e89b-12d3-a456-426614174001",
              sizeof (modify.target_uuid));
   g_strlcpy (modify.method, "ldap_connect", sizeof (modify.method));
   modify.name = g_strdup ("target");
   modify.comment = g_strdup ("comment");
-  assert_that (turbovas_control_modify_user (
+  assert_that (yafvs_control_modify_user (
                  "123e4567-e89b-12d3-a456-426614174000", &modify),
                is_equal_to (0));
   assert_that (modify_user_calls, is_equal_to (1));
@@ -6546,7 +6546,7 @@ Ensure (turbovas_control, runs_native_user_management_in_operator_sessions)
   assert_that (received_user_method, is_equal_to_string ("ldap_connect"));
 
   g_strlcpy (modify.method, "file", sizeof (modify.method));
-  assert_that (turbovas_control_modify_user (
+  assert_that (yafvs_control_modify_user (
                  "123e4567-e89b-12d3-a456-426614174000", &modify),
                is_equal_to (0));
   assert_that (modify_user_calls, is_equal_to (2));
@@ -6555,16 +6555,16 @@ Ensure (turbovas_control, runs_native_user_management_in_operator_sessions)
   g_strlcpy (modify.method, "ldap_connect", sizeof (modify.method));
   g_free (modify.name);
   modify.name = g_strdup ("renamed");
-  assert_that (turbovas_control_modify_user (
+  assert_that (yafvs_control_modify_user (
                  "123e4567-e89b-12d3-a456-426614174000", &modify),
                is_equal_to (6));
   g_free (modify.name);
   modify.name = g_strdup ("operator");
-  assert_that (turbovas_control_modify_user (
+  assert_that (yafvs_control_modify_user (
                  "123e4567-e89b-12d3-a456-426614174000", &modify),
                is_equal_to (0));
   assert_that (modify_user_calls, is_equal_to (3));
-  turbovas_control_user_modify_request_clear (&modify);
+  yafvs_control_user_modify_request_clear (&modify);
 
   g_strlcpy (delete_request_data.target_uuid,
              "123e4567-e89b-12d3-a456-426614174001",
@@ -6572,7 +6572,7 @@ Ensure (turbovas_control, runs_native_user_management_in_operator_sessions)
   g_strlcpy (delete_request_data.inheritor_uuid,
              "123e4567-e89b-12d3-a456-426614174002",
              sizeof (delete_request_data.inheritor_uuid));
-  assert_that (turbovas_control_delete_user (
+  assert_that (yafvs_control_delete_user (
                  "123e4567-e89b-12d3-a456-426614174000",
                  &delete_request_data), is_equal_to (0));
   assert_that (delete_user_calls, is_equal_to (1));
@@ -6590,10 +6590,10 @@ Ensure (turbovas_control, runs_native_user_management_in_operator_sessions)
   g_clear_pointer (&received_comment, g_free);
 }
 
-Ensure (turbovas_control,
+Ensure (yafvs_control,
         rejects_passwordless_file_transition_in_native_locked_update)
 {
-  turbovas_control_user_modify_request_t modify = {0};
+  yafvs_control_user_modify_request_t modify = {0};
 
   cleanup_calls = 0;
   reinit_calls = 0;
@@ -6610,21 +6610,21 @@ Ensure (turbovas_control,
   modify.name = g_strdup ("target");
   modify.comment = g_strdup ("comment");
 
-  assert_that (turbovas_control_modify_user (
+  assert_that (yafvs_control_modify_user (
                  "123e4567-e89b-12d3-a456-426614174000", &modify),
                is_equal_to (5));
   assert_that (modify_user_calls, is_equal_to (1));
   assert_that (received_user_method, is_equal_to_string ("file"));
   assert_that (received_name, is_null);
 
-  turbovas_control_user_modify_request_clear (&modify);
+  yafvs_control_user_modify_request_clear (&modify);
   g_clear_pointer (&received_user_method, g_free);
   g_clear_pointer (&received_user_target_uuid, g_free);
   g_clear_pointer (&received_name, g_free);
   g_clear_pointer (&received_comment, g_free);
 }
 
-Ensure (turbovas_control, dispatches_user_management_results_without_secrets)
+Ensure (yafvs_control, dispatches_user_management_results_without_secrets)
 {
   const char *clone_request =
     "user-clone " TEST_CONTROL_SECRET " "
@@ -6655,7 +6655,7 @@ Ensure (turbovas_control, dispatches_user_management_results_without_secrets)
     "user-modify " TEST_CONTROL_SECRET " "
     "123e4567-e89b-12d3-a456-426614174000 "
     "123e4567-e89b-12d3-a456-426614174001 ldap dGFyZ2V0 Qw== -\n";
-  char response[TURBOVAS_CONTROL_MAX_RESPONSE_BYTES] = {0};
+  char response[YAFVS_CONTROL_MAX_RESPONSE_BYTES] = {0};
   ssize_t response_len;
 
   mock_operator_name = "operator";
@@ -6666,7 +6666,7 @@ Ensure (turbovas_control, dispatches_user_management_results_without_secrets)
   modify_user_result = 8;
   delete_user_result = 9;
   assert_that (
-    g_setenv (TURBOVAS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
+    g_setenv (YAFVS_CONTROL_SECRET_ENV, TEST_CONTROL_SECRET, TRUE), is_true);
 
   response_len = dispatch_trash_empty_request (create_request, response);
   response[response_len] = '\0';
@@ -6694,7 +6694,7 @@ Ensure (turbovas_control, dispatches_user_management_results_without_secrets)
   response[response_len] = '\0';
   assert_that (response, is_equal_to_string ("-2 malformed\n"));
   assert_that (strstr (response, "VXNlcg=="), is_null);
-  g_unsetenv (TURBOVAS_CONTROL_SECRET_ENV);
+  g_unsetenv (YAFVS_CONTROL_SECRET_ENV);
 }
 
 int
@@ -6705,249 +6705,249 @@ main (int argc, char **argv)
 
   suite = create_test_suite ();
 
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          parses_strict_auth_settings_frames);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_malformed_auth_settings_frames);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_auth_settings_responses);
   add_test_with_context (
-    suite, turbovas_control,
+    suite, yafvs_control,
     runs_auth_settings_in_authorized_operator_session);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          round_trips_empty_auth_settings_fields);
   add_test_with_context (
-    suite, turbovas_control,
+    suite, yafvs_control,
     rejects_unknown_auth_settings_operator_and_malformed_frame);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          parses_strict_user_setting_modify_frames);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_malformed_user_setting_modify_frames);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_user_setting_modify_responses);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          modifies_user_settings_in_operator_session);
   add_test_with_context (
-    suite, turbovas_control,
+    suite, yafvs_control,
     dispatches_user_setting_results_and_rejects_bad_frames);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          parses_bounded_user_management_frames);
   add_test_with_context (
-    suite, turbovas_control,
+    suite, yafvs_control,
     rejects_malformed_or_unauthenticated_user_management_frames);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_authoritative_user_management_responses);
   add_test_with_context (
-    suite, turbovas_control,
+    suite, yafvs_control,
     clones_user_in_operator_session_and_reports_indeterminate_commit);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          runs_native_user_management_in_operator_sessions);
   add_test_with_context (
-    suite, turbovas_control,
+    suite, yafvs_control,
     rejects_passwordless_file_transition_in_native_locked_update);
   add_test_with_context (
-    suite, turbovas_control,
+    suite, yafvs_control,
     reports_committed_user_create_when_uuid_lookup_fails);
   add_test_with_context (
-    suite, turbovas_control,
+    suite, yafvs_control,
     dispatches_user_management_results_without_secrets);
 
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          accepts_exact_authenticated_stop_request);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_noncanonical_or_extra_requests);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_missing_weak_or_incorrect_secrets);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_only_protocol_responses);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          parses_canonical_task_clone_request);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_malformed_task_clone_requests);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          clones_task_in_operator_session_and_audits);
-  add_test_with_context (suite, turbovas_control, maps_task_clone_responses);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control, maps_task_clone_responses);
+  add_test_with_context (suite, yafvs_control,
                          accepts_strict_bounded_trash_empty_request);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_malformed_trash_empty_requests);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_trash_empty_contract_responses);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          dispatches_trash_count_mismatch);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          audits_successful_trash_empty);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          audits_trash_empty_failures);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          does_not_audit_missing_trash_operator);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          locks_before_count_and_skips_delete_on_mismatch);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          accepts_canonical_schedule_create_request);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          accepts_maximum_schedule_fields);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_noncanonical_or_oversized_schedule_fields);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          creates_schedule_in_operator_session);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_schedule_create_responses);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          accepts_username_password_credential_create_request);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          accepts_ssh_key_credential_create_request);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_malformed_credential_create_requests);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          creates_credential_in_operator_session);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_credential_create_responses);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          tracks_partial_request_length_and_clears_secrets);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_nonexistent_credential_operator_before_create);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          accepts_schedule_modify_presence_and_empty_tokens);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_malformed_or_unauthenticated_schedule_modify);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_invalid_schedule_modify_field_bytes);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          distinguishes_absent_and_empty_schedule_modify_calendar);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          modifies_schedule_in_operator_session);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_schedule_modify_responses);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_nonexistent_operator_before_session_setup);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          parses_bounded_diagnostic_nvt_request);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_malformed_diagnostic_nvt_requests);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_diagnostic_nvt_responses);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          runs_diagnostic_nvt_in_operator_session_and_audits);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          dispatches_malformed_diagnostic_nvt_frame);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          atomically_configures_diagnostic_nvt_and_cache);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          retries_identical_diagnostic_state_idempotently);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          deduplicates_requested_diagnostic_prerequisite);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_unsafe_diagnostic_config_states);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          reports_indeterminate_after_diagnostic_commit);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          parses_canonical_tag_create_requests);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_ambiguous_or_malformed_tag_create_requests);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          parses_atomic_tag_modify_and_empty_set);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_unsafe_tag_resource_type_mutation);
   add_test_with_context (
-    suite, turbovas_control,
+    suite, yafvs_control,
     runs_tag_mutations_in_operator_session_and_audits);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_tag_control_responses);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          parses_canonical_bounded_alert_email_request);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          enforces_alert_email_notice_mode_semantics);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          enforces_alert_email_canonicalization_and_bounds);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_alert_email_arrays_session_and_success_audit);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_selected_attach_message_and_failure_audit);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_simple_notice_without_report_selectors);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          omits_empty_optional_report_method_data);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_missing_alert_operator_before_authority);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_atomic_unavailable_alert_report_format);
   add_test_with_context (
-    suite, turbovas_control,
+    suite, yafvs_control,
     reports_postcommit_alert_uuid_failure_without_failed_audit);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_every_alert_create_response);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          parses_syslog_and_required_snmp_alert_requests);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_malformed_or_empty_snmp_alert_payloads);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_fixed_syslog_and_snmp_alert_creation);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_missing_snmp_owner_and_maps_alert_errors);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          returns_malformed_for_truncated_alert_frame);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          parses_canonical_bounded_alert_scp_requests);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_malformed_or_oversized_alert_scp_requests);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_alert_scp_arrays_session_and_success_audit);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          dispatches_alert_scp_errors_without_secrets);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          parses_strict_start_task_alert_frame);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_bad_uuid_and_malformed_start_task_alerts);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_start_task_alert_creation_and_commit_status);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          classifies_start_task_frames_without_logging_them);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          locks_start_task_reference_and_commits_atomically);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_unauthorized_missing_and_duplicate_start_task);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_start_task_alert_responses);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          dispatches_malformed_alert_scp_without_payload);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          parses_canonical_bounded_alert_smb_requests);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_malformed_or_oversized_alert_smb_requests);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_alert_smb_arrays_session_and_success_audit);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          audits_alert_smb_failure_and_cleans_session);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          preserves_alert_smb_postcommit_indeterminate_audit);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_missing_alert_smb_operator_before_authority);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          locks_alert_smb_references_and_commits_atomically);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          rejects_alert_smb_reference_failures_atomically);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          preserves_authoritative_alert_smb_validation);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          dispatches_malformed_alert_smb_without_payload);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          parses_strict_authenticated_alert_test_frames);
   add_test_with_context (
-    suite, turbovas_control,
+    suite, yafvs_control,
     maps_alert_test_responses_without_malformed_overlap);
   add_test_with_context (
-    suite, turbovas_control,
+    suite, yafvs_control,
     parses_strict_alert_report_delivery_frames);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          maps_alert_report_delivery_responses);
   add_test_with_context (
-    suite, turbovas_control,
+    suite, yafvs_control,
     delivers_report_in_operator_session_and_audits);
-  add_test_with_context (suite, turbovas_control,
+  add_test_with_context (suite, yafvs_control,
                          tests_alert_in_operator_session_audits_and_scrubs);
   add_test_with_context (
-    suite, turbovas_control,
+    suite, yafvs_control,
     dispatches_alert_test_without_sensitive_response_data);
 
   if (argc > 1)

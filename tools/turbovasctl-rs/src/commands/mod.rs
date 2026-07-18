@@ -5,6 +5,7 @@ mod audit;
 mod branding;
 mod common;
 mod compose;
+mod db_introspect;
 mod deps;
 mod direct_token;
 mod doctor;
@@ -27,6 +28,7 @@ pub use audit::{
     command_osv_lockfile_audit,
 };
 pub use branding::command_branding_state;
+pub use db_introspect::command_runtime_db_introspect;
 pub use deps::command_deps;
 pub use direct_token::command_runtime_native_api_direct_token;
 pub use doctor::command_doctor;

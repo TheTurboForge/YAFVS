@@ -35,6 +35,12 @@ pub enum CliCommand {
     PathCouplingState,
     /// Inspect Redis dependency and runtime boundary state.
     RuntimeRedisState,
+    /// Inspect fixed read-only database catalog facts.
+    RuntimeDbIntrospect {
+        /// Include information_schema columns for a safe schema.table identifier.
+        #[arg(long = "columns-for", value_name = "SCHEMA.TABLE")]
+        columns_for: Vec<String>,
+    },
     /// Show retained local quality gate history.
     QualityGateState,
     /// Show Community Feed cache and active-runtime state.
@@ -153,6 +159,7 @@ impl CliCommand {
             Self::BrandingState => "branding-state",
             Self::PathCouplingState => "path-coupling-state",
             Self::RuntimeRedisState => "runtime-redis-state",
+            Self::RuntimeDbIntrospect { .. } => "runtime-db-introspect",
             Self::QualityGateState => "quality-gate-state",
             Self::FeedState => "feed-state",
             Self::FeedGenerationState => "feed-generation-state",
@@ -220,6 +227,28 @@ mod tests {
                 .find_subcommand("feed-generation-runtime-guard")
                 .unwrap()
                 .is_hide_set()
+        );
+    }
+
+    #[test]
+    fn parses_repeatable_database_column_requests() {
+        assert_eq!(
+            parse_cli([
+                "runtime-db-introspect",
+                "--columns-for",
+                "public.targets",
+                "--columns-for",
+                "cert.cert_bund_advs",
+                "--status-only",
+            ])
+            .unwrap(),
+            Cli {
+                command: CliCommand::RuntimeDbIntrospect {
+                    columns_for: vec!["public.targets".into(), "cert.cert_bund_advs".into(),],
+                },
+                json: false,
+                status_only: true,
+            }
         );
     }
 

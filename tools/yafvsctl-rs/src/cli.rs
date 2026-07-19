@@ -98,6 +98,24 @@ pub enum CliCommand {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Import native schedules from the retained headerless CSV shape.
+    NativeSchedulesFromCsv {
+        #[arg(long)]
+        csv_file: PathBuf,
+        #[arg(long)]
+        allow_write_control: bool,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Import native schedules from the retained direct-child XML shape.
+    NativeSchedulesFromXml {
+        #[arg(long)]
+        xml_file: PathBuf,
+        #[arg(long)]
+        allow_write_control: bool,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Import native targets from the retained target CSV shape.
     NativeTargetsFromCsv {
         #[arg(long)]
@@ -437,6 +455,8 @@ impl CliCommand {
             Self::NativeUpdateTaskTarget { .. } => "native-update-task-target",
             Self::NativeTargetsFromHostList { .. } => "native-targets-from-host-list",
             Self::NativeTargetsFromXml { .. } => "native-targets-from-xml",
+            Self::NativeSchedulesFromCsv { .. } => "native-schedules-from-csv",
+            Self::NativeSchedulesFromXml { .. } => "native-schedules-from-xml",
             Self::NativeTargetsFromCsv { .. } => "native-targets-from-csv",
             Self::NativeTagsFromCsv { .. } => "native-tags-from-csv",
             Self::NativeStartTask { .. } => "native-start-task",
@@ -620,6 +640,43 @@ mod tests {
             }
         );
         assert_eq!(cli.command.name(), "native-tags-from-csv");
+    }
+
+    #[test]
+    fn parses_native_schedule_import_controls() {
+        let csv = parse_cli([
+            "native-schedules-from-csv",
+            "--csv-file",
+            "schedules.csv",
+            "--allow-write-control",
+            "--dry-run",
+            "--status-only",
+        ])
+        .unwrap();
+        assert!(csv.status_only);
+        assert_eq!(
+            csv.command,
+            CliCommand::NativeSchedulesFromCsv {
+                csv_file: PathBuf::from("schedules.csv"),
+                allow_write_control: true,
+                dry_run: true,
+            }
+        );
+        let xml = parse_cli([
+            "native-schedules-from-xml",
+            "--xml-file",
+            "schedules.xml",
+            "--allow-write-control",
+        ])
+        .unwrap();
+        assert_eq!(
+            xml.command,
+            CliCommand::NativeSchedulesFromXml {
+                xml_file: PathBuf::from("schedules.xml"),
+                allow_write_control: true,
+                dry_run: false,
+            }
+        );
     }
 
     #[test]

@@ -89,6 +89,7 @@ pub use repository::{
     command_inventory, command_repository_unavailable, command_status, find_repo_root,
 };
 pub use resource_import::{
+    command_native_schedules_from_csv, command_native_schedules_from_xml,
     command_native_tags_from_csv, command_native_targets_from_csv,
     command_native_targets_from_host_list, command_native_targets_from_xml,
 };

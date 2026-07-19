@@ -1208,6 +1208,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["deps", "gsa", "--json"], 0, "pass"),
                 (["deps", "definitely-invalid", "--json"], 1, "fail"),
                 (["runtime-plan", "--json"], 0, "warn"),
+                (["native-api-request", "--path", "/not-api", "--json"], 1, "fail"),
                 (["down", "--json"], 1, "fail"),
                 (["runtime-app-down", "--json"], 1, "fail"),
                 (["quality-gate-state", "--json"], (0, 1), ("pass", "warn", "fail")),
@@ -1440,7 +1441,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("nativeScopeReportQueryFromFilter", gsa_scopes)
         self.assertNotIn("parseScopeReportCounts", gsa_scopes)
         self.assertFalse((root / "components" / "python-gvm").exists())
-        self.assertIn("def command_native_api_request", native_tooling)
+        self.assertNotIn("def command_native_api_request", native_tooling)
         self.assertFalse((root / "components" / "gvm-tools" / "scripts" / "list-scope-reports.gmp.py").exists())
         self.assertNotIn("<name>get_scope_reports</name>", gmp_schema)
         self.assertNotIn("<name>get_scope_report_metrics</name>", gmp_schema)
@@ -2348,7 +2349,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2362,8 +2363,8 @@ class YAFVSCtlTests(unittest.TestCase):
             self.assertIn(f'tools/yafvsctl {command} "$@"', justfile)
 
         self.assertIn("def command_native_tooling_state", source)
-        self.assertIn("def command_native_api_request", source)
-        self.assertIn('native_api_request.add_argument("--status-only"', source)
+        self.assertNotIn("def command_native_api_request", source)
+        self.assertNotIn('subparsers.add_parser("native-api-request"', source)
         self.assertIn('migration_matrix.add_argument("--summary"', source)
         self.assertIn("args.status_only or args.compact or args.summary", source)
         self.assertIn("status_only=args.status_only", source)
@@ -2430,8 +2431,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/tags/{tag_id}/resources", source)
         self.assertIn("/api/v1/overrides", source)
         self.assertIn("/api/v1/overrides/{override_id}", source)
-        self.assertIn("def native_api_request_display_command", source)
-        self.assertIn("native_api_request_display_command(repo_root, request_path, method=method, request_id=request_id, body=body)", source)
+        self.assertNotIn("def native_api_request_display_command", source)
         self.assertIn("--allow-write-control", source)
         self.assertNotIn("def command_production_posture_check", source)
         self.assertIn("def command_quality_gate", source)
@@ -2442,7 +2442,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "native-api-request"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotIn(f"def command_{command.replace('-', '_')}", source)
@@ -2853,11 +2853,28 @@ class YAFVSCtlTests(unittest.TestCase):
 
 
 
-    def test_native_api_request_just_recipe_accepts_direct_options(self):
-        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+    def test_native_api_request_just_recipe_is_rust_direct(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        justfile = (root / "justfile").read_text(encoding="utf-8")
+        recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- native-api-request "$@"'
         self.assertIn('native-api-request *args:', justfile)
-        self.assertIn('if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-api-request "$@"', justfile)
-        self.assertNotIn('elif [ "${1:-}" != "" ] && [ "${1#-}" != "$1" ]; then', justfile)
+        self.assertIn(recipe, justfile)
+        self.assertNotIn('tools/yafvsctl native-api-request "$@"', justfile)
+        for surface in (
+            'def command_native_api_request',
+            'def validate_native_api_request_path',
+            'def validate_native_api_request_method',
+            'def validate_native_api_request_body_json',
+            'def validate_native_api_request_shape',
+            'def native_api_request_display_command',
+            'def compact_native_api_request_finding',
+            'def native_api_request_status_only_result',
+            'subparsers.add_parser("native-api-request"',
+            'args.command == "native-api-request"',
+        ):
+            with self.subTest(surface=surface):
+                self.assertNotIn(surface, source)
 
     def test_native_api_rust_test_recipe_serializes_filters(self):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
@@ -6628,39 +6645,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("runtime-certbund-report *args:", justfile)
         self.assertIn('runtime-certbund-report "$@"', justfile)
         self.assertNotIn('tools/yafvsctl runtime-certbund-report "$@"', justfile)
-
-    def test_native_api_request_validates_relative_api_paths(self):
-        self.assertEqual(yafvsctl.validate_native_api_request_path("/api/v1/reports?page_size=1"), "/api/v1/reports?page_size=1")
-        self.assertEqual(yafvsctl.validate_native_api_request_path("/api/v1"), "/api/v1")
-        for bad_path in (
-            "https://example.invalid/api/v1/reports",
-            "//example.invalid/api/v1/reports",
-            "/gmp",
-            "/api/v2/reports",
-            "/api/v1/reports#frag",
-            "/api/v1/",
-            "/api/v1/reports/",
-            "/api/v1/../reports",
-            "/api/v1//reports",
-        ):
-            with self.assertRaises(ValueError):
-                yafvsctl.validate_native_api_request_path(bad_path)
-
-    def test_native_api_request_validates_method_and_body_intent(self):
-        self.assertEqual(yafvsctl.validate_native_api_request_method("post"), "POST")
-        self.assertEqual(yafvsctl.validate_native_api_request_body_json('{"enabled": true}'), '{"enabled":true}')
-        yafvsctl.validate_native_api_request_shape("POST", body='{"enabled":true}', allow_write_control=True)
-        with self.assertRaises(ValueError):
-            yafvsctl.validate_native_api_request_method("TRACE")
-        with self.assertRaises(ValueError):
-            yafvsctl.validate_native_api_request_body_json("not-json")
-        with self.assertRaises(ValueError):
-            yafvsctl.validate_native_api_request_shape("POST", body=None, allow_write_control=False)
-        with self.assertRaises(ValueError):
-            yafvsctl.validate_native_api_request_shape("GET", body='{}', allow_write_control=True)
-        with self.assertRaises(ValueError):
-            yafvsctl.validate_native_api_request_shape("DELETE", body='{}', allow_write_control=True)
-
     def test_direct_control_probe_retries_only_control_unavailable(self):
         unavailable = yafvsctl.subprocess.CompletedProcess(
             [],
@@ -6715,166 +6699,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(attempts, 1)
         request.assert_called_once()
         sleep.assert_not_called()
-        with self.assertRaises(ValueError):
-            yafvsctl.validate_native_api_request_shape("PATCH", body='{}', allow_write_control=True, request_path="/api/v1/tags/123?unexpected=1")
-
-    def test_native_api_request_rejects_non_get_without_write_control_intent(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with unittest.mock.patch.object(yafvsctl, "native_api_curl") as curl:
-                result = yafvsctl.command_native_api_request(root, "/api/v1/reports?page_size=1", method="POST")
-                curl.assert_not_called()
-
-        self.assertEqual(result["status"], "fail")
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(checks["native-api-request.write-control-intent"]["status"], "fail")
-        self.assertIn("--allow-write-control", checks["native-api-request.write-control-intent"]["message"])
-
-    def test_native_api_request_threads_allowed_body_without_leaking_it(self):
-        secret_body = '{"secret":"do-not-print"}'
-
-        def fake_native_api_curl(_root, path, **kwargs):
-            captured["path"] = path
-            captured["kwargs"] = kwargs
-            return subprocess.CompletedProcess(["curl"], 0, '{"ok":true}\n', "")
-
-        captured: dict[str, object] = {}
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with unittest.mock.patch.object(yafvsctl, "native_api_curl", side_effect=fake_native_api_curl):
-                result = yafvsctl.command_native_api_request(
-                    root,
-                    "/api/v1/reports?page_size=1",
-                    method="POST",
-                    body_json=secret_body,
-                    allow_write_control=True,
-                )
-
-        rendered = json.dumps(result, sort_keys=True)
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(captured["path"], "/api/v1/reports?page_size=1")
-        self.assertEqual(captured["kwargs"], {"method": "POST", "request_id": None, "body": '{"secret":"do-not-print"}'})
-        self.assertIn("<redacted-body>", rendered)
-        self.assertIn("body_bytes", rendered)
-        self.assertNotIn(secret_body, rendered)
-        self.assertNotIn("do-not-print", rendered)
-
-    def test_native_api_request_status_only_omits_full_response_body(self):
-        result = {
-            "status": "pass",
-            "summary": "Native API request completed.",
-            "findings": [
-                {
-                    "status": "pass",
-                    "check": "native-api-request.direct",
-                    "message": "Direct native API GET /api/v1/port-lists/id/export returned authenticated JSON.",
-                    "details": {"response_summary": {"parsed": True, "id": "port-list-id"}},
-                }
-            ],
-            "details": {
-                "path": "/api/v1/port-lists/id/export",
-                "direct": True,
-                "method": "GET",
-                "http_status": 200,
-                "body_bytes": 0,
-                "response": {
-                    "id": "port-list-id",
-                    "name": "Port list",
-                    "port_ranges": [{"start": 1, "end": 65535, "comment": "large-payload-marker"}],
-                    "targets": [{"id": "target-id", "name": "private-target-marker"}],
-                },
-            },
-        }
-
-        compact = yafvsctl.native_api_request_status_only_result(result)
-        rendered = json.dumps(compact, sort_keys=True)
-
-        self.assertEqual(compact["status"], "pass")
-        self.assertEqual(compact["details"]["response_summary"]["id"], "port-list-id")
-        self.assertNotIn("response", compact["details"])
-        self.assertNotIn("large-payload-marker", rendered)
-        self.assertNotIn("private-target-marker", rendered)
-
-    def test_native_api_request_direct_accepts_no_content_delete(self):
-        response = subprocess.CompletedProcess(["curl"], 0, "\n204", "")
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with (
-                unittest.mock.patch.object(
-                    yafvsctl, "native_api_direct_runtime_env", return_value={}
-                ),
-                unittest.mock.patch.object(
-                    yafvsctl,
-                    "native_api_direct_config_shape_finding",
-                    return_value={
-                        "status": "pass",
-                        "check": "native-api-request.direct-config-shape",
-                        "message": "valid",
-                    },
-                ),
-                unittest.mock.patch.object(
-                    yafvsctl,
-                    "native_api_direct_bearer_token",
-                    return_value="x" * 32,
-                ),
-                unittest.mock.patch.object(
-                    yafvsctl, "direct_native_api_curl", return_value=response
-                ),
-            ):
-                result = yafvsctl.command_native_api_request(
-                    root,
-                    "/api/v1/alerts/11111111-1111-4111-8111-111111111111",
-                    direct=True,
-                    method="DELETE",
-                    allow_write_control=True,
-                )
-
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["details"]["http_status"], 204)
-        self.assertIsNone(result["details"]["response"])
-        self.assertEqual(result["findings"][-1]["status"], "pass")
-
-    def test_native_api_request_direct_alert_test_requires_post_write_intent_and_accepts_no_content(self):
-        alert_id = "11111111-1111-4111-8111-111111111111"
-        response = subprocess.CompletedProcess(["curl"], 0, "\n204", "")
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with (
-                unittest.mock.patch.object(
-                    yafvsctl, "native_api_direct_runtime_env", return_value={}
-                ),
-                unittest.mock.patch.object(
-                    yafvsctl,
-                    "native_api_direct_config_shape_finding",
-                    return_value={
-                        "status": "pass",
-                        "check": "native-api-request.direct-config-shape",
-                        "message": "valid",
-                    },
-                ),
-                unittest.mock.patch.object(
-                    yafvsctl,
-                    "native_api_direct_bearer_token",
-                    return_value="x" * 32,
-                ),
-                unittest.mock.patch.object(
-                    yafvsctl, "direct_native_api_curl", return_value=response
-                ) as curl,
-            ):
-                result = yafvsctl.command_native_api_request(
-                    root,
-                    f"/api/v1/alerts/{alert_id}/test",
-                    direct=True,
-                    method="POST",
-                    allow_write_control=True,
-                )
-
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["details"]["http_status"], 204)
-        self.assertIsNone(result["details"]["response"])
-        self.assertEqual(curl.call_args.kwargs["method"], "POST")
-        self.assertIsNone(curl.call_args.kwargs["body"])
-
     def test_native_start_task_requires_write_control_before_runtime(self):
         task_id = "11111111-1111-4111-8111-111111111111"
         with tempfile.TemporaryDirectory() as tmp:
@@ -10716,18 +10540,6 @@ class YAFVSCtlTests(unittest.TestCase):
 
         self.assertIsNone(failure)
         self.assertEqual(matches, [{"id": "22222222-2222-4222-8222-222222222222", "name": "needle"}])
-
-    def test_native_api_request_direct_rejects_non_get_before_bad_config(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                result = yafvsctl.command_native_api_request(root, "/api/v1/reports?page_size=1", direct=True, method="DELETE")
-                curl.assert_not_called()
-
-        self.assertEqual(result["status"], "fail")
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(checks["native-api-request.write-control-intent"]["status"], "fail")
-
     def test_openapi_tracks_direct_feed_security_information_and_alert_tag_lookup_contracts(self):
         root = Path(__file__).resolve().parents[2]
         openapi = (root / "api" / "openapi" / "yafvs-v1.yaml").read_text(encoding="utf-8")
@@ -12561,31 +12373,6 @@ class YAFVSCtlTests(unittest.TestCase):
             f"{yafvsctl.YAFVS_API_DIRECT_BIND_ENV} must use container port {yafvsctl.YAFVS_API_DIRECT_CONTAINER_PORT}",
             yafvsctl.native_api_direct_config_errors(bad_bind)[0],
         )
-
-    def test_native_api_request_direct_rejects_malformed_config_before_curl(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            original_host = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_DIRECT_HOST_ENV)
-            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
-            try:
-                yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_HOST_ENV] = "http://127.0.0.1"
-                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = "0123456789abcdef0123456789abcdef"
-                with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                    result = yafvsctl.command_native_api_request(root, "/api/v1/reports?page_size=1", direct=True)
-                    curl.assert_not_called()
-            finally:
-                if original_host is None:
-                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_DIRECT_HOST_ENV, None)
-                else:
-                    yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_HOST_ENV] = original_host
-                if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
-                else:
-                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
-        self.assertEqual(result["status"], "fail")
-        finding_by_check = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(finding_by_check["native-api-request.direct-config-shape"]["status"], "fail")
-
     def test_direct_api_bearer_token_strength_contract(self):
         self.assertEqual(yafvsctl.YAFVS_API_BEARER_TOKEN_MAX_LENGTH, 1024)
         self.assertTrue(yafvsctl.direct_api_bearer_token_is_acceptable("0123456789abcdef0123456789abcdef"))

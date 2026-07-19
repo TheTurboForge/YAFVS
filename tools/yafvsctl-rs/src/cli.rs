@@ -131,6 +131,23 @@ pub enum CliCommand {
         #[arg(long, default_value_t = 1.0, value_parser = validate_delay_seconds)]
         delay_seconds: f64,
     },
+    /// Snapshot and patch a bounded native schedule filter result.
+    NativeBulkModifySchedules {
+        #[arg(long)]
+        filter: String,
+        #[arg(long)]
+        timezone: Option<String>,
+        #[arg(long)]
+        icalendar_file: Option<PathBuf>,
+        #[arg(long, default_value_t = 100, value_parser = validate_max_overrides)]
+        max_schedules: usize,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        allow_write_control: bool,
+        #[arg(long)]
+        confirm_snapshot: Option<String>,
+    },
     /// Preview or permanently empty the operator-owned Trashcan.
     NativeEmptyTrash {
         #[arg(long)]
@@ -558,6 +575,7 @@ impl CliCommand {
             Self::NativeStartTasksFromCsv { .. } => "native-start-tasks-from-csv",
             Self::NativeStopTasksFromCsv { .. } => "native-stop-tasks-from-csv",
             Self::NativeStopAllTasks { .. } => "native-stop-all-tasks",
+            Self::NativeBulkModifySchedules { .. } => "native-bulk-modify-schedules",
             Self::NativeDeleteOverridesByFilter { .. } => "native-delete-overrides-by-filter",
             Self::NativeApiRequest { .. } => "native-api-request",
             Self::NativeEmptyTrash { .. } => "native-empty-trash",
@@ -633,6 +651,41 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_native_bulk_schedule_controls() {
+        let cli = parse_cli([
+            "native-bulk-modify-schedules",
+            "--filter",
+            "nightly",
+            "--timezone",
+            "UTC",
+            "--dry-run",
+        ])
+        .unwrap();
+        assert_eq!(
+            cli.command,
+            CliCommand::NativeBulkModifySchedules {
+                filter: "nightly".into(),
+                timezone: Some("UTC".into()),
+                icalendar_file: None,
+                max_schedules: 100,
+                dry_run: true,
+                allow_write_control: false,
+                confirm_snapshot: None,
+            }
+        );
+        assert!(
+            parse_cli([
+                "native-bulk-modify-schedules",
+                "--filter",
+                "nightly",
+                "--max-schedules",
+                "501",
+            ])
+            .is_err()
+        );
+    }
 
     #[test]
     fn parses_native_delete_overrides_controls() {

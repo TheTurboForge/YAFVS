@@ -5,11 +5,13 @@
 //!
 //! Format-specific importers live beside this module as their contracts grow.
 
+mod credential_csv;
 mod schedule_import;
 mod tag_csv;
 mod task_csv;
 mod target_csv;
 
+pub use credential_csv::command_native_credentials_from_csv;
 pub use schedule_import::{command_native_schedules_from_csv, command_native_schedules_from_xml};
 pub use tag_csv::command_native_tags_from_csv;
 pub use task_csv::command_native_tasks_from_csv;

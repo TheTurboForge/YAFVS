@@ -1636,6 +1636,7 @@ mod tests {
             "native-stop-tasks-from-csv",
             "native-stop-all-tasks",
             "native-update-task-target",
+            "native-verify-scanners",
             "feed-generation-stage",
             "feed-generation-state",
             "feed-generation-activate",

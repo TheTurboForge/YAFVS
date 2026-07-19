@@ -1218,6 +1218,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["native-stop-tasks-from-csv", "--csv-file", "/definitely-missing-yafvs-tasks.csv", "--json"], 1, "fail"),
                 (["native-stop-all-tasks", "--json"], 1, "fail"),
                 (["native-update-task-target", "--task-id", "11111111-1111-4111-8111-111111111111", "--host", "192.0.2.10", "--json"], 1, "fail"),
+                (["native-verify-scanners", "--json"], 1, "fail"),
                 (["native-targets-from-host-list", "--hosts-file", "/definitely-missing-yafvs-hosts.txt", "--json"], 1, "fail"),
                 (["native-targets-from-csv", "--csv-file", "/definitely-missing-yafvs-targets.csv", "--json"], 1, "fail"),
                 (["native-tags-from-csv", "--csv-file", "/definitely-missing-yafvs-tags.csv", "--json"], 1, "fail"),
@@ -2367,7 +2368,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2387,10 +2388,11 @@ class YAFVSCtlTests(unittest.TestCase):
             "native-tasks-from-csv",
             "native-credentials-from-csv",
             "native-alerts-from-csv",
+            "native-verify-scanners",
         ):
             self.assertNotIn(f'add_parser("{command}"', source)
             self.assertNotIn(f'elif args.command == "{command}":', source)
-        for command in ("native-scan-new-system", "native-verify-scanners"):
+        for command in ("native-scan-new-system",):
             self.assertIn(f'elif args.command == "{command}":', source)
 
         self.assertIn("def command_native_tooling_state", source)
@@ -2478,7 +2480,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "native-api-request", "native-start-task", "native-stop-task", "native-update-task-target", "native-tasks-from-csv"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "native-api-request", "native-start-task", "native-stop-task", "native-update-task-target", "native-tasks-from-csv", "native-verify-scanners"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotRegex(
@@ -7837,89 +7839,6 @@ class YAFVSCtlTests(unittest.TestCase):
             source.index("DELETE FROM targets_trash WHERE"),
         )
 
-
-    def test_native_verify_scanners_requires_write_control_before_runtime(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                result = yafvsctl.command_native_verify_scanners(root)
-                curl.assert_not_called()
-
-        self.assertEqual(result["status"], "fail")
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(checks["native-verify-scanners.write-control-intent"]["status"], "fail")
-
-    def test_native_verify_scanners_batches_direct_native_verification(self):
-        captured: list[tuple[str, str]] = []
-        scanner_uuid = "11111111-1111-4111-8111-111111111111"
-        remote_uuid = "22222222-2222-4222-8222-222222222222"
-
-        def fake_direct(_root, path, **kwargs):
-            captured.append((kwargs.get("method", "GET"), path))
-            if path == "/api/v1/scanners?page=1&page_size=500&sort=name":
-                return subprocess.CompletedProcess(
-                    ["curl"],
-                    0,
-                    json.dumps(
-                        {
-                            "page": {"page": 1, "page_size": 500, "total": 2},
-                            "items": [
-                                {"id": scanner_uuid, "name": "OpenVAS Default", "host": "/runtime/run/ospd/ospd.sock", "scanner_type": 2},
-                                {"id": remote_uuid, "name": "Remote scanner", "host": "scanner.example.invalid", "scanner_type": 2},
-                            ],
-                        }
-                    )
-                    + "\n200",
-                    "",
-                )
-            if path == f"/api/v1/scanners/{scanner_uuid}/verify":
-                return subprocess.CompletedProcess(
-                    ["curl"],
-                    0,
-                    json.dumps(
-                        {
-                            "scanner_id": scanner_uuid,
-                            "scanner_type": 2,
-                            "verified": True,
-                            "verification_mode": "osp-unix-socket",
-                            "name": "OpenVAS Default",
-                            "version": "22.9.0",
-                        }
-                    )
-                    + "\n200",
-                    "",
-                )
-            if path == f"/api/v1/scanners/{remote_uuid}/verify":
-                return subprocess.CompletedProcess(
-                    ["curl"],
-                    0,
-                    json.dumps({"error": {"code": "conflict", "message": "remote verification remains inherited"}}) + "\n409",
-                    "",
-                )
-            raise AssertionError(path)
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="a" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
-                result = yafvsctl.command_native_verify_scanners(root, allow_write_control=True, status_only=True)
-
-        self.assertEqual(result["status"], "warn")
-        self.assertEqual(
-            captured,
-            [
-                ("GET", "/api/v1/scanners?page=1&page_size=500&sort=name"),
-                ("POST", f"/api/v1/scanners/{scanner_uuid}/verify"),
-                ("POST", f"/api/v1/scanners/{remote_uuid}/verify"),
-            ],
-        )
-        self.assertEqual(result["details"]["scanner_count"], 2)
-        self.assertEqual(result["details"]["verified_count"], 1)
-        self.assertEqual(result["details"]["warning_count"], 1)
-        self.assertEqual(result["details"]["failure_count"], 0)
-        self.assertNotIn("Authorization: Bearer a", json.dumps(result))
 
     def test_direct_write_smoke_covers_explicit_email_and_smb_methods_with_residue_cleanup(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")

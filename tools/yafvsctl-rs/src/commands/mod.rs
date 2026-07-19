@@ -17,6 +17,7 @@ mod doctor;
 mod feed;
 mod feed_generation;
 mod license;
+mod native_api_request;
 mod native_runtime;
 mod path_coupling;
 mod production_posture;
@@ -62,6 +63,7 @@ pub use feed_generation::{
     command_feed_generation_state,
 };
 pub use license::command_license_report;
+pub use native_api_request::command_native_api_request;
 pub use path_coupling::command_path_coupling_state;
 pub use production_posture::command_production_posture_check;
 pub use quality_gate::command_quality_gate_state;

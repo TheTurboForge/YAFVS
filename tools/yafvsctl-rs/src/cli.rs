@@ -21,6 +21,21 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand, PartialEq, Eq)]
 pub enum CliCommand {
+    /// Send a bounded native API request.
+    NativeApiRequest {
+        #[arg(long)]
+        path: String,
+        #[arg(long)]
+        direct: bool,
+        #[arg(long, default_value = "GET")]
+        method: String,
+        #[arg(long)]
+        request_id: Option<String>,
+        #[arg(long)]
+        body_json: Option<String>,
+        #[arg(long)]
+        allow_write_control: bool,
+    },
     /// Show repository status.
     Status,
     /// Show expected component inventory.
@@ -277,6 +292,7 @@ pub enum CliCommand {
 impl CliCommand {
     pub fn name(&self) -> &'static str {
         match self {
+            Self::NativeApiRequest { .. } => "native-api-request",
             Self::Status => "status",
             Self::Inventory { .. } => "inventory",
             Self::BrandingState => "branding-state",
@@ -351,6 +367,38 @@ mod tests {
     use clap::CommandFactory;
     use std::fs;
     use std::path::Path;
+
+    #[test]
+    fn parses_guarded_native_api_request() {
+        let cli = parse_cli([
+            "native-api-request",
+            "--path",
+            "/api/v1/items",
+            "--direct",
+            "--method",
+            "POST",
+            "--request-id",
+            "request-1",
+            "--body-json",
+            "{\"name\":\"item\"}",
+            "--allow-write-control",
+            "--status-only",
+        ])
+        .unwrap();
+        assert!(cli.status_only);
+        assert_eq!(
+            cli.command,
+            CliCommand::NativeApiRequest {
+                path: "/api/v1/items".into(),
+                direct: true,
+                method: "POST".into(),
+                request_id: Some("request-1".into()),
+                body_json: Some("{\"name\":\"item\"}".into()),
+                allow_write_control: true,
+            }
+        );
+        assert_eq!(cli.command.name(), "native-api-request");
+    }
 
     #[test]
     fn parses_scanner_capability_commands() {

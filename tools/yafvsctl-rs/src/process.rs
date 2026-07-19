@@ -3,7 +3,8 @@
 
 use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::io::Read;
+use std::io::{Read, Write};
+use std::os::fd::RawFd;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -31,6 +32,32 @@ pub trait CommandRunner {
     ) -> Option<ProcessOutput> {
         self.run(program, args)
     }
+
+    fn run_with_input(
+        &self,
+        program: &str,
+        args: &[&str],
+        cwd: Option<&Path>,
+        env: Option<&BTreeMap<OsString, OsString>>,
+        timeout: Option<Duration>,
+        _input: Option<&[u8]>,
+    ) -> Option<ProcessOutput> {
+        self.run_with(program, args, cwd, env, timeout)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn run_with_input_and_fd(
+        &self,
+        program: &str,
+        args: &[&str],
+        cwd: Option<&Path>,
+        env: Option<&BTreeMap<OsString, OsString>>,
+        timeout: Option<Duration>,
+        input: Option<&[u8]>,
+        _inherited_fd: RawFd,
+    ) -> Option<ProcessOutput> {
+        self.run_with_input(program, args, cwd, env, timeout, input)
+    }
 }
 
 #[derive(Debug, Default)]
@@ -51,6 +78,32 @@ impl CommandRunner for SystemCommandRunner {
     ) -> Option<ProcessOutput> {
         run_system(program, args, cwd, env, timeout)
     }
+
+    fn run_with_input(
+        &self,
+        program: &str,
+        args: &[&str],
+        cwd: Option<&Path>,
+        env: Option<&BTreeMap<OsString, OsString>>,
+        timeout: Option<Duration>,
+        input: Option<&[u8]>,
+    ) -> Option<ProcessOutput> {
+        run_system_with_input(program, args, cwd, env, timeout, input, None)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn run_with_input_and_fd(
+        &self,
+        program: &str,
+        args: &[&str],
+        cwd: Option<&Path>,
+        env: Option<&BTreeMap<OsString, OsString>>,
+        timeout: Option<Duration>,
+        input: Option<&[u8]>,
+        inherited_fd: RawFd,
+    ) -> Option<ProcessOutput> {
+        run_system_with_input(program, args, cwd, env, timeout, input, Some(inherited_fd))
+    }
 }
 
 fn run_system(
@@ -60,12 +113,39 @@ fn run_system(
     env: Option<&BTreeMap<OsString, OsString>>,
     timeout: Option<Duration>,
 ) -> Option<ProcessOutput> {
+    run_system_with_input(program, args, cwd, env, timeout, None, None)
+}
+
+fn run_system_with_input(
+    program: &str,
+    args: &[&str],
+    cwd: Option<&Path>,
+    env: Option<&BTreeMap<OsString, OsString>>,
+    timeout: Option<Duration>,
+    input: Option<&[u8]>,
+    inherited_fd: Option<RawFd>,
+) -> Option<ProcessOutput> {
     let mut command = Command::new(program);
     command
         .args(args)
+        .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     command.process_group(0);
+    if let Some(fd) = inherited_fd {
+        // SAFETY: pre_exec runs after fork and before exec. fcntl is
+        // async-signal-safe, and the supplied descriptor remains owned by the
+        // parent for the duration of this synchronous command.
+        unsafe {
+            command.pre_exec(move || {
+                let flags = libc::fcntl(fd, libc::F_GETFD);
+                if flags < 0 || libc::fcntl(fd, libc::F_SETFD, flags & !libc::FD_CLOEXEC) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+    }
     if let Some(cwd) = cwd {
         command.current_dir(cwd);
     }
@@ -73,6 +153,9 @@ fn run_system(
         command.env_clear().envs(env);
     }
     let mut child = command.spawn().ok()?;
+    let mut stdin = child.stdin.take()?;
+    let input = input.unwrap_or_default().to_vec();
+    let stdin_writer = thread::spawn(move || stdin.write_all(&input).is_ok());
     let stdout = child.stdout.take()?;
     let stderr = child.stderr.take()?;
     let stdout_reader = thread::spawn(move || read_all(stdout));
@@ -97,6 +180,7 @@ fn run_system(
     };
     let stdout_bytes = stdout_reader.join().ok()??;
     let stderr_bytes = stderr_reader.join().ok()??;
+    let _ = stdin_writer.join();
     let stderr_text = String::from_utf8_lossy(&stderr_bytes).into_owned();
     let mut stdout_text = String::from_utf8_lossy(&stdout_bytes).into_owned();
     stdout_text.push_str(&stderr_text);
@@ -123,6 +207,10 @@ fn read_all(mut pipe: impl Read) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::CString;
+    use std::fs::File;
+    use std::io::{Seek, SeekFrom};
+    use std::os::fd::{AsRawFd, FromRawFd};
 
     #[test]
     fn captures_combined_process_output() {
@@ -148,5 +236,49 @@ mod tests {
         assert!(!output.success);
         assert_eq!(output.exit_code, Some(124));
         assert!(output.stdout.contains("Timed out after 0 seconds."));
+    }
+
+    #[test]
+    fn sends_stdin_without_deadlocking_output_collection() {
+        let body = vec![b'x'; 128 * 1024];
+        let output = SystemCommandRunner
+            .run_with_input(
+                "sh",
+                &["-c", "cat >/dev/null; printf done"],
+                None,
+                None,
+                Some(Duration::from_secs(1)),
+                Some(&body),
+            )
+            .unwrap();
+        assert!(output.success);
+        assert_eq!(output.stdout, "done");
+    }
+
+    #[test]
+    fn explicitly_inherited_descriptor_survives_exec() {
+        let name = CString::new("yafvsctl-process-test").unwrap();
+        // SAFETY: name is a valid C string and the result is checked.
+        let raw = unsafe { libc::memfd_create(name.as_ptr(), libc::MFD_CLOEXEC) };
+        assert!(raw >= 0);
+        // SAFETY: memfd_create returned a new owned descriptor.
+        let mut file = unsafe { File::from_raw_fd(raw) };
+        file.write_all(b"descriptor-only-value").unwrap();
+        file.seek(SeekFrom::Start(0)).unwrap();
+        let fd = file.as_raw_fd();
+        let fd_text = fd.to_string();
+        let output = SystemCommandRunner
+            .run_with_input_and_fd(
+                "sh",
+                &["-c", "cat \"/proc/self/fd/$1\"", "sh", &fd_text],
+                None,
+                None,
+                Some(Duration::from_secs(1)),
+                None,
+                fd,
+            )
+            .unwrap();
+        assert!(output.success);
+        assert_eq!(output.stdout, "descriptor-only-value");
     }
 }

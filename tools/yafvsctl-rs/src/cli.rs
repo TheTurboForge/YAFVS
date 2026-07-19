@@ -107,6 +107,15 @@ pub enum CliCommand {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Import EMAIL and SMB alerts from a private positional CSV.
+    NativeAlertsFromCsv {
+        #[arg(long)]
+        csv_file: PathBuf,
+        #[arg(long)]
+        allow_write_control: bool,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Create tasks from the retained resource-name CSV shape.
     NativeTasksFromCsv {
         #[arg(long)]
@@ -474,6 +483,7 @@ impl CliCommand {
             Self::NativeSchedulesFromCsv { .. } => "native-schedules-from-csv",
             Self::NativeSchedulesFromXml { .. } => "native-schedules-from-xml",
             Self::NativeCredentialsFromCsv { .. } => "native-credentials-from-csv",
+            Self::NativeAlertsFromCsv { .. } => "native-alerts-from-csv",
             Self::NativeTasksFromCsv { .. } => "native-tasks-from-csv",
             Self::NativeTargetsFromCsv { .. } => "native-targets-from-csv",
             Self::NativeTagsFromCsv { .. } => "native-tags-from-csv",
@@ -738,6 +748,28 @@ mod tests {
             }
         );
         assert_eq!(cli.command.name(), "native-credentials-from-csv");
+    }
+
+    #[test]
+    fn parses_native_alerts_from_csv_controls() {
+        let cli = parse_cli([
+            "native-alerts-from-csv",
+            "--csv-file",
+            "alerts.csv",
+            "--allow-write-control",
+            "--status-only",
+        ])
+        .unwrap();
+        assert!(cli.status_only);
+        assert_eq!(
+            cli.command,
+            CliCommand::NativeAlertsFromCsv {
+                csv_file: PathBuf::from("alerts.csv"),
+                allow_write_control: true,
+                dry_run: false,
+            }
+        );
+        assert_eq!(cli.command.name(), "native-alerts-from-csv");
     }
 
     #[test]

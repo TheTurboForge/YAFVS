@@ -17,8 +17,8 @@ pub use commands::{
     command_feed_generation_activate, command_feed_generation_rollback,
     command_feed_generation_runtime_guard, command_feed_generation_stage,
     command_feed_generation_state, command_feed_state, command_gsa_npm_audit, command_inventory,
-    command_license_report, command_logs, command_native_api_cargo_audit,
-    command_native_api_request, command_native_api_semgrep_audit,
+    command_license_report, command_logs, command_native_alerts_from_csv,
+    command_native_api_cargo_audit, command_native_api_request, command_native_api_semgrep_audit,
     command_native_credentials_from_csv, command_native_export_report_bundle,
     command_native_export_report_csv, command_native_export_report_pdf,
     command_native_schedules_from_csv, command_native_schedules_from_xml,
@@ -57,6 +57,17 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
             allow_write_control,
             dry_run,
         } => command_native_schedules_from_csv(
+            &repo_root,
+            csv_file,
+            *allow_write_control,
+            *dry_run,
+            cli.status_only,
+        ),
+        CliCommand::NativeAlertsFromCsv {
+            csv_file,
+            allow_write_control,
+            dry_run,
+        } => command_native_alerts_from_csv(
             &repo_root,
             csv_file,
             *allow_write_control,

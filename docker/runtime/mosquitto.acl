@@ -20,4 +20,4 @@ topic read scanner/scan/info
 
 # Compose health verification is unable to affect scanner topics.
 user health
-topic write turbovas/health
+topic write yafvs/health

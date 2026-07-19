@@ -37,7 +37,7 @@ class NotusScanner:
         """Derive stable identities so broker redelivery is idempotent."""
         return uuid5(
             NAMESPACE_URL,
-            f"https://turbovas.local/notus/{group_id}/{kind}/{identity}",
+            f"https://yafvs.local/notus/{group_id}/{kind}/{identity}",
         )
 
     def _publish(self, message: Message) -> Optional[PublishError]:

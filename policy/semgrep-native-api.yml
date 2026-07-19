@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 ---
 rules:
-  - id: turbovas.native-api.subprocess-spawn
+  - id: yafvs.native-api.subprocess-spawn
     languages: [rust]
     severity: ERROR
     message: Native API code must not spawn subprocesses; keep runtime control in explicit helpers.
@@ -14,7 +14,7 @@ rules:
       - pattern: tokio::process::Command::new(...)
       - pattern: Command::new(...)
 
-  - id: turbovas.native-api.unsafe-rust
+  - id: yafvs.native-api.unsafe-rust
     languages: [rust]
     severity: ERROR
     message: Native API code must not use unsafe Rust without a deliberate security review.
@@ -25,7 +25,7 @@ rules:
       - pattern: unsafe { ... }
       - pattern: unsafe fn $FUNC(...) { ... }
 
-  - id: turbovas.native-api.dynamic-sql-format
+  - id: yafvs.native-api.dynamic-sql-format
     languages: [rust]
     severity: ERROR
     message: Avoid format!-built SQL in native API PostgreSQL calls; use static SQL with bind parameters.

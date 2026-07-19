@@ -277,7 +277,7 @@ fn read_feed_lock_timestamp(lock_path: &FsPath) -> Option<String> {
 fn try_shared_flock(file: &File) -> Result<bool, io::Error> {
     // SAFETY: flock only receives a valid file descriptor borrowed from File;
     // no pointer aliasing or ownership transfer is involved.
-    // nosemgrep: turbovas.native-api.unsafe-rust
+    // nosemgrep: yafvs.native-api.unsafe-rust
     let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_SH | libc::LOCK_NB) };
     if result == 0 {
         return Ok(true);
@@ -295,7 +295,7 @@ fn try_shared_flock(file: &File) -> Result<bool, io::Error> {
 fn unlock_flock(file: &File, lock_path: &FsPath) {
     // SAFETY: flock only receives a valid file descriptor borrowed from File;
     // no pointer aliasing or ownership transfer is involved.
-    // nosemgrep: turbovas.native-api.unsafe-rust
+    // nosemgrep: yafvs.native-api.unsafe-rust
     let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_UN) };
     if result != 0 {
         let error = io::Error::last_os_error();

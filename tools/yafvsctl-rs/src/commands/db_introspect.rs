@@ -15,7 +15,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(60);
-const PSQL_SCRIPT: &str = r#"export PGPASSWORD="${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"; exec psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-turbovas}" -d "${POSTGRES_DB:-turbovas}" -At -c "$1""#;
+const PSQL_SCRIPT: &str = r#"export PGPASSWORD="${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"; exec psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-yafvs}" -d "${POSTGRES_DB:-yafvs}" -At -c "$1""#;
 
 const TABLES: [(&str, &str); 31] = [
     ("public", "meta"),
@@ -694,7 +694,7 @@ mod tests {
                     });
                 }
                 if sql.contains("current_database()") {
-                    "turbovas|turbovas|turbovas\n".into()
+                    "yafvs|yafvs|yafvs\n".into()
                 } else if sql.contains("database_version") {
                     "283\n".into()
                 } else if sql.contains("information_schema.schemata") {

@@ -50,7 +50,7 @@ const DATABASE_SCOPE_TABLES: [&str; 7] = [
     "scope_report_vulnerability_metrics",
 ];
 
-const PSQL_SCRIPT: &str = r#"export PGPASSWORD="${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"; exec psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-turbovas}" -d "${POSTGRES_DB:-turbovas}" -At -c "$1""#;
+const PSQL_SCRIPT: &str = r#"export PGPASSWORD="${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"; exec psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-yafvs}" -d "${POSTGRES_DB:-yafvs}" -At -c "$1""#;
 
 const DECIMAL_BYTE_UNITS: [(&str, i64); 6] = [
     ("B", 1),

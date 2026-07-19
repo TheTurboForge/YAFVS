@@ -41,7 +41,7 @@ const RETIRED_PREFIX_ARTIFACTS: [&str; 6] = [
     "lib/pkgconfig/libgvm_container_image_scanner.pc",
 ];
 const HARDENED_CONFIGURATION: &str = "build/hardened/hardening-configuration.json";
-const HARDENED_CMAKE_INJECTION: &str = "build/hardened/turbovas-hardening.cmake";
+const HARDENED_CMAKE_INJECTION: &str = "build/hardened/yafvs-hardening.cmake";
 const HARDENED_BUILD_MANIFEST: &str = "build/hardened/hardening-manifest.json";
 static NEXT_MANIFEST_TEMP: AtomicU64 = AtomicU64::new(0);
 

@@ -138,7 +138,7 @@ pub(crate) fn write_private_text(path: &Path, text: &str) -> io::Result<()> {
         .parent()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "private path has no parent"))?;
     let directory = open_private_directory(parent)?;
-    let lock_name = CString::new(".turbovas-private.lock").expect("static lock name");
+    let lock_name = CString::new(".yafvs-private.lock").expect("static lock name");
     // SAFETY: directory is a valid open directory descriptor, lock_name is
     // NUL-terminated, and the flags/mode are valid for openat.
     let lock_fd = unsafe {
@@ -154,7 +154,7 @@ pub(crate) fn write_private_text(path: &Path, text: &str) -> io::Result<()> {
     }
     // SAFETY: openat returned a new owned descriptor.
     let lock = unsafe { OwnedFd::from_raw_fd(lock_fd) };
-    validate_private_file_descriptor(&lock, parent.join(".turbovas-private.lock"))?;
+    validate_private_file_descriptor(&lock, parent.join(".yafvs-private.lock"))?;
     // SAFETY: lock is a valid file descriptor and LOCK_EX is a valid operation.
     if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX) } != 0 {
         return Err(io::Error::last_os_error());
@@ -399,7 +399,7 @@ mod tests {
     #[test]
     fn runtime_secret_is_created_once_and_read_back() {
         let root = fixture();
-        let repo = root.join("TurboVAS");
+        let repo = root.join("YAFVS");
         fs::create_dir_all(&repo).unwrap();
         let (created, was_created) = read_or_create_runtime_secret(&repo, "browser-proxy").unwrap();
         assert!(was_created);
@@ -414,7 +414,7 @@ mod tests {
     #[test]
     fn runtime_secret_rejects_links_and_multiple_lines() {
         let root = fixture();
-        let repo = root.join("TurboVAS");
+        let repo = root.join("YAFVS");
         fs::create_dir_all(&repo).unwrap();
         let path = runtime_secret_path(&repo, "browser-proxy");
         write_private_text(&path, "first\nsecond\n").unwrap();

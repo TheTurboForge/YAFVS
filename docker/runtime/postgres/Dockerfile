@@ -5,7 +5,7 @@
 FROM postgres:16-trixie
 
 ENV DEBIAN_FRONTEND=noninteractive \
-    LD_LIBRARY_PATH=/turbovas-prefix/lib:/turbovas-prefix/lib64
+    LD_LIBRARY_PATH=/yafvs-prefix/lib:/yafvs-prefix/lib64
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \

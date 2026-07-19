@@ -306,7 +306,7 @@ tools/yafvsctl native-start-task --task-id TASK_UUID --allow-write-control
 tools/yafvsctl native-scan-new-system --host 192.0.2.10 --dry-run --status-only
 tools/yafvsctl native-scan-new-system --host 192.0.2.10 --allow-scan-control --status-only
 tools/yafvsctl native-export-report-csv --report-id REPORT_UUID --output ./report.csv --status-only
-tools/yafvsctl native-export-report-bundle --report-id REPORT_UUID --output ./report.turbovas-report.zip --status-only
+tools/yafvsctl native-export-report-bundle --report-id REPORT_UUID --output ./report.yafvs-report.zip --status-only
 tools/yafvsctl native-delete-overrides-by-filter --filter 'obsolete policy' --dry-run --status-only
 tools/yafvsctl native-delete-overrides-by-filter --filter 'obsolete policy' --allow-write-control --confirm-snapshot SNAPSHOT_SHA256 --status-only
 tools/yafvsctl native-stop-task --task-id TASK_UUID --allow-write-control --status-only

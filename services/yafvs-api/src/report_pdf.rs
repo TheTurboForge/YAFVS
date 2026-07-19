@@ -295,7 +295,7 @@ fn validate_report_pdf_download_query(query: ReportPdfDownloadQuery) -> Result<(
 }
 
 fn report_pdf_headers(report_id: &str) -> Result<HeaderMap, ApiError> {
-    let filename = format!("turbovas-report-{report_id}.pdf");
+    let filename = format!("yafvs-report-{report_id}.pdf");
     let disposition = HeaderValue::from_str(&format!("attachment; filename=\"{filename}\""))
         .map_err(|_| ApiError::Config)?;
     let mut headers = HeaderMap::new();
@@ -887,7 +887,7 @@ mod tests {
         assert_eq!(headers.get(header::CACHE_CONTROL).unwrap(), "no-store");
         assert_eq!(
             headers.get(header::CONTENT_DISPOSITION).unwrap(),
-            "attachment; filename=\"turbovas-report-12345678-1234-1234-1234-123456789abc.pdf\""
+            "attachment; filename=\"yafvs-report-12345678-1234-1234-1234-123456789abc.pdf\""
         );
         assert!(canonical_report_id("../not-a-report").is_err());
     }

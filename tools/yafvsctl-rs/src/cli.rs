@@ -708,6 +708,8 @@ mod tests {
             "runtime-gmp-smoke",
             "runtime-credential-smoke",
             "runtime-rbac-smoke",
+            "down",
+            "runtime-app-down",
             "runtime-full-test-scan-preflight",
             "runtime-full-test-scan-start",
             "runtime-full-test-scan-status",

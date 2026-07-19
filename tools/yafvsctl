@@ -20696,30 +20696,6 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
         return direct_smoke_status_only_result(result) if status_only else result
 
 
-def _command_runtime_app_down_unlocked(repo_root: Path) -> dict[str, Any]:
-    stop = run_command(compose_command(repo_root, "--profile", "app", "stop", *APP_SERVICES), repo_root, env=runtime_env(repo_root))
-    remove = run_command(compose_command(repo_root, "--profile", "app", "rm", "-f", *APP_SERVICES), repo_root, env=runtime_env(repo_root))
-    findings = [
-        finding("pass" if stop.returncode == 0 else "fail", "compose.app-stop", f"docker compose app stop exit code {stop.returncode}.", details={"output_tail": output_tail(stop.stdout, 80)}),
-        finding("pass" if remove.returncode == 0 else "fail", "compose.app-rm", f"docker compose app rm exit code {remove.returncode}.", details={"output_tail": output_tail(remove.stdout, 80)}),
-    ]
-    return make_result("runtime-app-down", repo_root, "Application runtime shutdown attempted.", findings, [str(runtime_dir(repo_root))])
-
-
-def command_runtime_app_down(repo_root: Path) -> dict[str, Any]:
-    try:
-        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-app-down"):
-            return _command_runtime_app_down_unlocked(repo_root)
-    except RuntimeLockTimeout as error:
-        return make_result(
-            "runtime-app-down",
-            repo_root,
-            "Application runtime shutdown stopped while waiting for the feed lifecycle lock.",
-            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
-            [str(runtime_lock_dir(repo_root))],
-        )
-
-
 def command_runtime_app_smoke(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     manager_lock = runtime_lock_status(repo_root, RUNTIME_MANAGER_LOCK)
@@ -29824,26 +29800,6 @@ def command_runtime_browser_regression(repo_root: Path, *, status_only: bool = F
     return runtime_browser_regression_status_only_result(result_payload) if status_only else result_payload
 
 
-def _command_down_unlocked(repo_root: Path) -> dict[str, Any]:
-    result = run_command(compose_command(repo_root, "--profile", "app", "--profile", "tools", "down"), repo_root, env=runtime_env(repo_root))
-    findings = [finding("pass" if result.returncode == 0 else "fail", "compose.down", f"docker compose down exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-80:]})]
-    return make_result("down", repo_root, "Runtime infrastructure shutdown attempted.", findings)
-
-
-def command_down(repo_root: Path) -> dict[str, Any]:
-    try:
-        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "down"):
-            return _command_down_unlocked(repo_root)
-    except RuntimeLockTimeout as error:
-        return make_result(
-            "down",
-            repo_root,
-            "Runtime shutdown stopped while waiting for the feed lifecycle lock.",
-            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
-            [str(runtime_dir(repo_root))],
-        )
-
-
 def command_runtime_status(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     manager_lock = runtime_lock_status(repo_root, RUNTIME_MANAGER_LOCK)
@@ -30311,7 +30267,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("build-python", parents=[common], help="build/import-check Python components")
     subparsers.add_parser("build-baseline", parents=[common], help="build the inherited stack baseline")
     subparsers.add_parser("up", parents=[common], help="start runtime infrastructure services")
-    subparsers.add_parser("down", parents=[common], help="stop runtime infrastructure services")
     subparsers.add_parser("runtime-init", parents=[common], help="initialize persistent runtime database prerequisites")
     subparsers.add_parser("runtime-certs-init", parents=[common], help="initialize persistent runtime certificates")
     subparsers.add_parser("runtime-manager-init", parents=[common], help="initialize persistent gvmd database/user prerequisites")
@@ -30345,7 +30300,6 @@ def build_parser() -> argparse.ArgumentParser:
     runtime_app_up = subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
     runtime_app_up.add_argument("--status-only", action="store_true", help="emit compact app startup status and only non-pass findings for chat-safe validation")
     subparsers.add_parser("runtime-app-build", parents=[common], help="build application images explicitly without starting or changing feed state")
-    subparsers.add_parser("runtime-app-down", parents=[common], help="stop experimental application services")
     subparsers.add_parser("runtime-app-smoke", parents=[common], help="run experimental application service smoke checks")
     native_api_smoke = subparsers.add_parser("runtime-native-api-smoke", parents=[common], help="verify the internal YAFVS native API sidecar")
     native_api_smoke.add_argument("--status-only", action="store_true", help="emit compact native API smoke status and only non-pass findings for chat-safe validation")
@@ -30641,8 +30595,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_build_baseline(repo_root)
     elif args.command == "up":
         result = command_up(repo_root)
-    elif args.command == "down":
-        result = command_down(repo_root)
     elif args.command == "runtime-init":
         result = command_runtime_init(repo_root)
     elif args.command == "runtime-certs-init":
@@ -30679,8 +30631,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_app_up(repo_root, status_only=args.status_only)
     elif args.command == "runtime-app-build":
         result = command_runtime_app_build(repo_root)
-    elif args.command == "runtime-app-down":
-        result = command_runtime_app_down(repo_root)
     elif args.command == "runtime-app-smoke":
         result = command_runtime_app_smoke(repo_root)
     elif args.command == "runtime-native-api-smoke":

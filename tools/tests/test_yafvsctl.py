@@ -974,13 +974,27 @@ class YAFVSCtlTests(unittest.TestCase):
             "command_runtime_native_api_rebuild",
             "command_runtime_native_api_direct_write_smoke",
             "command_runtime_native_api_direct_smoke",
-            "command_runtime_app_down",
             "command_gvmd_smoke",
-            "command_down",
         ):
             start = source.index(f"def {function_name}")
             body = source[start : source.find("\ndef ", start + 5)]
             self.assertIn("acquire_runtime_lock", body)
+            self.assertIn("FEED_ACTIVATION_LOCK", body)
+
+        rust_source = (
+            Path(__file__).resolve().parents[1]
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "runtime.rs"
+        ).read_text(encoding="utf-8")
+        for function_name in (
+            "command_down_with_runner_and_timeout",
+            "command_runtime_app_down_with_runner_and_timeout",
+        ):
+            start = rust_source.index(f"fn {function_name}")
+            body = rust_source[start : rust_source.find("\nfn ", start + 5)]
+            self.assertIn("RuntimeOperationLock::acquire", body)
             self.assertIn("FEED_ACTIVATION_LOCK", body)
 
         error = yafvsctl.RuntimeLockTimeout(
@@ -1328,7 +1342,6 @@ class YAFVSCtlTests(unittest.TestCase):
             "runtime-scanner-redis-init",
             "runtime-scanner-register",
             "runtime-app-up",
-            "runtime-app-down",
             "runtime-app-smoke",
             "runtime-browser-smoke",
             "runtime-browser-regression",
@@ -1522,7 +1535,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
         runtime_scope_source = (root / "tools" / "runtime_scope.py").read_text(encoding="utf-8")
         browser_smoke_command = source.split("def command_runtime_browser_smoke", 1)[1].split("def command_runtime_browser_regression", 1)[0]
-        browser_regression_command = source.split("def command_runtime_browser_regression", 1)[1].split("def _command_down_unlocked", 1)[0]
+        browser_regression_command = source.split("def command_runtime_browser_regression", 1)[1].split("def command_runtime_status", 1)[0]
         scope_command_action = next(action for action in runtime_scope.build_parser()._actions if action.dest == "command")
         self.assertFalse((root / "tools" / "runtime_metrics.py").exists())
         self.assertEqual(scope_command_action.choices, ("smoke",))
@@ -11482,9 +11495,11 @@ class YAFVSCtlTests(unittest.TestCase):
             "inventory",
             "deps",
             "runtime-plan",
+            "down",
             "logs",
             "doctor",
             "runtime-log-review",
+            "runtime-app-down",
             "runtime-credential-smoke",
             "runtime-full-test-scan-preflight",
             "runtime-full-test-scan-start",
@@ -11499,7 +11514,6 @@ class YAFVSCtlTests(unittest.TestCase):
             "build-python",
             "build-baseline",
             "up",
-            "down",
         )
         for recipe in rust_owned | set(python_owned):
             with self.subTest(recipe=recipe):

@@ -791,53 +791,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("198.51.100.20:19392:9392", content)
         self.assertNotIn("127.0.0.1:19392:9392", content)
 
-    def test_license_status_only_omits_pass_manifest_details(self):
-        result = {
-            "status": "pass",
-            "summary": "ok",
-            "details": {"diff_scope": "staged", "modified_imported_only": True},
-            "findings": [
-                {
-                    "status": "pass",
-                    "check": "license.modified-imported-no-comment-manifest",
-                    "message": "ok",
-                    "details": {"manifest": {"a": "b"}},
-                }
-            ],
-        }
-        compact = yafvsctl.license_status_only_result(result)
-
-        self.assertEqual(compact["details"], {"diff_scope": "staged", "modified_imported_only": True, "finding_count": 1, "non_pass_count": 0})
-        self.assertEqual(compact["findings"], [{"status": "pass", "check": "license.status-only", "message": "License/provenance checks passed; no non-pass findings."}])
-
-    def test_license_status_only_keeps_failure_evidence_without_manifest_body(self):
-        result = {
-            "status": "fail",
-            "summary": "not ok",
-            "details": {"diff_scope": "staged", "modified_imported_only": True},
-            "findings": [
-                {
-                    "status": "fail",
-                    "check": "license.modified-imported-notices",
-                    "message": "missing",
-                    "details": {"missing": ["components/gsa/example.ts"]},
-                },
-                {
-                    "status": "fail",
-                    "check": "license.modified-imported-no-comment-manifest",
-                    "message": "manifest",
-                    "details": {"manifest": {"a": "b", "c": "d"}, "undocumented": ["x"]},
-                },
-            ],
-        }
-
-        compact = yafvsctl.license_status_only_result(result)
-
-        self.assertEqual(compact["details"]["non_pass_count"], 2)
-        self.assertEqual(compact["findings"][0]["details"], {"missing": ["components/gsa/example.ts"]})
-        self.assertNotIn("manifest", compact["findings"][1]["details"])
-        self.assertEqual(compact["findings"][1]["details"]["manifest_entry_count"], 2)
-
     def test_direct_smoke_status_only_keeps_signal_without_pass_payloads(self):
         result = {
             "status": "warn",
@@ -1212,17 +1165,12 @@ class YAFVSCtlTests(unittest.TestCase):
                 ["quality-gate-state", "--json"],
                 ["quality-gate-state", "--status-only", "--json"],
                 ["feed-state", "--json"],
-                ["license-report", "--json"],
-                ["license-report", "--status-only", "--json"],
-                ["license-report", "--public-release", "--mode", "source-public", "--json"],
-                ["license-report", "--public-release", "--mode", "container", "--json"],
-                ["license-report", "--diff-scope", "worktree", "--json"],
-                ["license-report", "--modified-imported-only", "--diff-scope", "staged", "--json"],
                 ["doctor", "--json"],
                 ["doctor", "--status-only", "--json"],
             ),
             rust_only_contracts=(
                 (["status", "--json"], 0, ("pass", "warn")),
+                (["license-report", "--json"], 0, "pass"),
                 (["inventory", "--json"], 0, "pass"),
                 (["inventory", "--scope", "components/gsa", "--json"], 0, "pass"),
                 (["inventory", "--scope", "definitely-invalid", "--json"], 0, "warn"),
@@ -2468,13 +2416,100 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "quality-gate-schedule", "runtime-native-api-direct-token"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "quality-gate-schedule", "runtime-native-api-direct-token", "license-report"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotIn(f"def command_{command.replace('-', '_')}", source)
                 self.assertNotIn(f'args.command == "{command}"', source)
                 self.assertIn(f"{command} *args:", justfile)
                 self.assertIn(f'{direct_recipe} {command} "$@"', justfile)
+
+    def test_rust_license_report_bridge_validates_envelopes_and_forwards_flags(self):
+        def envelope(status: str) -> str:
+            return json.dumps({
+                "status": status,
+                "summary": "ok",
+                "findings": [{"status": status, "check": "license.check", "message": "ok"}],
+                "artifacts": ["build/license.json"],
+                "metadata": {"command": "license-report"},
+            })
+
+        root = Path("/tmp/repo")
+        with unittest.mock.patch.object(
+            yafvsctl,
+            "run_command",
+            return_value=subprocess.CompletedProcess(["unit"], 0, envelope("pass"), ""),
+        ) as run_command:
+            result = yafvsctl.rust_license_report_result(
+                root,
+                public_release=True,
+                mode="container",
+                diff_scope="staged",
+                modified_imported_only=True,
+                status_only=True,
+            )
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(
+            run_command.call_args.args[0][-9:],
+            ["license-report", "--public-release", "--mode", "container", "--diff-scope", "staged", "--modified-imported-only", "--status-only", "--json"],
+        )
+        with unittest.mock.patch.object(
+            yafvsctl,
+            "run_command",
+            return_value=subprocess.CompletedProcess(["unit"], 1, envelope("fail"), ""),
+        ):
+            self.assertEqual(yafvsctl.rust_license_report_result(root)["status"], "fail")
+
+    def test_rust_license_report_bridge_fails_closed_without_process_output(self):
+        valid = {
+            "status": "pass",
+            "summary": "ok",
+            "findings": [{"status": "pass", "check": "license.check", "message": "ok"}],
+            "artifacts": [],
+            "metadata": {"command": "license-report"},
+        }
+        malformed = [
+            ("not-json SECRET_STDOUT", 0),
+            ("{" + '"status":"pass","status":"fail"' + "}", 0),
+            (json.dumps({**valid, "status": "fail"}), 1),
+            (json.dumps({**valid, "metadata": {"command": "doctor"}}), 0),
+            ("x" * (yafvsctl.YAFVSCTL_RUST_BRIDGE_MAX_OUTPUT_BYTES + 1), 0),
+        ]
+        root = Path("/tmp/repo")
+        for stdout, returncode in malformed:
+            with self.subTest(stdout_size=len(stdout)), unittest.mock.patch.object(
+                yafvsctl,
+                "run_command",
+                return_value=subprocess.CompletedProcess(["unit"], returncode, stdout, "SECRET_STDERR"),
+            ):
+                result = yafvsctl.rust_license_report_result(root)
+            self.assertEqual(result["status"], "fail")
+            self.assertEqual(result["findings"][0]["check"], "license-report.rust-bridge")
+            self.assertNotIn("SECRET_STDOUT", json.dumps(result))
+            self.assertNotIn("SECRET_STDERR", json.dumps(result))
+
+        with unittest.mock.patch.object(yafvsctl, "run_command", side_effect=OSError("SECRET_ERROR")):
+            result = yafvsctl.rust_license_report_result(root)
+        self.assertEqual(result["status"], "fail")
+        self.assertNotIn("SECRET_ERROR", json.dumps(result))
+        with unittest.mock.patch.object(yafvsctl, "run_command", side_effect=subprocess.SubprocessError("SECRET_SUBPROCESS_ERROR")):
+            result = yafvsctl.rust_license_report_result(root)
+        self.assertEqual(result["status"], "fail")
+        self.assertNotIn("SECRET_SUBPROCESS_ERROR", json.dumps(result))
+
+    def test_license_report_consumers_use_rust_wrapper_with_expected_options(self):
+        source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
+        self.assertNotIn("command_license_report", source)
+        self.assertIn(
+            'rust_license_report_result(repo_root, modified_imported_only=True, diff_scope="staged", status_only=True)',
+            source,
+        )
+        self.assertIn(
+            'rust_license_report_result(repo_root, public_release=True, mode="source-public")',
+            source,
+        )
+        self.assertEqual(source.count("license_result = rust_license_report_result(repo_root)"), 2)
 
     def test_runtime_redis_state_is_rust_only(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
@@ -5551,7 +5586,7 @@ class YAFVSCtlTests(unittest.TestCase):
              unittest.mock.patch.object(yafvsctl, "command_native_tooling_state", return_value=pass_result), \
              unittest.mock.patch.object(yafvsctl, "command_native_api_client_contract", return_value=pass_result), \
              unittest.mock.patch.object(yafvsctl, "command_native_api_migration_matrix", return_value=pass_result), \
-             unittest.mock.patch.object(yafvsctl, "command_license_report", return_value=pass_result), \
+             unittest.mock.patch.object(yafvsctl, "rust_license_report_result", return_value=pass_result) as license_report, \
              unittest.mock.patch.object(yafvsctl, "command_production_posture_check", return_value=prod_result):
             result = yafvsctl.command_closeout_readiness(root, status_only=True)
 
@@ -5559,6 +5594,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["steps"]["production-posture-check"]["status"], "warn")
         self.assertIn("hosted-workflow", result["details"]["unknown_steps"])
         self.assertTrue(any(item["check"] == "closeout-readiness.production-posture-check" for item in result["findings"]))
+        license_report.assert_called_once_with(root, modified_imported_only=True, diff_scope="staged", status_only=True)
 
     def test_openapi_operation_id_generator_is_stable_and_collision_free(self):
         root = Path(__file__).resolve().parents[2]
@@ -11400,7 +11436,7 @@ class YAFVSCtlTests(unittest.TestCase):
         completed = subprocess.CompletedProcess(["unit"], 0, "ok\n", "")
 
         with tempfile.TemporaryDirectory() as tmp, \
-             unittest.mock.patch.object(yafvsctl, "command_license_report", return_value=pass_result), \
+             unittest.mock.patch.object(yafvsctl, "rust_license_report_result", return_value=pass_result) as license_report, \
              unittest.mock.patch.object(yafvsctl, "command_doctor", return_value=pass_result), \
              unittest.mock.patch.object(yafvsctl, "command_native_tooling_state", return_value=pass_result), \
              unittest.mock.patch.object(yafvsctl, "command_native_api_client_contract", return_value=pass_result), \
@@ -11417,6 +11453,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("quality.native-tooling-state", checks)
         self.assertIn("quality.native-api-client-contract", checks)
         self.assertIn("quality.native-api-migration-matrix", checks)
+        license_report.assert_called_once_with(Path(tmp))
 
     def test_gsa_and_runtime_manager_locks_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
@@ -11511,221 +11548,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("/home/turboforge/.local/share/yafvs-tools/playwright/node_modules", candidates)
         self.assertIn("/home/turboforge/.local/nodejs/node-v22.22.3-linux-x64/lib/node_modules", candidates)
 
-    def test_license_helpers_detect_modified_imported_notice_gaps(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            source = root / "components" / "gvmd" / "src" / "example.c"
-            data = root / "components" / "gsa" / "package.json"
-            source.parent.mkdir(parents=True)
-            data.parent.mkdir(parents=True)
-            source.write_text("/* SPDX-FileCopyrightText: 2024 Greenbone AG\n *\n * SPDX-License-Identifier: AGPL-3.0-or-later\n */\n", encoding="utf-8")
-            data.write_text("{}\n", encoding="utf-8")
-            rows = [("M", "components/gvmd/src/example.c"), ("M", "components/gsa/package.json")]
-            missing, review = yafvsctl.modified_imported_notice_gaps(root, rows)
-            self.assertEqual(missing, ["components/gvmd/src/example.c"])
-            self.assertEqual(review, ["components/gsa/package.json"])
-            missing, review = yafvsctl.modified_imported_notice_gaps(
-                root,
-                rows,
-                turbovas_added={"components/gvmd/src/example.c"},
-            )
-            self.assertEqual(missing, [])
-            self.assertEqual(review, ["components/gsa/package.json"])
-            source.write_text(source.read_text(encoding="utf-8").replace(" *\n", " * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.\n *\n", 1), encoding="utf-8")
-            missing, review = yafvsctl.modified_imported_notice_gaps(root, rows)
-            self.assertEqual(missing, [])
-            self.assertEqual(review, ["components/gsa/package.json"])
-
-    def test_license_helpers_review_rename_and_copy_destinations(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            renamed = root / "components" / "gvmd" / "src" / "renamed.c"
-            copied = root / "components" / "gsa" / "src" / "copied.jsx"
-            data = root / "components" / "gsa" / "copied.json"
-            for path in (renamed, copied, data):
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("upstream content\n", encoding="utf-8")
-
-            missing, review = yafvsctl.modified_imported_notice_gaps(
-                root,
-                [
-                    ("R100", "components/gvmd/src/renamed.c"),
-                    ("C075", "components/gsa/src/copied.jsx"),
-                    ("C100", "components/gsa/copied.json"),
-                ],
-            )
-
-        self.assertEqual(
-            missing,
-            [
-                "components/gvmd/src/renamed.c",
-                "components/gsa/src/copied.jsx",
-            ],
-        )
-        self.assertEqual(review, ["components/gsa/copied.json"])
-
-    def test_git_name_status_detects_delete_add_rename_and_modified_copy(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            original = root / "components" / "gvmd" / "src" / "original.c"
-            copy_source = root / "components" / "gsa" / "src" / "copy-source.jsx"
-            original.parent.mkdir(parents=True)
-            copy_source.parent.mkdir(parents=True)
-            original.write_text("".join(f"original line {line}\\n" for line in range(20)), encoding="utf-8")
-            copy_source.write_text("".join(f"shared line {line}\\n" for line in range(20)), encoding="utf-8")
-            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-            subprocess.run(["git", "config", "user.name", "TurboVAS Test"], cwd=root, check=True)
-            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True)
-            subprocess.run(["git", "add", "."], cwd=root, check=True)
-            subprocess.run(["git", "commit", "-qm", "baseline"], cwd=root, check=True)
-            base = subprocess.run(
-                ["git", "rev-parse", "HEAD"],
-                cwd=root,
-                check=True,
-                text=True,
-                stdout=subprocess.PIPE,
-            ).stdout.strip()
-
-            renamed = original.with_name("renamed.c")
-            original.rename(renamed)
-            copied = copy_source.with_name("copied.jsx")
-            copied.write_text(copy_source.read_text(encoding="utf-8") + "TurboVAS change\\n", encoding="utf-8")
-            subprocess.run(["git", "add", "-A"], cwd=root, check=True)
-            subprocess.run(["git", "commit", "-qm", "move and copy"], cwd=root, check=True)
-
-            rows = yafvsctl.git_name_status(root, base, ("components",))
-
-        self.assertIn(("R100", "components/gvmd/src/renamed.c"), rows)
-        self.assertTrue(
-            any(
-                status.startswith("C") and path == "components/gsa/src/copied.jsx"
-                for status, path in rows
-            )
-        )
-
-    def test_modified_imported_notice_gaps_can_use_staged_content(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            source = root / "components" / "gvmd" / "src" / "example.c"
-            source.parent.mkdir(parents=True)
-            source.write_text("/* TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. */\n", encoding="utf-8")
-            rows = [("M", "components/gvmd/src/example.c")]
-
-            missing, review = yafvsctl.modified_imported_notice_gaps(
-                root,
-                rows,
-                content_provider=lambda _relative_path: "/* upstream staged blob */\n",
-            )
-
-        self.assertEqual(missing, ["components/gvmd/src/example.c"])
-        self.assertEqual(review, [])
-
-    def test_git_name_status_for_staged_scope_uses_cached_diff(self):
-        calls = []
-
-        def fake_run_git(_repo_root, args):
-            calls.append(args)
-            return "M\tcomponents/gvmd/src/example.c\n"
-
-        with unittest.mock.patch.object(yafvsctl, "run_git", side_effect=fake_run_git):
-            rows = yafvsctl.git_name_status_for_diff_scope(
-                Path("/tmp/repo"),
-                "staged",
-                ("components",),
-            )
-
-        self.assertEqual(rows, [("M", "components/gvmd/src/example.c")])
-        self.assertEqual(
-            calls,
-            [[
-                "diff",
-                "--find-renames",
-                "--find-copies-harder",
-                "-l0",
-                "--cached",
-                "--name-status",
-                "--",
-                "components",
-            ]],
-        )
-
-    def test_license_rename_exemptions_follow_staged_rename_into_worktree(self):
-        source = "components/gvmd/src/turbovas_control.c"
-        destination = "components/gvmd/src/yafvs_control.c"
-
-        def fake_run_git(_repo_root, args):
-            if "--cached" in args:
-                return f"R100\t{source}\t{destination}\n"
-            return f"M\t{destination}\n"
-
-        with unittest.mock.patch.object(yafvsctl, "run_git", side_effect=fake_run_git):
-            exempt = yafvsctl.modified_imported_notice_exempt_paths_for_scope(
-                Path("/tmp/repo"),
-                "worktree",
-                [("A", source)],
-            )
-
-        self.assertEqual(exempt, {source, destination})
-
-    def test_license_report_modified_imported_only_uses_diff_scope(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            source = root / "components" / "gvmd" / "src" / "example.c"
-            source.parent.mkdir(parents=True)
-            source.write_text("/* TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. */\n", encoding="utf-8")
-
-            with unittest.mock.patch.object(
-                yafvsctl,
-                "git_name_status_for_diff_scope",
-                return_value=[("M", "components/gvmd/src/example.c")],
-            ) as name_status:
-                result = yafvsctl.command_license_report(
-                    root,
-                    diff_scope="worktree",
-                    modified_imported_only=True,
-                )
-
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["details"], {"diff_scope": "worktree", "modified_imported_only": True})
-        name_status.assert_called_once_with(root, "worktree", ("components",))
-
-    def test_full_license_report_checks_dirty_modified_imported_notices(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            source = root / "components" / "gsa" / "src" / "example.jsx"
-            source.parent.mkdir(parents=True)
-            source.write_text(
-                "/* SPDX-FileCopyrightText: 2025 Greenbone AG\n"
-                " * SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>\n"
-                " *\n"
-                " * SPDX-License-Identifier: AGPL-3.0-or-later\n"
-                " */\n",
-                encoding="utf-8",
-            )
-
-            with unittest.mock.patch.object(yafvsctl, "git_name_status", return_value=[]), unittest.mock.patch.object(
-                yafvsctl,
-                "git_name_status_for_diff_scope",
-                side_effect=lambda _root, scope, _pathspecs=(): [("M", "components/gsa/src/example.jsx")] if scope == "worktree" else [],
-            ):
-                result = yafvsctl.command_license_report(root)
-
-        failed_checks = [finding for finding in result["findings"] if finding["status"] == "fail"]
-        self.assertIn("license.modified-imported-notices", {finding["check"] for finding in failed_checks})
-        self.assertTrue(
-            any(
-                finding.get("details", {}).get("diff_scope") == "worktree"
-                and finding.get("details", {}).get("missing") == ["components/gsa/src/example.jsx"]
-                for finding in failed_checks
-            )
-        )
-
-    def test_license_report_rejects_non_baseline_full_scope(self):
-        result = yafvsctl.command_license_report(Path("/tmp/repo"), diff_scope="staged")
-
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(result["findings"][0]["check"], "license.diff-scope")
-
     def test_license_precommit_recipe_is_registered(self):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
 
@@ -11740,24 +11562,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("gitleaks protect --staged --redact --no-banner", justfile)
         self.assertIn("--exit-code 7 --report-format json", justfile)
 
-    def test_no_comment_manifest_requires_current_documented_paths(self):
-        review = ["components/gsa/package.json", "components/gsa/public/locales/gsa-en.json", "components/gsa/new-data.json"]
-        manifest = {
-            "components/gsa/package.json": "JSON package manifest.",
-            "components/gsa/public/locales/gsa-en.json": "JSON locale catalog.",
-            "components/gsa/stale.json": "No longer modified.",
-        }
-        documented, undocumented, stale = yafvsctl.modified_imported_no_comment_manifest_gaps(review, manifest)
-        self.assertEqual(documented, ["components/gsa/package.json", "components/gsa/public/locales/gsa-en.json"])
-        self.assertEqual(undocumented, ["components/gsa/new-data.json"])
-        self.assertEqual(stale, ["components/gsa/stale.json"])
-
-    def test_public_readiness_gate_is_explicit(self):
-        self.assertEqual(yafvsctl.public_readiness_finding()["status"], "pass")
-        self.assertEqual(yafvsctl.public_readiness_finding(public_release=True, mode="source-public")["status"], "pass")
-        self.assertEqual(yafvsctl.public_readiness_finding(public_release=True, mode="binary")["status"], "fail")
-        self.assertIn("Greenbone non-affiliation", "\n".join(yafvsctl.PUBLIC_READINESS_LICENSE_ITEMS))
-
     def test_production_posture_tracks_password_rotation_gap(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         self.assertIn("production.first-login-password-rotation", source)
@@ -11768,27 +11572,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("<title>YAFVS</title>", index)
         self.assertIn('href="/img/favicon.svg" type="image/svg+xml"', index)
         self.assertNotIn("<title>OPENVAS</title>", index)
-
-    def test_license_helpers_require_spdx_for_new_turbovas_files(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            tool = root / "tools" / "example.py"
-            imported = root / "components" / "pg-gvm" / "src" / "array.c"
-            tool.parent.mkdir(parents=True)
-            imported.parent.mkdir(parents=True)
-            tool.write_text("print('missing header')\n", encoding="utf-8")
-            imported.write_text("/* upstream imported file */\n", encoding="utf-8")
-            rows = [("A", "tools/example.py"), ("A", "components/pg-gvm/src/array.c")]
-            self.assertEqual(yafvsctl.added_turbovas_spdx_gaps(root, rows), ["tools/example.py"])
-            tool.write_text("# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>\n# SPDX-License-Identifier: GPL-3.0-or-later\n\nprint('ok')\n", encoding="utf-8")
-            self.assertEqual(yafvsctl.added_turbovas_spdx_gaps(root, rows), [])
-
-    def test_comment_notice_supported_distinguishes_data_files(self):
-        self.assertTrue(yafvsctl.comment_notice_supported("components/gvmd/src/manage.c"))
-        self.assertTrue(yafvsctl.comment_notice_supported("components/openvas-scanner/compose/tests/smoketest/Makefile"))
-        self.assertFalse(yafvsctl.comment_notice_supported("components/gsa/index.html"))
-        self.assertFalse(yafvsctl.comment_notice_supported("components/gsa/package-lock.json"))
-        self.assertFalse(yafvsctl.comment_notice_supported("components/openvas-scanner/rust/src/openvasd/config/snapshots/default.snap"))
 
     def test_gsa_quality_env_adds_node_heap_headroom(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -14905,21 +14688,6 @@ class YAFVSCtlTests(unittest.TestCase):
             self.assertEqual(command[command.index("--nasl-url") + 1], f"{yafvsctl.GREENBONE_COMMUNITY_FEED_URL}/vulnerability-feed/22.04/vt-data/nasl/")
             self.assertEqual(command[command.index("--gvmd-data-url") + 1], f"{yafvsctl.GREENBONE_COMMUNITY_FEED_URL}/data-feed/22.04/")
             self.assertEqual(command[command.index("--destination-prefix") + 1], str(yafvsctl.feed_cache_var_lib(root)))
-
-    def test_enterprise_feed_key_support_markers_are_release_blockers(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            source = root / "components" / "greenbone-feed-sync" / "greenbone" / "feed" / "sync" / "parser.py"
-            source.parent.mkdir(parents=True)
-            source.write_text("parser.add_argument('--greenbone-enterprise-feed-key')\n", encoding="utf-8")
-
-            markers = yafvsctl.enterprise_feed_key_support_markers(root)
-            self.assertEqual(markers, [{"path": "components/greenbone-feed-sync/greenbone/feed/sync/parser.py", "line": 1, "marker": "--greenbone-enterprise-feed-key"}])
-            self.assertEqual(yafvsctl.enterprise_feed_key_support_finding(root)["status"], "fail")
-
-            source.write_text("# Community Feed only\n", encoding="utf-8")
-            self.assertEqual(yafvsctl.enterprise_feed_key_support_markers(root), [])
-            self.assertEqual(yafvsctl.enterprise_feed_key_support_finding(root)["status"], "pass")
 
     def test_feed_activation_state_is_private_atomic_and_validated(self):
         with tempfile.TemporaryDirectory() as tmp:

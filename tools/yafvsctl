@@ -51,74 +51,6 @@ COMPOSE_APP_UP_TRANSIENT_ERRORS = (
 SHORT_SECRET_BOUNDARY_CHARS = r"A-Za-z0-9_./-"
 LONG_SECRET_MIN_LENGTH = 12
 EXPECTED_ROOT_DOCS = ("README.md", "UPSTREAMS.md", "LICENSE_AUDIT.md")
-IMPORT_BASELINE_COMMIT = "def84d156dd45c27cad0a75bc2302ce151585d3c"
-HISTORICAL_TURBOVAS_MODIFICATION_NOTICE = "TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>."
-COMMENT_NOTICE_SUFFIXES = frozenset({".c", ".h", ".js", ".jsx", ".ts", ".tsx", ".py", ".cmake", ".rs", ".sh", ".sql", ".xml", ".in", ".md", ".txt", ".toml", ".yml", ".yaml"})
-COMMENT_NOTICE_NAMES = frozenset({"Makefile", ".dockerignore", ".gitignore"})
-IMPORTED_ADDED_PREFIXES = ("components/pg-gvm/",)
-FEED_CONTENT_TRACKED_PREFIXES = (
-    "YAFVS-runtime/",
-    "TurboVAS-runtime/",
-    "feed-cache/",
-    "feeds/openvas/plugins/",
-    "feeds/notus/",
-    "feeds/gvm/scap-data/",
-    "feeds/gvm/cert-data/",
-    "feeds/gvm/data-objects/",
-)
-PUBLIC_READINESS_LICENSE_ITEMS = (
-    "source-public license/provenance boundary for original TurboVAS-only files and docs",
-    "AGPL source-publication procedure for network services",
-    "openvas-smb Samba-derived provenance documentation",
-    "Greenbone Community Feed source-public boundary without feed bundling or redistribution",
-    "Greenbone non-affiliation, trademark, and residual branding review",
-    "release-time secret scan, attribution review, and source-publication evidence checklist",
-)
-PUBLICATION_MODES = ("source-public", "binary", "container", "hosted", "feed-redistribution")
-LATER_PUBLICATION_MODE_BLOCKERS = {
-    "binary": (
-        "binary/package source-offer procedure",
-        "complete bundled dependency/license notices",
-        "artifact signing and release provenance",
-    ),
-    "container": (
-        "container image source-offer procedure",
-        "image SBOM and bundled dependency review",
-        "base image license/security review",
-    ),
-    "hosted": (
-        "AGPL network-source offer for the deployed service",
-        "production authentication, TLS, and first-login posture",
-        "hosted-service privacy/security operating model",
-    ),
-    "feed-redistribution": (
-        "Greenbone Community Feed terms review for mirroring, bundling, or redistribution",
-        "feed-derived data publication decision",
-        "separate feed attribution and redistribution procedure",
-    ),
-}
-MODIFIED_IMPORTED_NO_COMMENT_FILES = {
-    "components/gsa/index.html": "HTML application shell served to browsers; a file-level modification comment would become runtime page content.",
-    "components/gsa/package-lock.json": "JSON dependency lockfile; comments would make the file invalid.",
-    "components/gsa/package.json": "JSON package manifest; comments would make the file invalid.",
-    "components/notus-scanner/poetry.lock": "Python dependency lockfile; comments would make the file invalid.",
-    "components/openvas-scanner/rust/Cargo.lock": "Rust dependency lockfile; comments would make the file invalid.",
-    "components/ospd-openvas/poetry.lock": "Python dependency lockfile; comments would make the file invalid.",
-    "components/gsa/public/img/enterprise-container.svg": "SVG browser asset; adding a text notice would alter the rendered asset payload.",
-    "components/gsa/public/img/favicon.svg": "SVG browser asset; adding a text notice would alter the rendered asset payload.",
-    "components/gsa/public/img/login-bottom.svg": "SVG browser asset; adding a text notice would alter the rendered asset payload.",
-    "components/gsa/public/img/login-top.svg": "SVG browser asset; adding a text notice would alter the rendered asset payload.",
-    "components/gsa/public/locales/gsa-ar.json": "JSON locale catalog; comments would make the file invalid.",
-    "components/gsa/public/locales/gsa-de.json": "JSON locale catalog; comments would make the file invalid.",
-    "components/gsa/public/locales/gsa-en.json": "JSON locale catalog; comments would make the file invalid.",
-    "components/gsa/public/locales/gsa-pt_BR.json": "JSON locale catalog; comments would make the file invalid.",
-    "components/gsa/public/locales/gsa-zh_CN.json": "JSON locale catalog; comments would make the file invalid.",
-    "components/gsa/public/locales/gsa-zh_TW.json": "JSON locale catalog; comments would make the file invalid.",
-    "components/gvm-libs/.docker/prod-oldstable.Dockerfile": "Dockerfile syntax/positioning is build-sensitive; a file-level notice could alter build semantics.",
-    "components/gvmd/docs/gvmd.8": "Generated manpage output; comments would alter generated artifact semantics.",
-    "components/gvmd/docs/gvmd.html": "Generated HTML documentation output; comments would alter generated artifact semantics.",
-    "components/openvas-scanner/rust/src/openvasd/config/snapshots/openvasd__config__tests__defaults.snap": "Generated insta snapshot; changing contents would alter test fixture semantics.",
-}
 BASELINE_TOOLS = (
     "git",
     "rg",
@@ -346,25 +278,6 @@ GREENBONE_COMMUNITY_FEED_URL = "rsync://feed.community.greenbone.net/community"
 FEED_RSYNC_TIMEOUT_SECONDS = 900
 GREENBONE_COMMUNITY_KEY_URL = "https://www.greenbone.net/GBCommunitySigningKey.asc"
 GREENBONE_COMMUNITY_KEY_FPR = "8AE4BE429B60A59B311C2E739823FAA60ED1E580"
-ENTERPRISE_FEED_KEY_UNSUPPORTED_MARKERS = (
-    "--greenbone-enterprise-feed-key",
-    "greenbone-enterprise-feed-key",
-    "GREENBONE_FEED_SYNC_ENTERPRISE_FEED_KEY",
-    "DEFAULT_ENTERPRISE_KEY_PATH",
-    "EnterpriseSettings",
-)
-ENTERPRISE_FEED_KEY_SUPPORT_SCAN_PATHS = (
-    "components/greenbone-feed-sync/greenbone/feed/sync/config.py",
-    "components/greenbone-feed-sync/greenbone/feed/sync/parser.py",
-    "components/greenbone-feed-sync/greenbone/feed/sync/main.py",
-    "components/greenbone-feed-sync/README.md",
-    "README.md",
-    "UPSTREAMS.md",
-    "LICENSE_AUDIT.md",
-    "docs/CHANGES_FROM_UPSTREAM.md",
-    "docs/USER_MANUAL.md",
-    "docs/PUBLIC_RELEASE_READINESS.md",
-)
 NOTUS_SIGNATURE_SUBTREES = ("advisories", "products")
 EMPTY_SCAN_CONFIG_ID = "085569ce-73ed-11df-83c3-002264764cea"
 FULL_AND_FAST_SCAN_CONFIG_ID = "daba56c8-73ec-11df-a475-002264764cea"
@@ -2512,96 +2425,6 @@ def run_git(repo_root: Path, args: list[str]) -> str | None:
     return result.stdout.strip()
 
 
-def git_name_status(repo_root: Path, base: str, pathspecs: tuple[str, ...] = ()) -> list[tuple[str, str]] | None:
-    args = ["diff", "--find-renames", "--find-copies-harder", "-l0", "--name-status", f"{base}..HEAD"]
-    if pathspecs:
-        args.append("--")
-        args.extend(pathspecs)
-    output = run_git(repo_root, args)
-    if output is None:
-        return None
-    rows: list[tuple[str, str]] = []
-    for line in output.splitlines():
-        parts = line.split("	")
-        if len(parts) < 2:
-            continue
-        rows.append((parts[0], parts[-1]))
-    return rows
-
-
-def git_rename_sources_for_diff_scope(
-    repo_root: Path,
-    diff_scope: str,
-    pathspecs: tuple[str, ...] = (),
-) -> dict[str, str] | None:
-    if diff_scope == "baseline":
-        args = [
-            "diff",
-            "--find-renames",
-            "--find-copies-harder",
-            "-l0",
-            "--name-status",
-            f"{IMPORT_BASELINE_COMMIT}..HEAD",
-        ]
-    elif diff_scope == "staged":
-        args = ["diff", "--find-renames", "--find-copies-harder", "-l0", "--cached", "--name-status"]
-    elif diff_scope == "worktree":
-        args = ["diff", "--find-renames", "--find-copies-harder", "-l0", "--name-status"]
-    else:
-        return None
-    if pathspecs:
-        args.append("--")
-        args.extend(pathspecs)
-    output = run_git(repo_root, args)
-    if output is None:
-        return None
-    sources: dict[str, str] = {}
-    for line in output.splitlines():
-        parts = line.split("\t")
-        if len(parts) >= 3 and parts[0].startswith(("R", "C")):
-            sources[parts[-1]] = parts[-2]
-    return sources
-
-
-def git_name_status_for_diff_scope(repo_root: Path, diff_scope: str, pathspecs: tuple[str, ...] = ()) -> list[tuple[str, str]] | None:
-    if diff_scope == "baseline":
-        return git_name_status(repo_root, IMPORT_BASELINE_COMMIT, pathspecs)
-    if diff_scope == "staged":
-        args = ["diff", "--find-renames", "--find-copies-harder", "-l0", "--cached", "--name-status"]
-    elif diff_scope == "worktree":
-        args = ["diff", "--find-renames", "--find-copies-harder", "-l0", "--name-status"]
-    else:
-        return None
-    if pathspecs:
-        args.append("--")
-        args.extend(pathspecs)
-    output = run_git(repo_root, args)
-    if output is None:
-        return None
-    rows: list[tuple[str, str]] = []
-    for line in output.splitlines():
-        parts = line.split("\t")
-        if len(parts) < 2:
-            continue
-        rows.append((parts[0], parts[-1]))
-    return rows
-
-
-def git_staged_file_head(repo_root: Path, relative_path: str, limit: int = 5000) -> str | None:
-    try:
-        result = subprocess.run(
-            ["git", "show", f":{relative_path}"],
-            cwd=repo_root,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
-    except (OSError, subprocess.CalledProcessError):
-        return None
-    return result.stdout[:limit]
-
-
 def git_tracked_files(repo_root: Path) -> list[str] | None:
     output = run_git(repo_root, ["ls-files"])
     if output is None:
@@ -2643,25 +2466,6 @@ def metadata(repo_root: Path, command: str) -> dict[str, Any]:
     }
 
 
-def modified_imported_notice_exempt_paths_for_scope(
-    repo_root: Path,
-    diff_scope: str,
-    baseline_rows: list[tuple[str, str]] | None,
-) -> set[str]:
-    exempt = modified_imported_notice_exempt_paths(baseline_rows)
-    scopes = ("staged", "worktree") if diff_scope == "worktree" else (diff_scope,)
-    for scope in scopes:
-        if scope == "baseline":
-            continue
-        rename_sources = git_rename_sources_for_diff_scope(repo_root, scope, ("components",))
-        if rename_sources is None:
-            continue
-        for destination, source in rename_sources.items():
-            if source in exempt:
-                exempt.add(destination)
-    return exempt
-
-
 def status_rank(status: str) -> int:
     return STATUSES.index(status)
 
@@ -2683,6 +2487,88 @@ def contract_drift_status(alignment_status: Any) -> str:
 
 def make_result(command: str, repo_root: Path, summary: str, findings: list[dict[str, Any]], artifacts: list[str] | None = None) -> dict[str, Any]:
     return {"status": aggregate_status(findings), "summary": summary, "findings": findings, "artifacts": artifacts or [], "metadata": metadata(repo_root, command)}
+
+
+def rust_result_envelope(repo_root: Path, expected_command: str, rust_arguments: list[str]) -> dict[str, Any]:
+    command = [
+        "cargo",
+        "run",
+        "--quiet",
+        "--locked",
+        "--target-dir",
+        str(repo_root / "build" / "yafvsctl-rs"),
+        "--manifest-path",
+        str(repo_root / YAFVSCTL_RUST_CRATE / "Cargo.toml"),
+        "--",
+        *rust_arguments,
+        "--json",
+    ]
+    try:
+        completed = run_command(command, repo_root, timeout=300)
+        stdout = completed.stdout
+        if not isinstance(stdout, str) or len(stdout.encode("utf-8")) > YAFVSCTL_RUST_BRIDGE_MAX_OUTPUT_BYTES:
+            raise ValueError("invalid Rust result output")
+        payload = json.loads(stdout, object_pairs_hook=reject_duplicate_json_object_keys)
+        if not isinstance(payload, dict):
+            raise ValueError("invalid Rust result envelope")
+        status = payload.get("status")
+        findings = payload.get("findings")
+        if (
+            status not in STATUSES
+            or not isinstance(payload.get("summary"), str)
+            or not isinstance(findings, list)
+            or not isinstance(payload.get("artifacts"), list)
+            or not all(isinstance(artifact, str) for artifact in payload["artifacts"])
+            or ("details" in payload and not isinstance(payload["details"], dict))
+            or not isinstance(payload.get("metadata"), dict)
+            or payload["metadata"].get("command") != expected_command
+            or completed.returncode != (1 if status == "fail" else 0)
+        ):
+            raise ValueError("invalid Rust result envelope")
+        for item in findings:
+            if (
+                not isinstance(item, dict)
+                or item.get("status") not in STATUSES
+                or not isinstance(item.get("check"), str)
+                or not isinstance(item.get("message"), str)
+            ):
+                raise ValueError("invalid Rust result finding")
+        if aggregate_status(findings) != status:
+            raise ValueError("invalid Rust result aggregate status")
+        return payload
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, ValueError, UnicodeError):
+        return make_result(
+            expected_command,
+            repo_root,
+            f"Rust {expected_command} result was unavailable or invalid.",
+            [
+                finding(
+                    "fail",
+                    f"{expected_command}.rust-bridge",
+                    f"Rust {expected_command} failed closed because its result was unavailable or invalid.",
+                )
+            ],
+        )
+
+
+def rust_license_report_result(
+    repo_root: Path,
+    public_release: bool = False,
+    mode: str = "source-public",
+    *,
+    diff_scope: str = "baseline",
+    modified_imported_only: bool = False,
+    status_only: bool = False,
+) -> dict[str, Any]:
+    arguments = ["license-report"]
+    if public_release:
+        arguments.append("--public-release")
+    arguments.extend(["--mode", mode, "--diff-scope", diff_scope])
+    if modified_imported_only:
+        arguments.append("--modified-imported-only")
+    if status_only:
+        arguments.append("--status-only")
+    return rust_result_envelope(repo_root, "license-report", arguments)
 
 
 def rust_runtime_data_state_result(repo_root: Path) -> dict[str, Any]:
@@ -12471,20 +12357,6 @@ def native_api_browser_access_from_status(status: str | None) -> str:
     return "unknown"
 
 
-def compact_license_status_finding(item: dict[str, Any]) -> dict[str, Any]:
-    compact = {key: value for key, value in item.items() if key != "details"}
-    details = item.get("details")
-    if isinstance(details, dict):
-        compact_details = dict(details)
-        manifest = compact_details.pop("manifest", None)
-        if isinstance(manifest, dict):
-            compact_details["manifest_entry_count"] = len(manifest)
-        compact["details"] = compact_details
-    return compact
-
-
-
-
 def native_target_xml_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     details = result.get("details") if isinstance(result.get("details"), dict) else {}
     compact = dict(result)
@@ -12536,37 +12408,6 @@ def production_posture_status_only_result(result: dict[str, Any]) -> dict[str, A
         finding("pass", "production-posture.status-only", "Production posture check passed; no non-pass findings.")
     ]
     return compact
-
-
-
-
-
-
-
-
-def license_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    findings = result.get("findings", [])
-    non_pass = [compact_license_status_finding(item) for item in findings if item.get("status") != "pass"]
-    if non_pass:
-        compact_findings = non_pass
-    else:
-        compact_findings = [
-            finding(
-                "pass",
-                "license.status-only",
-                "License/provenance checks passed; no non-pass findings.",
-            )
-        ]
-    details = result.get("details") if isinstance(result.get("details"), dict) else {}
-    result = dict(result)
-    result["details"] = {
-        "diff_scope": details.get("diff_scope", "baseline"),
-        "modified_imported_only": bool(details.get("modified_imported_only", False)),
-        "finding_count": len(findings),
-        "non_pass_count": len(non_pass),
-    }
-    result["findings"] = compact_findings
-    return result
 
 
 
@@ -13322,7 +13163,7 @@ def command_closeout_readiness(repo_root: Path, status_only: bool = False) -> di
     native_tooling = command_native_tooling_state(repo_root, status_only=True)
     native_client = command_native_api_client_contract(repo_root, status_only=True)
     migration = command_native_api_migration_matrix(repo_root, status_only=True)
-    license_result = command_license_report(repo_root, modified_imported_only=True, diff_scope="staged", status_only=True)
+    license_result = rust_license_report_result(repo_root, modified_imported_only=True, diff_scope="staged", status_only=True)
     production_posture = command_production_posture_check(repo_root, status_only=True)
     steps = {
         "git-worktree": {"status": "warn" if git_status.strip() else "pass", "summary": "Worktree has uncommitted changes." if git_status.strip() else "Worktree is clean.", "changed_path_count": len([line for line in git_status.splitlines() if line.strip()])},
@@ -13656,349 +13497,6 @@ def command_native_tooling_removal_review(
         findings,
     )
     result["details"] = details
-    return result
-
-
-def comment_notice_supported(relative_path: str) -> bool:
-    path = Path(relative_path)
-    return path.name in COMMENT_NOTICE_NAMES or path.suffix in COMMENT_NOTICE_SUFFIXES
-
-
-def file_head(path: Path, limit: int = 5000) -> str:
-    try:
-        return path.read_text(encoding="utf-8", errors="ignore")[:limit]
-    except OSError:
-        return ""
-
-
-def has_spdx_header(path: Path) -> bool:
-    head = file_head(path, 2000)
-    return "SPDX-FileCopyrightText:" in head and "SPDX-License-Identifier:" in head
-
-
-def text_has_turbovas_modification_notice(text: str) -> bool:
-    return HISTORICAL_TURBOVAS_MODIFICATION_NOTICE in text[:5000]
-
-
-def has_turbovas_modification_notice(path: Path) -> bool:
-    return text_has_turbovas_modification_notice(file_head(path))
-
-
-def imported_added_path(relative_path: str) -> bool:
-    return any(relative_path.startswith(prefix) for prefix in IMPORTED_ADDED_PREFIXES)
-
-
-def turbovas_added_paths(rows: list[tuple[str, str]] | None) -> set[str]:
-    if rows is None:
-        return set()
-    return {
-        relative_path
-        for status, relative_path in rows
-        if status.startswith("A") and not imported_added_path(relative_path)
-    }
-
-
-def modified_imported_notice_exempt_paths(rows: list[tuple[str, str]] | None) -> set[str]:
-    if rows is None:
-        return set()
-    return turbovas_added_paths(rows) | {
-        relative_path
-        for status, relative_path in rows
-        if status.startswith(("R", "C")) and imported_added_path(relative_path)
-    }
-
-
-def modified_imported_notice_gaps(
-    repo_root: Path,
-    rows: list[tuple[str, str]],
-    content_provider: Callable[[str], str | None] | None = None,
-    turbovas_added: set[str] | None = None,
-) -> tuple[list[str], list[str]]:
-    missing: list[str] = []
-    review: list[str] = []
-    added_paths = turbovas_added or set()
-    for status, relative_path in rows:
-        if not status.startswith(("M", "R", "C")):
-            continue
-        if relative_path in added_paths:
-            continue
-        if content_provider is None:
-            path = repo_root / relative_path
-            if not path.is_file():
-                continue
-            text = file_head(path)
-        else:
-            text = content_provider(relative_path)
-            if text is None:
-                continue
-        if text_has_turbovas_modification_notice(text):
-            continue
-        if comment_notice_supported(relative_path):
-            missing.append(relative_path)
-        else:
-            review.append(relative_path)
-    return missing, review
-
-
-def modified_imported_no_comment_manifest_gaps(review_notices: list[str], manifest: dict[str, str] | None = None) -> tuple[list[str], list[str], list[str]]:
-    manifest_paths = set((manifest or MODIFIED_IMPORTED_NO_COMMENT_FILES).keys())
-    review_paths = set(review_notices)
-    documented = sorted(review_paths & manifest_paths)
-    undocumented = sorted(review_paths - manifest_paths)
-    stale = sorted(manifest_paths - review_paths)
-    return documented, undocumented, stale
-
-
-def modified_imported_content_provider(repo_root: Path, diff_scope: str) -> Callable[[str], str | None] | None:
-    if diff_scope == "staged":
-        return lambda relative_path: git_staged_file_head(repo_root, relative_path)
-    return None
-
-
-def modified_imported_license_findings(
-    repo_root: Path,
-    rows: list[tuple[str, str]] | None,
-    *,
-    diff_scope: str,
-    check_manifest_stale: bool = True,
-    turbovas_added: set[str] | None = None,
-) -> list[dict[str, Any]]:
-    if rows is None:
-        return [finding("fail", "license.git-history", f"Could not collect modified imported files for diff scope {diff_scope}.")]
-    missing_notices, review_notices = modified_imported_notice_gaps(
-        repo_root,
-        rows,
-        content_provider=modified_imported_content_provider(repo_root, diff_scope),
-        turbovas_added=turbovas_added,
-    )
-    notice_details: dict[str, Any] = {"diff_scope": diff_scope, "missing": missing_notices}
-    if diff_scope == "baseline":
-        notice_details["baseline"] = IMPORT_BASELINE_COMMIT
-    findings = [
-        finding(
-            "pass" if not missing_notices else "fail",
-            "license.modified-imported-notices",
-            "Modified imported files have the required historical TurboVAS modification notices." if not missing_notices else "Modified imported files are missing required historical TurboVAS modification notices.",
-            details=notice_details,
-        )
-    ]
-    documented_review, undocumented_review, stale_review = modified_imported_no_comment_manifest_gaps(review_notices)
-    stale_failures = stale_review if check_manifest_stale else []
-    findings.append(
-        finding(
-            "pass" if not undocumented_review and not stale_failures else "fail",
-            "license.modified-imported-no-comment-manifest",
-            "Modified imported no-comment files are explicitly recorded in the license manifest." if not undocumented_review and not stale_failures else "Modified imported no-comment manifest is incomplete or stale.",
-            details={
-                "diff_scope": diff_scope,
-                "documented": documented_review,
-                "undocumented": undocumented_review,
-                "stale": stale_review if check_manifest_stale else [],
-                "stale_checked": check_manifest_stale,
-                "manifest": MODIFIED_IMPORTED_NO_COMMENT_FILES,
-            },
-        )
-    )
-    return findings
-
-
-def added_turbovas_spdx_gaps(repo_root: Path, rows: list[tuple[str, str]]) -> list[str]:
-    missing: list[str] = []
-    for status, relative_path in rows:
-        if not status.startswith("A") or imported_added_path(relative_path):
-            continue
-        path = repo_root / relative_path
-        if path.is_file() and not has_spdx_header(path):
-            missing.append(relative_path)
-    return missing
-
-
-def tracked_feed_content_paths(repo_root: Path) -> list[str] | None:
-    tracked = git_tracked_files(repo_root)
-    if tracked is None:
-        return None
-    return [path for path in tracked if any(path.startswith(prefix) for prefix in FEED_CONTENT_TRACKED_PREFIXES)]
-
-
-def public_readiness_finding(public_release: bool = False, mode: str = "source-public") -> dict[str, Any]:
-    if not public_release:
-        return finding(
-            "pass",
-            "license.public-readiness",
-            "Publication review items are tracked separately; run the source-public gate before changing repository visibility.",
-            details={"review_items": list(PUBLIC_READINESS_LICENSE_ITEMS), "release_gate": False, "mode": None},
-        )
-
-    if mode == "source-public":
-        return finding(
-            "pass",
-            "license.public-readiness.source-public",
-            "Source-public license/provenance boundary is separated from stricter binary, container, hosted-service, and feed-redistribution modes.",
-            details={
-                "mode": mode,
-                "release_gate": True,
-                "pp_items": ["PP-001", "PP-002", "PP-003", "PP-004", "PP-007"],
-                "accepted_scope": "public read access to source code only; no binaries, containers, hosted service, feed bundling, mirroring, or feed redistribution",
-                "review_items": list(PUBLIC_READINESS_LICENSE_ITEMS),
-            },
-        )
-
-    blockers = LATER_PUBLICATION_MODE_BLOCKERS.get(mode, ("unknown publication mode",))
-    return finding(
-        "fail",
-        f"license.public-readiness.{mode}",
-        f"Publication mode '{mode}' remains blocked; source-public readiness does not authorize this stricter mode.",
-        details={
-            "mode": mode,
-            "release_gate": True,
-            "pp_items": ["PP-001"],
-            "blockers": list(blockers),
-        },
-    )
-
-
-def enterprise_feed_key_support_markers(repo_root: Path) -> list[dict[str, Any]]:
-    hits: list[dict[str, Any]] = []
-    for relative in ENTERPRISE_FEED_KEY_SUPPORT_SCAN_PATHS:
-        path = repo_root / relative
-        if not path.is_file():
-            continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except OSError as exc:
-            hits.append({"path": relative, "line": None, "marker": "<read-error>", "error": str(exc)})
-            continue
-        for line_no, line in enumerate(text.splitlines(), start=1):
-            for marker in sorted(ENTERPRISE_FEED_KEY_UNSUPPORTED_MARKERS, key=len, reverse=True):
-                if marker in line:
-                    hits.append({"path": relative, "line": line_no, "marker": marker})
-                    break
-    return hits
-
-
-def enterprise_feed_key_support_finding(repo_root: Path) -> dict[str, Any]:
-    hits = enterprise_feed_key_support_markers(repo_root)
-    return finding(
-        "pass" if not hits else "fail",
-        "license.feed-enterprise-key-disabled",
-        "Enterprise feed-key support is absent from live YAFVS feed-sync source and public docs." if not hits else "Enterprise feed-key support markers remain in live YAFVS feed-sync source or public docs.",
-        details={"markers": list(ENTERPRISE_FEED_KEY_UNSUPPORTED_MARKERS), "scan_paths": list(ENTERPRISE_FEED_KEY_SUPPORT_SCAN_PATHS), "hits": hits},
-    )
-
-
-def command_license_report(
-    repo_root: Path,
-    public_release: bool = False,
-    mode: str = "source-public",
-    *,
-    diff_scope: str = "baseline",
-    modified_imported_only: bool = False,
-    status_only: bool = False,
-) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    if modified_imported_only:
-        rows = git_name_status_for_diff_scope(repo_root, diff_scope, ("components",))
-        baseline_rows = git_name_status(repo_root, IMPORT_BASELINE_COMMIT, ("components",))
-        findings.extend(
-            modified_imported_license_findings(
-                repo_root,
-                rows,
-                diff_scope=diff_scope,
-                check_manifest_stale=diff_scope == "baseline",
-                turbovas_added=modified_imported_notice_exempt_paths_for_scope(
-                    repo_root,
-                    diff_scope,
-                    baseline_rows,
-                ),
-            )
-        )
-        result = make_result("license-report", repo_root, "Modified imported file license/provenance checks completed.", findings)
-        result["details"] = {"diff_scope": diff_scope, "modified_imported_only": True}
-        if status_only:
-            result = license_status_only_result(result)
-        return result
-
-    if diff_scope != "baseline":
-        findings.append(
-            finding(
-                "fail",
-                "license.diff-scope",
-                "Non-baseline diff scopes are only supported with --modified-imported-only.",
-                details={"diff_scope": diff_scope},
-            )
-        )
-        result = make_result("license-report", repo_root, "License/provenance checks completed.", findings)
-        if status_only:
-            result = license_status_only_result(result)
-        return result
-
-    for component in COMPONENTS:
-        component_path = repo_root / component.path
-        for license_file in component.licenses:
-            relative = f"{component.path}/{license_file}"
-            findings.append(finding("pass" if (component_path / license_file).is_file() else "fail", "license.file", f"{component.name}: expected {license_file}", relative))
-
-    all_rows = git_name_status(repo_root, IMPORT_BASELINE_COMMIT)
-    rows = git_name_status(repo_root, IMPORT_BASELINE_COMMIT, ("components",))
-    notice_exempt = modified_imported_notice_exempt_paths(rows)
-    if rows is None:
-        findings.append(finding("fail", "license.git-history", f"Could not compare against import baseline {IMPORT_BASELINE_COMMIT}."))
-    else:
-        findings.extend(
-            modified_imported_license_findings(
-                repo_root,
-                rows,
-                diff_scope="baseline",
-                turbovas_added=notice_exempt,
-            )
-        )
-    for transient_scope in ("staged", "worktree"):
-        transient_rows = git_name_status_for_diff_scope(repo_root, transient_scope, ("components",))
-        findings.extend(
-            modified_imported_license_findings(
-                repo_root,
-                transient_rows,
-                diff_scope=transient_scope,
-                check_manifest_stale=False,
-                turbovas_added=modified_imported_notice_exempt_paths_for_scope(
-                    repo_root,
-                    transient_scope,
-                    rows,
-                ),
-            )
-        )
-
-    if all_rows is None:
-        findings.append(finding("fail", "license.new-file-spdx", f"Could not compare new files against import baseline {IMPORT_BASELINE_COMMIT}."))
-    else:
-        missing_spdx = added_turbovas_spdx_gaps(repo_root, all_rows)
-        findings.append(
-            finding(
-                "pass" if not missing_spdx else "fail",
-                "license.new-file-spdx",
-                "New YAFVS-created files have SPDX copyright and license headers." if not missing_spdx else "New YAFVS-created files are missing SPDX copyright or license headers.",
-                details={"missing": missing_spdx},
-            )
-        )
-
-    tracked_feed = tracked_feed_content_paths(repo_root)
-    if tracked_feed is None:
-        findings.append(finding("fail", "license.feed-content-tracking", "Could not list tracked files to verify feed content is untracked."))
-    else:
-        findings.append(
-            finding(
-                "pass" if not tracked_feed else "fail",
-                "license.feed-content-tracking",
-                "No runtime feed/cache content is tracked in Git." if not tracked_feed else "Runtime feed/cache content appears to be tracked in Git.",
-                details={"tracked_paths": tracked_feed},
-            )
-        )
-
-    findings.append(enterprise_feed_key_support_finding(repo_root))
-    findings.append(public_readiness_finding(public_release, mode))
-    result = make_result("license-report", repo_root, "License/provenance checks completed.", findings)
-    if status_only:
-        result = license_status_only_result(result)
     return result
 
 
@@ -14753,7 +14251,7 @@ def command_production_posture_check(repo_root: Path, status_only: bool = False)
         path = repo_root / relative
         findings.append(finding("pass" if path.is_file() else "fail", "production.docs", f"{relative} {'exists' if path.is_file() else 'is missing'}.", relative))
 
-    license_gate = command_license_report(repo_root, public_release=True, mode="source-public")
+    license_gate = rust_license_report_result(repo_root, public_release=True, mode="source-public")
     details["public_release_license_gate"] = {
         "status": license_gate["status"],
         "summary": license_gate["summary"],
@@ -31935,7 +31433,7 @@ def command_doctor(repo_root: Path, status_only: bool = False) -> dict[str, Any]
     for tool in BASELINE_TOOLS:
         findings.append(finding("pass" if shutil.which(tool) else "warn", "tool.available", f"{tool} is available." if shutil.which(tool) else f"{tool} is not available on PATH."))
     findings.append(python_version_finding())
-    license_result = command_license_report(repo_root)
+    license_result = rust_license_report_result(repo_root)
     findings.append(finding(license_result["status"], "license.compliance", license_result["summary"], details={"status": license_result["status"], "findings": license_result["findings"]}))
     findings.append(finding("pass", "surface.available", "Build readiness surface is available.", details={"commands": ["just deps", "just configure", "just build", "just build-core-c", "just build-c-services", "just build-ui", "just build-python", "just build-baseline"]}))
     findings.append(finding("pass" if compose_file(repo_root).is_file() else "warn", "surface.available", "Runtime infrastructure command surface is available." if compose_file(repo_root).is_file() else "Runtime infrastructure command surface is not available.", details={"commands": ["just runtime-plan", "just up", "just down", "just logs", "just runtime-init", "just runtime-certs-init", "just runtime-manager-init", "just runtime-scanner-redis-init", "just runtime-gmp-smoke", "just runtime-scanner-register", "just runtime-scanner-capability-check", "just runtime-scanner-process-check", "just runtime-nmap-capability-check", "just runtime-feed-keyring-init", "just feed-generation-stage", "just feed-generation-state", "just feed-generation-activate", "just feed-generation-rollback", "just runtime-full-test-scan-preflight", "just runtime-full-test-scan-start", "just runtime-full-test-scan-status", "just runtime-report-summary", "just runtime-report-export", "just runtime-certbund-report", "just runtime-report-metrics", "just runtime-scope-smoke", "just runtime-scope-report-summary", "just runtime-scope-report-metrics", "just runtime-rbac-smoke", "just feed-state", "just feed-cache-sync", "just runtime-status", "just runtime-smoke", "just runtime-log-review", "just runtime-data-state", "just runtime-db-introspect", "just runtime-performance-snapshot", "just runtime-app-up", "just runtime-app-smoke", "just runtime-native-api-smoke", "just runtime-native-api-rebuild", "just runtime-webui-smoke", "just runtime-browser-smoke", "just runtime-browser-regression", "just runtime-credential-smoke", "just runtime-app-down", "just gvmd-smoke", "just quality-gate", "just quality-gate-state", "just quality-gate-schedule"]}))
@@ -31981,7 +31479,7 @@ def command_quality_gate(repo_root: Path, include_runtime: bool = False) -> dict
     findings: list[dict[str, Any]] = []
     details: dict[str, Any] = {"steps": {}}
 
-    license_result = command_license_report(repo_root)
+    license_result = rust_license_report_result(repo_root)
     details["steps"]["license-report"] = {"status": license_result["status"], "summary": license_result["summary"]}
     findings.append(finding(license_result["status"], "quality.license-report", license_result["summary"], details={"status": license_result["status"]}))
 
@@ -32334,12 +31832,6 @@ def build_parser() -> argparse.ArgumentParser:
     closeout_readiness.add_argument("--status-only", action="store_true", help="emit compact closeout readiness details and only non-pass findings")
     doctor = subparsers.add_parser("doctor", parents=[common], help="run structural and environment health checks")
     doctor.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe doctor checks")
-    license_report = subparsers.add_parser("license-report", parents=[common], help="check preserved license/provenance files")
-    license_report.add_argument("--public-release", action="store_true", help="fail while public-release license review items remain open")
-    license_report.add_argument("--mode", choices=PUBLICATION_MODES, default="source-public", help="publication mode for --public-release gating")
-    license_report.add_argument("--diff-scope", choices=("baseline", "staged", "worktree"), default="baseline", help="diff scope for focused modified-imported-file checks")
-    license_report.add_argument("--modified-imported-only", action="store_true", help="run only the fast modified-imported-file notice checks")
-    license_report.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe closeout checks")
     production_posture = subparsers.add_parser("production-posture-check", parents=[common], help="run the non-destructive production posture checklist")
     production_posture.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe posture checks")
     configure = subparsers.add_parser("configure", parents=[common], help="configure a CMake component")
@@ -32688,8 +32180,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_closeout_readiness(repo_root, status_only=args.status_only)
     elif args.command == "doctor":
         result = command_doctor(repo_root, status_only=args.status_only)
-    elif args.command == "license-report":
-        result = command_license_report(repo_root, public_release=args.public_release, mode=args.mode, diff_scope=args.diff_scope, modified_imported_only=args.modified_imported_only, status_only=args.status_only)
     elif args.command == "production-posture-check":
         result = command_production_posture_check(repo_root, status_only=args.status_only)
     elif args.command == "configure":

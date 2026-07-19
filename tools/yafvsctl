@@ -2106,9 +2106,9 @@ OPENAPI_COMMON_ERROR_RESPONSE_REFS = {
 }
 OPENAPI_PARAMETERIZED_ERROR_RESPONSE_REFS = {"404": "NotFound"}
 NATIVE_API_MIGRATION_MATRIX_METADATA_FIELDS = (
-    "x_turbovas_exposure",
-    "x_turbovas_maturity",
-    "x_turbovas_replaces",
+    "x_yafvs_exposure",
+    "x_yafvs_maturity",
+    "x_yafvs_replaces",
 )
 DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
     {
@@ -7637,7 +7637,7 @@ def openapi_direct_operation_templates(repo_root: Path | None) -> list[dict[str,
     templates: list[dict[str, str]] = []
     for operation in openapi_contract_operations(repo_root):
         fields = set(operation.get("x_yafvs_fields", [])) if isinstance(operation.get("x_yafvs_fields"), list) else set()
-        values = operation.get("x_turbovas_values", {}) if isinstance(operation.get("x_turbovas_values"), dict) else {}
+        values = operation.get("x_yafvs_values", {}) if isinstance(operation.get("x_yafvs_values"), dict) else {}
         exposure = values.get("x-yafvs-exposure")
         if "x-yafvs-direct" not in fields and exposure not in OPENAPI_DIRECT_EXPOSURE_VALUES:
             continue
@@ -7871,7 +7871,7 @@ def openapi_contract_operations(repo_root: Path | None) -> list[dict[str, Any]]:
                 "operation_id": None,
                 "summary": None,
                 "x_yafvs_fields": [],
-                "x_turbovas_values": {},
+                "x_yafvs_values": {},
                 "parameters": [],
                 "responses": {},
                 "request_body": False,
@@ -7889,13 +7889,13 @@ def openapi_contract_operations(repo_root: Path | None) -> list[dict[str, Any]]:
         if operation_id_match:
             current["operation_id"] = operation_id_match.group(1)
             continue
-        turbovas_field_match = re.match(r"^      (x-yafvs-[A-Za-z0-9_-]+):(?:\s*([^#]+?))?\s*(?:#.*)?$", line)
-        if turbovas_field_match:
-            field = turbovas_field_match.group(1)
-            value = turbovas_field_match.group(2)
+        yafvs_field_match = re.match(r"^      (x-yafvs-[A-Za-z0-9_-]+):(?:\s*([^#]+?))?\s*(?:#.*)?$", line)
+        if yafvs_field_match:
+            field = yafvs_field_match.group(1)
+            value = yafvs_field_match.group(2)
             current["x_yafvs_fields"].append(field)
-            if isinstance(current.get("x_turbovas_values"), dict):
-                current["x_turbovas_values"][field] = openapi_scalar_value(value)
+            if isinstance(current.get("x_yafvs_values"), dict):
+                current["x_yafvs_values"][field] = openapi_scalar_value(value)
             continue
         if line == "      requestBody:":
             current["request_body"] = True
@@ -8021,7 +8021,7 @@ def openapi_write_control_contract_summary(
         method = str(item.get("method", ""))
         label = openapi_operation_label(item)
         fields = set(item.get("x_yafvs_fields", [])) if isinstance(item.get("x_yafvs_fields"), list) else set()
-        values = item.get("x_turbovas_values", {}) if isinstance(item.get("x_turbovas_values"), dict) else {}
+        values = item.get("x_yafvs_values", {}) if isinstance(item.get("x_yafvs_values"), dict) else {}
         exposure = values.get("x-yafvs-exposure")
         maturity = values.get("x-yafvs-maturity")
         has_direct_marker = "x-yafvs-direct" in fields
@@ -8150,7 +8150,7 @@ def openapi_exposure_contract_drift(operations: list[dict[str, Any]]) -> dict[st
 
     for item in operations:
         fields = set(item.get("x_yafvs_fields", [])) if isinstance(item.get("x_yafvs_fields"), list) else set()
-        values = item.get("x_turbovas_values", {}) if isinstance(item.get("x_turbovas_values"), dict) else {}
+        values = item.get("x_yafvs_values", {}) if isinstance(item.get("x_yafvs_values"), dict) else {}
         if "x-yafvs-exposure" in values and values.get("x-yafvs-exposure") not in OPENAPI_ALLOWED_EXPOSURE_VALUES:
             invalid.append(
                 {
@@ -8165,7 +8165,7 @@ def openapi_exposure_contract_drift(operations: list[dict[str, Any]]) -> dict[st
                 {
                     "operation": openapi_operation_label(item),
                     "expected": sorted(OPENAPI_ALLOWED_EXPOSURE_VALUES),
-                    "reason": "field_missing_for_turbovas_contract",
+                    "reason": "field_missing_for_yafvs_contract",
                 }
             )
         if "x-yafvs-exposure" in fields:
@@ -8197,7 +8197,7 @@ def openapi_exposure_contract_drift(operations: list[dict[str, Any]]) -> dict[st
             missing.append({"operation": operation, "expected": expected, "reason": "operation_missing"})
             continue
         fields = set(item.get("x_yafvs_fields", [])) if isinstance(item.get("x_yafvs_fields"), list) else set()
-        values = item.get("x_turbovas_values", {}) if isinstance(item.get("x_turbovas_values"), dict) else {}
+        values = item.get("x_yafvs_values", {}) if isinstance(item.get("x_yafvs_values"), dict) else {}
         if "x-yafvs-exposure" not in fields:
             missing.append({"operation": operation, "expected": expected, "reason": "field_missing"})
             continue
@@ -8225,7 +8225,7 @@ def openapi_migration_metadata_contract_drift(operations: list[dict[str, Any]]) 
     mismatches: list[dict[str, Any]] = []
 
     for item in operations:
-        values = item.get("x_turbovas_values", {}) if isinstance(item.get("x_turbovas_values"), dict) else {}
+        values = item.get("x_yafvs_values", {}) if isinstance(item.get("x_yafvs_values"), dict) else {}
         for field, allowed_values in sorted(OPENAPI_ALLOWED_MIGRATION_METADATA_VALUES.items()):
             if field in values and values.get(field) not in allowed_values:
                 invalid.append(
@@ -8245,7 +8245,7 @@ def openapi_migration_metadata_contract_drift(operations: list[dict[str, Any]]) 
                 missing.append({"operation": operation, "field": field, "expected": expected, "reason": "operation_missing"})
             continue
         fields = set(item.get("x_yafvs_fields", [])) if isinstance(item.get("x_yafvs_fields"), list) else set()
-        values = item.get("x_turbovas_values", {}) if isinstance(item.get("x_turbovas_values"), dict) else {}
+        values = item.get("x_yafvs_values", {}) if isinstance(item.get("x_yafvs_values"), dict) else {}
         for field, expected in sorted(expected_fields.items()):
             if field not in fields:
                 missing.append({"operation": operation, "field": field, "expected": expected, "reason": "field_missing"})
@@ -8815,7 +8815,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
         for item in operations
         if item.get("operation_id") and item.get("operation_id") != openapi_contract_operation_id(str(item.get("method", "")), str(item.get("path", "")))
     ]
-    unexpected_turbovas_fields = [
+    unexpected_yafvs_fields = [
         {"operation": openapi_operation_label(item), "fields": sorted(set(item.get("x_yafvs_fields", [])) - OPENAPI_ALLOWED_YAFVS_OPERATION_FIELDS)}
         for item in operations
         if sorted(set(item.get("x_yafvs_fields", [])) - OPENAPI_ALLOWED_YAFVS_OPERATION_FIELDS)
@@ -8856,7 +8856,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
         or missing_operation_summaries
         or duplicate_ids
         or nondeterministic_operation_ids
-        or unexpected_turbovas_fields
+        or unexpected_yafvs_fields
         or exposure_drift["missing_exposure_operations"]
         or exposure_drift["invalid_exposure_operations"]
         or exposure_drift["exposure_mismatches"]
@@ -8889,7 +8889,7 @@ def native_api_openapi_contract_summary(repo_root: Path | None) -> dict[str, Any
         "duplicate_operation_ids": duplicate_ids,
         "nondeterministic_operation_ids": nondeterministic_operation_ids,
         "allowed_yafvs_operation_fields": sorted(OPENAPI_ALLOWED_YAFVS_OPERATION_FIELDS),
-        "unexpected_turbovas_operation_fields": unexpected_turbovas_fields,
+        "unexpected_yafvs_operation_fields": unexpected_yafvs_fields,
         "allowed_exposure_values": sorted(OPENAPI_ALLOWED_EXPOSURE_VALUES),
         "allowed_maturity_values": sorted(OPENAPI_ALLOWED_MATURITY_VALUES),
         "allowed_replaces_values": sorted(OPENAPI_ALLOWED_REPLACES_VALUES),
@@ -9948,8 +9948,8 @@ def native_api_browser_proxy_contract_summary(repo_root: Path | None, endpoints:
         for operation in openapi_contract_operations(repo_root)
         if isinstance(operation.get("path"), str)
         and operation.get("method") == "get"
-        and isinstance(operation.get("x_turbovas_values"), dict)
-        and operation["x_turbovas_values"].get("x-yafvs-exposure") == "internal-only"
+        and isinstance(operation.get("x_yafvs_values"), dict)
+        and operation["x_yafvs_values"].get("x-yafvs-exposure") == "internal-only"
     )
     gsad_allowed, parse_errors = native_api_gsad_proxy_allowlist_templates(repo_root)
     gsad_write_allowed, write_parse_errors = native_api_gsad_proxy_write_allowlist_operations(repo_root)
@@ -11635,7 +11635,7 @@ def compact_native_tooling_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "get_request_body_count": len(openapi_contract.get("get_operations_with_request_bodies", [])) if isinstance(openapi_contract, dict) else 0,
         "duplicate_operation_id_count": len(openapi_contract.get("duplicate_operation_ids", [])) if isinstance(openapi_contract, dict) else 0,
         "nondeterministic_operation_id_count": len(openapi_contract.get("nondeterministic_operation_ids", [])) if isinstance(openapi_contract, dict) else 0,
-        "unexpected_turbovas_operation_field_count": len(openapi_contract.get("unexpected_turbovas_operation_fields", [])) if isinstance(openapi_contract, dict) else 0,
+        "unexpected_yafvs_operation_field_count": len(openapi_contract.get("unexpected_yafvs_operation_fields", [])) if isinstance(openapi_contract, dict) else 0,
         "missing_exposure_operation_count": len(openapi_contract.get("missing_exposure_operations", [])) if isinstance(openapi_contract, dict) else 0,
         "invalid_exposure_operation_count": len(openapi_contract.get("invalid_exposure_operations", [])) if isinstance(openapi_contract, dict) else 0,
         "exposure_mismatch_count": len(openapi_contract.get("exposure_mismatches", [])) if isinstance(openapi_contract, dict) else 0,
@@ -12647,7 +12647,7 @@ def native_api_migration_matrix_rows(repo_root: Path) -> list[dict[str, Any]]:
         operation = openapi_by_key.get(key)
         endpoint = row_endpoint(key)
         fields = set(operation.get("x_yafvs_fields", [])) if isinstance(operation, dict) else set()
-        values = operation.get("x_turbovas_values", {}) if isinstance(operation, dict) and isinstance(operation.get("x_turbovas_values"), dict) else {}
+        values = operation.get("x_yafvs_values", {}) if isinstance(operation, dict) and isinstance(operation.get("x_yafvs_values"), dict) else {}
         status = inventory.get("status") if isinstance(inventory, dict) and isinstance(inventory.get("status"), str) else "unknown"
         if status == "unknown" and openapi_operation_is_pending_write_control(operation):
             status = "openapi_preview_write_control"
@@ -12679,14 +12679,14 @@ def native_api_migration_matrix_rows(repo_root: Path) -> list[dict[str, Any]]:
                 "openapi_path": operation.get("path") if isinstance(operation, dict) else None,
                 "inventory_endpoint": inventory.get("endpoint") if isinstance(inventory, dict) else None,
                 "openapi_direct_marker": "x-yafvs-direct" in fields if isinstance(operation, dict) else None,
-                "x_turbovas_exposure": values.get("x-yafvs-exposure"),
-                "x_turbovas_maturity": values.get("x-yafvs-maturity"),
-                "x_turbovas_operator_identity": values.get("x-yafvs-operator-identity"),
-                "x_turbovas_owner_semantics": values.get("x-yafvs-owner-semantics"),
-                "x_turbovas_replaces": values.get("x-yafvs-replaces"),
-                "x_turbovas_inherited_still_owns": values.get("x-yafvs-inherited-still-owns"),
-                "x_turbovas_safety_contract": values.get("x-yafvs-safety-contract"),
-                "x_turbovas_side_effect": values.get("x-yafvs-side-effect"),
+                "x_yafvs_exposure": values.get("x-yafvs-exposure"),
+                "x_yafvs_maturity": values.get("x-yafvs-maturity"),
+                "x_yafvs_operator_identity": values.get("x-yafvs-operator-identity"),
+                "x_yafvs_owner_semantics": values.get("x-yafvs-owner-semantics"),
+                "x_yafvs_replaces": values.get("x-yafvs-replaces"),
+                "x_yafvs_inherited_still_owns": values.get("x-yafvs-inherited-still-owns"),
+                "x_yafvs_safety_contract": values.get("x-yafvs-safety-contract"),
+                "x_yafvs_side_effect": values.get("x-yafvs-side-effect"),
                 "replacement_candidates": replacement_candidates,
             }
         )
@@ -12777,13 +12777,13 @@ def native_api_migration_matrix_contract_summary(rows: list[dict[str, Any]]) -> 
             expected_exposure = "direct-write"
             expected_marker = True
 
-        if expected_exposure is not None and row.get("x_turbovas_exposure") != expected_exposure:
+        if expected_exposure is not None and row.get("x_yafvs_exposure") != expected_exposure:
             direct_exposure_mismatches.append(
                 {
                     "endpoint": row.get("endpoint"),
                     "method": row.get("method"),
                     "direct_access": direct_access,
-                    "actual": row.get("x_turbovas_exposure"),
+                    "actual": row.get("x_yafvs_exposure"),
                     "expected": expected_exposure,
                 }
             )
@@ -12840,7 +12840,7 @@ NATIVE_API_MIGRATION_RESIDUAL_BUCKET_TOKENS = {
 
 
 def native_api_migration_matrix_residual_buckets(row: dict[str, Any]) -> list[str]:
-    residue = row.get("x_turbovas_inherited_still_owns")
+    residue = row.get("x_yafvs_inherited_still_owns")
     if not isinstance(residue, str) or not residue:
         return []
     residue_words = residue.lower()
@@ -12866,14 +12866,14 @@ def native_api_migration_matrix_filter_rows(rows: list[dict[str, Any]], focus: s
             "direct_access",
             "operation_id",
             "openapi_path",
-            "x_turbovas_exposure",
-            "x_turbovas_maturity",
-            "x_turbovas_operator_identity",
-            "x_turbovas_owner_semantics",
-            "x_turbovas_replaces",
-            "x_turbovas_inherited_still_owns",
-            "x_turbovas_safety_contract",
-            "x_turbovas_side_effect",
+            "x_yafvs_exposure",
+            "x_yafvs_maturity",
+            "x_yafvs_operator_identity",
+            "x_yafvs_owner_semantics",
+            "x_yafvs_replaces",
+            "x_yafvs_inherited_still_owns",
+            "x_yafvs_safety_contract",
+            "x_yafvs_side_effect",
         ):
             value = row.get(key)
             if value is not None:
@@ -12890,7 +12890,7 @@ def native_api_migration_matrix_filter_rows(rows: list[dict[str, Any]], focus: s
 def openapi_operation_is_pending_write_control(operation: dict[str, Any] | None) -> bool:
     if not isinstance(operation, dict):
         return False
-    values = operation.get("x_turbovas_values", {}) if isinstance(operation.get("x_turbovas_values"), dict) else {}
+    values = operation.get("x_yafvs_values", {}) if isinstance(operation.get("x_yafvs_values"), dict) else {}
     maturity = values.get("x-yafvs-maturity")
     exposure = values.get("x-yafvs-exposure")
     return exposure == "internal-only" and maturity in {"preview-write", "preview-control"}
@@ -12901,7 +12901,7 @@ def native_api_migration_matrix_remaining_surface(rows: list[dict[str, Any]]) ->
     residue_counts: dict[str, int] = {}
     examples: dict[str, str] = {}
     for row in rows:
-        residue = row.get("x_turbovas_inherited_still_owns")
+        residue = row.get("x_yafvs_inherited_still_owns")
         if not isinstance(residue, str) or not residue:
             continue
         residue_counts[residue] = residue_counts.get(residue, 0) + 1
@@ -12935,12 +12935,12 @@ def native_api_migration_matrix_compact_focus_row(row: dict[str, Any]) -> dict[s
         "status",
         "direct_access",
         "browser_access",
-        "x_turbovas_replaces",
-        "x_turbovas_inherited_still_owns",
-        "x_turbovas_operator_identity",
-        "x_turbovas_owner_semantics",
-        "x_turbovas_side_effect",
-        "x_turbovas_safety_contract",
+        "x_yafvs_replaces",
+        "x_yafvs_inherited_still_owns",
+        "x_yafvs_operator_identity",
+        "x_yafvs_owner_semantics",
+        "x_yafvs_side_effect",
+        "x_yafvs_safety_contract",
     )
     return {key: row[key] for key in keys if row.get(key) is not None}
 
@@ -18795,8 +18795,8 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
     schedule_original_comment = ""
     schedule_name = f"yafvs-direct-write-smoke-schedule-{int(time.time())}-{os.getpid()}"
     schedule_clone_name = f"{schedule_name}-clone"
-    schedule_icalendar = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//TurboVAS//Schedule//EN\r\nBEGIN:VEVENT\r\nDTSTART:20350101T000000Z\r\nRRULE:FREQ=DAILY\r\nDURATION:PT1H\r\nUID:yafvs-direct-write-smoke-schedule\r\nDTSTAMP:19700101T000000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
-    schedule_patch_icalendar = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//TurboVAS//Schedule//EN\r\nBEGIN:VEVENT\r\nDTSTART:20360101T000000Z\r\nRRULE:FREQ=WEEKLY\r\nDURATION:PT2H\r\nUID:yafvs-direct-write-smoke-schedule\r\nDTSTAMP:19700101T000000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+    schedule_icalendar = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//YAFVS//Schedule//EN\r\nBEGIN:VEVENT\r\nDTSTART:20350101T000000Z\r\nRRULE:FREQ=DAILY\r\nDURATION:PT1H\r\nUID:yafvs-direct-write-smoke-schedule\r\nDTSTAMP:19700101T000000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
+    schedule_patch_icalendar = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//YAFVS//Schedule//EN\r\nBEGIN:VEVENT\r\nDTSTART:20360101T000000Z\r\nRRULE:FREQ=WEEKLY\r\nDURATION:PT2H\r\nUID:yafvs-direct-write-smoke-schedule\r\nDTSTAMP:19700101T000000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
     scan_config_id: str | None = None
     scan_config_clone_id: str | None = None
     scan_config_import_id: str | None = None
@@ -19168,7 +19168,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 scan_config_preference_reset_readback_ok = scan_config_preference_reset_readback.returncode == 0 and scan_config_preference_reset_readback_status == 200 and isinstance(scan_config_safe_checks_after_reset, dict) and scan_config_safe_checks_after_reset.get("configured") is False and scan_config_safe_checks_after_reset.get("value") == scan_config_safe_checks_before.get("default")
                 findings.append(native_api_probe_finding("pass" if scan_config_preference_reset_readback_ok else "fail", "native-api-direct.scan-config-preference-reset-readback", "Direct API readback confirms the scanner preference returned to its feed default." if scan_config_preference_reset_readback_ok else "Direct API readback did not confirm scanner preference reset.", scan_config_preference_reset_readback, direct_native_api_display_command(scan_config_detail_path, token=token, env=env), scan_config_preference_reset_readback_json, {"http_status": scan_config_preference_reset_readback_status, "scan_config_id": scan_config_id, "configured": scan_config_safe_checks_after_reset.get("configured") if isinstance(scan_config_safe_checks_after_reset, dict) else None, **summarize_native_api_response(scan_config_preference_reset_readback_json)}))
 
-                scan_config_unknown_preference_body = json.dumps({"preferences": [{"scope": "scanner", "name": "__turbovas_missing_preference__", "action": "set", "value": "1"}]}, separators=(",", ":"))
+                scan_config_unknown_preference_body = json.dumps({"preferences": [{"scope": "scanner", "name": "__yafvs_missing_preference__", "action": "set", "value": "1"}]}, separators=(",", ":"))
                 scan_config_unknown_preference = direct_native_api_curl(repo_root, scan_config_detail_path, token=token, env=env, method="PATCH", body=scan_config_unknown_preference_body, extra_headers=content_type)
                 scan_config_unknown_preference_json, scan_config_unknown_preference_status = parse_json_output_with_http_status(scan_config_unknown_preference)
                 scan_config_unknown_preference_ok = scan_config_unknown_preference.returncode == 0 and scan_config_unknown_preference_status == 404 and isinstance(scan_config_unknown_preference_json, dict) and scan_config_unknown_preference_json.get("error", {}).get("code") == "not_found"

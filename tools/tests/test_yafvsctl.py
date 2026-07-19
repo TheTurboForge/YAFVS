@@ -1247,7 +1247,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["feed-copy-to-runtime", "--json"], 1, "fail"),
                 (["runtime-feed-import-init", "--json"], 1, "fail"),
                 (["runtime-redis-state", "--json"], 0, "warn"),
-                (["runtime-identity-migrate", "--json"], 0, "pass"),
+                (["runtime-identity-migrate", "--json"], (0, 1), ("pass", "fail")),
                 (["runtime-data-state", "--json"], 0, "warn"),
                 (["runtime-db-introspect", "--json"], 0, "warn"),
                 (["runtime-performance-snapshot", "--json"], 0, "warn"),
@@ -1902,7 +1902,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(set(operations), set(expected_operations))
         for key, replaces in expected_operations.items():
             operation = operations[key]
-            values = operation["x_turbovas_values"]
+            values = operation["x_yafvs_values"]
             method, _path = key
             expected_exposure = (
                 "direct-read"
@@ -4088,15 +4088,15 @@ class YAFVSCtlTests(unittest.TestCase):
                 "x-yafvs-side-effect",
             ],
         )
-        self.assertEqual(contract["unexpected_turbovas_operation_fields"], [])
+        self.assertEqual(contract["unexpected_yafvs_operation_fields"], [])
         self.assertEqual(contract["allowed_exposure_values"], ["browser-write", "direct-read", "direct-write", "internal-only"])
         actual_exposure_values = sorted(
-            {operation["x_turbovas_values"]["x-yafvs-exposure"] for operation in yafvsctl.openapi_contract_operations(root)}
+            {operation["x_yafvs_values"]["x-yafvs-exposure"] for operation in yafvsctl.openapi_contract_operations(root)}
         )
         self.assertTrue(set(actual_exposure_values).issubset(set(contract["allowed_exposure_values"])))
         self.assertEqual(contract["allowed_maturity_values"], ["live-control", "live-read", "live-write", "preview-control", "preview-read", "preview-write"])
         actual_maturity_values = sorted(
-            {operation["x_turbovas_values"]["x-yafvs-maturity"] for operation in yafvsctl.openapi_contract_operations(root)}
+            {operation["x_yafvs_values"]["x-yafvs-maturity"] for operation in yafvsctl.openapi_contract_operations(root)}
         )
         self.assertTrue(set(actual_maturity_values).issubset(set(contract["allowed_maturity_values"])))
         expected_replaces_values = ['alert-clone',
@@ -4324,7 +4324,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(contract["allowed_replaces_values"], expected_replaces_values)
         actual_replaces_values = sorted(
             {
-                operation["x_turbovas_values"]["x-yafvs-replaces"]
+                operation["x_yafvs_values"]["x-yafvs-replaces"]
                 for operation in yafvsctl.openapi_contract_operations(root)
             }
         )
@@ -4332,9 +4332,9 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(contract["allowed_inherited_still_owns_values"], expected_inherited_still_owns_values)
         actual_inherited_still_owns_values = sorted(
             {
-                operation["x_turbovas_values"].get("x-yafvs-inherited-still-owns")
+                operation["x_yafvs_values"].get("x-yafvs-inherited-still-owns")
                 for operation in yafvsctl.openapi_contract_operations(root)
-                if operation["x_turbovas_values"].get("x-yafvs-inherited-still-owns") is not None
+                if operation["x_yafvs_values"].get("x-yafvs-inherited-still-owns") is not None
             }
         )
         self.assertTrue(set(actual_inherited_still_owns_values).issubset(set(contract["allowed_inherited_still_owns_values"])))
@@ -4710,7 +4710,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(details["summary"]["openapi_operation_rows"], 203)
         self.assertEqual(details["summary"]["inventory_rows"], 203)
         self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 203)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_turbovas_exposure"], 203)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_yafvs_exposure"], 203)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -4727,10 +4727,10 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(reports["direct_access"], "scriptable_read")
         self.assertEqual(reports["operation_id"], "getReports")
         self.assertTrue(reports["openapi_direct_marker"])
-        self.assertEqual(reports["x_turbovas_exposure"], "direct-read")
-        self.assertEqual(reports["x_turbovas_maturity"], "live-read")
-        self.assertEqual(reports["x_turbovas_replaces"], "raw-report-list-read")
-        self.assertEqual(reports["x_turbovas_inherited_still_owns"], "raw-report-generation-non-pdf-export-retention-and-mutations")
+        self.assertEqual(reports["x_yafvs_exposure"], "direct-read")
+        self.assertEqual(reports["x_yafvs_maturity"], "live-read")
+        self.assertEqual(reports["x_yafvs_replaces"], "raw-report-list-read")
+        self.assertEqual(reports["x_yafvs_inherited_still_owns"], "raw-report-generation-non-pdf-export-retention-and-mutations")
         self.assertIn("GSA raw report list (migrated through gsad same-origin proxy)", reports["replacement_candidates"])
 
         password_change = rows[("post", "/api/v1/users/current/password")]
@@ -4738,8 +4738,8 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(password_change["browser_access"], "browser_proxied")
         self.assertEqual(password_change["direct_access"], "browser_write")
         self.assertFalse(password_change["openapi_direct_marker"])
-        self.assertEqual(password_change["x_turbovas_exposure"], "browser-write")
-        self.assertEqual(password_change["x_turbovas_replaces"], "user-current-password-change")
+        self.assertEqual(password_change["x_yafvs_exposure"], "browser-write")
+        self.assertEqual(password_change["x_yafvs_replaces"], "user-current-password-change")
 
         create_scope = rows[("post", "/api/v1/scopes")]
         self.assertEqual(create_scope["status"], "implemented_internal_and_browser_proxied")
@@ -4748,20 +4748,20 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(create_scope["inventory_endpoint"], "/api/v1/scopes")
         self.assertEqual(create_scope["direct_access"], "direct_write_control")
         self.assertTrue(create_scope["openapi_direct_marker"])
-        self.assertEqual(create_scope["x_turbovas_maturity"], "live-write")
-        self.assertEqual(create_scope["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(create_scope["x_turbovas_replaces"], "scope-metadata-membership-write")
+        self.assertEqual(create_scope["x_yafvs_maturity"], "live-write")
+        self.assertEqual(create_scope["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(create_scope["x_yafvs_replaces"], "scope-metadata-membership-write")
 
         task_clone = rows[("post", "/api/v1/tasks/{task_id}/clone")]
         self.assertEqual(task_clone["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(task_clone["browser_access"], "browser_proxied")
         self.assertEqual(task_clone["direct_access"], "direct_write_control")
         self.assertEqual(task_clone["operation_id"], "postTasksByTaskIdClone")
-        self.assertEqual(task_clone["x_turbovas_maturity"], "live-write")
-        self.assertEqual(task_clone["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(task_clone["x_turbovas_replaces"], "task-clone")
-        self.assertEqual(task_clone["x_turbovas_side_effect"], "scanner-control")
-        self.assertIsNone(task_clone["x_turbovas_inherited_still_owns"])
+        self.assertEqual(task_clone["x_yafvs_maturity"], "live-write")
+        self.assertEqual(task_clone["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(task_clone["x_yafvs_replaces"], "task-clone")
+        self.assertEqual(task_clone["x_yafvs_side_effect"], "scanner-control")
+        self.assertIsNone(task_clone["x_yafvs_inherited_still_owns"])
         self.assertIn("Task resume, hard-delete", source)
         self.assertIn("inherited file export", source)
         self.assertNotIn("Task resume, clone", source)
@@ -4770,157 +4770,157 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(update_scope["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(update_scope["browser_access"], "browser_proxied")
         self.assertEqual(update_scope["direct_access"], "direct_write_control")
-        self.assertEqual(update_scope["x_turbovas_maturity"], "live-write")
-        self.assertEqual(update_scope["x_turbovas_exposure"], "direct-write")
+        self.assertEqual(update_scope["x_yafvs_maturity"], "live-write")
+        self.assertEqual(update_scope["x_yafvs_exposure"], "direct-write")
 
         delete_scope = rows[("delete", "/api/v1/scopes/{scope_id}")]
         self.assertEqual(delete_scope["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(delete_scope["direct_access"], "direct_write_control")
-        self.assertEqual(delete_scope["x_turbovas_maturity"], "live-write")
-        self.assertEqual(delete_scope["x_turbovas_exposure"], "direct-write")
+        self.assertEqual(delete_scope["x_yafvs_maturity"], "live-write")
+        self.assertEqual(delete_scope["x_yafvs_exposure"], "direct-write")
 
         delete_port_list = rows[("delete", "/api/v1/port-lists/{port_list_id}")]
         self.assertEqual(delete_port_list["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(delete_port_list["direct_access"], "direct_write_control")
-        self.assertEqual(delete_port_list["x_turbovas_maturity"], "live-write")
-        self.assertEqual(delete_port_list["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(delete_port_list["x_turbovas_replaces"], "port-list-trash-move")
+        self.assertEqual(delete_port_list["x_yafvs_maturity"], "live-write")
+        self.assertEqual(delete_port_list["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(delete_port_list["x_yafvs_replaces"], "port-list-trash-move")
 
         create_port_list_range = rows[("post", "/api/v1/port-lists/{port_list_id}/ranges")]
         self.assertEqual(create_port_list_range["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(create_port_list_range["direct_access"], "direct_write_control")
-        self.assertEqual(create_port_list_range["x_turbovas_maturity"], "live-write")
-        self.assertEqual(create_port_list_range["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(create_port_list_range["x_turbovas_replaces"], "port-list-range-create")
+        self.assertEqual(create_port_list_range["x_yafvs_maturity"], "live-write")
+        self.assertEqual(create_port_list_range["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(create_port_list_range["x_yafvs_replaces"], "port-list-range-create")
 
         delete_port_list_range = rows[("delete", "/api/v1/port-lists/{port_list_id}/ranges/{port_range_id}")]
         self.assertEqual(delete_port_list_range["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(delete_port_list_range["direct_access"], "direct_write_control")
-        self.assertEqual(delete_port_list_range["x_turbovas_maturity"], "live-write")
-        self.assertEqual(delete_port_list_range["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(delete_port_list_range["x_turbovas_replaces"], "port-list-range-delete")
+        self.assertEqual(delete_port_list_range["x_yafvs_maturity"], "live-write")
+        self.assertEqual(delete_port_list_range["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(delete_port_list_range["x_yafvs_replaces"], "port-list-range-delete")
 
         clone_port_list = rows[("post", "/api/v1/port-lists/{port_list_id}/clone")]
         self.assertEqual(clone_port_list["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(clone_port_list["direct_access"], "direct_write_control")
-        self.assertEqual(clone_port_list["x_turbovas_maturity"], "live-write")
-        self.assertEqual(clone_port_list["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(clone_port_list["x_turbovas_replaces"], "port-list-clone")
+        self.assertEqual(clone_port_list["x_yafvs_maturity"], "live-write")
+        self.assertEqual(clone_port_list["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(clone_port_list["x_yafvs_replaces"], "port-list-clone")
 
         import_port_list = rows[("post", "/api/v1/port-list-imports")]
         self.assertEqual(import_port_list["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(import_port_list["direct_access"], "direct_write_control")
-        self.assertEqual(import_port_list["x_turbovas_maturity"], "live-write")
-        self.assertEqual(import_port_list["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(import_port_list["x_turbovas_replaces"], "port-list-import")
+        self.assertEqual(import_port_list["x_yafvs_maturity"], "live-write")
+        self.assertEqual(import_port_list["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(import_port_list["x_yafvs_replaces"], "port-list-import")
 
         hard_delete_port_list = rows[("delete", "/api/v1/port-lists/{port_list_id}/trash")]
         self.assertEqual(hard_delete_port_list["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(hard_delete_port_list["direct_access"], "direct_write_control")
-        self.assertEqual(hard_delete_port_list["x_turbovas_maturity"], "live-write")
-        self.assertEqual(hard_delete_port_list["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(hard_delete_port_list["x_turbovas_replaces"], "port-list-hard-delete")
+        self.assertEqual(hard_delete_port_list["x_yafvs_maturity"], "live-write")
+        self.assertEqual(hard_delete_port_list["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(hard_delete_port_list["x_yafvs_replaces"], "port-list-hard-delete")
 
         export_port_list = rows[("get", "/api/v1/port-lists/{port_list_id}/export")]
         self.assertEqual(export_port_list["status"], "implemented_internal_browser_proxied_and_scriptable_read")
         self.assertEqual(export_port_list["direct_access"], "scriptable_read")
-        self.assertEqual(export_port_list["x_turbovas_maturity"], "live-read")
-        self.assertEqual(export_port_list["x_turbovas_exposure"], "direct-read")
-        self.assertEqual(export_port_list["x_turbovas_replaces"], "port-list-metadata-export-read")
+        self.assertEqual(export_port_list["x_yafvs_maturity"], "live-read")
+        self.assertEqual(export_port_list["x_yafvs_exposure"], "direct-read")
+        self.assertEqual(export_port_list["x_yafvs_replaces"], "port-list-metadata-export-read")
 
         delete_schedule = rows[("delete", "/api/v1/schedules/{schedule_id}")]
         self.assertEqual(delete_schedule["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(delete_schedule["direct_access"], "direct_write_control")
-        self.assertEqual(delete_schedule["x_turbovas_maturity"], "live-write")
-        self.assertEqual(delete_schedule["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(delete_schedule["x_turbovas_replaces"], "schedule-trash-move")
+        self.assertEqual(delete_schedule["x_yafvs_maturity"], "live-write")
+        self.assertEqual(delete_schedule["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(delete_schedule["x_yafvs_replaces"], "schedule-trash-move")
 
         clone_schedule = rows[("post", "/api/v1/schedules/{schedule_id}/clone")]
         self.assertEqual(clone_schedule["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(clone_schedule["direct_access"], "direct_write_control")
-        self.assertEqual(clone_schedule["x_turbovas_maturity"], "live-write")
-        self.assertEqual(clone_schedule["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(clone_schedule["x_turbovas_replaces"], "schedule-clone")
+        self.assertEqual(clone_schedule["x_yafvs_maturity"], "live-write")
+        self.assertEqual(clone_schedule["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(clone_schedule["x_yafvs_replaces"], "schedule-clone")
 
         patch_schedule = rows[("patch", "/api/v1/schedules/{schedule_id}")]
         self.assertEqual(patch_schedule["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(patch_schedule["browser_access"], "browser_proxied")
         self.assertEqual(patch_schedule["direct_access"], "direct_write_control")
-        self.assertEqual(patch_schedule["x_turbovas_maturity"], "live-write")
-        self.assertEqual(patch_schedule["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(patch_schedule["x_turbovas_replaces"], "schedule-metadata-modify")
+        self.assertEqual(patch_schedule["x_yafvs_maturity"], "live-write")
+        self.assertEqual(patch_schedule["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(patch_schedule["x_yafvs_replaces"], "schedule-metadata-modify")
 
         patch_filter = rows[("patch", "/api/v1/filters/{filter_id}")]
         self.assertEqual(patch_filter["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(patch_filter["direct_access"], "direct_write_control")
-        self.assertEqual(patch_filter["x_turbovas_maturity"], "live-write")
-        self.assertEqual(patch_filter["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(patch_filter["x_turbovas_replaces"], "saved-filter-metadata-modify")
+        self.assertEqual(patch_filter["x_yafvs_maturity"], "live-write")
+        self.assertEqual(patch_filter["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(patch_filter["x_yafvs_replaces"], "saved-filter-metadata-modify")
 
         delete_filter = rows[("delete", "/api/v1/filters/{filter_id}")]
         self.assertEqual(delete_filter["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(delete_filter["direct_access"], "direct_write_control")
-        self.assertEqual(delete_filter["x_turbovas_maturity"], "live-write")
-        self.assertEqual(delete_filter["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(delete_filter["x_turbovas_replaces"], "saved-filter-trash-move")
+        self.assertEqual(delete_filter["x_yafvs_maturity"], "live-write")
+        self.assertEqual(delete_filter["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(delete_filter["x_yafvs_replaces"], "saved-filter-trash-move")
 
         create_tag = rows[("post", "/api/v1/tags")]
         self.assertEqual(create_tag["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(create_tag["direct_access"], "direct_write_control")
-        self.assertEqual(create_tag["x_turbovas_maturity"], "live-write")
-        self.assertEqual(create_tag["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(create_tag["x_turbovas_replaces"], "tag-metadata-explicit-and-filter-resource-assignment-write")
-        self.assertIsNone(create_tag["x_turbovas_inherited_still_owns"])
+        self.assertEqual(create_tag["x_yafvs_maturity"], "live-write")
+        self.assertEqual(create_tag["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(create_tag["x_yafvs_replaces"], "tag-metadata-explicit-and-filter-resource-assignment-write")
+        self.assertIsNone(create_tag["x_yafvs_inherited_still_owns"])
 
         update_tag = rows[("patch", "/api/v1/tags/{tag_id}")]
         self.assertEqual(update_tag["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(update_tag["direct_access"], "direct_write_control")
-        self.assertEqual(update_tag["x_turbovas_maturity"], "live-write")
-        self.assertEqual(update_tag["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(update_tag["x_turbovas_replaces"], "tag-metadata-resource-type-and-atomic-assignment-write")
-        self.assertIsNone(update_tag["x_turbovas_inherited_still_owns"])
+        self.assertEqual(update_tag["x_yafvs_maturity"], "live-write")
+        self.assertEqual(update_tag["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(update_tag["x_yafvs_replaces"], "tag-metadata-resource-type-and-atomic-assignment-write")
+        self.assertIsNone(update_tag["x_yafvs_inherited_still_owns"])
 
         delete_tag = rows[("delete", "/api/v1/tags/{tag_id}")]
         self.assertEqual(delete_tag["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(delete_tag["direct_access"], "direct_write_control")
-        self.assertEqual(delete_tag["x_turbovas_maturity"], "live-write")
-        self.assertEqual(delete_tag["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(delete_tag["x_turbovas_replaces"], "tag-trash-move")
+        self.assertEqual(delete_tag["x_yafvs_maturity"], "live-write")
+        self.assertEqual(delete_tag["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(delete_tag["x_yafvs_replaces"], "tag-trash-move")
 
         update_tag_resources = rows[("post", "/api/v1/tags/{tag_id}/resources")]
         self.assertEqual(update_tag_resources["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(update_tag_resources["direct_access"], "direct_write_control")
-        self.assertEqual(update_tag_resources["x_turbovas_maturity"], "live-write")
-        self.assertEqual(update_tag_resources["x_turbovas_exposure"], "direct-write")
+        self.assertEqual(update_tag_resources["x_yafvs_maturity"], "live-write")
+        self.assertEqual(update_tag_resources["x_yafvs_exposure"], "direct-write")
 
         scope_report_detail = rows[("get", "/api/v1/scope-reports/{scope_report_id}")]
         self.assertEqual(scope_report_detail["operation_id"], "getScopeReportsByScopeReportId")
-        self.assertEqual(scope_report_detail["x_turbovas_exposure"], "direct-read")
-        self.assertEqual(scope_report_detail["x_turbovas_maturity"], "live-read")
-        self.assertEqual(scope_report_detail["x_turbovas_replaces"], "scope-report-detail-summary-read")
-        self.assertIsNone(scope_report_detail["x_turbovas_inherited_still_owns"])
+        self.assertEqual(scope_report_detail["x_yafvs_exposure"], "direct-read")
+        self.assertEqual(scope_report_detail["x_yafvs_maturity"], "live-read")
+        self.assertEqual(scope_report_detail["x_yafvs_replaces"], "scope-report-detail-summary-read")
+        self.assertIsNone(scope_report_detail["x_yafvs_inherited_still_owns"])
 
         delete_scope_report = rows[("delete", "/api/v1/scope-reports/{scope_report_id}")]
         self.assertEqual(delete_scope_report["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(delete_scope_report["direct_access"], "direct_write_control")
-        self.assertEqual(delete_scope_report["x_turbovas_maturity"], "live-write")
-        self.assertEqual(delete_scope_report["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(delete_scope_report["x_turbovas_replaces"], "scope-report-delete")
-        self.assertIsNone(delete_scope_report["x_turbovas_inherited_still_owns"])
+        self.assertEqual(delete_scope_report["x_yafvs_maturity"], "live-write")
+        self.assertEqual(delete_scope_report["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(delete_scope_report["x_yafvs_replaces"], "scope-report-delete")
+        self.assertIsNone(delete_scope_report["x_yafvs_inherited_still_owns"])
 
         scope_report_results_by_id = rows[("get", "/api/v1/scope-reports/{scope_report_id}/results")]
         self.assertEqual(scope_report_results_by_id["operation_id"], "getScopeReportsByScopeReportIdResults")
-        self.assertEqual(scope_report_results_by_id["x_turbovas_exposure"], "direct-read")
-        self.assertEqual(scope_report_results_by_id["x_turbovas_maturity"], "live-read")
-        self.assertEqual(scope_report_results_by_id["x_turbovas_replaces"], "scope-report-result-evidence-read")
-        self.assertIsNone(scope_report_results_by_id["x_turbovas_inherited_still_owns"])
+        self.assertEqual(scope_report_results_by_id["x_yafvs_exposure"], "direct-read")
+        self.assertEqual(scope_report_results_by_id["x_yafvs_maturity"], "live-read")
+        self.assertEqual(scope_report_results_by_id["x_yafvs_replaces"], "scope-report-result-evidence-read")
+        self.assertIsNone(scope_report_results_by_id["x_yafvs_inherited_still_owns"])
 
         feeds = rows[("get", "/api/v1/feeds")]
         self.assertEqual(feeds["operation_id"], "getFeeds")
-        self.assertEqual(feeds["x_turbovas_exposure"], "direct-read")
-        self.assertEqual(feeds["x_turbovas_maturity"], "live-read")
-        self.assertEqual(feeds["x_turbovas_replaces"], "feed-status-read")
-        self.assertEqual(feeds["x_turbovas_inherited_still_owns"], "feed-sync-import-control")
+        self.assertEqual(feeds["x_yafvs_exposure"], "direct-read")
+        self.assertEqual(feeds["x_yafvs_maturity"], "live-read")
+        self.assertEqual(feeds["x_yafvs_replaces"], "feed-status-read")
+        self.assertEqual(feeds["x_yafvs_inherited_still_owns"], "feed-sync-import-control")
 
         expected_catalog_metadata = {
             "/api/v1/cves": ("getCves", "cve-catalog-list-read", None),
@@ -4941,10 +4941,10 @@ class YAFVSCtlTests(unittest.TestCase):
         for endpoint, (operation_id, replaces, inherited_still_owns) in expected_catalog_metadata.items():
             row = rows[("get", endpoint)]
             self.assertEqual(row["operation_id"], operation_id)
-            self.assertEqual(row["x_turbovas_exposure"], "direct-read")
-            self.assertEqual(row["x_turbovas_maturity"], "live-read")
-            self.assertEqual(row["x_turbovas_replaces"], replaces)
-            self.assertEqual(row.get("x_turbovas_inherited_still_owns"), inherited_still_owns)
+            self.assertEqual(row["x_yafvs_exposure"], "direct-read")
+            self.assertEqual(row["x_yafvs_maturity"], "live-read")
+            self.assertEqual(row["x_yafvs_replaces"], replaces)
+            self.assertEqual(row.get("x_yafvs_inherited_still_owns"), inherited_still_owns)
 
         expected_asset_metadata = {
             "/api/v1/operating-systems": ("getOperatingSystems", "operating-system-asset-list-read", None),
@@ -4969,10 +4969,10 @@ class YAFVSCtlTests(unittest.TestCase):
         for endpoint, (operation_id, replaces, inherited_still_owns) in expected_asset_metadata.items():
             row = rows[("get", endpoint)]
             self.assertEqual(row["operation_id"], operation_id)
-            self.assertEqual(row["x_turbovas_exposure"], "direct-read")
-            self.assertEqual(row["x_turbovas_maturity"], "live-read")
-            self.assertEqual(row["x_turbovas_replaces"], replaces)
-            self.assertEqual(row.get("x_turbovas_inherited_still_owns"), inherited_still_owns)
+            self.assertEqual(row["x_yafvs_exposure"], "direct-read")
+            self.assertEqual(row["x_yafvs_maturity"], "live-read")
+            self.assertEqual(row["x_yafvs_replaces"], replaces)
+            self.assertEqual(row.get("x_yafvs_inherited_still_owns"), inherited_still_owns)
 
         expected_raw_report_metadata = {
             "/api/v1/reports/{report_id}/results": ("getReportsByReportIdResults", "raw-report-result-evidence-read"),
@@ -4988,10 +4988,10 @@ class YAFVSCtlTests(unittest.TestCase):
         for endpoint, (operation_id, replaces) in expected_raw_report_metadata.items():
             row = rows[("get", endpoint)]
             self.assertEqual(row["operation_id"], operation_id)
-            self.assertEqual(row["x_turbovas_exposure"], "direct-read")
-            self.assertEqual(row["x_turbovas_maturity"], "live-read")
-            self.assertEqual(row["x_turbovas_replaces"], replaces)
-            self.assertIsNone(row["x_turbovas_inherited_still_owns"])
+            self.assertEqual(row["x_yafvs_exposure"], "direct-read")
+            self.assertEqual(row["x_yafvs_maturity"], "live-read")
+            self.assertEqual(row["x_yafvs_replaces"], replaces)
+            self.assertIsNone(row["x_yafvs_inherited_still_owns"])
 
         expected_scope_report_metadata = {
             "/api/v1/scope-reports/{scope_report_id}/results": ("getScopeReportsByScopeReportIdResults", "scope-report-result-evidence-read"),
@@ -5008,68 +5008,68 @@ class YAFVSCtlTests(unittest.TestCase):
         for endpoint, (operation_id, replaces) in expected_scope_report_metadata.items():
             row = rows[("get", endpoint)]
             self.assertEqual(row["operation_id"], operation_id)
-            self.assertEqual(row["x_turbovas_exposure"], "direct-read")
-            self.assertEqual(row["x_turbovas_maturity"], "live-read")
-            self.assertEqual(row["x_turbovas_replaces"], replaces)
-            self.assertIsNone(row["x_turbovas_inherited_still_owns"])
+            self.assertEqual(row["x_yafvs_exposure"], "direct-read")
+            self.assertEqual(row["x_yafvs_maturity"], "live-read")
+            self.assertEqual(row["x_yafvs_replaces"], replaces)
+            self.assertIsNone(row["x_yafvs_inherited_still_owns"])
 
         tags = rows[("get", "/api/v1/tags")]
         self.assertEqual(tags["operation_id"], "getTags")
-        self.assertEqual(tags["x_turbovas_exposure"], "direct-read")
-        self.assertEqual(tags["x_turbovas_maturity"], "live-read")
-        self.assertEqual(tags["x_turbovas_replaces"], "tag-metadata-read")
-        self.assertIsNone(tags["x_turbovas_inherited_still_owns"])
+        self.assertEqual(tags["x_yafvs_exposure"], "direct-read")
+        self.assertEqual(tags["x_yafvs_maturity"], "live-read")
+        self.assertEqual(tags["x_yafvs_replaces"], "tag-metadata-read")
+        self.assertIsNone(tags["x_yafvs_inherited_still_owns"])
 
         tag_detail = rows[("get", "/api/v1/tags/{tag_id}")]
         self.assertEqual(tag_detail["operation_id"], "getTagsByTagId")
-        self.assertEqual(tag_detail["x_turbovas_exposure"], "direct-read")
-        self.assertEqual(tag_detail["x_turbovas_maturity"], "live-read")
-        self.assertEqual(tag_detail["x_turbovas_replaces"], "tag-metadata-read")
-        self.assertIsNone(tag_detail["x_turbovas_inherited_still_owns"])
+        self.assertEqual(tag_detail["x_yafvs_exposure"], "direct-read")
+        self.assertEqual(tag_detail["x_yafvs_maturity"], "live-read")
+        self.assertEqual(tag_detail["x_yafvs_replaces"], "tag-metadata-read")
+        self.assertIsNone(tag_detail["x_yafvs_inherited_still_owns"])
 
         tag_resources = rows[("get", "/api/v1/tags/{tag_id}/resources")]
         self.assertEqual(tag_resources["operation_id"], "getTagsByTagIdResources")
-        self.assertEqual(tag_resources["x_turbovas_exposure"], "direct-read")
-        self.assertEqual(tag_resources["x_turbovas_maturity"], "live-read")
-        self.assertEqual(tag_resources["x_turbovas_replaces"], "tag-resource-reference-read")
-        self.assertIsNone(tag_resources["x_turbovas_inherited_still_owns"])
+        self.assertEqual(tag_resources["x_yafvs_exposure"], "direct-read")
+        self.assertEqual(tag_resources["x_yafvs_maturity"], "live-read")
+        self.assertEqual(tag_resources["x_yafvs_replaces"], "tag-resource-reference-read")
+        self.assertIsNone(tag_resources["x_yafvs_inherited_still_owns"])
 
         tag_export = rows[("get", "/api/v1/tags/{tag_id}/export")]
         self.assertEqual(tag_export["operation_id"], "getTagsByTagIdExport")
-        self.assertEqual(tag_export["x_turbovas_exposure"], "direct-read")
-        self.assertEqual(tag_export["x_turbovas_maturity"], "live-read")
-        self.assertEqual(tag_export["x_turbovas_replaces"], "tag-metadata-export-read")
-        self.assertIsNone(tag_export["x_turbovas_inherited_still_owns"])
+        self.assertEqual(tag_export["x_yafvs_exposure"], "direct-read")
+        self.assertEqual(tag_export["x_yafvs_maturity"], "live-read")
+        self.assertEqual(tag_export["x_yafvs_replaces"], "tag-metadata-export-read")
+        self.assertIsNone(tag_export["x_yafvs_inherited_still_owns"])
 
         tag_clone = rows[("post", "/api/v1/tags/{tag_id}/clone")]
         self.assertEqual(tag_clone["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(tag_clone["direct_access"], "direct_write_control")
-        self.assertEqual(tag_clone["x_turbovas_maturity"], "live-write")
-        self.assertEqual(tag_clone["x_turbovas_exposure"], "direct-write")
-        self.assertEqual(tag_clone["x_turbovas_replaces"], "tag-clone")
-        self.assertIsNone(tag_clone["x_turbovas_inherited_still_owns"])
+        self.assertEqual(tag_clone["x_yafvs_maturity"], "live-write")
+        self.assertEqual(tag_clone["x_yafvs_exposure"], "direct-write")
+        self.assertEqual(tag_clone["x_yafvs_replaces"], "tag-clone")
+        self.assertIsNone(tag_clone["x_yafvs_inherited_still_owns"])
 
         tag_restore = rows[("post", "/api/v1/tags/{tag_id}/restore")]
         self.assertEqual(tag_restore["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(tag_restore["direct_access"], "direct_write_control")
-        self.assertEqual(tag_restore["x_turbovas_replaces"], "tag-restore")
-        self.assertIsNone(tag_restore["x_turbovas_inherited_still_owns"])
+        self.assertEqual(tag_restore["x_yafvs_replaces"], "tag-restore")
+        self.assertIsNone(tag_restore["x_yafvs_inherited_still_owns"])
 
         tag_hard_delete = rows[("delete", "/api/v1/tags/{tag_id}/trash")]
         self.assertEqual(tag_hard_delete["status"], "implemented_internal_and_browser_proxied")
         self.assertEqual(tag_hard_delete["direct_access"], "direct_write_control")
-        self.assertEqual(tag_hard_delete["x_turbovas_replaces"], "tag-hard-delete")
-        self.assertIsNone(tag_hard_delete["x_turbovas_inherited_still_owns"])
+        self.assertEqual(tag_hard_delete["x_yafvs_replaces"], "tag-hard-delete")
+        self.assertIsNone(tag_hard_delete["x_yafvs_inherited_still_owns"])
 
         retention = rows[("get", "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan")]
         self.assertEqual(retention["status"], "implemented_internal_browser_proxied_and_scriptable_read")
         self.assertEqual(retention["browser_access"], "browser_proxied")
         self.assertEqual(retention["direct_access"], "scriptable_read")
         self.assertTrue(retention["openapi_direct_marker"])
-        self.assertEqual(retention["x_turbovas_exposure"], "direct-read")
-        self.assertEqual(retention["x_turbovas_maturity"], "preview-read")
-        self.assertEqual(retention["x_turbovas_replaces"], "none")
-        self.assertEqual(retention["x_turbovas_inherited_still_owns"], "retention-mutations")
+        self.assertEqual(retention["x_yafvs_exposure"], "direct-read")
+        self.assertEqual(retention["x_yafvs_maturity"], "preview-read")
+        self.assertEqual(retention["x_yafvs_replaces"], "none")
+        self.assertEqual(retention["x_yafvs_inherited_still_owns"], "retention-mutations")
 
         cert_bund_detail = rows[("get", "/api/v1/cert-bund-advisories/{cert_bund_advisory_id}")]
         self.assertEqual(cert_bund_detail["inventory_endpoint"], "/api/v1/cert-bund-advisories/{advisory_id}")
@@ -5086,10 +5086,10 @@ class YAFVSCtlTests(unittest.TestCase):
                 "openapi_path": None,
                 "direct_access": "scriptable_read",
                 "openapi_direct_marker": False,
-                "x_turbovas_exposure": "internal-only",
-                "x_turbovas_maturity": "live-read",
-                "x_turbovas_replaces": "raw-report-list-read",
-                "x_turbovas_inherited_still_owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
+                "x_yafvs_exposure": "internal-only",
+                "x_yafvs_maturity": "live-read",
+                "x_yafvs_replaces": "raw-report-list-read",
+                "x_yafvs_inherited_still_owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
             },
             {
                 "endpoint": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
@@ -5098,10 +5098,10 @@ class YAFVSCtlTests(unittest.TestCase):
                 "openapi_path": "/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
                 "direct_access": "internal_only",
                 "openapi_direct_marker": True,
-                "x_turbovas_exposure": "direct-read",
-                "x_turbovas_maturity": None,
-                "x_turbovas_replaces": "none",
-                "x_turbovas_inherited_still_owns": "retention-mutations",
+                "x_yafvs_exposure": "direct-read",
+                "x_yafvs_maturity": None,
+                "x_yafvs_replaces": "none",
+                "x_yafvs_inherited_still_owns": "retention-mutations",
             },
         ]
 
@@ -5119,7 +5119,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 {
                     "endpoint": "/api/v1/scopes/{scope_id}/reports/{scope_report_id}/retention-plan",
                     "method": "get",
-                    "missing_fields": ["x_turbovas_maturity"],
+                    "missing_fields": ["x_yafvs_maturity"],
                 }
             ],
         )
@@ -5153,7 +5153,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 "items": [
                     {
                         "endpoint": "/api/v1/reports",
-                        "x_turbovas_inherited_still_owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
+                        "x_yafvs_inherited_still_owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
                     }
                 ],
             },
@@ -5186,10 +5186,10 @@ class YAFVSCtlTests(unittest.TestCase):
                 "direct_access": "scriptable_read",
                 "browser_access": "browser_proxied",
                 "openapi_direct_marker": True,
-                "x_turbovas_exposure": "direct-read",
-                "x_turbovas_maturity": "live-read",
-                "x_turbovas_replaces": "schedule-metadata-list-read",
-                "x_turbovas_inherited_still_owns": "schedule-calendar-edit-and-task-recalculation",
+                "x_yafvs_exposure": "direct-read",
+                "x_yafvs_maturity": "live-read",
+                "x_yafvs_replaces": "schedule-metadata-list-read",
+                "x_yafvs_inherited_still_owns": "schedule-calendar-edit-and-task-recalculation",
                 "replacement_candidates": ["read-only schedule automation"],
             },
             {
@@ -5200,10 +5200,10 @@ class YAFVSCtlTests(unittest.TestCase):
                 "direct_access": "scriptable_read",
                 "browser_access": "browser_proxied",
                 "openapi_direct_marker": True,
-                "x_turbovas_exposure": "direct-read",
-                "x_turbovas_maturity": "live-read",
-                "x_turbovas_replaces": "raw-report-list-read",
-                "x_turbovas_inherited_still_owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
+                "x_yafvs_exposure": "direct-read",
+                "x_yafvs_maturity": "live-read",
+                "x_yafvs_replaces": "raw-report-list-read",
+                "x_yafvs_inherited_still_owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
                 "replacement_candidates": ["runtime-report-summary helper"],
             },
         ]
@@ -5229,8 +5229,8 @@ class YAFVSCtlTests(unittest.TestCase):
                     "endpoint": "/api/v1/schedules",
                     "direct_access": "scriptable_read",
                     "browser_access": "browser_proxied",
-                    "x_turbovas_replaces": "schedule-metadata-list-read",
-                    "x_turbovas_inherited_still_owns": "schedule-calendar-edit-and-task-recalculation",
+                    "x_yafvs_replaces": "schedule-metadata-list-read",
+                    "x_yafvs_inherited_still_owns": "schedule-calendar-edit-and-task-recalculation",
                 }
             ],
         )
@@ -5244,20 +5244,20 @@ class YAFVSCtlTests(unittest.TestCase):
             "status": "implemented_internal_and_browser_proxied",
             "direct_access": "direct_write_control",
             "browser_access": "browser_proxied",
-            "x_turbovas_replaces": "task-metadata-modify",
-            "x_turbovas_inherited_still_owns": "task-scan-control-writes-and-deletes",
-            "x_turbovas_operator_identity": "direct-token-operator",
-            "x_turbovas_owner_semantics": "preserve-existing-owner",
-            "x_turbovas_side_effect": "metadata-write",
-            "x_turbovas_safety_contract": "write-control-v1",
+            "x_yafvs_replaces": "task-metadata-modify",
+            "x_yafvs_inherited_still_owns": "task-scan-control-writes-and-deletes",
+            "x_yafvs_operator_identity": "direct-token-operator",
+            "x_yafvs_owner_semantics": "preserve-existing-owner",
+            "x_yafvs_side_effect": "metadata-write",
+            "x_yafvs_safety_contract": "write-control-v1",
         }
 
         compact = yafvsctl.native_api_migration_matrix_compact_focus_row(row)
 
-        self.assertEqual(compact["x_turbovas_operator_identity"], "direct-token-operator")
-        self.assertEqual(compact["x_turbovas_owner_semantics"], "preserve-existing-owner")
-        self.assertEqual(compact["x_turbovas_side_effect"], "metadata-write")
-        self.assertEqual(compact["x_turbovas_safety_contract"], "write-control-v1")
+        self.assertEqual(compact["x_yafvs_operator_identity"], "direct-token-operator")
+        self.assertEqual(compact["x_yafvs_owner_semantics"], "preserve-existing-owner")
+        self.assertEqual(compact["x_yafvs_side_effect"], "metadata-write")
+        self.assertEqual(compact["x_yafvs_safety_contract"], "write-control-v1")
 
     def test_native_api_migration_matrix_focus_accepts_repeated_terms(self):
         root = Path(__file__).resolve().parents[2]
@@ -5270,10 +5270,10 @@ class YAFVSCtlTests(unittest.TestCase):
                 "direct_access": "scriptable_read",
                 "browser_access": "browser_proxied",
                 "openapi_direct_marker": True,
-                "x_turbovas_exposure": "direct-read",
-                "x_turbovas_maturity": "live-read",
-                "x_turbovas_replaces": "schedule-metadata-list-read",
-                "x_turbovas_inherited_still_owns": "schedule-calendar-edit-and-task-recalculation",
+                "x_yafvs_exposure": "direct-read",
+                "x_yafvs_maturity": "live-read",
+                "x_yafvs_replaces": "schedule-metadata-list-read",
+                "x_yafvs_inherited_still_owns": "schedule-calendar-edit-and-task-recalculation",
                 "replacement_candidates": ["read-only schedule automation"],
             },
             {
@@ -5284,9 +5284,9 @@ class YAFVSCtlTests(unittest.TestCase):
                 "direct_access": "scriptable_read",
                 "browser_access": "browser_proxied",
                 "openapi_direct_marker": True,
-                "x_turbovas_exposure": "direct-read",
-                "x_turbovas_maturity": "live-read",
-                "x_turbovas_replaces": "alert-metadata-list-read",
+                "x_yafvs_exposure": "direct-read",
+                "x_yafvs_maturity": "live-read",
+                "x_yafvs_replaces": "alert-metadata-list-read",
                 "replacement_candidates": ["alert list automation"],
             },
             {
@@ -5297,10 +5297,10 @@ class YAFVSCtlTests(unittest.TestCase):
                 "direct_access": "scriptable_read",
                 "browser_access": "browser_proxied",
                 "openapi_direct_marker": True,
-                "x_turbovas_exposure": "direct-read",
-                "x_turbovas_maturity": "live-read",
-                "x_turbovas_replaces": "raw-report-list-read",
-                "x_turbovas_inherited_still_owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
+                "x_yafvs_exposure": "direct-read",
+                "x_yafvs_maturity": "live-read",
+                "x_yafvs_replaces": "raw-report-list-read",
+                "x_yafvs_inherited_still_owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
                 "replacement_candidates": ["runtime-report-summary helper"],
             },
         ]
@@ -5324,9 +5324,9 @@ class YAFVSCtlTests(unittest.TestCase):
                 "direct_access": "scriptable_read",
                 "browser_access": "browser_proxied",
                 "openapi_direct_marker": True,
-                "x_turbovas_exposure": "direct-read",
-                "x_turbovas_maturity": "live-read",
-                "x_turbovas_replaces": "override-metadata-list-read",
+                "x_yafvs_exposure": "direct-read",
+                "x_yafvs_maturity": "live-read",
+                "x_yafvs_replaces": "override-metadata-list-read",
                 "replacement_candidates": ["override list automation"],
             },
             {
@@ -5337,10 +5337,10 @@ class YAFVSCtlTests(unittest.TestCase):
                 "direct_access": "direct_write_control",
                 "browser_access": "browser_proxied",
                 "openapi_direct_marker": True,
-                "x_turbovas_exposure": "direct-write",
-                "x_turbovas_maturity": "live-write",
-                "x_turbovas_replaces": "trashcan-report-hard-delete",
-                "x_turbovas_inherited_still_owns": "trashcan-deep-row-data-and-mutations",
+                "x_yafvs_exposure": "direct-write",
+                "x_yafvs_maturity": "live-write",
+                "x_yafvs_replaces": "trashcan-report-hard-delete",
+                "x_yafvs_inherited_still_owns": "trashcan-deep-row-data-and-mutations",
                 "replacement_candidates": ["deep Trashcan report delete semantics"],
             },
         ]
@@ -5371,10 +5371,10 @@ class YAFVSCtlTests(unittest.TestCase):
                 "direct_access": "scriptable_read",
                 "browser_access": "browser_proxied",
                 "openapi_direct_marker": True,
-                "x_turbovas_exposure": "direct-read",
-                "x_turbovas_maturity": "live-read",
-                "x_turbovas_replaces": "raw-report-list-read",
-                "x_turbovas_inherited_still_owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
+                "x_yafvs_exposure": "direct-read",
+                "x_yafvs_maturity": "live-read",
+                "x_yafvs_replaces": "raw-report-list-read",
+                "x_yafvs_inherited_still_owns": "raw-report-generation-non-pdf-export-retention-and-mutations",
                 "replacement_candidates": ["runtime-report-summary helper"],
             }
         ]
@@ -5414,10 +5414,10 @@ class YAFVSCtlTests(unittest.TestCase):
                 "openapi_path": None,
                 "direct_access": "scriptable_read",
                 "openapi_direct_marker": None,
-                "x_turbovas_exposure": None,
-                "x_turbovas_maturity": None,
-                "x_turbovas_replaces": None,
-                "x_turbovas_inherited_still_owns": None,
+                "x_yafvs_exposure": None,
+                "x_yafvs_maturity": None,
+                "x_yafvs_replaces": None,
+                "x_yafvs_inherited_still_owns": None,
             }
         ]
         with unittest.mock.patch.object(yafvsctl, "native_api_migration_matrix_rows", return_value=rows):
@@ -5436,9 +5436,9 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_native_api_migration_matrix_remaining_surface_buckets_owner_tails(self):
         rows = [
-            {"endpoint": "/api/v1/tasks", "x_turbovas_inherited_still_owns": "task-scan-control-writes-and-deletes"},
-            {"endpoint": "/api/v1/targets", "x_turbovas_inherited_still_owns": "target-credential-secrets-writes-and-deletes"},
-            {"endpoint": "/api/v1/trashcan/reports", "x_turbovas_inherited_still_owns": "trashcan-deep-row-data-and-mutations"},
+            {"endpoint": "/api/v1/tasks", "x_yafvs_inherited_still_owns": "task-scan-control-writes-and-deletes"},
+            {"endpoint": "/api/v1/targets", "x_yafvs_inherited_still_owns": "target-credential-secrets-writes-and-deletes"},
+            {"endpoint": "/api/v1/trashcan/reports", "x_yafvs_inherited_still_owns": "trashcan-deep-row-data-and-mutations"},
         ]
 
         remaining = yafvsctl.native_api_migration_matrix_remaining_surface(rows)
@@ -5635,7 +5635,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(summary["duplicate_operation_ids"], [])
         self.assertEqual(summary["nondeterministic_operation_ids"][0]["operation"], "GET /reports")
         self.assertEqual(summary["nondeterministic_operation_ids"][0]["expected"], "getReports")
-        self.assertEqual(summary["unexpected_turbovas_operation_fields"], [{"operation": "GET /reports", "fields": ["x-yafvs-surprise"]}])
+        self.assertEqual(summary["unexpected_yafvs_operation_fields"], [{"operation": "GET /reports", "fields": ["x-yafvs-surprise"]}])
         self.assertEqual(summary["invalid_exposure_operations"], [{"operation": "GET /reports", "actual": "banana", "allowed": ["browser-write", "direct-read", "direct-write", "internal-only"]}])
         missing_exposure = {item["operation"] for item in summary["missing_exposure_operations"]}
         self.assertEqual(
@@ -5957,7 +5957,7 @@ class YAFVSCtlTests(unittest.TestCase):
             {
                 "operation": "GET /future-metadata",
                 "expected": ["browser-write", "direct-read", "direct-write", "internal-only"],
-                "reason": "field_missing_for_turbovas_contract",
+                "reason": "field_missing_for_yafvs_contract",
             },
             summary["missing_exposure_operations"],
         )
@@ -10657,17 +10657,17 @@ class YAFVSCtlTests(unittest.TestCase):
         for operation, operation_id, replaces, inherited_still_owns in expected_catalog_metadata:
             self.assertEqual(operation["operation_id"], operation_id)
             self.assertIn("x-yafvs-direct", operation["x_yafvs_fields"])
-            self.assertEqual(operation["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
-            self.assertEqual(operation["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
-            self.assertEqual(operation["x_turbovas_values"]["x-yafvs-replaces"], replaces)
-            self.assertEqual(operation["x_turbovas_values"].get("x-yafvs-inherited-still-owns"), inherited_still_owns)
+            self.assertEqual(operation["x_yafvs_values"]["x-yafvs-exposure"], "direct-read")
+            self.assertEqual(operation["x_yafvs_values"]["x-yafvs-maturity"], "live-read")
+            self.assertEqual(operation["x_yafvs_values"]["x-yafvs-replaces"], replaces)
+            self.assertEqual(operation["x_yafvs_values"].get("x-yafvs-inherited-still-owns"), inherited_still_owns)
 
         for operation in (
             operations[("get", "/filters")],
             operations[("get", "/filters/{filter_id}")],
             operations[("get", "/filters/{filter_id}/export")],
         ):
-            self.assertNotIn("x-yafvs-inherited-still-owns", operation["x_turbovas_values"])
+            self.assertNotIn("x-yafvs-inherited-still-owns", operation["x_yafvs_values"])
 
         self.assertIn('GSA CVE detail metadata export', native_tooling)
         self.assertIn('GSA NVT detail metadata export', native_tooling)
@@ -10698,50 +10698,50 @@ class YAFVSCtlTests(unittest.TestCase):
         for operation, operation_id, replaces, inherited_still_owns in expected_asset_metadata:
             self.assertEqual(operation["operation_id"], operation_id)
             self.assertIn("x-yafvs-direct", operation["x_yafvs_fields"])
-            self.assertEqual(operation["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
-            self.assertEqual(operation["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
-            self.assertEqual(operation["x_turbovas_values"]["x-yafvs-replaces"], replaces)
-            self.assertEqual(operation["x_turbovas_values"].get("x-yafvs-inherited-still-owns"), inherited_still_owns)
+            self.assertEqual(operation["x_yafvs_values"]["x-yafvs-exposure"], "direct-read")
+            self.assertEqual(operation["x_yafvs_values"]["x-yafvs-maturity"], "live-read")
+            self.assertEqual(operation["x_yafvs_values"]["x-yafvs-replaces"], replaces)
+            self.assertEqual(operation["x_yafvs_values"].get("x-yafvs-inherited-still-owns"), inherited_still_owns)
 
         self.assertEqual(alerts["operation_id"], "getAlerts")
         self.assertIn("x-yafvs-direct", alerts["x_yafvs_fields"])
-        self.assertEqual(alerts["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
-        self.assertEqual(alerts["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
-        self.assertEqual(alerts["x_turbovas_values"]["x-yafvs-replaces"], "alert-metadata-list-read")
-        self.assertNotIn("x-yafvs-inherited-still-owns", alerts["x_turbovas_values"])
+        self.assertEqual(alerts["x_yafvs_values"]["x-yafvs-exposure"], "direct-read")
+        self.assertEqual(alerts["x_yafvs_values"]["x-yafvs-maturity"], "live-read")
+        self.assertEqual(alerts["x_yafvs_values"]["x-yafvs-replaces"], "alert-metadata-list-read")
+        self.assertNotIn("x-yafvs-inherited-still-owns", alerts["x_yafvs_values"])
         self.assertEqual(alert_detail["operation_id"], "getAlertsByAlertId")
         self.assertIn("x-yafvs-direct", alert_detail["x_yafvs_fields"])
-        self.assertEqual(alert_detail["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
-        self.assertEqual(alert_detail["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
-        self.assertEqual(alert_detail["x_turbovas_values"]["x-yafvs-replaces"], "alert-metadata-detail-read")
-        self.assertNotIn("x-yafvs-inherited-still-owns", alert_detail["x_turbovas_values"])
+        self.assertEqual(alert_detail["x_yafvs_values"]["x-yafvs-exposure"], "direct-read")
+        self.assertEqual(alert_detail["x_yafvs_values"]["x-yafvs-maturity"], "live-read")
+        self.assertEqual(alert_detail["x_yafvs_values"]["x-yafvs-replaces"], "alert-metadata-detail-read")
+        self.assertNotIn("x-yafvs-inherited-still-owns", alert_detail["x_yafvs_values"])
         self.assertEqual(alert_detail["responses"]["404"], "#/components/responses/NotFound")
         self.assertEqual(alert_export["operation_id"], "getAlertsByAlertIdExport")
         self.assertIn("x-yafvs-direct", alert_export["x_yafvs_fields"])
-        self.assertEqual(alert_export["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
-        self.assertEqual(alert_export["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
-        self.assertEqual(alert_export["x_turbovas_values"]["x-yafvs-replaces"], "alert-metadata-export-read")
-        self.assertNotIn("x-yafvs-inherited-still-owns", alert_export["x_turbovas_values"])
+        self.assertEqual(alert_export["x_yafvs_values"]["x-yafvs-exposure"], "direct-read")
+        self.assertEqual(alert_export["x_yafvs_values"]["x-yafvs-maturity"], "live-read")
+        self.assertEqual(alert_export["x_yafvs_values"]["x-yafvs-replaces"], "alert-metadata-export-read")
+        self.assertNotIn("x-yafvs-inherited-still-owns", alert_export["x_yafvs_values"])
         self.assertEqual(alert_export["responses"]["404"], "#/components/responses/NotFound")
         self.assertEqual(feeds["operation_id"], "getFeeds")
         self.assertIn("x-yafvs-direct", feeds["x_yafvs_fields"])
-        self.assertEqual(feeds["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
-        self.assertEqual(feeds["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
-        self.assertEqual(feeds["x_turbovas_values"]["x-yafvs-replaces"], "feed-status-read")
-        self.assertEqual(feeds["x_turbovas_values"]["x-yafvs-inherited-still-owns"], "feed-sync-import-control")
+        self.assertEqual(feeds["x_yafvs_values"]["x-yafvs-exposure"], "direct-read")
+        self.assertEqual(feeds["x_yafvs_values"]["x-yafvs-maturity"], "live-read")
+        self.assertEqual(feeds["x_yafvs_values"]["x-yafvs-replaces"], "feed-status-read")
+        self.assertEqual(feeds["x_yafvs_values"]["x-yafvs-inherited-still-owns"], "feed-sync-import-control")
         self.assertEqual(feeds["responses"]["400"], "#/components/responses/BadRequest")
         self.assertEqual(tag_resource_names["operation_id"], "getTagsResourceNamesByResourceType")
         self.assertIn("x-yafvs-direct", tag_resource_names["x_yafvs_fields"])
-        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
-        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
-        self.assertEqual(tag_resource_names["x_turbovas_values"]["x-yafvs-replaces"], "tag-resource-name-read")
-        self.assertNotIn("x-yafvs-inherited-still-owns", tag_resource_names["x_turbovas_values"])
+        self.assertEqual(tag_resource_names["x_yafvs_values"]["x-yafvs-exposure"], "direct-read")
+        self.assertEqual(tag_resource_names["x_yafvs_values"]["x-yafvs-maturity"], "live-read")
+        self.assertEqual(tag_resource_names["x_yafvs_values"]["x-yafvs-replaces"], "tag-resource-name-read")
+        self.assertNotIn("x-yafvs-inherited-still-owns", tag_resource_names["x_yafvs_values"])
         self.assertEqual(tag_resource_names["responses"]["404"], "#/components/responses/NotFound")
         self.assertEqual(trashcan_summary["operation_id"], "getTrashcanSummary")
         self.assertIn("x-yafvs-direct", trashcan_summary["x_yafvs_fields"])
-        self.assertEqual(trashcan_summary["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
-        self.assertEqual(trashcan_summary["x_turbovas_values"]["x-yafvs-maturity"], "live-read")
-        self.assertEqual(trashcan_summary["x_turbovas_values"]["x-yafvs-replaces"], "trashcan-count-summary-read")
+        self.assertEqual(trashcan_summary["x_yafvs_values"]["x-yafvs-exposure"], "direct-read")
+        self.assertEqual(trashcan_summary["x_yafvs_values"]["x-yafvs-maturity"], "live-read")
+        self.assertEqual(trashcan_summary["x_yafvs_values"]["x-yafvs-replaces"], "trashcan-count-summary-read")
         root = Path(__file__).resolve().parents[2]
         result = yafvsctl.command_native_tooling_removal_review(root)
         status_only = yafvsctl.command_native_tooling_removal_review(root, status_only=True)
@@ -10793,10 +10793,10 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("/scopes/{scope_id}/reports/{scope_report_id}/retention-plan:", openapi)
         operations = {(item["method"], item["path"]): item for item in yafvsctl.openapi_contract_operations(root)}
         retention = operations[("get", "/scopes/{scope_id}/reports/{scope_report_id}/retention-plan")]
-        self.assertEqual(retention["x_turbovas_values"]["x-yafvs-exposure"], "direct-read")
-        self.assertEqual(retention["x_turbovas_values"]["x-yafvs-maturity"], "preview-read")
-        self.assertEqual(retention["x_turbovas_values"]["x-yafvs-replaces"], "none")
-        self.assertEqual(retention["x_turbovas_values"]["x-yafvs-inherited-still-owns"], "retention-mutations")
+        self.assertEqual(retention["x_yafvs_values"]["x-yafvs-exposure"], "direct-read")
+        self.assertEqual(retention["x_yafvs_values"]["x-yafvs-maturity"], "preview-read")
+        self.assertEqual(retention["x_yafvs_values"]["x-yafvs-replaces"], "none")
+        self.assertEqual(retention["x_yafvs_values"]["x-yafvs-inherited-still-owns"], "retention-mutations")
         self.assertIn("x-yafvs-direct", retention["x_yafvs_fields"])
         self.assertIn("ScopeReportRetentionPlan", openapi)
         self.assertIn("detail_compacted", openapi)
@@ -10910,7 +10910,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("XML metadata export, aggregate dashboards, and filtered detail result expansion are intentionally not retained.", export["notes"])
         for operation in yafvsctl.openapi_contract_operations(root):
             if operation["path"].startswith("/overrides"):
-                self.assertNotIn("x-yafvs-inherited-still-owns", operation["x_turbovas_values"])
+                self.assertNotIn("x-yafvs-inherited-still-owns", operation["x_yafvs_values"])
 
     def test_native_schedule_csv_script_is_absent_after_native_retirement(self):
         root = Path(__file__).resolve().parents[2]
@@ -13639,7 +13639,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     payload = json.loads(body)
                     if "preferences" in payload:
                         for preference in payload["preferences"]:
-                            if preference["name"] == "__turbovas_missing_preference__":
+                            if preference["name"] == "__yafvs_missing_preference__":
                                 return yafvsctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"not_found"}}\n404', "")
                             if preference["scope"] == "scanner":
                                 self.assertEqual(preference["name"], "safe_checks")
@@ -14468,9 +14468,13 @@ class YAFVSCtlTests(unittest.TestCase):
             return yafvsctl.subprocess.CompletedProcess(command, 0, "{}", "")
 
         secret_body = '{"password":"must-not-be-in-argv"}'
-        with unittest.mock.patch.object(yafvsctl, "run_command", side_effect=fake_run):
+        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(
+            yafvsctl, "run_command", side_effect=fake_run
+        ):
+            root = Path(tmp) / "YAFVS"
+            root.mkdir()
             yafvsctl.native_api_curl(
-                Path.cwd(),
+                root,
                 "/api/v1/credentials",
                 method="POST",
                 body=secret_body,
@@ -16081,8 +16085,8 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_full_test_scan_target_is_explicit_canonical_and_bounded(self):
         self.assertEqual(TEST_FULL_TEST_TARGET.cidr, "192.0.2.0/24")
-        self.assertEqual(TEST_FULL_TEST_TARGET.target_name, "TurboVAS full test target 192.0.2.0/24")
-        self.assertEqual(TEST_FULL_TEST_TARGET.task_name, "TurboVAS full test scan 192.0.2.0/24")
+        self.assertEqual(TEST_FULL_TEST_TARGET.target_name, "YAFVS full test target 192.0.2.0/24")
+        self.assertEqual(TEST_FULL_TEST_TARGET.task_name, "YAFVS full test scan 192.0.2.0/24")
         with self.assertRaisesRegex(ValueError, "canonical CIDR"):
             runtime_full_test_scan.parse_full_test_target("192.0.2.1/24")
         with self.assertRaisesRegex(ValueError, "at most 256"):

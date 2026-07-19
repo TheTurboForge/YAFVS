@@ -11,7 +11,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -1156,42 +1156,6 @@ fn write_new_file(path: &Path, contents: &[u8]) -> Result<(), String> {
     file.write_all(contents)
         .map_err(|error| error.to_string())?;
     file.sync_all().map_err(|error| error.to_string())
-}
-
-pub(crate) fn write_secure_json_artifact(
-    path: &Path,
-    payload: &ResultEnvelope,
-) -> Result<(), String> {
-    let text = serde_json::to_string_pretty(payload)
-        .map(|text| format!("{text}\n"))
-        .map_err(|error| error.to_string())?;
-    write_secure_atomic_latest(path, text.as_bytes())
-}
-
-fn validate_secure_artifact_target(path: &Path) -> Result<(), String> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| "latest artifact has no parent".to_string())?;
-    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    let parent_metadata = fs::symlink_metadata(parent).map_err(|error| error.to_string())?;
-    if !parent_metadata.file_type().is_dir() || parent_metadata.uid() != unsafe { libc::getuid() } {
-        return Err("artifact directory is not a real, current-user-owned directory".into());
-    }
-    match fs::symlink_metadata(path) {
-        Ok(metadata)
-            if metadata.file_type().is_file()
-                && metadata.uid() == unsafe { libc::getuid() }
-                && metadata.nlink() == 1 => {}
-        Ok(_) => return Err("artifact target is not a private regular file".into()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error.to_string()),
-    }
-    Ok(())
-}
-
-fn write_secure_atomic_latest(path: &Path, contents: &[u8]) -> Result<(), String> {
-    validate_secure_artifact_target(path)?;
-    write_atomic_latest(path, contents)
 }
 
 fn write_atomic_latest(path: &Path, contents: &[u8]) -> Result<(), String> {

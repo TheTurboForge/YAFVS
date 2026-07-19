@@ -3,11 +3,12 @@
 
 //! Read-only runtime data-state diagnostic with private local evidence output.
 
+use super::artifact::write_secure_json_artifact;
 use super::common::{metadata, output_tail, runtime_dir};
 use super::runtime_lock::{inspect_runtime_lock, runtime_lock_paths};
 use super::runtime_performance_snapshot::{
     path_tree_summary_checked, psql, psql_value, service_running, table_presence_rows,
-    table_row_count_output, write_secure_json_artifact,
+    table_row_count_output,
 };
 use crate::process::{CommandRunner, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};

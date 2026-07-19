@@ -2260,16 +2260,6 @@ GSAD_FRESHNESS_BUILD_PATHS = ("build/gsad/src/gsad", "build/prefix/sbin/gsad")
 
 
 @dataclass(frozen=True)
-class FeedClass:
-    key: str
-    label: str
-    cache_rel: str
-    runtime_rel: str
-    markers: tuple[str, ...]
-
-
-
-@dataclass(frozen=True)
 class Component:
     name: str
     path: str
@@ -2306,13 +2296,6 @@ COMPONENTS: tuple[Component, ...] = (
     Component("greenbone-feed-sync", "components/greenbone-feed-sync", "feed synchronization tooling", ("LICENSE",), ("README.md", "pyproject.toml")),
 )
 COMPONENT_BY_NAME = {component.name: component for component in COMPONENTS}
-FEED_CLASSES: tuple[FeedClass, ...] = (
-    FeedClass("nasl", "NASL vulnerability tests", "openvas/plugins", "openvas/plugins", ("plugin_feed_info.inc", "LICENSE")),
-    FeedClass("notus", "Notus advisories", "notus", "notus", ("advisories/sha256sums", "advisories/sha256sums.asc", "products/sha256sums", "products/sha256sums.asc")),
-    FeedClass("scap", "SCAP data", "gvm/scap-data", "gvm/scap-data", ("COPYING", "feed.xml", "timestamp")),
-    FeedClass("cert", "CERT data", "gvm/cert-data", "gvm/cert-data", ("COPYING.CERT-BUND", "COPYING.DFN-CERT", "feed.xml")),
-    FeedClass("gvmd", "GVMD data objects", f"gvm/data-objects/gvmd/{FEED_RELEASE}", f"gvm/data-objects/gvmd/{FEED_RELEASE}", ("LICENSE", "feed.xml", "timestamp", "scan-configs", "report-formats", "port-lists")),
-)
 FEED_SIGNED_MANIFESTS: dict[str, tuple[tuple[str, str], ...]] = {
     "nasl": (("sha256sums", "sha256sums.asc"),),
     "notus": (
@@ -2556,6 +2539,10 @@ def rust_quality_gate_state_result(repo_root: Path, status_only: bool = False) -
     if status_only:
         arguments.append("--status-only")
     return rust_result_envelope(repo_root, "quality-gate-state", arguments)
+
+
+def rust_feed_state_result(repo_root: Path) -> dict[str, Any]:
+    return rust_result_envelope(repo_root, "feed-state", ["feed-state"])
 
 
 def rust_license_report_result(
@@ -4863,56 +4850,6 @@ def runtime_gsa_freshness_findings(repo_root: Path) -> list[dict[str, Any]]:
         )
     elif started_at is not None:
         findings.append(finding("pass", "gsad.runtime-freshness", "Running gsad is not older than relevant static or native-proxy build inputs.", details={"started_at": gsad_state.get("StartedAt") if gsad_state else None}))
-    return findings
-
-
-def feed_path_summary(path: Path, markers: tuple[str, ...]) -> dict[str, Any]:
-    file_count = 0
-    byte_count = 0
-    latest_mtime: float | None = None
-    errors: list[str] = []
-    if path.is_dir():
-        for entry in path.rglob("*"):
-            try:
-                if entry.is_file():
-                    stat = entry.stat()
-                    file_count += 1
-                    byte_count += stat.st_size
-                    latest_mtime = stat.st_mtime if latest_mtime is None else max(latest_mtime, stat.st_mtime)
-            except OSError as error:
-                errors.append(f"{entry}: {error}")
-    marker_rows = [{"path": marker, "exists": (path / marker).exists()} for marker in markers]
-    latest = datetime.fromtimestamp(latest_mtime, timezone.utc).replace(microsecond=0).isoformat() if latest_mtime is not None else None
-    return {
-        "exists": path.is_dir(),
-        "file_count": file_count,
-        "byte_count": byte_count,
-        "latest_mtime": latest,
-        "markers": marker_rows,
-        "errors": errors[:20],
-    }
-
-
-def feed_location_findings(repo_root: Path, location: str, root: Path, rel_attr: str) -> list[dict[str, Any]]:
-    findings: list[dict[str, Any]] = []
-    findings.append(finding("pass" if root.is_dir() else "warn", f"feed.{location}.root", f"{location} feed root {'exists' if root.is_dir() else 'is missing'}.", str(root)))
-    for feed_class in FEED_CLASSES:
-        rel = getattr(feed_class, rel_attr)
-        path = root / rel
-        summary = feed_path_summary(path, feed_class.markers)
-        marker_missing = [row["path"] for row in summary["markers"] if not row["exists"]]
-        status = "pass" if summary["exists"] and summary["file_count"] > 0 and not marker_missing and not summary["errors"] else "warn"
-        if not summary["exists"]:
-            message = f"{feed_class.label} directory is missing."
-        elif summary["file_count"] == 0:
-            message = f"{feed_class.label} directory exists but contains no files."
-        elif marker_missing:
-            message = f"{feed_class.label} has files but expected markers are missing."
-        elif summary["errors"]:
-            message = f"{feed_class.label} state has filesystem inspection errors."
-        else:
-            message = f"{feed_class.label} is present."
-        findings.append(finding(status, f"feed.{location}.{feed_class.key}", message, str(path), {"summary": summary, "missing_markers": marker_missing}))
     return findings
 
 
@@ -16346,19 +16283,6 @@ def command_runtime_rbac_smoke(repo_root: Path) -> dict[str, Any]:
     summary = parsed.get("summary") if parsed else f"Runtime RBAC smoke completed with exit code {result.returncode}."
     return make_result("runtime-rbac-smoke", repo_root, summary, findings, artifacts)
 
-def command_feed_state(repo_root: Path) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    findings.extend(feed_location_findings(repo_root, "cache", feed_cache_var_lib(repo_root), "cache_rel"))
-    findings.extend(feed_location_findings(repo_root, "runtime", feed_runtime_root(repo_root), "runtime_rel"))
-    return make_result(
-        "feed-state",
-        repo_root,
-        "Feed cache and runtime copy state collected.",
-        findings,
-        [str(feed_cache_var_lib(repo_root)), str(feed_runtime_root(repo_root))],
-    )
-
-
 def command_feed_cache_sync(repo_root: Path) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     binary = feed_sync_binary(repo_root)
@@ -22082,7 +22006,7 @@ def command_runtime_app_smoke(repo_root: Path) -> dict[str, Any]:
     manager_lock = runtime_lock_status(repo_root, RUNTIME_MANAGER_LOCK)
     if manager_lock["active"]:
         findings.append(finding("fail", "runtime.manager-lock", "A manager initialization or manager operation is active; app smoke would race transient state.", details={"lock": manager_lock}))
-    findings.extend(command_feed_state(repo_root)["findings"])
+    findings.extend(rust_feed_state_result(repo_root)["findings"])
     findings.extend(cert_file_findings(repo_root))
     if not certs_complete(repo_root):
         findings.append(finding("fail", "runtime.cert.complete", "Runtime certificates are incomplete; run just runtime-certs-init."))
@@ -31843,7 +31767,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-scope-report-summary", parents=[common], help="summarize the latest Organization scope report")
     scope_report_metrics = subparsers.add_parser("runtime-scope-report-metrics", parents=[common], help="read CVSS Load and authenticated coverage for a scope report")
     scope_report_metrics.add_argument("--scope-report-id", help="optional scope report id; defaults to the latest Organization scope report")
-    subparsers.add_parser("feed-state", parents=[common], help="show Greenbone Community Feed cache and active-generation state")
     subparsers.add_parser("feed-cache-sync", parents=[common], help="start full Greenbone Community Feed cache sync in tmux")
     subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
@@ -32198,8 +32121,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_scope(repo_root, "summary")
     elif args.command == "runtime-scope-report-metrics":
         result = command_runtime_metrics(repo_root, "scope-report", scope_report_id=args.scope_report_id)
-    elif args.command == "feed-state":
-        result = command_feed_state(repo_root)
     elif args.command == "feed-cache-sync":
         result = command_feed_cache_sync(repo_root)
     elif args.command == "runtime-status":

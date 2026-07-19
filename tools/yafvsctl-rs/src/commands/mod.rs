@@ -92,6 +92,7 @@ pub use resource_import::{
     command_native_schedules_from_csv, command_native_schedules_from_xml,
     command_native_tags_from_csv, command_native_targets_from_csv,
     command_native_targets_from_host_list, command_native_targets_from_xml,
+    command_native_tasks_from_csv,
 };
 pub use runtime::{command_down, command_logs, command_runtime_app_down, command_runtime_plan};
 pub use runtime_certbund_report::command_runtime_certbund_report;

@@ -98,6 +98,13 @@ pub enum CliCommand {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Create tasks from the retained resource-name CSV shape.
+    NativeTasksFromCsv {
+        #[arg(long)]
+        csv_file: PathBuf,
+        #[arg(long)]
+        allow_write_control: bool,
+    },
     /// Import native schedules from the retained headerless CSV shape.
     NativeSchedulesFromCsv {
         #[arg(long)]
@@ -457,6 +464,7 @@ impl CliCommand {
             Self::NativeTargetsFromXml { .. } => "native-targets-from-xml",
             Self::NativeSchedulesFromCsv { .. } => "native-schedules-from-csv",
             Self::NativeSchedulesFromXml { .. } => "native-schedules-from-xml",
+            Self::NativeTasksFromCsv { .. } => "native-tasks-from-csv",
             Self::NativeTargetsFromCsv { .. } => "native-targets-from-csv",
             Self::NativeTagsFromCsv { .. } => "native-tags-from-csv",
             Self::NativeStartTask { .. } => "native-start-task",
@@ -677,6 +685,27 @@ mod tests {
                 dry_run: false,
             }
         );
+    }
+
+    #[test]
+    fn parses_native_tasks_from_csv_controls() {
+        let cli = parse_cli([
+            "native-tasks-from-csv",
+            "--csv-file",
+            "tasks.csv",
+            "--allow-write-control",
+            "--status-only",
+        ])
+        .unwrap();
+        assert!(cli.status_only);
+        assert_eq!(
+            cli.command,
+            CliCommand::NativeTasksFromCsv {
+                csv_file: PathBuf::from("tasks.csv"),
+                allow_write_control: true,
+            }
+        );
+        assert_eq!(cli.command.name(), "native-tasks-from-csv");
     }
 
     #[test]

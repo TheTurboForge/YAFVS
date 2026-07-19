@@ -112,7 +112,7 @@ pub use runtime_performance_snapshot::command_runtime_performance_snapshot;
 pub use runtime_probe::{
     command_runtime_credential_smoke, command_runtime_full_test_scan_preflight,
     command_runtime_full_test_scan_start, command_runtime_full_test_scan_status,
-    command_runtime_gmp_smoke, command_runtime_rbac_smoke,
+    command_runtime_gmp_smoke, command_runtime_rbac_smoke, command_runtime_scope_smoke,
 };
 pub use runtime_report::{
     command_runtime_report_export, command_runtime_report_metrics, command_runtime_report_summary,

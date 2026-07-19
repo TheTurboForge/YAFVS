@@ -7,6 +7,7 @@
 //! prerequisite validation, bounded execution, redaction, and result envelopes.
 
 use super::common::{build_env, executable_path, metadata, output_tail, runtime_dir};
+use super::compose::{compose_command, runtime_environment};
 use super::runtime_log_review::redact_text;
 use super::runtime_scanner_capability::{
     command_runtime_nmap_capability_check, command_runtime_scanner_capability_check,
@@ -283,6 +284,10 @@ pub fn command_runtime_gmp_smoke(repo_root: &Path) -> ResultEnvelope {
 
 pub fn command_runtime_rbac_smoke(repo_root: &Path) -> ResultEnvelope {
     command_runtime_rbac_smoke_with(repo_root, &SystemCommandRunner)
+}
+
+pub fn command_runtime_scope_smoke(repo_root: &Path) -> ResultEnvelope {
+    command_runtime_scope_smoke_with(repo_root, &SystemCommandRunner)
 }
 
 pub fn command_runtime_full_test_scan_preflight(
@@ -812,6 +817,259 @@ fn command_runtime_rbac_smoke_with(repo_root: &Path, runner: &dyn CommandRunner)
     .with_artifacts(artifacts)
 }
 
+fn command_runtime_scope_smoke_with(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+) -> ResultEnvelope {
+    const COMMAND: &str = "runtime-scope-smoke";
+    const BROWSER_PROXY_SECRET_ENV: &str = "YAFVS_API_BROWSER_PROXY_SECRET";
+    let probe = repo_root.join("tools/runtime_scope.py");
+    let artifact_dir = runtime_dir(repo_root).join("artifacts/scope-reports");
+    let (running, service_environment) =
+        running_service_state(repo_root, runner, "yafvs-api");
+    let browser_proxy_secret = service_environment
+        .get(BROWSER_PROXY_SECRET_ENV)
+        .is_some_and(|value| !value.trim().is_empty());
+    let mut findings = vec![
+        Finding::new(
+            if running { "pass" } else { "fail" },
+            "native-api.container",
+            if running {
+                "yafvs-api container is running."
+            } else {
+                "yafvs-api container is not running; start the app profile before reading scope reports through the native API."
+            }
+            .into(),
+        ),
+        Finding::new(
+            if browser_proxy_secret { "pass" } else { "fail" },
+            "native-api.browser-proxy-secret",
+            if browser_proxy_secret {
+                "yafvs-api browser-proxy secret is configured for native cleanup."
+            } else {
+                "yafvs-api is running without the browser-proxy secret; refresh the app profile before runtime scope cleanup."
+            }
+            .into(),
+        ),
+        file_prerequisite(
+            repo_root,
+            &probe,
+            "runtime-scope.probe",
+            "Runtime scope helper exists.",
+            "Runtime scope helper is missing.",
+        ),
+    ];
+    match prepare_artifact_dir(&artifact_dir) {
+        Ok(()) => findings.push(
+            Finding::new(
+                "pass",
+                "runtime-scope.artifact-dir",
+                "Runtime scope artifact directory is ready.".into(),
+            )
+            .with_path(&artifact_dir.display().to_string()),
+        ),
+        Err(error) => findings.push(
+            Finding::new(
+                "fail",
+                "runtime-scope.artifact-dir",
+                format!("Runtime scope artifact directory is not usable: {error}"),
+            )
+            .with_path(&artifact_dir.display().to_string()),
+        ),
+    }
+    if findings.iter().any(|finding| finding.status == "fail") {
+        return make_result(
+            metadata(repo_root, COMMAND, runner),
+            "Runtime scope command stopped at prerequisites.".into(),
+            findings,
+        )
+        .with_artifacts(vec![artifact_dir.display().to_string()]);
+    }
+
+    let artifact_text = artifact_dir.display().to_string();
+    let repo_text = repo_root.display().to_string();
+    let output = run_probe_with_env(
+        repo_root,
+        runner,
+        &probe,
+        &[
+            "smoke",
+            "--username",
+            ADMIN_USER,
+            "--artifact-dir",
+            &artifact_text,
+            "--repo-root",
+            &repo_text,
+        ],
+        Duration::from_secs(180),
+        runtime_environment(repo_root),
+    );
+    let parsed = parse_bounded_helper_output(&output);
+    let helper_status = parsed
+        .as_ref()
+        .and_then(|value| value.get("status"))
+        .and_then(Value::as_str);
+    let finding_status = if output.success && matches!(helper_status, Some("pass" | "warn")) {
+        helper_status.unwrap_or("fail")
+    } else {
+        "fail"
+    };
+    let exit_code = output.exit_code.unwrap_or(1);
+    let summary = parsed
+        .as_ref()
+        .and_then(|value| value.get("summary"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            format!("Runtime scope smoke command completed with exit code {exit_code}.")
+        });
+    findings.push(
+        Finding::new(finding_status, "runtime-scope.smoke", summary.clone()).with_details(json!({
+            "helper": parsed,
+            "output_tail": output_tail(&output.stdout, 120),
+        })),
+    );
+    if let Some(proof) = runtime_scope_organization_proof_finding(parsed.as_ref()) {
+        findings.push(proof);
+    }
+    let artifacts = parsed_artifacts(parsed.as_ref())
+        .unwrap_or_else(|| vec![artifact_dir.display().to_string()]);
+    make_result(metadata(repo_root, COMMAND, runner), summary, findings).with_artifacts(artifacts)
+}
+
+fn running_service_state(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    service: &str,
+) -> (bool, std::collections::BTreeMap<String, String>) {
+    let environment = runtime_environment(repo_root);
+    let command = compose_command(
+        repo_root,
+        &["ps".to_string(), "-q".to_string(), service.to_string()],
+    );
+    let arguments = command.iter().map(String::as_str).collect::<Vec<_>>();
+    let Some(container) = runner
+        .run_with(
+            "docker",
+            &arguments,
+            Some(repo_root),
+            Some(&environment),
+            Some(Duration::from_secs(30)),
+        )
+        .filter(|output| output.success)
+        .and_then(|output| {
+            output
+                .stdout
+                .lines()
+                .next()
+                .map(str::trim)
+                .map(str::to_string)
+        })
+        .filter(|container| !container.is_empty())
+    else {
+        return (false, std::collections::BTreeMap::new());
+    };
+    let running = runner
+        .run_with(
+            "docker",
+            &["inspect", "-f", "{{.State.Running}}", &container],
+            Some(repo_root),
+            Some(&environment),
+            Some(Duration::from_secs(30)),
+        )
+        .is_some_and(|output| output.success && output.stdout.trim() == "true");
+    if !running {
+        return (false, std::collections::BTreeMap::new());
+    }
+    let Some(output) = runner
+        .run_with(
+            "docker",
+            &["inspect", "-f", "{{json .Config.Env}}", &container],
+            Some(repo_root),
+            Some(&environment),
+            Some(Duration::from_secs(30)),
+        )
+        .filter(|output| output.success && !output.stdout.trim().is_empty())
+    else {
+        return (true, std::collections::BTreeMap::new());
+    };
+    let Ok(values) = serde_json::from_str::<Vec<String>>(&output.stdout) else {
+        return (true, std::collections::BTreeMap::new());
+    };
+    let values = values
+        .into_iter()
+        .filter_map(|value| {
+            let (name, value) = value.split_once('=')?;
+            Some((name.to_string(), value.to_string()))
+        })
+        .collect();
+    (true, values)
+}
+
+fn runtime_scope_organization_proof_finding(parsed: Option<&Value>) -> Option<Finding> {
+    let parsed = parsed?;
+    if !matches!(
+        parsed.get("status").and_then(Value::as_str),
+        Some("pass" | "warn")
+    ) {
+        return None;
+    }
+    let details = parsed.get("details")?.as_object()?;
+    let organization = details.get("organization_scope")?.as_object()?;
+    let organization_report = details.get("organization_scope_report")?.as_object()?;
+    let scope_after_add = details.get("scope_after_add")?.as_object()?;
+    let scope_after_remove = details.get("scope_after_remove")?.as_object()?;
+    let cleanup = details.get("cleanup")?.as_object()?;
+    let proof = json!({
+        "organization_target_count": organization.get("target_count"),
+        "organization_host_count": organization.get("host_count"),
+        "organization_source_report_count": organization_report.get("source_report_count"),
+        "scope_after_add_target_count": scope_after_add.get("target_count"),
+        "scope_after_add_host_count": scope_after_add.get("host_count"),
+        "scope_after_remove_target_count": scope_after_remove.get("target_count"),
+        "scope_after_remove_host_count": scope_after_remove.get("host_count"),
+        "cleanup_scope": cleanup.get("scope"),
+        "cleanup_scope_report": cleanup.get("scope_report"),
+        "cleanup_organization_scope_report": cleanup.get("organization_scope_report"),
+    });
+    let complete = integer_at_least(&proof, "organization_target_count", 1)
+        && integer_at_least(&proof, "organization_host_count", 1)
+        && integer_at_least(&proof, "organization_source_report_count", 1)
+        && integer_at_least(&proof, "scope_after_add_target_count", 2)
+        && integer_at_least(&proof, "scope_after_add_host_count", 2)
+        && integer_at_least(&proof, "scope_after_remove_target_count", 1)
+        && integer_at_least(&proof, "scope_after_remove_host_count", 1)
+        && proof.get("scope_after_remove_target_count")?.as_i64() == Some(1)
+        && proof.get("scope_after_remove_host_count")?.as_i64() == Some(1)
+        && [
+            "cleanup_scope",
+            "cleanup_scope_report",
+            "cleanup_organization_scope_report",
+        ]
+        .iter()
+        .all(|key| proof.get(key).and_then(Value::as_str) == Some("deleted"));
+    Some(
+        Finding::new(
+            if complete { "pass" } else { "warn" },
+            "runtime-scope.organization-proof",
+            if complete {
+                "Organization scope membership and source-report proof is available."
+            } else {
+                "Organization scope membership proof is incomplete; inspect the scope smoke artifact."
+            }
+            .into(),
+        )
+        .with_details(proof),
+    )
+}
+
+fn integer_at_least(value: &Value, key: &str, minimum: i64) -> bool {
+    value
+        .get(key)
+        .and_then(Value::as_i64)
+        .is_some_and(|number| number >= minimum)
+}
+
 fn redact_json_value(value: &mut Value, secrets: &[String]) {
     match value {
         Value::String(text) => *text = redact_text(text, secrets),
@@ -1221,6 +1479,50 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct ScopeRunner {
+        calls: Mutex<Vec<Vec<String>>>,
+        helper: Option<ProcessOutput>,
+    }
+
+    impl CommandRunner for ScopeRunner {
+        fn run(&self, _program: &str, _args: &[&str]) -> Option<ProcessOutput> {
+            None
+        }
+
+        fn run_with(
+            &self,
+            program: &str,
+            args: &[&str],
+            _cwd: Option<&Path>,
+            _env: Option<&BTreeMap<OsString, OsString>>,
+            timeout: Option<Duration>,
+        ) -> Option<ProcessOutput> {
+            self.calls.lock().unwrap().push(
+                std::iter::once(program.to_string())
+                    .chain(args.iter().map(|arg| (*arg).to_string()))
+                    .collect(),
+            );
+            if program.ends_with("python3") {
+                assert_eq!(timeout, Some(Duration::from_secs(180)));
+                return self.helper.clone();
+            }
+            let stdout = if args.contains(&"{{.State.Running}}") {
+                "true\n"
+            } else if args.contains(&"{{json .Config.Env}}") {
+                "[\"YAFVS_API_BROWSER_PROXY_SECRET=scope-secret\"]\n"
+            } else {
+                "scope-container\n"
+            };
+            Some(ProcessOutput {
+                success: true,
+                exit_code: Some(0),
+                stdout: stdout.into(),
+                stderr: String::new(),
+            })
+        }
+    }
+
     impl CommandRunner for ProbeRunner {
         fn run(&self, _program: &str, _args: &[&str]) -> Option<ProcessOutput> {
             None
@@ -1282,6 +1584,119 @@ mod tests {
         let serialized = serde_json::to_string(&result).unwrap();
         assert!(!serialized.contains(password.as_ref()));
         assert!(serialized.contains("[redacted]"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn scope_smoke_stops_before_helper_when_runtime_is_missing() {
+        let (root, repo) = fixture("scope-missing");
+        fs::write(repo.join("tools/runtime_scope.py"), "# helper\n").unwrap();
+        let result = command_runtime_scope_smoke_with(&repo, &ProbeRunner::default());
+        assert_eq!(result.status, "fail");
+        assert_eq!(
+            result.summary,
+            "Runtime scope command stopped at prerequisites."
+        );
+        assert_eq!(
+            result
+                .findings
+                .iter()
+                .map(|item| item.check.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "native-api.container",
+                "native-api.browser-proxy-secret",
+                "runtime-scope.probe",
+                "runtime-scope.artifact-dir",
+            ]
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn scope_smoke_preserves_helper_contract_and_complete_proof() {
+        let (root, repo) = fixture("scope-success");
+        fs::write(repo.join("tools/runtime_scope.py"), "# helper\n").unwrap();
+        let runner = ScopeRunner {
+            helper: Some(ProcessOutput {
+                success: true,
+                exit_code: Some(0),
+                stdout: serde_json::to_string(&json!({
+                    "status": "warn",
+                    "summary": "scope coverage partial",
+                    "artifacts": ["scope.json"],
+                    "details": {
+                        "organization_scope": {"target_count": 4, "host_count": 7},
+                        "organization_scope_report": {"source_report_count": 4},
+                        "scope_after_add": {"target_count": 2, "host_count": 2},
+                        "scope_after_remove": {"target_count": 1, "host_count": 1},
+                        "cleanup": {
+                            "scope": "deleted",
+                            "scope_report": "deleted",
+                            "organization_scope_report": "deleted"
+                        }
+                    }
+                }))
+                .unwrap(),
+                stderr: String::new(),
+            }),
+            ..ScopeRunner::default()
+        };
+        let result = command_runtime_scope_smoke_with(&repo, &runner);
+        assert_eq!(result.status, "warn");
+        assert_eq!(result.summary, "scope coverage partial");
+        assert_eq!(result.artifacts, ["scope.json"]);
+        assert_eq!(result.findings.last().unwrap().status, "pass");
+        assert_eq!(
+            result.findings.last().unwrap().check,
+            "runtime-scope.organization-proof"
+        );
+        let calls = runner.calls.lock().unwrap();
+        let python = calls
+            .iter()
+            .find(|call| call[0].ends_with("python3"))
+            .unwrap();
+        assert!(python.iter().any(|argument| argument == "smoke"));
+        assert!(python.iter().any(|argument| argument == "--username"));
+        assert!(python.iter().any(|argument| argument == ADMIN_USER));
+        assert!(python.iter().any(|argument| argument == "--artifact-dir"));
+        assert!(python.iter().any(|argument| argument == "--repo-root"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn incomplete_scope_proof_warns_and_malformed_helper_fails_closed() {
+        let proof = runtime_scope_organization_proof_finding(Some(&json!({
+            "status": "pass",
+            "details": {
+                "organization_scope": {"target_count": 0, "host_count": 1},
+                "organization_scope_report": {"source_report_count": 1},
+                "scope_after_add": {"target_count": 2, "host_count": 2},
+                "scope_after_remove": {"target_count": 1, "host_count": 1},
+                "cleanup": {
+                    "scope": "deleted",
+                    "scope_report": "deleted",
+                    "organization_scope_report": "deleted"
+                }
+            }
+        })))
+        .unwrap();
+        assert_eq!(proof.status, "warn");
+        let (root, repo) = fixture("scope-malformed");
+        fs::write(repo.join("tools/runtime_scope.py"), "# helper\n").unwrap();
+        let runner = ScopeRunner {
+            helper: Some(ProcessOutput {
+                success: true,
+                exit_code: Some(0),
+                stdout: "[]".into(),
+                stderr: String::new(),
+            }),
+            ..ScopeRunner::default()
+        };
+        assert_eq!(
+            command_runtime_scope_smoke_with(&repo, &runner).status,
+            "fail"
+        );
         fs::remove_dir_all(root).unwrap();
     }
 

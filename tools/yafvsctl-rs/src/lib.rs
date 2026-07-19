@@ -39,6 +39,7 @@ pub use commands::{
     command_runtime_native_api_direct_bootstrap, command_runtime_native_api_direct_token,
     command_runtime_nmap_capability_check, command_runtime_performance_snapshot,
     command_runtime_plan, command_runtime_rbac_smoke, command_runtime_redis_state,
+    command_runtime_scope_smoke,
     command_runtime_report_export, command_runtime_report_metrics, command_runtime_report_summary,
     command_runtime_scanner_capability_check, command_runtime_scanner_process_check,
     command_runtime_scope_report_metrics, command_runtime_scope_report_summary,
@@ -429,6 +430,7 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         CliCommand::RuntimeGmpSmoke => command_runtime_gmp_smoke(&repo_root),
         CliCommand::RuntimeCredentialSmoke => command_runtime_credential_smoke(&repo_root),
         CliCommand::RuntimeRbacSmoke => command_runtime_rbac_smoke(&repo_root),
+        CliCommand::RuntimeScopeSmoke => command_runtime_scope_smoke(&repo_root),
         CliCommand::RuntimeWebuiSmoke => command_runtime_webui_smoke(&repo_root, cli.status_only),
         CliCommand::RuntimeFullTestScanPreflight { target_cidr } => {
             command_runtime_full_test_scan_preflight(&repo_root, target_cidr)

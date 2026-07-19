@@ -201,7 +201,7 @@ runtime-scanner-redis-init *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-scanner-redis-init "$@"
 
 runtime-gmp-smoke *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-gmp-smoke "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- runtime-gmp-smoke "$@"
 
 runtime-scanner-register *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-scanner-register "$@"
@@ -348,7 +348,7 @@ runtime-credential-smoke *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-credential-smoke "$@"
 
 runtime-rbac-smoke *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-rbac-smoke "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- runtime-rbac-smoke "$@"
 
 quality-gate *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl quality-gate "$@"

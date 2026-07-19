@@ -617,6 +617,8 @@ mod tests {
             "runtime-performance-snapshot",
             "runtime-log-review",
             "runtime-redis-state",
+            "runtime-gmp-smoke",
+            "runtime-rbac-smoke",
             "c-hardening-check",
             "quality-gate-schedule",
             "runtime-native-api-direct-token",

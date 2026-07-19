@@ -5013,14 +5013,6 @@ def runtime_credential_smoke_probe_path(repo_root: Path) -> Path:
     return repo_root / "tools" / "runtime_credential_smoke.py"
 
 
-def runtime_rbac_smoke_probe_path(repo_root: Path) -> Path:
-    return repo_root / "tools" / "runtime_rbac_smoke.py"
-
-
-def rbac_smoke_artifact_dir(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "artifacts", "rbac-smoke")
-
-
 def report_artifact_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "artifacts", "reports")
 
@@ -6679,6 +6671,8 @@ def native_tooling_category(relative_path: str) -> tuple[str, str] | None:
         return "compatibility_bridge", "GSA session tests characterize compatibility login/logout behavior; they are not a product workflow."
     if relative_path == "tools/runtime_browser_smoke.py":
         return "compatibility_bridge", "Browser smoke keeps a bounded raw GMP cleanup fallback for test artifacts; it imports neither removed legacy client."
+    if relative_path == "tools/yafvsctl-rs/src/commands/runtime_probe.rs":
+        return "compatibility_bridge", "Rust CLI orchestration retains bounded raw GMP smoke helpers without depending on removed python-gvm or gvm-tools clients."
     if relative_path == "tools/yafvsctl":
         return "compatibility_bridge", "yafvsctl measures the completed legacy-client teardown and remaining GMP owner tails."
     if relative_path.startswith("tools/runtime_") and relative_path.endswith(".py"):
@@ -13851,24 +13845,11 @@ def command_runtime_manager_init_unlocked(
 
 
 def command_runtime_gmp_smoke(repo_root: Path) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
-    socket_path = gvmd_socket_path(repo_root)
-    probe = repo_root / "tools" / "runtime_gmp_smoke.py"
-    findings.append(socket_readiness_finding("gvmd.socket", "gvmd", socket_path, missing_status="fail"))
-    findings.append(finding("pass" if secret_path.is_file() else "fail", "runtime.admin-secret", "Development admin secret exists." if secret_path.is_file() else "Development admin secret is missing; run just runtime-manager-init.", str(secret_path)))
-    findings.append(finding("pass" if probe.is_file() else "fail", "gmp.probe", "GMP smoke probe exists." if probe.is_file() else "GMP smoke probe is missing.", str(probe.relative_to(repo_root))))
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-gmp-smoke", repo_root, "GMP smoke stopped at prerequisites.", findings, [str(runtime_dir(repo_root))])
-
-    result = run_command([sys.executable, str(probe), "--socket", str(socket_path), "--username", DEV_ADMIN_USER, "--password-file", str(secret_path)], repo_root, env=build_env(repo_root), timeout=60)
-    try:
-        parsed = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        parsed = None
-    probe_status = parsed.get("status") if parsed else None
-    findings.append(finding("pass" if result.returncode == 0 and probe_status == "pass" else "fail", "gvmd.gmp", f"Raw GMP socket authenticated get_version exit code {result.returncode}.", details={"probe": parsed, "output_tail": output_tail(result.stdout, 60)}))
-    return make_result("runtime-gmp-smoke", repo_root, "Runtime GMP smoke completed.", findings, [str(runtime_dir(repo_root))])
+    return rust_result_envelope(
+        repo_root,
+        "runtime-gmp-smoke",
+        ["runtime-gmp-smoke"],
+    )
 
 
 def wait_for_runtime_gmp_smoke(repo_root: Path, *, attempts: int = 3, interval_seconds: int = 5) -> tuple[dict[str, Any], int]:
@@ -15155,55 +15136,6 @@ def command_runtime_scope_report_metrics_native(repo_root: Path, scope_report_id
     findings.append(process_step_finding("pass" if metrics_ok else "fail", "runtime-metrics.scope-report-native", payload["summary"], metrics, compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../metrics")))
     return make_result("runtime-scope-report-metrics", repo_root, payload["summary"], findings, payload["artifacts"])
 
-
-def command_runtime_rbac_smoke(repo_root: Path) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
-    probe = runtime_rbac_smoke_probe_path(repo_root)
-    artifact_dir = rbac_smoke_artifact_dir(repo_root)
-    findings.append(finding("pass" if gvmd_socket_path(repo_root).is_socket() else "fail", "gvmd.socket", "gvmd socket is ready." if gvmd_socket_path(repo_root).is_socket() else "gvmd socket is not ready.", str(gvmd_socket_path(repo_root))))
-    findings.append(finding("pass" if secret_path.is_file() else "fail", "runtime.admin-secret", "Development admin secret exists." if secret_path.is_file() else "Development admin secret is missing.", str(secret_path)))
-    findings.append(finding("pass" if probe.is_file() else "fail", "runtime-rbac.probe", "Runtime RBAC smoke helper exists." if probe.is_file() else "Runtime RBAC smoke helper is missing.", str(probe.relative_to(repo_root)) if probe.exists() else str(probe)))
-    try:
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        findings.append(finding("pass", "runtime-rbac.artifact-dir", "Runtime RBAC smoke artifact directory is ready.", str(artifact_dir)))
-    except OSError as error:
-        findings.append(finding("fail", "runtime-rbac.artifact-dir", f"Runtime RBAC smoke artifact directory is not usable: {error}", str(artifact_dir)))
-
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-rbac-smoke", repo_root, "Runtime RBAC smoke stopped at prerequisites.", findings, [str(artifact_dir)])
-
-    args = [
-        sys.executable,
-        str(probe),
-        "--socket",
-        str(gvmd_socket_path(repo_root)),
-        "--username",
-        DEV_ADMIN_USER,
-        "--password-file",
-        str(secret_path),
-        "--artifact-dir",
-        str(artifact_dir),
-    ]
-    result = run_command(args, repo_root, env=build_env(repo_root), timeout=180)
-    try:
-        parsed = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        parsed = None
-    helper_status = parsed.get("status") if parsed else None
-    finding_status = helper_status if result.returncode == 0 and helper_status in {"pass", "warn"} else "fail"
-    password = secret_path.read_text(encoding="utf-8").strip() if secret_path.is_file() else ""
-    findings.append(
-        finding(
-            finding_status,
-            "runtime-rbac.operator-account",
-            parsed.get("summary", f"Runtime RBAC smoke helper exit code {result.returncode}.") if parsed else f"Runtime RBAC smoke helper exit code {result.returncode}.",
-            details={"helper": parsed, "output_tail": output_tail(result.stdout, 120, [password])},
-        )
-    )
-    artifacts = list(parsed.get("artifacts", [])) if parsed and isinstance(parsed.get("artifacts"), list) else [str(artifact_dir)]
-    summary = parsed.get("summary") if parsed else f"Runtime RBAC smoke completed with exit code {result.returncode}."
-    return make_result("runtime-rbac-smoke", repo_root, summary, findings, artifacts)
 
 def command_feed_cache_sync(repo_root: Path) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
@@ -30580,7 +30512,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-certs-init", parents=[common], help="initialize persistent runtime certificates")
     subparsers.add_parser("runtime-manager-init", parents=[common], help="initialize persistent gvmd database/user prerequisites")
     subparsers.add_parser("runtime-scanner-redis-init", parents=[common], help="initialize dedicated OpenVAS scanner Redis runtime")
-    subparsers.add_parser("runtime-gmp-smoke", parents=[common], help="run authenticated GMP smoke over the runtime gvmd socket")
     subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
     subparsers.add_parser("runtime-feed-keyring-init", parents=[common], help="initialize the shared feed signature GnuPG keyring")
     full_test_preflight = subparsers.add_parser("runtime-full-test-scan-preflight", parents=[common], help="preflight an explicit authorized full test scan")
@@ -30637,7 +30568,6 @@ def build_parser() -> argparse.ArgumentParser:
     browser_regression = subparsers.add_parser("runtime-browser-regression", parents=[common], help="run deep browser route/link/pagination regression checks")
     browser_regression.add_argument("--status-only", action="store_true", help="emit compact browser-regression status and only non-pass findings for chat-safe validation")
     subparsers.add_parser("runtime-credential-smoke", parents=[common], help="verify credential creation through a headless browser")
-    subparsers.add_parser("runtime-rbac-smoke", parents=[common], help="verify all authenticated users share operator privileges")
     quality_gate = subparsers.add_parser("quality-gate", parents=[common], help="run the local deterministic quality gate")
     quality_gate.add_argument("--runtime", action="store_true", help="include runtime-safe status/log/data diagnostics")
     subparsers.add_parser("gvmd-smoke", parents=[common], help="run a narrow gvmd runtime profile smoke")
@@ -30925,8 +30855,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_manager_init(repo_root)
     elif args.command == "runtime-scanner-redis-init":
         result = command_runtime_scanner_redis_init(repo_root)
-    elif args.command == "runtime-gmp-smoke":
-        result = command_runtime_gmp_smoke(repo_root)
     elif args.command == "runtime-scanner-register":
         result = command_runtime_scanner_register(repo_root)
     elif args.command == "runtime-feed-keyring-init":
@@ -30988,8 +30916,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_browser_regression(repo_root, status_only=args.status_only)
     elif args.command == "runtime-credential-smoke":
         result = command_runtime_credential_smoke(repo_root)
-    elif args.command == "runtime-rbac-smoke":
-        result = command_runtime_rbac_smoke(repo_root)
     elif args.command == "quality-gate":
         result = command_quality_gate(repo_root, include_runtime=args.runtime)
     elif args.command == "gvmd-smoke":

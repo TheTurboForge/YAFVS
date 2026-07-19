@@ -1202,6 +1202,8 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-scanner-capability-check", "--json"], (0, 1), ("pass", "fail")),
                 (["runtime-scanner-process-check", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["runtime-nmap-capability-check", "--json"], (0, 1), ("pass", "fail")),
+                (["runtime-gmp-smoke", "--json"], (0, 1), ("pass", "fail")),
+                (["runtime-rbac-smoke", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["c-hardening-check", "--status-only", "--json"], 1, "fail"),
                 (["path-coupling-state", "--json"], 0, "pass"),
                 (["path-coupling-state", "--status-only", "--json"], 0, "pass"),
@@ -1310,7 +1312,6 @@ class YAFVSCtlTests(unittest.TestCase):
             "runtime-certs-init",
             "runtime-manager-init",
             "runtime-scanner-redis-init",
-            "runtime-gmp-smoke",
             "runtime-scanner-register",
             "runtime-app-up",
             "runtime-app-down",
@@ -2641,6 +2642,10 @@ class YAFVSCtlTests(unittest.TestCase):
         root = Path("/tmp/repo")
         for command, wrapper in [
             (
+                "runtime-gmp-smoke",
+                yafvsctl.command_runtime_gmp_smoke,
+            ),
+            (
                 "runtime-scanner-capability-check",
                 yafvsctl.command_runtime_scanner_capability_check,
             ),
@@ -2688,6 +2693,8 @@ class YAFVSCtlTests(unittest.TestCase):
             "runtime-scanner-capability-check",
             "runtime-scanner-process-check",
             "runtime-nmap-capability-check",
+            "runtime-gmp-smoke",
+            "runtime-rbac-smoke",
         ):
             self.assertNotIn(f'subparsers.add_parser("{command}"', source)
             self.assertNotIn(f'args.command == "{command}"', source)
@@ -15491,7 +15498,9 @@ class YAFVSCtlTests(unittest.TestCase):
         gmp_smoke_wrapper = wrapper_source.split("def command_runtime_gmp_smoke", 1)[1].split("def wait_for_runtime_gmp_smoke", 1)[0]
         self.assertNotIn("venv_python(repo_root, \"python-gvm\")", gmp_smoke_wrapper)
         self.assertNotIn("python-gvm.venv", gmp_smoke_wrapper)
-        self.assertIn("sys.executable", gmp_smoke_wrapper)
+        self.assertNotIn("sys.executable", gmp_smoke_wrapper)
+        self.assertIn("rust_result_envelope", gmp_smoke_wrapper)
+        self.assertIn('"runtime-gmp-smoke"', gmp_smoke_wrapper)
 
     def test_full_test_scan_no_longer_imports_python_gvm_runtime_client(self):
         source = FULL_TEST_SCAN_PATH.read_text(encoding="utf-8")
@@ -15568,14 +15577,16 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_runtime_rbac_smoke_uses_raw_bridge_not_python_gvm_connection(self):
         source = RUNTIME_RBAC_PATH.read_text(encoding="utf-8")
         wrapper_source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
-        rbac_wrapper = wrapper_source.split("def command_runtime_rbac_smoke", 1)[1].split("def command_feed_cache_sync", 1)[0]
+        rust_wrapper_source = (
+            Path(__file__).resolve().parents[1]
+            / "yafvsctl-rs/src/commands/runtime_probe.rs"
+        ).read_text(encoding="utf-8")
         self.assertNotIn("runtime_full_test_scan.connect_gmp", source)
         self.assertNotIn("from gvm", source)
         self.assertNotIn("gmp.", source)
         self.assertIn("RbacGmpClient", source)
-        self.assertNotIn("venv_python(repo_root, \"python-gvm\")", rbac_wrapper)
-        self.assertNotIn("python-gvm.venv", rbac_wrapper)
-        self.assertIn("sys.executable", rbac_wrapper)
+        self.assertNotIn("def command_runtime_rbac_smoke", wrapper_source)
+        self.assertIn("command_runtime_rbac_smoke", rust_wrapper_source)
 
     def test_runtime_rbac_raw_client_emits_expected_xml_subset(self):
         client = runtime_rbac_smoke.RbacGmpClient(Path("/tmp/gvmd.sock"), "admin", "secret", 10)

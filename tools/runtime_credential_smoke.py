@@ -250,10 +250,10 @@ def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
     artifact_dir = Path(args.artifact_dir).expanduser().resolve()
     artifact_dir.mkdir(parents=True, exist_ok=True)
     login_password = Path(args.password_file).read_text(encoding="utf-8").strip()
-    credential_password = args.credential_password or os.environ.get("YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD")
+    credential_password = os.environ.get("YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD")
     if not credential_password:
         failed = payload("fail", "Credential password material is missing.")
-        failed["findings"] = [{"status": "fail", "check": "credential-smoke.credential-password", "message": "Set YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD or pass --credential-password."}]
+        failed["findings"] = [{"status": "fail", "check": "credential-smoke.credential-password", "message": "Set YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD."}]
         failed["artifacts"] = [write_artifact(artifact_dir, "credential-smoke-failed.json", failed)]
         return failed
     node_paths = playwright_node_path_candidates()
@@ -327,7 +327,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--artifact-dir", required=True)
     parser.add_argument("--credential-name", required=True)
     parser.add_argument("--credential-login", default="yafvs-smoke")
-    parser.add_argument("--credential-password")
     parser.add_argument("--timeout-ms", type=int, default=DEFAULT_TIMEOUT_MS)
     return parser
 

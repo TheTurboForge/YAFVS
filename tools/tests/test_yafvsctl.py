@@ -1322,7 +1322,6 @@ class YAFVSCtlTests(unittest.TestCase):
             "runtime-app-smoke",
             "runtime-browser-smoke",
             "runtime-browser-regression",
-            "runtime-credential-smoke",
             "runtime-report-metrics",
             "runtime-scope-report-metrics",
             "gvmd-smoke",
@@ -1513,7 +1512,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
         runtime_scope_source = (root / "tools" / "runtime_scope.py").read_text(encoding="utf-8")
         browser_smoke_command = source.split("def command_runtime_browser_smoke", 1)[1].split("def command_runtime_browser_regression", 1)[0]
-        browser_regression_command = source.split("def command_runtime_browser_regression", 1)[1].split("def command_runtime_credential_smoke", 1)[0]
+        browser_regression_command = source.split("def command_runtime_browser_regression", 1)[1].split("def _command_down_unlocked", 1)[0]
         scope_command_action = next(action for action in runtime_scope.build_parser()._actions if action.dest == "command")
         self.assertFalse((root / "tools" / "runtime_metrics.py").exists())
         self.assertEqual(scope_command_action.choices, ("smoke",))
@@ -2319,14 +2318,15 @@ class YAFVSCtlTests(unittest.TestCase):
         smoke.assert_called_once()
         sleep.assert_not_called()
 
-    def test_runtime_credential_smoke_is_registered(self):
+    def test_runtime_credential_smoke_is_rust_owned(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        self.assertIn("def command_runtime_credential_smoke", source)
-        self.assertIn("runtime_credential_smoke_probe_path", source)
-        self.assertIn("runtime-credential-smoke", source)
+        helper = (Path(__file__).resolve().parents[1] / "runtime_credential_smoke.py").read_text(encoding="utf-8")
+        self.assertNotIn("def command_runtime_credential_smoke", source)
+        self.assertNotIn("runtime_credential_smoke_probe_path", source)
+        self.assertNotIn("--credential-password", helper)
         self.assertIn("runtime-credential-smoke *args:", justfile)
-        self.assertIn('tools/yafvsctl runtime-credential-smoke "$@"', justfile)
+        self.assertIn('tools/yafvsctl-rs/Cargo.toml -- runtime-credential-smoke "$@"', justfile)
 
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
@@ -11475,6 +11475,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "logs",
             "doctor",
             "runtime-log-review",
+            "runtime-credential-smoke",
             "runtime-full-test-scan-preflight",
             "runtime-full-test-scan-start",
             "runtime-full-test-scan-status",

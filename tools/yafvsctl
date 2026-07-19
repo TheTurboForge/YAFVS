@@ -5000,10 +5000,6 @@ def runtime_browser_regression_probe_path(repo_root: Path) -> Path:
     return repo_root / "tools" / "runtime_browser_regression.py"
 
 
-def runtime_credential_smoke_probe_path(repo_root: Path) -> Path:
-    return repo_root / "tools" / "runtime_credential_smoke.py"
-
-
 def report_artifact_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "artifacts", "reports")
 
@@ -5049,10 +5045,6 @@ def browser_smoke_run_artifact_dir(
 
 def browser_regression_artifact_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "artifacts", "browser-regression")
-
-
-def credential_smoke_artifact_dir(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "artifacts", "credential-smoke")
 
 
 def quality_gate_artifact_dir(repo_root: Path) -> Path:
@@ -29832,67 +29824,6 @@ def command_runtime_browser_regression(repo_root: Path, *, status_only: bool = F
     return runtime_browser_regression_status_only_result(result_payload) if status_only else result_payload
 
 
-def command_runtime_credential_smoke(repo_root: Path) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
-    probe = runtime_credential_smoke_probe_path(repo_root)
-    artifact_dir = credential_smoke_artifact_dir(repo_root)
-    findings.append(finding("pass" if secret_path.is_file() else "fail", "runtime.admin-secret", "Development admin secret exists." if secret_path.is_file() else "Development admin secret is missing.", str(secret_path)))
-    findings.append(finding("pass" if probe.is_file() else "fail", "credential-smoke.probe", "Credential browser smoke helper exists." if probe.is_file() else "Credential browser smoke helper is missing.", str(probe.relative_to(repo_root)) if probe.exists() else str(probe)))
-    findings.append(finding("pass" if shutil.which("node") else "fail", "node.available", "node is available for credential browser smoke." if shutil.which("node") else "node is not available on PATH."))
-    try:
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        probe_file = artifact_dir / ".yafvs-write-test"
-        probe_file.write_text("ok\n", encoding="utf-8")
-        probe_file.unlink()
-        findings.append(finding("pass", "credential-smoke.artifact-dir", "Credential smoke artifact directory is ready.", str(artifact_dir)))
-    except OSError as error:
-        findings.append(finding("fail", "credential-smoke.artifact-dir", f"Credential smoke artifact directory is not usable: {error}", str(artifact_dir)))
-
-    base_urls = gsad_base_urls(repo_root)
-    findings.append(finding("pass" if base_urls else "fail", "gsad.urls", "Configured gsad base URLs are available." if base_urls else "No gsad base URLs are configured.", details={"base_urls": list(base_urls)}))
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-credential-smoke", repo_root, "Runtime credential smoke stopped at prerequisites.", findings, [str(artifact_dir)])
-
-    credential_name = "yafvs-credential-smoke-" + secrets.token_hex(4)
-    credential_password = secrets.token_urlsafe(24)
-    args = [
-        sys.executable,
-        str(probe),
-        "--username",
-        DEV_ADMIN_USER,
-        "--password-file",
-        str(secret_path),
-        "--artifact-dir",
-        str(artifact_dir),
-        "--credential-name",
-        credential_name,
-        "--credential-password",
-        credential_password,
-    ]
-    for base_url in base_urls:
-        args.extend(["--base-url", base_url])
-    result = run_command(args, repo_root, env=runtime_env(repo_root), timeout=300)
-    try:
-        parsed = json.loads(result.stdout.strip().splitlines()[-1])
-    except (IndexError, json.JSONDecodeError):
-        parsed = None
-    helper_status = parsed.get("status") if parsed else None
-    finding_status = helper_status if result.returncode == 0 and helper_status in {"pass", "warn"} else "fail"
-    admin_password = secret_path.read_text(encoding="utf-8").strip() if secret_path.is_file() else ""
-    findings.append(
-        finding(
-            finding_status,
-            "credential-smoke.run",
-            parsed.get("summary", f"Credential browser smoke helper exit code {result.returncode}.") if parsed else f"Credential browser smoke helper exit code {result.returncode}.",
-            details={"helper": parsed, "output_tail": output_tail(result.stdout, 120, [admin_password, credential_password])},
-        )
-    )
-    artifacts = list(parsed.get("artifacts", [])) if parsed and isinstance(parsed.get("artifacts"), list) else [str(artifact_dir)]
-    summary = parsed.get("summary") if parsed else f"Runtime credential smoke completed with exit code {result.returncode}."
-    return make_result("runtime-credential-smoke", repo_root, summary, findings, artifacts)
-
-
 def _command_down_unlocked(repo_root: Path) -> dict[str, Any]:
     result = run_command(compose_command(repo_root, "--profile", "app", "--profile", "tools", "down"), repo_root, env=runtime_env(repo_root))
     findings = [finding("pass" if result.returncode == 0 else "fail", "compose.down", f"docker compose down exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-80:]})]
@@ -30433,7 +30364,6 @@ def build_parser() -> argparse.ArgumentParser:
     browser_smoke.add_argument("--write-filter-smoke", action="store_true", help="create/clone/delete a disposable saved filter through browser native POST proxy validation")
     browser_regression = subparsers.add_parser("runtime-browser-regression", parents=[common], help="run deep browser route/link/pagination regression checks")
     browser_regression.add_argument("--status-only", action="store_true", help="emit compact browser-regression status and only non-pass findings for chat-safe validation")
-    subparsers.add_parser("runtime-credential-smoke", parents=[common], help="verify credential creation through a headless browser")
     quality_gate = subparsers.add_parser("quality-gate", parents=[common], help="run the local deterministic quality gate")
     quality_gate.add_argument("--runtime", action="store_true", help="include runtime-safe status/log/data diagnostics")
     subparsers.add_parser("gvmd-smoke", parents=[common], help="run a narrow gvmd runtime profile smoke")
@@ -30769,8 +30699,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_browser_smoke(repo_root, args.route, write_filter_smoke=args.write_filter_smoke, status_only=args.status_only)
     elif args.command == "runtime-browser-regression":
         result = command_runtime_browser_regression(repo_root, status_only=args.status_only)
-    elif args.command == "runtime-credential-smoke":
-        result = command_runtime_credential_smoke(repo_root)
     elif args.command == "quality-gate":
         result = command_quality_gate(repo_root, include_runtime=args.runtime)
     elif args.command == "gvmd-smoke":

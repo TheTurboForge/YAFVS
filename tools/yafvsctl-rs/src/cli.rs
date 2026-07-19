@@ -700,6 +700,7 @@ mod tests {
             "runtime-log-review",
             "runtime-redis-state",
             "runtime-gmp-smoke",
+            "runtime-credential-smoke",
             "runtime-rbac-smoke",
             "runtime-full-test-scan-preflight",
             "runtime-full-test-scan-start",

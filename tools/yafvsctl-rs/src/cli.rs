@@ -209,6 +209,8 @@ pub enum CliCommand {
         #[arg(long)]
         rotate: bool,
     },
+    /// Prepare and check opt-in direct native API bootstrap guardrails without starting it.
+    RuntimeNativeApiDirectBootstrap,
 }
 
 impl CliCommand {
@@ -260,6 +262,7 @@ impl CliCommand {
             Self::Doctor => "doctor",
             Self::QualityGateSchedule { .. } => "quality-gate-schedule",
             Self::RuntimeNativeApiDirectToken { .. } => "runtime-native-api-direct-token",
+            Self::RuntimeNativeApiDirectBootstrap => "runtime-native-api-direct-bootstrap",
         }
     }
 }
@@ -301,6 +304,22 @@ mod tests {
             assert_eq!(cli.command, expected);
             assert_eq!(cli.command.name(), argument);
         }
+    }
+
+    #[test]
+    fn parses_and_names_direct_bootstrap() {
+        assert_eq!(
+            parse_cli(["runtime-native-api-direct-bootstrap", "--status-only"]).unwrap(),
+            Cli {
+                command: CliCommand::RuntimeNativeApiDirectBootstrap,
+                json: false,
+                status_only: true,
+            }
+        );
+        assert_eq!(
+            CliCommand::RuntimeNativeApiDirectBootstrap.name(),
+            "runtime-native-api-direct-bootstrap"
+        );
     }
 
     #[test]

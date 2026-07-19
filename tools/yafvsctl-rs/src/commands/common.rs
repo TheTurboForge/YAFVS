@@ -118,7 +118,7 @@ pub(crate) fn runtime_dir(repo_root: &Path) -> PathBuf {
     absolute.canonicalize().unwrap_or(absolute)
 }
 
-fn expand_home(path: PathBuf) -> PathBuf {
+pub(crate) fn expand_home(path: PathBuf) -> PathBuf {
     let Some(text) = path.to_str() else {
         return path;
     };

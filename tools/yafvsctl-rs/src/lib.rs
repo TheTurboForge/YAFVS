@@ -25,11 +25,12 @@ pub use commands::{
     command_runtime_full_test_scan_preflight, command_runtime_full_test_scan_start,
     command_runtime_full_test_scan_status, command_runtime_gmp_smoke,
     command_runtime_identity_migrate, command_runtime_log_review,
-    command_runtime_native_api_direct_token, command_runtime_nmap_capability_check,
-    command_runtime_performance_snapshot, command_runtime_plan, command_runtime_rbac_smoke,
-    command_runtime_redis_state, command_runtime_scanner_capability_check,
-    command_runtime_scanner_process_check, command_runtime_webui_smoke,
-    command_rust_migration_state, command_security_policy_check, command_status, find_repo_root,
+    command_runtime_native_api_direct_bootstrap, command_runtime_native_api_direct_token,
+    command_runtime_nmap_capability_check, command_runtime_performance_snapshot,
+    command_runtime_plan, command_runtime_rbac_smoke, command_runtime_redis_state,
+    command_runtime_scanner_capability_check, command_runtime_scanner_process_check,
+    command_runtime_webui_smoke, command_rust_migration_state, command_security_policy_check,
+    command_status, find_repo_root,
 };
 pub use render::{render_human, render_json};
 pub use result::{ResultEnvelope, exit_code};
@@ -161,6 +162,9 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         ),
         CliCommand::RuntimeNativeApiDirectToken { rotate } => {
             command_runtime_native_api_direct_token(&repo_root, *rotate)
+        }
+        CliCommand::RuntimeNativeApiDirectBootstrap => {
+            command_runtime_native_api_direct_bootstrap(&repo_root, cli.status_only)
         }
     }
 }

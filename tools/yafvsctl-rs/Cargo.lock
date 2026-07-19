@@ -457,23 +457,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d56353a2a665ad0f41a421187180aab746c8c325620617ad883a99a1cbe66d2"
 
 [[package]]
-name = "yafvsctl"
-version = "0.1.0-alpha.0"
-dependencies = [
- "clap",
- "glob",
- "libc",
- "quick-xml",
- "regex",
- "serde",
- "serde_json",
- "sha2",
- "shlex",
- "time",
- "toml",
-]
-
-[[package]]
 name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -523,6 +506,23 @@ name = "winnow"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
+
+[[package]]
+name = "yafvsctl"
+version = "0.1.0-alpha.0"
+dependencies = [
+ "clap",
+ "glob",
+ "libc",
+ "quick-xml",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "shlex",
+ "time",
+ "toml",
+]
 
 [[package]]
 name = "zmij"

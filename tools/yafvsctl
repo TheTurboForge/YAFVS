@@ -274,8 +274,6 @@ NATIVE_NVT_DIAGNOSTIC_PREREQUISITE_IDS = (
 NATIVE_TARGET_CSV_SSH_CREDENTIAL_TYPES = frozenset({"up", "usk"})
 NATIVE_TARGET_CSV_SMB_CREDENTIAL_TYPES = frozenset({"up"})
 NATIVE_TASK_BATCH_PAGE_SIZE = 500
-NATIVE_REPORT_CSV_DEFAULT_MAX_RESULTS = 100_000
-NATIVE_REPORT_CSV_MAX_RESULTS_LIMIT = 1_000_000
 NATIVE_REPORT_BUNDLE_DEFAULT_MAX_ITEMS = 100_000
 NATIVE_REPORT_BUNDLE_MAX_ITEMS_LIMIT = 1_000_000
 NATIVE_REPORT_BUNDLE_DEFAULT_MAX_BYTES = 512 * 1024 * 1024
@@ -22025,192 +22023,6 @@ def native_report_csv_row(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def native_report_csv_result_row_is_typed(row: Any, report_id: str) -> bool:
-    return (
-        isinstance(row, dict)
-        and isinstance(row.get("id"), str)
-        and bool(UUID_VALUE_RE.fullmatch(row["id"]))
-        and row.get("source_report_id") == report_id
-        and isinstance(row.get("host"), str)
-        and isinstance(row.get("port"), str)
-        and isinstance(row.get("nvt_oid"), str)
-        and isinstance(row.get("name"), str)
-        and type(row.get("severity")) in {int, float}
-        and type(row.get("qod")) is int
-    )
-
-
-def native_export_report_csv_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    details = result.get("details") if isinstance(result.get("details"), dict) else {}
-    compact = dict(result)
-    compact["details"] = {
-        key: details.get(key)
-        for key in ("report_id", "output", "max_results", "row_count", "total", "page_count", "byte_count", "sha256")
-    }
-    compact["findings"] = [
-        compact_doctor_finding(item)
-        for item in result.get("findings", [])
-        if isinstance(item, dict) and item.get("status") != "pass"
-    ] or [finding("pass", "native-export-report-csv.status-only", "Native CSV report export completed; evidence content omitted.")]
-    return compact
-
-
-def native_export_report_csv_result(
-    repo_root: Path,
-    summary: str,
-    findings: list[dict[str, Any]],
-    details: dict[str, Any],
-    *,
-    status_only: bool,
-    artifacts: list[str] | None = None,
-) -> dict[str, Any]:
-    result = make_result("native-export-report-csv", repo_root, summary, findings, artifacts or [])
-    result["details"] = details
-    return native_export_report_csv_status_only_result(result) if status_only else result
-
-
-def command_native_export_report_csv(
-    repo_root: Path,
-    *,
-    report_id: str,
-    output: Path | None = None,
-    max_results: int = NATIVE_REPORT_CSV_DEFAULT_MAX_RESULTS,
-    overwrite: bool = False,
-    status_only: bool = False,
-) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    details: dict[str, Any] = {"report_id": report_id, "max_results": max_results, "row_count": 0, "total": None, "page_count": 0}
-    try:
-        report_id = validate_native_api_operator_uuid_value(report_id, env_name="--report-id")
-        if type(max_results) is not int or not 1 <= max_results <= NATIVE_REPORT_CSV_MAX_RESULTS_LIMIT:
-            raise ValueError(f"--max-results must be between 1 and {NATIVE_REPORT_CSV_MAX_RESULTS_LIMIT}")
-        output_path = (output or Path(f"{report_id}.csv")).expanduser()
-        if output_path.exists() and output_path.is_dir():
-            raise ValueError("--output must name a file, not a directory")
-        if output_path.exists() and not overwrite:
-            raise ValueError("--output already exists; use --overwrite to replace it")
-        if not output_path.parent.is_dir():
-            raise ValueError("--output parent directory does not exist")
-        if not os.access(output_path.parent, os.W_OK):
-            raise ValueError("--output parent directory is not writable")
-    except (OSError, ValueError) as exc:
-        findings.append(finding("fail", "native-export-report-csv.arguments", str(exc)))
-        return native_export_report_csv_result(repo_root, "Native CSV report export rejected before runtime access.", findings, details, status_only=status_only)
-
-    details.update({"report_id": report_id, "output": str(output_path), "max_results": max_results})
-    env = native_api_direct_runtime_env(repo_root)
-    findings.append(native_api_direct_config_shape_finding(env, check="native-export-report-csv.direct-config-shape"))
-    if aggregate_status(findings) == "fail":
-        return native_export_report_csv_result(repo_root, "Direct native API CSV export rejected before runtime access.", findings, details, status_only=status_only)
-    token = native_api_direct_bearer_token(repo_root, env)
-    if not direct_api_bearer_token_is_acceptable(token):
-        findings.append(finding("fail", "native-export-report-csv.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH}))
-        return native_export_report_csv_result(repo_root, "Direct native API CSV export rejected before runtime access.", findings, details, status_only=status_only)
-
-    detail_path = f"/api/v1/reports/{urllib.parse.quote(report_id)}"
-    detail_response = direct_native_api_curl(repo_root, detail_path, token=token, env=env)
-    detail_json, detail_status = parse_json_output_with_http_status(detail_response)
-    detail_ok = (
-        detail_response.returncode == 0
-        and detail_status == 200
-        and isinstance(detail_json, dict)
-        and detail_json.get("id") == report_id
-        and isinstance(detail_json.get("name"), str)
-    )
-    findings.append(
-        native_api_probe_finding(
-            "pass" if detail_ok else "fail",
-            "native-export-report-csv.report-preflight",
-            "Direct native API returned the exact report metadata." if detail_ok else "Direct native API report preflight failed or returned the wrong report.",
-            detail_response,
-            direct_native_api_display_command(detail_path, token=token, env=env),
-            detail_json,
-            {"http_status": detail_status, "report_id": report_id, **summarize_native_api_response(detail_json)},
-        )
-    )
-    if not detail_ok:
-        return native_export_report_csv_result(repo_root, "Native CSV report export stopped at report preflight.", findings, details, status_only=status_only)
-
-    rows: list[dict[str, Any]] = []
-    seen_ids: set[str] = set()
-    expected_total: int | None = None
-    page = 1
-    while expected_total is None or len(rows) < expected_total:
-        path = f"/api/v1/reports/{urllib.parse.quote(report_id)}/results?page={page}&page_size={NATIVE_TASK_BATCH_PAGE_SIZE}&sort=-severity"
-        response = direct_native_api_curl(repo_root, path, token=token, env=env)
-        parsed, http_status = parse_json_output_with_http_status(response)
-        items = parsed.get("items") if isinstance(parsed, dict) else None
-        page_info = parsed.get("page") if isinstance(parsed, dict) else None
-        total = page_info.get("total") if isinstance(page_info, dict) else None
-        page_number = page_info.get("page") if isinstance(page_info, dict) else None
-        page_ok = (
-            response.returncode == 0
-            and http_status == 200
-            and isinstance(items, list)
-            and type(total) is int
-            and total >= 0
-            and page_number == page
-            and all(native_report_csv_result_row_is_typed(item, report_id) for item in items)
-        )
-        if expected_total is not None and total != expected_total:
-            page_ok = False
-        if page_ok and expected_total is None:
-            expected_total = total
-            details["total"] = total
-            if total > max_results:
-                findings.append(finding("fail", "native-export-report-csv.max-results", f"Report contains {total} results, exceeding --max-results {max_results}.", details={"total": total, "max_results": max_results}))
-                return native_export_report_csv_result(repo_root, "Native CSV report export stopped at the result safety cap.", findings, details, status_only=status_only)
-        if page_ok:
-            page_ids = [item["id"] for item in items]
-            if len(page_ids) != len(set(page_ids)) or any(item_id in seen_ids for item_id in page_ids):
-                page_ok = False
-        if not page_ok:
-            findings.append(finding("fail", "native-export-report-csv.result-page", "Direct native API returned an invalid, drifting, duplicate, or incomplete result page.", details={"page": page, "http_status": http_status, "expected_total": expected_total, "observed_total": total}))
-            return native_export_report_csv_result(repo_root, "Native CSV report export failed while reading result pages; no output was replaced.", findings, details, status_only=status_only)
-        if not items and expected_total != len(rows):
-            findings.append(finding("fail", "native-export-report-csv.incomplete", "Result pagination ended before the declared total was reached.", details={"page": page, "row_count": len(rows), "total": expected_total}))
-            return native_export_report_csv_result(repo_root, "Native CSV report export ended before all results were read; no output was replaced.", findings, details, status_only=status_only)
-        seen_ids.update(item["id"] for item in items)
-        rows.extend(items)
-        details["page_count"] = page
-        if expected_total == len(rows):
-            break
-        if expected_total is not None and len(rows) > expected_total:
-            findings.append(finding("fail", "native-export-report-csv.total-overrun", "Result pages exceeded the declared total.", details={"page": page, "row_count": len(rows), "total": expected_total}))
-            return native_export_report_csv_result(repo_root, "Native CSV report export exceeded the declared result total; no output was replaced.", findings, details, status_only=status_only)
-        page += 1
-
-    details["row_count"] = len(rows)
-    findings.append(finding("pass", "native-export-report-csv.results", f"Read all {len(rows)} report result row(s) across {details['page_count']} page(s).", details={"row_count": len(rows), "total": expected_total, "page_count": details["page_count"]}))
-
-    temp_path = output_path.parent / f".{output_path.name}.tmp-{os.getpid()}-{secrets.token_hex(8)}"
-    try:
-        fd = os.open(temp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=NATIVE_REPORT_CSV_FIELDS, extrasaction="ignore")
-            writer.writeheader()
-            writer.writerows(native_report_csv_row(row) for row in rows)
-            handle.flush()
-            os.fsync(handle.fileno())
-        byte_count = temp_path.stat().st_size
-        digest = hashlib.sha256()
-        with temp_path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
-        os.replace(temp_path, output_path)
-    except OSError as exc:
-        try:
-            temp_path.unlink(missing_ok=True)
-        except OSError:
-            pass
-        findings.append(finding("fail", "native-export-report-csv.output", f"Atomic CSV output failed: {exc}", details={"output": str(output_path)}))
-        return native_export_report_csv_result(repo_root, "Native CSV report export could not write the output; any existing file was preserved.", findings, details, status_only=status_only)
-
-    details.update({"byte_count": byte_count, "sha256": digest.hexdigest()})
-    findings.append(finding("pass", "native-export-report-csv.output", "Native report evidence CSV was written atomically.", details={"output": str(output_path), "row_count": len(rows), "byte_count": byte_count, "sha256": digest.hexdigest()}))
-    return native_export_report_csv_result(repo_root, "Native report evidence CSV export completed.", findings, details, status_only=status_only, artifacts=[str(output_path)])
-
-
 NATIVE_REPORT_BUNDLE_ERROR_FIELDS = (
     "id",
     "source_report_id",
@@ -28149,12 +27961,6 @@ def build_parser() -> argparse.ArgumentParser:
     native_scan_with_delivery.add_argument("--allow-scan-control", action="store_true", help="confirm intentional target/task creation and scan start")
     native_scan_with_delivery.add_argument("--dry-run", action="store_true", help="plan request bodies without runtime access; this is the default without --allow-scan-control")
     native_scan_with_delivery.add_argument("--status-only", action="store_true", help="emit compact resource identifiers and state")
-    native_export_report_csv = subparsers.add_parser("native-export-report-csv", parents=[common], help="export deterministic report result evidence through the direct native API")
-    native_export_report_csv.add_argument("--report-id", required=True, help="raw report UUID")
-    native_export_report_csv.add_argument("--output", type=Path, help="CSV output path; defaults to REPORT_ID.csv")
-    native_export_report_csv.add_argument("--max-results", type=int, default=NATIVE_REPORT_CSV_DEFAULT_MAX_RESULTS, help=f"safety cap from 1 to {NATIVE_REPORT_CSV_MAX_RESULTS_LIMIT}")
-    native_export_report_csv.add_argument("--overwrite", action="store_true", help="replace an existing output atomically")
-    native_export_report_csv.add_argument("--status-only", action="store_true", help="emit compact export metadata without evidence rows")
     native_export_report_bundle = subparsers.add_parser("native-export-report-bundle", parents=[common], help="export a complete versioned native report evidence bundle")
     native_export_report_bundle.add_argument("--report-id", required=True, help="raw report UUID")
     native_export_report_bundle.add_argument("--output", type=Path, help="ZIP output path; defaults to REPORT_ID.yafvs-report.zip")
@@ -28409,15 +28215,6 @@ def main(argv: list[str] | None = None) -> int:
             scanner_id=args.scanner_id,
             allow_scan_control=args.allow_scan_control,
             dry_run=args.dry_run,
-            status_only=args.status_only,
-        )
-    elif args.command == "native-export-report-csv":
-        result = command_native_export_report_csv(
-            repo_root,
-            report_id=args.report_id,
-            output=args.output,
-            max_results=args.max_results,
-            overwrite=args.overwrite,
             status_only=args.status_only,
         )
     elif args.command == "native-delete-overrides-by-filter":

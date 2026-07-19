@@ -307,7 +307,7 @@ tools/yafvsctl native-verify-scanners --json --allow-write-control --status-only
 just native-start-task --task-id TASK_UUID --allow-write-control
 tools/yafvsctl native-scan-new-system --host 192.0.2.10 --dry-run --status-only
 tools/yafvsctl native-scan-new-system --host 192.0.2.10 --allow-scan-control --status-only
-tools/yafvsctl native-export-report-csv --report-id REPORT_UUID --output ./report.csv --status-only
+just native-export-report-csv --report-id REPORT_UUID --output ./report.csv --status-only
 just native-export-report-pdf --report-id REPORT_UUID --output ./report.pdf --status-only
 tools/yafvsctl native-export-report-bundle --report-id REPORT_UUID --output ./report.yafvs-report.zip --status-only
 tools/yafvsctl native-delete-overrides-by-filter --filter 'obsolete policy' --dry-run --status-only

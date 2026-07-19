@@ -1981,6 +1981,7 @@ mod tests {
             "feed-generation-rollback",
             "runtime-db-introspect",
             "runtime-performance-snapshot",
+            "runtime-status",
             "runtime-report-summary",
             "runtime-report-export",
             "runtime-report-metrics",

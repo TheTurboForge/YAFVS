@@ -1121,7 +1121,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 env = feed_generation_env.copy()
                 if arguments[0] == "quality-gate-schedule":
                     env.pop("YAFVS_ENABLE_QUALITY_GATE_SCHEDULE", None)
-                if arguments[0] in {"runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-report-summary", "runtime-report-export", "runtime-report-metrics", "runtime-scope-report-summary", "runtime-scope-report-metrics"}:
+                if arguments[0] in {"runtime-status", "runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-report-summary", "runtime-report-export", "runtime-report-metrics", "runtime-scope-report-summary", "runtime-scope-report-metrics"}:
                     env["COMPOSE_PROJECT_NAME"] = "yafvsctl-parity-no-runtime"
                 if arguments[0] in {"down", "runtime-app-down"}:
                     shutdown_runtime = Path(parity_runtime) / arguments[0]
@@ -1228,7 +1228,11 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["deps", "gsa", "--json"], 0, "pass"),
                 (["deps", "definitely-invalid", "--json"], 1, "fail"),
                 (["runtime-plan", "--json"], 0, "warn"),
+                (["runtime-status", "--json"], 0, "warn"),
                 (["native-api-request", "--path", "/not-api", "--json"], 1, "fail"),
+                (["native-scan-new-system", "--host", "not-an-ip", "--json"], 1, "fail"),
+                (["native-scan-with-delivery", "--host", "not-an-ip", "--alert-id", "not-a-uuid", "--json"], 1, "fail"),
+                (["native-nvt-diagnostic-scan", "--host", "not-an-ip", "--nvt-id", "1.2.3", "--json"], 1, "fail"),
                 (["native-export-report-bundle", "--report-id", "11111111-1111-4111-8111-111111111111", "--max-items", "0", "--json"], 1, "fail"),
                 (["native-export-report-csv", "--report-id", "11111111-1111-4111-8111-111111111111", "--max-results", "0", "--json"], 1, "fail"),
                 (["native-export-report-pdf", "--report-id", "11111111-1111-4111-8111-111111111111", "--max-bytes", "0", "--json"], 1, "fail"),
@@ -1600,7 +1604,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
         runtime_scope_source = (root / "tools" / "runtime_scope.py").read_text(encoding="utf-8")
         browser_smoke_command = source.split("def command_runtime_browser_smoke", 1)[1].split("def command_runtime_browser_regression", 1)[0]
-        browser_regression_command = source.split("def command_runtime_browser_regression", 1)[1].split("def command_runtime_status", 1)[0]
+        browser_regression_command = source.split("def command_runtime_browser_regression", 1)[1].split("def command_runtime_smoke", 1)[0]
         scope_command_action = next(action for action in runtime_scope.build_parser()._actions if action.dest == "command")
         self.assertFalse((root / "tools" / "runtime_metrics.py").exists())
         self.assertEqual(scope_command_action.choices, ("smoke",))
@@ -2857,6 +2861,14 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("def command_runtime_performance_snapshot", source)
         self.assertIn("runtime-performance-snapshot *args:", justfile)
         self.assertIn("tools/yafvsctl-rs/Cargo.toml -- runtime-performance-snapshot", justfile)
+
+    def test_runtime_status_is_rust_only(self):
+        source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        self.assertNotIn('subparsers.add_parser("runtime-status"', source)
+        self.assertNotIn("def command_runtime_status", source)
+        self.assertIn("runtime-status *args:", justfile)
+        self.assertIn("tools/yafvsctl-rs/Cargo.toml -- runtime-status", justfile)
 
     def test_audit_commands_are_rust_only(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")

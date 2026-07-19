@@ -21561,41 +21561,6 @@ def command_runtime_browser_regression(repo_root: Path, *, status_only: bool = F
     return runtime_browser_regression_status_only_result(result_payload) if status_only else result_payload
 
 
-def command_runtime_status(repo_root: Path) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    manager_lock = runtime_lock_status(repo_root, RUNTIME_MANAGER_LOCK)
-    findings.append(finding("warn" if manager_lock["active"] else "pass", "runtime.manager-lock", "A manager operation is currently active." if manager_lock["active"] else "No manager operation lock is active.", details={"lock": manager_lock}))
-    findings.append(finding("pass" if shutil.which("docker") else "fail", "docker.available", "docker is available." if shutil.which("docker") else "docker is not available."))
-    docker = run_command(["docker", "info"], repo_root, env=runtime_env(repo_root))
-    findings.append(finding("pass" if docker.returncode == 0 else "fail", "docker.daemon", f"docker info exit code {docker.returncode}.", details={"output_tail": docker.stdout.splitlines()[-40:]}))
-    config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
-    findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": config.stdout.splitlines()[-40:]}))
-    findings.extend(ensure_runtime_dirs(repo_root))
-    ps = run_command(compose_command(repo_root, "ps", "--format", "json"), repo_root, env=runtime_env(repo_root))
-    findings.append(finding("pass" if ps.returncode == 0 else "fail", "compose.ps", f"docker compose ps exit code {ps.returncode}.", details={"output_tail": ps.stdout.splitlines()[-80:]}))
-    for service in RUNTIME_SERVICES:
-        findings.append(finding("pass" if container_running(repo_root, service) else "warn", "runtime.running", f"{service} container is {'running' if container_running(repo_root, service) else 'not running'}.", details={"service": service}))
-    if container_running(repo_root, "postgres"):
-        ready = postgres_ready(repo_root)
-        findings.append(finding("pass" if ready.returncode == 0 else "warn", "postgres.ready", f"pg_isready exit code {ready.returncode}.", details={"output_tail": ready.stdout.splitlines()[-20:]}))
-        findings.extend(ensure_postgres_collation(repo_root, refresh_empty=False))
-        dba = psql(repo_root, "SELECT EXISTS (SELECT FROM pg_roles WHERE rolname = 'dba');")
-        dba_value = psql_value(dba)
-        findings.append(finding("pass" if dba.returncode == 0 and dba_value == "t" else "warn", "postgres.role.dba", f"dba role exists: {dba_value or 'unknown'}.", details={"output_tail": dba.stdout.splitlines()[-20:]}))
-        membership = psql(repo_root, f"SELECT pg_has_role({sql_literal(postgres_user(repo_root))}, 'dba', 'member');")
-        membership_value = psql_value(membership)
-        findings.append(finding("pass" if membership.returncode == 0 and membership_value == "t" else "warn", "postgres.role.membership", f"{postgres_user(repo_root)} has dba role membership: {membership_value or 'unknown'}.", details={"output_tail": membership.stdout.splitlines()[-20:]}))
-        findings.append(pg_gvm_extension_status(repo_root))
-    findings.extend(cert_file_findings(repo_root))
-    secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
-    findings.append(finding("pass" if secret_path.is_file() else "warn", "runtime.admin-secret", "Development admin secret exists." if secret_path.is_file() else "Development admin secret is not initialized yet.", str(secret_path)))
-    for service in APP_SERVICES:
-        findings.append(finding("pass" if container_running(repo_root, service) else "warn", "runtime.app.running", f"{service} container is {'running' if container_running(repo_root, service) else 'not running'}.", details={"service": service}))
-    findings.append(socket_readiness_finding("gvmd.socket", "gvmd", gvmd_socket_path(repo_root)))
-    findings.append(socket_readiness_finding("ospd.socket", "ospd-openvas", ospd_socket_path(repo_root)))
-    return make_result("runtime-status", repo_root, "Runtime status collected.", findings, [str(runtime_dir(repo_root))])
-
-
 def command_runtime_smoke(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     findings.extend(ensure_runtime_dirs(repo_root))
@@ -21799,7 +21764,7 @@ def command_quality_gate(repo_root: Path, include_runtime: bool = False) -> dict
 
     if include_runtime:
         for name, command_result in (
-            ("runtime-status", command_runtime_status(repo_root)),
+            ("runtime-status", rust_result_envelope(repo_root, "runtime-status", ["runtime-status"])),
             ("runtime-log-review", rust_runtime_log_review_result(repo_root)),
             ("runtime-data-state", rust_runtime_data_state_result(repo_root)),
         ):
@@ -21870,7 +21835,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-manager-init", parents=[common], help="initialize persistent gvmd database/user prerequisites")
     subparsers.add_parser("runtime-scanner-redis-init", parents=[common], help="initialize dedicated OpenVAS scanner Redis runtime")
     subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
-    subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
     runtime_app_up = subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
     runtime_app_up.add_argument("--status-only", action="store_true", help="emit compact app startup status and only non-pass findings for chat-safe validation")
@@ -21937,8 +21901,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_scanner_redis_init(repo_root)
     elif args.command == "runtime-scanner-register":
         result = command_runtime_scanner_register(repo_root)
-    elif args.command == "runtime-status":
-        result = command_runtime_status(repo_root)
     elif args.command == "runtime-smoke":
         result = command_runtime_smoke(repo_root)
     elif args.command == "runtime-app-up":

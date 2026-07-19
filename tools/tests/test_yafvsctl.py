@@ -1225,6 +1225,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["native-schedules-from-csv", "--csv-file", "/definitely-missing-yafvs-schedules.csv", "--json"], 1, "fail"),
                 (["native-schedules-from-xml", "--xml-file", "/definitely-missing-yafvs-schedules.xml", "--json"], 1, "fail"),
                 (["native-credentials-from-csv", "--csv-file", "/definitely-missing-yafvs-credentials.csv", "--json"], 1, "fail"),
+                (["native-alerts-from-csv", "--csv-file", "/definitely-missing-yafvs-alerts.csv", "--json"], 1, "fail"),
                 (["native-tasks-from-csv", "--csv-file", "/definitely-missing-yafvs-tasks-create.csv", "--json"], 1, "fail"),
                 (["down", "--json"], 1, "fail"),
                 (["runtime-app-down", "--json"], 1, "fail"),
@@ -2366,7 +2367,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-tasks-from-csv", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2385,6 +2386,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "native-stop-all-tasks",
             "native-tasks-from-csv",
             "native-credentials-from-csv",
+            "native-alerts-from-csv",
         ):
             self.assertNotIn(f'add_parser("{command}"', source)
             self.assertNotIn(f'elif args.command == "{command}":', source)
@@ -7918,272 +7920,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["warning_count"], 1)
         self.assertEqual(result["details"]["failure_count"], 0)
         self.assertNotIn("Authorization: Bearer a", json.dumps(result))
-
-    def test_native_alerts_from_csv_rejects_malformed_rows_before_runtime(self):
-        invalid_rows = (
-            "Too,Few,Columns\n",
-            "Bad,OTHER,a,b,c,d,1,CSV Results,Done\n",
-            "Bad,EMAIL,a,b,c,d,9,CSV Results,Done\n",
-            "Bad,SMB,credential,not-a-share,report.csv,reports,,CSV Results,Done\n",
-            "Duplicate,EMAIL,a,b,c,d,1,CSV Results,Done\nDuplicate,EMAIL,a,b,c,d,1,CSV Results,Done\n",
-            "Bad,EMAIL,a,b,c,d,1,CSV Results,Unknown Status\n",
-        )
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "alerts.csv"
-            for content in invalid_rows:
-                csv_file.write_text(content, encoding="utf-8")
-                with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                    result = yafvsctl.command_native_alerts_from_csv(root, csv_file, allow_write_control=True)
-                    curl.assert_not_called()
-                self.assertEqual(result["status"], "fail")
-                self.assertNotIn("not-a-share", json.dumps(result))
-
-    def test_native_alert_csv_message_rejects_c1_controls_before_runtime(self):
-        with self.assertRaisesRegex(ValueError, "message must be UTF-8 text"):
-            yafvsctl.native_alert_csv_message(1, "visible\u0085control")
-
-    def test_native_alerts_from_csv_rejects_gvmd_invalid_smb_paths_before_runtime(self):
-        invalid_rows = (
-            "Bad,SMB,credential,//server/sha?re,report.csv,reports,,CSV Results,Done\n",
-            "Bad,SMB,credential,//server/share,report.csv,reports?,,CSV Results,Done\n",
-            "Bad,SMB,credential,//server/share,report.csv,reports.,,CSV Results,Done\n",
-        )
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "alerts.csv"
-            for content in invalid_rows:
-                csv_file.write_text(content, encoding="utf-8")
-                with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                    result = yafvsctl.command_native_alerts_from_csv(root, csv_file, allow_write_control=True)
-                    curl.assert_not_called()
-                self.assertEqual(result["status"], "fail")
-                self.assertEqual(result["findings"][0]["check"], "native-alerts-from-csv.rows")
-
-    def test_native_alerts_from_csv_defaults_to_offline_redacted_dry_run(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "private-alert-input.csv"
-            csv_file.write_text(
-                "Mail,EMAIL,sender@example.invalid,recipient@example.invalid,secret subject,secret body,0,CSV Results,Done\n"
-                "Share,SMB,credential-name,//server/share,secret-report.csv,secret-folder,,CSV Results,Requested\n",
-                encoding="utf-8",
-            )
-            with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                result = yafvsctl.command_native_alerts_from_csv(root, csv_file, status_only=True)
-                curl.assert_not_called()
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["details"], {
-            "row_count": 2, "email_row_count": 1, "smb_row_count": 1, "dry_run": True,
-            "skipped_existing_alert_count": 0, "preflight_failure_count": 0,
-            "created_alert_count": 0, "create_failure_count": 0,
-            "indeterminate_alert_count": 0, "unattempted_alert_count": 0,
-        })
-        rendered = json.dumps(result)
-        for secret in ("sender@example.invalid", "recipient@example.invalid", "secret subject", "secret body", "credential-name", "//server/share", "secret-folder", "private-alert-input.csv"):
-            self.assertNotIn(secret, rendered)
-        self.assertNotIn(str(root), rendered)
-
-    def test_native_alerts_from_csv_resolves_metadata_before_exact_email_and_smb_posts(self):
-        calls: list[str] = []
-        bodies: list[dict[str, object]] = []
-        uuid = "00000000-0000-4000-8000-000000000001"
-        operator_uuid = "00000000-0000-4000-8000-000000000002"
-
-        def fake_direct(_root, path, **kwargs):
-            calls.append(path)
-            if "?" in path:
-                query = yafvsctl.urllib.parse.parse_qs(yafvsctl.urllib.parse.urlsplit(path).query)
-                name = query["filter"][0]
-                if path.startswith("/api/v1/report-formats?"):
-                    items = [{"id": uuid, "name": name}]
-                elif path.startswith("/api/v1/credentials?"):
-                    items = [{
-                        "id": uuid,
-                        "name": name,
-                        "credential_type": "up",
-                        "owner_id": operator_uuid,
-                        "smb_compatible": True,
-                    }]
-                else:
-                    items = []
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"page": {"total": len(items)}, "items": items}) + "\n200", "")
-            body = json.loads(kwargs["body"])
-            bodies.append(body)
-            response = {"id": uuid, "name": body["name"], "active": False, "method": {"type": body["method"]}, "method_data_redacted": True}
-            return subprocess.CompletedProcess(["curl"], 0, json.dumps(response) + "\n201", "")
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "alerts.csv"
-            csv_file.write_text(
-                "Mail,EMAIL,sender@example.invalid,recipient@example.invalid,Subject,message,2,CSV Results,Done\n"
-                "Share,SMB,share-credential,//server/share,report.csv,reports,,CSV Results,Requested\n",
-                encoding="utf-8",
-            )
-            with (
-                unittest.mock.patch.object(
-                    yafvsctl,
-                    "native_api_direct_runtime_env",
-                    return_value={yafvsctl.YAFVS_API_OPERATOR_UUID_ENV: operator_uuid},
-                ),
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "config", "ok")),
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="a" * 64),
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct),
-            ):
-                result = yafvsctl.command_native_alerts_from_csv(root, csv_file, allow_write_control=True)
-        self.assertEqual(result["status"], "pass")
-        self.assertTrue(all("?" in path for path in calls[:5]))
-        self.assertEqual(result["details"]["created_alert_count"], 2)
-        self.assertIn("operator-owned and SMB-compatible", result["findings"][-2]["message"])
-        self.assertEqual(bodies[0], {
-            "method": "EMAIL", "name": "Mail", "comment": yafvsctl.NATIVE_ALERT_CSV_COMMENT,
-            "active": True, "status": "Done", "to_address": "recipient@example.invalid",
-            "from_address": "sender@example.invalid", "subject": "Subject", "notice": "attach",
-            "message": "message", "report_format_id": uuid,
-        })
-        self.assertEqual(bodies[1], {
-            "method": "SMB", "name": "Share", "comment": yafvsctl.NATIVE_ALERT_CSV_COMMENT,
-            "active": True, "status": "Requested", "smb_credential_id": uuid,
-            "smb_share_path": "//server/share", "smb_file_path": "reports/report.csv",
-            "report_format_id": uuid, "smb_max_protocol": "default",
-        })
-        self.assertNotIn("share-credential", json.dumps(result))
-        self.assertNotIn("//server/share", json.dumps(result))
-
-    def test_native_alerts_from_csv_requires_exact_owner_and_smb_compatible_before_any_write(self):
-        operator_uuid = "00000000-0000-4000-8000-000000000002"
-        invalid_metadata = (
-            {"owner_id": "00000000-0000-4000-8000-000000000003", "smb_compatible": True},
-            {"owner_id": operator_uuid, "smb_compatible": False},
-            {"owner_id": operator_uuid, "smb_compatible": 1},
-        )
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "alerts.csv"
-            csv_file.write_text(
-                "Mail,EMAIL,sender@example.invalid,recipient@example.invalid,Subject,message,1,CSV Results,Done\n"
-                "Share,SMB,share-credential,//server/share,report.csv,reports,,CSV Results,Done\n",
-                encoding="utf-8",
-            )
-            for metadata in invalid_metadata:
-                def fake_direct(_root, path, **_kwargs):
-                    if path.startswith("/api/v1/alerts?"):
-                        items = []
-                    elif path.startswith("/api/v1/report-formats?"):
-                        items = [{"id": "00000000-0000-4000-8000-000000000001", "name": "CSV Results"}]
-                    else:
-                        items = [{
-                            "id": "00000000-0000-4000-8000-000000000001",
-                            "name": "share-credential",
-                            "credential_type": "up",
-                            **metadata,
-                        }]
-                    return subprocess.CompletedProcess(["curl"], 0, json.dumps({"page": {"total": len(items)}, "items": items}) + "\n200", "")
-
-                with (
-                    unittest.mock.patch.object(
-                        yafvsctl,
-                        "native_api_direct_runtime_env",
-                        return_value={yafvsctl.YAFVS_API_OPERATOR_UUID_ENV: operator_uuid},
-                    ),
-                    unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "config", "ok")),
-                    unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="b" * 64),
-                    unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct) as curl,
-                ):
-                    result = yafvsctl.command_native_alerts_from_csv(root, csv_file, allow_write_control=True)
-                self.assertEqual(result["status"], "fail")
-                self.assertEqual(result["details"]["preflight_failure_count"], 1)
-                self.assertFalse(any(call.args[1] == "/api/v1/alerts" for call in curl.mock_calls))
-
-    def test_native_alert_csv_redaction_does_not_confuse_smb_credential_name_with_method_type(self):
-        row = yafvsctl.NativeAlertCsvRow(
-            row_number=1,
-            name="Share",
-            method="SMB",
-            status="Done",
-            report_format_name="CSV Results",
-            smb_credential_name="SMB",
-            smb_share_path="//server/share",
-            smb_file_path="reports/report.csv",
-        )
-        response = {
-            "id": "00000000-0000-4000-8000-000000000001",
-            "name": "Share",
-            "active": False,
-            "method": {"type": "SMB"},
-            "method_data_redacted": True,
-        }
-        self.assertTrue(yafvsctl.native_alert_csv_response_is_redacted(response, row))
-        response["smb_credential"] = "SMB"
-        self.assertFalse(yafvsctl.native_alert_csv_response_is_redacted(response, row))
-
-    def test_native_alerts_from_csv_rejects_ambiguous_or_non_up_metadata_before_writes(self):
-        def fake_direct(_root, path, **_kwargs):
-            if path.startswith("/api/v1/alerts?"):
-                items = [{"name": "Share"}, {"name": "Share"}]
-            elif path.startswith("/api/v1/report-formats?"):
-                items = [{"id": "00000000-0000-4000-8000-000000000001", "name": "CSV Results"}]
-            else:
-                items = [{"id": "00000000-0000-4000-8000-000000000001", "name": "share-credential", "credential_type": "usk"}]
-            return subprocess.CompletedProcess(["curl"], 0, json.dumps({"page": {"total": len(items)}, "items": items}) + "\n200", "")
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "alerts.csv"
-            csv_file.write_text("Share,SMB,share-credential,//server/share,report.csv,reports,,CSV Results,Done\n", encoding="utf-8")
-            with (
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}),
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "config", "ok")),
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="b" * 64),
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct) as curl,
-            ):
-                result = yafvsctl.command_native_alerts_from_csv(root, csv_file, allow_write_control=True)
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(result["details"]["preflight_failure_count"], 1)
-        self.assertFalse(any(path == "/api/v1/alerts" for path, _args, _kwargs in curl.mock_calls))
-
-    def test_native_alerts_from_csv_stops_after_indeterminate_mutation_without_payload_leaks(self):
-        post_count = 0
-
-        def fake_direct(_root, path, **kwargs):
-            nonlocal post_count
-            if "?" in path:
-                name = yafvsctl.urllib.parse.parse_qs(yafvsctl.urllib.parse.urlsplit(path).query)["filter"][0]
-                if path.startswith("/api/v1/report-formats?"):
-                    items = [{"id": "00000000-0000-4000-8000-000000000001", "name": name}]
-                else:
-                    items = []
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"page": {"total": len(items)}, "items": items}) + "\n200", "")
-            post_count += 1
-            if post_count == 2:
-                return subprocess.CompletedProcess(["curl"], 7, "", "transport body echo sender@example.invalid")
-            body = json.loads(kwargs["body"])
-            response = {"id": "00000000-0000-4000-8000-000000000001", "name": body["name"], "active": False, "method": {"type": "EMAIL"}, "method_data_redacted": True}
-            return subprocess.CompletedProcess(["curl"], 0, json.dumps(response) + "\n201", "")
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "alerts.csv"
-            csv_file.write_text(
-                "First,EMAIL,sender@example.invalid,recipient@example.invalid,Subject,message,1,CSV Results,Done\n"
-                "Second,EMAIL,sender@example.invalid,recipient@example.invalid,Subject,message,1,CSV Results,Done\n"
-                "Last,EMAIL,sender@example.invalid,recipient@example.invalid,Subject,message,1,CSV Results,Done\n",
-                encoding="utf-8",
-            )
-            with (
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}),
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "config", "ok")),
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="c" * 64),
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct),
-            ):
-                result = yafvsctl.command_native_alerts_from_csv(root, csv_file, allow_write_control=True, status_only=True)
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(result["details"]["created_alert_count"], 1)
-        self.assertEqual(result["details"]["indeterminate_alert_count"], 1)
-        self.assertEqual(result["details"]["unattempted_alert_count"], 1)
-        self.assertNotIn("sender@example.invalid", json.dumps(result))
 
     def test_direct_write_smoke_covers_explicit_email_and_smb_methods_with_residue_cleanup(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")

@@ -97,7 +97,7 @@ native-credentials-from-csv *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- native-credentials-from-csv "$@"
 
 native-alerts-from-csv *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-alerts-from-csv "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- native-alerts-from-csv "$@"
 
 native-api-migration-matrix *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-api-migration-matrix "$@"

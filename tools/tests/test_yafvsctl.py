@@ -6904,6 +6904,24 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(args.port_list_id, yafvsctl.IANA_TCP_UDP_PORT_LIST_ID)
         self.assertEqual(args.scan_config_id, yafvsctl.FULL_AND_FAST_SCAN_CONFIG_ID)
         self.assertEqual(args.scanner_id, yafvsctl.NATIVE_SCAN_NEW_SYSTEM_DEFAULT_SCANNER_ID)
+        rust = subprocess.run(
+            [
+                "cargo", "run", "--quiet", "--locked",
+                "--target-dir", "build/yafvsctl-rs",
+                "--manifest-path", "tools/yafvsctl-rs/Cargo.toml", "--",
+                "native-scan-new-system", "--host", "2001:db8::10", "--dry-run", "--json",
+            ],
+            cwd=Path(__file__).resolve().parents[2],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=120,
+            check=False,
+        )
+        self.assertEqual(rust.returncode, 0, rust.stderr)
+        payload = json.loads(rust.stdout)
+        self.assertEqual(payload["details"]["status"], "dry_run")
+        self.assertEqual(payload["details"]["planned_target"]["hosts"], ["2001:db8::10"])
 
     def test_native_scan_new_system_is_not_a_remaining_gvm_tools_replacement_candidate(self):
         candidates = set().union(*yafvsctl.NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS.values())
@@ -7254,6 +7272,27 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("start-alert-scan.gmp.py", candidates)
         self.assertNotIn("start-alert-scan.gmp.py", yafvsctl.NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS)
         self.assertFalse((Path(__file__).resolve().parents[2] / "components/gvm-tools/scripts/start-alert-scan.gmp.py").exists())
+        rust = subprocess.run(
+            [
+                "cargo", "run", "--quiet", "--locked",
+                "--target-dir", "build/yafvsctl-rs",
+                "--manifest-path", "tools/yafvsctl-rs/Cargo.toml", "--",
+                "native-scan-with-delivery",
+                "--target-id", "11111111-1111-4111-8111-111111111111",
+                "--alert-id", "44444444-4444-4444-8444-444444444444",
+                "--json",
+            ],
+            cwd=Path(__file__).resolve().parents[2],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=120,
+            check=False,
+        )
+        self.assertEqual(rust.returncode, 0, rust.stderr)
+        payload = json.loads(rust.stdout)
+        self.assertEqual(payload["details"]["status"], "dry_run")
+        self.assertEqual(payload["details"]["alert_id"], "44444444-4444-4444-8444-444444444444")
 
     def test_native_scan_with_delivery_status_only_keeps_delivery_reference(self):
         alert_id = "44444444-4444-4444-8444-444444444444"

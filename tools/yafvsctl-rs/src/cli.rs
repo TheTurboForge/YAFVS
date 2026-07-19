@@ -116,6 +116,44 @@ pub enum CliCommand {
         #[arg(long)]
         allow_write_control: bool,
     },
+    /// Create and start one scan for an explicit IP address.
+    NativeScanNewSystem {
+        #[arg(long)]
+        host: String,
+        #[arg(long, default_value = crate::commands::native_scan::IANA_TCP_UDP_PORT_LIST_ID)]
+        port_list_id: String,
+        #[arg(long, default_value = crate::commands::native_scan::FULL_AND_FAST_SCAN_CONFIG_ID)]
+        scan_config_id: String,
+        #[arg(long, default_value = crate::commands::native_scan::DEFAULT_SCANNER_ID)]
+        scanner_id: String,
+        #[arg(long)]
+        allow_scan_control: bool,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Create and start one guarded scan with an EMAIL or SMB alert.
+    NativeScanWithDelivery {
+        #[arg(
+            long,
+            conflicts_with = "target_id",
+            required_unless_present = "target_id"
+        )]
+        host: Option<String>,
+        #[arg(long, conflicts_with = "host", required_unless_present = "host")]
+        target_id: Option<String>,
+        #[arg(long)]
+        alert_id: String,
+        #[arg(long, default_value = crate::commands::native_scan::IANA_TCP_UDP_PORT_LIST_ID)]
+        port_list_id: String,
+        #[arg(long, default_value = crate::commands::native_scan::FULL_AND_FAST_SCAN_CONFIG_ID)]
+        scan_config_id: String,
+        #[arg(long, default_value = crate::commands::native_scan::DEFAULT_SCANNER_ID)]
+        scanner_id: String,
+        #[arg(long)]
+        allow_scan_control: bool,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Snapshot and trash a bounded native override filter result.
     NativeDeleteOverridesByFilter {
         #[arg(long)]
@@ -588,6 +626,8 @@ impl CliCommand {
             Self::NativeApiRequest { .. } => "native-api-request",
             Self::NativeEmptyTrash { .. } => "native-empty-trash",
             Self::NativeVerifyScanners { .. } => "native-verify-scanners",
+            Self::NativeScanNewSystem { .. } => "native-scan-new-system",
+            Self::NativeScanWithDelivery { .. } => "native-scan-with-delivery",
             Self::Status => "status",
             Self::Inventory { .. } => "inventory",
             Self::BrandingState => "branding-state",
@@ -1418,6 +1458,61 @@ mod tests {
             .is_ok()
         );
         assert!(parse_cli(["runtime-full-test-scan-preflight"]).is_err());
+    }
+
+    #[test]
+    fn parses_native_scan_commands_and_rejects_conflicting_targets() {
+        assert_eq!(
+            parse_cli([
+                "native-scan-new-system",
+                "--host",
+                "192.0.2.10",
+                "--dry-run",
+            ])
+            .unwrap()
+            .command,
+            CliCommand::NativeScanNewSystem {
+                host: "192.0.2.10".into(),
+                port_list_id: crate::commands::native_scan::IANA_TCP_UDP_PORT_LIST_ID.into(),
+                scan_config_id: crate::commands::native_scan::FULL_AND_FAST_SCAN_CONFIG_ID.into(),
+                scanner_id: crate::commands::native_scan::DEFAULT_SCANNER_ID.into(),
+                allow_scan_control: false,
+                dry_run: true,
+            }
+        );
+        assert_eq!(
+            parse_cli([
+                "native-scan-with-delivery",
+                "--target-id",
+                "11111111-1111-4111-8111-111111111111",
+                "--alert-id",
+                "22222222-2222-4222-8222-222222222222",
+            ])
+            .unwrap()
+            .command,
+            CliCommand::NativeScanWithDelivery {
+                host: None,
+                target_id: Some("11111111-1111-4111-8111-111111111111".into()),
+                alert_id: "22222222-2222-4222-8222-222222222222".into(),
+                port_list_id: crate::commands::native_scan::IANA_TCP_UDP_PORT_LIST_ID.into(),
+                scan_config_id: crate::commands::native_scan::FULL_AND_FAST_SCAN_CONFIG_ID.into(),
+                scanner_id: crate::commands::native_scan::DEFAULT_SCANNER_ID.into(),
+                allow_scan_control: false,
+                dry_run: false,
+            }
+        );
+        assert!(
+            parse_cli([
+                "native-scan-with-delivery",
+                "--host",
+                "192.0.2.10",
+                "--target-id",
+                "11111111-1111-4111-8111-111111111111",
+                "--alert-id",
+                "22222222-2222-4222-8222-222222222222",
+            ])
+            .is_err()
+        );
     }
 
     #[test]

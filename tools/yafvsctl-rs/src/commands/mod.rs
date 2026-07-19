@@ -26,6 +26,7 @@ mod native_export_report_bundle;
 mod native_export_report_csv;
 mod native_export_report_pdf;
 mod native_runtime;
+pub(crate) mod native_scan;
 mod native_verify_scanners;
 mod path_coupling;
 mod production_posture;
@@ -91,6 +92,7 @@ pub(crate) use native_export_report_csv::DEFAULT_MAX_RESULTS as NATIVE_REPORT_CS
 pub use native_export_report_csv::command_native_export_report_csv;
 pub(crate) use native_export_report_pdf::DEFAULT_MAX_BYTES as NATIVE_REPORT_PDF_DEFAULT_MAX_BYTES;
 pub use native_export_report_pdf::command_native_export_report_pdf;
+pub use native_scan::{command_native_scan_new_system, command_native_scan_with_delivery};
 pub use native_verify_scanners::command_native_verify_scanners;
 pub use path_coupling::command_path_coupling_state;
 pub use production_posture::command_production_posture_check;

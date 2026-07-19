@@ -1231,6 +1231,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["native-credentials-from-csv", "--csv-file", "/definitely-missing-yafvs-credentials.csv", "--json"], 1, "fail"),
                 (["native-alerts-from-csv", "--csv-file", "/definitely-missing-yafvs-alerts.csv", "--json"], 1, "fail"),
                 (["native-tasks-from-csv", "--csv-file", "/definitely-missing-yafvs-tasks-create.csv", "--json"], 1, "fail"),
+                (["runtime-scope-smoke", "--json"], 1, "fail"),
                 (["down", "--json"], 1, "fail"),
                 (["runtime-app-down", "--json"], 1, "fail"),
                 (["quality-gate-state", "--json"], (0, 1), ("pass", "warn", "fail")),
@@ -1730,36 +1731,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(reports[0]["scan_run_status"], "Done")
         self.assertEqual(reports[0]["result_count"], "7")
         native_json.assert_called_once_with(root, "/api/v1/reports?page_size=100&sort=-creation_time")
-
-    def test_runtime_scope_smoke_extracts_organization_proof_finding(self):
-        proof = yafvsctl.runtime_scope_organization_proof_finding(
-            {
-                "status": "pass",
-                "details": {
-                    "organization_scope": {"target_count": 4, "host_count": 7},
-                    "organization_scope_report": {"source_report_count": 4},
-                    "scope_after_add": {"target_count": 2, "host_count": 2},
-                    "scope_after_remove": {"target_count": 1, "host_count": 1},
-                    "cleanup": {
-                        "scope": "deleted",
-                        "scope_report": "deleted",
-                        "organization_scope_report": "deleted",
-                    },
-                },
-            }
-        )
-
-        self.assertIsNotNone(proof)
-        assert proof is not None
-        self.assertEqual(proof["status"], "pass")
-        self.assertEqual(proof["check"], "runtime-scope.organization-proof")
-        self.assertEqual(proof["details"]["organization_target_count"], 4)
-        self.assertEqual(proof["details"]["organization_host_count"], 7)
-        self.assertEqual(proof["details"]["organization_source_report_count"], 4)
-        self.assertEqual(proof["details"]["scope_after_add_target_count"], 2)
-        self.assertEqual(proof["details"]["scope_after_remove_host_count"], 1)
-        self.assertEqual(proof["details"]["cleanup_scope"], "deleted")
-        self.assertEqual(proof["details"]["cleanup_organization_scope_report"], "deleted")
 
     def test_report_metrics_ui_is_exposed_on_raw_and_scope_report_details(self):
         root = Path(__file__).resolve().parents[2]
@@ -2371,7 +2342,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-delete-overrides-by-filter", "native-bulk-modify-schedules", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-delete-overrides-by-filter", "native-bulk-modify-schedules", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "runtime-scope-smoke", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2481,7 +2452,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "native-api-request", "native-start-task", "native-stop-task", "native-update-task-target", "native-tasks-from-csv", "native-empty-trash", "native-verify-scanners"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "runtime-scope-smoke", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "native-api-request", "native-start-task", "native-stop-task", "native-update-task-target", "native-tasks-from-csv", "native-empty-trash", "native-verify-scanners"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotRegex(
@@ -12237,17 +12208,24 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_runtime_scope_uses_only_native_api(self):
         source = RUNTIME_SCOPE_PATH.read_text(encoding="utf-8")
         wrapper_source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
-        scope_wrapper = wrapper_source.split("def command_runtime_scope", 1)[1].split("def runtime_scope_organization_proof_finding", 1)[0]
+        rust_wrapper_source = (
+            Path(__file__).resolve().parents[1]
+            / "yafvsctl-rs/src/commands/runtime_probe.rs"
+        ).read_text(encoding="utf-8")
+        scope_wrapper = rust_wrapper_source.split("fn command_runtime_scope_smoke_with", 1)[1].split(
+            "fn runtime_scope_organization_proof_finding", 1
+        )[0]
         self.assertNotIn("runtime_full_test_scan.connect_gmp", source)
         self.assertNotIn("gmp.", source)
         self.assertNotIn("connect_raw_gmp_client", source)
         self.assertNotIn("runtime_full_test_scan", source)
         self.assertIn("native_generate_scope_report", source)
-        self.assertNotIn("venv_python(repo_root, \"python-gvm\")", scope_wrapper)
+        self.assertNotIn("def command_runtime_scope", wrapper_source)
+        self.assertNotIn('add_parser("runtime-scope-smoke"', wrapper_source)
+        self.assertIn("command_runtime_scope_smoke", rust_wrapper_source)
+        self.assertIn("Duration::from_secs(180)", scope_wrapper)
         self.assertNotIn("python-gvm.venv", scope_wrapper)
         self.assertNotIn("gvmd_socket_path(repo_root)", scope_wrapper)
-        self.assertNotIn("runtime_secret_path(repo_root", scope_wrapper)
-        self.assertIn("sys.executable", scope_wrapper)
 
     def test_runtime_rbac_smoke_uses_raw_bridge_not_python_gvm_connection(self):
         source = RUNTIME_RBAC_PATH.read_text(encoding="utf-8")

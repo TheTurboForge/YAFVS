@@ -1837,6 +1837,7 @@ mod tests {
             "runtime-gmp-smoke",
             "runtime-credential-smoke",
             "runtime-rbac-smoke",
+            "runtime-scope-smoke",
             "down",
             "runtime-app-down",
             "runtime-webui-smoke",

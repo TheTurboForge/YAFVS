@@ -4824,20 +4824,12 @@ def openvas_runtime_config_path(repo_root: Path) -> Path:
     return runtime_path(repo_root, "state", "ospd", "openvas.conf")
 
 
-def runtime_scope_probe_path(repo_root: Path) -> Path:
-    return repo_root / "tools" / "runtime_scope.py"
-
-
 def runtime_browser_smoke_probe_path(repo_root: Path) -> Path:
     return repo_root / "tools" / "runtime_browser_smoke.py"
 
 
 def runtime_browser_regression_probe_path(repo_root: Path) -> Path:
     return repo_root / "tools" / "runtime_browser_regression.py"
-
-
-def scope_report_artifact_dir(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "artifacts", "scope-reports")
 
 
 def metrics_artifact_dir(repo_root: Path) -> Path:
@@ -13764,120 +13756,6 @@ def native_scope_report_browser_target(repo_root: Path, check: str, success_mess
             "listing": listing_json,
             "output_tail": output_tail(listing.stdout, 80),
         },
-    )
-
-
-def command_runtime_scope(repo_root: Path, action: str) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    probe = runtime_scope_probe_path(repo_root)
-    artifact_dir = scope_report_artifact_dir(repo_root)
-    findings.append(finding("pass" if container_running(repo_root, "yafvs-api") else "fail", "native-api.container", "yafvs-api container is running." if container_running(repo_root, "yafvs-api") else "yafvs-api container is not running; start the app profile before reading scope reports through the native API."))
-    browser_proxy_secret = running_service_env_value(repo_root, "yafvs-api", YAFVS_API_BROWSER_PROXY_SECRET_ENV)
-    findings.append(
-        finding(
-            "pass" if browser_proxy_secret else "fail",
-            "native-api.browser-proxy-secret",
-            "yafvs-api browser-proxy secret is configured for native cleanup."
-            if browser_proxy_secret
-            else "yafvs-api is running without the browser-proxy secret; refresh the app profile before runtime scope cleanup.",
-        )
-    )
-    findings.append(finding("pass" if probe.is_file() else "fail", "runtime-scope.probe", "Runtime scope helper exists." if probe.is_file() else "Runtime scope helper is missing.", str(probe.relative_to(repo_root)) if probe.exists() else str(probe)))
-    try:
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        findings.append(finding("pass", "runtime-scope.artifact-dir", "Runtime scope artifact directory is ready.", str(artifact_dir)))
-    except OSError as error:
-        findings.append(finding("fail", "runtime-scope.artifact-dir", f"Runtime scope artifact directory is not usable: {error}", str(artifact_dir)))
-
-    command_name = "runtime-scope-smoke" if action == "smoke" else "runtime-scope-report-summary"
-    if aggregate_status(findings) == "fail":
-        return make_result(command_name, repo_root, "Runtime scope command stopped at prerequisites.", findings, [str(artifact_dir)])
-
-    args = [
-        sys.executable,
-        str(probe),
-        action,
-        "--username",
-        DEV_ADMIN_USER,
-        "--artifact-dir",
-        str(artifact_dir),
-        "--repo-root",
-        str(repo_root),
-    ]
-    result = run_command(args, repo_root, env=runtime_env(repo_root), timeout=180)
-    try:
-        parsed = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        parsed = None
-    helper_status = parsed.get("status") if parsed else None
-    finding_status = helper_status if result.returncode == 0 and helper_status in {"pass", "warn"} else "fail"
-    findings.append(
-        finding(
-            finding_status,
-            f"runtime-scope.{action}",
-            parsed.get("summary", f"Runtime scope helper exit code {result.returncode}.") if parsed else f"Runtime scope helper exit code {result.returncode}.",
-            details={"helper": parsed, "output_tail": output_tail(result.stdout, 120)},
-        )
-    )
-    if action == "smoke":
-        organization_proof = runtime_scope_organization_proof_finding(parsed)
-        if organization_proof is not None:
-            findings.append(organization_proof)
-    artifacts = list(parsed.get("artifacts", [])) if parsed and isinstance(parsed.get("artifacts"), list) else [str(artifact_dir)]
-    summary = parsed.get("summary") if parsed else f"Runtime scope {action} command completed with exit code {result.returncode}."
-    return make_result(command_name, repo_root, summary, findings, artifacts)
-
-
-
-def runtime_scope_organization_proof_finding(parsed: dict[str, Any] | None) -> dict[str, Any] | None:
-    if not parsed or parsed.get("status") not in {"pass", "warn"}:
-        return None
-    details = parsed.get("details")
-    if not isinstance(details, dict):
-        return None
-    organization = details.get("organization_scope")
-    organization_report = details.get("organization_scope_report")
-    scope_after_add = details.get("scope_after_add")
-    scope_after_remove = details.get("scope_after_remove")
-    cleanup = details.get("cleanup")
-    if not all(
-        isinstance(value, dict)
-        for value in (organization, organization_report, scope_after_add, scope_after_remove, cleanup)
-    ):
-        return None
-
-    proof = {
-        "organization_target_count": organization.get("target_count"),
-        "organization_host_count": organization.get("host_count"),
-        "organization_source_report_count": organization_report.get("source_report_count"),
-        "scope_after_add_target_count": scope_after_add.get("target_count"),
-        "scope_after_add_host_count": scope_after_add.get("host_count"),
-        "scope_after_remove_target_count": scope_after_remove.get("target_count"),
-        "scope_after_remove_host_count": scope_after_remove.get("host_count"),
-        "cleanup_scope": cleanup.get("scope"),
-        "cleanup_scope_report": cleanup.get("scope_report"),
-        "cleanup_organization_scope_report": cleanup.get("organization_scope_report"),
-    }
-    expected = {
-        "organization_target_count": lambda value: isinstance(value, int) and value > 0,
-        "organization_host_count": lambda value: isinstance(value, int) and value > 0,
-        "organization_source_report_count": lambda value: isinstance(value, int) and value > 0,
-        "scope_after_add_target_count": lambda value: isinstance(value, int) and value >= 2,
-        "scope_after_add_host_count": lambda value: isinstance(value, int) and value >= 2,
-        "scope_after_remove_target_count": lambda value: value == 1,
-        "scope_after_remove_host_count": lambda value: value == 1,
-        "cleanup_scope": lambda value: value == "deleted",
-        "cleanup_scope_report": lambda value: value == "deleted",
-        "cleanup_organization_scope_report": lambda value: value == "deleted",
-    }
-    status = "pass" if all(check(proof.get(key)) for key, check in expected.items()) else "warn"
-    return finding(
-        status,
-        "runtime-scope.organization-proof",
-        "Organization scope membership and source-report proof is available."
-        if status == "pass"
-        else "Organization scope membership proof is incomplete; inspect the scope smoke artifact.",
-        details=proof,
     )
 
 
@@ -23295,7 +23173,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-scanner-redis-init", parents=[common], help="initialize dedicated OpenVAS scanner Redis runtime")
     subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
     subparsers.add_parser("runtime-feed-keyring-init", parents=[common], help="initialize the shared feed signature GnuPG keyring")
-    subparsers.add_parser("runtime-scope-smoke", parents=[common], help="verify scope reporting without starting scans")
     subparsers.add_parser("feed-cache-sync", parents=[common], help="start full Greenbone Community Feed cache sync in tmux")
     subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
@@ -23404,8 +23281,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_scanner_register(repo_root)
     elif args.command == "runtime-feed-keyring-init":
         result = command_runtime_feed_keyring_init(repo_root)
-    elif args.command == "runtime-scope-smoke":
-        result = command_runtime_scope(repo_root, "smoke")
     elif args.command == "feed-cache-sync":
         result = command_feed_cache_sync(repo_root)
     elif args.command == "runtime-status":

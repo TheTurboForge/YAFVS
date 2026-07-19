@@ -1218,6 +1218,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["native-stop-tasks-from-csv", "--csv-file", "/definitely-missing-yafvs-tasks.csv", "--json"], 1, "fail"),
                 (["native-stop-all-tasks", "--json"], 1, "fail"),
                 (["native-update-task-target", "--task-id", "11111111-1111-4111-8111-111111111111", "--host", "192.0.2.10", "--json"], 1, "fail"),
+                (["native-empty-trash", "--allow-write-control", "--json"], 1, "fail"),
                 (["native-verify-scanners", "--json"], 1, "fail"),
                 (["native-targets-from-host-list", "--hosts-file", "/definitely-missing-yafvs-hosts.txt", "--json"], 1, "fail"),
                 (["native-targets-from-csv", "--csv-file", "/definitely-missing-yafvs-targets.csv", "--json"], 1, "fail"),
@@ -2368,7 +2369,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2388,6 +2389,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "native-tasks-from-csv",
             "native-credentials-from-csv",
             "native-alerts-from-csv",
+            "native-empty-trash",
             "native-verify-scanners",
         ):
             self.assertNotIn(f'add_parser("{command}"', source)
@@ -2480,7 +2482,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "native-api-request", "native-start-task", "native-stop-task", "native-update-task-target", "native-tasks-from-csv", "native-verify-scanners"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "native-api-request", "native-start-task", "native-stop-task", "native-update-task-target", "native-tasks-from-csv", "native-empty-trash", "native-verify-scanners"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotRegex(
@@ -7275,42 +7277,6 @@ class YAFVSCtlTests(unittest.TestCase):
             self.assertEqual(result["status"], "fail")
             self.assertEqual(result["findings"][0]["check"], "native-delete-overrides-by-filter.arguments")
 
-    def test_native_empty_trash_parser_preview_and_local_write_guards(self):
-        parser = yafvsctl.build_parser()
-        preview_args = parser.parse_args(["native-empty-trash"])
-        self.assertEqual(preview_args.command, "native-empty-trash")
-        self.assertFalse(preview_args.allow_write_control)
-        self.assertFalse(preview_args.acknowledge_permanent_deletion)
-        self.assertIsNone(preview_args.expected_total)
-        write_args = parser.parse_args(
-            [
-                "native-empty-trash",
-                "--allow-write-control",
-                "--acknowledge-permanent-deletion",
-                "--expected-total",
-                "3",
-                "--status-only",
-            ]
-        )
-        self.assertTrue(write_args.allow_write_control)
-        self.assertTrue(write_args.acknowledge_permanent_deletion)
-        self.assertEqual(write_args.expected_total, 3)
-        self.assertTrue(write_args.status_only)
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                incomplete = yafvsctl.command_native_empty_trash(
-                    root,
-                    allow_write_control=True,
-                    expected_total=0,
-                )
-                negative = yafvsctl.command_native_empty_trash(root, expected_total=-1)
-        self.assertEqual(incomplete["status"], "fail")
-        self.assertEqual(incomplete["details"]["outcome"], "rejected")
-        self.assertEqual(negative["status"], "fail")
-        curl.assert_not_called()
-
     def test_native_empty_trash_preview_payload_is_complete_counts_only_contract(self):
         items = [
             {"resource_type": resource_type, "count": 0}
@@ -7327,142 +7293,6 @@ class YAFVSCtlTests(unittest.TestCase):
         unsafe["items"] = [dict(item) for item in items]
         unsafe["items"][0]["name"] = "must-not-be-accepted"
         self.assertIsNone(yafvsctl.native_empty_trash_preview_payload(unsafe))
-
-    def test_native_empty_trash_preview_only_uses_one_get_and_compact_output_stays_counts_only(self):
-        items = [
-            {"resource_type": resource_type, "count": 0}
-            for resource_type in sorted(yafvsctl.NATIVE_EMPTY_TRASH_RESOURCE_TYPES)
-        ]
-        items[0]["count"] = 2
-        payload = {"scope": "operator", "items": items, "total": 2, "snapshot_digest": "a" * 64}
-        calls = []
-
-        def fake_direct(_root, path, **kwargs):
-            calls.append((path, kwargs.get("method", "GET")))
-            return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
-
-        with tempfile.TemporaryDirectory() as tmp:
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="t" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
-                result = yafvsctl.command_native_empty_trash(Path(tmp), status_only=True)
-
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["details"]["outcome"], "preview")
-        self.assertEqual(result["details"]["preview_total"], 2)
-        self.assertEqual(calls, [(yafvsctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH, "GET")])
-        rendered = json.dumps(result)
-        self.assertNotIn("name", rendered)
-        self.assertNotIn("t" * 64, rendered)
-
-    def test_native_empty_trash_requires_fresh_total_match_before_one_post(self):
-        items = [
-            {"resource_type": resource_type, "count": 0}
-            for resource_type in sorted(yafvsctl.NATIVE_EMPTY_TRASH_RESOURCE_TYPES)
-        ]
-        items[0]["count"] = 2
-        preview = {"scope": "operator", "items": items, "total": 2, "snapshot_digest": "a" * 64}
-        mismatch_calls = []
-
-        def mismatch_direct(_root, path, **kwargs):
-            mismatch_calls.append((path, kwargs.get("method", "GET")))
-            return subprocess.CompletedProcess(["curl"], 0, json.dumps(preview) + "\n200", "")
-
-        confirmed_calls = []
-
-        def confirmed_direct(_root, path, **kwargs):
-            confirmed_calls.append((path, kwargs.get("method", "GET"), kwargs.get("body")))
-            if path == yafvsctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH:
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps(preview) + "\n200", "")
-            self.assertEqual(path, yafvsctl.NATIVE_EMPTY_TRASH_PATH)
-            self.assertEqual(kwargs.get("method"), "POST")
-            self.assertEqual(
-                json.loads(kwargs.get("body")),
-                {
-                    "acknowledge_permanent_deletion": True,
-                    "expected_total": 2,
-                    "expected_snapshot_digest": "a" * 64,
-                },
-            )
-            return subprocess.CompletedProcess(["curl"], 0, '{"scope":"operator","deleted_total":2}\n200', "")
-
-        common = [
-            unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}),
-            unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")),
-            unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="t" * 64),
-        ]
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with common[0], common[1], common[2], unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=mismatch_direct):
-                mismatch = yafvsctl.command_native_empty_trash(
-                    root,
-                    allow_write_control=True,
-                    acknowledge_permanent_deletion=True,
-                    expected_total=1,
-                )
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="t" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=confirmed_direct):
-                confirmed = yafvsctl.command_native_empty_trash(
-                    root,
-                    allow_write_control=True,
-                    acknowledge_permanent_deletion=True,
-                    expected_total=2,
-                )
-
-        self.assertEqual(mismatch["status"], "fail")
-        self.assertEqual(mismatch["details"]["outcome"], "mismatch")
-        self.assertEqual(mismatch_calls, [(yafvsctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH, "GET")])
-        self.assertEqual(confirmed["status"], "pass")
-        self.assertEqual(confirmed["details"]["outcome"], "confirmed")
-        self.assertEqual(confirmed["details"]["deleted_total"], 2)
-        self.assertEqual(
-            [(path, method) for path, method, _body in confirmed_calls],
-            [
-                (yafvsctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH, "GET"),
-                (yafvsctl.NATIVE_EMPTY_TRASH_PATH, "POST"),
-            ],
-        )
-
-    def test_native_empty_trash_distinguishes_rejected_and_indeterminate_post_outcomes(self):
-        items = [
-            {"resource_type": resource_type, "count": 0}
-            for resource_type in sorted(yafvsctl.NATIVE_EMPTY_TRASH_RESOURCE_TYPES)
-        ]
-        preview = {"scope": "operator", "items": items, "total": 0, "snapshot_digest": "a" * 64}
-
-        def response_with_post(post_status, payload):
-            calls = []
-
-            def fake_direct(_root, path, **kwargs):
-                calls.append((path, kwargs.get("method", "GET")))
-                response_payload = preview if path == yafvsctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH else payload
-                status = 200 if path == yafvsctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH else post_status
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps(response_payload) + f"\n{status}", "")
-
-            return fake_direct, calls
-
-        rejected_direct, rejected_calls = response_with_post(409, {"error": {"code": "conflict"}})
-        indeterminate_direct, indeterminate_calls = response_with_post(502, {"error": {"code": "mutation_outcome_indeterminate"}})
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="t" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=rejected_direct):
-                rejected = yafvsctl.command_native_empty_trash(root, allow_write_control=True, acknowledge_permanent_deletion=True, expected_total=0)
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="t" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=indeterminate_direct):
-                indeterminate = yafvsctl.command_native_empty_trash(root, allow_write_control=True, acknowledge_permanent_deletion=True, expected_total=0)
-
-        self.assertEqual(rejected["details"]["outcome"], "rejected")
-        self.assertEqual(indeterminate["details"]["outcome"], "indeterminate")
-        self.assertEqual(rejected_calls, [(yafvsctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH, "GET"), (yafvsctl.NATIVE_EMPTY_TRASH_PATH, "POST")])
-        self.assertEqual(indeterminate_calls, [(yafvsctl.NATIVE_EMPTY_TRASH_PREVIEW_PATH, "GET"), (yafvsctl.NATIVE_EMPTY_TRASH_PATH, "POST")])
 
     def test_direct_trash_empty_smoke_uses_isolated_fixture_and_never_empties_preexisting_trash(self):
         operator_uuid = "11111111-1111-4111-8111-111111111111"

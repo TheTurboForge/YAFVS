@@ -303,6 +303,8 @@ just native-targets-from-xml --json --xml-file ./targets.xml --dry-run
 just native-targets-from-xml --json --xml-file ./targets.xml --allow-write-control --status-only
 just native-tags-from-csv --json --csv-file ./tags.csv --dry-run
 just native-tags-from-csv --json --csv-file ./tags.csv --allow-write-control --status-only
+just native-empty-trash --json --status-only
+just native-empty-trash --json --allow-write-control --acknowledge-permanent-deletion --expected-total EXPECTED_TOTAL --status-only
 just native-verify-scanners --json --allow-write-control --status-only
 just native-start-task --task-id TASK_UUID --allow-write-control
 tools/yafvsctl native-scan-new-system --host 192.0.2.10 --dry-run --status-only
@@ -366,6 +368,14 @@ ZIP contains a versioned manifest with per-member hashes and counts, canonical
 JSON evidence and analytical collections, and spreadsheet-safe Results and
 Error Messages CSV views. The bundle intentionally does not reproduce legacy
 XML bytes or schema ornamentation; JSON is canonical for machine processing.
+
+`native-empty-trash` is preview-only unless all three mutation controls are
+present. Preview returns counts for the exact operator-owned Trashcan scope.
+Permanent deletion requires `--allow-write-control`,
+`--acknowledge-permanent-deletion`, and the exact fresh `--expected-total`;
+the command also forwards the preview's hidden snapshot digest so a same-count
+content change is rejected. A possibly sent deletion is never retried, and an
+incomplete response is reported as indeterminate rather than assumed safe.
 
 `native-delete-overrides-by-filter` replaces the inherited destructive GMP
 script with an explicit two-step native workflow. Its `--filter` is a printable

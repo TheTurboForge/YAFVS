@@ -98,6 +98,15 @@ pub enum CliCommand {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Import the retained secret-free target XML subset.
+    NativeTargetsFromXml {
+        #[arg(long)]
+        xml_file: PathBuf,
+        #[arg(long)]
+        allow_write_control: bool,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Start named tasks from a CSV through the guarded direct native API.
     NativeStartTasksFromCsv {
         #[arg(long)]
@@ -407,6 +416,7 @@ impl CliCommand {
             Self::NativeExportReportPdf { .. } => "native-export-report-pdf",
             Self::NativeUpdateTaskTarget { .. } => "native-update-task-target",
             Self::NativeTargetsFromHostList { .. } => "native-targets-from-host-list",
+            Self::NativeTargetsFromXml { .. } => "native-targets-from-xml",
             Self::NativeStartTask { .. } => "native-start-task",
             Self::NativeStopTask { .. } => "native-stop-task",
             Self::NativeStartTasksFromCsv { .. } => "native-start-tasks-from-csv",
@@ -516,6 +526,29 @@ mod tests {
             }
         );
         assert_eq!(cli.command.name(), "native-targets-from-host-list");
+    }
+
+    #[test]
+    fn parses_native_targets_from_xml_controls() {
+        let cli = parse_cli([
+            "native-targets-from-xml",
+            "--xml-file",
+            "targets.xml",
+            "--allow-write-control",
+            "--dry-run",
+            "--status-only",
+        ])
+        .unwrap();
+        assert!(cli.status_only);
+        assert_eq!(
+            cli.command,
+            CliCommand::NativeTargetsFromXml {
+                xml_file: PathBuf::from("targets.xml"),
+                allow_write_control: true,
+                dry_run: true,
+            }
+        );
+        assert_eq!(cli.command.name(), "native-targets-from-xml");
     }
 
     #[test]

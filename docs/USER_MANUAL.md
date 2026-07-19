@@ -315,7 +315,7 @@ tools/yafvsctl native-delete-overrides-by-filter --filter 'obsolete policy' --al
 just native-stop-task --task-id TASK_UUID --allow-write-control --status-only
 just native-update-task-target --task-id TASK_UUID --host 192.0.2.10 --host 192.0.2.11 --exclude-host 192.0.2.11 --allow-write-control --status-only
 just native-update-task-target --task-id TASK_UUID --hosts-file ./replacement-hosts.csv --allow-write-control --status-only
-tools/yafvsctl native-start-tasks-from-csv --csv-file ./tasks.csv --allow-write-control --status-only
+just native-start-tasks-from-csv --csv-file ./tasks.csv --allow-write-control --status-only
 ```
 
 `native-update-task-target` replaces the retired GMP script with one guarded

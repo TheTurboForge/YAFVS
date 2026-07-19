@@ -13880,41 +13880,6 @@ def native_result_threat(score: float) -> str:
     return "Unknown"
 
 
-def command_runtime_scope_report_summary_native(repo_root: Path) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    artifact_dir = scope_report_artifact_dir(repo_root)
-    try:
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        findings.append(finding("pass", "runtime-scope.artifact-dir", "Runtime scope artifact directory is ready.", str(artifact_dir)))
-    except OSError as error:
-        findings.append(finding("fail", "runtime-scope.artifact-dir", f"Runtime scope artifact directory is not usable: {error}", str(artifact_dir)))
-    findings.append(finding("pass" if container_running(repo_root, "yafvs-api") else "fail", "native-api.container", "yafvs-api container is running." if container_running(repo_root, "yafvs-api") else "yafvs-api container is not running; start the app profile before reading native scope-report summaries."))
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-scope-report-summary", repo_root, "Runtime scope report summary stopped at native API prerequisites.", findings, [str(artifact_dir)])
-
-    listing, summary_details, listing_json = latest_organization_scope_report_native(repo_root)
-    if summary_details is None:
-        payload = {
-            "status": "fail",
-            "summary": "No Organization scope report exists through the native API.",
-            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "yafvs-api", "listing": listing_json},
-        }
-        payload["artifacts"] = [write_json_artifact(artifact_dir, "summary-failed.json", payload)]
-        findings.append(process_step_finding("fail", "runtime-scope.summary-native", payload["summary"], listing, compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports?...")))
-        return make_result("runtime-scope-report-summary", repo_root, payload["summary"], findings, payload["artifacts"])
-
-    payload = {
-        "status": "pass",
-        "summary": "Latest Organization scope report read through the native API.",
-        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-        "details": summary_details,
-    }
-    payload["artifacts"] = [write_json_artifact(artifact_dir, "summary.json", payload)]
-    findings.append(process_step_finding("pass", "runtime-scope.summary-native", payload["summary"], listing, compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports?...")))
-    return make_result("runtime-scope-report-summary", repo_root, payload["summary"], findings, payload["artifacts"])
-
-
 def latest_organization_scope_report_native(repo_root: Path) -> tuple[subprocess.CompletedProcess[str], dict[str, Any] | None, dict[str, Any]]:
     list_path = "/api/v1/scope-reports?page_size=1&sort=-creation_time&filter=Organization"
     listing = native_api_curl(repo_root, list_path)
@@ -13985,9 +13950,6 @@ def native_scope_report_browser_target(repo_root: Path, check: str, success_mess
 
 
 def command_runtime_scope(repo_root: Path, action: str) -> dict[str, Any]:
-    if action == "summary":
-        return command_runtime_scope_report_summary_native(repo_root)
-
     findings: list[dict[str, Any]] = []
     probe = runtime_scope_probe_path(repo_root)
     artifact_dir = scope_report_artifact_dir(repo_root)
@@ -14120,57 +14082,6 @@ def latest_completed_full_test_report_id(repo_root: Path) -> tuple[str | None, s
     if not report_id:
         return None, "No completed full-test raw report exists; pass --report-id to inspect a specific report.", result
     return report_id, None, result
-
-
-def command_runtime_scope_report_metrics_native(repo_root: Path, scope_report_id: str | None = None) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    artifact_dir = metrics_artifact_dir(repo_root)
-    try:
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        findings.append(finding("pass", "runtime-metrics.artifact-dir", "Runtime metrics artifact directory is ready.", str(artifact_dir)))
-    except OSError as error:
-        findings.append(finding("fail", "runtime-metrics.artifact-dir", f"Runtime metrics artifact directory is not usable: {error}", str(artifact_dir)))
-    findings.append(finding("pass" if container_running(repo_root, "yafvs-api") else "fail", "native-api.container", "yafvs-api container is running." if container_running(repo_root, "yafvs-api") else "yafvs-api container is not running; start the app profile before reading native scope-report metrics."))
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-scope-report-metrics", repo_root, "Runtime scope report metrics stopped at native API prerequisites.", findings, [str(artifact_dir)])
-
-    filter_value = scope_report_id or "Organization"
-    list_path = f"/api/v1/scope-reports?page_size=1&sort=-creation_time&filter={urllib.parse.quote(filter_value)}"
-    listing = native_api_curl(repo_root, list_path)
-    listing_json = parse_json_output(listing)
-    report_items = listing_json.get("items", []) if isinstance(listing_json, dict) else []
-    selected = report_items[0] if report_items else None
-    if not isinstance(selected, dict) or not selected.get("id") or not isinstance(selected.get("scope"), dict) or not selected["scope"].get("id"):
-        payload = {
-            "status": "fail",
-            "summary": "Runtime scope report metrics failed because no matching scope report was found through the native API.",
-            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "yafvs-api", "filter": filter_value, "listing": listing_json},
-        }
-        payload["artifacts"] = [write_json_artifact(artifact_dir, "scope-report-metrics-failed.json", payload)]
-        findings.append(process_step_finding("fail", "runtime-metrics.scope-report-native-select", payload["summary"], listing, compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scope-reports?...")))
-        return make_result("runtime-scope-report-metrics", repo_root, payload["summary"], findings, payload["artifacts"])
-
-    selected_scope_id = selected["scope"]["id"]
-    selected_scope_report_id = selected["id"]
-    metrics_path = f"/api/v1/scopes/{selected_scope_id}/reports/{selected_scope_report_id}/metrics"
-    metrics = native_api_curl(repo_root, metrics_path)
-    metrics_json = parse_json_output(metrics)
-    metrics_ok = metrics.returncode == 0 and isinstance(metrics_json, dict) and isinstance(metrics_json.get("summary"), dict)
-    payload = {
-        "status": "pass" if metrics_ok else "fail",
-        "summary": "Runtime scope report metrics read through the native API." if metrics_ok else "Runtime scope report metrics response did not include scope report metrics.",
-        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-        "details": {
-            "source": "yafvs-api",
-            "scope": selected.get("scope"),
-            "scope_report_id": selected_scope_report_id,
-            "metrics": metrics_json,
-        },
-    }
-    payload["artifacts"] = [write_json_artifact(artifact_dir, "scope-report-metrics.json" if metrics_ok else "scope-report-metrics-failed.json", payload)]
-    findings.append(process_step_finding("pass" if metrics_ok else "fail", "runtime-metrics.scope-report-native", payload["summary"], metrics, compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/scopes/.../reports/.../metrics")))
-    return make_result("runtime-scope-report-metrics", repo_root, payload["summary"], findings, payload["artifacts"])
 
 
 def command_feed_cache_sync(repo_root: Path) -> dict[str, Any]:
@@ -29244,9 +29155,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
     subparsers.add_parser("runtime-feed-keyring-init", parents=[common], help="initialize the shared feed signature GnuPG keyring")
     subparsers.add_parser("runtime-scope-smoke", parents=[common], help="verify scope reporting without starting scans")
-    subparsers.add_parser("runtime-scope-report-summary", parents=[common], help="summarize the latest Organization scope report")
-    scope_report_metrics = subparsers.add_parser("runtime-scope-report-metrics", parents=[common], help="read CVSS Load and authenticated coverage for a scope report")
-    scope_report_metrics.add_argument("--scope-report-id", help="optional scope report id; defaults to the latest Organization scope report")
     subparsers.add_parser("feed-cache-sync", parents=[common], help="start full Greenbone Community Feed cache sync in tmux")
     subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
@@ -29554,10 +29462,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_feed_keyring_init(repo_root)
     elif args.command == "runtime-scope-smoke":
         result = command_runtime_scope(repo_root, "smoke")
-    elif args.command == "runtime-scope-report-summary":
-        result = command_runtime_scope(repo_root, "summary")
-    elif args.command == "runtime-scope-report-metrics":
-        result = command_runtime_scope_report_metrics_native(repo_root, scope_report_id=args.scope_report_id)
     elif args.command == "feed-cache-sync":
         result = command_feed_cache_sync(repo_root)
     elif args.command == "runtime-status":

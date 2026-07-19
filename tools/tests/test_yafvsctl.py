@@ -1121,7 +1121,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 env = feed_generation_env.copy()
                 if arguments[0] == "quality-gate-schedule":
                     env.pop("YAFVS_ENABLE_QUALITY_GATE_SCHEDULE", None)
-                if arguments[0] in {"runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-report-summary", "runtime-report-export", "runtime-report-metrics"}:
+                if arguments[0] in {"runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-report-summary", "runtime-report-export", "runtime-report-metrics", "runtime-scope-report-summary", "runtime-scope-report-metrics"}:
                     env["COMPOSE_PROJECT_NAME"] = "yafvsctl-parity-no-runtime"
                 if arguments[0] in {"down", "runtime-app-down"}:
                     shutdown_runtime = Path(parity_runtime) / arguments[0]
@@ -1239,6 +1239,8 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-report-summary", "--report-id", "report-1", "--max-results", "0", "--json"], 1, "fail"),
                 (["runtime-report-export", "--report-id", "report-1", "--top-results", "100001", "--json"], 1, "fail"),
                 (["runtime-report-metrics", "--report-id", "report-1", "--json"], 1, "fail"),
+                (["runtime-scope-report-summary", "--json"], 1, "fail"),
+                (["runtime-scope-report-metrics", "--scope-report-id", "Organization", "--json"], 1, "fail"),
                 (["runtime-certbund-report", "--report-id", "report-1", "--task-id", "task-1", "--json"], 1, "fail"),
                 (["runtime-log-review", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["runtime-scanner-capability-check", "--json"], (0, 1), ("pass", "fail")),
@@ -1364,7 +1366,6 @@ class YAFVSCtlTests(unittest.TestCase):
             "runtime-app-smoke",
             "runtime-browser-smoke",
             "runtime-browser-regression",
-            "runtime-scope-report-metrics",
             "gvmd-smoke",
         ]
         for wrapper in wrappers:
@@ -1577,17 +1578,18 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("gmp.delete_scope(", runtime_scope_source)
         self.assertNotIn("gmp.delete_scope_report", runtime_scope_source)
         rust_report_source = (root / "tools" / "yafvsctl-rs" / "src" / "commands" / "runtime_report.rs").read_text(encoding="utf-8")
+        rust_scope_report_source = (root / "tools" / "yafvsctl-rs" / "src" / "commands" / "runtime_scope_report.rs").read_text(encoding="utf-8")
         self.assertNotIn("runtime_metrics_probe_path", source)
-        self.assertIn("def command_runtime_scope_report_summary_native", source)
+        self.assertNotIn("def command_runtime_scope_report_summary_native", source)
         self.assertIn("def native_scope_report_browser_target", source)
         self.assertNotIn("def command_runtime_report_summary_native", source)
         self.assertNotIn("def command_runtime_report_metrics_native", source)
-        self.assertIn("def command_runtime_scope_report_metrics_native", source)
+        self.assertNotIn("def command_runtime_scope_report_metrics_native", source)
         self.assertIn("/api/v1/scope-reports?page_size=1&sort=-creation_time&filter=Organization", source)
         self.assertNotIn("def native_report_results_pages", source)
         self.assertIn('format!("/api/v1/reports/{encoded_report_id}/results")', rust_report_source)
         self.assertIn('"/api/v1/reports/{}/metrics"', rust_report_source)
-        self.assertIn("/api/v1/scopes/{selected_scope_id}/reports/{selected_scope_report_id}/metrics", source)
+        self.assertIn('"/api/v1/scopes/{}/reports/{}/metrics"', rust_scope_report_source)
         self.assertIn("native_scope_report_browser_target", browser_smoke_command)
         self.assertIn("native_scope_report_browser_target", browser_regression_command)
         self.assertNotIn("runtime_scope_probe_path", browser_smoke_command)

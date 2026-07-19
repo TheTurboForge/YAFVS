@@ -928,6 +928,8 @@ mod tests {
             "runtime-report-summary",
             "runtime-report-export",
             "runtime-report-metrics",
+            "runtime-scope-report-summary",
+            "runtime-scope-report-metrics",
             "runtime-certbund-report",
             "runtime-log-review",
             "runtime-redis-state",

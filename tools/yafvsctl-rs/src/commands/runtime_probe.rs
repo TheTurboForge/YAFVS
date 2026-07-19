@@ -1169,7 +1169,7 @@ fn simple_socket_prerequisite(path: &Path) -> Finding {
     .with_path(&path.display().to_string())
 }
 
-fn socket_readiness_finding(
+pub(crate) fn socket_readiness_finding(
     check: &str,
     label: &str,
     path: &Path,

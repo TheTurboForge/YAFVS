@@ -51,6 +51,7 @@ native-export-report-pdf
 native-update-task-target
 native-targets-from-host-list
 native-targets-from-csv
+native-tags-from-csv
 native-targets-from-xml
 native-start-tasks-from-csv
 native-stop-tasks-from-csv

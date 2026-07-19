@@ -5,8 +5,10 @@
 //!
 //! Format-specific importers live beside this module as their contracts grow.
 
+mod tag_csv;
 mod target_csv;
 
+pub use tag_csv::command_native_tags_from_csv;
 pub use target_csv::command_native_targets_from_csv;
 
 use super::common::{iso_system_time, metadata};

@@ -109,6 +109,15 @@ pub enum CliCommand {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Import native tags from the retained tag CSV shape.
+    NativeTagsFromCsv {
+        #[arg(long)]
+        csv_file: PathBuf,
+        #[arg(long)]
+        allow_write_control: bool,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Import the retained secret-free target XML subset.
     NativeTargetsFromXml {
         #[arg(long)]
@@ -429,6 +438,7 @@ impl CliCommand {
             Self::NativeTargetsFromHostList { .. } => "native-targets-from-host-list",
             Self::NativeTargetsFromXml { .. } => "native-targets-from-xml",
             Self::NativeTargetsFromCsv { .. } => "native-targets-from-csv",
+            Self::NativeTagsFromCsv { .. } => "native-tags-from-csv",
             Self::NativeStartTask { .. } => "native-start-task",
             Self::NativeStopTask { .. } => "native-stop-task",
             Self::NativeStartTasksFromCsv { .. } => "native-start-tasks-from-csv",
@@ -587,6 +597,29 @@ mod tests {
             }
         );
         assert_eq!(cli.command.name(), "native-targets-from-csv");
+    }
+
+    #[test]
+    fn parses_native_tags_from_csv_controls() {
+        let cli = parse_cli([
+            "native-tags-from-csv",
+            "--csv-file",
+            "tags.csv",
+            "--allow-write-control",
+            "--dry-run",
+            "--status-only",
+        ])
+        .unwrap();
+        assert!(cli.status_only);
+        assert_eq!(
+            cli.command,
+            CliCommand::NativeTagsFromCsv {
+                csv_file: PathBuf::from("tags.csv"),
+                allow_write_control: true,
+                dry_run: true,
+            }
+        );
+        assert_eq!(cli.command.name(), "native-tags-from-csv");
     }
 
     #[test]

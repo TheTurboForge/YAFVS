@@ -111,7 +111,7 @@ def run_case(
     redis_server: str,
     redis_cli: str,
 ) -> dict[str, object]:
-    with tempfile.TemporaryDirectory(prefix="turbovas-process-control-") as temp:
+    with tempfile.TemporaryDirectory(prefix="yafvs-process-control-") as temp:
         temp_path = Path(temp)
         socket_path = temp_path / "redis.sock"
         redis = subprocess.Popen(
@@ -140,9 +140,9 @@ def run_case(
             plugin_dir.mkdir()
             (plugin_dir / "plugin_feed_info.inc").write_text(
                 'PLUGIN_SET = "process-control-test";\n'
-                'PLUGIN_FEED = "TurboVAS isolated test";\n'
-                'FEED_VENDOR = "TurboVAS";\n'
-                'FEED_HOME = "https://github.com/TheTurboForge/TurboVAS";\n'
+                'PLUGIN_FEED = "YAFVS isolated test";\n'
+                'FEED_VENDOR = "YAFVS";\n'
+                'FEED_HOME = "https://github.com/TheTurboForge/YAFVS";\n'
                 'FEED_NAME = "TEST";\n'
                 'FEED_COMMIT = "test";\n',
                 encoding="utf-8",

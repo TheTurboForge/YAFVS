@@ -62,8 +62,8 @@ Docker, compiler, Node, and component dependencies are reported by `doctor`
 and are needed for deeper build/runtime work.
 
 ```sh
-git clone https://github.com/TheTurboForge/TurboVAS.git
-cd TurboVAS
+git clone https://github.com/TheTurboForge/YAFVS.git
+cd YAFVS
 just status --json
 just inventory --json
 just doctor --status-only --json

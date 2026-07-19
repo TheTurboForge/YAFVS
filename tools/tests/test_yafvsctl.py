@@ -922,14 +922,14 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         function = source[source.index("def _command_runtime_app_up_unlocked"):source.index("def command_runtime_app_up")]
 
-        self.assertLess(function.index("rendered_app_execution_mount_finding"), function.index("command_up(repo_root)"))
-        self.assertLess(function.index("active_feed_generation_selector_journal_finding"), function.index("command_up(repo_root)"))
+        self.assertLess(function.index("rendered_app_execution_mount_finding"), function.index('rust_result_envelope(repo_root, "up", ["up"])'))
+        self.assertLess(function.index("active_feed_generation_selector_journal_finding"), function.index('rust_result_envelope(repo_root, "up", ["up"])'))
         self.assertLess(function.index("command_runtime_init(repo_root)"), function.index("active_feed_generation_finding"))
         self.assertLess(function.index("active_feed_generation_finding"), function.index("compose_app_services_up_with_retry"))
         self.assertIn('"Application runtime startup stopped at mount prerequisites."', function)
 
     def test_runtime_app_up_refuses_missing_active_feed_generation(self):
-        command_up = unittest.mock.Mock(
+        rust_up = unittest.mock.Mock(
             return_value={"status": "pass", "summary": "should not run"}
         )
         completed = subprocess.CompletedProcess([], 0, "", "")
@@ -954,12 +954,12 @@ class YAFVSCtlTests(unittest.TestCase):
                         "pass", "production.app-execution-mounts", "Mock mounts."
                     )
                 ),
-                command_up=command_up,
+                rust_result_envelope=rust_up,
             ):
                 result = yafvsctl.command_runtime_app_up(root)
         self.assertEqual(result["status"], "fail")
         self.assertIn("mount prerequisites", result["summary"])
-        command_up.assert_not_called()
+        rust_up.assert_not_called()
 
     def test_feed_lifecycle_lock_serializes_stage_and_runtime_mutations(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(
@@ -1132,6 +1132,13 @@ class YAFVSCtlTests(unittest.TestCase):
                     env.pop("YAFVS_ENABLE_QUALITY_GATE_SCHEDULE", None)
                 if arguments[0] in {"runtime-status", "runtime-smoke", "gvmd-smoke", "runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-report-summary", "runtime-report-export", "runtime-report-metrics", "runtime-scope-report-summary", "runtime-scope-report-metrics"}:
                     env["COMPOSE_PROJECT_NAME"] = "yafvsctl-parity-no-runtime"
+                if arguments[0] == "up":
+                    blocked_runtime = Path(parity_runtime) / "up"
+                    blocked_runtime.write_text(
+                        "force runtime setup to fail before Docker\n",
+                        encoding="utf-8",
+                    )
+                    env["YAFVS_RUNTIME_DIR"] = str(blocked_runtime)
                 if arguments[0] in {"down", "runtime-app-down"}:
                     shutdown_runtime = Path(parity_runtime) / arguments[0]
                     shutdown_runtime.mkdir()
@@ -1240,6 +1247,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-status", "--json"], 0, "warn"),
                 (["runtime-smoke", "--json"], 1, "fail"),
                 (["gvmd-smoke", "--json"], 1, "fail"),
+                (["up", "--json"], 1, "fail"),
                 (["native-api-request", "--path", "/not-api", "--json"], 1, "fail"),
                 (["native-scan-new-system", "--host", "not-an-ip", "--json"], 1, "fail"),
                 (["native-scan-with-delivery", "--host", "not-an-ip", "--alert-id", "not-a-uuid", "--json"], 1, "fail"),
@@ -2896,6 +2904,15 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("def _command_gvmd_smoke_unlocked", source)
         self.assertIn("gvmd-smoke *args:", justfile)
         self.assertIn("tools/yafvsctl-rs/Cargo.toml -- gvmd-smoke", justfile)
+
+    def test_up_is_rust_only(self):
+        source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        self.assertNotIn('subparsers.add_parser("up"', source)
+        self.assertNotIn("def command_up", source)
+        self.assertIn('rust_result_envelope(repo_root, "up", ["up"])', source)
+        self.assertIn("up *args:", justfile)
+        self.assertIn("tools/yafvsctl-rs/Cargo.toml -- up", justfile)
 
     def test_audit_commands_are_rust_only(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
@@ -7668,6 +7685,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "inventory",
             "deps",
             "runtime-plan",
+            "up",
             "down",
             "logs",
             "doctor",
@@ -7686,7 +7704,6 @@ class YAFVSCtlTests(unittest.TestCase):
             "build-ui",
             "build-python",
             "build-baseline",
-            "up",
         )
         for recipe in rust_owned | set(python_owned):
             with self.subTest(recipe=recipe):

@@ -1993,6 +1993,7 @@ mod tests {
             "runtime-status",
             "runtime-smoke",
             "gvmd-smoke",
+            "up",
             "runtime-report-summary",
             "runtime-report-export",
             "runtime-report-metrics",

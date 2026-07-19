@@ -13052,20 +13052,6 @@ def rendered_app_execution_mount_finding(repo_root: Path, env: dict[str, str]) -
     return app_execution_mount_finding(repo_root, payload)
 
 
-def command_up(repo_root: Path) -> dict[str, Any]:
-    findings = ensure_runtime_dirs(repo_root)
-    findings.extend(ensure_build_runtime_dirs(repo_root))
-    config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
-    findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": config.stdout.splitlines()[-40:]}))
-    if aggregate_status(findings) == "fail":
-        return make_result("up", repo_root, "Runtime startup stopped before docker compose up.", findings)
-    result = run_command(compose_command(repo_root, "up", "-d", "--build", *RUNTIME_SERVICES), repo_root, env=runtime_env(repo_root))
-    findings.append(finding("pass" if result.returncode == 0 else "fail", "compose.up", f"docker compose up exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-80:]}))
-    for service in RUNTIME_SERVICES:
-        findings.append(finding("pass" if container_running(repo_root, service) else "fail", "runtime.running", f"{service} container is running.", details={"service": service}))
-    return make_result("up", repo_root, "Runtime infrastructure startup attempted.", findings)
-
-
 def command_runtime_init(repo_root: Path) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
@@ -13781,7 +13767,7 @@ def _command_runtime_app_up_unlocked(repo_root: Path, status_only: bool = False)
     if aggregate_status(findings) == "fail":
         result = make_result("runtime-app-up", repo_root, "Application runtime startup stopped at mount prerequisites.", findings, [str(runtime_dir(repo_root))])
         return runtime_app_up_status_only_result(result) if status_only else result
-    infra = command_up(repo_root)
+    infra = rust_result_envelope(repo_root, "up", ["up"])
     findings.append(finding(infra["status"], "runtime.infrastructure", infra["summary"], details={"status": infra["status"]}))
     findings.append(refresh_mqtt_broker(repo_root))
     db_init = command_runtime_init(repo_root)
@@ -21747,7 +21733,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("build-ui", parents=[common], help="build the web UI")
     subparsers.add_parser("build-python", parents=[common], help="build/import-check Python components")
     subparsers.add_parser("build-baseline", parents=[common], help="build the inherited stack baseline")
-    subparsers.add_parser("up", parents=[common], help="start runtime infrastructure services")
     subparsers.add_parser("runtime-init", parents=[common], help="initialize persistent runtime database prerequisites")
     subparsers.add_parser("runtime-manager-init", parents=[common], help="initialize persistent gvmd database/user prerequisites")
     subparsers.add_parser("runtime-scanner-redis-init", parents=[common], help="initialize dedicated OpenVAS scanner Redis runtime")
@@ -21806,8 +21791,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_build_python_chain(repo_root)
     elif args.command == "build-baseline":
         result = command_build_baseline(repo_root)
-    elif args.command == "up":
-        result = command_up(repo_root)
     elif args.command == "runtime-init":
         result = command_runtime_init(repo_root)
     elif args.command == "runtime-manager-init":

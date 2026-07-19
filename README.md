@@ -24,7 +24,7 @@ support promise, or feed redistribution.
 | Operator workflows | Development-validated | Target/task, raw-report, scope-report, export, and browser workflows run in the guarded development stack. |
 | Docker application runtime | Experimental | Persistent local development services exist; they are not a production deployment profile. |
 | Native HTTP/JSON API | In migration | DB-backed native reads and guarded writes exist while GMP/XML remains compatibility and control plumbing. |
-| Rust operator CLI | Incremental migration | Rust implements 76 parity-tested subcommands across repository, assurance, runtime-inspection, guarded resource/task control, immutable feed staging, and explicit opt-in operator actions; Python remains the compatibility entrypoint for the rest. |
+| Rust operator CLI | Incremental migration | Rust implements 77 parity-tested subcommands across repository, assurance, runtime-inspection, guarded resource/task control, immutable feed staging, and explicit opt-in operator actions; Python remains the compatibility entrypoint for the rest. |
 | Production and distribution | Not available | Authentication, TLS, deployment, packaging, hosted-service, and non-source release gates remain separate unfinished work. |
 
 ## System Shape

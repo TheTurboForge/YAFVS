@@ -473,6 +473,8 @@ pub enum CliCommand {
     RuntimeRbacSmoke,
     /// Verify scope reporting and cleanup through the narrow native-API helper.
     RuntimeScopeSmoke,
+    /// Create or verify the persistent development certificate infrastructure.
+    RuntimeCertsInit,
     /// Verify the staged GSA web UI over gsad.
     RuntimeWebuiSmoke,
     /// Preflight an explicit authorized full test scan without starting it.
@@ -626,6 +628,7 @@ impl CliCommand {
             Self::RuntimeCredentialSmoke => "runtime-credential-smoke",
             Self::RuntimeRbacSmoke => "runtime-rbac-smoke",
             Self::RuntimeScopeSmoke => "runtime-scope-smoke",
+            Self::RuntimeCertsInit => "runtime-certs-init",
             Self::RuntimeWebuiSmoke => "runtime-webui-smoke",
             Self::RuntimeFullTestScanPreflight { .. } => "runtime-full-test-scan-preflight",
             Self::RuntimeFullTestScanStart { .. } => "runtime-full-test-scan-start",
@@ -1421,6 +1424,7 @@ mod tests {
             ),
             ("runtime-rbac-smoke", CliCommand::RuntimeRbacSmoke),
             ("runtime-scope-smoke", CliCommand::RuntimeScopeSmoke),
+            ("runtime-certs-init", CliCommand::RuntimeCertsInit),
             ("runtime-webui-smoke", CliCommand::RuntimeWebuiSmoke),
         ] {
             let cli = parse_cli([argument]).unwrap();

@@ -36,6 +36,7 @@ mod repository;
 mod resource_import;
 mod runtime;
 mod runtime_certbund_report;
+mod runtime_certs;
 mod runtime_data_state;
 mod runtime_identity_migrate;
 mod runtime_lock;
@@ -105,6 +106,7 @@ pub use resource_import::{
 };
 pub use runtime::{command_down, command_logs, command_runtime_app_down, command_runtime_plan};
 pub use runtime_certbund_report::command_runtime_certbund_report;
+pub use runtime_certs::command_runtime_certs_init;
 pub use runtime_data_state::command_runtime_data_state;
 pub use runtime_identity_migrate::command_runtime_identity_migrate;
 pub use runtime_log_review::command_runtime_log_review;

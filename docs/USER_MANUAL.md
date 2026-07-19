@@ -204,6 +204,7 @@ never inferred from the filesystem selector.
 
 Useful development checks include:
 
+- `just runtime-certs-init --json`
 - `just runtime-status`
 - `just runtime-smoke`
 - `just runtime-log-review --json`
@@ -239,6 +240,12 @@ Useful development checks include:
 
 See `../BUILDING.md` and `../docker/runtime/README.md` for build and runtime
 command details.
+
+`runtime-certs-init` generates development certificates only when all six
+expected certificate/key paths are absent. A complete safe set is verified
+without regeneration. Any partial, linked, empty, wrong-owner, or
+group/world-readable private-key state is rejected; the command never rotates
+or overwrites such state automatically.
 
 The native HTTP/JSON API is internal by default for browser/runtime migration.
 For development automation, `just runtime-native-api-direct-smoke --json`

@@ -32,7 +32,7 @@ not use a failure exit code; `fail` exits non-zero.
 - `just rust-migration-state`: inspect C-to-Rust tooling and the current proof
   candidate.
 
-The incremental Rust command spine currently implements 76 parity-tested
+The incremental Rust command spine currently implements 77 parity-tested
 subcommands. Commands in this mechanically checked block have a native Rust
 implementation; the normal `just` recipes remain the stable front door while
 each recipe cutover follows parity validation:
@@ -110,6 +110,7 @@ runtime-gmp-smoke
 runtime-credential-smoke
 runtime-rbac-smoke
 runtime-scope-smoke
+runtime-certs-init
 runtime-webui-smoke
 runtime-full-test-scan-preflight
 runtime-full-test-scan-start
@@ -228,6 +229,9 @@ them with direct database or protocol mutations.
 - `just up` / `just down`: start or stop infrastructure services.
 - `just logs [service]`: show recent Compose logs.
 - `just runtime-certs-init`: create or verify development certificates.
+  Empty state may be generated; complete state is verified without
+  regeneration. Partial, linked, empty, wrong-owner, or permissive private-key
+  state is rejected and never overwritten or rotated automatically.
 - `just runtime-init`: initialize PostgreSQL prerequisites.
 - `just runtime-manager-init`: migrate/initialize manager state and the
   development operator.

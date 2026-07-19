@@ -45,6 +45,7 @@ mod runtime_webui;
 mod rust_migration;
 mod secret;
 mod security_policy;
+mod task_batch_control;
 mod task_control;
 mod task_target;
 
@@ -110,5 +111,9 @@ pub use runtime_scope_report::{
 pub use runtime_webui::command_runtime_webui_smoke;
 pub use rust_migration::command_rust_migration_state;
 pub use security_policy::command_security_policy_check;
+pub use task_batch_control::{
+    command_native_start_tasks_from_csv, command_native_stop_all_tasks,
+    command_native_stop_tasks_from_csv,
+};
 pub use task_control::{command_native_start_task, command_native_stop_task};
 pub use task_target::command_native_update_task_target;

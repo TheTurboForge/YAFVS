@@ -83,6 +83,25 @@ pub enum CliCommand {
         #[arg(long)]
         allow_write_control: bool,
     },
+    /// Start named tasks from a CSV through the guarded direct native API.
+    NativeStartTasksFromCsv {
+        #[arg(long)]
+        csv_file: PathBuf,
+        #[arg(long)]
+        allow_write_control: bool,
+    },
+    /// Stop named active tasks from a CSV through the guarded direct native API.
+    NativeStopTasksFromCsv {
+        #[arg(long)]
+        csv_file: PathBuf,
+        #[arg(long)]
+        allow_write_control: bool,
+    },
+    /// Stop every running, requested, or queued task through the guarded direct native API.
+    NativeStopAllTasks {
+        #[arg(long)]
+        allow_write_control: bool,
+    },
     /// Start one task through the guarded direct native API.
     NativeStartTask {
         #[arg(long)]
@@ -374,6 +393,9 @@ impl CliCommand {
             Self::NativeUpdateTaskTarget { .. } => "native-update-task-target",
             Self::NativeStartTask { .. } => "native-start-task",
             Self::NativeStopTask { .. } => "native-stop-task",
+            Self::NativeStartTasksFromCsv { .. } => "native-start-tasks-from-csv",
+            Self::NativeStopTasksFromCsv { .. } => "native-stop-tasks-from-csv",
+            Self::NativeStopAllTasks { .. } => "native-stop-all-tasks",
             Self::NativeApiRequest { .. } => "native-api-request",
             Self::Status => "status",
             Self::Inventory { .. } => "inventory",
@@ -1116,6 +1138,57 @@ mod tests {
                 command: CliCommand::Inventory { scope: None },
                 json: false,
                 status_only: true,
+            }
+        );
+    }
+
+    #[test]
+    fn parses_native_batch_task_controls() {
+        let start = parse_cli([
+            "native-start-tasks-from-csv",
+            "--csv-file",
+            "tasks.csv",
+            "--allow-write-control",
+            "--status-only",
+        ])
+        .unwrap();
+        assert_eq!(start.command.name(), "native-start-tasks-from-csv");
+        assert!(start.status_only);
+        assert_eq!(
+            start.command,
+            CliCommand::NativeStartTasksFromCsv {
+                csv_file: PathBuf::from("tasks.csv"),
+                allow_write_control: true,
+            }
+        );
+        let stop_csv = parse_cli([
+            "native-stop-tasks-from-csv",
+            "--csv-file",
+            "tasks.csv",
+            "--allow-write-control",
+        ])
+        .unwrap();
+        assert_eq!(stop_csv.command.name(), "native-stop-tasks-from-csv");
+        assert!(!stop_csv.status_only);
+        assert_eq!(
+            stop_csv.command,
+            CliCommand::NativeStopTasksFromCsv {
+                csv_file: PathBuf::from("tasks.csv"),
+                allow_write_control: true,
+            }
+        );
+        let stop_all = parse_cli([
+            "native-stop-all-tasks",
+            "--allow-write-control",
+            "--status-only",
+        ])
+        .unwrap();
+        assert_eq!(stop_all.command.name(), "native-stop-all-tasks");
+        assert!(stop_all.status_only);
+        assert_eq!(
+            stop_all.command,
+            CliCommand::NativeStopAllTasks {
+                allow_write_control: true,
             }
         );
     }

@@ -370,7 +370,7 @@ fn runtime_secret_redactions(repo_root: &Path) -> Result<Vec<String>, String> {
         .map_err(|error| error.to_string())
 }
 
-fn redact_text(text: &str, secrets: &[String]) -> String {
+pub(crate) fn redact_text(text: &str, secrets: &[String]) -> String {
     secrets.iter().fold(text.to_string(), |value, secret| {
         redact_secret_value(&value, secret)
     })

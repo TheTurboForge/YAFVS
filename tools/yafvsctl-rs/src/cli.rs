@@ -122,6 +122,10 @@ pub enum CliCommand {
     RuntimeNmapCapabilityCheck,
     /// Classify database and non-database runtime state.
     RuntimeDataState,
+    /// Run the retained authenticated GMP smoke.
+    RuntimeGmpSmoke,
+    /// Characterize the retained shared operator-account compatibility boundary.
+    RuntimeRbacSmoke,
     /// Show recent runtime logs.
     Logs {
         /// Optional Compose service name.
@@ -213,6 +217,8 @@ impl CliCommand {
             Self::RuntimeScannerProcessCheck => "runtime-scanner-process-check",
             Self::RuntimeNmapCapabilityCheck => "runtime-nmap-capability-check",
             Self::RuntimeDataState => "runtime-data-state",
+            Self::RuntimeGmpSmoke => "runtime-gmp-smoke",
+            Self::RuntimeRbacSmoke => "runtime-rbac-smoke",
             Self::Logs { .. } => "logs",
             Self::LicenseReport { .. } => "license-report",
             Self::Doctor => "doctor",
@@ -220,6 +226,7 @@ impl CliCommand {
             Self::RuntimeNativeApiDirectToken { .. } => "runtime-native-api-direct-token",
         }
     }
+
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>
@@ -254,6 +261,18 @@ mod tests {
                 "runtime-scanner-process-check",
                 CliCommand::RuntimeScannerProcessCheck,
             ),
+        ] {
+            let cli = parse_cli([argument]).unwrap();
+            assert_eq!(cli.command, expected);
+            assert_eq!(cli.command.name(), argument);
+        }
+    }
+
+    #[test]
+    fn parses_runtime_probe_commands() {
+        for (argument, expected) in [
+            ("runtime-gmp-smoke", CliCommand::RuntimeGmpSmoke),
+            ("runtime-rbac-smoke", CliCommand::RuntimeRbacSmoke),
         ] {
             let cli = parse_cli([argument]).unwrap();
             assert_eq!(cli.command, expected);

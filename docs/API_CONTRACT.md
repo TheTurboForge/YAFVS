@@ -202,7 +202,7 @@ source of truth for the first native API shape until a live implementation
 lands. Future endpoint work must update the OpenAPI contract and the GMP/XML
 strangler map in the same slice.
 
-Read-only automation can use `tools/yafvsctl native-api-request --json --path
+Read-only automation can use `just native-api-request --json --path
 '/api/v1/...'` for the internal development path, or add `--direct` to call the
 opt-in direct bearer listener. This replaces covered read-only GMP scripts for
 report, scope, target, task, scan-config metadata, override metadata, tag

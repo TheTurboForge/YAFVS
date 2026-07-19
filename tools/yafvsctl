@@ -19817,155 +19817,6 @@ def native_stop_task_request(
     return path, response, parsed, http_status, accepted
 
 
-def load_native_task_target_hosts_csv(hosts_file: Path) -> list[str]:
-    hosts: list[str] = []
-    try:
-        with hosts_file.open(encoding="utf-8", newline="") as handle:
-            for row in csv.reader(handle):
-                if not row:
-                    continue
-                host = row[0].strip()
-                if host:
-                    hosts.append(host)
-    except OSError as exc:
-        raise ValueError(f"failed to read hosts CSV file: {exc}") from exc
-    if not hosts:
-        raise ValueError("hosts CSV file must contain a nonempty first-column host value")
-    return hosts
-
-
-def command_native_update_task_target(
-    repo_root: Path,
-    *,
-    task_id: str,
-    hosts: Sequence[str] | None = None,
-    hosts_file: Path | None = None,
-    exclude_hosts: Sequence[str] | None = None,
-    allow_write_control: bool = False,
-    status_only: bool = False,
-) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    try:
-        task_id = validate_native_api_operator_uuid_value(task_id, env_name="--task-id")
-        supplied_hosts = [host.strip() for host in hosts or [] if host.strip()]
-        if bool(supplied_hosts) == bool(hosts_file):
-            raise ValueError("provide exactly one of --host or --hosts-file")
-        resolved_hosts = load_native_task_target_hosts_csv(hosts_file) if hosts_file else supplied_hosts
-        if not resolved_hosts:
-            raise ValueError("provide at least one nonempty --host value")
-        resolved_exclude_hosts = [host.strip() for host in exclude_hosts or [] if host.strip()]
-    except ValueError as exc:
-        findings.append(finding("fail", "native-update-task-target.arguments", str(exc)))
-        return make_result("native-update-task-target", repo_root, "Native task-target replacement rejected before runtime access.", findings)
-
-    if not allow_write_control:
-        findings.append(
-            finding(
-                "fail",
-                "native-update-task-target.write-control-intent",
-                "Replacing a task target requires --allow-write-control because it creates a target and rebinds a task.",
-            )
-        )
-        return make_result("native-update-task-target", repo_root, "Native task-target replacement rejected before runtime access.", findings)
-
-    env = native_api_direct_runtime_env(repo_root)
-    findings.append(native_api_direct_config_shape_finding(env, check="native-update-task-target.direct-config-shape"))
-    if aggregate_status(findings) == "fail":
-        return make_result("native-update-task-target", repo_root, "Direct native API task-target replacement rejected before runtime access.", findings)
-    token = native_api_direct_bearer_token(repo_root, env)
-    if not direct_api_bearer_token_is_acceptable(token):
-        findings.append(
-            finding(
-                "fail",
-                "native-update-task-target.direct-token-strength",
-                "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
-            )
-        )
-        return make_result("native-update-task-target", repo_root, "Native task-target replacement rejected before runtime access.", findings)
-
-    body_object: dict[str, Any] = {"hosts": resolved_hosts}
-    if resolved_exclude_hosts:
-        body_object["exclude_hosts"] = resolved_exclude_hosts
-    path = f"/api/v1/tasks/{urllib.parse.quote(task_id)}/replace-target"
-    response = direct_native_api_curl(
-        repo_root,
-        path,
-        token=token,
-        env=env,
-        method="POST",
-        body=json.dumps(body_object),
-        extra_headers=[("Content-Type", "application/json")],
-    )
-    parsed, http_status = parse_json_output_with_http_status(response)
-    old_target_id = parsed.get("old_target_id") if isinstance(parsed, dict) else None
-    new_target_id = parsed.get("new_target_id") if isinstance(parsed, dict) else None
-    old_target_disposition = parsed.get("old_target_disposition") if isinstance(parsed, dict) else None
-    accepted = (
-        response.returncode == 0
-        and http_status == 200
-        and isinstance(parsed, dict)
-        and parsed.get("task_id") == task_id
-        and isinstance(old_target_id, str)
-        and bool(UUID_VALUE_RE.fullmatch(old_target_id))
-        and isinstance(new_target_id, str)
-        and bool(UUID_VALUE_RE.fullmatch(new_target_id))
-        and parsed.get("status") == "replaced"
-        and old_target_disposition in {"trashed", "retained"}
-    )
-    findings.append(
-        native_api_probe_finding(
-            "pass" if accepted else "fail",
-            "native-update-task-target.request",
-            "Native API atomically cloned and rebound the task target without starting a scan."
-            if accepted
-            else "Native API task-target replacement failed or returned an invalid acknowledgement.",
-            response,
-            direct_native_api_display_command(
-                path,
-                token=token,
-                env=env,
-                method="POST",
-                body=json.dumps(body_object),
-                extra_headers=[("Content-Type", "application/json")],
-            ),
-            parsed,
-            {
-                "http_status": http_status,
-                "task_id": task_id,
-                "old_target_id": old_target_id,
-                "new_target_id": new_target_id,
-                "task_status": parsed.get("status") if isinstance(parsed, dict) else None,
-                "old_target_disposition": old_target_disposition,
-                **summarize_native_api_response(parsed),
-            },
-        )
-    )
-    result = make_result(
-        "native-update-task-target",
-        repo_root,
-        "Native task-target replacement completed." if accepted else "Native task-target replacement failed.",
-        findings,
-    )
-    result["details"] = {
-        "task_id": task_id,
-        "old_target_id": old_target_id,
-        "new_target_id": new_target_id,
-        "task_status": parsed.get("status") if isinstance(parsed, dict) else None,
-        "old_target_disposition": old_target_disposition,
-        "http_status": http_status,
-    }
-    if status_only:
-        compact = dict(result)
-        compact["findings"] = [
-            compact_doctor_finding(item)
-            for item in findings
-            if isinstance(item, dict) and item.get("status") != "pass"
-        ] or [finding("pass", "native-update-task-target.status-only", "Native task-target replacement acknowledgement summarized.")]
-        result = compact
-    return result
-
-
 @dataclass(frozen=True)
 class NativeTaskCsvRow:
     row_number: int
@@ -28621,14 +28472,6 @@ def build_parser() -> argparse.ArgumentParser:
     native_bulk_modify_schedules.add_argument("--allow-write-control", action="store_true", help="confirm intentional schedule calendar mutation")
     native_bulk_modify_schedules.add_argument("--confirm-snapshot", help="SHA-256 emitted by a fresh dry run; required for writes")
     native_bulk_modify_schedules.add_argument("--status-only", action="store_true", help="emit compact snapshot and outcome counts without calendar content")
-    native_update_task_target = subparsers.add_parser("native-update-task-target", parents=[common], help="replace one task target through the guarded direct native API")
-    native_update_task_target.add_argument("--task-id", required=True, help="task UUID whose target will be replaced")
-    target_hosts = native_update_task_target.add_mutually_exclusive_group(required=True)
-    target_hosts.add_argument("--host", action="append", default=[], help="explicit host/IP value for the replacement target; may be repeated")
-    target_hosts.add_argument("--hosts-file", type=Path, help="CSV file whose first nonempty column supplies replacement target hosts")
-    native_update_task_target.add_argument("--exclude-host", action="append", default=[], help="explicit excluded host/IP value; may be repeated")
-    native_update_task_target.add_argument("--allow-write-control", action="store_true", help="confirm intentional target clone and task rebind")
-    native_update_task_target.add_argument("--status-only", action="store_true", help="emit compact task-target replacement acknowledgement")
     native_stop_tasks_csv = subparsers.add_parser("native-stop-tasks-from-csv", parents=[common], help="stop active tasks named in the inherited first-column CSV shape through the guarded direct native API")
     native_stop_tasks_csv.add_argument("--csv-file", required=True, type=Path, help="CSV file with one task name in the first column per row")
     native_stop_tasks_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional scanner task control for every selected row")
@@ -28850,16 +28693,6 @@ def main(argv: list[str] | None = None) -> int:
             max_items=args.max_items,
             max_bytes=args.max_bytes,
             overwrite=args.overwrite,
-            status_only=args.status_only,
-        )
-    elif args.command == "native-update-task-target":
-        result = command_native_update_task_target(
-            repo_root,
-            task_id=args.task_id,
-            hosts=args.host,
-            hosts_file=args.hosts_file,
-            exclude_hosts=args.exclude_host,
-            allow_write_control=args.allow_write_control,
             status_only=args.status_only,
         )
     elif args.command == "native-start-tasks-from-csv":

@@ -148,8 +148,8 @@ just runtime-native-api-direct-smoke --json
 just runtime-native-api-direct-token --json
 just runtime-native-api-direct-token --json --rotate
 just native-api-client-contract --status-only --json
-tools/yafvsctl native-api-request --direct --json --path '/api/v1/reports?page_size=1'
-tools/yafvsctl native-api-request --direct --json --request-id 'operator-check-1' --path '/api/v1/reports?page_size=1'
+just native-api-request --direct --json --path '/api/v1/reports?page_size=1'
+just native-api-request --direct --json --request-id 'operator-check-1' --path '/api/v1/reports?page_size=1'
 ```
 
 `runtime-native-api-direct-bootstrap` creates the ignored development runtime

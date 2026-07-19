@@ -268,12 +268,12 @@ class CliParserTestCase(unittest.TestCase):
                 "--ssh-key",
                 "/run/secrets/feed-key",
                 "--ssh-known-hosts",
-                "/etc/turbovas/feed-known-hosts",
+                "/etc/yafvs/feed-known-hosts",
             ]
         )
         self.assertEqual(args.ssh_key, Path("/run/secrets/feed-key"))
         self.assertEqual(
-            args.ssh_known_hosts, Path("/etc/turbovas/feed-known-hosts")
+            args.ssh_known_hosts, Path("/etc/yafvs/feed-known-hosts")
         )
 
     def test_compression_level(self):
@@ -483,7 +483,7 @@ verbose = 3
 feed-url = "rsync://foo.bar"
 destination-prefix = "/usr/lib"
 ssh-key = "/run/secrets/feed-key"
-ssh-known-hosts = "/etc/turbovas/feed-known-hosts"
+ssh-known-hosts = "/etc/yafvs/feed-known-hosts"
 """
         path_mock_instance = path_mock.return_value
         path_mock_instance.absolute.return_value = "/foo/bar/foo.toml"
@@ -500,7 +500,7 @@ ssh-known-hosts = "/etc/turbovas/feed-known-hosts"
         self.assertEqual(args.destination_prefix, Path("/usr/lib"))
         self.assertEqual(args.ssh_key, Path("/run/secrets/feed-key"))
         self.assertEqual(
-            args.ssh_known_hosts, Path("/etc/turbovas/feed-known-hosts")
+            args.ssh_known_hosts, Path("/etc/yafvs/feed-known-hosts")
         )
 
     @patch("greenbone.feed.sync.parser.Path")
@@ -533,7 +533,7 @@ destination-prefix = "/usr/lib"
             "GREENBONE_FEED_SYNC_URL": "rsync://foo.bar",
             "GREENBONE_FEED_SYNC_VERBOSE": "3",
             "GREENBONE_FEED_SYNC_SSH_KEY": "/run/secrets/feed-key",
-            "GREENBONE_FEED_SYNC_SSH_KNOWN_HOSTS": "/etc/turbovas/feed-known-hosts",
+            "GREENBONE_FEED_SYNC_SSH_KNOWN_HOSTS": "/etc/yafvs/feed-known-hosts",
         },
     )
     def test_from_environment(self):
@@ -545,7 +545,7 @@ destination-prefix = "/usr/lib"
         self.assertEqual(args.destination_prefix, Path("/usr/lib"))
         self.assertEqual(args.ssh_key, Path("/run/secrets/feed-key"))
         self.assertEqual(
-            args.ssh_known_hosts, Path("/etc/turbovas/feed-known-hosts")
+            args.ssh_known_hosts, Path("/etc/yafvs/feed-known-hosts")
         )
 
     @patch.dict(

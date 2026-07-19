@@ -258,7 +258,7 @@ class FeedSyncTestCase(unittest.IsolatedAsyncioTestCase):
                     "GREENBONE_FEED_SYNC_URL": "ssh://feed-user@feed.example",
                     "GREENBONE_FEED_SYNC_SSH_KEY": "/run/secrets/feed-key",
                     "GREENBONE_FEED_SYNC_SSH_KNOWN_HOSTS": (
-                        "/etc/turbovas/feed-known-hosts"
+                        "/etc/yafvs/feed-known-hosts"
                     ),
                 },
             ),
@@ -277,7 +277,7 @@ class FeedSyncTestCase(unittest.IsolatedAsyncioTestCase):
             compression_level=9,
             timeout=None,
             ssh_key=Path("/run/secrets/feed-key"),
-            ssh_known_hosts=Path("/etc/turbovas/feed-known-hosts"),
+            ssh_known_hosts=Path("/etc/yafvs/feed-known-hosts"),
         )
         expected_urls = [
             "ssh://feed-user@feed.example/vulnerability-feed/"

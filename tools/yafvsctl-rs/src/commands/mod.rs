@@ -18,6 +18,7 @@ mod feed;
 mod feed_generation;
 mod license;
 mod native_api_request;
+mod native_export_report_bundle;
 mod native_export_report_csv;
 mod native_export_report_pdf;
 mod native_runtime;
@@ -68,10 +69,15 @@ pub use feed_generation::{
 };
 pub use license::command_license_report;
 pub use native_api_request::command_native_api_request;
-pub use native_export_report_csv::command_native_export_report_csv;
+pub use native_export_report_bundle::command_native_export_report_bundle;
+pub(crate) use native_export_report_bundle::{
+    DEFAULT_MAX_BYTES as NATIVE_REPORT_BUNDLE_DEFAULT_MAX_BYTES,
+    DEFAULT_MAX_ITEMS as NATIVE_REPORT_BUNDLE_DEFAULT_MAX_ITEMS,
+};
 pub(crate) use native_export_report_csv::DEFAULT_MAX_RESULTS as NATIVE_REPORT_CSV_DEFAULT_MAX_RESULTS;
-pub use native_export_report_pdf::command_native_export_report_pdf;
+pub use native_export_report_csv::command_native_export_report_csv;
 pub(crate) use native_export_report_pdf::DEFAULT_MAX_BYTES as NATIVE_REPORT_PDF_DEFAULT_MAX_BYTES;
+pub use native_export_report_pdf::command_native_export_report_pdf;
 pub use path_coupling::command_path_coupling_state;
 pub use production_posture::command_production_posture_check;
 pub use quality_gate::command_quality_gate_state;

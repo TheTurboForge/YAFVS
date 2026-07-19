@@ -76,6 +76,88 @@ pub fn command_native_export_report_csv(
     )
 }
 
+pub(crate) fn report_csv_bytes_for_bundle(rows: &[Value]) -> Result<Vec<u8>, String> {
+    let mut writer = WriterBuilder::new()
+        .terminator(Terminator::Any(b'\n'))
+        .from_writer(Vec::new());
+    writer
+        .write_record(CSV_FIELDS)
+        .map_err(|error| format!("report CSV header could not be encoded: {error}"))?;
+    for row in rows {
+        writer
+            .write_record(bundle_csv_row(row))
+            .map_err(|error| format!("report CSV row could not be encoded: {error}"))?;
+    }
+    writer
+        .into_inner()
+        .map_err(|error| format!("report CSV could not be completed: {}", error.error()))
+}
+
+fn bundle_csv_row(row: &Value) -> Vec<String> {
+    let object = row.as_object();
+    let report = object
+        .and_then(|value| value.get("report"))
+        .and_then(Value::as_object);
+    let task = object
+        .and_then(|value| value.get("task"))
+        .and_then(Value::as_object);
+    let get = |field| object.and_then(|value| value.get(field));
+    let severity = bundle_json_float(get("severity"));
+    vec![
+        csv_cell(get("id"), true),
+        csv_cell(get("source_report_id"), true),
+        csv_cell(report.and_then(|value| value.get("id")), true),
+        csv_cell(report.and_then(|value| value.get("name")), true),
+        csv_cell(task.and_then(|value| value.get("id")), true),
+        csv_cell(task.and_then(|value| value.get("name")), true),
+        csv_cell(get("host"), true),
+        csv_cell(get("host_asset_id"), true),
+        csv_cell(get("hostname"), true),
+        csv_cell(get("port"), true),
+        csv_cell(get("severity"), false),
+        spreadsheet_safe(threat(severity)),
+        csv_cell(get("qod"), false),
+        csv_cell(get("nvt_oid"), true),
+        csv_cell(get("name"), true),
+        csv_cell(get("nvt_family"), true),
+        bundle_collection_cell(get("cves")),
+        bundle_collection_cell(get("cert_refs")),
+        bundle_collection_cell(get("xrefs")),
+        csv_cell(get("max_epss"), true),
+        csv_cell(get("max_severity"), true),
+        csv_cell(get("created_at"), true),
+        csv_cell(get("scan_nvt_version"), true),
+        csv_cell(get("description"), true),
+        csv_cell(get("description_excerpt"), true),
+        csv_cell(get("summary"), true),
+        csv_cell(get("insight"), true),
+        csv_cell(get("affected"), true),
+        csv_cell(get("impact"), true),
+        csv_cell(get("detection"), true),
+        csv_cell(get("solution_type"), true),
+        csv_cell(get("solution"), true),
+        csv_cell(get("raw_evidence_href"), true),
+        bundle_collection_cell(get("user_tags")),
+        bundle_collection_cell(get("overrides")),
+    ]
+}
+
+fn bundle_json_float(value: Option<&Value>) -> f64 {
+    match value {
+        Some(Value::Number(value)) => value.as_f64().unwrap_or(0.0),
+        Some(Value::String(value)) => value.parse().unwrap_or(0.0),
+        Some(Value::Bool(value)) => f64::from(u8::from(*value)),
+        _ => 0.0,
+    }
+}
+
+fn bundle_collection_cell(value: Option<&Value>) -> String {
+    match value {
+        None => "[]".into(),
+        Some(value) => csv_cell(Some(value), true),
+    }
+}
+
 fn envelope(
     repo_root: &Path,
     runner: &dyn CommandRunner,

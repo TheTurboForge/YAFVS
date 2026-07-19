@@ -22,6 +22,25 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand, PartialEq, Eq)]
 pub enum CliCommand {
+    /// Export one complete versioned native report evidence bundle.
+    NativeExportReportBundle {
+        #[arg(long)]
+        report_id: String,
+        #[arg(long)]
+        output: Option<PathBuf>,
+        #[arg(
+            long,
+            default_value_t = crate::commands::NATIVE_REPORT_BUNDLE_DEFAULT_MAX_ITEMS
+        )]
+        max_items: usize,
+        #[arg(
+            long,
+            default_value_t = crate::commands::NATIVE_REPORT_BUNDLE_DEFAULT_MAX_BYTES
+        )]
+        max_bytes: u64,
+        #[arg(long)]
+        overwrite: bool,
+    },
     /// Export one bounded CSV report through the guarded direct native API.
     NativeExportReportCsv {
         #[arg(long)]
@@ -349,6 +368,7 @@ pub enum CliCommand {
 impl CliCommand {
     pub fn name(&self) -> &'static str {
         match self {
+            Self::NativeExportReportBundle { .. } => "native-export-report-bundle",
             Self::NativeExportReportCsv { .. } => "native-export-report-csv",
             Self::NativeExportReportPdf { .. } => "native-export-report-pdf",
             Self::NativeUpdateTaskTarget { .. } => "native-update-task-target",
@@ -429,6 +449,36 @@ mod tests {
     use clap::CommandFactory;
     use std::fs;
     use std::path::Path;
+
+    #[test]
+    fn parses_native_report_bundle_bounds_and_output_controls() {
+        let cli = parse_cli([
+            "native-export-report-bundle",
+            "--report-id",
+            "11111111-1111-4111-8111-111111111111",
+            "--output",
+            "report.yafvs-report.zip",
+            "--max-items",
+            "4096",
+            "--max-bytes",
+            "1048576",
+            "--overwrite",
+            "--status-only",
+        ])
+        .unwrap();
+        assert!(cli.status_only);
+        assert_eq!(
+            cli.command,
+            CliCommand::NativeExportReportBundle {
+                report_id: "11111111-1111-4111-8111-111111111111".into(),
+                output: Some(PathBuf::from("report.yafvs-report.zip")),
+                max_items: 4096,
+                max_bytes: 1_048_576,
+                overwrite: true,
+            }
+        );
+        assert_eq!(cli.command.name(), "native-export-report-bundle");
+    }
 
     #[test]
     fn parses_native_csv_export_bounds_and_output_controls() {

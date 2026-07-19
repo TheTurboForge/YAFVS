@@ -18,7 +18,8 @@ pub use commands::{
     command_feed_generation_runtime_guard, command_feed_generation_stage,
     command_feed_generation_state, command_feed_state, command_gsa_npm_audit, command_inventory,
     command_license_report, command_logs, command_native_api_cargo_audit,
-    command_native_api_request, command_native_api_semgrep_audit, command_native_export_report_csv,
+    command_native_api_request, command_native_api_semgrep_audit,
+    command_native_export_report_bundle, command_native_export_report_csv,
     command_native_export_report_pdf, command_native_start_task, command_native_stop_task,
     command_native_update_task_target, command_osv_lockfile_audit, command_path_coupling_state,
     command_production_posture_check, command_quality_gate_schedule, command_quality_gate_state,
@@ -46,6 +47,21 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         None => return command_repository_unavailable(cwd, cli.command.name()),
     };
     match &cli.command {
+        CliCommand::NativeExportReportBundle {
+            report_id,
+            output,
+            max_items,
+            max_bytes,
+            overwrite,
+        } => command_native_export_report_bundle(
+            &repo_root,
+            report_id,
+            output.as_deref(),
+            *max_items,
+            *max_bytes,
+            *overwrite,
+            cli.status_only,
+        ),
         CliCommand::NativeExportReportCsv {
             report_id,
             output,

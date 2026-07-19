@@ -1219,6 +1219,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["native-stop-all-tasks", "--json"], 1, "fail"),
                 (["native-update-task-target", "--task-id", "11111111-1111-4111-8111-111111111111", "--host", "192.0.2.10", "--json"], 1, "fail"),
                 (["native-delete-overrides-by-filter", "--filter", "CVE", "--allow-write-control", "--json"], 1, "fail"),
+                (["native-bulk-modify-schedules", "--filter", "nightly", "--timezone", "UTC", "--allow-write-control", "--json"], 1, "fail"),
                 (["native-empty-trash", "--allow-write-control", "--json"], 1, "fail"),
                 (["native-verify-scanners", "--json"], 1, "fail"),
                 (["native-targets-from-host-list", "--hosts-file", "/definitely-missing-yafvs-hosts.txt", "--json"], 1, "fail"),
@@ -2370,7 +2371,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-delete-overrides-by-filter", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-delete-overrides-by-filter", "native-bulk-modify-schedules", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2378,11 +2379,6 @@ class YAFVSCtlTests(unittest.TestCase):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
                 self.assertIn(f'tools/yafvsctl {command} "$@"', justfile)
-        for command in ("native-bulk-modify-schedules",):
-            self.assertIn(command, source)
-            self.assertIn(f"{command} *args:", justfile)
-            self.assertIn(f'tools/yafvsctl {command} "$@"', justfile)
-
         for command in (
             "native-start-tasks-from-csv",
             "native-stop-tasks-from-csv",
@@ -2391,6 +2387,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "native-credentials-from-csv",
             "native-alerts-from-csv",
             "native-delete-overrides-by-filter",
+            "native-bulk-modify-schedules",
             "native-empty-trash",
             "native-verify-scanners",
         ):
@@ -7380,152 +7377,41 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(skipped[-1]["check"], "native-api-direct.trash-empty-preflight-skipped")
         self.assertEqual(skipped[-1]["status"], "warn")
 
-    def test_native_bulk_modify_schedules_parser_and_pre_runtime_guards(self):
-        args = yafvsctl.build_parser().parse_args(["native-bulk-modify-schedules", "--filter", "nightly", "--timezone", "UTC", "--dry-run"])
-        self.assertEqual(args.command, "native-bulk-modify-schedules")
-        self.assertEqual(args.max_schedules, yafvsctl.NATIVE_BULK_MODIFY_SCHEDULES_DEFAULT_MAX)
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            calendar = root / "calendar.ics"
-            calendar.write_text("BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", encoding="utf-8")
-            with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                missing_input = yafvsctl.command_native_bulk_modify_schedules(root, filter_value="nightly", dry_run=True)
-                unconfirmed = yafvsctl.command_native_bulk_modify_schedules(root, filter_value="nightly", timezone="UTC")
-                invalid_calendar = yafvsctl.command_native_bulk_modify_schedules(root, filter_value="nightly", icalendar_file=root / "missing.ics", dry_run=True)
-                oversized = yafvsctl.command_native_bulk_modify_schedules(root, filter_value="nightly", icalendar_file=calendar, max_schedules=0, dry_run=True)
-                curl.assert_not_called()
-        for result in (missing_input, unconfirmed, invalid_calendar, oversized):
-            self.assertEqual(result["status"], "fail")
-            self.assertEqual(result["findings"][0]["check"], "native-bulk-modify-schedules.arguments")
-
-    def test_native_bulk_modify_schedules_rejects_invalid_calendar_text_before_runtime(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            control_calendar = root / "control.ics"
-            invalid_utf8_calendar = root / "invalid-utf8.ics"
-            invalid_utf8_calendar.write_bytes(b"BEGIN:VCALENDAR\xff\nEND:VCALENDAR\n")
-            with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                controls = []
-                for character in ("\x01", "\x7f", "\x85"):
-                    control_calendar.write_text(f"BEGIN:VCALENDAR\r\nX-BAD:{character}\r\nEND:VCALENDAR\r\n", encoding="utf-8")
-                    controls.append(yafvsctl.command_native_bulk_modify_schedules(root, filter_value="nightly", icalendar_file=control_calendar, dry_run=True))
-                invalid_utf8 = yafvsctl.command_native_bulk_modify_schedules(root, filter_value="nightly", icalendar_file=invalid_utf8_calendar, dry_run=True)
-                curl.assert_not_called()
-        for control in controls:
-            self.assertEqual(control["status"], "fail")
-            self.assertIn("unsupported control characters", control["findings"][0]["message"])
-        self.assertEqual(invalid_utf8["status"], "fail")
-        self.assertIn("failed to read iCalendar file", invalid_utf8["findings"][0]["message"])
-
-    def test_native_bulk_modify_schedules_dry_run_paginates_hashes_and_redacts_calendar(self):
-        ids = [
-            "22222222-2222-4222-8222-222222222222",
-            "11111111-1111-4111-8111-111111111111",
-        ]
-        calendar_text = "BEGIN:VCALENDAR\r\nX-SECRET:do-not-print\r\nEND:VCALENDAR\r\n"
-        calls = []
-
-        def fake_direct(_root, path, **kwargs):
-            calls.append((kwargs.get("method", "GET"), path))
-            page = 1 if "page=1&" in path else 2
-            payload = {"items": [{"id": ids[page - 1]}], "page": {"page": page, "page_size": 500, "total": 2}}
-            return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
-
-        with tempfile.TemporaryDirectory() as tmp:
-            calendar = Path(tmp) / "calendar.ics"
-            calendar.write_text(calendar_text, encoding="utf-8")
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="t" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
-                full = yafvsctl.command_native_bulk_modify_schedules(Path(tmp), filter_value="nightly", timezone="Europe/Berlin", icalendar_file=calendar, dry_run=True)
-                compact = yafvsctl.command_native_bulk_modify_schedules(Path(tmp), filter_value="nightly", timezone="Europe/Berlin", icalendar_file=calendar, dry_run=True, status_only=True)
-        expected_ids = sorted(ids)
-        expected_filter, expected_calendar, expected_snapshot = yafvsctl.native_bulk_modify_schedules_snapshot("nightly", expected_ids, timezone="Europe/Berlin", icalendar=calendar_text)
-        self.assertEqual(full["status"], "pass")
-        self.assertEqual(full["details"]["schedule_ids"], expected_ids)
-        self.assertEqual(full["details"]["filter_sha256"], expected_filter)
-        self.assertEqual(full["details"]["icalendar_sha256"], expected_calendar)
-        self.assertEqual(full["details"]["snapshot_sha256"], expected_snapshot)
-        self.assertEqual(compact["details"]["matched_count"], 2)
-        self.assertNotIn("schedule_ids", compact["details"])
-        self.assertNotIn(calendar_text, json.dumps(full))
-        self.assertNotIn(calendar_text, json.dumps(compact))
-        self.assertTrue(all(method == "GET" for method, _path in calls))
-        self.assertTrue(all("filter=nightly" in path and "sort=id" in path for _method, path in calls))
-
-    def test_native_bulk_modify_schedules_requires_matching_snapshot_and_preserves_omitted_fields(self):
-        schedule_id = "11111111-1111-4111-8111-111111111111"
-        calendar_text = "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n"
-        patch_bodies = []
-
-        def fake_direct(_root, path, **kwargs):
-            method = kwargs.get("method", "GET")
-            if method == "GET":
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"items": [{"id": schedule_id}], "page": {"page": 1, "page_size": 500, "total": 1}}) + "\n200", "")
-            patch_bodies.append(json.loads(kwargs["body"]))
-            return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": schedule_id}) + "\n200", "")
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            calendar = root / "calendar.ics"
-            calendar.write_text(calendar_text, encoding="utf-8")
-            timezone_snapshot = yafvsctl.native_bulk_modify_schedules_snapshot("nightly", [schedule_id], timezone="UTC", icalendar=None)[2]
-            calendar_snapshot = yafvsctl.native_bulk_modify_schedules_snapshot("nightly", [schedule_id], timezone=None, icalendar=calendar_text)[2]
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="t" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
-                mismatch = yafvsctl.command_native_bulk_modify_schedules(root, filter_value="nightly", timezone="UTC", allow_write_control=True, confirm_snapshot="0" * 64)
-                timezone_result = yafvsctl.command_native_bulk_modify_schedules(root, filter_value="nightly", timezone="UTC", allow_write_control=True, confirm_snapshot=timezone_snapshot)
-                calendar_result = yafvsctl.command_native_bulk_modify_schedules(root, filter_value="nightly", icalendar_file=calendar, allow_write_control=True, confirm_snapshot=calendar_snapshot)
-        self.assertEqual(mismatch["status"], "fail")
-        self.assertEqual(mismatch["findings"][-1]["check"], "native-bulk-modify-schedules.snapshot-confirmation")
-        self.assertEqual(timezone_result["status"], "pass")
-        self.assertEqual(calendar_result["status"], "pass")
-        self.assertEqual(patch_bodies, [{"timezone": "UTC"}, {"icalendar": calendar_text}])
-
-    def test_native_bulk_modify_schedules_stops_at_first_failure_and_redacts_calendar(self):
-        ids = [
-            "11111111-1111-4111-8111-111111111111",
-            "22222222-2222-4222-8222-222222222222",
-            "33333333-3333-4333-8333-333333333333",
-        ]
-        calendar_text = "BEGIN:VCALENDAR\r\nX-SECRET:do-not-print\r\nEND:VCALENDAR\r\n"
-        calls = []
-
-        def fake_direct(_root, path, **kwargs):
-            method = kwargs.get("method", "GET")
-            calls.append((method, path))
-            if method == "GET":
-                payload = {"items": [{"id": item} for item in ids], "page": {"page": 1, "page_size": 500, "total": 3}}
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
-            if path.endswith(ids[0]):
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": ids[0]}) + "\n200", "")
-            return subprocess.CompletedProcess(["curl"], 0, '{"error":{"code":"forbidden"}}\n403', "")
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            calendar = root / "calendar.ics"
-            calendar.write_text(calendar_text, encoding="utf-8")
-            snapshot = yafvsctl.native_bulk_modify_schedules_snapshot("nightly", ids, timezone=None, icalendar=calendar_text)[2]
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="t" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
-                result = yafvsctl.command_native_bulk_modify_schedules(root, filter_value="nightly", icalendar_file=calendar, allow_write_control=True, confirm_snapshot=snapshot)
-                compact = yafvsctl.native_bulk_modify_schedules_status_only_result(result)
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(result["details"]["attempted_count"], 2)
-        self.assertEqual(result["details"]["succeeded_count"], 1)
-        self.assertEqual(result["details"]["failed_count"], 1)
-        self.assertEqual(result["details"]["unattempted_count"], 1)
-        self.assertEqual([method for method, _path in calls], ["GET", "PATCH", "PATCH"])
-        self.assertIn("no rollback was attempted", result["summary"])
-        self.assertNotIn(calendar_text, json.dumps(result))
-        self.assertNotIn(calendar_text, json.dumps(compact))
-
+    def test_native_bulk_modify_schedules_bridge_preserves_controls(self):
+        expected = {"status": "pass", "details": {"snapshot_sha256": "a" * 64}}
+        with unittest.mock.patch.object(yafvsctl, "rust_result_envelope", return_value=expected) as bridge:
+            result = yafvsctl.command_native_bulk_modify_schedules(
+                Path("/repo"),
+                filter_value="nightly",
+                timezone="UTC",
+                icalendar_file=Path("/tmp/calendar.ics"),
+                max_schedules=1,
+                dry_run=True,
+                allow_write_control=True,
+                confirm_snapshot="a" * 64,
+                status_only=True,
+            )
+        self.assertIs(result, expected)
+        bridge.assert_called_once_with(
+            Path("/repo"),
+            "native-bulk-modify-schedules",
+            [
+                "native-bulk-modify-schedules",
+                "--filter",
+                "nightly",
+                "--max-schedules",
+                "1",
+                "--timezone",
+                "UTC",
+                "--icalendar-file",
+                "/tmp/calendar.ics",
+                "--dry-run",
+                "--allow-write-control",
+                "--confirm-snapshot",
+                "a" * 64,
+                "--status-only",
+            ],
+        )
 
     def test_task_target_replace_runtime_cleanup_is_ordered_and_complete(self):
         source = inspect.getsource(yafvsctl.direct_task_target_replace_runtime_findings)
@@ -9772,6 +9658,52 @@ class YAFVSCtlTests(unittest.TestCase):
                                 "details": {
                                     "created_credential_count": 1,
                                 },
+                            }
+                        ),
+                        "",
+                    )
+                if command and command[0] == "cargo" and "native-bulk-modify-schedules" in command:
+                    self.assertIn("--filter", command)
+                    self.assertIn("--max-schedules", command)
+                    self.assertIn("1", command)
+                    self.assertIn("--timezone", command)
+                    self.assertIn("UTC", command)
+                    self.assertIn("--json", command)
+                    dry_run = "--dry-run" in command
+                    if not dry_run:
+                        self.assertIn("--allow-write-control", command)
+                        self.assertIn("--confirm-snapshot", command)
+                    details = {
+                        "matched_count": 1,
+                        "schedule_ids": [schedule_uuid],
+                        "snapshot_sha256": "a" * 64,
+                        "attempted_count": 0 if dry_run else 1,
+                        "succeeded_count": 0 if dry_run else 1,
+                        "failed_count": 0,
+                        "unattempted_count": 0,
+                    }
+                    return yafvsctl.subprocess.CompletedProcess(
+                        command,
+                        0,
+                        json.dumps(
+                            {
+                                "status": "pass",
+                                "summary": "Native bulk schedule operation completed.",
+                                "findings": [
+                                    yafvsctl.finding(
+                                        "pass",
+                                        "native-bulk-modify-schedules.status-only",
+                                        "Native bulk schedule operation passed.",
+                                    )
+                                ],
+                                "artifacts": [],
+                                "metadata": {
+                                    "command": "native-bulk-modify-schedules",
+                                    "generated_at": "2026-07-19T00:00:00+00:00",
+                                    "repo_root": str(root),
+                                    "head": None,
+                                },
+                                "details": details,
                             }
                         ),
                         "",

@@ -1813,6 +1813,7 @@ mod tests {
             "native-stop-all-tasks",
             "native-update-task-target",
             "native-delete-overrides-by-filter",
+            "native-bulk-modify-schedules",
             "native-empty-trash",
             "native-verify-scanners",
             "feed-generation-stage",

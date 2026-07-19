@@ -270,8 +270,6 @@ NATIVE_NVT_DIAGNOSTIC_PREREQUISITE_IDS = (
     "1.3.6.1.4.1.25623.1.0.100315",
 )
 NATIVE_TASK_BATCH_PAGE_SIZE = 500
-NATIVE_BULK_MODIFY_SCHEDULES_DEFAULT_MAX = 100
-NATIVE_BULK_MODIFY_SCHEDULES_MAX_LIMIT = 500
 # Persisted gvmd task_status_t values that can still own scanner/control work.
 FEED_TRANSITION_BLOCKING_TASK_STATUS_IDS = (0, 3, 4, 10, 11, 14, 16, 17, 18, 19)
 RETAINED_QUALITY_GATE_ARTIFACTS = 30
@@ -20756,288 +20754,38 @@ def native_empty_trash_fetch_preview(
     return response, native_empty_trash_preview_payload(parsed), http_status
 
 
-def native_bulk_modify_schedules_filter_value(value: str) -> str:
-    value = value.strip()
-    if not value:
-        raise ValueError("--filter must be non-empty; broad unfiltered schedule mutation is refused")
-    if len(value.encode("utf-8")) > 1024 or not value.isprintable():
-        raise ValueError("--filter must be one printable line up to 1024 bytes")
-    return value
-
-
-def native_bulk_modify_schedules_timezone(value: str | None) -> str | None:
-    if value is None:
-        return None
-    value = value.strip()
-    if not value:
-        raise ValueError("--timezone must be non-empty when supplied")
-    if len(value.encode("utf-8")) > NATIVE_SCHEDULE_CSV_MAX_TIMEZONE_LENGTH or not value.isprintable():
-        raise ValueError(f"--timezone must be one printable line up to {NATIVE_SCHEDULE_CSV_MAX_TIMEZONE_LENGTH} bytes")
-    return value
-
-
-def load_native_bulk_modify_schedules_icalendar(icalendar_file: Path | None) -> str | None:
-    if icalendar_file is None:
-        return None
-    if not icalendar_file.is_file():
-        raise ValueError("--icalendar-file must name a readable regular file")
-    try:
-        with icalendar_file.open(encoding="utf-8", newline="") as handle:
-            icalendar = handle.read()
-    except (OSError, UnicodeDecodeError) as exc:
-        raise ValueError(f"failed to read iCalendar file: {exc}") from exc
-    if not icalendar.strip():
-        raise ValueError("--icalendar-file must not be empty")
-    if len(icalendar.encode("utf-8")) > NATIVE_SCHEDULE_CSV_MAX_ICALENDAR_LENGTH:
-        raise ValueError(f"--icalendar-file exceeds {NATIVE_SCHEDULE_CSV_MAX_ICALENDAR_LENGTH} bytes")
-    if any(
-        (ord(character) < 32 or 127 <= ord(character) <= 159)
-        and character not in {"\r", "\n", "\t"}
-        for character in icalendar
-    ):
-        raise ValueError("--icalendar-file contains unsupported control characters")
-    return icalendar
-
-
-def native_bulk_modify_schedules_snapshot(
-    filter_value: str,
-    schedule_ids: list[str],
-    *,
-    timezone: str | None,
-    icalendar: str | None,
-) -> tuple[str, str | None, str]:
-    filter_sha256 = hashlib.sha256(filter_value.encode("utf-8")).hexdigest()
-    icalendar_sha256 = hashlib.sha256(icalendar.encode("utf-8")).hexdigest() if icalendar is not None else None
-    payload = json.dumps(
-        {
-            "filter_sha256": filter_sha256,
-            "icalendar_sha256": icalendar_sha256,
-            "schedule_ids": sorted(schedule_ids),
-            "timezone": timezone,
-        },
-        ensure_ascii=True,
-        separators=(",", ":"),
-        sort_keys=True,
-    )
-    return filter_sha256, icalendar_sha256, hashlib.sha256(payload.encode("ascii")).hexdigest()
-
-
-def native_bulk_modify_schedules_fetch_snapshot(
-    repo_root: Path,
-    *,
-    filter_value: str,
-    max_schedules: int,
-    token: str,
-    env: dict[str, str],
-) -> tuple[list[str], dict[str, Any] | None]:
-    schedule_ids: list[str] = []
-    seen: set[str] = set()
-    expected_total: int | None = None
-    page = 1
-    while expected_total is None or len(schedule_ids) < expected_total:
-        path = (
-            f"/api/v1/schedules?filter={urllib.parse.quote(filter_value, safe='')}"
-            f"&page={page}&page_size={NATIVE_TASK_BATCH_PAGE_SIZE}&sort=id"
-        )
-        response = direct_native_api_curl(repo_root, path, token=token, env=env)
-        parsed, http_status = parse_json_output_with_http_status(response)
-        items = parsed.get("items") if isinstance(parsed, dict) else None
-        page_info = parsed.get("page") if isinstance(parsed, dict) else None
-        total = page_info.get("total") if isinstance(page_info, dict) else None
-        actual_page = page_info.get("page") if isinstance(page_info, dict) else None
-        page_ids = [item.get("id") for item in items] if isinstance(items, list) else []
-        page_ok = (
-            response.returncode == 0
-            and http_status == 200
-            and isinstance(items, list)
-            and type(total) is int
-            and total >= 0
-            and actual_page == page
-            and all(isinstance(item, dict) and isinstance(item.get("id"), str) and UUID_VALUE_RE.fullmatch(item["id"]) for item in items)
-        )
-        if expected_total is not None and total != expected_total:
-            page_ok = False
-        if page_ok and expected_total is None:
-            expected_total = total
-            if total > max_schedules:
-                return [], {"reason": "matched schedule count exceeds safety cap", "total": total, "max_schedules": max_schedules}
-        if page_ok and (len(page_ids) != len(set(page_ids)) or any(schedule_id in seen for schedule_id in page_ids)):
-            page_ok = False
-        if not page_ok:
-            return [], {
-                "reason": "schedule snapshot page was invalid, duplicated, or changed during pagination",
-                "page": page,
-                "http_status": http_status,
-                "expected_total": expected_total,
-                "observed_total": total,
-            }
-        if not items and len(schedule_ids) != expected_total:
-            return [], {"reason": "schedule snapshot ended before declared total", "page": page, "total": expected_total}
-        seen.update(page_ids)
-        schedule_ids.extend(page_ids)
-        if len(schedule_ids) == expected_total:
-            break
-        if expected_total is not None and len(schedule_ids) > expected_total:
-            return [], {"reason": "schedule snapshot exceeded declared total", "page": page, "total": expected_total}
-        page += 1
-        if page > 1000:
-            return [], {"reason": "schedule snapshot pagination exceeded safety limit", "total": expected_total}
-    return sorted(schedule_ids), None
-
-
-def native_bulk_modify_schedules_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    details = result.get("details") if isinstance(result.get("details"), dict) else {}
-    compact = dict(result)
-    compact["details"] = {
-        key: details.get(key)
-        for key in (
-            "filter_sha256",
-            "icalendar_sha256",
-            "snapshot_sha256",
-            "matched_count",
-            "max_schedules",
-            "dry_run",
-            "attempted_count",
-            "succeeded_count",
-            "failed_count",
-            "unattempted_count",
-        )
-    }
-    compact_findings = [
-        compact_doctor_finding(item)
-        for item in result.get("findings", [])
-        if isinstance(item, dict) and item.get("status") != "pass"
-    ]
-    compact["findings"] = compact_findings or [
-        finding("pass", "native-bulk-modify-schedules.status-only", "Native schedule mutation snapshot/result summarized.")
-    ]
-    return compact
-
-
-def native_bulk_modify_schedules_result(
-    repo_root: Path,
-    summary: str,
-    findings: list[dict[str, Any]],
-    details: dict[str, Any],
-    *,
-    status_only: bool,
-) -> dict[str, Any]:
-    result = make_result("native-bulk-modify-schedules", repo_root, summary, findings)
-    result["details"] = details
-    return native_bulk_modify_schedules_status_only_result(result) if status_only else result
-
-
 def command_native_bulk_modify_schedules(
     repo_root: Path,
     *,
     filter_value: str,
     timezone: str | None = None,
     icalendar_file: Path | None = None,
-    max_schedules: int = NATIVE_BULK_MODIFY_SCHEDULES_DEFAULT_MAX,
+    max_schedules: int = 100,
     dry_run: bool = False,
     allow_write_control: bool = False,
     confirm_snapshot: str | None = None,
     status_only: bool = False,
 ) -> dict[str, Any]:
-    command = "native-bulk-modify-schedules"
-    findings: list[dict[str, Any]] = []
-    details: dict[str, Any] = {
-        "matched_count": 0,
-        "max_schedules": max_schedules,
-        "dry_run": dry_run,
-        "attempted_count": 0,
-        "succeeded_count": 0,
-        "failed_count": 0,
-        "unattempted_count": 0,
-        "rows": [],
-    }
-    try:
-        filter_value = native_bulk_modify_schedules_filter_value(filter_value)
-        timezone = native_bulk_modify_schedules_timezone(timezone)
-        icalendar = load_native_bulk_modify_schedules_icalendar(icalendar_file)
-        if timezone is None and icalendar is None:
-            raise ValueError("supply at least one of --timezone or --icalendar-file")
-        if type(max_schedules) is not int or not 1 <= max_schedules <= NATIVE_BULK_MODIFY_SCHEDULES_MAX_LIMIT:
-            raise ValueError(f"--max-schedules must be between 1 and {NATIVE_BULK_MODIFY_SCHEDULES_MAX_LIMIT}")
-        if not dry_run and not allow_write_control:
-            raise ValueError("modifying schedules requires --allow-write-control")
-        if not dry_run and (not isinstance(confirm_snapshot, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", confirm_snapshot)):
-            raise ValueError("modifying schedules requires --confirm-snapshot with the SHA-256 from a fresh --dry-run")
-    except ValueError as exc:
-        findings.append(finding("fail", f"{command}.arguments", str(exc)))
-        return native_bulk_modify_schedules_result(repo_root, "Native bulk schedule mutation rejected before runtime access.", findings, details, status_only=status_only)
-
-    details["max_schedules"] = max_schedules
-    env = native_api_direct_runtime_env(repo_root)
-    findings.append(native_api_direct_config_shape_finding(env, check=f"{command}.direct-config-shape"))
-    if aggregate_status(findings) == "fail":
-        return native_bulk_modify_schedules_result(repo_root, "Direct native API schedule mutation rejected before runtime access.", findings, details, status_only=status_only)
-    token = native_api_direct_bearer_token(repo_root, env)
-    if not direct_api_bearer_token_is_acceptable(token):
-        findings.append(finding("fail", f"{command}.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH}))
-        return native_bulk_modify_schedules_result(repo_root, "Direct native API schedule mutation rejected before runtime access.", findings, details, status_only=status_only)
-
-    schedule_ids, snapshot_error = native_bulk_modify_schedules_fetch_snapshot(
-        repo_root,
-        filter_value=filter_value,
-        max_schedules=max_schedules,
-        token=token,
-        env=env,
-    )
-    if snapshot_error:
-        findings.append(finding("fail", f"{command}.snapshot", "Native schedule snapshot failed; no PATCH requests were attempted.", details=snapshot_error))
-        return native_bulk_modify_schedules_result(repo_root, "Native bulk schedule mutation stopped during snapshot collection.", findings, details, status_only=status_only)
-    filter_sha256, icalendar_sha256, snapshot_sha256 = native_bulk_modify_schedules_snapshot(
+    arguments = [
+        "native-bulk-modify-schedules",
+        "--filter",
         filter_value,
-        schedule_ids,
-        timezone=timezone,
-        icalendar=icalendar,
-    )
-    details.update({
-        "filter": filter_value,
-        "filter_sha256": filter_sha256,
-        "icalendar_file": str(icalendar_file) if icalendar_file is not None else None,
-        "icalendar_sha256": icalendar_sha256,
-        "snapshot_sha256": snapshot_sha256,
-        "matched_count": len(schedule_ids),
-        "schedule_ids": schedule_ids,
-        "timezone": timezone,
-    })
-    findings.append(finding("pass", f"{command}.snapshot", f"Snapshotted {len(schedule_ids)} schedule UUID(s) deterministically.", details={"matched_count": len(schedule_ids), "filter_sha256": filter_sha256, "icalendar_sha256": icalendar_sha256, "snapshot_sha256": snapshot_sha256}))
-
+        "--max-schedules",
+        str(max_schedules),
+    ]
+    if timezone is not None:
+        arguments.extend(["--timezone", timezone])
+    if icalendar_file is not None:
+        arguments.extend(["--icalendar-file", str(icalendar_file)])
     if dry_run:
-        return native_bulk_modify_schedules_result(repo_root, "Native bulk schedule mutation dry run completed; no PATCH requests were attempted.", findings, details, status_only=status_only)
-    if not secrets.compare_digest(confirm_snapshot.lower(), snapshot_sha256):
-        findings.append(finding("fail", f"{command}.snapshot-confirmation", "Confirmed snapshot does not match the fresh native schedule snapshot; no PATCH requests were attempted.", details={"expected_snapshot_sha256": snapshot_sha256}))
-        return native_bulk_modify_schedules_result(repo_root, "Native bulk schedule mutation rejected because the snapshot changed.", findings, details, status_only=status_only)
-    findings.append(finding("pass", f"{command}.snapshot-confirmation", "Confirmed snapshot matches the fresh native schedule snapshot."))
-
-    body = {key: value for key, value in (("timezone", timezone), ("icalendar", icalendar)) if value is not None}
-    for schedule_id in schedule_ids:
-        path = f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}"
-        response = direct_native_api_curl(
-            repo_root,
-            path,
-            token=token,
-            env=env,
-            method="PATCH",
-            body=json.dumps(body, separators=(",", ":")),
-            extra_headers=(("Content-Type", "application/json"),),
-        )
-        parsed, http_status = parse_json_output_with_http_status(response)
-        details["attempted_count"] += 1
-        succeeded = response.returncode == 0 and http_status == 200 and isinstance(parsed, dict) and parsed.get("id") == schedule_id
-        details["rows"].append({"schedule_id": schedule_id, "status": "succeeded" if succeeded else "failed", "http_status": http_status})
-        if succeeded:
-            details["succeeded_count"] += 1
-            continue
-        details["failed_count"] += 1
-        details["unattempted_count"] = len(schedule_ids) - details["attempted_count"]
-        findings.append(finding("fail", f"{command}.schedule.{schedule_id}", "Native API schedule PATCH failed; prior successes remain committed and remaining schedules were not attempted.", details={"schedule_id": schedule_id, "http_status": http_status, "attempted_count": details["attempted_count"], "succeeded_count": details["succeeded_count"], "failed_count": details["failed_count"], "unattempted_count": details["unattempted_count"]}))
-        return native_bulk_modify_schedules_result(repo_root, "Native bulk schedule mutation stopped after its first failed PATCH; prior successes remain committed and no rollback was attempted.", findings, details, status_only=status_only)
-
-    findings.append(finding("pass", f"{command}.patch", f"Patched {details['succeeded_count']} schedule(s) sequentially through the native API."))
-    return native_bulk_modify_schedules_result(repo_root, f"Native bulk schedule mutation patched all {details['succeeded_count']} selected schedule(s).", findings, details, status_only=status_only)
+        arguments.append("--dry-run")
+    if allow_write_control:
+        arguments.append("--allow-write-control")
+    if confirm_snapshot is not None:
+        arguments.extend(["--confirm-snapshot", confirm_snapshot])
+    if status_only:
+        arguments.append("--status-only")
+    return rust_result_envelope(repo_root, "native-bulk-modify-schedules", arguments)
 
 
 def native_target_host_list_target_body(host: str, port_list_id: str, timestamp: str) -> dict[str, Any]:
@@ -23511,15 +23259,6 @@ def build_parser() -> argparse.ArgumentParser:
     native_scan_with_delivery.add_argument("--allow-scan-control", action="store_true", help="confirm intentional target/task creation and scan start")
     native_scan_with_delivery.add_argument("--dry-run", action="store_true", help="plan request bodies without runtime access; this is the default without --allow-scan-control")
     native_scan_with_delivery.add_argument("--status-only", action="store_true", help="emit compact resource identifiers and state")
-    native_bulk_modify_schedules = subparsers.add_parser("native-bulk-modify-schedules", parents=[common], help="snapshot and sequentially PATCH a bounded native schedule filter result")
-    native_bulk_modify_schedules.add_argument("--filter", dest="filter_value", required=True, help="non-empty native schedule text filter; broad unfiltered mutation is refused")
-    native_bulk_modify_schedules.add_argument("--timezone", help="replacement timezone; omit to preserve each current timezone")
-    native_bulk_modify_schedules.add_argument("--icalendar-file", type=Path, help="UTF-8 replacement iCalendar file; omit to preserve each current calendar")
-    native_bulk_modify_schedules.add_argument("--max-schedules", type=int, default=NATIVE_BULK_MODIFY_SCHEDULES_DEFAULT_MAX, help=f"maximum matched schedules, from 1 to {NATIVE_BULK_MODIFY_SCHEDULES_MAX_LIMIT}")
-    native_bulk_modify_schedules.add_argument("--dry-run", action="store_true", help="emit the deterministic mutation-bound snapshot hash without PATCH requests")
-    native_bulk_modify_schedules.add_argument("--allow-write-control", action="store_true", help="confirm intentional schedule calendar mutation")
-    native_bulk_modify_schedules.add_argument("--confirm-snapshot", help="SHA-256 emitted by a fresh dry run; required for writes")
-    native_bulk_modify_schedules.add_argument("--status-only", action="store_true", help="emit compact snapshot and outcome counts without calendar content")
     native_tooling_state = subparsers.add_parser("native-tooling-state", parents=[common], help="inventory inherited GMP/python-gvm/gvm-tools dependency surfaces")
     native_tooling_state.add_argument("--compact", action="store_true", help="alias for --status-only; emit chat-safe counts and only non-pass findings")
     native_tooling_state.add_argument("--summary", action="store_true", help="emit status/count contract summaries without removal-candidate paths or endpoint inventories")
@@ -23614,18 +23353,6 @@ def main(argv: list[str] | None = None) -> int:
             scanner_id=args.scanner_id,
             allow_scan_control=args.allow_scan_control,
             dry_run=args.dry_run,
-            status_only=args.status_only,
-        )
-    elif args.command == "native-bulk-modify-schedules":
-        result = command_native_bulk_modify_schedules(
-            repo_root,
-            filter_value=args.filter_value,
-            timezone=args.timezone,
-            icalendar_file=args.icalendar_file,
-            max_schedules=args.max_schedules,
-            dry_run=args.dry_run,
-            allow_write_control=args.allow_write_control,
-            confirm_snapshot=args.confirm_snapshot,
             status_only=args.status_only,
         )
     elif args.command == "native-scan-new-system":

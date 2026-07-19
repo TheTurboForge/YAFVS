@@ -314,6 +314,8 @@ just native-export-report-pdf --report-id REPORT_UUID --output ./report.pdf --st
 just native-export-report-bundle --report-id REPORT_UUID --output ./report.yafvs-report.zip --status-only
 just native-delete-overrides-by-filter --filter 'obsolete policy' --dry-run --status-only
 just native-delete-overrides-by-filter --filter 'obsolete policy' --allow-write-control --confirm-snapshot SNAPSHOT_SHA256 --status-only
+just native-bulk-modify-schedules --filter 'nightly' --timezone UTC --dry-run --status-only
+just native-bulk-modify-schedules --filter 'nightly' --timezone UTC --allow-write-control --confirm-snapshot SNAPSHOT_SHA256 --status-only
 just native-stop-task --task-id TASK_UUID --allow-write-control --status-only
 just native-update-task-target --task-id TASK_UUID --host 192.0.2.10 --host 192.0.2.11 --exclude-host 192.0.2.11 --allow-write-control --status-only
 just native-update-task-target --task-id TASK_UUID --hosts-file ./replacement-hosts.csv --allow-write-control --status-only
@@ -388,6 +390,13 @@ invalidates affected report override counts without hard-deleting history.
 Default one-second pacing is configurable with `--delay-seconds`; each
 confirmed, rejected, or indeterminate outcome is recorded once without
 retry, and later rows from the exact snapshot continue.
+
+`native-bulk-modify-schedules` binds the selected UUID set, filter, replacement
+timezone, and replacement iCalendar digest into its dry-run snapshot. A real
+run requires the exact fresh hash and explicit write control. PATCH requests
+run sequentially and stop after the first rejected or indeterminate outcome;
+prior successes remain committed, no request is retried, and no automatic
+rollback is attempted. Omitted timezone or calendar fields remain unchanged.
 
 `native-verify-scanners` replaces the inherited `gvm-tools` scanner verification
 table with direct native API calls. It verifies each scanner without starting a

@@ -1199,6 +1199,8 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-db-introspect", "--json"], 0, "warn"),
                 (["runtime-performance-snapshot", "--json"], 0, "warn"),
                 (["runtime-log-review", "--json"], (0, 1), ("pass", "warn", "fail")),
+                (["runtime-scanner-capability-check", "--json"], (0, 1), ("pass", "fail")),
+                (["runtime-nmap-capability-check", "--json"], (0, 1), ("pass", "fail")),
                 (["c-hardening-check", "--status-only", "--json"], 1, "fail"),
                 (["path-coupling-state", "--json"], 0, "pass"),
                 (["path-coupling-state", "--status-only", "--json"], 0, "pass"),
@@ -2633,6 +2635,67 @@ class YAFVSCtlTests(unittest.TestCase):
             run_command.call_args.args[0][-2:],
             ["runtime-log-review", "--json"],
         )
+
+    def test_rust_capability_bridges_and_direct_ownership(self):
+        root = Path("/tmp/repo")
+        for command, wrapper in [
+            (
+                "runtime-scanner-capability-check",
+                yafvsctl.command_runtime_scanner_capability_check,
+            ),
+            (
+                "runtime-nmap-capability-check",
+                yafvsctl.command_runtime_nmap_capability_check,
+            ),
+        ]:
+            envelope = json.dumps(
+                {
+                    "status": "pass",
+                    "summary": "ok",
+                    "findings": [
+                        {
+                            "status": "pass",
+                            "check": "ospd.running",
+                            "message": "ok",
+                        }
+                    ],
+                    "artifacts": [],
+                    "metadata": {"command": command},
+                }
+            )
+            with self.subTest(command=command), unittest.mock.patch.object(
+                yafvsctl,
+                "run_command",
+                return_value=subprocess.CompletedProcess(["unit"], 0, envelope, ""),
+            ) as run_command:
+                result = wrapper(root)
+            self.assertEqual(result["status"], "pass")
+            self.assertEqual(run_command.call_args.args[0][-2:], [command, "--json"])
+
+        source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(
+            encoding="utf-8"
+        )
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(
+            encoding="utf-8"
+        )
+        direct_recipe = "cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --"
+        for command in (
+            "runtime-scanner-capability-check",
+            "runtime-nmap-capability-check",
+        ):
+            self.assertNotIn(f'subparsers.add_parser("{command}"', source)
+            self.assertNotIn(f'args.command == "{command}"', source)
+            self.assertIn(f'{direct_recipe} {command} "$@"', justfile)
+        for helper in (
+            "parse_proc_status",
+            "cap_hex_has",
+            "missing_required_caps",
+            "hostname_looks_like_docker_short_id",
+            "ospd_setpriv_raw_socket_probe_command",
+            "ospd_setpriv_nmap_probe_commands",
+            "nmap_privilege_warning_present",
+        ):
+            self.assertNotIn(f"def {helper}", source)
 
     def test_license_report_consumers_use_rust_wrapper_with_expected_options(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
@@ -14377,52 +14440,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(yafvsctl.GREENBONE_COMMUNITY_FEED_URL, "rsync://feed.community.greenbone.net/community")
         self.assertEqual(yafvsctl.GREENBONE_COMMUNITY_KEY_FPR, "8AE4BE429B60A59B311C2E739823FAA60ED1E580")
         self.assertEqual(yafvsctl.GREENBONE_COMMUNITY_KEY_URL, "https://www.greenbone.net/GBCommunitySigningKey.asc")
-
-    def test_capability_helpers_detect_required_scanner_caps(self):
-        self.assertTrue(yafvsctl.cap_hex_has("0000000000003000", 12))
-        self.assertTrue(yafvsctl.cap_hex_has("0000000000003000", 13))
-        self.assertEqual(yafvsctl.missing_required_caps("0000000000003000"), [])
-        self.assertEqual(yafvsctl.missing_required_caps("0000000000001000"), ["NET_RAW"])
-
-    def test_scanner_hostname_guard_rejects_docker_short_ids(self):
-        self.assertEqual(yafvsctl.OSPD_STABLE_HOSTNAME, "yafvs-ospd-openvas")
-        self.assertTrue(yafvsctl.hostname_looks_like_docker_short_id("b758d8ce41ff"))
-        self.assertFalse(yafvsctl.hostname_looks_like_docker_short_id("yafvs-ospd-openvas"))
-        self.assertFalse(yafvsctl.hostname_looks_like_docker_short_id("scan-node-01"))
-
-    def test_proc_status_helpers_parse_ids(self):
-        values = yafvsctl.parse_proc_status("Uid:\t1000\t1000\t1000\t1000\nGid:\t1000\t1000\t1000\t1000\n")
-        self.assertEqual(yafvsctl.first_proc_status_id(values["Uid"]), "1000")
-        self.assertEqual(yafvsctl.first_proc_status_id(values["Gid"]), "1000")
-
-    def test_ospd_setpriv_raw_socket_probe_uses_non_root_caps(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            command = yafvsctl.ospd_setpriv_raw_socket_probe_command(root)
-            self.assertEqual(command[:2], ["setpriv", "--reuid"])
-            self.assertIn("--ambient-caps", command)
-            self.assertIn("+net_raw,+net_admin", command)
-            self.assertIn("socket.SOCK_RAW", command[-1])
-
-    def test_ospd_setpriv_nmap_probes_use_privileged_env_and_non_root_caps(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            probes = yafvsctl.ospd_setpriv_nmap_probe_commands(root)
-            self.assertEqual([check for check, _ in probes], ["nmap.raw-syn", "nmap.os-detection"])
-            for _, command in probes:
-                self.assertEqual(command[:2], ["setpriv", "--reuid"])
-                self.assertIn("--ambient-caps", command)
-                self.assertIn("+net_raw,+net_admin", command)
-                self.assertIn("NMAP_PRIVILEGED=1", command[-1])
-                self.assertIn("127.0.0.1", command[-1])
-            self.assertIn("http.server 18080", probes[1][1][-1])
-            self.assertIn("18080", probes[1][1][-1])
-
-    def test_nmap_privilege_warning_detection(self):
-        self.assertTrue(yafvsctl.nmap_privilege_warning_present("You requested a scan type which requires root privileges."))
-        self.assertFalse(yafvsctl.nmap_privilege_warning_present("Nmap done: 1 IP address scanned."))
 
     def test_scanner_process_summary_counts_zombies_and_active_children(self):
         output = """    PID    PPID STAT COMMAND         COMMAND

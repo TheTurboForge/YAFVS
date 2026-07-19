@@ -71,6 +71,8 @@ deps
 runtime-feed-import-init
 runtime-performance-snapshot
 runtime-log-review
+runtime-scanner-capability-check
+runtime-nmap-capability-check
 runtime-data-state
 logs
 license-report

@@ -114,6 +114,10 @@ pub enum CliCommand {
     RuntimePerformanceSnapshot,
     /// Review recent full-stack runtime logs for high-signal failures.
     RuntimeLogReview,
+    /// Verify non-root OpenVAS raw-socket capabilities.
+    RuntimeScannerCapabilityCheck,
+    /// Verify non-root Nmap raw scan capabilities.
+    RuntimeNmapCapabilityCheck,
     /// Classify database and non-database runtime state.
     RuntimeDataState,
     /// Show recent runtime logs.
@@ -203,6 +207,8 @@ impl CliCommand {
             Self::RuntimeFeedImportInit => "runtime-feed-import-init",
             Self::RuntimePerformanceSnapshot => "runtime-performance-snapshot",
             Self::RuntimeLogReview => "runtime-log-review",
+            Self::RuntimeScannerCapabilityCheck => "runtime-scanner-capability-check",
+            Self::RuntimeNmapCapabilityCheck => "runtime-nmap-capability-check",
             Self::RuntimeDataState => "runtime-data-state",
             Self::Logs { .. } => "logs",
             Self::LicenseReport { .. } => "license-report",
@@ -229,6 +235,24 @@ mod tests {
     use clap::CommandFactory;
     use std::fs;
     use std::path::Path;
+
+    #[test]
+    fn parses_scanner_capability_commands() {
+        for (argument, expected) in [
+            (
+                "runtime-scanner-capability-check",
+                CliCommand::RuntimeScannerCapabilityCheck,
+            ),
+            (
+                "runtime-nmap-capability-check",
+                CliCommand::RuntimeNmapCapabilityCheck,
+            ),
+        ] {
+            let cli = parse_cli([argument]).unwrap();
+            assert_eq!(cli.command, expected);
+            assert_eq!(cli.command.name(), argument);
+        }
+    }
 
     #[test]
     fn parses_quality_gate_schedule_actions_and_rejects_combinations() {

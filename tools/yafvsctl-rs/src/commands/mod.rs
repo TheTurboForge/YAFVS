@@ -24,6 +24,7 @@ mod runtime_identity_migrate;
 mod runtime_lock;
 mod runtime_log_review;
 mod runtime_performance_snapshot;
+mod runtime_scanner_capability;
 mod rust_migration;
 mod secret;
 mod security_policy;
@@ -59,5 +60,8 @@ pub use runtime_data_state::command_runtime_data_state;
 pub use runtime_identity_migrate::command_runtime_identity_migrate;
 pub use runtime_log_review::command_runtime_log_review;
 pub use runtime_performance_snapshot::command_runtime_performance_snapshot;
+pub use runtime_scanner_capability::{
+    command_runtime_nmap_capability_check, command_runtime_scanner_capability_check,
+};
 pub use rust_migration::command_rust_migration_state;
 pub use security_policy::command_security_policy_check;

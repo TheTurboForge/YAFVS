@@ -15,6 +15,7 @@ mod direct_posture;
 mod direct_token;
 mod doctor;
 mod feed;
+mod feed_cache_sync;
 mod feed_generation;
 mod license;
 mod native_api_request;
@@ -70,6 +71,7 @@ pub use doctor::command_doctor;
 pub use feed::{
     command_feed_copy_to_runtime, command_feed_state, command_runtime_feed_import_init,
 };
+pub use feed_cache_sync::command_feed_cache_sync;
 pub use feed_generation::{
     command_feed_generation_activate, command_feed_generation_rollback,
     command_feed_generation_runtime_guard, command_feed_generation_stage,

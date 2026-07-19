@@ -340,6 +340,8 @@ pub enum CliCommand {
     QualityGateState,
     /// Show Community Feed cache and active-runtime state.
     FeedState,
+    /// Start a detached Community Feed cache synchronization.
+    FeedCacheSync,
     /// Verify immutable content-addressed feed generations without changing them.
     FeedGenerationState,
     /// Verify that the selected feed generation, activation journal, and database attestation agree.
@@ -597,6 +599,7 @@ impl CliCommand {
             Self::CHardeningManifestWrite => "c-hardening-manifest-write",
             Self::QualityGateState => "quality-gate-state",
             Self::FeedState => "feed-state",
+            Self::FeedCacheSync => "feed-cache-sync",
             Self::FeedGenerationState => "feed-generation-state",
             Self::FeedGenerationRuntimeGuard { .. } => "feed-generation-runtime-guard",
             Self::FeedGenerationStage => "feed-generation-stage",
@@ -1432,6 +1435,7 @@ mod tests {
                 "runtime-feed-keyring-init",
                 CliCommand::RuntimeFeedKeyringInit,
             ),
+            ("feed-cache-sync", CliCommand::FeedCacheSync),
             ("runtime-webui-smoke", CliCommand::RuntimeWebuiSmoke),
         ] {
             let cli = parse_cli([argument]).unwrap();

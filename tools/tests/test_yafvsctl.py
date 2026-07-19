@@ -1156,6 +1156,13 @@ class YAFVSCtlTests(unittest.TestCase):
                     outside_key.write_text("not a trusted key\n", encoding="utf-8")
                     key_artifact.symlink_to(outside_key)
                     env["YAFVS_RUNTIME_DIR"] = str(keyring_runtime)
+                if arguments[0] == "feed-cache-sync":
+                    feed_sync_runtime = Path(parity_runtime) / "feed-cache-sync"
+                    feed_sync_runtime.write_text(
+                        "force directory preparation to fail before self-test or tmux\n",
+                        encoding="utf-8",
+                    )
+                    env["YAFVS_RUNTIME_DIR"] = str(feed_sync_runtime)
                 rust_result = invoke(rust_command, arguments, env=env)
                 expected_exit_codes = (
                     expected_exit_code
@@ -1247,6 +1254,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-scope-smoke", "--json"], 1, "fail"),
                 (["runtime-certs-init", "--json"], 0, "pass"),
                 (["runtime-feed-keyring-init", "--json"], 1, "fail"),
+                (["feed-cache-sync", "--json"], 1, "fail"),
                 (["down", "--json"], 1, "fail"),
                 (["runtime-app-down", "--json"], 1, "fail"),
                 (["quality-gate-state", "--json"], (0, 1), ("pass", "warn", "fail")),

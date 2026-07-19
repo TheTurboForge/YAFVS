@@ -32,7 +32,7 @@ not use a failure exit code; `fail` exits non-zero.
 - `just rust-migration-state`: inspect C-to-Rust tooling and the current proof
   candidate.
 
-The incremental Rust command spine currently implements 78 parity-tested
+The incremental Rust command spine currently implements 79 parity-tested
 subcommands. Commands in this mechanically checked block have a native Rust
 implementation; the normal `just` recipes remain the stable front door while
 each recipe cutover follows parity validation:
@@ -78,6 +78,7 @@ runtime-db-introspect
 c-hardening-check
 quality-gate-state
 feed-state
+feed-cache-sync
 feed-generation-state
 feed-generation-stage
 feed-generation-activate
@@ -247,6 +248,10 @@ them with direct database or protocol mutations.
   The pinned Community key is inspected before import, key and signed-manifest
   files are consumed through stable no-follow descriptors, and downloads use a
   private bounded temporary artifact before atomic installation.
+- `just feed-cache-sync`: validate the pinned Community feed-sync command and
+  start at most one detached `yafvs-feed-sync` tmux session with a private
+  timestamped log. This updates only the persistent cache; immutable staging
+  and activation remain separate explicit commands.
 - `just runtime-status`: show current runtime status.
 - `just runtime-smoke`: run infrastructure smoke checks.
 - `just runtime-log-review`: write a redacted high-signal log review.

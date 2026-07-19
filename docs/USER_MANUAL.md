@@ -206,6 +206,7 @@ Useful development checks include:
 
 - `just runtime-certs-init --json`
 - `just runtime-feed-keyring-init --json`
+- `just feed-cache-sync --json`
 - `just runtime-status`
 - `just runtime-smoke`
 - `just runtime-log-review --json`
@@ -254,6 +255,12 @@ import, and verifies the active Notus advisory and product checksum
 signatures. A missing public-key artifact is downloaded into a private bounded
 temporary file and installed atomically; linked, nonregular, wrong-owner,
 multiply linked, empty, or oversized key and signature inputs are rejected.
+
+`feed-cache-sync` first runs the feed-sync self-test, refuses an unsafe or
+stale generated launcher, and starts no second update while the
+`yafvs-feed-sync` tmux session exists. A successful start writes to a private
+timestamped runtime log. Cache synchronization does not stage or activate a
+feed generation; those remain separate verified operations.
 
 The native HTTP/JSON API is internal by default for browser/runtime migration.
 For development automation, `just runtime-native-api-direct-smoke --json`

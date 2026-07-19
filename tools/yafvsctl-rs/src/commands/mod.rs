@@ -43,6 +43,7 @@ mod rust_migration;
 mod secret;
 mod security_policy;
 mod task_control;
+mod task_target;
 
 pub use audit::{
     command_gsa_npm_audit, command_native_api_cargo_audit, command_native_api_semgrep_audit,
@@ -98,3 +99,4 @@ pub use runtime_webui::command_runtime_webui_smoke;
 pub use rust_migration::command_rust_migration_state;
 pub use security_policy::command_security_policy_check;
 pub use task_control::{command_native_start_task, command_native_stop_task};
+pub use task_target::command_native_update_task_target;

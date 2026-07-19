@@ -3,6 +3,7 @@
 
 use clap::{Parser, Subcommand};
 use std::ffi::OsString;
+use std::path::PathBuf;
 
 #[derive(Debug, Parser, PartialEq, Eq)]
 #[command(name = "yafvsctl", disable_help_subcommand = true)]
@@ -21,6 +22,23 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand, PartialEq, Eq)]
 pub enum CliCommand {
+    /// Replace one task target through the guarded direct native API.
+    NativeUpdateTaskTarget {
+        #[arg(long)]
+        task_id: String,
+        #[arg(
+            long,
+            conflicts_with = "hosts_file",
+            required_unless_present = "hosts_file"
+        )]
+        host: Vec<String>,
+        #[arg(long, conflicts_with = "host", required_unless_present = "host")]
+        hosts_file: Option<PathBuf>,
+        #[arg(long)]
+        exclude_host: Vec<String>,
+        #[arg(long)]
+        allow_write_control: bool,
+    },
     /// Start one task through the guarded direct native API.
     NativeStartTask {
         #[arg(long)]
@@ -306,6 +324,7 @@ pub enum CliCommand {
 impl CliCommand {
     pub fn name(&self) -> &'static str {
         match self {
+            Self::NativeUpdateTaskTarget { .. } => "native-update-task-target",
             Self::NativeStartTask { .. } => "native-start-task",
             Self::NativeStopTask { .. } => "native-stop-task",
             Self::NativeApiRequest { .. } => "native-api-request",
@@ -383,6 +402,44 @@ mod tests {
     use clap::CommandFactory;
     use std::fs;
     use std::path::Path;
+
+    #[test]
+    fn parses_guarded_task_target_replacement_and_requires_one_host_source() {
+        let cli = parse_cli([
+            "native-update-task-target",
+            "--task-id",
+            "11111111-1111-4111-8111-111111111111",
+            "--host",
+            "192.0.2.10",
+            "--exclude-host",
+            "192.0.2.11",
+            "--allow-write-control",
+            "--status-only",
+        ])
+        .unwrap();
+        assert!(cli.status_only);
+        assert_eq!(cli.command.name(), "native-update-task-target");
+        assert!(
+            parse_cli([
+                "native-update-task-target",
+                "--task-id",
+                "11111111-1111-4111-8111-111111111111"
+            ])
+            .is_err()
+        );
+        assert!(
+            parse_cli([
+                "native-update-task-target",
+                "--task-id",
+                "11111111-1111-4111-8111-111111111111",
+                "--host",
+                "192.0.2.10",
+                "--hosts-file",
+                "hosts.csv",
+            ])
+            .is_err()
+        );
+    }
 
     #[test]
     fn parses_guarded_native_api_request() {

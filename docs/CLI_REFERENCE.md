@@ -32,7 +32,7 @@ not use a failure exit code; `fail` exits non-zero.
 - `just rust-migration-state`: inspect C-to-Rust tooling and the current proof
   candidate.
 
-The incremental Rust command spine currently implements 55 parity-tested
+The incremental Rust command spine currently implements 56 parity-tested
 subcommands. Python remains canonical only for commands not listed in this
 mechanically checked block while the normal `just` recipes continue to provide
 a stable front door:
@@ -45,6 +45,7 @@ just yafvsctl-rust-test
 
 <!-- rust-cli-commands:start -->
 ```text
+native-update-task-target
 native-start-task
 native-stop-task
 native-api-request

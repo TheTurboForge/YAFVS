@@ -20,7 +20,7 @@ use std::os::fd::{AsRawFd, FromRawFd};
 use std::path::Path;
 use std::time::Duration;
 
-const MAX_REQUEST_BODY_BYTES: usize = 1024 * 1024;
+pub(crate) const MAX_REQUEST_BODY_BYTES: usize = 1024 * 1024;
 const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_REQUEST_PATH_BYTES: usize = 64 * 1024;
 const REQUEST_ID_MAX: usize = 128;

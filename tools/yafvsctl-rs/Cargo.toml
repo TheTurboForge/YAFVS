@@ -10,6 +10,7 @@ publish = false
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
+csv = "1"
 glob = "0.3"
 libc = "0.2"
 quick-xml = "0.41"

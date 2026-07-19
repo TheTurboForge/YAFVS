@@ -1842,6 +1842,7 @@ mod tests {
             "runtime-credential-smoke",
             "runtime-rbac-smoke",
             "runtime-scope-smoke",
+            "runtime-certs-init",
             "down",
             "runtime-app-down",
             "runtime-webui-smoke",

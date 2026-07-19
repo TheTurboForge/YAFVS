@@ -13195,41 +13195,6 @@ def command_runtime_init(repo_root: Path) -> dict[str, Any]:
     return make_result("runtime-init", repo_root, "Runtime database initialization completed.", findings, [str(runtime_dir(repo_root)), "build/prefix"])
 
 
-def command_runtime_certs_init(repo_root: Path) -> dict[str, Any]:
-    findings = ensure_runtime_dirs(repo_root)
-    cert_private_dir(repo_root).mkdir(parents=True, exist_ok=True)
-    cert_public_dir(repo_root).mkdir(parents=True, exist_ok=True)
-    try:
-        cert_private_dir(repo_root).chmod(0o700)
-        cert_public_dir(repo_root).chmod(0o755)
-    except OSError as error:
-        findings.append(finding("warn", "runtime.cert.permissions", f"Could not adjust certificate directory permissions: {error}."))
-
-    script = repo_root / "build" / "prefix" / "bin" / "gvm-manage-certs"
-    findings.append(finding("pass" if shutil.which("certtool") else "fail", "certtool.available", "certtool is available." if shutil.which("certtool") else "certtool is missing; install gnutls-bin."))
-    findings.append(finding("pass" if script.is_file() else "fail", "gvm-manage-certs.available", "gvm-manage-certs is available in build/prefix." if script.is_file() else "gvm-manage-certs is missing; build/install gvmd first.", str(script)))
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-certs-init", repo_root, "Certificate initialization stopped before generation.", findings, [str(runtime_dir(repo_root))])
-
-    if certs_partial(repo_root):
-        findings.extend(cert_file_findings(repo_root))
-        findings.append(finding("fail", "runtime.cert.partial", "Partial certificate infrastructure exists; refusing to overwrite or rotate automatically."))
-        return make_result("runtime-certs-init", repo_root, "Certificate initialization stopped at partial existing state.", findings, [str(runtime_dir(repo_root))])
-
-    if not certs_complete(repo_root):
-        create = run_command([str(script), "-a"], repo_root, env=gvm_cert_env(repo_root))
-        findings.append(finding("pass" if create.returncode == 0 else "fail", "runtime.cert.create", f"gvm-manage-certs -a exit code {create.returncode}.", details={"output_tail": output_tail(create.stdout, 80)}))
-        if create.returncode != 0:
-            return make_result("runtime-certs-init", repo_root, "Certificate generation failed.", findings, [str(runtime_dir(repo_root))])
-    else:
-        findings.append(finding("pass", "runtime.cert.exists", "Complete certificate infrastructure already exists; not regenerating."))
-
-    verify = run_command([str(script), "-V"], repo_root, env=gvm_cert_env(repo_root))
-    findings.append(finding("pass" if verify.returncode == 0 else "fail", "runtime.cert.verify", f"gvm-manage-certs -V exit code {verify.returncode}.", details={"output_tail": output_tail(verify.stdout, 80)}))
-    findings.extend(cert_file_findings(repo_root))
-    return make_result("runtime-certs-init", repo_root, "Runtime certificate initialization completed.", findings, [str(cert_public_dir(repo_root)), str(cert_private_dir(repo_root))])
-
-
 def _command_runtime_scanner_redis_init_unlocked(
     repo_root: Path,
     probe_openvas: bool = True,
@@ -23168,7 +23133,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("build-baseline", parents=[common], help="build the inherited stack baseline")
     subparsers.add_parser("up", parents=[common], help="start runtime infrastructure services")
     subparsers.add_parser("runtime-init", parents=[common], help="initialize persistent runtime database prerequisites")
-    subparsers.add_parser("runtime-certs-init", parents=[common], help="initialize persistent runtime certificates")
     subparsers.add_parser("runtime-manager-init", parents=[common], help="initialize persistent gvmd database/user prerequisites")
     subparsers.add_parser("runtime-scanner-redis-init", parents=[common], help="initialize dedicated OpenVAS scanner Redis runtime")
     subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
@@ -23271,8 +23235,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_up(repo_root)
     elif args.command == "runtime-init":
         result = command_runtime_init(repo_root)
-    elif args.command == "runtime-certs-init":
-        result = command_runtime_certs_init(repo_root)
     elif args.command == "runtime-manager-init":
         result = command_runtime_manager_init(repo_root)
     elif args.command == "runtime-scanner-redis-init":

@@ -25,6 +25,7 @@ mod runtime_lock;
 mod runtime_log_review;
 mod runtime_performance_snapshot;
 mod runtime_scanner_capability;
+mod runtime_scanner_process;
 mod rust_migration;
 mod secret;
 mod security_policy;
@@ -63,5 +64,6 @@ pub use runtime_performance_snapshot::command_runtime_performance_snapshot;
 pub use runtime_scanner_capability::{
     command_runtime_nmap_capability_check, command_runtime_scanner_capability_check,
 };
+pub use runtime_scanner_process::command_runtime_scanner_process_check;
 pub use rust_migration::command_rust_migration_state;
 pub use security_policy::command_security_policy_check;

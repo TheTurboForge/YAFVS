@@ -23,8 +23,8 @@ pub use commands::{
     command_runtime_feed_import_init, command_runtime_identity_migrate, command_runtime_log_review,
     command_runtime_native_api_direct_token, command_runtime_nmap_capability_check,
     command_runtime_performance_snapshot, command_runtime_plan, command_runtime_redis_state,
-    command_runtime_scanner_capability_check, command_rust_migration_state,
-    command_security_policy_check, command_status, find_repo_root,
+    command_runtime_scanner_capability_check, command_runtime_scanner_process_check,
+    command_rust_migration_state, command_security_policy_check, command_status, find_repo_root,
 };
 pub use render::{render_human, render_json};
 pub use result::{ResultEnvelope, exit_code};
@@ -94,6 +94,7 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         CliCommand::RuntimeScannerCapabilityCheck => {
             command_runtime_scanner_capability_check(&repo_root)
         }
+        CliCommand::RuntimeScannerProcessCheck => command_runtime_scanner_process_check(&repo_root),
         CliCommand::RuntimeNmapCapabilityCheck => command_runtime_nmap_capability_check(&repo_root),
         CliCommand::RuntimeDataState => command_runtime_data_state(&repo_root),
         CliCommand::Logs {

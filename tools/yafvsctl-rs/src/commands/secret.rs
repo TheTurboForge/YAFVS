@@ -63,7 +63,7 @@ fn validate_single_line_secret(path: &Path, mut secret: String) -> io::Result<St
     Ok(secret)
 }
 
-fn read_private_text(path: &Path, max_bytes: usize) -> io::Result<String> {
+pub(crate) fn read_private_text(path: &Path, max_bytes: usize) -> io::Result<String> {
     let parent = path
         .parent()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "private path has no parent"))?;
@@ -92,6 +92,7 @@ fn read_private_text(path: &Path, max_bytes: usize) -> io::Result<String> {
     let euid = unsafe { libc::geteuid() };
     if !before.file_type().is_file()
         || before.uid() != euid
+        || before.nlink() != 1
         || before.permissions().mode() & 0o077 != 0
     {
         return Err(io::Error::new(
@@ -440,6 +441,18 @@ mod tests {
         let target = root.join("target");
         fs::write(&target, "secret\n").unwrap();
         std::os::unix::fs::symlink(&target, &path).unwrap();
+        assert!(read_or_create_runtime_secret(&repo, "browser-proxy").is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn runtime_secret_rejects_hardlinks() {
+        let root = fixture();
+        let repo = root.join("YAFVS");
+        fs::create_dir_all(&repo).unwrap();
+        let path = runtime_secret_path(&repo, "browser-proxy");
+        write_private_text(&path, "secret\n").unwrap();
+        fs::hard_link(&path, root.join("linked-secret")).unwrap();
         assert!(read_or_create_runtime_secret(&repo, "browser-proxy").is_err());
         fs::remove_dir_all(root).unwrap();
     }

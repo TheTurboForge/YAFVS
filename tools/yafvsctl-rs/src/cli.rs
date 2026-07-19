@@ -116,6 +116,8 @@ pub enum CliCommand {
     RuntimeLogReview,
     /// Verify non-root OpenVAS raw-socket capabilities.
     RuntimeScannerCapabilityCheck,
+    /// Verify scanner process and MQTT credential hygiene.
+    RuntimeScannerProcessCheck,
     /// Verify non-root Nmap raw scan capabilities.
     RuntimeNmapCapabilityCheck,
     /// Classify database and non-database runtime state.
@@ -208,6 +210,7 @@ impl CliCommand {
             Self::RuntimePerformanceSnapshot => "runtime-performance-snapshot",
             Self::RuntimeLogReview => "runtime-log-review",
             Self::RuntimeScannerCapabilityCheck => "runtime-scanner-capability-check",
+            Self::RuntimeScannerProcessCheck => "runtime-scanner-process-check",
             Self::RuntimeNmapCapabilityCheck => "runtime-nmap-capability-check",
             Self::RuntimeDataState => "runtime-data-state",
             Self::Logs { .. } => "logs",
@@ -246,6 +249,10 @@ mod tests {
             (
                 "runtime-nmap-capability-check",
                 CliCommand::RuntimeNmapCapabilityCheck,
+            ),
+            (
+                "runtime-scanner-process-check",
+                CliCommand::RuntimeScannerProcessCheck,
             ),
         ] {
             let cli = parse_cli([argument]).unwrap();

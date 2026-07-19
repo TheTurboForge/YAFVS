@@ -3512,7 +3512,9 @@ def rust_feed_generation_runtime_guard_finding(
         *arguments,
     ]
     try:
-        completed = run_command(command, repo_root, timeout=300)
+        completed = run_command(
+            command, repo_root, timeout=300 if selector_only else 1800
+        )
         payload = json.loads(completed.stdout)
     except (OSError, json.JSONDecodeError):
         completed = None

@@ -14841,6 +14841,10 @@ class YAFVSCtlTests(unittest.TestCase):
             arguments = run_command.call_args.args[0]
             self.assertEqual(arguments[-1], "--json")
             self.assertEqual("--selector-only" in arguments, selector_only)
+            self.assertEqual(
+                run_command.call_args.kwargs["timeout"],
+                300 if selector_only else 1800,
+            )
 
     def test_rust_feed_generation_runtime_guard_bridge_rejects_invalid_results(self):
         valid_item = {

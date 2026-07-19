@@ -7,7 +7,7 @@ use super::{
     Limits, R, absolute_dir, digest, identity, is_dir, is_lnk, is_reg, mode, open_dir_at,
     path_is_missing, selector, stat, stat_at, uid, verify,
 };
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::ffi::CString;
 use std::io;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
@@ -372,6 +372,45 @@ pub(super) fn read_current_generation(runtime_root: &Path, limits: &Limits) -> R
     Ok(Some(verified))
 }
 
+/// Read only the safely resolved immutable-generation reference.
+///
+/// This deliberately does not inventory or hash generation contents. Runtime
+/// callers use it to reject a missing, unsafe, or journal-mismatched selector
+/// before paying for full content verification. Starting app services still
+/// requires `read_current_generation` and its complete verification pass.
+pub(super) fn read_current_generation_reference(runtime_root: &Path) -> R<Option<Value>> {
+    let store_path = runtime_root.join("feed-store");
+    let store = match absolute_dir(&store_path) {
+        Ok(store) => store,
+        Err(_) if path_is_missing(&store_path) => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    private_user_directory(store.as_raw_fd())?;
+    let Some(generation_id) = selector(store.as_raw_fd())? else {
+        return Ok(None);
+    };
+    let generations = open_dir_at(store.as_raw_fd(), "generations")?;
+    private_user_directory(generations.as_raw_fd())?;
+    let entry = stat_at(generations.as_raw_fd(), &generation_id)?;
+    let opened = open_dir_at(generations.as_raw_fd(), &generation_id)?;
+    let opened_stat = stat(opened.as_raw_fd())?;
+    if !is_dir(&entry)
+        || !is_dir(&opened_stat)
+        || identity(&entry) != identity(&opened_stat)
+        || opened_stat.st_uid != uid()
+        || mode(&opened_stat) & 0o222 != 0
+    {
+        return Err("current feed generation reference is unsafe".into());
+    }
+    if selector(store.as_raw_fd())? != Some(generation_id.clone()) {
+        return Err("current feed generation selector changed while resolving".into());
+    }
+    Ok(Some(json!({
+        "generation_id": generation_id,
+        "verified": false,
+    })))
+}
+
 pub(super) fn select_generation(
     runtime_root: &Path,
     generation_id: &str,
@@ -502,6 +541,11 @@ mod tests {
                 .unwrap_err()
                 .contains("not a user-owned symlink")
         );
+        assert!(
+            read_current_generation_reference(&root)
+                .unwrap_err()
+                .contains("not a user-owned symlink")
+        );
         fs::remove_file(store.join("current")).unwrap();
         fs::set_permissions(&store, fs::Permissions::from_mode(0o755)).unwrap();
         assert_eq!(
@@ -509,6 +553,47 @@ mod tests {
             "feed generation store is not private and user-owned"
         );
         fs::set_permissions(&store, fs::Permissions::from_mode(0o700)).unwrap();
+        cleanup(&root);
+    }
+
+    #[test]
+    fn current_reference_is_structural_and_full_read_still_hashes_payload() {
+        let _serial = TEST_SERIAL.lock().unwrap();
+        let (root, id) = valid_generation("reference-vs-verification");
+        symlink(format!("generations/{id}"), root.join("feed-store/current")).unwrap();
+
+        let reference = read_current_generation_reference(&root).unwrap().unwrap();
+        assert_eq!(reference["generation_id"], id);
+        assert_eq!(reference["verified"], false);
+
+        let payload = root
+            .join("feed-store/generations")
+            .join(&id)
+            .join("openvas/plugins/plugin_feed_info.inc");
+        fs::set_permissions(&payload, fs::Permissions::from_mode(0o644)).unwrap();
+        fs::write(&payload, b"tampered-but-sealed").unwrap();
+        fs::set_permissions(&payload, fs::Permissions::from_mode(0o444)).unwrap();
+
+        assert_eq!(
+            read_current_generation_reference(&root).unwrap().unwrap()["generation_id"],
+            id
+        );
+        assert!(read_current_generation(&root, &Limits::default()).is_err());
+        cleanup(&root);
+    }
+
+    #[test]
+    fn current_reference_rejects_a_writable_generation_root() {
+        let _serial = TEST_SERIAL.lock().unwrap();
+        let (root, id) = valid_generation("writable-reference");
+        symlink(format!("generations/{id}"), root.join("feed-store/current")).unwrap();
+        let generation = root.join("feed-store/generations").join(&id);
+        fs::set_permissions(&generation, fs::Permissions::from_mode(0o755)).unwrap();
+
+        assert_eq!(
+            read_current_generation_reference(&root).unwrap_err(),
+            "current feed generation reference is unsafe"
+        );
         cleanup(&root);
     }
 

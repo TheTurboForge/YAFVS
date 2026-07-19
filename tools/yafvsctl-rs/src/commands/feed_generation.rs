@@ -90,17 +90,38 @@ pub fn command_feed_generation_runtime_guard(
     selector_only: bool,
 ) -> ResultEnvelope {
     let runtime = runtime_dir(repo_root);
-    let finding = active_feed_generation_runtime_guard_finding(
+    let selector_journal = active_feed_generation_runtime_guard_finding(
         &runtime,
-        selector::read_current_generation(&runtime, &Limits::default()),
+        selector::read_current_generation_reference(&runtime),
         journal::read_activation_state(&runtime),
-        selector_only,
-        || {
-            DatabaseAttestationAdapter::new(repo_root, &SystemCommandRunner)
-                .read()
-                .map(|attestation| attestation.map(|value| value.generation_id().to_owned()))
-        },
+        true,
+        || unreachable!("selector-only feed guard must not read PostgreSQL"),
     );
+    let referenced_generation_id = selector_journal
+        .details
+        .as_ref()
+        .and_then(|details| details["selector_generation_id"].as_str())
+        .map(str::to_owned);
+    let finding = if selector_only {
+        selector_journal
+    } else if selector_journal.status != "pass" {
+        promote_selector_journal_failure(selector_journal)
+    } else {
+        active_feed_generation_runtime_guard_finding(
+            &runtime,
+            require_referenced_generation(
+                referenced_generation_id.as_deref(),
+                selector::read_current_generation(&runtime, &Limits::default()),
+            ),
+            journal::read_activation_state(&runtime),
+            false,
+            || {
+                DatabaseAttestationAdapter::new(repo_root, &SystemCommandRunner)
+                    .read()
+                    .map(|attestation| attestation.map(|value| value.generation_id().to_owned()))
+            },
+        )
+    };
     make_result(
         metadata(
             repo_root,
@@ -110,6 +131,34 @@ pub fn command_feed_generation_runtime_guard(
         "Active feed generation runtime guard completed.".into(),
         vec![finding],
     )
+}
+
+fn require_referenced_generation(
+    referenced_generation_id: Option<&str>,
+    verified: Result<Option<Value>, String>,
+) -> Result<Option<Value>, String> {
+    let verified = verified?;
+    let verified_generation_id = verified
+        .as_ref()
+        .and_then(|value| value["generation_id"].as_str());
+    if referenced_generation_id.is_some() && referenced_generation_id == verified_generation_id {
+        Ok(verified)
+    } else {
+        Err(
+            "current feed generation changed between reference resolution and full verification"
+                .into(),
+        )
+    }
+}
+
+fn promote_selector_journal_failure(selector_journal: Finding) -> Finding {
+    let mut finding = Finding::new("fail", "feed-generation.current", selector_journal.message)
+        .with_path(selector_journal.path.as_deref().unwrap_or_default());
+    if let Some(details) = selector_journal.details {
+        finding = finding.with_details(details);
+    }
+
+    finding
 }
 
 fn active_feed_generation_runtime_guard_finding<F>(
@@ -128,12 +177,7 @@ where
         return selector_journal;
     }
     if selector_journal.status != "pass" {
-        let mut finding = Finding::new("fail", "feed-generation.current", selector_journal.message)
-            .with_path(selector_journal.path.as_deref().unwrap_or_default());
-        if let Some(details) = selector_journal.details {
-            finding = finding.with_details(details);
-        }
-        return finding;
+        return promote_selector_journal_failure(selector_journal);
     }
     let mut details = selector_journal.details.unwrap_or_else(|| json!({}));
     match read_database() {
@@ -1908,6 +1952,28 @@ mod tests {
             generation_id
         );
         fs::remove_dir_all(runtime).unwrap();
+    }
+
+    #[test]
+    fn runtime_guard_binds_full_verification_to_the_preliminary_reference() {
+        let generation_id = "a".repeat(64);
+        let other_generation_id = "b".repeat(64);
+        assert!(
+            require_referenced_generation(
+                Some(&generation_id),
+                Ok(Some(selected_generation(&generation_id))),
+            )
+            .is_ok()
+        );
+        assert_eq!(
+            require_referenced_generation(
+                Some(&generation_id),
+                Ok(Some(selected_generation(&other_generation_id))),
+            )
+            .unwrap_err(),
+            "current feed generation changed between reference resolution and full verification"
+        );
+        assert!(require_referenced_generation(None, Ok(None)).is_err());
     }
 
     #[test]

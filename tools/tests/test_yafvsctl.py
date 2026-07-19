@@ -2614,7 +2614,7 @@ class YAFVSCtlTests(unittest.TestCase):
             'rust_license_report_result(repo_root, public_release=True, mode="source-public")',
             source,
         )
-        self.assertEqual(source.count("license_result = rust_license_report_result(repo_root)"), 2)
+        self.assertEqual(source.count("license_result = rust_license_report_result(repo_root)"), 1)
 
     def test_runtime_redis_state_is_rust_only(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
@@ -11353,9 +11353,9 @@ class YAFVSCtlTests(unittest.TestCase):
             "deps",
             "runtime-plan",
             "logs",
+            "doctor",
         }
         python_owned = (
-            "doctor",
             "configure",
             "build",
             "build-core-c",

@@ -3,7 +3,8 @@
 
 use super::compose::{compose_command, runtime_environment};
 use crate::process::{CommandRunner, ProcessOutput};
-use serde_json::{Map, Value};
+use crate::result::Finding;
+use serde_json::{Map, Value, json};
 use std::path::Path;
 use std::time::Duration;
 
@@ -20,6 +21,93 @@ pub(crate) struct NativeJsonResponse {
     pub(crate) output: ProcessOutput,
     pub(crate) parsed: Option<Value>,
     pub(crate) error: Option<String>,
+}
+
+pub(crate) fn native_pages_ok(pages: &NativeObjectPages) -> bool {
+    pages.error.is_none()
+        && pages.total.is_some()
+        && pages
+            .response
+            .as_ref()
+            .is_some_and(|response| response.output.success && response.error.is_none())
+}
+
+pub(crate) fn native_page_finding(
+    status: &str,
+    check: &str,
+    message: &str,
+    pages: &NativeObjectPages,
+    display_path: &str,
+) -> Finding {
+    pages.response.as_ref().map_or_else(
+        || {
+            Finding::new(status, check, message.into()).with_details(json!({
+                "exit_code": 1,
+                "command": native_api_display_command(display_path),
+                "response_summary": {"parsed": false},
+                "error": pages.error,
+            }))
+        },
+        |response| native_probe_finding(status, check, message, response, display_path),
+    )
+}
+
+pub(crate) fn native_probe_finding(
+    status: &str,
+    check: &str,
+    message: &str,
+    response: &NativeJsonResponse,
+    display_path: &str,
+) -> Finding {
+    let mut details = Map::new();
+    details.insert(
+        "exit_code".into(),
+        response.output.exit_code.map_or(Value::Null, Value::from),
+    );
+    details.insert(
+        "command".into(),
+        Value::String(native_api_display_command(display_path)),
+    );
+    details.insert("response_summary".into(), summarize_response(response));
+    if let Some(error) = &response.error {
+        details.insert("error".into(), Value::String(error.clone()));
+    }
+    if !response.output.stdout.is_empty() {
+        details.insert(
+            "stdout_bytes".into(),
+            Value::from(response.output.stdout.len()),
+        );
+    }
+    if !response.output.stderr.is_empty() {
+        details.insert(
+            "stderr_bytes".into(),
+            Value::from(response.output.stderr.len()),
+        );
+    }
+    Finding::new(status, check, message.into()).with_details(Value::Object(details))
+}
+
+fn summarize_response(response: &NativeJsonResponse) -> Value {
+    let Some(object) = response.object() else {
+        return json!({"parsed": false});
+    };
+    let mut summary = Map::from_iter([("parsed".into(), Value::Bool(true))]);
+    if let Some(page) = object.get("page").and_then(Value::as_object) {
+        let bounded_page = ["page", "page_size", "total", "total_pages"]
+            .into_iter()
+            .filter_map(|key| {
+                page.get(key)
+                    .filter(|value| value.is_number())
+                    .cloned()
+                    .map(|value| (key.into(), value))
+            })
+            .collect();
+        summary.insert("page".into(), Value::Object(bounded_page));
+    }
+    if let Some(items) = object.get("items").and_then(Value::as_array) {
+        summary.insert("item_count_in_response".into(), Value::from(items.len()));
+    }
+    Value::Object(summary)
 }
 
 impl NativeJsonResponse {

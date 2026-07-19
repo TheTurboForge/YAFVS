@@ -6,8 +6,8 @@ use super::artifact::{
 };
 use super::common::{expand_home, metadata, runtime_dir};
 use super::native_runtime::{
-    NativeJsonResponse, NativeObjectPages, fetch_object_pages, native_api_display_command,
-    native_api_get_json, percent_encode_component,
+    fetch_object_pages, native_api_get_json, native_page_finding, native_pages_ok,
+    native_probe_finding, percent_encode_component,
 };
 use super::report_selection::latest_completed_full_test_report_id;
 use super::runtime_performance_snapshot::service_running;
@@ -216,8 +216,8 @@ fn command_with(
         max_results,
         runner,
     );
-    let results_ok = pages_ok(&results);
-    findings.push(page_probe_finding(
+    let results_ok = native_pages_ok(&results);
+    findings.push(native_page_finding(
         if results_ok { "pass" } else { "fail" },
         "runtime-certbund-report.results-read",
         if results_ok {
@@ -235,8 +235,8 @@ fn command_with(
         max_hosts,
         runner,
     );
-    let hosts_ok = pages_ok(&hosts);
-    findings.push(page_probe_finding(
+    let hosts_ok = native_pages_ok(&hosts);
+    findings.push(native_page_finding(
         if hosts_ok { "pass" } else { "fail" },
         "runtime-certbund-report.hosts-read",
         if hosts_ok {
@@ -580,93 +580,6 @@ fn resolve_output_path(repo_root: &Path, output: Option<&str>, default: PathBuf)
     } else {
         repo_root.join(path)
     }
-}
-
-fn pages_ok(pages: &NativeObjectPages) -> bool {
-    pages.error.is_none()
-        && pages.total.is_some()
-        && pages
-            .response
-            .as_ref()
-            .is_some_and(|response| response.output.success && response.error.is_none())
-}
-
-fn page_probe_finding(
-    status: &str,
-    check: &str,
-    message: &str,
-    pages: &NativeObjectPages,
-    display_path: &str,
-) -> Finding {
-    pages.response.as_ref().map_or_else(
-        || {
-            Finding::new(status, check, message.into()).with_details(json!({
-                "exit_code": 1,
-                "command": native_api_display_command(display_path),
-                "response_summary": {"parsed": false},
-                "error": pages.error,
-            }))
-        },
-        |response| native_probe_finding(status, check, message, response, display_path),
-    )
-}
-
-fn native_probe_finding(
-    status: &str,
-    check: &str,
-    message: &str,
-    response: &NativeJsonResponse,
-    display_path: &str,
-) -> Finding {
-    let mut details = Map::new();
-    details.insert(
-        "exit_code".into(),
-        response.output.exit_code.map_or(Value::Null, Value::from),
-    );
-    details.insert(
-        "command".into(),
-        Value::String(native_api_display_command(display_path)),
-    );
-    details.insert("response_summary".into(), summarize_response(response));
-    if let Some(error) = &response.error {
-        details.insert("error".into(), Value::String(error.clone()));
-    }
-    if !response.output.stdout.is_empty() {
-        details.insert(
-            "stdout_bytes".into(),
-            Value::from(response.output.stdout.len()),
-        );
-    }
-    if !response.output.stderr.is_empty() {
-        details.insert(
-            "stderr_bytes".into(),
-            Value::from(response.output.stderr.len()),
-        );
-    }
-    Finding::new(status, check, message.into()).with_details(Value::Object(details))
-}
-
-fn summarize_response(response: &NativeJsonResponse) -> Value {
-    let Some(object) = response.object() else {
-        return json!({"parsed": false});
-    };
-    let mut summary = Map::from_iter([("parsed".into(), Value::Bool(true))]);
-    if let Some(page) = object.get("page").and_then(Value::as_object) {
-        let bounded_page = ["page", "page_size", "total", "total_pages"]
-            .into_iter()
-            .filter_map(|key| {
-                page.get(key)
-                    .filter(|value| value.is_number())
-                    .cloned()
-                    .map(|value| (key.into(), value))
-            })
-            .collect();
-        summary.insert("page".into(), Value::Object(bounded_page));
-    }
-    if let Some(items) = object.get("items").and_then(Value::as_array) {
-        summary.insert("item_count_in_response".into(), Value::from(items.len()));
-    }
-    Value::Object(summary)
 }
 
 fn certbund_ids(results: &[Map<String, Value>]) -> Vec<String> {

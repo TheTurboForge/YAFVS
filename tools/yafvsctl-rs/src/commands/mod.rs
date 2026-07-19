@@ -8,6 +8,7 @@ mod common;
 mod compose;
 mod db_introspect;
 mod deps;
+mod direct_api;
 mod direct_token;
 mod doctor;
 mod feed;

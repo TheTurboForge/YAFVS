@@ -30,6 +30,7 @@ pub use commands::{
     command_runtime_plan, command_runtime_rbac_smoke, command_runtime_redis_state,
     command_runtime_report_export, command_runtime_report_metrics, command_runtime_report_summary,
     command_runtime_scanner_capability_check, command_runtime_scanner_process_check,
+    command_runtime_scope_report_metrics, command_runtime_scope_report_summary,
     command_runtime_webui_smoke, command_rust_migration_state, command_security_policy_check,
     command_status, find_repo_root,
 };
@@ -121,6 +122,10 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         ),
         CliCommand::RuntimeReportMetrics { report_id } => {
             command_runtime_report_metrics(&repo_root, report_id.as_deref())
+        }
+        CliCommand::RuntimeScopeReportSummary => command_runtime_scope_report_summary(&repo_root),
+        CliCommand::RuntimeScopeReportMetrics { scope_report_id } => {
+            command_runtime_scope_report_metrics(&repo_root, scope_report_id.as_deref())
         }
         CliCommand::RuntimeCertbundReport {
             report_id,

@@ -146,6 +146,14 @@ pub enum CliCommand {
         #[arg(long)]
         report_id: Option<String>,
     },
+    /// Summarize the latest Organization scope report through the native API.
+    RuntimeScopeReportSummary,
+    /// Emit native metrics for the selected scope report filter.
+    RuntimeScopeReportMetrics {
+        /// Compatibility selector interpreted as a native scope-report filter.
+        #[arg(long)]
+        scope_report_id: Option<String>,
+    },
     /// Build a native CERT-Bund JSON or CSV report for a raw report or task.
     RuntimeCertbundReport {
         /// Optional raw report id; defaults to the latest completed full-test report.
@@ -301,6 +309,8 @@ impl CliCommand {
             Self::RuntimeReportSummary { .. } => "runtime-report-summary",
             Self::RuntimeReportExport { .. } => "runtime-report-export",
             Self::RuntimeReportMetrics { .. } => "runtime-report-metrics",
+            Self::RuntimeScopeReportSummary => "runtime-scope-report-summary",
+            Self::RuntimeScopeReportMetrics { .. } => "runtime-scope-report-metrics",
             Self::RuntimeCertbundReport { .. } => "runtime-certbund-report",
             Self::RuntimeLogReview => "runtime-log-review",
             Self::RuntimeScannerCapabilityCheck => "runtime-scanner-capability-check",
@@ -421,6 +431,22 @@ mod tests {
         assert_eq!(
             CliCommand::RuntimeReportMetrics { report_id: None }.name(),
             "runtime-report-metrics"
+        );
+        assert_eq!(
+            parse_cli(["runtime-scope-report-summary"]).unwrap().command,
+            CliCommand::RuntimeScopeReportSummary
+        );
+        assert_eq!(
+            parse_cli([
+                "runtime-scope-report-metrics",
+                "--scope-report-id",
+                "Organization / one"
+            ])
+            .unwrap()
+            .command,
+            CliCommand::RuntimeScopeReportMetrics {
+                scope_report_id: Some("Organization / one".into())
+            }
         );
     }
 

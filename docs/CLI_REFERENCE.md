@@ -32,7 +32,7 @@ not use a failure exit code; `fail` exits non-zero.
 - `just rust-migration-state`: inspect C-to-Rust tooling and the current proof
   candidate.
 
-The incremental Rust command spine currently implements 81 parity-tested
+The incremental Rust command spine currently implements 82 parity-tested
 subcommands. Commands in this mechanically checked block have a native Rust
 implementation; the normal `just` recipes remain the stable front door while
 each recipe cutover follows parity validation:
@@ -50,6 +50,7 @@ native-export-report-csv
 native-export-report-pdf
 native-update-task-target
 native-scan-new-system
+native-nvt-diagnostic-scan
 native-scan-with-delivery
 native-delete-overrides-by-filter
 native-bulk-modify-schedules

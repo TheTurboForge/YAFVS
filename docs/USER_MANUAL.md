@@ -209,6 +209,7 @@ Useful development checks include:
 - `just feed-cache-sync --json`
 - `just native-scan-new-system -- --host 192.0.2.10 --dry-run --json`
 - `just native-scan-with-delivery -- --target-id <uuid> --alert-id <uuid> --json`
+- `just native-nvt-diagnostic-scan -- --host 192.0.2.10 --nvt-id <oid> --json`
 - `just runtime-status`
 - `just runtime-smoke`
 - `just runtime-log-review --json`

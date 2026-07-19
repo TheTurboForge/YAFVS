@@ -131,6 +131,23 @@ pub enum CliCommand {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Create and start one guarded scan selecting exactly one diagnostic NVT.
+    NativeNvtDiagnosticScan {
+        #[arg(long)]
+        host: String,
+        #[arg(long)]
+        nvt_id: String,
+        #[arg(long, default_value = crate::commands::native_scan::EMPTY_SCAN_CONFIG_ID)]
+        source_scan_config_id: String,
+        #[arg(long, default_value = crate::commands::native_scan::IANA_TCP_UDP_PORT_LIST_ID)]
+        port_list_id: String,
+        #[arg(long, default_value = crate::commands::native_scan::DEFAULT_SCANNER_ID)]
+        scanner_id: String,
+        #[arg(long)]
+        allow_scan_control: bool,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Create and start one guarded scan with an EMAIL or SMB alert.
     NativeScanWithDelivery {
         #[arg(
@@ -628,6 +645,7 @@ impl CliCommand {
             Self::NativeVerifyScanners { .. } => "native-verify-scanners",
             Self::NativeScanNewSystem { .. } => "native-scan-new-system",
             Self::NativeScanWithDelivery { .. } => "native-scan-with-delivery",
+            Self::NativeNvtDiagnosticScan { .. } => "native-nvt-diagnostic-scan",
             Self::Status => "status",
             Self::Inventory { .. } => "inventory",
             Self::BrandingState => "branding-state",
@@ -1462,6 +1480,27 @@ mod tests {
 
     #[test]
     fn parses_native_scan_commands_and_rejects_conflicting_targets() {
+        assert_eq!(
+            parse_cli([
+                "native-nvt-diagnostic-scan",
+                "--host",
+                "192.0.2.10",
+                "--nvt-id",
+                "1.3.6.1.4.1.25623.1.0.106223",
+            ])
+            .unwrap()
+            .command,
+            CliCommand::NativeNvtDiagnosticScan {
+                host: "192.0.2.10".into(),
+                nvt_id: "1.3.6.1.4.1.25623.1.0.106223".into(),
+                source_scan_config_id:
+                    crate::commands::native_scan::EMPTY_SCAN_CONFIG_ID.into(),
+                port_list_id: crate::commands::native_scan::IANA_TCP_UDP_PORT_LIST_ID.into(),
+                scanner_id: crate::commands::native_scan::DEFAULT_SCANNER_ID.into(),
+                allow_scan_control: false,
+                dry_run: false,
+            }
+        );
         assert_eq!(
             parse_cli([
                 "native-scan-new-system",

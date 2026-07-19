@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use super::artifact::{write_secure_artifact, write_secure_json_artifact};
+use super::artifact::{
+    prepare_secure_artifact_parent, write_secure_artifact, write_secure_json_artifact,
+};
 use super::common::{expand_home, metadata, runtime_dir};
 use super::native_runtime::{
     NativeJsonResponse, NativeObjectPages, fetch_object_pages, native_api_display_command,
@@ -12,7 +14,6 @@ use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
 use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
 use time::format_description;
@@ -72,7 +73,7 @@ fn command_with(
 ) -> ResultEnvelope {
     let artifact_dir = runtime_dir(repo_root).join("artifacts/reports");
     let mut findings = Vec::new();
-    match fs::create_dir_all(&artifact_dir) {
+    match prepare_secure_artifact_parent(&artifact_dir.join("certbund-report.json")) {
         Ok(()) => findings.push(
             Finding::new(
                 "pass",
@@ -923,6 +924,7 @@ mod tests {
     use super::*;
     use std::collections::VecDeque;
     use std::ffi::OsString;
+    use std::fs;
     use std::os::unix::fs::symlink;
     use std::sync::Mutex;
     use std::sync::atomic::{AtomicU64, Ordering};

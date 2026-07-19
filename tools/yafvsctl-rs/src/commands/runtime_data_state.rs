@@ -14,8 +14,6 @@ use crate::process::{CommandRunner, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
-use std::fs;
-use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
 const DATABASE_CORE_TABLES: [&str; 17] = [
@@ -209,9 +207,7 @@ fn command_runtime_data_state_with(repo_root: &Path, runner: &dyn CommandRunner)
     )
     .with_artifacts(vec![artifact.display().to_string()])
     .with_details(Value::Object(details));
-    if let Err(error) = prepare_data_state_artifact_dir(repo_root)
-        .and_then(|_| write_secure_json_artifact(&artifact, &result))
-    {
+    if let Err(error) = write_secure_json_artifact(&artifact, &result) {
         result.findings.push(
             Finding::new(
                 "fail",
@@ -223,28 +219,6 @@ fn command_runtime_data_state_with(repo_root: &Path, runner: &dyn CommandRunner)
         result.status = "fail".into();
     }
     result
-}
-
-fn prepare_data_state_artifact_dir(repo_root: &Path) -> Result<(), String> {
-    let runtime = runtime_dir(repo_root);
-    fs::create_dir_all(&runtime).map_err(|error| error.to_string())?;
-    let artifacts = runtime.join("artifacts");
-    let data_state = artifacts.join("data-state");
-    for directory in [&runtime, &artifacts, &data_state] {
-        match fs::create_dir(directory) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(error) => return Err(error.to_string()),
-        }
-        let metadata = fs::symlink_metadata(directory).map_err(|error| error.to_string())?;
-        if !metadata.file_type().is_dir() || metadata.uid() != unsafe { libc::getuid() } {
-            return Err(format!(
-                "artifact directory {} is not a real, current-user-owned directory",
-                directory.display()
-            ));
-        }
-    }
-    Ok(())
 }
 
 fn runtime_manager_lock_details(repo_root: &Path, findings: &mut Vec<Finding>) -> Value {

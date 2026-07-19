@@ -47,6 +47,7 @@ mod runtime_identity_migrate;
 mod runtime_init;
 mod runtime_lock;
 mod runtime_log_review;
+mod runtime_manager_init;
 mod runtime_performance_snapshot;
 mod runtime_probe;
 mod runtime_report;
@@ -128,6 +129,7 @@ pub use runtime_health::{command_runtime_smoke, command_runtime_status};
 pub use runtime_identity_migrate::command_runtime_identity_migrate;
 pub use runtime_init::command_runtime_init;
 pub use runtime_log_review::command_runtime_log_review;
+pub use runtime_manager_init::command_runtime_manager_init;
 pub use runtime_performance_snapshot::command_runtime_performance_snapshot;
 pub use runtime_probe::{
     command_runtime_credential_smoke, command_runtime_full_test_scan_preflight,

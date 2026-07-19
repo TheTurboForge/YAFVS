@@ -42,7 +42,7 @@ pub fn command_runtime_init(repo_root: &Path) -> ResultEnvelope {
     command_runtime_init_with(repo_root, &SystemCommandRunner, &mut sleep)
 }
 
-fn command_runtime_init_with(
+pub(crate) fn command_runtime_init_with(
     repo_root: &Path,
     runner: &dyn CommandRunner,
     sleep: &mut dyn FnMut(Duration),

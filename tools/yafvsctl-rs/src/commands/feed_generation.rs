@@ -26,6 +26,26 @@ mod transition;
 
 pub(crate) use scanner_runtime::prepare_openvas_runtime_config;
 
+pub(crate) fn initialize_manager_with_images(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    environment: &BTreeMap<std::ffi::OsString, std::ffi::OsString>,
+    image_ids: &BTreeMap<String, String>,
+) -> (bool, Vec<Finding>, Vec<String>) {
+    let runtime = service_runtime::ServiceRuntime::new(
+        repo_root,
+        runner,
+        environment,
+        image_ids,
+    );
+    let outcome = manager_init::initialize_manager(repo_root, runner, &runtime);
+    (
+        outcome.status != transition::StepStatus::Fail,
+        outcome.findings,
+        outcome.artifacts,
+    )
+}
+
 use super::common::{compact_finding, metadata, runtime_dir};
 use super::runtime_lock::{
     DEFAULT_RUNTIME_LOCK_TIMEOUT, FEED_ACTIVATION_LOCK, RuntimeLockError, RuntimeOperationLock,

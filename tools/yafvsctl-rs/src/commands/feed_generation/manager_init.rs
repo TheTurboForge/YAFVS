@@ -19,6 +19,7 @@ use std::time::Duration;
 
 const ADMIN_USER: &str = "admin";
 const ADMIN_PASSWORD: &str = "admin";
+const ADMIN_PASSWORD_ENV: &str = "YAFVS_GVMD_ADMIN_PASSWORD";
 const ADMIN_SECRET: &str = "gvmd-admin-password";
 const FEED_IMPORT_OWNER_SETTING: &str = "78eceaec-3385-11ea-b237-28d24461215b";
 const SOURCE_DATABASE_VERSION: u64 = 287;
@@ -171,13 +172,10 @@ pub(super) fn initialize_manager(
     );
 
     if admin_uuid.is_none() {
-        let create_user = match run_gvmd(
+        let create_user = match run_gvmd_with_admin_password(
             runtime,
-            &[
-                &format!("--create-user={ADMIN_USER}"),
-                &format!("--password={ADMIN_PASSWORD}"),
-                "--disable-password-policy",
-            ],
+            AdminPasswordOperation::Create,
+            ADMIN_PASSWORD,
             COMMAND_TIMEOUT,
         ) {
             Ok(output) => output,
@@ -226,13 +224,10 @@ pub(super) fn initialize_manager(
         ));
     }
 
-    let update_password = match run_gvmd(
+    let update_password = match run_gvmd_with_admin_password(
         runtime,
-        &[
-            &format!("--user={ADMIN_USER}"),
-            &format!("--new-password={ADMIN_PASSWORD}"),
-            "--disable-password-policy",
-        ],
+        AdminPasswordOperation::Update,
+        ADMIN_PASSWORD,
         COMMAND_TIMEOUT,
     ) {
         Ok(output) => output,
@@ -289,6 +284,59 @@ pub(super) fn initialize_manager(
         findings,
         &secret_path,
     )
+}
+
+#[derive(Clone, Copy)]
+enum AdminPasswordOperation {
+    Create,
+    Update,
+}
+
+fn run_gvmd_with_admin_password(
+    runtime: &ServiceRuntime<'_>,
+    operation: AdminPasswordOperation,
+    password: &str,
+    timeout: Duration,
+) -> Result<ProcessOutput, ()> {
+    if password.is_empty()
+        || password
+            .as_bytes()
+            .iter()
+            .any(|byte| matches!(*byte, b'\0' | b'\n' | b'\r'))
+    {
+        return Err(());
+    }
+    required_identifier(runtime.environment(), "POSTGRES_DB")?;
+    required_identifier(runtime.environment(), "POSTGRES_USER")?;
+    let script = match operation {
+        AdminPasswordOperation::Create => format!(
+            "exec gvmd --database=\"$POSTGRES_DB\" --db-host=postgres --db-port=5432 --db-user=\"$POSTGRES_USER\" --create-user={ADMIN_USER} --password=\"${ADMIN_PASSWORD_ENV}\" --disable-password-policy"
+        ),
+        AdminPasswordOperation::Update => format!(
+            "exec gvmd --database=\"$POSTGRES_DB\" --db-host=postgres --db-port=5432 --db-user=\"$POSTGRES_USER\" --user={ADMIN_USER} --new-password=\"${ADMIN_PASSWORD_ENV}\" --disable-password-policy"
+        ),
+    };
+    let arguments = [
+        "--profile",
+        "app",
+        "run",
+        "--rm",
+        "-T",
+        "--pull",
+        "never",
+        "--env",
+        ADMIN_PASSWORD_ENV,
+        "gvmd",
+        "sh",
+        "-c",
+        &script,
+    ]
+    .map(str::to_owned);
+    let mut environment = runtime.environment().clone();
+    environment.insert(OsString::from(ADMIN_PASSWORD_ENV), OsString::from(password));
+    runtime
+        .run_pinned_compose_with_environment(&arguments, timeout, &environment)
+        .map_err(|_| ())
 }
 
 fn run_gvmd(
@@ -414,6 +462,7 @@ mod tests {
     struct Runner {
         outputs: Mutex<VecDeque<Option<ProcessOutput>>>,
         commands: Mutex<Vec<Vec<String>>>,
+        environments: Mutex<Vec<BTreeMap<OsString, OsString>>>,
     }
 
     impl Runner {
@@ -421,6 +470,7 @@ mod tests {
             Self {
                 outputs: Mutex::new(outputs.into_iter().collect()),
                 commands: Mutex::new(Vec::new()),
+                environments: Mutex::new(Vec::new()),
             }
         }
     }
@@ -435,12 +485,16 @@ mod tests {
             program: &str,
             arguments: &[&str],
             _: Option<&Path>,
-            _: Option<&BTreeMap<OsString, OsString>>,
+            environment: Option<&BTreeMap<OsString, OsString>>,
             _: Option<Duration>,
         ) -> Option<ProcessOutput> {
             let mut command = vec![program.to_owned()];
             command.extend(arguments.iter().map(|argument| (*argument).to_owned()));
             self.commands.lock().unwrap().push(command);
+            self.environments
+                .lock()
+                .unwrap()
+                .push(environment.cloned().unwrap_or_default());
             self.outputs.lock().unwrap().pop_front().flatten()
         }
     }
@@ -508,11 +562,10 @@ mod tests {
         assert!(commands[0].iter().any(|argument| argument == "--migrate"));
         assert!(commands[1].iter().any(|argument| argument == "psql"));
         assert!(commands[2].iter().any(|argument| argument == "--get-users"));
-        assert!(
-            commands[3]
-                .iter()
-                .any(|argument| argument == "--user=admin")
-        );
+        assert!(commands[3].iter().any(|argument| {
+            argument.contains("--user=admin")
+                && argument.contains("--new-password=\"$YAFVS_GVMD_ADMIN_PASSWORD\"")
+        }));
         assert!(
             commands[4]
                 .iter()
@@ -530,6 +583,42 @@ mod tests {
                 .iter()
                 .flatten()
                 .any(|argument| argument == "never")
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn admin_password_uses_environment_without_entering_docker_arguments() {
+        let (root, repo) = fixture();
+        let runner = Runner::new([output(true, "")]);
+        let environment = environment();
+        let images = images();
+        let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);
+        let password = "private-value";
+
+        let output = run_gvmd_with_admin_password(
+            &runtime,
+            AdminPasswordOperation::Create,
+            password,
+            Duration::from_secs(1),
+        )
+        .unwrap();
+
+        assert!(output.success);
+        assert!(
+            runner
+                .commands
+                .lock()
+                .unwrap()
+                .iter()
+                .flatten()
+                .all(|argument| !argument.contains(password))
+        );
+        assert_eq!(
+            runner.environments.lock().unwrap()[0]
+                .get(OsStr::new(ADMIN_PASSWORD_ENV))
+                .and_then(|value| value.to_str()),
+            Some(password)
         );
         fs::remove_dir_all(root).unwrap();
     }
@@ -559,12 +648,12 @@ mod tests {
         assert!(
             commands[3]
                 .iter()
-                .any(|argument| argument == "--create-user=admin")
+                .any(|argument| argument.contains("--create-user=admin"))
         );
         assert!(
             commands[5]
                 .iter()
-                .any(|argument| argument == "--user=admin")
+                .any(|argument| argument.contains("--user=admin"))
         );
         fs::remove_dir_all(root).unwrap();
     }

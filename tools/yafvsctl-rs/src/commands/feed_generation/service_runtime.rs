@@ -326,8 +326,17 @@ impl<'a> ServiceRuntime<'a> {
         arguments: &[String],
         timeout: Duration,
     ) -> Result<ProcessOutput, String> {
+        self.run_pinned_compose_with_environment(arguments, timeout, self.environment)
+    }
+
+    pub(super) fn run_pinned_compose_with_environment(
+        &self,
+        arguments: &[String],
+        timeout: Duration,
+        environment: &BTreeMap<OsString, OsString>,
+    ) -> Result<ProcessOutput, String> {
         let command = pinned_compose_command(self.repo_root, self.image_ids, arguments)?;
-        self.run_docker(command, timeout)
+        self.run_docker_with_environment(command, timeout, environment)
     }
 
     pub(super) fn run_compose(
@@ -339,13 +348,22 @@ impl<'a> ServiceRuntime<'a> {
     }
 
     fn run_docker(&self, command: Vec<String>, timeout: Duration) -> Result<ProcessOutput, String> {
+        self.run_docker_with_environment(command, timeout, self.environment)
+    }
+
+    fn run_docker_with_environment(
+        &self,
+        command: Vec<String>,
+        timeout: Duration,
+        environment: &BTreeMap<OsString, OsString>,
+    ) -> Result<ProcessOutput, String> {
         let arguments = command.iter().map(String::as_str).collect::<Vec<_>>();
         self.runner
             .run_with(
                 "docker",
                 &arguments,
                 Some(self.repo_root),
-                Some(self.environment),
+                Some(environment),
                 Some(timeout),
             )
             .ok_or_else(|| "Docker command could not be started".to_owned())

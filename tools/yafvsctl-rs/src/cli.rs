@@ -448,6 +448,8 @@ pub enum CliCommand {
     Up,
     /// Initialize PostgreSQL collation, roles, and pg-gvm prerequisites.
     RuntimeInit,
+    /// Migrate manager state and create or align the development administrator.
+    RuntimeManagerInit,
     /// Initialize the scanner Redis service and OpenVAS runtime configuration.
     RuntimeScannerRedisInit,
     /// Stop and remove the development runtime infrastructure and application containers.
@@ -687,6 +689,7 @@ impl CliCommand {
             Self::GvmdSmoke => "gvmd-smoke",
             Self::Up => "up",
             Self::RuntimeInit => "runtime-init",
+            Self::RuntimeManagerInit => "runtime-manager-init",
             Self::RuntimeScannerRedisInit => "runtime-scanner-redis-init",
             Self::Down => "down",
             Self::RuntimeAppDown => "runtime-app-down",

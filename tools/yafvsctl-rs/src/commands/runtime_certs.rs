@@ -22,6 +22,10 @@ struct CertFile {
     private: bool,
 }
 
+pub(crate) fn runtime_certificate_findings(repo_root: &Path) -> Vec<Finding> {
+    cert_file_findings(&cert_files(repo_root), "warn")
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum CertState {
     Empty,
@@ -384,12 +388,7 @@ mod tests {
         Complete,
     }
 
-    type Invocation = (
-        String,
-        Vec<String>,
-        BTreeMap<OsString, OsString>,
-        Duration,
-    );
+    type Invocation = (String, Vec<String>, BTreeMap<OsString, OsString>, Duration);
 
     #[derive(Default)]
     struct Runner {

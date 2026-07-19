@@ -1133,6 +1133,16 @@ class YAFVSCtlTests(unittest.TestCase):
                     env["YAFVS_RUNTIME_DIR"] = str(shutdown_runtime)
                 if arguments[0] == "runtime-webui-smoke":
                     env["YAFVS_GSAD_HOSTS"] = "127.0.0.1:1"
+                if arguments[0] == "runtime-native-api-direct-bootstrap":
+                    for name in (
+                        yafvsctl.YAFVS_API_DIRECT_ENV,
+                        yafvsctl.YAFVS_API_DIRECT_HOST_ENV,
+                        yafvsctl.YAFVS_API_DIRECT_PORT_ENV,
+                        yafvsctl.YAFVS_API_DIRECT_BIND_ENV,
+                        yafvsctl.YAFVS_API_BEARER_TOKEN_ENV,
+                        yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV,
+                    ):
+                        env.pop(name, None)
                 rust_result = invoke(rust_command, arguments, env=env)
                 expected_exit_codes = (
                     expected_exit_code
@@ -1212,6 +1222,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["quality-gate-schedule", "--status", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["quality-gate-schedule", "--install", "--json"], 1, "fail"),
                 (["runtime-native-api-direct-token", "--json"], (0, 1), ("pass", "warn", "fail")),
+                (["runtime-native-api-direct-bootstrap", "--json"], 0, "pass"),
                 (["feed-generation-state", "--json"], 0, "warn"),
                 (["feed-generation-state", "--status-only", "--json"], 0, "warn"),
                 (["feed-generation-stage", "--json"], 1, "fail"),
@@ -2330,7 +2341,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule"}
-        for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
+        for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
             with self.subTest(command=command):
@@ -2423,7 +2434,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "license-report"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "license-report"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotIn(f"def command_{command.replace('-', '_')}", source)
@@ -12651,148 +12662,6 @@ class YAFVSCtlTests(unittest.TestCase):
             with self.subTest(token=token):
                 self.assertFalse(yafvsctl.direct_api_bearer_token_is_acceptable(token))
 
-    def test_direct_native_api_bootstrap_creates_secret_without_reporting_value(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
-                result = yafvsctl.command_runtime_native_api_direct_bootstrap(root)
-            token = yafvsctl.runtime_secret_path(root, yafvsctl.YAFVS_API_BEARER_TOKEN_SECRET).read_text(encoding="utf-8").strip()
-
-        rendered = json.dumps(result, sort_keys=True)
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(result["status"], "pass")
-        self.assertTrue(yafvsctl.direct_api_bearer_token_is_acceptable(token))
-        self.assertNotIn(token, rendered)
-        self.assertEqual(checks["native-api-direct-bootstrap.host-binding"]["status"], "pass")
-        self.assertEqual(checks["native-api-direct-bootstrap.token"]["details"]["token_value_reported"], False)
-        self.assertEqual(checks["native-api-direct-bootstrap.token"]["details"]["runtime_secret_mode"], "0600")
-        self.assertTrue(checks["native-api-direct-bootstrap.token"]["details"]["runtime_secret_permission_ok"])
-        self.assertEqual(checks["production.native-api-direct.auth-boundary"]["status"], "pass")
-
-    def test_direct_native_api_bootstrap_status_only_is_chat_safe(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
-                full = yafvsctl.command_runtime_native_api_direct_bootstrap(root)
-                compact = yafvsctl.command_runtime_native_api_direct_bootstrap(root, status_only=True)
-            token = yafvsctl.runtime_secret_path(root, yafvsctl.YAFVS_API_BEARER_TOKEN_SECRET).read_text(encoding="utf-8").strip()
-
-        self.assertEqual(compact["status"], "pass")
-        self.assertEqual(compact["details"]["non_pass_count"], 0)
-        self.assertEqual(compact["details"]["finding_count"], len(full["findings"]))
-        self.assertEqual(compact["details"]["token_value_reported"], False)
-        self.assertEqual(compact["findings"][0]["check"], "runtime-native-api-direct-bootstrap.status-only")
-        self.assertNotIn(token, json.dumps(compact, sort_keys=True))
-        self.assertLess(len(json.dumps(compact)), len(json.dumps(full)))
-
-    def test_direct_native_api_bootstrap_fails_broad_secret_permissions_without_leaking_token(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            token_path = yafvsctl.write_runtime_secret(
-                root,
-                yafvsctl.YAFVS_API_BEARER_TOKEN_SECRET,
-                "0123456789abcdef0123456789abcdef",
-            )
-            token_path.chmod(0o644)
-            token = token_path.read_text(encoding="utf-8").strip()
-            with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
-                result = yafvsctl.command_runtime_native_api_direct_bootstrap(root)
-
-        rendered = json.dumps(result, sort_keys=True)
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(checks["native-api-direct-bootstrap.token"]["status"], "fail")
-        self.assertEqual(checks["production.native-api-direct.auth-boundary"]["status"], "fail")
-        self.assertEqual(checks["native-api-direct-bootstrap.token"]["details"]["runtime_secret_mode"], "0644")
-        self.assertFalse(checks["native-api-direct-bootstrap.token"]["details"]["runtime_secret_permission_ok"])
-        self.assertNotIn(token, rendered)
-
-    def test_direct_native_api_bootstrap_status_only_keeps_failures_without_token(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            token_path = yafvsctl.write_runtime_secret(
-                root,
-                yafvsctl.YAFVS_API_BEARER_TOKEN_SECRET,
-                "0123456789abcdef0123456789abcdef",
-            )
-            token_path.chmod(0o644)
-            token = token_path.read_text(encoding="utf-8").strip()
-            with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
-                compact = yafvsctl.command_runtime_native_api_direct_bootstrap(root, status_only=True)
-
-        rendered = json.dumps(compact, sort_keys=True)
-        checks = {item["check"]: item for item in compact["findings"]}
-        self.assertEqual(compact["status"], "fail")
-        self.assertEqual(compact["details"]["non_pass_count"], 2)
-        self.assertEqual(compact["details"]["important_checks"]["native-api-direct-bootstrap.token"], "fail")
-        self.assertEqual(checks["native-api-direct-bootstrap.token"]["status"], "fail")
-        self.assertNotIn(token, rendered)
-
-    def test_direct_native_api_bootstrap_fails_non_loopback_without_leaking_token(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            token = "0123456789abcdef0123456789abcdef"
-            original_host = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_DIRECT_HOST_ENV)
-            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
-            try:
-                yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_HOST_ENV] = "192.0.2.10"
-                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = token
-                with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
-                    result = yafvsctl.command_runtime_native_api_direct_bootstrap(root)
-            finally:
-                if original_host is None:
-                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_DIRECT_HOST_ENV, None)
-                else:
-                    yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_HOST_ENV] = original_host
-                if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
-                else:
-                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
-
-        rendered = json.dumps(result, sort_keys=True)
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(checks["native-api-direct-bootstrap.host-binding"]["status"], "fail")
-        self.assertEqual(checks["production.native-api-direct.configured-binding"]["status"], "fail")
-        self.assertNotIn(token, rendered)
-
-    def test_direct_native_api_bootstrap_fails_wrong_container_bind_before_runtime(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            token = "0123456789abcdef0123456789abcdef"
-            original_bind = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_DIRECT_BIND_ENV)
-            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
-            try:
-                yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_BIND_ENV] = "0.0.0.0:9999"
-                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = token
-                with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
-                    result = yafvsctl.command_runtime_native_api_direct_bootstrap(root)
-            finally:
-                if original_bind is None:
-                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_DIRECT_BIND_ENV, None)
-                else:
-                    yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_BIND_ENV] = original_bind
-                if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
-                else:
-                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
-
-        rendered = json.dumps(result, sort_keys=True)
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(checks["native-api-direct-bootstrap.config-shape"]["status"], "fail")
-        self.assertEqual(checks["native-api-direct-bootstrap.host-binding"]["status"], "fail")
-        self.assertEqual(checks["production.native-api-direct.config-shape"]["status"], "fail")
-        self.assertEqual(checks["production.native-api-direct.configured-binding"]["status"], "fail")
-        self.assertIn("container port 9081", rendered)
-        self.assertNotIn(token, rendered)
-
     def test_direct_native_api_smoke_fails_wrong_container_bind_before_runtime_restart(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
@@ -14304,64 +14173,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertTrue(auth["details"]["environment_token_used"])
         self.assertIn("environment", rendered)
         self.assertNotIn("super-secret-token-0123456789abcdef", rendered)
-
-    def test_direct_native_api_bootstrap_fails_environment_token_posture(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            token = "0123456789abcdef0123456789abcdef"
-            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
-            try:
-                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = token
-                with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
-                    result = yafvsctl.command_runtime_native_api_direct_bootstrap(root)
-            finally:
-                if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
-                else:
-                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
-
-        rendered = json.dumps(result, sort_keys=True)
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(checks["native-api-direct-bootstrap.token"]["status"], "pass")
-        self.assertEqual(checks["production.native-api-direct.auth-boundary"]["status"], "fail")
-        self.assertTrue(checks["production.native-api-direct.auth-boundary"]["details"]["environment_token_used"])
-        self.assertNotIn(token, rendered)
-
-    def test_direct_native_api_bootstrap_fails_broad_configured_token_file_permissions(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            token = "0123456789abcdef0123456789abcdef"
-            token_file = Path(tmp) / "custom-token"
-            token_file.write_text(token, encoding="utf-8")
-            token_file.chmod(0o664)
-            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
-            original_token_file = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV)
-            try:
-                yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
-                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV] = str(token_file)
-                with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
-                    result = yafvsctl.command_runtime_native_api_direct_bootstrap(root)
-            finally:
-                if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
-                else:
-                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
-                if original_token_file is None:
-                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV, None)
-                else:
-                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV] = original_token_file
-
-        rendered = json.dumps(result, sort_keys=True)
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(checks["native-api-direct-bootstrap.token"]["status"], "fail")
-        self.assertEqual(checks["native-api-direct-bootstrap.token"]["details"]["token_source"], "configured-token-file")
-        self.assertEqual(checks["native-api-direct-bootstrap.token"]["details"]["token_file_host_path"], str(token_file))
-        self.assertEqual(checks["production.native-api-direct.auth-boundary"]["status"], "fail")
-        self.assertNotIn(token, rendered)
 
     def test_direct_native_api_display_command_redacts_token(self):
         env = {

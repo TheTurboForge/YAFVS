@@ -15365,146 +15365,6 @@ def command_runtime_native_api_rebuild(repo_root: Path) -> dict[str, Any]:
         )
 
 
-def direct_bootstrap_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    compact = dict(result)
-    findings = result.get("findings", [])
-    non_pass = [compact_doctor_finding(item) for item in findings if item.get("status") != "pass"]
-    details = result.get("details", {}) if isinstance(result.get("details"), dict) else {}
-    checks = {
-        item.get("check"): item.get("status")
-        for item in findings
-        if isinstance(item, dict) and item.get("check")
-    }
-    important_checks = {
-        check: checks[check]
-        for check in (
-            "native-api-direct-bootstrap.config-shape",
-            "native-api-direct-bootstrap.host-binding",
-            "native-api-direct-bootstrap.token",
-            "production.native-api-direct.config-shape",
-            "production.native-api-direct.configured-binding",
-            "production.native-api-direct.running-binding",
-            "production.native-api-direct.auth-boundary",
-        )
-        if check in checks
-    }
-    compact["details"] = {
-        "direct_enabled": details.get("direct_enabled"),
-        "token_source": details.get("token_source"),
-        "token_value_reported": False,
-        "finding_count": len(findings),
-        "non_pass_count": len(non_pass),
-        "important_checks": important_checks,
-    }
-    compact["findings"] = non_pass or [
-        finding(
-            "pass",
-            "runtime-native-api-direct-bootstrap.status-only",
-            "Direct native API bootstrap checks passed; no non-pass findings.",
-        )
-    ]
-    return compact
-
-
-def command_runtime_native_api_direct_bootstrap(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    try:
-        env = native_api_direct_runtime_env(repo_root)
-    except (OSError, UnicodeDecodeError):
-        env = runtime_app_env(repo_root)
-        env[YAFVS_API_DIRECT_ENV] = "1"
-        env.setdefault(
-            YAFVS_API_DIRECT_HOST_ENV,
-            YAFVS_API_DIRECT_DEFAULT_HOST,
-        )
-        env.setdefault(
-            YAFVS_API_DIRECT_PORT_ENV,
-            YAFVS_API_DIRECT_DEFAULT_PORT,
-        )
-        env.setdefault(
-            YAFVS_API_DIRECT_BIND_ENV,
-            f"0.0.0.0:{YAFVS_API_DIRECT_CONTAINER_PORT}",
-        )
-        env.setdefault(
-            YAFVS_API_BEARER_TOKEN_FILE_ENV,
-            YAFVS_API_BEARER_TOKEN_CONTAINER_FILE,
-        )
-    try:
-        token = native_api_direct_bearer_token(repo_root, env)
-    except OSError:
-        token = ""
-    token_file_metadata = native_api_direct_token_file_metadata(repo_root, env)
-    token_source = "environment" if env.get(YAFVS_API_BEARER_TOKEN_ENV) else token_file_metadata["source"]
-    secret_path = runtime_secret_path(repo_root, YAFVS_API_BEARER_TOKEN_SECRET)
-
-    findings.append(native_api_direct_config_shape_finding(env, check="native-api-direct-bootstrap.config-shape"))
-    config_errors = native_api_direct_config_errors(env)
-    host = native_api_direct_host(env)
-    if config_errors:
-        host_status = "fail"
-        host_message = "Direct native API bootstrap refuses malformed host, port, or bind settings."
-    elif host_is_wildcard(host):
-        host_status = "fail"
-        host_message = "Direct native API bootstrap refuses wildcard host publication."
-    elif not host_is_loopback(host):
-        host_status = "fail"
-        host_message = "Direct native API bootstrap refuses non-loopback publication until production TLS/bootstrap/host-binding hardening exists."
-    else:
-        host_status = "pass"
-        host_message = "Direct native API bootstrap is loopback-bounded."
-    findings.append(
-        finding(
-            host_status,
-            "native-api-direct-bootstrap.host-binding",
-            host_message,
-            details={
-                "host": host,
-                "host_port": native_api_direct_port(env),
-                "host_binding": native_api_direct_port_binding(env),
-                "container_bind": env.get(YAFVS_API_DIRECT_BIND_ENV),
-            },
-        )
-    )
-
-    token_ok = direct_api_bearer_token_is_acceptable(token)
-    token_permission_ok = token_source == "environment" or not token_file_metadata["host_metadata_available"] or token_file_metadata["permission_ok"]
-    token_status = "pass" if token_ok and token_permission_ok else "fail"
-    findings.append(
-        finding(
-            token_status,
-            "native-api-direct-bootstrap.token",
-            "Direct native API bootstrap has a bearer token that satisfies the local strength contract and is not group/world accessible."
-            if token_status == "pass"
-            else "Direct native API bootstrap bearer token is missing, weak, or group/world accessible.",
-            token_file_metadata["host_path"] if token_source != "environment" else None,
-            {
-                "token_source": token_source,
-                "minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH,
-                "runtime_secret": str(secret_path),
-                "token_file_configured_value": token_file_metadata["configured_value"],
-                "token_file_host_path": token_file_metadata["host_path"],
-                "token_file_host_metadata_available": token_file_metadata["host_metadata_available"],
-                "runtime_secret_mode": token_file_metadata["mode"],
-                "runtime_secret_permission_ok": token_file_metadata["permission_ok"],
-                "runtime_secret_group_or_world_accessible": token_file_metadata["group_or_world_accessible"],
-                "token_value_reported": False,
-            },
-        )
-    )
-
-    findings.extend(direct_native_api_posture_findings(repo_root, env))
-    result = make_result("runtime-native-api-direct-bootstrap", repo_root, "Direct native API bootstrap guardrails checked.", findings)
-    result["details"] = {
-        "base_url": native_api_direct_base_url(env),
-        "direct_enabled": env.get(YAFVS_API_DIRECT_ENV) == "1",
-        "token_source": token_source,
-        "token_value_reported": False,
-    }
-    if status_only:
-        result = direct_bootstrap_status_only_result(result)
-    return result
-
-
 def native_api_direct_admin_operator_uuid(
     repo_root: Path,
     *,
@@ -30189,8 +30049,6 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_direct_smoke.add_argument("--status-only", action="store_true", help="emit compact direct-smoke status and only non-pass findings for chat-safe validation")
     native_api_direct_write_smoke = subparsers.add_parser("runtime-native-api-direct-write-smoke", parents=[common], help="verify guarded direct native API write-control with zero-residue tag metadata writes")
     native_api_direct_write_smoke.add_argument("--status-only", action="store_true", help="emit compact write-smoke status and only non-pass findings for chat-safe validation")
-    native_api_direct_bootstrap = subparsers.add_parser("runtime-native-api-direct-bootstrap", parents=[common], help="prepare and check opt-in direct native API bootstrap guardrails without starting the listener")
-    native_api_direct_bootstrap.add_argument("--status-only", action="store_true", help="emit compact bootstrap status and only non-pass findings for chat-safe validation")
     subparsers.add_parser("runtime-native-api-rebuild", parents=[common], help="rebuild and restart only the internal YAFVS native API sidecar")
     browser_smoke = subparsers.add_parser("runtime-browser-smoke", parents=[common], help="verify report workflows through a headless browser")
     browser_smoke.add_argument("--route", action="append", help="focus browser smoke on one route label or path; may be repeated")
@@ -30517,8 +30375,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_native_api_direct_smoke(repo_root, status_only=args.status_only)
     elif args.command == "runtime-native-api-direct-write-smoke":
         result = command_runtime_native_api_direct_write_smoke(repo_root, status_only=args.status_only)
-    elif args.command == "runtime-native-api-direct-bootstrap":
-        result = command_runtime_native_api_direct_bootstrap(repo_root, status_only=args.status_only)
     elif args.command == "runtime-native-api-rebuild":
         result = command_runtime_native_api_rebuild(repo_root)
     elif args.command == "runtime-browser-smoke":

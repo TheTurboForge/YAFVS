@@ -1209,6 +1209,8 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["deps", "definitely-invalid", "--json"], 1, "fail"),
                 (["runtime-plan", "--json"], 0, "warn"),
                 (["native-api-request", "--path", "/not-api", "--json"], 1, "fail"),
+                (["native-start-task", "--task-id", "11111111-1111-4111-8111-111111111111", "--json"], 1, "fail"),
+                (["native-stop-task", "--task-id", "not-a-uuid", "--allow-write-control", "--json"], 1, "fail"),
                 (["down", "--json"], 1, "fail"),
                 (["runtime-app-down", "--json"], 1, "fail"),
                 (["quality-gate-state", "--json"], (0, 1), ("pass", "warn", "fail")),
@@ -2349,7 +2351,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2442,10 +2444,13 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "native-api-request"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "native-api-request", "native-start-task", "native-stop-task"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
-                self.assertNotIn(f"def command_{command.replace('-', '_')}", source)
+                self.assertNotRegex(
+                    source,
+                    rf"(?m)^def command_{re.escape(command.replace('-', '_'))}\(",
+                )
                 self.assertNotIn(f'args.command == "{command}"', source)
                 self.assertIn(f"{command} *args:", justfile)
                 self.assertIn(f'{direct_recipe} {command} "$@"', justfile)
@@ -6699,116 +6704,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(attempts, 1)
         request.assert_called_once()
         sleep.assert_not_called()
-    def test_native_start_task_requires_write_control_before_runtime(self):
-        task_id = "11111111-1111-4111-8111-111111111111"
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                result = yafvsctl.command_native_start_task(root, task_id=task_id)
-                curl.assert_not_called()
-
-        self.assertEqual(result["status"], "fail")
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(checks["native-start-task.write-control-intent"]["status"], "fail")
-
-    def test_native_stop_task_requires_write_control_before_runtime(self):
-        task_id = "11111111-1111-4111-8111-111111111111"
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                result = yafvsctl.command_native_stop_task(root, task_id=task_id)
-                curl.assert_not_called()
-
-        self.assertEqual(result["status"], "fail")
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(checks["native-stop-task.write-control-intent"]["status"], "fail")
-
-    def test_native_stop_task_rejects_incomplete_requested_acknowledgement(self):
-        task_id = "11111111-1111-4111-8111-111111111111"
-        response = subprocess.CompletedProcess(
-            ["curl"],
-            0,
-            json.dumps({"task_id": task_id, "status": "requested"}) + "\n202",
-            "",
-        )
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="a" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", return_value=response) as curl:
-                result = yafvsctl.command_native_stop_task(
-                    root,
-                    task_id=task_id,
-                    allow_write_control=True,
-                    status_only=True,
-                )
-
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(result["details"]["task_status"], "requested")
-        curl.assert_called_once()
-        self.assertEqual(curl.call_args.args[1], f"/api/v1/tasks/{task_id}/stop")
-        self.assertEqual(curl.call_args.kwargs["method"], "POST")
-        self.assertNotIn("a" * 64, json.dumps(result))
-
-    def test_native_stop_task_accepts_stopped_acknowledgement(self):
-        task_id = "11111111-1111-4111-8111-111111111111"
-        response = subprocess.CompletedProcess(
-            ["curl"],
-            0,
-            json.dumps({"task_id": task_id, "status": "stopped"}) + "\n200",
-            "",
-        )
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="a" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", return_value=response) as curl:
-                result = yafvsctl.command_native_stop_task(
-                    root,
-                    task_id=task_id,
-                    allow_write_control=True,
-                    status_only=True,
-                )
-
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["details"]["task_status"], "stopped")
-        self.assertEqual(result["details"]["http_status"], 200)
-        curl.assert_called_once()
-        self.assertEqual(curl.call_args.args[1], f"/api/v1/tasks/{task_id}/stop")
-        self.assertEqual(curl.call_args.kwargs["method"], "POST")
-        self.assertNotIn("a" * 64, json.dumps(result))
-
-    def test_native_start_task_calls_guarded_direct_endpoint_and_summarizes_acknowledgement(self):
-        task_id = "11111111-1111-4111-8111-111111111111"
-        report_id = "22222222-2222-4222-8222-222222222222"
-        response = subprocess.CompletedProcess(
-            ["curl"],
-            0,
-            json.dumps({"task_id": task_id, "report_id": report_id, "status": "requested"}) + "\n202",
-            "",
-        )
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="a" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", return_value=response) as curl:
-                result = yafvsctl.command_native_start_task(
-                    root,
-                    task_id=task_id,
-                    allow_write_control=True,
-                    status_only=True,
-                )
-
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["details"]["report_id"], report_id)
-        curl.assert_called_once()
-        self.assertEqual(curl.call_args.args[1], f"/api/v1/tasks/{task_id}/start")
-        self.assertEqual(curl.call_args.kwargs["method"], "POST")
-        self.assertNotIn("a" * 64, json.dumps(result))
-
     def _native_scan_new_system_result(
         self,
         *,

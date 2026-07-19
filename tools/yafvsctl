@@ -19797,100 +19797,6 @@ def validate_native_verify_scanners_page_size(page_size: int) -> int:
     return page_size
 
 
-def command_native_start_task(
-    repo_root: Path,
-    *,
-    task_id: str,
-    allow_write_control: bool = False,
-    status_only: bool = False,
-) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    try:
-        task_id = validate_native_api_operator_uuid_value(task_id, env_name="--task-id")
-    except ValueError as exc:
-        findings.append(finding("fail", "native-start-task.arguments", str(exc)))
-        return make_result("native-start-task", repo_root, "Native task start rejected before runtime access.", findings)
-
-    if not allow_write_control:
-        findings.append(
-            finding(
-                "fail",
-                "native-start-task.write-control-intent",
-                "Starting a task requires --allow-write-control because it creates a report and queues scanner execution.",
-            )
-        )
-        return make_result("native-start-task", repo_root, "Native task start rejected before runtime access.", findings)
-
-    env = native_api_direct_runtime_env(repo_root)
-    findings.append(native_api_direct_config_shape_finding(env, check="native-start-task.direct-config-shape"))
-    if aggregate_status(findings) == "fail":
-        return make_result("native-start-task", repo_root, "Direct native API task start rejected before runtime access.", findings)
-    token = native_api_direct_bearer_token(repo_root, env)
-    if not direct_api_bearer_token_is_acceptable(token):
-        findings.append(
-            finding(
-                "fail",
-                "native-start-task.direct-token-strength",
-                "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
-            )
-        )
-        return make_result("native-start-task", repo_root, "Direct native API task start rejected before runtime access.", findings)
-
-    path = f"/api/v1/tasks/{urllib.parse.quote(task_id)}/start"
-    response = direct_native_api_curl(repo_root, path, token=token, env=env, method="POST")
-    parsed, http_status = parse_json_output_with_http_status(response)
-    report_id = parsed.get("report_id") if isinstance(parsed, dict) else None
-    accepted = (
-        response.returncode == 0
-        and http_status == 202
-        and isinstance(parsed, dict)
-        and parsed.get("task_id") == task_id
-        and isinstance(report_id, str)
-        and bool(UUID_VALUE_RE.fullmatch(report_id))
-        and parsed.get("status") == "requested"
-    )
-    findings.append(
-        native_api_probe_finding(
-            "pass" if accepted else "fail",
-            "native-start-task.request",
-            "Native API accepted the task start and returned the queued report id."
-            if accepted
-            else "Native API task start failed or returned an invalid acknowledgement.",
-            response,
-            direct_native_api_display_command(path, token=token, env=env, method="POST"),
-            parsed,
-            {
-                "http_status": http_status,
-                "task_id": task_id,
-                "report_id": report_id,
-                **summarize_native_api_response(parsed),
-            },
-        )
-    )
-    result = make_result(
-        "native-start-task",
-        repo_root,
-        "Native task start accepted." if accepted else "Native task start failed.",
-        findings,
-    )
-    result["details"] = {
-        "task_id": task_id,
-        "report_id": report_id,
-        "task_status": parsed.get("status") if isinstance(parsed, dict) else None,
-        "http_status": http_status,
-    }
-    if status_only:
-        compact = dict(result)
-        compact["findings"] = [
-            compact_doctor_finding(item)
-            for item in findings
-            if isinstance(item, dict) and item.get("status") != "pass"
-        ] or [finding("pass", "native-start-task.status-only", "Native task start accepted; acknowledgement summarized.")]
-        result = compact
-    return result
-
-
 def native_stop_task_request(
     repo_root: Path,
     task_id: str,
@@ -19909,93 +19815,6 @@ def native_stop_task_request(
         and parsed.get("status") == "stopped"
     )
     return path, response, parsed, http_status, accepted
-
-
-def command_native_stop_task(
-    repo_root: Path,
-    *,
-    task_id: str,
-    allow_write_control: bool = False,
-    status_only: bool = False,
-) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    try:
-        task_id = validate_native_api_operator_uuid_value(task_id, env_name="--task-id")
-    except ValueError as exc:
-        findings.append(finding("fail", "native-stop-task.arguments", str(exc)))
-        return make_result("native-stop-task", repo_root, "Native task stop rejected before runtime access.", findings)
-
-    if not allow_write_control:
-        findings.append(
-            finding(
-                "fail",
-                "native-stop-task.write-control-intent",
-                "Stopping a task requires --allow-write-control because it controls scanner task execution.",
-            )
-        )
-        return make_result("native-stop-task", repo_root, "Native task stop rejected before runtime access.", findings)
-
-    env = native_api_direct_runtime_env(repo_root)
-    findings.append(native_api_direct_config_shape_finding(env, check="native-stop-task.direct-config-shape"))
-    if aggregate_status(findings) == "fail":
-        return make_result("native-stop-task", repo_root, "Direct native API task stop rejected before runtime access.", findings)
-    token = native_api_direct_bearer_token(repo_root, env)
-    if not direct_api_bearer_token_is_acceptable(token):
-        findings.append(
-            finding(
-                "fail",
-                "native-stop-task.direct-token-strength",
-                "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
-            )
-        )
-        return make_result("native-stop-task", repo_root, "Native task stop rejected before runtime access.", findings)
-
-    path, response, parsed, http_status, accepted = native_stop_task_request(
-        repo_root,
-        task_id,
-        token=token,
-        env=env,
-    )
-    task_status = parsed.get("status") if isinstance(parsed, dict) else None
-    findings.append(
-        native_api_probe_finding(
-            "pass" if accepted else "fail",
-            "native-stop-task.request",
-            "Native API verified that scanner work is absent and stopped the task."
-            if accepted
-            else "Native API task stop failed or returned an invalid acknowledgement.",
-            response,
-            direct_native_api_display_command(path, token=token, env=env, method="POST"),
-            parsed,
-            {
-                "http_status": http_status,
-                "task_id": task_id,
-                "task_status": task_status,
-                **summarize_native_api_response(parsed),
-            },
-        )
-    )
-    result = make_result(
-        "native-stop-task",
-        repo_root,
-        "Native task stop completed." if accepted else "Native task stop failed.",
-        findings,
-    )
-    result["details"] = {
-        "task_id": task_id,
-        "task_status": task_status,
-        "http_status": http_status,
-    }
-    if status_only:
-        compact = dict(result)
-        compact["findings"] = [
-            compact_doctor_finding(item)
-            for item in findings
-            if isinstance(item, dict) and item.get("status") != "pass"
-        ] or [finding("pass", "native-stop-task.status-only", "Native task stop accepted; acknowledgement summarized.")]
-        result = compact
-    return result
 
 
 def load_native_task_target_hosts_csv(hosts_file: Path) -> list[str]:
@@ -28738,10 +28557,6 @@ def build_parser() -> argparse.ArgumentParser:
     native_empty_trash.add_argument("--acknowledge-permanent-deletion", action="store_true", help="acknowledge that the confirmed Trashcan items cannot be restored")
     native_empty_trash.add_argument("--expected-total", type=int, help="exact total from the fresh operator Trashcan preview")
     native_empty_trash.add_argument("--status-only", action="store_true", help="emit a compact counts-only outcome without item names or secrets")
-    native_start_task = subparsers.add_parser("native-start-task", parents=[common], help="start one existing task through the guarded direct native API")
-    native_start_task.add_argument("--task-id", required=True, help="task UUID to start")
-    native_start_task.add_argument("--allow-write-control", action="store_true", help="confirm intentional report creation and scanner queue control")
-    native_start_task.add_argument("--status-only", action="store_true", help="emit compact task-start acknowledgement")
     native_scan_new_system = subparsers.add_parser("native-scan-new-system", parents=[common], help="create and start one scan for an explicit IP address through the guarded direct native API")
     native_scan_new_system.add_argument("--host", required=True, help="one explicit IPv4 or IPv6 address; hostnames, CIDRs, and ranges are rejected")
     native_scan_new_system.add_argument("--port-list-id", default=IANA_TCP_UDP_PORT_LIST_ID, help="existing port-list UUID")
@@ -28806,10 +28621,6 @@ def build_parser() -> argparse.ArgumentParser:
     native_bulk_modify_schedules.add_argument("--allow-write-control", action="store_true", help="confirm intentional schedule calendar mutation")
     native_bulk_modify_schedules.add_argument("--confirm-snapshot", help="SHA-256 emitted by a fresh dry run; required for writes")
     native_bulk_modify_schedules.add_argument("--status-only", action="store_true", help="emit compact snapshot and outcome counts without calendar content")
-    native_stop_task = subparsers.add_parser("native-stop-task", parents=[common], help="stop one existing task through the guarded direct native API")
-    native_stop_task.add_argument("--task-id", required=True, help="task UUID to stop")
-    native_stop_task.add_argument("--allow-write-control", action="store_true", help="confirm intentional scanner task control")
-    native_stop_task.add_argument("--status-only", action="store_true", help="emit compact task-stop acknowledgement")
     native_update_task_target = subparsers.add_parser("native-update-task-target", parents=[common], help="replace one task target through the guarded direct native API")
     native_update_task_target.add_argument("--task-id", required=True, help="task UUID whose target will be replaced")
     target_hosts = native_update_task_target.add_mutually_exclusive_group(required=True)
@@ -29058,13 +28869,6 @@ def main(argv: list[str] | None = None) -> int:
             allow_write_control=args.allow_write_control,
             status_only=args.status_only,
         )
-    elif args.command == "native-start-task":
-        result = command_native_start_task(
-            repo_root,
-            task_id=args.task_id,
-            allow_write_control=args.allow_write_control,
-            status_only=args.status_only,
-        )
     elif args.command == "native-scan-new-system":
         result = command_native_scan_new_system(
             repo_root,
@@ -29100,13 +28904,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_native_tasks_from_csv(
             repo_root,
             args.csv_file,
-            allow_write_control=args.allow_write_control,
-            status_only=args.status_only,
-        )
-    elif args.command == "native-stop-task":
-        result = command_native_stop_task(
-            repo_root,
-            task_id=args.task_id,
             allow_write_control=args.allow_write_control,
             status_only=args.status_only,
         )

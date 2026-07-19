@@ -1219,6 +1219,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["native-stop-all-tasks", "--json"], 1, "fail"),
                 (["native-update-task-target", "--task-id", "11111111-1111-4111-8111-111111111111", "--host", "192.0.2.10", "--json"], 1, "fail"),
                 (["native-targets-from-host-list", "--hosts-file", "/definitely-missing-yafvs-hosts.txt", "--json"], 1, "fail"),
+                (["native-targets-from-csv", "--csv-file", "/definitely-missing-yafvs-targets.csv", "--json"], 1, "fail"),
                 (["native-targets-from-xml", "--xml-file", "/definitely-missing-yafvs-targets.xml", "--json"], 1, "fail"),
                 (["down", "--json"], 1, "fail"),
                 (["runtime-app-down", "--json"], 1, "fail"),
@@ -2360,7 +2361,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-xml", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -9090,113 +9091,6 @@ class YAFVSCtlTests(unittest.TestCase):
             yafvsctl.openapi_duplicate_field_paths(block),
             ["properties.resource_type"],
         )
-
-    def test_native_targets_from_csv_parses_rows_and_dry_runs_payloads(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "targets.csv"
-            csv_file.write_text("CSV target,192.0.2.10,smb-one,ssh-one,,,ICMP Ping\n\n", encoding="utf-8")
-
-            rows = yafvsctl.load_native_target_csv_rows(csv_file)
-            self.assertEqual(len(rows), 1)
-            self.assertEqual(rows[0].name, "CSV target")
-            self.assertEqual(rows[0].alive_test, "ICMP Ping")
-
-            result = yafvsctl.command_native_targets_from_csv(root, csv_file, dry_run=True)
-
-        self.assertEqual(result["status"], "pass")
-        planned = result["details"]["planned_targets"][0]
-        self.assertEqual(planned["name"], "CSV target")
-        self.assertEqual(planned["hosts"], ["192.0.2.10"])
-        self.assertEqual(planned["alive_tests"], ["ICMP Ping"])
-        self.assertNotIn("credentials", planned)
-
-    def test_native_targets_from_csv_requires_write_control_before_runtime(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "targets.csv"
-            csv_file.write_text("CSV target,192.0.2.10,,,,,\n", encoding="utf-8")
-            with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                result = yafvsctl.command_native_targets_from_csv(root, csv_file)
-                curl.assert_not_called()
-
-        self.assertEqual(result["status"], "fail")
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(checks["native-targets-from-csv.write-control-intent"]["status"], "fail")
-
-    def test_native_targets_from_csv_preflights_credentials_and_skips_existing_targets(self):
-        captured_paths: list[str] = []
-        created_bodies: list[dict[str, object]] = []
-
-        def query_value(path: str, name: str) -> str:
-            parsed = yafvsctl.urllib.parse.urlsplit(path)
-            values = yafvsctl.urllib.parse.parse_qs(parsed.query)
-            return values.get(name, [""])[0]
-
-        def fake_direct(_root, path, **kwargs):
-            captured_paths.append(path)
-            if path.startswith("/api/v1/targets?"):
-                name = query_value(path, "filter")
-                items = [{"id": "33333333-3333-4333-8333-333333333333", "name": name}] if name == "Existing target" else []
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"page": {"total": len(items)}, "items": items}) + "\n200", "")
-            if path.startswith("/api/v1/credentials?"):
-                name = query_value(path, "filter")
-                item = {
-                    "smb-one": {"id": "44444444-4444-4444-8444-444444444444", "name": "smb-one", "credential_type": "up"},
-                    "ssh-one": {"id": "55555555-5555-4555-8555-555555555555", "name": "ssh-one", "credential_type": "usk"},
-                }[name]
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"page": {"total": 1}, "items": [item]}) + "\n200", "")
-            self.assertEqual(path, "/api/v1/targets")
-            body = json.loads(kwargs["body"])
-            created_bodies.append(body)
-            return subprocess.CompletedProcess(["curl"], 0, '{"id":"66666666-6666-4666-8666-666666666666"}\n201', "")
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "targets.csv"
-            csv_file.write_text(
-                "CSV target,192.0.2.10,smb-one,ssh-one,,,ICMP Ping\n"
-                "CSV target,192.0.2.12,,,,,\n"
-                "Existing target,192.0.2.11,,,,,\n",
-                encoding="utf-8",
-            )
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="a" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
-                result = yafvsctl.command_native_targets_from_csv(root, csv_file, allow_write_control=True, status_only=True)
-
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["details"]["created_target_count"], 1)
-        self.assertEqual(result["details"]["skipped_existing_target_count"], 2)
-        self.assertEqual(created_bodies[0]["credentials"]["smb"]["id"], "44444444-4444-4444-8444-444444444444")
-        self.assertEqual(created_bodies[0]["credentials"]["ssh"]["id"], "55555555-5555-4555-8555-555555555555")
-        self.assertIn("/api/v1/targets", captured_paths)
-
-    def test_native_targets_from_csv_exact_lookup_pages_until_match(self):
-        def fake_direct(_root, path, **_kwargs):
-            query = yafvsctl.urllib.parse.parse_qs(yafvsctl.urllib.parse.urlsplit(path).query)
-            page = int(query["page"][0])
-            if page == 1:
-                items = [{"id": "11111111-1111-4111-8111-111111111111", "name": "near miss"}]
-            else:
-                items = [{"id": "22222222-2222-4222-8222-222222222222", "name": "needle", "credential_type": "up"}]
-            return subprocess.CompletedProcess(["curl"], 0, json.dumps({"page": {"page": page, "page_size": 1, "total": 2}, "items": items}) + "\n200", "")
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
-                matches, failure = yafvsctl.native_target_csv_fetch_exact_items(
-                    root,
-                    "/api/v1/credentials",
-                    "needle",
-                    token="a" * 64,
-                    env={},
-                    allowed_types=yafvsctl.NATIVE_TARGET_CSV_SMB_CREDENTIAL_TYPES,
-                )
-
-        self.assertIsNone(failure)
-        self.assertEqual(matches, [{"id": "22222222-2222-4222-8222-222222222222", "name": "needle", "credential_type": "up"}])
 
     def test_native_tags_from_csv_parses_supported_subset_and_dry_runs_payloads(self):
         with tempfile.TemporaryDirectory() as tmp:

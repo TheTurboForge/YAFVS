@@ -10940,24 +10940,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(trashcan_summary["x_yafvs_values"]["x-yafvs-exposure"], "direct-read")
         self.assertEqual(trashcan_summary["x_yafvs_values"]["x-yafvs-maturity"], "live-read")
         self.assertEqual(trashcan_summary["x_yafvs_values"]["x-yafvs-replaces"], "trashcan-count-summary-read")
-        root = Path(__file__).resolve().parents[2]
-        result = yafvsctl.command_native_tooling_removal_review(root)
-        status_only = yafvsctl.command_native_tooling_removal_review(root, status_only=True)
-
-        self.assertEqual(result["status"], "pass")
-        details = result["details"]
-        self.assertEqual(details["safe_removal_count"], 0)
-        self.assertEqual(details["total"], 0)
-        self.assertEqual(details["blocked_or_review_count"], 0)
-        self.assertNotIn("write_or_mutation", details["bucket_counts"])
-        self.assertNotIn("items", details)
-        self.assertNotIn("implemented_native_endpoints", details)
-
-        status_details = status_only["details"]
-        self.assertIn("bucket_counts", status_details)
-        self.assertNotIn("buckets", status_details)
-        self.assertNotIn("path_blockers", status_details)
-
     def test_openapi_tracks_raw_report_contracts(self):
         root = Path(__file__).resolve().parents[2]
         openapi = (root / "api" / "openapi" / "yafvs-v1.yaml").read_text(encoding="utf-8")

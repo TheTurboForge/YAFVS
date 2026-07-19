@@ -1963,6 +1963,7 @@ mod tests {
             "native-export-report-pdf",
             "native-scan-new-system",
             "native-scan-with-delivery",
+            "native-nvt-diagnostic-scan",
             "native-start-tasks-from-csv",
             "native-stop-tasks-from-csv",
             "native-stop-all-tasks",

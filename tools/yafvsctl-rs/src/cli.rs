@@ -1985,6 +1985,7 @@ mod tests {
             "runtime-db-introspect",
             "runtime-performance-snapshot",
             "runtime-status",
+            "runtime-smoke",
             "runtime-report-summary",
             "runtime-report-export",
             "runtime-report-metrics",

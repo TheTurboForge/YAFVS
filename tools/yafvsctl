@@ -21561,39 +21561,6 @@ def command_runtime_browser_regression(repo_root: Path, *, status_only: bool = F
     return runtime_browser_regression_status_only_result(result_payload) if status_only else result_payload
 
 
-def command_runtime_smoke(repo_root: Path) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    findings.extend(ensure_runtime_dirs(repo_root))
-    config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
-    findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": config.stdout.splitlines()[-40:]}))
-    port_config = run_command(compose_command(repo_root, "config"), repo_root, env=runtime_env(repo_root))
-    broad_bindings = [line.strip() for line in port_config.stdout.splitlines() if "0.0.0.0:" in line or "[::]:" in line]
-    findings.append(finding("fail" if broad_bindings else "pass", "runtime.ports", "No broad host port bindings found." if not broad_bindings else "Broad host port bindings found.", details={"broad_bindings": broad_bindings}))
-    for service in RUNTIME_SERVICES:
-        findings.append(finding("pass" if container_running(repo_root, service) else "fail", "runtime.running", f"{service} container is running.", details={"service": service}))
-    if container_running(repo_root, "postgres"):
-        result = postgres_ready(repo_root)
-        findings.append(finding("pass" if result.returncode == 0 else "fail", "postgres.ready", f"pg_isready exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-20:]}))
-        for collation in ensure_postgres_collation(repo_root, refresh_empty=False):
-            if collation["status"] == "warn":
-                collation = dict(collation)
-                collation["status"] = "fail"
-            findings.append(collation)
-        extension = pg_gvm_extension_status(repo_root)
-        if extension["status"] == "warn":
-            extension = dict(extension)
-            extension["status"] = "fail"
-        findings.append(extension)
-    if container_running(repo_root, "redis-openvas"):
-        result = scanner_redis_ping(repo_root)
-        findings.append(finding("pass" if result.returncode == 0 and "PONG" in result.stdout else "fail", "redis-openvas.ready", f"scanner Redis Unix socket ping exit code {result.returncode}.", str(scanner_redis_socket_path(repo_root)), {"output_tail": result.stdout.splitlines()[-20:]}))
-        findings.append(finding("pass" if scanner_redis_socket_path(repo_root).is_socket() else "fail", "redis-openvas.socket", "scanner Redis Unix socket exists." if scanner_redis_socket_path(repo_root).is_socket() else "scanner Redis Unix socket is missing.", str(scanner_redis_socket_path(repo_root))))
-    if container_running(repo_root, "mosquitto"):
-        result = exec_in_service(repo_root, "mosquitto", mqtt_health_probe_command())
-        findings.append(finding("pass" if result.returncode == 0 else "fail", "mosquitto.ready", f"mosquitto_pub broker check exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-20:]}))
-    return make_result("runtime-smoke", repo_root, "Runtime smoke checks completed.", findings, [str(runtime_dir(repo_root))])
-
-
 def _command_gvmd_smoke_unlocked(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     findings.append(active_feed_generation_finding(repo_root))
@@ -21835,7 +21802,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-manager-init", parents=[common], help="initialize persistent gvmd database/user prerequisites")
     subparsers.add_parser("runtime-scanner-redis-init", parents=[common], help="initialize dedicated OpenVAS scanner Redis runtime")
     subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
-    subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
     runtime_app_up = subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
     runtime_app_up.add_argument("--status-only", action="store_true", help="emit compact app startup status and only non-pass findings for chat-safe validation")
     subparsers.add_parser("runtime-app-build", parents=[common], help="build application images explicitly without starting or changing feed state")
@@ -21901,8 +21867,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_scanner_redis_init(repo_root)
     elif args.command == "runtime-scanner-register":
         result = command_runtime_scanner_register(repo_root)
-    elif args.command == "runtime-smoke":
-        result = command_runtime_smoke(repo_root)
     elif args.command == "runtime-app-up":
         result = command_runtime_app_up(repo_root, status_only=args.status_only)
     elif args.command == "runtime-app-build":

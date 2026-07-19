@@ -1161,8 +1161,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_rust_yafvsctl_matches_python_migrated_command_contracts(self):
         self.assert_rust_yafvsctl_parity(
-            (
-            ),
+            (),
             rust_only_contracts=(
                 (["status", "--json"], 0, ("pass", "warn")),
                 (["license-report", "--json"], 0, "pass"),
@@ -1199,6 +1198,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-data-state", "--json"], 0, "warn"),
                 (["runtime-db-introspect", "--json"], 0, "warn"),
                 (["runtime-performance-snapshot", "--json"], 0, "warn"),
+                (["runtime-log-review", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["c-hardening-check", "--status-only", "--json"], 1, "fail"),
                 (["path-coupling-state", "--json"], 0, "pass"),
                 (["path-coupling-state", "--status-only", "--json"], 0, "pass"),
@@ -2323,7 +2323,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2345,7 +2345,8 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("def command_native_api_client_contract", source)
         self.assertIn("def command_native_api_replacement_dashboard", source)
         self.assertIn("def command_closeout_readiness", source)
-        self.assertIn("def command_runtime_log_review", source)
+        self.assertIn("def rust_runtime_log_review_result", source)
+        self.assertIn('rust_result_envelope(repo_root, "runtime-log-review", ["runtime-log-review"])', source)
         self.assertIn("def command_runtime_native_api_smoke", source)
         self.assertIn('native_api_smoke.add_argument("--status-only"', source)
         self.assertIn("command_runtime_native_api_smoke(repo_root, status_only=args.status_only)", source)
@@ -2416,7 +2417,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "license-report"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "license-report"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotIn(f"def command_{command.replace('-', '_')}", source)
@@ -2601,6 +2602,36 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(
             run_command.call_args.args[0][-3:],
             ["doctor", "--status-only", "--json"],
+        )
+
+    def test_rust_runtime_log_review_bridge_uses_fixed_arguments(self):
+        envelope = json.dumps(
+            {
+                "status": "warn",
+                "summary": "Runtime log review completed.",
+                "findings": [
+                    {
+                        "status": "warn",
+                        "check": "log-review.container",
+                        "message": "app container is not running.",
+                    }
+                ],
+                "artifacts": ["/runtime/artifacts/log-review/log-review.json"],
+                "metadata": {"command": "runtime-log-review"},
+            }
+        )
+        root = Path("/tmp/repo")
+        with unittest.mock.patch.object(
+            yafvsctl,
+            "run_command",
+            return_value=subprocess.CompletedProcess(["unit"], 0, envelope, ""),
+        ) as run_command:
+            result = yafvsctl.rust_runtime_log_review_result(root)
+
+        self.assertEqual(result["status"], "warn")
+        self.assertEqual(
+            run_command.call_args.args[0][-2:],
+            ["runtime-log-review", "--json"],
         )
 
     def test_license_report_consumers_use_rust_wrapper_with_expected_options(self):
@@ -11354,6 +11385,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "runtime-plan",
             "logs",
             "doctor",
+            "runtime-log-review",
         }
         python_owned = (
             "configure",
@@ -11378,38 +11410,6 @@ class YAFVSCtlTests(unittest.TestCase):
         for recipe in python_owned:
             with self.subTest(recipe=recipe):
                 self.assertIn(f'tools/yafvsctl {recipe} "$@"', justfile)
-
-    def test_runtime_log_review_detects_known_regressions(self):
-        matches = yafvsctl.log_review_matches(
-            [
-                "Nmap (NASL wrapper): You requested a scan type which requires root privileges.",
-                "database collation version mismatch",
-                "Error: Unable to open log file /mosquitto/log/mosquitto.log for writing.",
-                "Traceback (most recent call last):",
-            ]
-        )
-        keys = {match["key"] for match in matches}
-        self.assertIn("nmap-root-privilege", keys)
-        self.assertIn("postgres-collation", keys)
-        self.assertIn("mosquitto-log-file", keys)
-        self.assertIn("traceback", keys)
-
-    def test_runtime_log_review_uses_service_specific_patterns(self):
-        postgres_matches = yafvsctl.log_review_matches(
-            ["2026-06-15 10:00:00.000 UTC [42] ERROR:  relation does not exist"],
-            service="postgres",
-        )
-        self.assertIn("postgres-error", {match["key"] for match in postgres_matches})
-        generic_matches = yafvsctl.log_review_matches(
-            ["2026-06-15 10:00:00.000 UTC [42] ERROR:  relation does not exist"],
-            service="redis",
-        )
-        self.assertNotIn("postgres-error", {match["key"] for match in generic_matches})
-        notus_matches = yafvsctl.log_review_matches(
-            ["notus-scanner: GPG error while verifying advisories"],
-            service="notus-scanner",
-        )
-        self.assertIn("notus-feed", {match["key"] for match in notus_matches})
 
     def test_quality_gate_downgrades_known_doctor_notes_only(self):
         status, summary = yafvsctl.quality_gate_doctor_status(
@@ -11472,7 +11472,9 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("command_native_tooling_state(repo_root, status_only=True)", source)
         self.assertIn("command_native_api_client_contract(repo_root, status_only=True)", source)
         self.assertIn("command_native_api_migration_matrix(repo_root, status_only=True)", source)
+        self.assertIn("(\"runtime-log-review\", rust_runtime_log_review_result(repo_root))", source)
         self.assertIn("(\"runtime-data-state\", rust_runtime_data_state_result(repo_root))", source)
+        self.assertNotIn("command_runtime_log_review(repo_root)", source)
         self.assertNotIn("command_runtime_data_state(repo_root)", source)
 
     def test_quality_gate_includes_native_api_contract_steps(self):

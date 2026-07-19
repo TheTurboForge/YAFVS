@@ -70,6 +70,7 @@ feed-copy-to-runtime
 deps
 runtime-feed-import-init
 runtime-performance-snapshot
+runtime-log-review
 runtime-data-state
 logs
 license-report

@@ -112,6 +112,8 @@ pub enum CliCommand {
     RuntimeFeedImportInit,
     /// Capture a runtime performance snapshot for diagnostics.
     RuntimePerformanceSnapshot,
+    /// Review recent full-stack runtime logs for high-signal failures.
+    RuntimeLogReview,
     /// Classify database and non-database runtime state.
     RuntimeDataState,
     /// Show recent runtime logs.
@@ -200,6 +202,7 @@ impl CliCommand {
             Self::Deps { .. } => "deps",
             Self::RuntimeFeedImportInit => "runtime-feed-import-init",
             Self::RuntimePerformanceSnapshot => "runtime-performance-snapshot",
+            Self::RuntimeLogReview => "runtime-log-review",
             Self::RuntimeDataState => "runtime-data-state",
             Self::Logs { .. } => "logs",
             Self::LicenseReport { .. } => "license-report",
@@ -562,6 +565,7 @@ mod tests {
             "feed-generation-rollback",
             "runtime-db-introspect",
             "runtime-performance-snapshot",
+            "runtime-log-review",
             "runtime-redis-state",
             "c-hardening-check",
             "quality-gate-schedule",

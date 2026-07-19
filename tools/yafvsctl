@@ -301,7 +301,6 @@ NMAP_PRIVILEGE_WARNING_PATTERNS = (
     "you requested a scan type which requires root privileges",
     "raw scans require root privileges",
 )
-LOG_REVIEW_TAIL_LINES = 300
 RETAINED_QUALITY_GATE_ARTIFACTS = 30
 GSA_OPERATION_LOCK = "gsa-quality"
 RUNTIME_MANAGER_LOCK = "runtime-manager"
@@ -2180,38 +2179,6 @@ ALERT_FORBIDDEN_PAYLOAD_KEYS = frozenset(
     }
 )
 QUALITY_GATE_SERVICE_NAME = "yafvs-quality-gate.service"
-LOG_REVIEW_PATTERNS: tuple[tuple[str, str, str, str], ...] = (
-    ("fail", "nmap-root-privilege", r"requires root privileges|requires root|raw scans require root privileges", "Nmap/root-privilege warning found."),
-    ("fail", "postgres-collation", r"collation version mismatch|database .* has a collation version mismatch", "Postgres collation mismatch found."),
-    ("fail", "mosquitto-log-file", r"unable to open log file|error: unable to open log file", "Mosquitto file-log permission warning found."),
-    ("fail", "feed-signature", r"bad signature|no public key|sha256sums\.asc|advisory load failed", "Feed signature/advisory-load problem found."),
-    ("fail", "traceback", r"traceback \(most recent call last\)|uncaught exception|panic:|panicked at|thread .* panicked", "Runtime traceback or panic found."),
-    ("fail", "crash", r"segmentation fault|core dumped|fatal error|critical", "Crash/critical runtime error found."),
-    ("fail", "permission", r"permission denied|operation not permitted", "Permission error found."),
-    ("warn", "manager-response", r"failure to receive response from manager daemon", "Manager-response failure found."),
-)
-LOG_REVIEW_SERVICE_PATTERNS: dict[str, tuple[tuple[str, str, str, str], ...]] = {
-    "postgres": (
-        ("fail", "postgres-error", r"\bERROR:\s|\bFATAL:\s|\bPANIC:\s", "Postgres ERROR/FATAL/PANIC found in recent log tail."),
-    ),
-    "gvmd": (
-        ("fail", "gvmd-socket", r"failed to .*socket|cannot .*socket|connection refused|broken pipe", "Manager socket/connection failure found."),
-        ("fail", "gvmd-sql", r"sql error|database query failed|pq:|postgres.*error", "Manager database error found."),
-    ),
-    "gsad": (
-        ("warn", "gsad-manager", r"failure to receive response from manager daemon|manager.*unavailable|connect.*gvmd.*failed", "GSAD manager communication problem found."),
-    ),
-    "ospd-openvas": (
-        ("fail", "ospd-scanner-crash", r"scan.*interrupted|ospd.*exception|openvas.*crash|scanner.*exited", "OSPD/OpenVAS scan or scanner failure found."),
-        ("fail", "ospd-feed-signature", r"gpg.*error|signature.*failed|bad signature|no public key|sha256sums\.asc", "OSPD feed signature problem found."),
-    ),
-    "notus-scanner": (
-        ("fail", "notus-feed", r"gpg.*error|signature.*failed|bad signature|no public key|advisory load.*error|failed.*advisories", "Notus feed signature/advisory problem found."),
-    ),
-    "mosquitto": (
-        ("fail", "mosquitto-error", r"\berror:\s|\bfatal:\s", "Mosquitto error found in recent log tail."),
-    ),
-}
 GSA_FRESHNESS_SOURCE_PATHS = (
     "components/gsa/src",
     "components/gsa/public",
@@ -2613,6 +2580,10 @@ def rust_runtime_data_state_result(repo_root: Path) -> dict[str, Any]:
                 )
             ],
         )
+
+
+def rust_runtime_log_review_result(repo_root: Path) -> dict[str, Any]:
+    return rust_result_envelope(repo_root, "runtime-log-review", ["runtime-log-review"])
 
 
 def command_repository_unavailable(start: Path, command: str) -> dict[str, Any]:
@@ -5368,10 +5339,6 @@ def credential_smoke_artifact_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "artifacts", "credential-smoke")
 
 
-def log_review_artifact_dir(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "artifacts", "log-review")
-
-
 def quality_gate_artifact_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "artifacts", "quality-gate")
 
@@ -7017,20 +6984,6 @@ def mqtt_health_probe_command() -> list[str]:
     return ["mosquitto_pub", "-o", "/tmp/yafvs-mqtt-health.options"]
 
 
-def log_review_matches(lines: Iterable[str], service: str | None = None) -> list[dict[str, Any]]:
-    matches: list[dict[str, Any]] = []
-    material = list(lines)
-    patterns = [*LOG_REVIEW_PATTERNS]
-    if service:
-        patterns.extend(LOG_REVIEW_SERVICE_PATTERNS.get(service, ()))
-    for status, key, pattern, message in patterns:
-        regex = re.compile(pattern, re.IGNORECASE)
-        matched = [line for line in material if regex.search(line)]
-        if matched:
-            matches.append({"status": status, "key": key, "message": message, "matches": matched[-20:]})
-    return matches
-
-
 def docker_container_state(repo_root: Path, service: str) -> dict[str, Any] | None:
     cid = container_id(repo_root, service)
     if not cid:
@@ -7044,17 +6997,6 @@ def docker_container_state(repo_root: Path, service: str) -> dict[str, Any] | No
         state = {"inspect_output": output_tail(inspect.stdout, 40)}
     state["container_id"] = cid
     return state
-
-
-def runtime_secret_redactions(repo_root: Path) -> list[str]:
-    values: list[str] = []
-    for secret_name in (DEV_ADMIN_SECRET,):
-        path = runtime_secret_path(repo_root, secret_name)
-        if path.is_file():
-            value = path.read_text(encoding="utf-8").strip()
-            if value:
-                values.append(value)
-    return values
 
 
 def redact_text(text: str, secrets_to_redact: Iterable[str]) -> str:
@@ -31079,50 +31021,6 @@ def command_down(repo_root: Path) -> dict[str, Any]:
         )
 
 
-def command_runtime_log_review(repo_root: Path) -> dict[str, Any]:
-    artifact_dir = log_review_artifact_dir(repo_root)
-    secrets_to_redact = runtime_secret_redactions(repo_root)
-    findings: list[dict[str, Any]] = []
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-    review_details: dict[str, Any] = {"services": {}}
-
-    for service in (*RUNTIME_SERVICES, *APP_SERVICES):
-        service_details: dict[str, Any] = {}
-        state = docker_container_state(repo_root, service)
-        service_details["state"] = state
-        if state is None:
-            findings.append(finding("warn", "log-review.container", f"{service} container does not exist; logs may be unavailable.", details={"service": service}))
-        elif state.get("Running") is not True:
-            status = "fail" if service in RUNTIME_SERVICES else "warn"
-            findings.append(finding(status, "log-review.container", f"{service} container is not running.", details={"service": service, "state": state}))
-        else:
-            findings.append(finding("pass", "log-review.container", f"{service} container is running.", details={"service": service, "state": {"Status": state.get("Status"), "Running": state.get("Running")}}))
-
-        command = compose_command(repo_root, "logs", "--no-color", "--tail", str(LOG_REVIEW_TAIL_LINES), service)
-        logs = run_command(command, repo_root, env=runtime_env(repo_root), timeout=120)
-        redacted = redact_text(logs.stdout, secrets_to_redact)
-        log_path = artifact_dir / f"{service}.log"
-        log_path.write_text(redacted, encoding="utf-8")
-        service_details["artifact"] = str(log_path)
-        service_details["line_count"] = len(redacted.splitlines())
-        redacted_logs = subprocess.CompletedProcess(logs.args, logs.returncode, redacted)
-        findings.append(process_step_finding("pass" if logs.returncode == 0 else "warn", "log-review.logs", f"Collected recent {service} Docker logs with exit code {logs.returncode}.", redacted_logs, command))
-
-        matches = log_review_matches(redacted.splitlines(), service=service)
-        service_details["matches"] = matches
-        if matches:
-            for match in matches:
-                findings.append(finding(match["status"], f"log-review.{match['key']}", f"{service}: {match['message']}", details={"service": service, "matches": match["matches"]}))
-        else:
-            findings.append(finding("pass", "log-review.patterns", f"{service} log tail contains no high-signal runtime patterns.", details={"service": service}))
-        review_details["services"][service] = service_details
-
-    result = make_result("runtime-log-review", repo_root, "Runtime log review completed.", findings, [str(artifact_dir / "log-review.json")])
-    result["details"] = review_details
-    write_json_artifact(artifact_dir, "log-review.json", result)
-    return result
-
-
 def command_runtime_status(repo_root: Path) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
     manager_lock = runtime_lock_status(repo_root, RUNTIME_MANAGER_LOCK)
@@ -31362,7 +31260,7 @@ def command_quality_gate(repo_root: Path, include_runtime: bool = False) -> dict
     if include_runtime:
         for name, command_result in (
             ("runtime-status", command_runtime_status(repo_root)),
-            ("runtime-log-review", command_runtime_log_review(repo_root)),
+            ("runtime-log-review", rust_runtime_log_review_result(repo_root)),
             ("runtime-data-state", rust_runtime_data_state_result(repo_root)),
         ):
             details["steps"][name] = {"status": command_result["status"], "summary": command_result["summary"], "artifacts": command_result.get("artifacts", [])}
@@ -31632,7 +31530,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("feed-cache-sync", parents=[common], help="start full Greenbone Community Feed cache sync in tmux")
     subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
-    subparsers.add_parser("runtime-log-review", parents=[common], help="review recent full-stack runtime logs")
     runtime_app_up = subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
     runtime_app_up.add_argument("--status-only", action="store_true", help="emit compact app startup status and only non-pass findings for chat-safe validation")
     subparsers.add_parser("runtime-app-build", parents=[common], help="build application images explicitly without starting or changing feed state")
@@ -31987,8 +31884,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_status(repo_root)
     elif args.command == "runtime-smoke":
         result = command_runtime_smoke(repo_root)
-    elif args.command == "runtime-log-review":
-        result = command_runtime_log_review(repo_root)
     elif args.command == "runtime-app-up":
         result = command_runtime_app_up(repo_root, status_only=args.status_only)
     elif args.command == "runtime-app-build":

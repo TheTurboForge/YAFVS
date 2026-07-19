@@ -30,6 +30,18 @@ pub(crate) fn read_or_create_runtime_secret(
     }
 }
 
+pub(crate) fn read_existing_runtime_secret(
+    repo_root: &Path,
+    name: &str,
+) -> io::Result<Option<String>> {
+    let path = runtime_secret_path(repo_root, name);
+    match read_private_text(&path, 4096) {
+        Ok(secret) => validate_single_line_secret(&path, secret).map(Some),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 fn validate_single_line_secret(path: &Path, mut secret: String) -> io::Result<String> {
     if secret.ends_with('\n') {
         secret.pop();

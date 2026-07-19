@@ -20,7 +20,7 @@ pub use commands::{
     command_native_api_cargo_audit, command_native_api_semgrep_audit, command_osv_lockfile_audit,
     command_path_coupling_state, command_quality_gate_schedule, command_quality_gate_state,
     command_repository_unavailable, command_runtime_data_state, command_runtime_db_introspect,
-    command_runtime_feed_import_init, command_runtime_identity_migrate,
+    command_runtime_feed_import_init, command_runtime_identity_migrate, command_runtime_log_review,
     command_runtime_native_api_direct_token, command_runtime_performance_snapshot,
     command_runtime_plan, command_runtime_redis_state, command_rust_migration_state,
     command_security_policy_check, command_status, find_repo_root,
@@ -89,6 +89,7 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         CliCommand::Deps { component } => command_deps(&repo_root, component.as_deref()),
         CliCommand::RuntimeFeedImportInit => command_runtime_feed_import_init(&repo_root),
         CliCommand::RuntimePerformanceSnapshot => command_runtime_performance_snapshot(&repo_root),
+        CliCommand::RuntimeLogReview => command_runtime_log_review(&repo_root),
         CliCommand::RuntimeDataState => command_runtime_data_state(&repo_root),
         CliCommand::Logs {
             service,

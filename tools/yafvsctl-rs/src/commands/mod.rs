@@ -17,6 +17,7 @@ mod doctor;
 mod feed;
 mod feed_generation;
 mod license;
+mod native_runtime;
 mod path_coupling;
 mod production_posture;
 mod quality_gate;
@@ -24,6 +25,7 @@ mod quality_schedule;
 mod redis;
 mod repository;
 mod runtime;
+mod runtime_certbund_report;
 mod runtime_data_state;
 mod runtime_identity_migrate;
 mod runtime_lock;
@@ -66,6 +68,7 @@ pub use repository::{
     command_inventory, command_repository_unavailable, command_status, find_repo_root,
 };
 pub use runtime::{command_down, command_logs, command_runtime_app_down, command_runtime_plan};
+pub use runtime_certbund_report::command_runtime_certbund_report;
 pub use runtime_data_state::command_runtime_data_state;
 pub use runtime_identity_migrate::command_runtime_identity_migrate;
 pub use runtime_log_review::command_runtime_log_review;

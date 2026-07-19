@@ -116,6 +116,27 @@ pub enum CliCommand {
     RuntimeFeedImportInit,
     /// Capture a runtime performance snapshot for diagnostics.
     RuntimePerformanceSnapshot,
+    /// Build a native CERT-Bund JSON or CSV report for a raw report or task.
+    RuntimeCertbundReport {
+        /// Optional raw report id; defaults to the latest completed full-test report.
+        #[arg(long)]
+        report_id: Option<String>,
+        /// Optional task id whose last report should be analysed.
+        #[arg(long)]
+        task_id: Option<String>,
+        /// Maximum result rows to fetch.
+        #[arg(long, default_value_t = 1000)]
+        max_results: usize,
+        /// Maximum host rows to fetch.
+        #[arg(long, default_value_t = 5000)]
+        max_hosts: usize,
+        /// Output artifact format; JSON is always written as the canonical artifact.
+        #[arg(long, default_value = "json", value_parser = ["json", "csv"])]
+        format: String,
+        /// Optional output artifact path for the selected format.
+        #[arg(long)]
+        output: Option<String>,
+    },
     /// Review recent full-stack runtime logs for high-signal failures.
     RuntimeLogReview,
     /// Verify non-root OpenVAS raw-socket capabilities.
@@ -247,6 +268,7 @@ impl CliCommand {
             Self::Deps { .. } => "deps",
             Self::RuntimeFeedImportInit => "runtime-feed-import-init",
             Self::RuntimePerformanceSnapshot => "runtime-performance-snapshot",
+            Self::RuntimeCertbundReport { .. } => "runtime-certbund-report",
             Self::RuntimeLogReview => "runtime-log-review",
             Self::RuntimeScannerCapabilityCheck => "runtime-scanner-capability-check",
             Self::RuntimeScannerProcessCheck => "runtime-scanner-process-check",
@@ -307,6 +329,61 @@ mod tests {
             assert_eq!(cli.command, expected);
             assert_eq!(cli.command.name(), argument);
         }
+    }
+
+    #[test]
+    fn parses_and_names_runtime_certbund_report_without_parser_level_selector_conflict() {
+        assert_eq!(
+            parse_cli([
+                "runtime-certbund-report",
+                "--report-id",
+                "report-1",
+                "--task-id",
+                "task-1",
+                "--max-results",
+                "25",
+                "--max-hosts",
+                "50",
+                "--format",
+                "csv",
+                "--output",
+                "report.csv",
+            ])
+            .unwrap()
+            .command,
+            CliCommand::RuntimeCertbundReport {
+                report_id: Some("report-1".into()),
+                task_id: Some("task-1".into()),
+                max_results: 25,
+                max_hosts: 50,
+                format: "csv".into(),
+                output: Some("report.csv".into()),
+            }
+        );
+        assert_eq!(
+            parse_cli(["runtime-certbund-report"]).unwrap().command,
+            CliCommand::RuntimeCertbundReport {
+                report_id: None,
+                task_id: None,
+                max_results: 1000,
+                max_hosts: 5000,
+                format: "json".into(),
+                output: None,
+            }
+        );
+        assert_eq!(
+            CliCommand::RuntimeCertbundReport {
+                report_id: None,
+                task_id: None,
+                max_results: 1,
+                max_hosts: 1,
+                format: "json".into(),
+                output: None,
+            }
+            .name(),
+            "runtime-certbund-report"
+        );
+        assert!(parse_cli(["runtime-certbund-report", "--format", "xml"]).is_err());
     }
 
     #[test]

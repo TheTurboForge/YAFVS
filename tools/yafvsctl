@@ -11403,22 +11403,6 @@ def native_api_browser_access_from_status(status: str | None) -> str:
     return "unknown"
 
 
-def native_target_xml_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    details = result.get("details") if isinstance(result.get("details"), dict) else {}
-    compact = dict(result)
-    compact["details"] = {
-        "xml_file": details.get("xml_file"),
-        "row_count": details.get("row_count", 0),
-        "dry_run": details.get("dry_run", False),
-        "created_target_count": details.get("created_target_count", 0),
-    }
-    non_pass = [item for item in result.get("findings", []) if item.get("status") != "pass"]
-    compact["findings"] = non_pass or [
-        finding("pass", "native-targets-from-xml.status-only", "Native XML target import passed; details summarized.")
-    ]
-    return compact
-
-
 def compact_doctor_finding(item: dict[str, Any]) -> dict[str, Any]:
     compact = {
         key: item[key]
@@ -22291,118 +22275,6 @@ class NativeTargetCsvRow:
     alive_test: str
 
 
-@dataclass(frozen=True)
-class NativeTargetXmlRow:
-    row_number: int
-    name: str
-    hosts: tuple[str, ...]
-    exclude_hosts: tuple[str, ...]
-    comment: str | None
-    alive_tests: tuple[str, ...]
-    reverse_lookup_only: bool
-    reverse_lookup_unify: bool
-    port_list_id: str
-    credentials: dict[str, dict[str, Any]]
-
-
-NATIVE_TARGET_XML_CREDENTIAL_FIELDS = {
-    "ssh_credential": "ssh",
-    "smb_credential": "smb",
-    "esxi_credential": "esxi",
-    "snmp_credential": "snmp",
-}
-
-
-def native_target_xml_text(element: ET.Element, name: str, *, required: bool = False) -> str:
-    child = element.find(name)
-    value = child.text.strip() if child is not None and child.text is not None else ""
-    if required and not value:
-        raise ValueError(f"target row is missing required <{name}> text")
-    return value
-
-
-def native_target_xml_flag(element: ET.Element, name: str) -> bool:
-    value = native_target_xml_text(element, name).strip()
-    if value in ("", "0"):
-        return False
-    if value == "1":
-        return True
-    raise ValueError(f"<{name}> must be empty, 0, or 1")
-
-
-def native_target_xml_list(value: str) -> tuple[str, ...]:
-    return tuple(item.strip() for item in value.split(",") if item.strip())
-
-
-def load_native_target_xml_rows(xml_file: Path) -> list[NativeTargetXmlRow]:
-    try:
-        root = ET.parse(xml_file).getroot()
-    except ET.ParseError as exc:
-        raise ValueError(f"failed to parse target XML file: {exc}") from exc
-    except OSError as exc:
-        raise ValueError(f"failed to read target XML file: {exc}") from exc
-
-    rows: list[NativeTargetXmlRow] = []
-    for row_number, target in enumerate(root.findall("target"), start=1):
-        name = native_target_xml_text(target, "name", required=True)
-        hosts = native_target_xml_list(native_target_xml_text(target, "hosts", required=True))
-        if not hosts:
-            raise ValueError(f"target row {row_number} must include at least one host")
-        exclude_hosts = native_target_xml_list(native_target_xml_text(target, "exclude_hosts"))
-        comment = native_target_xml_text(target, "comment") or None
-        alive_test = native_target_xml_text(target, "alive_tests") or NATIVE_TARGET_HOST_LIST_DEFAULT_ALIVE_TEST
-        port_list = target.find("port_list")
-        port_list_id = (port_list.get("id") or "").strip() if port_list is not None else ""
-        if not UUID_VALUE_RE.fullmatch(port_list_id):
-            raise ValueError(f"target row {row_number} must include a port_list id UUID")
-        port_range = native_target_xml_text(target, "port_range")
-        if port_range:
-            raise ValueError(f"target row {row_number} port_range is not native-safe; use a port_list id")
-
-        credentials: dict[str, dict[str, Any]] = {}
-        for xml_name, native_name in NATIVE_TARGET_XML_CREDENTIAL_FIELDS.items():
-            credential = target.find(xml_name)
-            if credential is None:
-                continue
-            credential_id = (credential.get("id") or "").strip()
-            if not credential_id:
-                continue
-            if not UUID_VALUE_RE.fullmatch(credential_id):
-                raise ValueError(f"target row {row_number} {xml_name} id must be a UUID")
-            link: dict[str, Any] = {"id": credential_id}
-            port = credential.find("port")
-            port_text = port.text.strip() if port is not None and port.text is not None else ""
-            if port_text:
-                if native_name != "ssh":
-                    raise ValueError(f"target row {row_number} {xml_name} ports are not native-safe yet")
-                try:
-                    port_value = int(port_text)
-                except ValueError as exc:
-                    raise ValueError(f"target row {row_number} {xml_name} port must be an integer") from exc
-                if not 1 <= port_value <= 65535:
-                    raise ValueError(f"target row {row_number} {xml_name} port must be within 1..65535")
-                link["port"] = port_value
-            credentials[native_name] = link
-
-        rows.append(
-            NativeTargetXmlRow(
-                row_number=row_number,
-                name=name,
-                hosts=hosts,
-                exclude_hosts=exclude_hosts,
-                comment=comment,
-                alive_tests=(alive_test,),
-                reverse_lookup_only=native_target_xml_flag(target, "reverse_lookup_only"),
-                reverse_lookup_unify=native_target_xml_flag(target, "reverse_lookup_unify"),
-                port_list_id=port_list_id,
-                credentials=credentials,
-            )
-        )
-    if not rows:
-        raise ValueError("target XML file does not contain any <target> rows")
-    return rows
-
-
 def load_native_target_csv_rows(csv_file: Path) -> list[NativeTargetCsvRow]:
     rows: list[NativeTargetCsvRow] = []
     try:
@@ -22464,23 +22336,6 @@ def native_target_csv_target_body(
     body["alive_tests"] = [row.alive_test]
     if credentials:
         body["credentials"] = credentials
-    return body
-
-
-def native_target_xml_target_body(row: NativeTargetXmlRow) -> dict[str, Any]:
-    body: dict[str, Any] = {
-        "name": row.name,
-        "comment": row.comment,
-        "port_list_id": row.port_list_id,
-        "hosts": list(row.hosts),
-        "exclude_hosts": list(row.exclude_hosts),
-        "alive_tests": list(row.alive_tests),
-        "allow_simultaneous_ips": False,
-        "reverse_lookup_only": row.reverse_lookup_only,
-        "reverse_lookup_unify": row.reverse_lookup_unify,
-    }
-    if row.credentials:
-        body["credentials"] = row.credentials
     return body
 
 
@@ -24255,96 +24110,6 @@ def command_native_targets_from_csv(
     result["details"] = details
     return native_target_csv_status_only_result(result) if status_only else result
 
-
-def command_native_targets_from_xml(
-    repo_root: Path,
-    xml_file: Path,
-    *,
-    allow_write_control: bool = False,
-    dry_run: bool = False,
-    status_only: bool = False,
-) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    details: dict[str, Any] = {
-        "xml_file": str(xml_file),
-        "dry_run": dry_run,
-        "created_target_count": 0,
-        "created_target_ids": [],
-    }
-    try:
-        rows = load_native_target_xml_rows(xml_file)
-        details["row_count"] = len(rows)
-        findings.append(finding("pass", "native-targets-from-xml.rows", f"Loaded {len(rows)} target XML row(s)."))
-    except ValueError as exc:
-        findings.append(finding("fail", "native-targets-from-xml.rows", str(exc), details={"xml_file": str(xml_file)}))
-        result = make_result("native-targets-from-xml", repo_root, "Native XML target import rejected before runtime access.", findings)
-        result["details"] = details
-        return native_target_xml_status_only_result(result) if status_only else result
-
-    planned_targets = [native_target_xml_target_body(row) for row in rows]
-    if dry_run:
-        details["planned_targets"] = planned_targets
-        findings.append(finding("pass", "native-targets-from-xml.dry-run", "Dry run planned native target writes without runtime access."))
-        result = make_result("native-targets-from-xml", repo_root, "Native XML target import dry run completed.", findings)
-        result["details"] = details
-        return native_target_xml_status_only_result(result) if status_only else result
-
-    if not allow_write_control:
-        findings.append(finding("fail", "native-targets-from-xml.write-control-intent", "Creating targets requires --allow-write-control."))
-        result = make_result("native-targets-from-xml", repo_root, "Native XML target import rejected before runtime access.", findings)
-        result["details"] = details
-        return native_target_xml_status_only_result(result) if status_only else result
-
-    env = native_api_direct_runtime_env(repo_root)
-    findings.append(native_api_direct_config_shape_finding(env, check="native-targets-from-xml.direct-config-shape"))
-    if aggregate_status(findings) == "fail":
-        result = make_result("native-targets-from-xml", repo_root, "Direct native API XML target import rejected before runtime access.", findings)
-        result["details"] = details
-        return native_target_xml_status_only_result(result) if status_only else result
-    token = native_api_direct_bearer_token(repo_root, env)
-    if not direct_api_bearer_token_is_acceptable(token):
-        findings.append(
-            finding(
-                "fail",
-                "native-targets-from-xml.direct-token-strength",
-                "Direct native API bearer token is too short or contains unsafe characters.",
-                details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH},
-            )
-        )
-        result = make_result("native-targets-from-xml", repo_root, "Direct native API XML target import rejected before runtime access.", findings)
-        result["details"] = details
-        return native_target_xml_status_only_result(result) if status_only else result
-
-    content_type = (("Content-Type", "application/json"),)
-    created_target_ids: list[str] = []
-    create_failures: list[dict[str, Any]] = []
-    for row in rows:
-        target_body = json.dumps(native_target_xml_target_body(row), separators=(",", ":"))
-        target_create = direct_native_api_curl(repo_root, "/api/v1/targets", token=token, env=env, method="POST", body=target_body, extra_headers=content_type)
-        target_create_json, target_create_status = parse_json_output_with_http_status(target_create)
-        target_id = target_create_json.get("id") if isinstance(target_create_json, dict) and isinstance(target_create_json.get("id"), str) else None
-        if target_create.returncode == 0 and target_create_status == 201 and target_id:
-            created_target_ids.append(target_id)
-            continue
-        create_failures.append({"row": row.row_number, "name": row.name, "http_status": target_create_status, **summarize_native_api_response(target_create_json)})
-        break
-    details["created_target_ids"] = created_target_ids
-    details["created_target_count"] = len(created_target_ids)
-    if create_failures:
-        details["create_failures"] = create_failures
-        findings.append(finding("fail", "native-targets-from-xml.target-create", "One or more native target create requests failed.", details={"failure_count": len(create_failures), "failures": create_failures[:10]}))
-    else:
-        findings.append(finding("pass", "native-targets-from-xml.target-create", f"Created {len(created_target_ids)} target(s) through the native API."))
-
-    result_status = aggregate_status(findings)
-    result = make_result(
-        "native-targets-from-xml",
-        repo_root,
-        "Native XML target import completed." if result_status != "fail" else "Native XML target import failed.",
-        findings,
-    )
-    result["details"] = details
-    return native_target_xml_status_only_result(result) if status_only else result
 
 def parse_json_output(result: subprocess.CompletedProcess[str]) -> dict[str, Any] | None:
     try:
@@ -26836,11 +26601,6 @@ def build_parser() -> argparse.ArgumentParser:
     native_targets_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional target creation")
     native_targets_csv.add_argument("--dry-run", action="store_true", help="plan target request bodies without contacting the runtime")
     native_targets_csv.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
-    native_targets_xml = subparsers.add_parser("native-targets-from-xml", parents=[common], help="create native targets from the inherited target XML shape through the direct native API")
-    native_targets_xml.add_argument("--xml-file", required=True, type=Path, help="XML file with inherited <target> rows")
-    native_targets_xml.add_argument("--allow-write-control", action="store_true", help="confirm intentional target creation")
-    native_targets_xml.add_argument("--dry-run", action="store_true", help="plan target request bodies without contacting the runtime")
-    native_targets_xml.add_argument("--status-only", action="store_true", help="emit compact response summary and only non-pass findings")
     native_tags_csv = subparsers.add_parser("native-tags-from-csv", parents=[common], help="create native tags from the native-safe subset of the inherited tag CSV shape through the direct native API")
     native_tags_csv.add_argument("--csv-file", required=True, type=Path, help="CSV file with tag type, value, description, and up to ten resource-name columns")
     native_tags_csv.add_argument("--allow-write-control", action="store_true", help="confirm intentional tag creation")
@@ -27056,14 +26816,6 @@ def main(argv: list[str] | None = None) -> int:
             repo_root,
             args.csv_file,
             port_list_id=args.port_list_id,
-            allow_write_control=args.allow_write_control,
-            dry_run=args.dry_run,
-            status_only=args.status_only,
-        )
-    elif args.command == "native-targets-from-xml":
-        result = command_native_targets_from_xml(
-            repo_root,
-            args.xml_file,
             allow_write_control=args.allow_write_control,
             dry_run=args.dry_run,
             status_only=args.status_only,

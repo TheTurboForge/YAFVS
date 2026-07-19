@@ -716,7 +716,7 @@ fn finish_status(mut result: ResultEnvelope, status_only: bool) -> ResultEnvelop
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::target_import::ApiReply;
+    use crate::commands::resource_import::ApiReply;
     use crate::process::ProcessOutput;
     use std::collections::VecDeque;
     use std::fs;

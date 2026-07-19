@@ -29,6 +29,7 @@ mod quality_schedule;
 mod redis;
 mod report_selection;
 mod repository;
+mod resource_import;
 mod runtime;
 mod runtime_certbund_report;
 mod runtime_data_state;
@@ -45,7 +46,6 @@ mod runtime_webui;
 mod rust_migration;
 mod secret;
 mod security_policy;
-mod target_import;
 mod task_batch_control;
 mod task_control;
 mod task_target;
@@ -88,6 +88,10 @@ pub use redis::command_runtime_redis_state;
 pub use repository::{
     command_inventory, command_repository_unavailable, command_status, find_repo_root,
 };
+pub use resource_import::{
+    command_native_targets_from_csv, command_native_targets_from_host_list,
+    command_native_targets_from_xml,
+};
 pub use runtime::{command_down, command_logs, command_runtime_app_down, command_runtime_plan};
 pub use runtime_certbund_report::command_runtime_certbund_report;
 pub use runtime_data_state::command_runtime_data_state;
@@ -112,10 +116,6 @@ pub use runtime_scope_report::{
 pub use runtime_webui::command_runtime_webui_smoke;
 pub use rust_migration::command_rust_migration_state;
 pub use security_policy::command_security_policy_check;
-pub use target_import::{
-    command_native_targets_from_csv, command_native_targets_from_host_list,
-    command_native_targets_from_xml,
-};
 pub use task_batch_control::{
     command_native_start_tasks_from_csv, command_native_stop_all_tasks,
     command_native_stop_tasks_from_csv,

@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Bounded target import commands sharing one guarded native-API boundary.
+//! Bounded resource-import commands sharing one guarded native-API boundary.
 //!
 //! Format-specific importers live beside this module as their contracts grow.
 
-mod csv;
+mod target_csv;
 
-pub use csv::command_native_targets_from_csv;
+pub use target_csv::command_native_targets_from_csv;
 
 use super::common::{iso_system_time, metadata};
 use super::direct_api::validate_operator_uuid;

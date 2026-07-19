@@ -5,6 +5,17 @@ use clap::{Parser, Subcommand};
 use std::ffi::OsString;
 use std::path::PathBuf;
 
+fn validate_page_size(value: &str) -> Result<usize, String> {
+    let page_size = value
+        .parse::<usize>()
+        .map_err(|_| "page size must be an integer".to_string())?;
+    if (1..=500).contains(&page_size) {
+        Ok(page_size)
+    } else {
+        Err("page size must be between 1 and 500".to_string())
+    }
+}
+
 #[derive(Debug, Parser, PartialEq, Eq)]
 #[command(name = "yafvsctl", disable_help_subcommand = true)]
 pub struct Cli {
@@ -80,6 +91,15 @@ pub enum CliCommand {
         hosts_file: Option<PathBuf>,
         #[arg(long)]
         exclude_host: Vec<String>,
+        #[arg(long)]
+        allow_write_control: bool,
+    },
+    /// Verify configured scanners through the guarded direct native API.
+    NativeVerifyScanners {
+        #[arg(long)]
+        scanner_id: Vec<String>,
+        #[arg(long, default_value_t = 500, value_parser = validate_page_size)]
+        page_size: usize,
         #[arg(long)]
         allow_write_control: bool,
     },
@@ -493,6 +513,7 @@ impl CliCommand {
             Self::NativeStopTasksFromCsv { .. } => "native-stop-tasks-from-csv",
             Self::NativeStopAllTasks { .. } => "native-stop-all-tasks",
             Self::NativeApiRequest { .. } => "native-api-request",
+            Self::NativeVerifyScanners { .. } => "native-verify-scanners",
             Self::Status => "status",
             Self::Inventory { .. } => "inventory",
             Self::BrandingState => "branding-state",
@@ -564,6 +585,34 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_native_verify_scanners_options() {
+        let cli = parse_cli([
+            "native-verify-scanners",
+            "--scanner-id",
+            "11111111-1111-4111-8111-111111111111",
+            "--scanner-id",
+            "22222222-2222-4222-8222-222222222222",
+            "--allow-write-control",
+            "--status-only",
+        ])
+        .unwrap();
+        assert!(cli.status_only);
+        assert_eq!(
+            cli.command,
+            CliCommand::NativeVerifyScanners {
+                scanner_id: vec![
+                    "11111111-1111-4111-8111-111111111111".into(),
+                    "22222222-2222-4222-8222-222222222222".into()
+                ],
+                page_size: 500,
+                allow_write_control: true
+            }
+        );
+        assert!(parse_cli(["native-verify-scanners", "--page-size", "0"]).is_err());
+        assert!(parse_cli(["native-verify-scanners", "--page-size", "501"]).is_err());
+    }
     use clap::CommandFactory;
     use std::fs;
     use std::path::Path;

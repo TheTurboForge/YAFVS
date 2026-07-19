@@ -49,6 +49,7 @@ native-export-report-bundle
 native-export-report-csv
 native-export-report-pdf
 native-update-task-target
+native-verify-scanners
 native-targets-from-host-list
 native-credentials-from-csv
 native-alerts-from-csv

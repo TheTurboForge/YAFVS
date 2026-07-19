@@ -1997,6 +1997,7 @@ mod tests {
             "runtime-smoke",
             "gvmd-smoke",
             "up",
+            "runtime-init",
             "runtime-report-summary",
             "runtime-report-export",
             "runtime-report-metrics",

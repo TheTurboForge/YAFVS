@@ -1428,7 +1428,6 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_runtime_just_wrappers_forward_args(self):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         wrappers = [
-            "runtime-init",
             "runtime-manager-init",
             "runtime-scanner-redis-init",
             "runtime-scanner-register",
@@ -2914,6 +2913,19 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn('rust_result_envelope(repo_root, "up", ["up"])', source)
         self.assertIn("up *args:", justfile)
         self.assertIn("tools/yafvsctl-rs/Cargo.toml -- up", justfile)
+
+    def test_runtime_init_is_rust_owned_with_strict_python_bridge(self):
+        source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        self.assertNotIn('subparsers.add_parser("runtime-init"', source)
+        self.assertNotIn('args.command == "runtime-init"', source)
+        self.assertIn("def command_runtime_init", source)
+        self.assertIn(
+            '"runtime-init", ["runtime-init"]',
+            " ".join(source.split()),
+        )
+        self.assertIn("runtime-init *args:", justfile)
+        self.assertIn("tools/yafvsctl-rs/Cargo.toml -- runtime-init", justfile)
 
     def test_audit_commands_are_rust_only(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
@@ -11533,63 +11545,7 @@ class YAFVSCtlTests(unittest.TestCase):
         ):
             self.assertIn(rule, acl)
 
-    def test_postgres_collation_databases_include_runtime_and_defaults(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            self.assertEqual(yafvsctl.postgres_collation_databases(root), ("yafvs", "postgres", "template1"))
-
-    def test_postgres_collation_checks_all_development_databases(self):
-        calls = []
-        original_psql = yafvsctl.psql
-
-        def fake_psql(_root, sql, database=None):
-            calls.append((sql, database))
-            return yafvsctl.subprocess.CompletedProcess([], 0, "2.41|2.41\n", "")
-
-        try:
-            yafvsctl.psql = fake_psql
-            with tempfile.TemporaryDirectory() as tmp:
-                root = Path(tmp) / "TurboVAS"
-                root.mkdir()
-                findings = yafvsctl.ensure_postgres_collation(root, refresh_empty=False)
-        finally:
-            yafvsctl.psql = original_psql
-
-        self.assertEqual([finding["details"]["database"] for finding in findings], ["yafvs", "postgres", "template1"])
-        self.assertTrue(all(finding["status"] == "pass" for finding in findings))
-        self.assertEqual([call[1] for call in calls], ["yafvs", "postgres", "template1"])
-
-    def test_postgres_collation_refreshes_empty_database_from_alternate_connection(self):
-        calls = []
-        original_psql = yafvsctl.psql
-
-        def fake_psql(_root, sql, database=None):
-            calls.append((sql, database))
-            if "datcollversion" in sql:
-                return yafvsctl.subprocess.CompletedProcess([], 0, "2.36|2.41\n", "")
-            if "count(*) FROM pg_class" in sql:
-                return yafvsctl.subprocess.CompletedProcess([], 0, "0\n", "")
-            if "ALTER DATABASE" in sql:
-                return yafvsctl.subprocess.CompletedProcess([], 0, "ALTER DATABASE\n", "")
-            return yafvsctl.subprocess.CompletedProcess([], 1, "unexpected\n", "")
-
-        try:
-            yafvsctl.psql = fake_psql
-            with tempfile.TemporaryDirectory() as tmp:
-                root = Path(tmp) / "TurboVAS"
-                root.mkdir()
-                finding = yafvsctl.ensure_postgres_database_collation(root, "template1", refresh_empty=True)
-        finally:
-            yafvsctl.psql = original_psql
-
-        self.assertEqual(finding["status"], "pass")
-        self.assertEqual(finding["details"]["database"], "template1")
-        self.assertEqual(calls[-1][1], "yafvs")
-        self.assertIn('ALTER DATABASE "template1" REFRESH COLLATION VERSION', calls[-1][0])
-
     def test_sql_escaping_helpers(self):
-        self.assertEqual(yafvsctl.sql_identifier('a"b'), '"a""b"')
         self.assertEqual(yafvsctl.sql_literal("a'b"), "'a''b'")
 
     def test_runtime_native_api_rebuild_uses_no_deps_restart(self):

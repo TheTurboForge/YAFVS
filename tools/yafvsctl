@@ -238,9 +238,6 @@ POSTGRES_DEFAULTS = {
     "password": "yafvs-dev",
     "database": "yafvs",
 }
-POSTGRES_COLLATION_BASE_DATABASES = ("postgres", "template1")
-PG_GVM_CONTROL = "pg-gvm.control"
-PG_GVM_LIBRARY = "libpg-gvm.so"
 PG_GVM_EXTENSION = "pg-gvm"
 DEV_ADMIN_USER = "admin"
 DEV_ADMIN_PASSWORD = "admin"
@@ -6180,16 +6177,8 @@ def postgres_database(repo_root: Path) -> str:
     return runtime_env(repo_root).get("POSTGRES_DB", POSTGRES_DEFAULTS["database"])
 
 
-def sql_identifier(identifier: str) -> str:
-    return '"' + identifier.replace('"', '""') + '"'
-
-
 def sql_literal(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
-
-
-def postgres_ready(repo_root: Path) -> subprocess.CompletedProcess[str]:
-    return exec_in_service(repo_root, "postgres", ["pg_isready", "-U", postgres_user(repo_root), "-d", postgres_database(repo_root)])
 
 
 def psql(repo_root: Path, sql: str, database: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -6220,103 +6209,6 @@ def psql_value(result: subprocess.CompletedProcess[str]) -> str:
         if clean and not clean.startswith(ignored_prefixes):
             return clean
     return ""
-
-
-
-def postgres_collation_databases(repo_root: Path) -> tuple[str, ...]:
-    return tuple(dict.fromkeys((postgres_database(repo_root), *POSTGRES_COLLATION_BASE_DATABASES)))
-
-
-def postgres_collation_connection_database(repo_root: Path, target_database: str) -> str:
-    for candidate in postgres_collation_databases(repo_root):
-        if candidate != target_database:
-            return candidate
-    return target_database
-
-
-def postgres_user_relation_count_query() -> str:
-    return (
-        "SELECT count(*) FROM pg_class "
-        "WHERE relkind IN ('r','i','S','v','m') "
-        "AND relnamespace NOT IN ("
-        "SELECT oid FROM pg_namespace "
-        "WHERE nspname LIKE 'pg_%' OR nspname = 'information_schema'"
-        ");"
-    )
-
-
-def ensure_postgres_database_collation(repo_root: Path, database: str, refresh_empty: bool = True) -> dict[str, Any]:
-    result = psql(repo_root, "SELECT datcollversion || '|' || pg_database_collation_actual_version(oid) FROM pg_database WHERE datname = current_database();", database=database)
-    if result.returncode != 0:
-        return finding("fail", "postgres.collation", f"{database}: collation version check exit code {result.returncode}.", details={"database": database, "output_tail": result.stdout.splitlines()[-40:]})
-    value = psql_value(result)
-    if "|" not in value:
-        return finding("warn", "postgres.collation", f"{database}: could not parse database collation version check.", details={"database": database, "output_tail": result.stdout.splitlines()[-40:]})
-    recorded, actual = value.split("|", 1)
-    if recorded == actual:
-        return finding("pass", "postgres.collation", f"{database}: database collation version is current: {actual}.", details={"database": database, "recorded": recorded, "actual": actual})
-
-    count_result = psql(repo_root, postgres_user_relation_count_query(), database=database)
-    if count_result.returncode != 0:
-        return finding("fail", "postgres.collation", f"{database}: collation mismatch {recorded} != {actual}; relation-count check failed.", details={"database": database, "recorded": recorded, "actual": actual, "output_tail": count_result.stdout.splitlines()[-40:]})
-    relation_count = psql_value(count_result)
-    if relation_count == "0" and refresh_empty:
-        refresh = psql(
-            repo_root,
-            f"ALTER DATABASE {sql_identifier(database)} REFRESH COLLATION VERSION;",
-            database=postgres_collation_connection_database(repo_root, database),
-        )
-        return finding("pass" if refresh.returncode == 0 else "fail", "postgres.collation", f"{database}: refreshed empty development database collation version from {recorded} to {actual}.", details={"database": database, "recorded": recorded, "actual": actual, "relation_count": relation_count, "output_tail": refresh.stdout.splitlines()[-40:]})
-    if relation_count == "0":
-        return finding("warn", "postgres.collation", f"{database}: database collation version mismatch {recorded} != {actual}; runtime-init can refresh this empty development database.", details={"database": database, "recorded": recorded, "actual": actual, "relation_count": relation_count})
-    return finding("warn", "postgres.collation", f"{database}: database collation version mismatch {recorded} != {actual}; manual review required before refreshing a database with objects.", details={"database": database, "recorded": recorded, "actual": actual, "relation_count": relation_count})
-
-
-def ensure_postgres_collation(repo_root: Path, refresh_empty: bool = True) -> list[dict[str, Any]]:
-    return [
-        ensure_postgres_database_collation(repo_root, database, refresh_empty=refresh_empty)
-        for database in postgres_collation_databases(repo_root)
-    ]
-
-def pg_gvm_artifacts(repo_root: Path) -> tuple[list[dict[str, Any]], dict[str, Path]]:
-    prefix = repo_root / "build" / "prefix"
-    extension_dir = prefix / "share" / "postgresql" / "extension"
-    library = prefix / "lib" / "postgresql" / PG_GVM_LIBRARY
-    sql_files = sorted(extension_dir.glob("pg-gvm--*.sql"))
-    artifacts = {
-        "extension_dir": extension_dir,
-        "control": extension_dir / PG_GVM_CONTROL,
-        "library": library,
-    }
-    findings = [
-        finding("pass" if artifacts["control"].is_file() else "fail", "pg-gvm.control", f"{PG_GVM_CONTROL} is available in build/prefix.", str(artifacts["control"].relative_to(repo_root)) if artifacts["control"].exists() else str(artifacts["control"])),
-        finding("pass" if library.is_file() else "fail", "pg-gvm.library", f"{PG_GVM_LIBRARY} is available in build/prefix.", str(library.relative_to(repo_root)) if library.exists() else str(library)),
-        finding("pass" if sql_files else "fail", "pg-gvm.sql", "pg-gvm extension SQL files are available in build/prefix.", details={"files": [str(path.relative_to(repo_root)) for path in sql_files]}),
-    ]
-    return findings, artifacts
-
-
-def copy_pg_gvm_extension(repo_root: Path) -> list[dict[str, Any]]:
-    artifact_findings, artifacts = pg_gvm_artifacts(repo_root)
-    if aggregate_status(artifact_findings) == "fail":
-        return artifact_findings
-    extension_dir = artifacts["extension_dir"]
-    library = artifacts["library"]
-    copy_sql = run_command(
-        compose_command(repo_root, "cp", str(extension_dir) + "/.", f"postgres:/usr/share/postgresql/16/extension/"),
-        repo_root,
-        env=runtime_env(repo_root),
-    )
-    copy_library = run_command(
-        compose_command(repo_root, "cp", str(library), f"postgres:/usr/lib/postgresql/16/lib/{PG_GVM_LIBRARY}"),
-        repo_root,
-        env=runtime_env(repo_root),
-    )
-    return [
-        *artifact_findings,
-        finding("pass" if copy_sql.returncode == 0 else "fail", "pg-gvm.copy.sql", f"Copy pg-gvm SQL/control files exit code {copy_sql.returncode}.", details={"output_tail": copy_sql.stdout.splitlines()[-40:]}),
-        finding("pass" if copy_library.returncode == 0 else "fail", "pg-gvm.copy.library", f"Copy pg-gvm shared library exit code {copy_library.returncode}.", details={"output_tail": copy_library.stdout.splitlines()[-40:]}),
-    ]
 
 
 def pg_gvm_extension_status(repo_root: Path) -> dict[str, Any]:
@@ -13053,46 +12945,7 @@ def rendered_app_execution_mount_finding(repo_root: Path, env: dict[str, str]) -
 
 
 def command_runtime_init(repo_root: Path) -> dict[str, Any]:
-    findings = ensure_runtime_dirs(repo_root)
-    config = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
-    findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": config.stdout.splitlines()[-40:]}))
-    findings.extend(pg_gvm_artifacts(repo_root)[0])
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-init", repo_root, "Runtime initialization stopped before Postgres changes.", findings)
-
-    result = run_command(compose_command(repo_root, "up", "-d", "--build", "postgres"), repo_root, env=runtime_env(repo_root))
-    findings.append(finding("pass" if result.returncode == 0 else "fail", "postgres.up", f"docker compose up postgres exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-80:]}))
-    if result.returncode != 0:
-        return make_result("runtime-init", repo_root, "Runtime initialization stopped at Postgres startup.", findings)
-
-    ready_result: subprocess.CompletedProcess[str] | None = None
-    for _ in range(30):
-        ready_result = postgres_ready(repo_root)
-        if ready_result.returncode == 0:
-            break
-        import time
-
-        time.sleep(2)
-    findings.append(finding("pass" if ready_result and ready_result.returncode == 0 else "fail", "postgres.ready", f"pg_isready exit code {ready_result.returncode if ready_result else 'unavailable'}.", details={"output_tail": ready_result.stdout.splitlines()[-20:] if ready_result else []}))
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-init", repo_root, "Runtime initialization stopped before database setup.", findings)
-
-    findings.extend(ensure_postgres_collation(repo_root))
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-init", repo_root, "Runtime initialization stopped at Postgres collation check.", findings)
-
-    findings.extend(copy_pg_gvm_extension(repo_root))
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-init", repo_root, "Runtime initialization stopped while installing pg-gvm files.", findings)
-
-    create_dba = psql(repo_root, "DO $$ BEGIN CREATE ROLE dba WITH SUPERUSER NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$;")
-    findings.append(finding("pass" if create_dba.returncode == 0 else "fail", "postgres.role.dba", f"Create/verify dba role exit code {create_dba.returncode}.", details={"output_tail": create_dba.stdout.splitlines()[-40:]}))
-    grant_dba = psql(repo_root, f"GRANT dba TO {sql_identifier(postgres_user(repo_root))};")
-    findings.append(finding("pass" if grant_dba.returncode == 0 else "fail", "postgres.role.grant", f"Grant dba to {postgres_user(repo_root)} exit code {grant_dba.returncode}.", details={"output_tail": grant_dba.stdout.splitlines()[-40:]}))
-    create_extension = psql(repo_root, f'CREATE EXTENSION IF NOT EXISTS "{PG_GVM_EXTENSION}";')
-    findings.append(finding("pass" if create_extension.returncode == 0 else "fail", "postgres.extension.pg-gvm", f"Create/verify pg-gvm extension exit code {create_extension.returncode}.", details={"output_tail": create_extension.stdout.splitlines()[-80:]}))
-    findings.append(pg_gvm_extension_status(repo_root))
-    return make_result("runtime-init", repo_root, "Runtime database initialization completed.", findings, [str(runtime_dir(repo_root)), "build/prefix"])
+    return rust_result_envelope(repo_root, "runtime-init", ["runtime-init"])
 
 
 def _command_runtime_scanner_redis_init_unlocked(
@@ -21733,7 +21586,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("build-ui", parents=[common], help="build the web UI")
     subparsers.add_parser("build-python", parents=[common], help="build/import-check Python components")
     subparsers.add_parser("build-baseline", parents=[common], help="build the inherited stack baseline")
-    subparsers.add_parser("runtime-init", parents=[common], help="initialize persistent runtime database prerequisites")
     subparsers.add_parser("runtime-manager-init", parents=[common], help="initialize persistent gvmd database/user prerequisites")
     subparsers.add_parser("runtime-scanner-redis-init", parents=[common], help="initialize dedicated OpenVAS scanner Redis runtime")
     subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
@@ -21791,8 +21643,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_build_python_chain(repo_root)
     elif args.command == "build-baseline":
         result = command_build_baseline(repo_root)
-    elif args.command == "runtime-init":
-        result = command_runtime_init(repo_root)
     elif args.command == "runtime-manager-init":
         result = command_runtime_manager_init(repo_root)
     elif args.command == "runtime-scanner-redis-init":

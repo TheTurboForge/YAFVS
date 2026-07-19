@@ -1224,6 +1224,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["native-targets-from-xml", "--xml-file", "/definitely-missing-yafvs-targets.xml", "--json"], 1, "fail"),
                 (["native-schedules-from-csv", "--csv-file", "/definitely-missing-yafvs-schedules.csv", "--json"], 1, "fail"),
                 (["native-schedules-from-xml", "--xml-file", "/definitely-missing-yafvs-schedules.xml", "--json"], 1, "fail"),
+                (["native-tasks-from-csv", "--csv-file", "/definitely-missing-yafvs-tasks-create.csv", "--json"], 1, "fail"),
                 (["down", "--json"], 1, "fail"),
                 (["runtime-app-down", "--json"], 1, "fail"),
                 (["quality-gate-state", "--json"], (0, 1), ("pass", "warn", "fail")),
@@ -2364,7 +2365,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-tasks-from-csv", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2381,6 +2382,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "native-start-tasks-from-csv",
             "native-stop-tasks-from-csv",
             "native-stop-all-tasks",
+            "native-tasks-from-csv",
         ):
             self.assertNotIn(f'add_parser("{command}"', source)
             self.assertNotIn(f'elif args.command == "{command}":', source)
@@ -2472,7 +2474,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "native-api-request", "native-start-task", "native-stop-task", "native-update-task-target"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "native-api-request", "native-start-task", "native-stop-task", "native-update-task-target", "native-tasks-from-csv"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotRegex(
@@ -7831,233 +7833,6 @@ class YAFVSCtlTests(unittest.TestCase):
             source.index("DELETE FROM targets_trash WHERE"),
         )
 
-    def test_native_task_create_csv_parser_accepts_optional_columns_and_validates_shape(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "tasks.csv"
-            csv_file.write_text(
-                ' Minimal , Target , Scanner , Config \n'
-                '"Scheduled, quoted",Target,Scanner,Config,Daily,reverse,Mail,Mail\n',
-                encoding="utf-8",
-            )
-            rows = yafvsctl.load_native_task_create_csv_rows(csv_file)
-
-            self.assertEqual(len(rows), 2)
-            self.assertEqual(rows[0].name, "Minimal")
-            self.assertEqual(rows[0].schedule_name, "")
-            self.assertEqual(rows[0].hosts_ordering, "RANDOM")
-            self.assertEqual(rows[1].name, "Scheduled, quoted")
-            self.assertEqual(rows[1].hosts_ordering, "REVERSE")
-            self.assertEqual(rows[1].alert_names, ("Mail", "Mail"))
-
-            csv_file.write_text("too,few,columns\n", encoding="utf-8")
-            with self.assertRaises(ValueError):
-                yafvsctl.load_native_task_create_csv_rows(csv_file)
-
-    def test_native_tasks_from_csv_requires_write_control_before_runtime(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "tasks.csv"
-            csv_file.write_text("Task,Target,Scanner,Config\n", encoding="utf-8")
-            with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                result = yafvsctl.command_native_tasks_from_csv(root, csv_file)
-                curl.assert_not_called()
-
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(
-            next(item for item in result["findings"] if item["check"].endswith("write-control-intent"))["status"],
-            "fail",
-        )
-
-    def test_native_tasks_from_csv_snapshots_resolves_optional_links_and_creates(self):
-        ids = {
-            "task": "11111111-1111-4111-8111-111111111111",
-            "target": "22222222-2222-4222-8222-222222222222",
-            "scanner": "33333333-3333-4333-8333-333333333333",
-            "config": "44444444-4444-4444-8444-444444444444",
-            "schedule": "55555555-5555-4555-8555-555555555555",
-            "alert": "66666666-6666-4666-8666-666666666666",
-        }
-        collection_items = {
-            "tasks": [{"id": "77777777-7777-4777-8777-777777777777", "name": "Existing"}],
-            "targets": [{"id": ids["target"], "name": "Target"}],
-            "scanners": [{"id": ids["scanner"], "name": "Scanner"}],
-            "scan-configs": [{"id": ids["config"], "name": "Config"}],
-            "schedules": [{"id": ids["schedule"], "name": "Daily"}],
-            "alerts": [{"id": ids["alert"], "name": "Mail"}],
-        }
-        captured: list[tuple[str, str, str | None]] = []
-
-        def fake_direct(_root, path, **kwargs):
-            method = kwargs.get("method", "GET")
-            captured.append((method, path, kwargs.get("body")))
-            if method == "GET":
-                collection = path.split("/api/v1/", 1)[1].split("?", 1)[0]
-                items = collection_items[collection]
-                payload = {
-                    "items": items,
-                    "page": {"page": 1, "page_size": 500, "total": len(items)},
-                }
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
-            body = json.loads(kwargs["body"])
-            return subprocess.CompletedProcess(
-                ["curl"],
-                0,
-                json.dumps({"id": ids["task"], "name": body["name"]}) + "\n201",
-                "",
-            )
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "tasks.csv"
-            csv_file.write_text(
-                "New,Target,Scanner,Config,Daily,reverse,Mail,Mail\n"
-                "Existing,Target,Scanner,Config\n",
-                encoding="utf-8",
-            )
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="a" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
-                result = yafvsctl.command_native_tasks_from_csv(
-                    root,
-                    csv_file,
-                    allow_write_control=True,
-                )
-
-        self.assertEqual(result["status"], "warn")
-        self.assertEqual(result["details"]["row_count"], 2)
-        self.assertEqual(result["details"]["planned_count"], 1)
-        self.assertEqual(result["details"]["skipped_count"], 1)
-        self.assertEqual(result["details"]["host_ordering_count"], 1)
-        self.assertEqual(result["details"]["created_count"], 1)
-        self.assertEqual(result["details"]["failure_count"], 0)
-        post_bodies = [json.loads(body) for method, _path, body in captured if method == "POST"]
-        self.assertEqual(
-            post_bodies,
-            [
-                {
-                    "name": "New",
-                    "target_id": ids["target"],
-                    "scanner_id": ids["scanner"],
-                    "config_id": ids["config"],
-                    "schedule_id": ids["schedule"],
-                    "alert_ids": [ids["alert"]],
-                    "hosts_ordering": "reverse",
-                }
-            ],
-        )
-        self.assertNotIn("a" * 64, json.dumps(result))
-
-    def test_native_tasks_from_csv_preflight_failure_attempts_no_create(self):
-        ids = {
-            "target": "11111111-1111-4111-8111-111111111111",
-            "scanner": "22222222-2222-4222-8222-222222222222",
-            "config": "33333333-3333-4333-8333-333333333333",
-        }
-        collection_items = {
-            "tasks": [],
-            "targets": [{"id": ids["target"], "name": "Target"}],
-            "scanners": [{"id": ids["scanner"], "name": "Scanner"}],
-            "scan-configs": [{"id": ids["config"], "name": "Config"}],
-        }
-        captured: list[str] = []
-
-        def fake_direct(_root, path, **kwargs):
-            captured.append(kwargs.get("method", "GET"))
-            self.assertEqual(kwargs.get("method", "GET"), "GET")
-            collection = path.split("/api/v1/", 1)[1].split("?", 1)[0]
-            items = collection_items[collection]
-            return subprocess.CompletedProcess(
-                ["curl"],
-                0,
-                json.dumps({"items": items, "page": {"page": 1, "page_size": 500, "total": len(items)}}) + "\n200",
-                "",
-            )
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "tasks.csv"
-            csv_file.write_text(
-                "Valid,Target,Scanner,Config\n"
-                "Invalid,Missing,Scanner,Config\n"
-                "Valid,Target,Scanner,Config\n",
-                encoding="utf-8",
-            )
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="a" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
-                result = yafvsctl.command_native_tasks_from_csv(
-                    root,
-                    csv_file,
-                    allow_write_control=True,
-                )
-
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(captured, ["GET", "GET", "GET", "GET"])
-        self.assertEqual(result["details"]["planned_count"], 1)
-        self.assertEqual(result["details"]["created_count"], 0)
-        self.assertEqual(result["details"]["failure_count"], 2)
-
-    def test_native_tasks_from_csv_continues_after_runtime_create_failure(self):
-        ids = {
-            "target": "11111111-1111-4111-8111-111111111111",
-            "scanner": "22222222-2222-4222-8222-222222222222",
-            "config": "33333333-3333-4333-8333-333333333333",
-            "created": "44444444-4444-4444-8444-444444444444",
-        }
-        collection_items = {
-            "tasks": [],
-            "targets": [{"id": ids["target"], "name": "Target"}],
-            "scanners": [{"id": ids["scanner"], "name": "Scanner"}],
-            "scan-configs": [{"id": ids["config"], "name": "Config"}],
-        }
-        post_count = 0
-
-        def fake_direct(_root, path, **kwargs):
-            nonlocal post_count
-            if kwargs.get("method", "GET") == "GET":
-                collection = path.split("/api/v1/", 1)[1].split("?", 1)[0]
-                items = collection_items[collection]
-                return subprocess.CompletedProcess(
-                    ["curl"],
-                    0,
-                    json.dumps({"items": items, "page": {"page": 1, "page_size": 500, "total": len(items)}}) + "\n200",
-                    "",
-                )
-            post_count += 1
-            body = json.loads(kwargs["body"])
-            if post_count == 1:
-                return subprocess.CompletedProcess(["curl"], 0, '{"error":{"code":"conflict"}}\n409', "")
-            return subprocess.CompletedProcess(
-                ["curl"],
-                0,
-                json.dumps({"id": ids["created"], "name": body["name"]}) + "\n201",
-                "",
-            )
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "tasks.csv"
-            csv_file.write_text(
-                "First,Target,Scanner,Config\nSecond,Target,Scanner,Config\n",
-                encoding="utf-8",
-            )
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="a" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
-                result = yafvsctl.command_native_tasks_from_csv(
-                    root,
-                    csv_file,
-                    allow_write_control=True,
-                )
-
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(post_count, 2)
-        self.assertEqual(result["details"]["created_count"], 1)
-        self.assertEqual(result["details"]["failure_count"], 1)
 
     def test_native_verify_scanners_requires_write_control_before_runtime(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -19,6 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{CString, OsString};
 use std::fs;
 use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::FileTypeExt;
 use std::path::Path;
 
 const RUNTIME_MANAGER_LOCK: &str = "runtime-manager";
@@ -168,7 +169,13 @@ fn command_runtime_status_with_runner(
     }
 
     if service_states.get("postgres").copied().unwrap_or(false) {
-        findings.extend(postgres_findings(runner, repo_root, &environment, false));
+        findings.extend(postgres_findings(
+            runner,
+            repo_root,
+            &environment,
+            false,
+            true,
+        ));
     }
 
     findings.extend(certificate_findings(repo_root));
@@ -221,6 +228,181 @@ fn command_runtime_status_with_runner(
     make_result(
         metadata(repo_root, "runtime-status", runner),
         "Runtime status collected.".into(),
+        findings,
+    )
+    .with_artifacts(vec![runtime_dir(repo_root).display().to_string()])
+}
+
+pub fn command_runtime_smoke(repo_root: &Path) -> ResultEnvelope {
+    command_runtime_smoke_with_runner(repo_root, &SystemCommandRunner)
+}
+
+fn command_runtime_smoke_with_runner(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+) -> ResultEnvelope {
+    let environment = runtime_environment(repo_root);
+    let mut findings = strict_runtime_directory_findings(repo_root);
+    let compose_path = repo_root.join("compose/dev.yaml");
+    let config = run_compose(
+        runner,
+        repo_root,
+        &["config".into(), "--quiet".into()],
+        &environment,
+    );
+    findings.push(process_finding(
+        &config,
+        "compose.config",
+        "Compose config validation",
+        40,
+        Some(relative_or_absolute(repo_root, &compose_path)),
+    ));
+
+    let port_config = run_compose(runner, repo_root, &["config".into()], &environment);
+    let broad_bindings = port_config
+        .stdout
+        .lines()
+        .filter(|line| line.contains("0.0.0.0:") || line.contains("[::]:"))
+        .map(str::trim)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    let port_status = if port_config.exit_code != Some(0) || !broad_bindings.is_empty() {
+        "fail"
+    } else {
+        "pass"
+    };
+    let port_message = if port_config.exit_code != Some(0) {
+        format!(
+            "Compose port configuration could not be rendered; exit code {}.",
+            port_config.exit_code.unwrap_or(1)
+        )
+    } else if broad_bindings.is_empty() {
+        "No broad host port bindings found.".into()
+    } else {
+        "Broad host port bindings found.".into()
+    };
+    findings.push(
+        Finding::new(port_status, "runtime.ports", port_message).with_details(json!({
+            "broad_bindings": broad_bindings,
+            "output_tail": output_tail(&port_config.stdout, 40),
+        })),
+    );
+
+    let service_states = RUNTIME_SERVICES
+        .iter()
+        .map(|service| {
+            (
+                *service,
+                container_running(runner, repo_root, service, &environment),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    for service in RUNTIME_SERVICES {
+        let running = service_states.get(service).copied().unwrap_or(false);
+        findings.push(
+            Finding::new(
+                if running { "pass" } else { "fail" },
+                "runtime.running",
+                format!(
+                    "{service} container is {}.",
+                    if running { "running" } else { "not running" }
+                ),
+            )
+            .with_details(json!({ "service": service })),
+        );
+    }
+
+    if service_states.get("postgres").copied().unwrap_or(false) {
+        findings.extend(postgres_findings(
+            runner,
+            repo_root,
+            &environment,
+            true,
+            false,
+        ));
+    }
+    if service_states
+        .get("redis-openvas")
+        .copied()
+        .unwrap_or(false)
+    {
+        let ping = exec_in_service(
+            runner,
+            repo_root,
+            "redis-openvas",
+            &[
+                "redis-cli".into(),
+                "-s".into(),
+                "/run/redis-openvas/redis.sock".into(),
+                "ping".into(),
+            ],
+            &environment,
+        );
+        let socket_path = runtime_dir(repo_root).join("run/redis-openvas/redis.sock");
+        findings.push(
+            Finding::new(
+                if ping.exit_code == Some(0) && ping.stdout.contains("PONG") {
+                    "pass"
+                } else {
+                    "fail"
+                },
+                "redis-openvas.ready",
+                format!(
+                    "scanner Redis Unix socket ping exit code {}.",
+                    ping.exit_code.unwrap_or(1)
+                ),
+            )
+            .with_path(&socket_path.display().to_string())
+            .with_details(json!({ "output_tail": output_tail(&ping.stdout, 20) })),
+        );
+        let socket_exists = fs::symlink_metadata(&socket_path)
+            .is_ok_and(|metadata| metadata.file_type().is_socket());
+        findings.push(
+            Finding::new(
+                if socket_exists { "pass" } else { "fail" },
+                "redis-openvas.socket",
+                if socket_exists {
+                    "scanner Redis Unix socket exists."
+                } else {
+                    "scanner Redis Unix socket is missing."
+                }
+                .into(),
+            )
+            .with_path(&socket_path.display().to_string()),
+        );
+    }
+    if service_states.get("mosquitto").copied().unwrap_or(false) {
+        let probe = exec_in_service(
+            runner,
+            repo_root,
+            "mosquitto",
+            &[
+                "mosquitto_pub".into(),
+                "-o".into(),
+                "/tmp/yafvs-mqtt-health.options".into(),
+            ],
+            &environment,
+        );
+        findings.push(
+            Finding::new(
+                if probe.exit_code == Some(0) {
+                    "pass"
+                } else {
+                    "fail"
+                },
+                "mosquitto.ready",
+                format!(
+                    "mosquitto_pub broker check exit code {}.",
+                    probe.exit_code.unwrap_or(1)
+                ),
+            )
+            .with_details(json!({ "output_tail": output_tail(&probe.stdout, 20) })),
+        );
+    }
+
+    make_result(
+        metadata(repo_root, "runtime-smoke", runner),
+        "Runtime smoke checks completed.".into(),
         findings,
     )
     .with_artifacts(vec![runtime_dir(repo_root).display().to_string()])
@@ -335,6 +517,18 @@ fn runtime_directory_findings(repo_root: &Path) -> Vec<Finding> {
                 "OSPD feed lock file",
             ),
         ])
+        .collect()
+}
+
+fn strict_runtime_directory_findings(repo_root: &Path) -> Vec<Finding> {
+    runtime_directory_findings(repo_root)
+        .into_iter()
+        .map(|mut finding| {
+            if finding.status == "warn" {
+                finding.status = "fail".into();
+            }
+            finding
+        })
         .collect()
 }
 
@@ -480,6 +674,7 @@ fn postgres_findings(
     repo_root: &Path,
     environment: &BTreeMap<OsString, OsString>,
     strict: bool,
+    include_roles: bool,
 ) -> Vec<Finding> {
     let user = environment_value(environment, "POSTGRES_USER", "yafvs");
     let database = environment_value(environment, "POSTGRES_DB", "yafvs");
@@ -519,68 +714,70 @@ fn postgres_findings(
         strict,
     ));
 
-    let dba = psql(
-        runner,
-        repo_root,
-        environment,
-        &database,
-        "SELECT EXISTS (SELECT FROM pg_roles WHERE rolname = 'dba');",
-    );
-    let dba_value = psql_value(&dba.stdout);
-    findings.push(
-        Finding::new(
-            if dba.exit_code == Some(0) && dba_value == "t" {
-                "pass"
-            } else if strict {
-                "fail"
-            } else {
-                "warn"
-            },
-            "postgres.role.dba",
-            format!(
-                "dba role exists: {}.",
-                if dba_value.is_empty() {
-                    "unknown"
+    if include_roles {
+        let dba = psql(
+            runner,
+            repo_root,
+            environment,
+            &database,
+            "SELECT EXISTS (SELECT FROM pg_roles WHERE rolname = 'dba');",
+        );
+        let dba_value = psql_value(&dba.stdout);
+        findings.push(
+            Finding::new(
+                if dba.exit_code == Some(0) && dba_value == "t" {
+                    "pass"
+                } else if strict {
+                    "fail"
                 } else {
-                    &dba_value
-                }
-            ),
-        )
-        .with_details(json!({ "output_tail": output_tail(&dba.stdout, 20) })),
-    );
+                    "warn"
+                },
+                "postgres.role.dba",
+                format!(
+                    "dba role exists: {}.",
+                    if dba_value.is_empty() {
+                        "unknown"
+                    } else {
+                        &dba_value
+                    }
+                ),
+            )
+            .with_details(json!({ "output_tail": output_tail(&dba.stdout, 20) })),
+        );
 
-    let membership = psql(
-        runner,
-        repo_root,
-        environment,
-        &database,
-        &format!(
-            "SELECT pg_has_role({}, 'dba', 'member');",
-            sql_literal(&user)
-        ),
-    );
-    let membership_value = psql_value(&membership.stdout);
-    findings.push(
-        Finding::new(
-            if membership.exit_code == Some(0) && membership_value == "t" {
-                "pass"
-            } else if strict {
-                "fail"
-            } else {
-                "warn"
-            },
-            "postgres.role.membership",
-            format!(
-                "{user} has dba role membership: {}.",
-                if membership_value.is_empty() {
-                    "unknown"
-                } else {
-                    &membership_value
-                }
+        let membership = psql(
+            runner,
+            repo_root,
+            environment,
+            &database,
+            &format!(
+                "SELECT pg_has_role({}, 'dba', 'member');",
+                sql_literal(&user)
             ),
-        )
-        .with_details(json!({ "output_tail": output_tail(&membership.stdout, 20) })),
-    );
+        );
+        let membership_value = psql_value(&membership.stdout);
+        findings.push(
+            Finding::new(
+                if membership.exit_code == Some(0) && membership_value == "t" {
+                    "pass"
+                } else if strict {
+                    "fail"
+                } else {
+                    "warn"
+                },
+                "postgres.role.membership",
+                format!(
+                    "{user} has dba role membership: {}.",
+                    if membership_value.is_empty() {
+                        "unknown"
+                    } else {
+                        &membership_value
+                    }
+                ),
+            )
+            .with_details(json!({ "output_tail": output_tail(&membership.stdout, 20) })),
+        );
+    }
     findings.push(pg_gvm_extension_finding(
         runner,
         repo_root,
@@ -893,6 +1090,7 @@ mod tests {
     #[derive(Default)]
     struct HealthyRunner {
         calls: Mutex<Vec<RecordedCall>>,
+        broad_bindings: bool,
     }
 
     impl HealthyRunner {
@@ -945,6 +1143,14 @@ mod tests {
             };
             self.calls.lock().unwrap().push(call.clone());
             let joined = call.args.join(" ");
+            if self.broad_bindings
+                && call
+                    .args
+                    .last()
+                    .is_some_and(|argument| argument == "config")
+            {
+                return Some(successful("published: 0.0.0.0:9392\n"));
+            }
             if joined.contains(" ps -q ") {
                 let service = call.args.last().unwrap();
                 return Some(successful(&format!("{service}-container\n")));
@@ -965,6 +1171,9 @@ mod tests {
             if joined.contains("extname = 'pg-gvm'") {
                 return Some(successful("1.0\n"));
             }
+            if joined.contains("redis-cli") {
+                return Some(successful("PONG\n"));
+            }
             Some(successful(""))
         }
     }
@@ -976,6 +1185,102 @@ mod tests {
             stdout: stdout.into(),
             stderr: String::new(),
         }
+    }
+
+    fn prepare_runtime_smoke_prerequisites(fixture: &Fixture) -> std::os::unix::net::UnixListener {
+        let runtime = fixture.runtime();
+        for relative in RUNTIME_DIRS.iter().chain(EXTRA_RUNTIME_DIRS.iter()) {
+            fs::create_dir_all(runtime.join(relative)).unwrap();
+        }
+        fs::write(runtime.join("run/feed-update.lock"), "").unwrap();
+        fs::write(runtime.join("run/ospd/feed-update.lock"), "").unwrap();
+        std::os::unix::net::UnixListener::bind(runtime.join("run/redis-openvas/redis.sock"))
+            .unwrap()
+    }
+
+    #[test]
+    fn smoke_is_observational_and_strict_when_runtime_state_is_absent() {
+        let fixture = Fixture::new("smoke-observational");
+        assert!(!fixture.runtime().exists());
+
+        let result = command_runtime_smoke_with_runner(&fixture.repo, &HealthyRunner::default());
+
+        assert_eq!(result.status, "fail");
+        assert_eq!(result.metadata.command, "runtime-smoke");
+        assert!(!fixture.runtime().exists());
+        assert!(result.findings.iter().any(|finding| {
+            finding.check == "runtime.dir"
+                && finding.status == "fail"
+                && finding.message.contains("is missing")
+        }));
+    }
+
+    #[test]
+    fn smoke_reuses_health_primitives_without_role_or_duplicate_service_probes() {
+        let fixture = Fixture::new("smoke-healthy");
+        let _redis_listener = prepare_runtime_smoke_prerequisites(&fixture);
+        let runner = HealthyRunner::default();
+
+        let result = command_runtime_smoke_with_runner(&fixture.repo, &runner);
+        let calls = runner.calls();
+        assert_eq!(result.status, "pass");
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|call| call.args.join(" ").contains(" ps -q "))
+                .count(),
+            RUNTIME_SERVICES.len()
+        );
+        let psql_calls = calls
+            .iter()
+            .filter(|call| call.args.iter().any(|argument| argument == "psql"))
+            .collect::<Vec<_>>();
+        assert_eq!(psql_calls.len(), 4);
+        assert!(psql_calls.iter().all(|call| {
+            !call
+                .args
+                .iter()
+                .any(|argument| argument.contains("pg_has_role"))
+                && !call
+                    .args
+                    .iter()
+                    .any(|argument| argument.contains("rolname"))
+        }));
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|finding| finding.check == "redis-openvas.ready" && finding.status == "pass")
+        );
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|finding| finding.check == "mosquitto.ready" && finding.status == "pass")
+        );
+    }
+
+    #[test]
+    fn smoke_fails_broad_host_bindings() {
+        let fixture = Fixture::new("smoke-broad-binding");
+        let runner = HealthyRunner {
+            broad_bindings: true,
+            ..HealthyRunner::default()
+        };
+
+        let result = command_runtime_smoke_with_runner(&fixture.repo, &runner);
+        let finding = result
+            .findings
+            .iter()
+            .find(|finding| finding.check == "runtime.ports")
+            .unwrap();
+        assert_eq!(finding.status, "fail");
+        assert_eq!(finding.message, "Broad host port bindings found.");
+        assert!(
+            finding.details.as_ref().unwrap()["broad_bindings"]
+                .as_array()
+                .is_some_and(|bindings| bindings == &vec![json!("published: 0.0.0.0:9392")])
+        );
     }
 
     #[test]

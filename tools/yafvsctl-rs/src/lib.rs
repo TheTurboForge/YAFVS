@@ -42,7 +42,7 @@ pub use commands::{
     command_runtime_native_api_direct_bootstrap, command_runtime_native_api_direct_token,
     command_runtime_nmap_capability_check, command_runtime_performance_snapshot,
     command_runtime_plan, command_runtime_rbac_smoke, command_runtime_redis_state,
-    command_runtime_scope_smoke, command_runtime_status,
+    command_runtime_scope_smoke, command_runtime_smoke, command_runtime_status,
     command_runtime_report_export, command_runtime_report_metrics, command_runtime_report_summary,
     command_runtime_scanner_capability_check, command_runtime_scanner_process_check,
     command_runtime_scope_report_metrics, command_runtime_scope_report_summary,
@@ -433,6 +433,7 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         }
         CliCommand::RuntimePlan => command_runtime_plan(&repo_root),
         CliCommand::RuntimeStatus => command_runtime_status(&repo_root),
+        CliCommand::RuntimeSmoke => command_runtime_smoke(&repo_root),
         CliCommand::Down => command_down(&repo_root),
         CliCommand::RuntimeAppDown => command_runtime_app_down(&repo_root),
         CliCommand::FeedCopyToRuntime => command_feed_copy_to_runtime(&repo_root),

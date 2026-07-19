@@ -2364,7 +2364,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-delete-overrides-by-filter", "native-bulk-modify-schedules", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "runtime-feed-keyring-init", "security-policy-check", "feed-state", "feed-cache-sync", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-delete-overrides-by-filter", "native-bulk-modify-schedules", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "runtime-feed-keyring-init", "security-policy-check", "feed-state", "feed-cache-sync", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2383,11 +2383,11 @@ class YAFVSCtlTests(unittest.TestCase):
             "native-bulk-modify-schedules",
             "native-empty-trash",
             "native-verify-scanners",
+            "native-scan-new-system",
+            "native-scan-with-delivery",
         ):
             self.assertNotIn(f'add_parser("{command}"', source)
             self.assertNotIn(f'elif args.command == "{command}":', source)
-        for command in ("native-scan-new-system",):
-            self.assertIn(f'elif args.command == "{command}":', source)
 
         self.assertIn("def command_native_tooling_state", source)
         self.assertNotIn("def command_native_export_report_csv", source)
@@ -6898,12 +6898,14 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIsNone(result["details"]["report_id"])
         self.assertNotIn(("DELETE", f"/api/v1/targets/{ids['target']}"), calls)
 
-    def test_native_scan_new_system_parser_is_registered(self):
-        args = yafvsctl.build_parser().parse_args(["native-scan-new-system", "--host", "192.0.2.10", "--dry-run"])
-        self.assertEqual(args.command, "native-scan-new-system")
-        self.assertEqual(args.port_list_id, yafvsctl.IANA_TCP_UDP_PORT_LIST_ID)
-        self.assertEqual(args.scan_config_id, yafvsctl.FULL_AND_FAST_SCAN_CONFIG_ID)
-        self.assertEqual(args.scanner_id, yafvsctl.NATIVE_SCAN_NEW_SYSTEM_DEFAULT_SCANNER_ID)
+    def test_native_scan_new_system_is_rust_direct(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        justfile = (root / "justfile").read_text(encoding="utf-8")
+        self.assertNotIn('subparsers.add_parser("native-scan-new-system"', source)
+        self.assertNotIn('elif args.command == "native-scan-new-system":', source)
+        self.assertIn('tools/yafvsctl-rs/Cargo.toml -- native-scan-new-system "$@"', justfile)
+        self.assertNotIn('tools/yafvsctl native-scan-new-system "$@"', justfile)
         rust = subprocess.run(
             [
                 "cargo", "run", "--quiet", "--locked",
@@ -7261,13 +7263,15 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["operation_status"], "prepared_not_started")
         self.assertNotIn(("POST", f"/api/v1/tasks/{ids['task']}/start"), calls)
 
-    def test_native_scan_with_delivery_parser_and_recipe_are_registered(self):
-        args = yafvsctl.build_parser().parse_args(["native-scan-with-delivery", "--target-id", "11111111-1111-4111-8111-111111111111", "--alert-id", "44444444-4444-4444-8444-444444444444"])
-        self.assertEqual(args.command, "native-scan-with-delivery")
-        self.assertEqual(args.target_id, "11111111-1111-4111-8111-111111111111")
-        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+    def test_native_scan_with_delivery_is_rust_direct(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        justfile = (root / "justfile").read_text(encoding="utf-8")
+        self.assertNotIn('subparsers.add_parser("native-scan-with-delivery"', source)
+        self.assertNotIn('elif args.command == "native-scan-with-delivery":', source)
         self.assertIn("native-scan-with-delivery *args:", justfile)
-        self.assertIn('tools/yafvsctl native-scan-with-delivery "$@"', justfile)
+        self.assertIn('tools/yafvsctl-rs/Cargo.toml -- native-scan-with-delivery "$@"', justfile)
+        self.assertNotIn('tools/yafvsctl native-scan-with-delivery "$@"', justfile)
         candidates = set().union(*yafvsctl.NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS.values())
         self.assertNotIn("start-alert-scan.gmp.py", candidates)
         self.assertNotIn("start-alert-scan.gmp.py", yafvsctl.NATIVE_TOOLING_GVM_TOOLS_PATH_BLOCKERS)

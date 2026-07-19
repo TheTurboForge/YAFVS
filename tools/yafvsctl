@@ -22916,14 +22916,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help=argparse.SUPPRESS)
-    native_scan_new_system = subparsers.add_parser("native-scan-new-system", parents=[common], help="create and start one scan for an explicit IP address through the guarded direct native API")
-    native_scan_new_system.add_argument("--host", required=True, help="one explicit IPv4 or IPv6 address; hostnames, CIDRs, and ranges are rejected")
-    native_scan_new_system.add_argument("--port-list-id", default=IANA_TCP_UDP_PORT_LIST_ID, help="existing port-list UUID")
-    native_scan_new_system.add_argument("--scan-config-id", default=FULL_AND_FAST_SCAN_CONFIG_ID, help="existing scan-config UUID")
-    native_scan_new_system.add_argument("--scanner-id", default=NATIVE_SCAN_NEW_SYSTEM_DEFAULT_SCANNER_ID, help="existing scan-task-capable scanner UUID")
-    native_scan_new_system.add_argument("--allow-scan-control", action="store_true", help="confirm intentional target/task creation and scan start")
-    native_scan_new_system.add_argument("--dry-run", action="store_true", help="plan target and task request bodies without runtime writes")
-    native_scan_new_system.add_argument("--status-only", action="store_true", help="emit compact scan request identifiers and state")
     native_nvt_diagnostic_scan = subparsers.add_parser("native-nvt-diagnostic-scan", parents=[common], help="create and start one guarded native scan selecting exactly one diagnostic NVT")
     native_nvt_diagnostic_scan.add_argument("--host", required=True, help="one explicit IPv4 or IPv6 address; hostnames, CIDRs, and ranges are rejected")
     native_nvt_diagnostic_scan.add_argument("--nvt-id", required=True, help="numeric NVT OID to select")
@@ -22933,17 +22925,6 @@ def build_parser() -> argparse.ArgumentParser:
     native_nvt_diagnostic_scan.add_argument("--allow-scan-control", action="store_true", help="confirm intentional config/target/task writes and scanner start")
     native_nvt_diagnostic_scan.add_argument("--dry-run", action="store_true", help="plan the diagnostic selection and scan without runtime access; this is the default without --allow-scan-control")
     native_nvt_diagnostic_scan.add_argument("--status-only", action="store_true", help="emit compact deterministic identifiers and state")
-    native_scan_with_delivery = subparsers.add_parser("native-scan-with-delivery", parents=[common], help="create and start one guarded native scan with one existing EMAIL or SMB alert")
-    native_scan_with_delivery.add_argument("--alert-id", required=True, help="existing active EMAIL or SMB alert UUID")
-    target_source = native_scan_with_delivery.add_mutually_exclusive_group(required=True)
-    target_source.add_argument("--target-id", help="existing target UUID; the target is never modified")
-    target_source.add_argument("--host", help="one explicit IPv4 or IPv6 address; creates a new target")
-    native_scan_with_delivery.add_argument("--port-list-id", default=IANA_TCP_UDP_PORT_LIST_ID, help="existing port-list UUID for --host mode")
-    native_scan_with_delivery.add_argument("--scan-config-id", default=FULL_AND_FAST_SCAN_CONFIG_ID, help="existing scan-config UUID")
-    native_scan_with_delivery.add_argument("--scanner-id", default=NATIVE_SCAN_NEW_SYSTEM_DEFAULT_SCANNER_ID, help="existing scan-task-capable scanner UUID")
-    native_scan_with_delivery.add_argument("--allow-scan-control", action="store_true", help="confirm intentional target/task creation and scan start")
-    native_scan_with_delivery.add_argument("--dry-run", action="store_true", help="plan request bodies without runtime access; this is the default without --allow-scan-control")
-    native_scan_with_delivery.add_argument("--status-only", action="store_true", help="emit compact resource identifiers and state")
     native_tooling_state = subparsers.add_parser("native-tooling-state", parents=[common], help="inventory inherited GMP/python-gvm/gvm-tools dependency surfaces")
     native_tooling_state.add_argument("--compact", action="store_true", help="alias for --status-only; emit chat-safe counts and only non-pass findings")
     native_tooling_state.add_argument("--summary", action="store_true", help="emit status/count contract summaries without removal-candidate paths or endpoint inventories")
@@ -23018,30 +22999,6 @@ def main(argv: list[str] | None = None) -> int:
             nvt_id=args.nvt_id,
             source_scan_config_id=args.source_scan_config_id,
             port_list_id=args.port_list_id,
-            scanner_id=args.scanner_id,
-            allow_scan_control=args.allow_scan_control,
-            dry_run=args.dry_run,
-            status_only=args.status_only,
-        )
-    elif args.command == "native-scan-with-delivery":
-        result = command_native_scan_with_delivery(
-            repo_root,
-            alert_id=args.alert_id,
-            host=args.host,
-            target_id=args.target_id,
-            port_list_id=args.port_list_id,
-            scan_config_id=args.scan_config_id,
-            scanner_id=args.scanner_id,
-            allow_scan_control=args.allow_scan_control,
-            dry_run=args.dry_run,
-            status_only=args.status_only,
-        )
-    elif args.command == "native-scan-new-system":
-        result = command_native_scan_new_system(
-            repo_root,
-            host=args.host,
-            port_list_id=args.port_list_id,
-            scan_config_id=args.scan_config_id,
             scanner_id=args.scanner_id,
             allow_scan_control=args.allow_scan_control,
             dry_run=args.dry_run,

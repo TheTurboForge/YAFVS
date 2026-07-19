@@ -1922,6 +1922,8 @@ mod tests {
             "native-export-report-bundle",
             "native-export-report-csv",
             "native-export-report-pdf",
+            "native-scan-new-system",
+            "native-scan-with-delivery",
             "native-start-tasks-from-csv",
             "native-stop-tasks-from-csv",
             "native-stop-all-tasks",

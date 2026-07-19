@@ -4429,11 +4429,6 @@ def stage_gsa_static(repo_root: Path) -> list[dict[str, Any]]:
     return findings
 
 
-def first_gsa_asset_rel(index_html: str) -> str | None:
-    match = re.search(r"""(?:src|href)=["']/(assets/[^"']+)["']""", index_html)
-    return match.group(1) if match else None
-
-
 def gsa_freshness_should_skip_source_file(path: Path) -> bool:
     parts = set(path.parts)
     if "__tests__" in parts or "__mocks__" in parts:
@@ -29440,62 +29435,6 @@ def command_runtime_native_api_smoke(repo_root: Path, status_only: bool = False)
     return result
 
 
-def runtime_webui_smoke_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    compact = dict(result)
-    findings = result.get("findings", [])
-    non_pass = [compact_browser_smoke_finding(item) for item in findings if isinstance(item, dict) and item.get("status") != "pass"]
-    checks = {
-        item.get("check"): item.get("status")
-        for item in findings
-        if isinstance(item, dict) and item.get("check")
-    }
-    urls = [
-        item.get("details", {}).get("url")
-        for item in findings
-        if isinstance(item, dict) and item.get("check", "").startswith("webui.http-") and isinstance(item.get("details"), dict)
-    ]
-    compact["details"] = {
-        "finding_count": len(findings),
-        "non_pass_count": len(non_pass),
-        "artifact_count": len(result.get("artifacts", [])) if isinstance(result.get("artifacts"), list) else 0,
-        "base_url_count": len({url.split('/', 3)[2] for url in urls if isinstance(url, str) and url.startswith("http")}),
-        "checks": checks,
-    }
-    compact["findings"] = non_pass or [
-        finding("pass", "runtime-webui-smoke.status-only", "Runtime web UI smoke passed with compact status-only output.")
-    ]
-    return compact
-
-
-def command_runtime_webui_smoke(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    static_dir = gsad_static_dir(repo_root)
-    index_path = static_dir / "index.html"
-    config_path = static_dir / "config.js"
-    findings.append(finding("pass" if index_path.is_file() else "fail", "webui.static-index", "Staged GSA index.html exists." if index_path.is_file() else "Staged GSA index.html is missing; run just build-ui.", str(index_path)))
-    findings.append(finding("pass" if config_path.is_file() else "fail", "webui.static-config", "Staged GSA config.js exists." if config_path.is_file() else "Staged GSA config.js is missing; run just build-ui.", str(config_path)))
-    findings.extend(runtime_gsa_freshness_findings(repo_root))
-
-    index_text = index_path.read_text(encoding="utf-8") if index_path.is_file() else ""
-    asset_rel = first_gsa_asset_rel(index_text)
-    findings.append(finding("pass" if asset_rel else "fail", "webui.static-asset-ref", f"Found GSA asset reference {asset_rel}." if asset_rel else "No GSA asset reference found in index.html.", str(index_path)))
-
-    for base_url in gsad_base_urls(repo_root):
-        index_http = run_command(["curl", "-kfsS", "--max-time", "10", f"{base_url}/"], repo_root, env=runtime_env(repo_root))
-        findings.append(finding("pass" if index_http.returncode == 0 and '<div id="app">' in index_http.stdout else "fail", "webui.http-index", f"GSA index HTTP probe exit code {index_http.returncode}.", details={"url": f"{base_url}/", "output_tail": output_tail(index_http.stdout, 40)}))
-
-        config_http = run_command(["curl", "-kfsS", "--max-time", "10", f"{base_url}/config.js"], repo_root, env=runtime_env(repo_root))
-        expected_api_server = "apiServer: window.location.host"
-        findings.append(finding("pass" if config_http.returncode == 0 and expected_api_server in config_http.stdout else "fail", "webui.http-config", f"GSA config.js HTTP probe exit code {config_http.returncode}.", details={"url": f"{base_url}/config.js", "expected": expected_api_server, "output_tail": output_tail(config_http.stdout, 40)}))
-
-        if asset_rel:
-            asset_http = run_command(["curl", "-kfsS", "--max-time", "10", "-o", "/dev/null", f"{base_url}/{asset_rel}"], repo_root, env=runtime_env(repo_root))
-            findings.append(finding("pass" if asset_http.returncode == 0 else "fail", "webui.http-asset", f"GSA asset HTTP probe exit code {asset_http.returncode}.", details={"url": f"{base_url}/{asset_rel}", "output_tail": output_tail(asset_http.stdout, 40)}))
-
-    result = make_result("runtime-webui-smoke", repo_root, "Runtime web UI smoke checks completed.", findings, [str(static_dir), *gsad_base_urls(repo_root)])
-    return runtime_webui_smoke_status_only_result(result) if status_only else result
-
-
 def compact_browser_smoke_finding(item: dict[str, Any]) -> dict[str, Any]:
     compact = {
         key: item[key]
@@ -30310,8 +30249,6 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_direct_bootstrap = subparsers.add_parser("runtime-native-api-direct-bootstrap", parents=[common], help="prepare and check opt-in direct native API bootstrap guardrails without starting the listener")
     native_api_direct_bootstrap.add_argument("--status-only", action="store_true", help="emit compact bootstrap status and only non-pass findings for chat-safe validation")
     subparsers.add_parser("runtime-native-api-rebuild", parents=[common], help="rebuild and restart only the internal YAFVS native API sidecar")
-    webui_smoke = subparsers.add_parser("runtime-webui-smoke", parents=[common], help="verify the staged GSA web UI over gsad")
-    webui_smoke.add_argument("--status-only", action="store_true", help="emit compact web UI smoke status and only non-pass findings for chat-safe validation")
     browser_smoke = subparsers.add_parser("runtime-browser-smoke", parents=[common], help="verify report workflows through a headless browser")
     browser_smoke.add_argument("--route", action="append", help="focus browser smoke on one route label or path; may be repeated")
     browser_smoke.add_argument("--status-only", action="store_true", help="emit compact browser-smoke status and only non-pass findings for chat-safe validation")
@@ -30643,8 +30580,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_native_api_direct_bootstrap(repo_root, status_only=args.status_only)
     elif args.command == "runtime-native-api-rebuild":
         result = command_runtime_native_api_rebuild(repo_root)
-    elif args.command == "runtime-webui-smoke":
-        result = command_runtime_webui_smoke(repo_root, status_only=args.status_only)
     elif args.command == "runtime-browser-smoke":
         result = command_runtime_browser_smoke(repo_root, args.route, write_filter_smoke=args.write_filter_smoke, status_only=args.status_only)
     elif args.command == "runtime-browser-regression":

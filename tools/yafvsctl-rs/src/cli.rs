@@ -714,6 +714,7 @@ mod tests {
             "runtime-rbac-smoke",
             "down",
             "runtime-app-down",
+            "runtime-webui-smoke",
             "runtime-full-test-scan-preflight",
             "runtime-full-test-scan-start",
             "runtime-full-test-scan-status",

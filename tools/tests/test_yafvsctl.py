@@ -1131,6 +1131,8 @@ class YAFVSCtlTests(unittest.TestCase):
                         encoding="utf-8",
                     )
                     env["YAFVS_RUNTIME_DIR"] = str(shutdown_runtime)
+                if arguments[0] == "runtime-webui-smoke":
+                    env["YAFVS_GSAD_HOSTS"] = "127.0.0.1:1"
                 rust_result = invoke(rust_command, arguments, env=env)
                 expected_exit_codes = (
                     expected_exit_code
@@ -1229,6 +1231,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-gmp-smoke", "--json"], (0, 1), ("pass", "fail")),
                 (["runtime-credential-smoke", "--json"], 1, "fail"),
                 (["runtime-rbac-smoke", "--json"], (0, 1), ("pass", "warn", "fail")),
+                (["runtime-webui-smoke", "--json"], 1, "fail"),
                 (["runtime-full-test-scan-preflight", "--target-cidr", "10.0.0.0/16", "--json"], 1, "fail"),
                 (["runtime-full-test-scan-start", "--target-cidr", "192.0.2.0/24", "--json"], 1, "fail"),
                 (["runtime-full-test-scan-status", "--target-cidr", "10.0.0.0/16", "--json"], 1, "fail"),
@@ -1927,34 +1930,6 @@ class YAFVSCtlTests(unittest.TestCase):
             yafvsctl.native_api_migration_matrix_contract_summary(list(rows.values())),
             {"rows_missing_openapi": [], "rows_missing_inventory": [], "rows_missing_migration_metadata": [], "direct_exposure_mismatches": [], "direct_marker_mismatches": []},
         )
-
-    def test_runtime_webui_smoke_status_only_is_registered_and_compacts_output(self):
-        source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
-        self.assertIn("def command_runtime_webui_smoke", source)
-        self.assertIn("webui_smoke.add_argument(\"--status-only\"", source)
-        self.assertIn("command_runtime_webui_smoke(repo_root, status_only=args.status_only)", source)
-
-        result = yafvsctl.make_result(
-            "runtime-webui-smoke",
-            Path("/tmp/TurboVAS"),
-            "Runtime web UI smoke checks completed.",
-            [
-                yafvsctl.finding("pass", "webui.static-index", "index", "/tmp/index.html"),
-                yafvsctl.finding("pass", "webui.http-index", "index http", details={"url": "https://one/", "output_tail": ["large"]}),
-                yafvsctl.finding("warn", "webui.http-config", "config warning", details={"url": "https://two/config.js", "output_tail": ["large"]}),
-            ],
-            ["/tmp/static", "https://one", "https://two"],
-        )
-
-        compact = yafvsctl.runtime_webui_smoke_status_only_result(result)
-
-        self.assertEqual(compact["status"], "warn")
-        self.assertEqual(compact["details"]["finding_count"], 3)
-        self.assertEqual(compact["details"]["non_pass_count"], 1)
-        self.assertEqual(compact["details"]["artifact_count"], 3)
-        self.assertEqual(compact["details"]["base_url_count"], 2)
-        self.assertEqual(compact["findings"][0]["check"], "webui.http-config")
-        self.assertNotIn("output_tail", json.dumps(compact["findings"]))
 
     def test_runtime_browser_smoke_is_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
@@ -14650,8 +14625,6 @@ class YAFVSCtlTests(unittest.TestCase):
             config_text = config.read_text(encoding="utf-8")
             self.assertIn("apiServer: window.location.host || '192.168.178.42:19392'", config_text)
             self.assertIn("apiProtocol: (window.location.protocol || 'https:').replace(':', '')", config_text)
-            self.assertEqual(yafvsctl.first_gsa_asset_rel((yafvsctl.gsad_static_dir(root) / "index.html").read_text(encoding="utf-8")), "assets/index.js")
-
     def test_feed_community_key_download_command_targets_runtime_artifact(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"

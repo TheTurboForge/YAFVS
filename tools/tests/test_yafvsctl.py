@@ -1224,6 +1224,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["native-targets-from-xml", "--xml-file", "/definitely-missing-yafvs-targets.xml", "--json"], 1, "fail"),
                 (["native-schedules-from-csv", "--csv-file", "/definitely-missing-yafvs-schedules.csv", "--json"], 1, "fail"),
                 (["native-schedules-from-xml", "--xml-file", "/definitely-missing-yafvs-schedules.xml", "--json"], 1, "fail"),
+                (["native-credentials-from-csv", "--csv-file", "/definitely-missing-yafvs-credentials.csv", "--json"], 1, "fail"),
                 (["native-tasks-from-csv", "--csv-file", "/definitely-missing-yafvs-tasks-create.csv", "--json"], 1, "fail"),
                 (["down", "--json"], 1, "fail"),
                 (["runtime-app-down", "--json"], 1, "fail"),
@@ -2365,7 +2366,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-tasks-from-csv", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-tasks-from-csv", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2383,6 +2384,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "native-stop-tasks-from-csv",
             "native-stop-all-tasks",
             "native-tasks-from-csv",
+            "native-credentials-from-csv",
         ):
             self.assertNotIn(f'add_parser("{command}"', source)
             self.assertNotIn(f'elif args.command == "{command}":', source)
@@ -7917,393 +7919,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["failure_count"], 0)
         self.assertNotIn("Authorization: Bearer a", json.dumps(result))
 
-    def test_native_credentials_from_csv_rejects_every_invalid_row_before_runtime(self):
-        invalid_rows = (
-            "name,type,login,password\n",
-            "Broken,SNMP,user,secret\n",
-            "Broken,ESX,user,secret,key\n",
-            "Broken,OTHER,user,secret\n",
-            "Broken,UP,user\n",
-            "\n",
-            "Duplicate,UP,user,first-secret\nDuplicate,UP,user,second-secret\n",
-        )
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "credentials.csv"
-            for content in invalid_rows:
-                csv_file.write_text(content, encoding="utf-8")
-                csv_file.chmod(0o600)
-                with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                    result = yafvsctl.command_native_credentials_from_csv(root, csv_file, allow_write_control=True)
-                    curl.assert_not_called()
-                self.assertEqual(result["status"], "fail")
-                self.assertNotIn("first-secret", json.dumps(result))
-                self.assertNotIn("second-secret", json.dumps(result))
-
-    def test_native_credentials_from_csv_defaults_to_redacted_no_runtime_dry_run(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            key_file = root / "id_ed25519"
-            key_file.write_text("PRIVATE SSH KEY\n", encoding="utf-8")
-            key_file.chmod(0o600)
-            csv_file = root / "credentials.csv"
-            csv_file.write_text(
-                "Up,UP,operator,up-secret\nSsh,SSH,root,ssh-pass,id_ed25519\n",
-                encoding="utf-8",
-            )
-            csv_file.chmod(0o600)
-            with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                result = yafvsctl.command_native_credentials_from_csv(root, csv_file)
-                curl.assert_not_called()
-
-        rendered = json.dumps(result)
-        self.assertEqual(result["status"], "pass")
-        self.assertTrue(result["details"]["dry_run"])
-        self.assertEqual(result["details"]["planned_credential_count"], 2)
-        self.assertEqual(result["details"]["csv_file"], "credentials.csv")
-        self.assertNotIn("up-secret", rendered)
-        self.assertNotIn("ssh-pass", rendered)
-        self.assertNotIn("PRIVATE SSH KEY", rendered)
-        self.assertNotIn(str(root), json.dumps(result["findings"]))
-        self.assertNotIn(str(root), json.dumps(result["details"]))
-
-    def test_native_credentials_from_csv_rejects_contradictory_write_and_dry_run_flags(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "credentials.csv"
-            csv_file.write_text("Up,UP,operator,up-secret\n", encoding="utf-8")
-            with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                result = yafvsctl.command_native_credentials_from_csv(
-                    root,
-                    csv_file,
-                    allow_write_control=True,
-                    dry_run=True,
-                )
-                curl.assert_not_called()
-
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(result["findings"][0]["check"], "native-credentials-from-csv.arguments")
-        self.assertNotIn("up-secret", json.dumps(result))
-
-    def test_native_credentials_from_csv_rejects_unsafe_key_paths_and_boundaries(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "credentials.csv"
-            key_file = root / "id_ed25519"
-            key_file.write_text("key\n", encoding="utf-8")
-            key_file.chmod(0o644)
-            csv_file.write_text("Ssh,SSH,root,pass,id_ed25519\n", encoding="utf-8")
-            csv_file.chmod(0o600)
-            with self.assertRaisesRegex(ValueError, "unsafe group or world permissions"):
-                yafvsctl.load_native_credential_csv_rows(csv_file)
-
-            key_file.chmod(0o600)
-            key_file.write_bytes(b"x" * (yafvsctl.NATIVE_CREDENTIAL_CSV_MAX_PRIVATE_KEY_BYTES + 1))
-            with self.assertRaisesRegex(ValueError, "exceeds 32768"):
-                yafvsctl.load_native_credential_csv_rows(csv_file)
-
-            key_file.write_bytes(b"\xff")
-            with self.assertRaisesRegex(ValueError, "must be UTF-8 text"):
-                yafvsctl.load_native_credential_csv_rows(csv_file)
-
-            key_file.write_text("key\n", encoding="utf-8")
-            link_file = root / "link"
-            link_file.symlink_to(key_file.name)
-            csv_file.write_text("Ssh,SSH,root,pass,link\n", encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "must not contain symlinks") as raised:
-                yafvsctl.load_native_credential_csv_rows(csv_file)
-            self.assertNotIn(str(root), str(raised.exception))
-            self.assertIn("SSH key path", str(raised.exception))
-
-            key_directory = root / "keys"
-            key_directory.mkdir()
-            nested_key = key_directory / "id_ed25519"
-            nested_key.write_text("key\n", encoding="utf-8")
-            nested_key.chmod(0o600)
-            directory_link = root / "linked-keys"
-            directory_link.symlink_to(key_directory.name, target_is_directory=True)
-            csv_file.write_text("Ssh,SSH,root,pass,linked-keys/id_ed25519\n", encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "must not contain symlinks"):
-                yafvsctl.load_native_credential_csv_rows(csv_file)
-
-            outside_key = root.parent / "outside-key"
-            outside_key.write_text("key\n", encoding="utf-8")
-            outside_key.chmod(0o600)
-            self.addCleanup(outside_key.unlink, missing_ok=True)
-            csv_file.write_text("Ssh,SSH,root,pass,../outside-key\n", encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "must stay within"):
-                yafvsctl.load_native_credential_csv_rows(csv_file)
-
-    def test_native_credentials_from_csv_requires_private_regular_csv_file(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "credentials.csv"
-            csv_file.write_text("Up,UP,operator,secret\n", encoding="utf-8")
-            csv_file.chmod(0o644)
-            with self.assertRaisesRegex(ValueError, "must not grant group or world permissions"):
-                yafvsctl.load_native_credential_csv_rows(csv_file)
-
-            csv_file.chmod(0o600)
-            link_file = root / "credentials-link.csv"
-            link_file.symlink_to(csv_file.name)
-            with self.assertRaisesRegex(ValueError, "must not be a symlink"):
-                yafvsctl.load_native_credential_csv_rows(link_file)
-
-    def test_native_credentials_from_csv_resolves_all_existing_names_then_posts_up_and_ssh(self):
-        events: list[tuple[str, str]] = []
-        created_bodies: list[dict[str, object]] = []
-
-        def fake_direct(_root, path, **kwargs):
-            if path.startswith("/api/v1/credentials?"):
-                name = yafvsctl.urllib.parse.parse_qs(yafvsctl.urllib.parse.urlsplit(path).query)["filter"][0]
-                events.append(("lookup", name))
-                items = [{"id": "existing-id", "name": name}] if name == "Existing" else []
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"page": {"total": len(items)}, "items": items}) + "\n200", "")
-            self.assertEqual(path, "/api/v1/credentials")
-            body = json.loads(kwargs["body"])
-            events.append(("post", body["name"]))
-            created_bodies.append(body)
-            credential_id = f"00000000-0000-4000-8000-{len(created_bodies):012d}"
-            return subprocess.CompletedProcess(
-                ["curl"],
-                0,
-                json.dumps({"id": credential_id, "name": body["name"], "credential_type": body["type"]}) + "\n201",
-                "",
-            )
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            key_file = root / "id_ed25519"
-            key_file.write_text("PRIVATE SSH KEY\n", encoding="utf-8")
-            key_file.chmod(0o600)
-            csv_file = root / "credentials.csv"
-            csv_file.write_text(
-                "NewUp,UP,operator,up-secret\nExisting,UP,operator,existing-secret\nNewSsh,SSH,root,ssh-pass,id_ed25519\n",
-                encoding="utf-8",
-            )
-            csv_file.chmod(0o600)
-            with (
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}),
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")),
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="a" * 64),
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct),
-            ):
-                result = yafvsctl.command_native_credentials_from_csv(root, csv_file, allow_write_control=True)
-
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual([kind for kind, _name in events[:3]], ["lookup", "lookup", "lookup"])
-        self.assertEqual([name for kind, name in events if kind == "post"], ["NewUp", "NewSsh"])
-        self.assertEqual(result["details"]["skipped_existing_credential_count"], 1)
-        self.assertEqual(result["details"]["created_credential_count"], 2)
-        self.assertEqual(created_bodies[0]["type"], "up")
-        self.assertEqual(created_bodies[0]["password"], "up-secret")
-        self.assertEqual(created_bodies[1]["type"], "usk")
-        self.assertEqual(created_bodies[1]["passphrase"], "ssh-pass")
-        self.assertEqual(created_bodies[1]["private_key"], "PRIVATE SSH KEY\n")
-        rendered = json.dumps(result)
-        self.assertNotIn("up-secret", rendered)
-        self.assertNotIn("ssh-pass", rendered)
-        self.assertNotIn("PRIVATE SSH KEY", rendered)
-
-    def test_native_credentials_from_csv_stops_on_first_post_failure_and_redacts_server_detail(self):
-        attempted: list[str] = []
-
-        def fake_direct(_root, path, **kwargs):
-            if path.startswith("/api/v1/credentials?"):
-                return subprocess.CompletedProcess(["curl"], 0, '{"page":{"total":0},"items":[]}\n200', "")
-            body = json.loads(kwargs["body"])
-            attempted.append(body["name"])
-            if body["name"] == "Broken":
-                return subprocess.CompletedProcess(["curl"], 0, '{"error":{"message":"up-secret must not leak"}}\n409', "")
-            return subprocess.CompletedProcess(
-                ["curl"],
-                0,
-                json.dumps({"id": "00000000-0000-4000-8000-000000000001", "name": body["name"], "credential_type": body["type"]}) + "\n201",
-                "",
-            )
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "credentials.csv"
-            csv_file.write_text(
-                "First,UP,operator,first-secret\nBroken,UP,operator,up-secret\nLast,UP,operator,last-secret\n",
-                encoding="utf-8",
-            )
-            csv_file.chmod(0o600)
-            with (
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}),
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")),
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="b" * 64),
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct),
-            ):
-                result = yafvsctl.command_native_credentials_from_csv(root, csv_file, allow_write_control=True, status_only=True)
-
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(attempted, ["First", "Broken"])
-        self.assertEqual(result["details"]["created_credential_count"], 1)
-        self.assertEqual(result["details"]["unattempted_credential_count"], 1)
-        rendered = json.dumps(result)
-        self.assertNotIn("first-secret", rendered)
-        self.assertNotIn("up-secret", rendered)
-        self.assertNotIn("last-secret", rendered)
-
-    def test_native_credentials_from_csv_rejects_ambiguous_existing_name_before_writes(self):
-        calls: list[str] = []
-
-        def fake_direct(_root, path, **_kwargs):
-            calls.append(path)
-            return subprocess.CompletedProcess(
-                ["curl"],
-                0,
-                json.dumps({"page": {"total": 2}, "items": [{"name": "Ambiguous"}, {"name": "Ambiguous"}]}) + "\n200",
-                "",
-            )
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "credentials.csv"
-            csv_file.write_text("Ambiguous,UP,operator,secret\n", encoding="utf-8")
-            csv_file.chmod(0o600)
-            with (
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}),
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")),
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="c" * 64),
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct),
-            ):
-                result = yafvsctl.command_native_credentials_from_csv(root, csv_file, allow_write_control=True)
-
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(result["details"]["preflight_failure_count"], 1)
-        self.assertEqual(len(calls), 1)
-        self.assertNotIn("secret", json.dumps(result))
-
-    def test_native_credentials_from_csv_rejects_nested_secret_or_invalid_id_in_created_response(self):
-        responses = (
-            {"id": "00000000-0000-4000-8000-000000000001", "name": "Created", "credential_type": "up", "nested": {"password": "secret"}},
-            {"id": "not-a-uuid", "name": "Created", "credential_type": "up"},
-        )
-        for response_body in responses:
-            with self.subTest(response_body=response_body):
-                def fake_direct(_root, path, **_kwargs):
-                    if path.startswith("/api/v1/credentials?"):
-                        return subprocess.CompletedProcess(["curl"], 0, '{"page":{"total":0},"items":[]}\n200', "")
-                    return subprocess.CompletedProcess(["curl"], 0, json.dumps(response_body) + "\n201", "")
-
-                with tempfile.TemporaryDirectory() as tmp:
-                    root = Path(tmp)
-                    csv_file = root / "credentials.csv"
-                    csv_file.write_text("Created,UP,operator,secret\n", encoding="utf-8")
-                    csv_file.chmod(0o600)
-                    with (
-                        unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}),
-                        unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")),
-                        unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="d" * 64),
-                        unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct),
-                    ):
-                        result = yafvsctl.command_native_credentials_from_csv(root, csv_file, allow_write_control=True)
-
-                self.assertEqual(result["status"], "fail")
-                self.assertEqual(result["details"]["indeterminate_credential_count"], 1)
-                self.assertNotIn("secret", json.dumps(result))
-
-    def test_native_credential_csv_response_detects_escaped_and_unicode_secret_values(self):
-        credential_id = "00000000-0000-4000-8000-000000000001"
-        for submitted_secret in ('p"ass', "pässword", "line1\nline2", "back\\slash"):
-            with self.subTest(submitted_secret=submitted_secret):
-                row = yafvsctl.NativeCredentialCsvRow(1, "Created", "UP", "operator", submitted_secret, "")
-                parsed = {
-                    "id": credential_id,
-                    "name": "Created",
-                    "credential_type": "up",
-                    "diagnostic": {"echo": f"server echoed {submitted_secret}"},
-                }
-                self.assertFalse(
-                    yafvsctl.native_credential_csv_response_is_redacted(parsed, row, submitted_secret, "")
-                )
-
-        clean_row = yafvsctl.NativeCredentialCsvRow(1, "Created", "UP", "operator", "secret", "")
-        clean_response = {"id": credential_id, "name": "Created", "credential_type": "up", "owner": "admin"}
-        self.assertTrue(yafvsctl.native_credential_csv_response_is_redacted(clean_response, clean_row, "secret", ""))
-
-    def test_native_credentials_from_csv_marks_nonzero_or_unexpected_success_as_indeterminate(self):
-        outcomes = (
-            subprocess.CompletedProcess(["curl"], 7, '{"id":"00000000-0000-4000-8000-000000000001","name":"Created","credential_type":"up"}\n201', ""),
-            subprocess.CompletedProcess(["curl"], 0, "\n204", ""),
-        )
-        for post_response in outcomes:
-            with self.subTest(returncode=post_response.returncode, output=post_response.stdout):
-                def fake_direct(_root, path, **_kwargs):
-                    if path.startswith("/api/v1/credentials?"):
-                        return subprocess.CompletedProcess(["curl"], 0, '{"page":{"total":0},"items":[]}\n200', "")
-                    return post_response
-
-                with tempfile.TemporaryDirectory() as tmp:
-                    root = Path(tmp)
-                    csv_file = root / "credentials.csv"
-                    csv_file.write_text("Created,UP,operator,secret\n", encoding="utf-8")
-                    csv_file.chmod(0o600)
-                    with (
-                        unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}),
-                        unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")),
-                        unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="f" * 64),
-                        unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct),
-                    ):
-                        result = yafvsctl.command_native_credentials_from_csv(root, csv_file, allow_write_control=True)
-
-                self.assertEqual(result["status"], "fail")
-                self.assertEqual(result["details"]["indeterminate_credential_count"], 1)
-                self.assertEqual(result["findings"][-1]["details"]["outcome"], "indeterminate")
-
-    def test_native_credentials_from_csv_accounts_for_transport_exception_after_partial_write(self):
-        post_count = 0
-
-        def fake_direct(_root, path, **kwargs):
-            nonlocal post_count
-            if path.startswith("/api/v1/credentials?"):
-                return subprocess.CompletedProcess(["curl"], 0, '{"page":{"total":0},"items":[]}\n200', "")
-            post_count += 1
-            if post_count == 2:
-                raise OSError("simulated transport failure with secret")
-            body = json.loads(kwargs["body"])
-            return subprocess.CompletedProcess(
-                ["curl"],
-                0,
-                json.dumps({"id": "00000000-0000-4000-8000-000000000001", "name": body["name"], "credential_type": body["type"]}) + "\n201",
-                "",
-            )
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "credentials.csv"
-            csv_file.write_text("First,UP,operator,first-secret\nSecond,UP,operator,second-secret\n", encoding="utf-8")
-            csv_file.chmod(0o600)
-            with (
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}),
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")),
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="e" * 64),
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct),
-            ):
-                result = yafvsctl.command_native_credentials_from_csv(root, csv_file, allow_write_control=True)
-
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(result["details"]["created_credential_count"], 1)
-        self.assertEqual(result["details"]["indeterminate_credential_count"], 1)
-        self.assertEqual(result["details"]["unattempted_credential_count"], 0)
-        self.assertNotIn("secret", json.dumps(result))
-
-    def test_native_credentials_from_csv_enforces_document_bounds(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            csv_file = root / "credentials.csv"
-            csv_file.write_text("One,UP,operator,one\nTwo,UP,operator,two\n", encoding="utf-8")
-            csv_file.chmod(0o600)
-            with unittest.mock.patch.object(yafvsctl, "NATIVE_CREDENTIAL_CSV_MAX_ROWS", 1):
-                with self.assertRaisesRegex(ValueError, "exceeds 1 rows"):
-                    yafvsctl.load_native_credential_csv_rows(csv_file)
-            with unittest.mock.patch.object(yafvsctl, "NATIVE_CREDENTIAL_CSV_MAX_AGGREGATE_SECRET_BYTES", 4):
-                with self.assertRaisesRegex(ValueError, "secret material exceeds 4 bytes"):
-                    yafvsctl.load_native_credential_csv_rows(csv_file)
-
     def test_native_alerts_from_csv_rejects_malformed_rows_before_runtime(self):
         invalid_rows = (
             "Too,Few,Columns\n",
@@ -10767,6 +10382,38 @@ class YAFVSCtlTests(unittest.TestCase):
                 if isinstance(env, dict):
                     envs.append(dict(env))
                 command_text = " ".join(command)
+                if command and command[0] == "cargo" and "native-credentials-from-csv" in command:
+                    self.assertIn("--allow-write-control", command)
+                    self.assertIn("--status-only", command)
+                    self.assertIn("--json", command)
+                    return yafvsctl.subprocess.CompletedProcess(
+                        command,
+                        0,
+                        json.dumps(
+                            {
+                                "status": "pass",
+                                "summary": "Native credential CSV operation completed.",
+                                "findings": [
+                                    yafvsctl.finding(
+                                        "pass",
+                                        "native-credentials-from-csv.status-only",
+                                        "Native credential CSV operation passed; details summarized.",
+                                    )
+                                ],
+                                "artifacts": [],
+                                "metadata": {
+                                    "command": "native-credentials-from-csv",
+                                    "generated_at": "2026-07-19T00:00:00+00:00",
+                                    "repo_root": str(root),
+                                    "head": None,
+                                },
+                                "details": {
+                                    "created_credential_count": 1,
+                                },
+                            }
+                        ),
+                        "",
+                    )
                 if "inserted_schedule AS" in command_text and "inserted_alert AS" in command_text and "inserted_tag AS" in command_text:
                     return yafvsctl.subprocess.CompletedProcess(
                         command,

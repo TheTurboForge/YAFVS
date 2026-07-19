@@ -17,6 +17,7 @@ mod feed;
 mod feed_generation;
 mod license;
 mod path_coupling;
+mod production_posture;
 mod quality_gate;
 mod quality_schedule;
 mod redis;
@@ -56,6 +57,7 @@ pub use feed_generation::{
 };
 pub use license::command_license_report;
 pub use path_coupling::command_path_coupling_state;
+pub use production_posture::command_production_posture_check;
 pub use quality_gate::command_quality_gate_state;
 pub use quality_schedule::command_quality_gate_schedule;
 pub use redis::command_runtime_redis_state;

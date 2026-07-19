@@ -19,9 +19,9 @@ pub use commands::{
     command_feed_generation_state, command_feed_state, command_gsa_npm_audit, command_inventory,
     command_license_report, command_logs, command_native_api_cargo_audit,
     command_native_api_semgrep_audit, command_osv_lockfile_audit, command_path_coupling_state,
-    command_quality_gate_schedule, command_quality_gate_state, command_repository_unavailable,
-    command_runtime_app_down, command_runtime_credential_smoke, command_runtime_data_state,
-    command_runtime_db_introspect, command_runtime_feed_import_init,
+    command_production_posture_check, command_quality_gate_schedule, command_quality_gate_state,
+    command_repository_unavailable, command_runtime_app_down, command_runtime_credential_smoke,
+    command_runtime_data_state, command_runtime_db_introspect, command_runtime_feed_import_init,
     command_runtime_full_test_scan_preflight, command_runtime_full_test_scan_start,
     command_runtime_full_test_scan_status, command_runtime_gmp_smoke,
     command_runtime_identity_migrate, command_runtime_log_review,
@@ -165,6 +165,9 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         }
         CliCommand::RuntimeNativeApiDirectBootstrap => {
             command_runtime_native_api_direct_bootstrap(&repo_root, cli.status_only)
+        }
+        CliCommand::ProductionPostureCheck => {
+            command_production_posture_check(&repo_root, cli.status_only)
         }
     }
 }

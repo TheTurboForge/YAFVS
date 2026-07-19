@@ -211,6 +211,8 @@ pub enum CliCommand {
     },
     /// Prepare and check opt-in direct native API bootstrap guardrails without starting it.
     RuntimeNativeApiDirectBootstrap,
+    /// Run the non-destructive production posture checklist.
+    ProductionPostureCheck,
 }
 
 impl CliCommand {
@@ -263,6 +265,7 @@ impl CliCommand {
             Self::QualityGateSchedule { .. } => "quality-gate-schedule",
             Self::RuntimeNativeApiDirectToken { .. } => "runtime-native-api-direct-token",
             Self::RuntimeNativeApiDirectBootstrap => "runtime-native-api-direct-bootstrap",
+            Self::ProductionPostureCheck => "production-posture-check",
         }
     }
 }

@@ -968,7 +968,6 @@ class YAFVSCtlTests(unittest.TestCase):
         for function_name in (
             "command_build_ui",
             "command_runtime_manager_init",
-            "command_runtime_scanner_redis_init",
             "command_runtime_scanner_register",
             "command_runtime_app_up",
             "command_runtime_native_api_rebuild",
@@ -1005,6 +1004,16 @@ class YAFVSCtlTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("RuntimeOperationLock::acquire", gvmd_smoke_source)
         self.assertIn("FEED_ACTIVATION_LOCK", gvmd_smoke_source)
+
+        scanner_redis_source = (
+            Path(__file__).resolve().parents[1]
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "runtime_scanner_redis.rs"
+        ).read_text(encoding="utf-8")
+        self.assertIn("RuntimeOperationLock::acquire", scanner_redis_source)
+        self.assertIn("FEED_ACTIVATION_LOCK", scanner_redis_source)
 
         error = yafvsctl.RuntimeLockTimeout(
             yafvsctl.FEED_ACTIVATION_LOCK,
@@ -1430,7 +1439,6 @@ class YAFVSCtlTests(unittest.TestCase):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         wrappers = [
             "runtime-manager-init",
-            "runtime-scanner-redis-init",
             "runtime-scanner-register",
             "runtime-app-up",
             "runtime-app-smoke",
@@ -2927,6 +2935,26 @@ class YAFVSCtlTests(unittest.TestCase):
         )
         self.assertIn("runtime-init *args:", justfile)
         self.assertIn("tools/yafvsctl-rs/Cargo.toml -- runtime-init", justfile)
+
+    def test_runtime_scanner_redis_init_is_rust_owned_with_internal_python_bridge(self):
+        source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        self.assertNotIn('subparsers.add_parser("runtime-scanner-redis-init"', source)
+        self.assertNotIn('args.command == "runtime-scanner-redis-init"', source)
+        self.assertIn("def _command_runtime_scanner_redis_init_unlocked", source)
+        self.assertIn("def command_runtime_scanner_redis_init", source)
+        command = source.split("def command_runtime_scanner_redis_init", 1)[1]
+        command = command.split("\ndef ", 1)[0]
+        self.assertIn("if lifecycle_managed:", command)
+        self.assertIn(
+            '"runtime-scanner-redis-init", ["runtime-scanner-redis-init"]',
+            " ".join(command.split()),
+        )
+        self.assertIn("runtime-scanner-redis-init *args:", justfile)
+        self.assertIn(
+            "tools/yafvsctl-rs/Cargo.toml -- runtime-scanner-redis-init",
+            justfile,
+        )
 
     def test_audit_commands_are_rust_only(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")

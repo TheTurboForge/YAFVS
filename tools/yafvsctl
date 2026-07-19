@@ -13019,19 +13019,15 @@ def command_runtime_scanner_redis_init(
         return _command_runtime_scanner_redis_init_unlocked(
             repo_root, probe_openvas, app_image_ids=app_image_ids
         )
-    try:
-        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-scanner-redis-init"):
-            return _command_runtime_scanner_redis_init_unlocked(
-                repo_root, probe_openvas, app_image_ids=app_image_ids
-            )
-    except RuntimeLockTimeout as error:
-        return make_result(
-            "runtime-scanner-redis-init",
-            repo_root,
-            "Scanner Redis initialization stopped while waiting for the feed lifecycle lock.",
-            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
-            [str(runtime_dir(repo_root))],
+    if not probe_openvas or app_image_ids is not None:
+        raise ValueError(
+            "non-default scanner Redis initialization requires lifecycle_managed=True"
         )
+    return rust_result_envelope(
+        repo_root,
+        "runtime-scanner-redis-init",
+        ["runtime-scanner-redis-init"],
+    )
 
 
 def command_runtime_manager_init(
@@ -21587,7 +21583,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("build-python", parents=[common], help="build/import-check Python components")
     subparsers.add_parser("build-baseline", parents=[common], help="build the inherited stack baseline")
     subparsers.add_parser("runtime-manager-init", parents=[common], help="initialize persistent gvmd database/user prerequisites")
-    subparsers.add_parser("runtime-scanner-redis-init", parents=[common], help="initialize dedicated OpenVAS scanner Redis runtime")
     subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
     runtime_app_up = subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
     runtime_app_up.add_argument("--status-only", action="store_true", help="emit compact app startup status and only non-pass findings for chat-safe validation")
@@ -21645,8 +21640,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_build_baseline(repo_root)
     elif args.command == "runtime-manager-init":
         result = command_runtime_manager_init(repo_root)
-    elif args.command == "runtime-scanner-redis-init":
-        result = command_runtime_scanner_redis_init(repo_root)
     elif args.command == "runtime-scanner-register":
         result = command_runtime_scanner_register(repo_root)
     elif args.command == "runtime-app-up":

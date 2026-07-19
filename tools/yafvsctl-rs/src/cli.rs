@@ -2001,6 +2001,7 @@ mod tests {
             "gvmd-smoke",
             "up",
             "runtime-init",
+            "runtime-scanner-redis-init",
             "runtime-report-summary",
             "runtime-report-export",
             "runtime-report-metrics",

@@ -1204,6 +1204,9 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-nmap-capability-check", "--json"], (0, 1), ("pass", "fail")),
                 (["runtime-gmp-smoke", "--json"], (0, 1), ("pass", "fail")),
                 (["runtime-rbac-smoke", "--json"], (0, 1), ("pass", "warn", "fail")),
+                (["runtime-full-test-scan-preflight", "--target-cidr", "10.0.0.0/16", "--json"], 1, "fail"),
+                (["runtime-full-test-scan-start", "--target-cidr", "192.0.2.0/24", "--json"], 1, "fail"),
+                (["runtime-full-test-scan-status", "--target-cidr", "10.0.0.0/16", "--json"], 1, "fail"),
                 (["c-hardening-check", "--status-only", "--json"], 1, "fail"),
                 (["path-coupling-state", "--json"], 0, "pass"),
                 (["path-coupling-state", "--status-only", "--json"], 0, "pass"),
@@ -11471,6 +11474,9 @@ class YAFVSCtlTests(unittest.TestCase):
             "logs",
             "doctor",
             "runtime-log-review",
+            "runtime-full-test-scan-preflight",
+            "runtime-full-test-scan-start",
+            "runtime-full-test-scan-status",
         }
         python_owned = (
             "configure",
@@ -14405,8 +14411,6 @@ class YAFVSCtlTests(unittest.TestCase):
             root.mkdir()
             self.assertEqual(yafvsctl.scanner_redis_socket_path(root), Path(tmp) / "YAFVS-runtime" / "run" / "redis-openvas" / "redis.sock")
             self.assertEqual(yafvsctl.openvas_runtime_config_path(root), Path(tmp) / "YAFVS-runtime" / "state" / "ospd" / "openvas.conf")
-            self.assertEqual(yafvsctl.runtime_full_test_scan_probe_path(root), root / "tools" / "runtime_full_test_scan.py")
-            self.assertEqual(yafvsctl.full_test_scan_artifact_dir(root), Path(tmp) / "YAFVS-runtime" / "artifacts" / "full-test-scan")
 
     def test_feed_paths_live_under_runtime_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -15510,12 +15514,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("gmp.", source)
         self.assertIn("RawGmpClient", source)
 
-        wrapper_source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
-        full_test_scan_wrapper = wrapper_source.split("def command_runtime_full_test_scan", 1)[1].split("def command_runtime_report", 1)[0]
-        self.assertNotIn("venv_python(repo_root, \"python-gvm\")", full_test_scan_wrapper)
-        self.assertNotIn("python-gvm.venv", full_test_scan_wrapper)
-        self.assertIn("sys.executable", full_test_scan_wrapper)
-
     def test_full_test_scan_raw_start_client_quotes_task_id_attribute(self):
         client = runtime_full_test_scan.RawGmpClient(Path("/tmp/gvmd.sock"), "admin", "secret", 10)
         client.connection = object()
@@ -15715,27 +15713,16 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(payload["status"], "fail")
         self.assertIn("does not match", payload["summary"])
 
-    def test_full_test_scan_wrapper_rejects_target_before_runtime_checks(self):
+    def test_full_test_scan_wrapper_is_rust_only_cli_ownership(self):
         root = Path(__file__).resolve().parents[2]
-        with unittest.mock.patch.object(yafvsctl, "command_runtime_scanner_capability_check") as capability:
-            invalid = yafvsctl.command_runtime_full_test_scan(
-                root,
-                "start",
-                target_cidr="10.0.0.0/16",
-                confirm_authorized_target="10.0.0.0/16",
-            )
-            mismatch = yafvsctl.command_runtime_full_test_scan(
-                root,
-                "start",
-                target_cidr=TEST_FULL_TEST_TARGET.cidr,
-                confirm_authorized_target="192.0.2.1/32",
-            )
-
-        self.assertEqual(invalid["status"], "fail")
-        self.assertEqual(invalid["findings"][0]["check"], "full-test-scan.target")
-        self.assertEqual(mismatch["status"], "fail")
-        self.assertEqual(mismatch["findings"][0]["check"], "full-test-scan.confirmation")
-        capability.assert_not_called()
+        python_source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        rust_source = (
+            root / "tools" / "yafvsctl-rs" / "src" / "commands" / "runtime_probe.rs"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("def command_runtime_full_test_scan", python_source)
+        self.assertNotIn("def validated_full_test_target_cidr", python_source)
+        self.assertIn("command_runtime_full_test_scan_with", rust_source)
+        self.assertIn("validated_full_test_target_cidr", rust_source)
 
     def test_full_test_scan_start_records_broken_pipe_during_poll(self):
         class FakeGMP:

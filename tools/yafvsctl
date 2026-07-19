@@ -98,7 +98,6 @@ APP_RUNTIME_ARTIFACT_IGNORED_PATHS = frozenset(
 )
 APP_DEPLOYMENT_RECEIPT = Path("state/app-deployment.json")
 FULL_TEST_TASK_PREFIX = "YAFVS full test scan "
-MAX_FULL_TEST_TARGET_ADDRESSES = 256
 COMPLETED_SCAN_RUN_STATUS = 1
 RUNTIME_DIRS = (
     "postgres",
@@ -4987,14 +4986,6 @@ def scanner_redis_socket_path(repo_root: Path) -> Path:
 
 def openvas_runtime_config_path(repo_root: Path) -> Path:
     return runtime_path(repo_root, "state", "ospd", "openvas.conf")
-
-
-def runtime_full_test_scan_probe_path(repo_root: Path) -> Path:
-    return repo_root / "tools" / "runtime_full_test_scan.py"
-
-
-def full_test_scan_artifact_dir(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "artifacts", "full-test-scan")
 
 
 def runtime_scope_probe_path(repo_root: Path) -> Path:
@@ -14047,124 +14038,6 @@ def command_runtime_nmap_capability_check(repo_root: Path) -> dict[str, Any]:
         "runtime-nmap-capability-check",
         ["runtime-nmap-capability-check"],
     )
-
-
-def validated_full_test_target_cidr(value: str) -> str:
-    try:
-        network = ipaddress.ip_network(value.strip(), strict=True)
-    except ValueError as error:
-        raise ValueError(f"Full-test target must be a canonical CIDR: {error}") from error
-    if network.is_unspecified or network.is_multicast:
-        raise ValueError("Full-test target must not be an unspecified or multicast network.")
-    if network.num_addresses > MAX_FULL_TEST_TARGET_ADDRESSES:
-        raise ValueError(f"Full-test target may contain at most {MAX_FULL_TEST_TARGET_ADDRESSES} addresses; got {network.num_addresses}.")
-    return str(network)
-
-
-def command_runtime_full_test_scan(
-    repo_root: Path,
-    action: str,
-    target_cidr: str,
-    confirm_authorized_target: str | None = None,
-) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    try:
-        canonical_target_cidr = validated_full_test_target_cidr(target_cidr)
-    except ValueError as error:
-        return make_result(
-            f"runtime-full-test-scan-{action}",
-            repo_root,
-            "Full test scan command refused an invalid target.",
-            [finding("fail", "full-test-scan.target", str(error))],
-        )
-    if action == "start":
-        if not confirm_authorized_target:
-            return make_result(
-                "runtime-full-test-scan-start",
-                repo_root,
-                "Full test scan start refused without an exact target confirmation.",
-                [finding("fail", "full-test-scan.confirmation", "Pass --confirm-authorized-target with the exact --target-cidr value.")],
-            )
-        try:
-            canonical_confirmation = validated_full_test_target_cidr(confirm_authorized_target)
-        except ValueError as error:
-            return make_result(
-                "runtime-full-test-scan-start",
-                repo_root,
-                "Full test scan start refused an invalid target confirmation.",
-                [finding("fail", "full-test-scan.confirmation", str(error))],
-            )
-        if canonical_confirmation != canonical_target_cidr:
-            return make_result(
-                "runtime-full-test-scan-start",
-                repo_root,
-                "Full test scan start refused a mismatched target confirmation.",
-                [finding("fail", "full-test-scan.confirmation", "--confirm-authorized-target must exactly match --target-cidr.")],
-            )
-    secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
-    probe = runtime_full_test_scan_probe_path(repo_root)
-    artifact_dir = full_test_scan_artifact_dir(repo_root)
-    findings.append(finding("pass" if gvmd_socket_path(repo_root).is_socket() else "fail", "gvmd.socket", "gvmd socket is ready." if gvmd_socket_path(repo_root).is_socket() else "gvmd socket is not ready.", str(gvmd_socket_path(repo_root))))
-    findings.append(finding("pass" if secret_path.is_file() else "fail", "runtime.admin-secret", "Development admin secret exists." if secret_path.is_file() else "Development admin secret is missing.", str(secret_path)))
-    findings.append(finding("pass" if probe.is_file() else "fail", "full-test-scan.probe", "Full test scan helper exists." if probe.is_file() else "Full test scan helper is missing.", str(probe.relative_to(repo_root)) if probe.exists() else str(probe)))
-    try:
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        findings.append(finding("pass", "full-test-scan.artifact-dir", "Full test scan artifact directory is ready.", str(artifact_dir)))
-    except OSError as error:
-        findings.append(finding("fail", "full-test-scan.artifact-dir", f"Full test scan artifact directory is not usable: {error}", str(artifact_dir)))
-
-    if action in {"preflight", "start"}:
-        capability = command_runtime_scanner_capability_check(repo_root)
-        findings.append(finding(capability["status"], "ospd.capability-check", capability["summary"], details={"status": capability["status"], "findings": capability["findings"]}))
-        process_check = command_runtime_scanner_process_check(repo_root)
-        findings.append(finding(process_check["status"], "ospd.process-check", process_check["summary"], details={"status": process_check["status"], "findings": process_check["findings"]}))
-        nmap_capability = command_runtime_nmap_capability_check(repo_root)
-        findings.append(finding(nmap_capability["status"], "nmap.capability-check", nmap_capability["summary"], details={"status": nmap_capability["status"], "findings": nmap_capability["findings"]}))
-
-    command_name = f"runtime-full-test-scan-{action}"
-    if aggregate_status(findings) == "fail":
-        return make_result(command_name, repo_root, "Full test scan command stopped at prerequisites.", findings, [str(artifact_dir)])
-
-    args = [
-        sys.executable,
-        str(probe),
-        action,
-        "--socket",
-        str(gvmd_socket_path(repo_root)),
-        "--username",
-        DEV_ADMIN_USER,
-        "--password-file",
-        str(secret_path),
-        "--artifact-dir",
-        str(artifact_dir),
-        "--target-cidr",
-        canonical_target_cidr,
-        "--repo-root",
-        str(repo_root),
-        "--ospd-log-file",
-        str(runtime_path(repo_root, "logs", "ospd", "ospd-openvas.log")),
-    ]
-    if confirm_authorized_target:
-        args.extend(["--confirm-authorized-target", confirm_authorized_target])
-    result = run_command(args, repo_root, env=build_env(repo_root), timeout=120)
-    try:
-        parsed = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        parsed = None
-    helper_status = parsed.get("status") if parsed else None
-    finding_status = helper_status if result.returncode == 0 and helper_status in {"pass", "warn"} else "fail"
-    password = secret_path.read_text(encoding="utf-8").strip() if secret_path.is_file() else ""
-    findings.append(
-        finding(
-            finding_status,
-            f"full-test-scan.{action}",
-            parsed.get("summary", f"Full test scan helper exit code {result.returncode}.") if parsed else f"Full test scan helper exit code {result.returncode}.",
-            details={"helper": parsed, "output_tail": output_tail(result.stdout, 120, [password])},
-        )
-    )
-    artifacts = list(parsed.get("artifacts", [])) if parsed and isinstance(parsed.get("artifacts"), list) else [str(artifact_dir)]
-    summary = parsed.get("summary") if parsed else f"Full test scan {action} command completed with exit code {result.returncode}."
-    return make_result(command_name, repo_root, summary, findings, artifacts)
 
 
 def command_runtime_report(
@@ -30514,13 +30387,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-scanner-redis-init", parents=[common], help="initialize dedicated OpenVAS scanner Redis runtime")
     subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
     subparsers.add_parser("runtime-feed-keyring-init", parents=[common], help="initialize the shared feed signature GnuPG keyring")
-    full_test_preflight = subparsers.add_parser("runtime-full-test-scan-preflight", parents=[common], help="preflight an explicit authorized full test scan")
-    full_test_preflight.add_argument("--target-cidr", required=True, help="explicit canonical authorized target CIDR; at most 256 addresses")
-    full_test_start = subparsers.add_parser("runtime-full-test-scan-start", parents=[common], help="start an explicit authorized full test scan")
-    full_test_start.add_argument("--target-cidr", required=True, help="explicit canonical authorized target CIDR; at most 256 addresses")
-    full_test_start.add_argument("--confirm-authorized-target", help="exact target CIDR confirmation required before scan start")
-    full_test_status = subparsers.add_parser("runtime-full-test-scan-status", parents=[common], help="show an explicit authorized full test scan status")
-    full_test_status.add_argument("--target-cidr", required=True, help="explicit canonical authorized target CIDR; at most 256 addresses")
     report_summary = subparsers.add_parser("runtime-report-summary", parents=[common], help="summarize the latest runtime full-test report")
     report_summary.add_argument("--report-id", help="optional report id; defaults to the latest completed full-test report")
     report_summary.add_argument("--max-results", type=int, default=1000, help="maximum results to fetch from the selected report")
@@ -30859,17 +30725,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_scanner_register(repo_root)
     elif args.command == "runtime-feed-keyring-init":
         result = command_runtime_feed_keyring_init(repo_root)
-    elif args.command == "runtime-full-test-scan-preflight":
-        result = command_runtime_full_test_scan(repo_root, "preflight", target_cidr=args.target_cidr)
-    elif args.command == "runtime-full-test-scan-start":
-        result = command_runtime_full_test_scan(
-            repo_root,
-            "start",
-            target_cidr=args.target_cidr,
-            confirm_authorized_target=args.confirm_authorized_target,
-        )
-    elif args.command == "runtime-full-test-scan-status":
-        result = command_runtime_full_test_scan(repo_root, "status", target_cidr=args.target_cidr)
     elif args.command == "runtime-report-summary":
         result = command_runtime_report(repo_root, "summary", report_id=args.report_id, max_results=args.max_results, top_results=args.top_results)
     elif args.command == "runtime-report-export":

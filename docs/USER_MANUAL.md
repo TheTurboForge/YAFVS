@@ -308,6 +308,7 @@ just native-start-task --task-id TASK_UUID --allow-write-control
 tools/yafvsctl native-scan-new-system --host 192.0.2.10 --dry-run --status-only
 tools/yafvsctl native-scan-new-system --host 192.0.2.10 --allow-scan-control --status-only
 tools/yafvsctl native-export-report-csv --report-id REPORT_UUID --output ./report.csv --status-only
+just native-export-report-pdf --report-id REPORT_UUID --output ./report.pdf --status-only
 tools/yafvsctl native-export-report-bundle --report-id REPORT_UUID --output ./report.yafvs-report.zip --status-only
 tools/yafvsctl native-delete-overrides-by-filter --filter 'obsolete policy' --dry-run --status-only
 tools/yafvsctl native-delete-overrides-by-filter --filter 'obsolete policy' --allow-write-control --confirm-snapshot SNAPSHOT_SHA256 --status-only
@@ -347,6 +348,15 @@ cap, writes a private same-directory temporary file, and atomically replaces the
 destination only after a complete export. Existing files require `--overwrite`.
 The output is a stable result-view CSV rather than gvmd's configurable
 report-format rendering.
+
+`native-export-report-pdf` streams the selected native evidence PDF directly
+into a private same-directory transaction file without placing the bearer token
+or response body in process arguments, environment variables, or the result
+envelope. It enforces an explicit byte cap in both curl and the child process,
+accepts only an HTTP 200 `application/pdf` response with PDF magic and matching
+byte counts, and installs the validated file atomically. Existing files require
+`--overwrite`; without it, a destination created during the download wins and
+is preserved.
 
 `native-export-report-bundle` is the complete native evidence artifact. It
 preflights the exact report and metrics, paginates every retained raw result row

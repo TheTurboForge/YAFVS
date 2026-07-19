@@ -90,10 +90,11 @@ fn open_artifact_parent(path: &Path) -> Result<(OwnedFd, CString), String> {
     let stat = unsafe { stat.assume_init() };
     if stat.st_mode & libc::S_IFMT != libc::S_IFDIR
         || stat.st_uid != unsafe { libc::getuid() }
-        || stat.st_mode & 0o022 != 0
+        || stat.st_mode & 0o002 != 0
     {
         return Err(
-            "artifact directory is not a private, real, current-user-owned directory".into(),
+            "artifact directory is not a real, current-user-owned, non-world-writable directory"
+                .into(),
         );
     }
     Ok((parent, target_name))
@@ -323,10 +324,23 @@ mod tests {
     }
 
     #[test]
-    fn refuses_a_group_writable_final_parent() {
-        let root = temporary_root("writable-parent");
+    fn accepts_the_existing_group_writable_owner_parent_contract() {
+        let root = temporary_root("group-writable-parent");
         fs::create_dir_all(&root).unwrap();
-        fs::set_permissions(&root, fs::Permissions::from_mode(0o770)).unwrap();
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o775)).unwrap();
+        write_secure_artifact(&root.join("report.json"), b"expected").unwrap();
+        assert_eq!(
+            fs::read_to_string(root.join("report.json")).unwrap(),
+            "expected"
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn refuses_a_world_writable_final_parent() {
+        let root = temporary_root("world-writable-parent");
+        fs::create_dir_all(&root).unwrap();
+        fs::set_permissions(&root, fs::Permissions::from_mode(0o777)).unwrap();
         assert!(write_secure_artifact(&root.join("report.json"), b"unsafe").is_err());
         assert!(!root.join("report.json").exists());
         let _ = fs::remove_dir_all(root);

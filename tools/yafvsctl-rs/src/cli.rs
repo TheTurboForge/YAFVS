@@ -1759,6 +1759,7 @@ mod tests {
             "native-stop-tasks-from-csv",
             "native-stop-all-tasks",
             "native-update-task-target",
+            "native-delete-overrides-by-filter",
             "native-empty-trash",
             "native-verify-scanners",
             "feed-generation-stage",

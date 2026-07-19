@@ -719,6 +719,59 @@ mod tests {
     }
 
     #[test]
+    fn snapshot_pagination_requires_a_stable_total() {
+        let mut responses = VecDeque::from([
+            api_call(
+                json!({
+                    "items": [{"id": ID2}],
+                    "page": {"page": 1, "page_size": 500, "total": 2},
+                }),
+                200,
+            ),
+            api_call(
+                json!({
+                    "items": [{"id": ID1}],
+                    "page": {"page": 2, "page_size": 500, "total": 2},
+                }),
+                200,
+            ),
+        ]);
+        let mut paths = Vec::new();
+        let mut call = |path: &str, method: &str| {
+            assert_eq!(method, "GET");
+            paths.push(path.to_string());
+            Ok(responses.pop_front().unwrap())
+        };
+        let (ids, _) = fetch_snapshot("CVE", DEFAULT_MAX, &mut call).unwrap();
+        assert_eq!(ids, [ID1, ID2]);
+        assert!(paths[0].contains("page=1&"));
+        assert!(paths[1].contains("page=2&"));
+
+        let mut responses = VecDeque::from([
+            api_call(
+                json!({
+                    "items": [{"id": ID1}],
+                    "page": {"page": 1, "page_size": 500, "total": 2},
+                }),
+                200,
+            ),
+            api_call(
+                json!({
+                    "items": [{"id": ID2}],
+                    "page": {"page": 2, "page_size": 500, "total": 3},
+                }),
+                200,
+            ),
+        ]);
+        let mut changed = |_: &str, _: &str| Ok(responses.pop_front().unwrap());
+        let error = fetch_snapshot("CVE", DEFAULT_MAX, &mut changed).unwrap_err();
+        assert_eq!(
+            error.1["reason"],
+            "override snapshot page was invalid, duplicated, or changed during pagination"
+        );
+    }
+
+    #[test]
     fn cap_and_snapshot_change_refuse_all_deletes() {
         let runner = Runner::default();
         let mut capped = |_: &str, _: &str| Ok(api_call(page(&[ID1, ID2], 2), 200));
@@ -816,6 +869,7 @@ mod tests {
         compact_status_only(&mut compact);
         let rendered = serde_json::to_string(&compact).unwrap();
         assert!(!rendered.contains(ID1));
+        assert!(!rendered.contains("\"filter\":\"CVE\""));
         assert!(rendered.contains("partial-failures"));
     }
 

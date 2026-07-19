@@ -1218,6 +1218,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["native-stop-tasks-from-csv", "--csv-file", "/definitely-missing-yafvs-tasks.csv", "--json"], 1, "fail"),
                 (["native-stop-all-tasks", "--json"], 1, "fail"),
                 (["native-update-task-target", "--task-id", "11111111-1111-4111-8111-111111111111", "--host", "192.0.2.10", "--json"], 1, "fail"),
+                (["native-delete-overrides-by-filter", "--filter", "CVE", "--allow-write-control", "--json"], 1, "fail"),
                 (["native-empty-trash", "--allow-write-control", "--json"], 1, "fail"),
                 (["native-verify-scanners", "--json"], 1, "fail"),
                 (["native-targets-from-host-list", "--hosts-file", "/definitely-missing-yafvs-hosts.txt", "--json"], 1, "fail"),
@@ -2369,7 +2370,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-delete-overrides-by-filter", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2377,7 +2378,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
                 self.assertIn(f'tools/yafvsctl {command} "$@"', justfile)
-        for command in ("native-delete-overrides-by-filter", "native-bulk-modify-schedules"):
+        for command in ("native-bulk-modify-schedules",):
             self.assertIn(command, source)
             self.assertIn(f"{command} *args:", justfile)
             self.assertIn(f'tools/yafvsctl {command} "$@"', justfile)
@@ -2389,6 +2390,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "native-tasks-from-csv",
             "native-credentials-from-csv",
             "native-alerts-from-csv",
+            "native-delete-overrides-by-filter",
             "native-empty-trash",
             "native-verify-scanners",
         ):
@@ -7259,24 +7261,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["alert_id"], alert_id)
         self.assertEqual(result["details"]["status"], "dry_run")
 
-    def test_native_delete_overrides_by_filter_parser_and_pre_runtime_guards(self):
-        args = yafvsctl.build_parser().parse_args(["native-delete-overrides-by-filter", "--filter", "CVE-2026", "--dry-run"])
-        self.assertEqual(args.command, "native-delete-overrides-by-filter")
-        self.assertEqual(args.max_overrides, yafvsctl.NATIVE_OVERRIDE_DELETE_DEFAULT_MAX)
-        self.assertEqual(args.delay_seconds, 1.0)
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                blank = yafvsctl.command_native_delete_overrides_by_filter(root, filter_value=" ", dry_run=True)
-                unconfirmed = yafvsctl.command_native_delete_overrides_by_filter(root, filter_value="CVE-2026", allow_write_control=True)
-                capped = yafvsctl.command_native_delete_overrides_by_filter(root, filter_value="CVE-2026", dry_run=True, max_overrides=0)
-                delayed = yafvsctl.command_native_delete_overrides_by_filter(root, filter_value="CVE-2026", dry_run=True, delay_seconds=61)
-                curl.assert_not_called()
-        for result in (blank, unconfirmed, capped, delayed):
-            self.assertEqual(result["status"], "fail")
-            self.assertEqual(result["findings"][0]["check"], "native-delete-overrides-by-filter.arguments")
-
     def test_native_empty_trash_preview_payload_is_complete_counts_only_contract(self):
         items = [
             {"resource_type": resource_type, "count": 0}
@@ -7395,113 +7379,6 @@ class YAFVSCtlTests(unittest.TestCase):
         )
         self.assertEqual(skipped[-1]["check"], "native-api-direct.trash-empty-preflight-skipped")
         self.assertEqual(skipped[-1]["status"], "warn")
-
-    def test_native_delete_overrides_by_filter_dry_run_snapshots_stable_ids_without_writes(self):
-        ids = [
-            "22222222-2222-4222-8222-222222222222",
-            "11111111-1111-4111-8111-111111111111",
-        ]
-        calls = []
-
-        def fake_direct(_root, path, **kwargs):
-            calls.append((kwargs.get("method", "GET"), path))
-            page = 1 if "page=1&" in path else 2
-            payload = {"items": [{"id": ids[page - 1]}], "page": {"page": page, "page_size": 500, "total": 2}}
-            return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
-
-        with tempfile.TemporaryDirectory() as tmp:
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="t" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
-                full = yafvsctl.command_native_delete_overrides_by_filter(Path(tmp), filter_value="CVE 2026", dry_run=True)
-                compact = yafvsctl.command_native_delete_overrides_by_filter(Path(tmp), filter_value="CVE 2026", dry_run=True, status_only=True)
-        expected_ids = sorted(ids)
-        filter_hash, snapshot_hash = yafvsctl.native_override_delete_snapshot("CVE 2026", expected_ids)
-        self.assertEqual(full["status"], "pass")
-        self.assertEqual(full["details"]["override_ids"], expected_ids)
-        self.assertEqual(full["details"]["filter_sha256"], filter_hash)
-        self.assertEqual(full["details"]["snapshot_sha256"], snapshot_hash)
-        self.assertEqual(compact["details"]["matched_count"], 2)
-        self.assertNotIn("override_ids", compact["details"])
-        self.assertNotIn("filter", compact["details"])
-        self.assertNotIn("t" * 64, json.dumps(full))
-        self.assertTrue(all(method == "GET" for method, _path in calls))
-        self.assertTrue(all("filter=CVE%202026" in path and "sort=id" in path for _method, path in calls))
-
-    def test_native_delete_overrides_by_filter_refuses_cap_and_snapshot_change_before_deletes(self):
-        override_id = "11111111-1111-4111-8111-111111111111"
-
-        def cap_response(_root, _path, **_kwargs):
-            payload = {"items": [{"id": override_id}], "page": {"page": 1, "page_size": 500, "total": 101}}
-            return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
-
-        def snapshot_response(_root, path, **kwargs):
-            self.assertEqual(kwargs.get("method", "GET"), "GET")
-            payload = {"items": [{"id": override_id}], "page": {"page": 1, "page_size": 500, "total": 1}}
-            return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
-
-        common = [
-            unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}),
-            unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")),
-            unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="t" * 64),
-        ]
-        with tempfile.TemporaryDirectory() as tmp:
-            with common[0], common[1], common[2], unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=cap_response):
-                capped = yafvsctl.command_native_delete_overrides_by_filter(Path(tmp), filter_value="CVE", dry_run=True, max_overrides=100)
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="t" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=snapshot_response):
-                changed = yafvsctl.command_native_delete_overrides_by_filter(
-                    Path(tmp), filter_value="CVE", allow_write_control=True, confirm_snapshot="0" * 64
-                )
-        self.assertEqual(capped["status"], "fail")
-        self.assertEqual(changed["status"], "fail")
-        self.assertEqual(changed["findings"][-1]["check"], "native-delete-overrides-by-filter.snapshot-confirmation")
-
-    def test_native_delete_overrides_by_filter_confirmed_partial_failure_continues_with_pacing(self):
-        ids = [
-            "11111111-1111-4111-8111-111111111111",
-            "22222222-2222-4222-8222-222222222222",
-        ]
-        _filter_hash, snapshot_hash = yafvsctl.native_override_delete_snapshot("CVE", ids)
-        calls = []
-
-        def fake_direct(_root, path, **kwargs):
-            method = kwargs.get("method", "GET")
-            calls.append((method, path))
-            if method == "GET":
-                payload = {"items": [{"id": item} for item in ids], "page": {"page": 1, "page_size": 500, "total": 2}}
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
-            if path.endswith(ids[0]):
-                return subprocess.CompletedProcess(["curl"], 0, "\n204", "")
-            return subprocess.CompletedProcess(["curl"], 0, '{"error":{"code":"forbidden"}}\n403', "")
-
-        with tempfile.TemporaryDirectory() as tmp:
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="t" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct), \
-                unittest.mock.patch.object(yafvsctl.time, "sleep") as sleep:
-                result = yafvsctl.command_native_delete_overrides_by_filter(
-                    Path(tmp),
-                    filter_value="CVE",
-                    allow_write_control=True,
-                    confirm_snapshot=snapshot_hash,
-                    delay_seconds=0.25,
-                )
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(result["details"]["deleted_count"], 1)
-        self.assertEqual(result["details"]["failure_count"], 1)
-        compact = yafvsctl.native_delete_overrides_status_only_result(result)
-        rendered_compact = json.dumps(compact)
-        self.assertEqual(compact["details"]["failure_count"], 1)
-        self.assertIn("native-delete-overrides-by-filter.partial-failures", rendered_compact)
-        for override_id in ids:
-            self.assertNotIn(override_id, rendered_compact)
-        self.assertEqual([method for method, _path in calls], ["GET", "DELETE", "DELETE"])
-        sleep.assert_called_once_with(0.25)
 
     def test_native_bulk_modify_schedules_parser_and_pre_runtime_guards(self):
         args = yafvsctl.build_parser().parse_args(["native-bulk-modify-schedules", "--filter", "nightly", "--timezone", "UTC", "--dry-run"])

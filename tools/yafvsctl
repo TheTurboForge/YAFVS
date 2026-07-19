@@ -270,8 +270,6 @@ NATIVE_NVT_DIAGNOSTIC_PREREQUISITE_IDS = (
     "1.3.6.1.4.1.25623.1.0.100315",
 )
 NATIVE_TASK_BATCH_PAGE_SIZE = 500
-NATIVE_OVERRIDE_DELETE_DEFAULT_MAX = 100
-NATIVE_OVERRIDE_DELETE_MAX_LIMIT = 500
 NATIVE_BULK_MODIFY_SCHEDULES_DEFAULT_MAX = 100
 NATIVE_BULK_MODIFY_SCHEDULES_MAX_LIMIT = 500
 # Persisted gvmd task_status_t values that can still own scanner/control work.
@@ -20758,236 +20756,6 @@ def native_empty_trash_fetch_preview(
     return response, native_empty_trash_preview_payload(parsed), http_status
 
 
-def native_override_delete_filter_value(value: str) -> str:
-    value = value.strip()
-    if not value:
-        raise ValueError("--filter must be non-empty; broad unfiltered deletion is refused")
-    if len(value.encode("utf-8")) > 1024 or not value.isprintable():
-        raise ValueError("--filter must be one printable line up to 1024 bytes")
-    return value
-
-
-def native_override_delete_snapshot(filter_value: str, override_ids: list[str]) -> tuple[str, str]:
-    filter_sha256 = hashlib.sha256(filter_value.encode("utf-8")).hexdigest()
-    payload = json.dumps(
-        {"filter_sha256": filter_sha256, "override_ids": sorted(override_ids)},
-        ensure_ascii=True,
-        separators=(",", ":"),
-        sort_keys=True,
-    )
-    return filter_sha256, hashlib.sha256(payload.encode("ascii")).hexdigest()
-
-
-def native_override_delete_fetch_snapshot(
-    repo_root: Path,
-    *,
-    filter_value: str,
-    max_overrides: int,
-    token: str,
-    env: dict[str, str],
-) -> tuple[list[str], dict[str, Any] | None]:
-    override_ids: list[str] = []
-    seen: set[str] = set()
-    expected_total: int | None = None
-    page = 1
-    while expected_total is None or len(override_ids) < expected_total:
-        path = (
-            f"/api/v1/overrides?filter={urllib.parse.quote(filter_value, safe='')}"
-            f"&page={page}&page_size={NATIVE_TASK_BATCH_PAGE_SIZE}&sort=id"
-        )
-        response = direct_native_api_curl(repo_root, path, token=token, env=env)
-        parsed, http_status = parse_json_output_with_http_status(response)
-        items = parsed.get("items") if isinstance(parsed, dict) else None
-        page_info = parsed.get("page") if isinstance(parsed, dict) else None
-        total = page_info.get("total") if isinstance(page_info, dict) else None
-        actual_page = page_info.get("page") if isinstance(page_info, dict) else None
-        page_ids = [item.get("id") for item in items] if isinstance(items, list) else []
-        page_ok = (
-            response.returncode == 0
-            and http_status == 200
-            and isinstance(items, list)
-            and type(total) is int
-            and total >= 0
-            and actual_page == page
-            and all(isinstance(item, dict) and isinstance(item.get("id"), str) and UUID_VALUE_RE.fullmatch(item["id"]) for item in items)
-        )
-        if expected_total is not None and total != expected_total:
-            page_ok = False
-        if page_ok and expected_total is None:
-            expected_total = total
-            if total > max_overrides:
-                return [], {"reason": "matched override count exceeds safety cap", "total": total, "max_overrides": max_overrides}
-        if page_ok and (len(page_ids) != len(set(page_ids)) or any(item_id in seen for item_id in page_ids)):
-            page_ok = False
-        if not page_ok:
-            return [], {
-                "reason": "override snapshot page was invalid, duplicated, or changed during pagination",
-                "page": page,
-                "http_status": http_status,
-                "expected_total": expected_total,
-                "observed_total": total,
-            }
-        if not items and len(override_ids) != expected_total:
-            return [], {"reason": "override snapshot ended before declared total", "page": page, "total": expected_total}
-        seen.update(page_ids)
-        override_ids.extend(page_ids)
-        if len(override_ids) == expected_total:
-            break
-        if expected_total is not None and len(override_ids) > expected_total:
-            return [], {"reason": "override snapshot exceeded declared total", "page": page, "total": expected_total}
-        page += 1
-        if page > 1000:
-            return [], {"reason": "override snapshot pagination exceeded safety limit", "total": expected_total}
-    return sorted(override_ids), None
-
-
-def native_delete_overrides_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    details = result.get("details") if isinstance(result.get("details"), dict) else {}
-    compact = dict(result)
-    compact["details"] = {
-        key: details.get(key)
-        for key in (
-            "filter_sha256",
-            "snapshot_sha256",
-            "matched_count",
-            "max_overrides",
-            "dry_run",
-            "delay_seconds",
-            "deleted_count",
-            "failure_count",
-        )
-    }
-    compact_findings = [
-        compact_doctor_finding(item)
-        for item in result.get("findings", [])
-        if isinstance(item, dict)
-        and item.get("status") != "pass"
-        and not str(item.get("check", "")).startswith("native-delete-overrides-by-filter.override.")
-    ]
-    if details.get("failure_count"):
-        compact_findings.append(
-            finding(
-                "fail",
-                "native-delete-overrides-by-filter.partial-failures",
-                f"{details['failure_count']} override trash move(s) failed; inspect the full local artifact for row details.",
-            )
-        )
-    compact["findings"] = compact_findings or [
-        finding("pass", "native-delete-overrides-by-filter.status-only", "Native override delete snapshot/result summarized.")
-    ]
-    return compact
-
-
-def native_delete_overrides_result(
-    repo_root: Path,
-    summary: str,
-    findings: list[dict[str, Any]],
-    details: dict[str, Any],
-    *,
-    status_only: bool,
-) -> dict[str, Any]:
-    result = make_result("native-delete-overrides-by-filter", repo_root, summary, findings)
-    result["details"] = details
-    return native_delete_overrides_status_only_result(result) if status_only else result
-
-
-def command_native_delete_overrides_by_filter(
-    repo_root: Path,
-    *,
-    filter_value: str,
-    max_overrides: int = NATIVE_OVERRIDE_DELETE_DEFAULT_MAX,
-    dry_run: bool = False,
-    allow_write_control: bool = False,
-    confirm_snapshot: str | None = None,
-    delay_seconds: float = 1.0,
-    status_only: bool = False,
-) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    details: dict[str, Any] = {
-        "matched_count": 0,
-        "max_overrides": max_overrides,
-        "dry_run": dry_run,
-        "delay_seconds": delay_seconds,
-        "deleted_count": 0,
-        "failure_count": 0,
-        "rows": [],
-    }
-    try:
-        filter_value = native_override_delete_filter_value(filter_value)
-        if type(max_overrides) is not int or not 1 <= max_overrides <= NATIVE_OVERRIDE_DELETE_MAX_LIMIT:
-            raise ValueError(f"--max-overrides must be between 1 and {NATIVE_OVERRIDE_DELETE_MAX_LIMIT}")
-        if isinstance(delay_seconds, bool) or not isinstance(delay_seconds, (int, float)) or not 0.0 <= float(delay_seconds) <= 60.0:
-            raise ValueError("--delay-seconds must be between 0 and 60")
-        delay_seconds = float(delay_seconds)
-        if not dry_run and not allow_write_control:
-            raise ValueError("deleting overrides requires --allow-write-control")
-        if not dry_run and (not isinstance(confirm_snapshot, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", confirm_snapshot)):
-            raise ValueError("deleting overrides requires --confirm-snapshot with the SHA-256 from a fresh --dry-run")
-    except ValueError as exc:
-        findings.append(finding("fail", "native-delete-overrides-by-filter.arguments", str(exc)))
-        return native_delete_overrides_result(repo_root, "Native filtered override deletion rejected before runtime access.", findings, details, status_only=status_only)
-
-    details["delay_seconds"] = delay_seconds
-    env = native_api_direct_runtime_env(repo_root)
-    findings.append(native_api_direct_config_shape_finding(env, check="native-delete-overrides-by-filter.direct-config-shape"))
-    if aggregate_status(findings) == "fail":
-        return native_delete_overrides_result(repo_root, "Direct native API override deletion rejected before runtime access.", findings, details, status_only=status_only)
-    token = native_api_direct_bearer_token(repo_root, env)
-    if not direct_api_bearer_token_is_acceptable(token):
-        findings.append(finding("fail", "native-delete-overrides-by-filter.direct-token-strength", "Direct native API bearer token is too short or contains unsafe characters.", details={"minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH}))
-        return native_delete_overrides_result(repo_root, "Direct native API override deletion rejected before runtime access.", findings, details, status_only=status_only)
-
-    override_ids, snapshot_error = native_override_delete_fetch_snapshot(
-        repo_root,
-        filter_value=filter_value,
-        max_overrides=max_overrides,
-        token=token,
-        env=env,
-    )
-    if snapshot_error:
-        findings.append(finding("fail", "native-delete-overrides-by-filter.snapshot", "Native override snapshot failed; no deletes were attempted.", details=snapshot_error))
-        return native_delete_overrides_result(repo_root, "Native filtered override deletion stopped during snapshot collection.", findings, details, status_only=status_only)
-    filter_sha256, snapshot_sha256 = native_override_delete_snapshot(filter_value, override_ids)
-    details.update({
-        "filter": filter_value,
-        "filter_sha256": filter_sha256,
-        "snapshot_sha256": snapshot_sha256,
-        "matched_count": len(override_ids),
-        "override_ids": override_ids,
-    })
-    findings.append(finding("pass", "native-delete-overrides-by-filter.snapshot", f"Snapshotted {len(override_ids)} override UUID(s) deterministically.", details={"matched_count": len(override_ids), "filter_sha256": filter_sha256, "snapshot_sha256": snapshot_sha256}))
-
-    if dry_run:
-        return native_delete_overrides_result(repo_root, "Native filtered override deletion dry run completed; no writes were attempted.", findings, details, status_only=status_only)
-    if not secrets.compare_digest(confirm_snapshot.lower(), snapshot_sha256):
-        findings.append(finding("fail", "native-delete-overrides-by-filter.snapshot-confirmation", "Confirmed snapshot does not match the fresh native override snapshot; no deletes were attempted.", details={"expected_snapshot_sha256": snapshot_sha256}))
-        return native_delete_overrides_result(repo_root, "Native filtered override deletion rejected because the snapshot changed.", findings, details, status_only=status_only)
-    findings.append(finding("pass", "native-delete-overrides-by-filter.snapshot-confirmation", "Confirmed snapshot matches the fresh native override snapshot."))
-
-    for index, override_id in enumerate(override_ids):
-        path = f"/api/v1/overrides/{urllib.parse.quote(override_id)}"
-        response = direct_native_api_curl(repo_root, path, token=token, env=env, method="DELETE")
-        _parsed, http_status = parse_json_output_with_http_status(response)
-        deleted = response.returncode == 0 and http_status == 204
-        if deleted:
-            details["deleted_count"] += 1
-            details["rows"].append({"override_id": override_id, "status": "deleted"})
-            findings.append(finding("pass", f"native-delete-overrides-by-filter.override.{override_id}", "Native API moved the override to trash.", details={"override_id": override_id, "http_status": http_status}))
-        else:
-            details["failure_count"] += 1
-            details["rows"].append({"override_id": override_id, "status": "failed", "http_status": http_status})
-            findings.append(finding("fail", f"native-delete-overrides-by-filter.override.{override_id}", "Native API did not confirm override trash move; remaining snapshot rows continue.", details={"override_id": override_id, "http_status": http_status, "exit_code": response.returncode}))
-        if delay_seconds and index + 1 < len(override_ids):
-            time.sleep(delay_seconds)
-
-    summary = (
-        f"Native filtered override deletion moved all {details['deleted_count']} override(s) to trash."
-        if details["failure_count"] == 0
-        else f"Native filtered override deletion completed with {details['failure_count']} failure(s); {details['deleted_count']} override(s) moved to trash."
-    )
-    return native_delete_overrides_result(repo_root, summary, findings, details, status_only=status_only)
-
-
 def native_bulk_modify_schedules_filter_value(value: str) -> str:
     value = value.strip()
     if not value:
@@ -23743,14 +23511,6 @@ def build_parser() -> argparse.ArgumentParser:
     native_scan_with_delivery.add_argument("--allow-scan-control", action="store_true", help="confirm intentional target/task creation and scan start")
     native_scan_with_delivery.add_argument("--dry-run", action="store_true", help="plan request bodies without runtime access; this is the default without --allow-scan-control")
     native_scan_with_delivery.add_argument("--status-only", action="store_true", help="emit compact resource identifiers and state")
-    native_delete_overrides = subparsers.add_parser("native-delete-overrides-by-filter", parents=[common], help="snapshot and trash a bounded native override filter result")
-    native_delete_overrides.add_argument("--filter", dest="filter_value", required=True, help="non-empty native override text filter; broad unfiltered deletion is refused")
-    native_delete_overrides.add_argument("--max-overrides", type=int, default=NATIVE_OVERRIDE_DELETE_DEFAULT_MAX, help=f"maximum matched overrides, from 1 to {NATIVE_OVERRIDE_DELETE_MAX_LIMIT}")
-    native_delete_overrides.add_argument("--dry-run", action="store_true", help="emit the deterministic snapshot hash without deletes")
-    native_delete_overrides.add_argument("--allow-write-control", action="store_true", help="confirm intentional override trash moves")
-    native_delete_overrides.add_argument("--confirm-snapshot", help="SHA-256 emitted by a fresh dry run; required for writes")
-    native_delete_overrides.add_argument("--delay-seconds", type=float, default=1.0, help="delay between deletes, from 0 to 60 seconds")
-    native_delete_overrides.add_argument("--status-only", action="store_true", help="emit compact snapshot and outcome counts")
     native_bulk_modify_schedules = subparsers.add_parser("native-bulk-modify-schedules", parents=[common], help="snapshot and sequentially PATCH a bounded native schedule filter result")
     native_bulk_modify_schedules.add_argument("--filter", dest="filter_value", required=True, help="non-empty native schedule text filter; broad unfiltered mutation is refused")
     native_bulk_modify_schedules.add_argument("--timezone", help="replacement timezone; omit to preserve each current timezone")
@@ -23877,17 +23637,6 @@ def main(argv: list[str] | None = None) -> int:
             scanner_id=args.scanner_id,
             allow_scan_control=args.allow_scan_control,
             dry_run=args.dry_run,
-            status_only=args.status_only,
-        )
-    elif args.command == "native-delete-overrides-by-filter":
-        result = command_native_delete_overrides_by_filter(
-            repo_root,
-            filter_value=args.filter_value,
-            max_overrides=args.max_overrides,
-            dry_run=args.dry_run,
-            allow_write_control=args.allow_write_control,
-            confirm_snapshot=args.confirm_snapshot,
-            delay_seconds=args.delay_seconds,
             status_only=args.status_only,
         )
     elif args.command == "native-tooling-state":

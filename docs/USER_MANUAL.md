@@ -312,8 +312,8 @@ tools/yafvsctl native-scan-new-system --host 192.0.2.10 --allow-scan-control --s
 just native-export-report-csv --report-id REPORT_UUID --output ./report.csv --status-only
 just native-export-report-pdf --report-id REPORT_UUID --output ./report.pdf --status-only
 just native-export-report-bundle --report-id REPORT_UUID --output ./report.yafvs-report.zip --status-only
-tools/yafvsctl native-delete-overrides-by-filter --filter 'obsolete policy' --dry-run --status-only
-tools/yafvsctl native-delete-overrides-by-filter --filter 'obsolete policy' --allow-write-control --confirm-snapshot SNAPSHOT_SHA256 --status-only
+just native-delete-overrides-by-filter --filter 'obsolete policy' --dry-run --status-only
+just native-delete-overrides-by-filter --filter 'obsolete policy' --allow-write-control --confirm-snapshot SNAPSHOT_SHA256 --status-only
 just native-stop-task --task-id TASK_UUID --allow-write-control --status-only
 just native-update-task-target --task-id TASK_UUID --host 192.0.2.10 --host 192.0.2.11 --exclude-host 192.0.2.11 --allow-write-control --status-only
 just native-update-task-target --task-id TASK_UUID --hosts-file ./replacement-hosts.csv --allow-write-control --status-only
@@ -385,8 +385,9 @@ bounded override UUID set and returns its SHA-256 snapshot. A real run requires
 refuses to proceed if the set changed. Each request enforces operator ownership,
 moves one live override to trash transactionally, relocates associated tags, and
 invalidates affected report override counts without hard-deleting history.
-Default one-second pacing is configurable with `--delay-seconds`; partial
-failures are reported while later rows continue.
+Default one-second pacing is configurable with `--delay-seconds`; each
+confirmed, rejected, or indeterminate outcome is recorded once without
+retry, and later rows from the exact snapshot continue.
 
 `native-verify-scanners` replaces the inherited `gvm-tools` scanner verification
 table with direct native API calls. It verifies each scanner without starting a

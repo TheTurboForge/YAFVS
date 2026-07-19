@@ -1236,6 +1236,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-data-state", "--json"], 0, "warn"),
                 (["runtime-db-introspect", "--json"], 0, "warn"),
                 (["runtime-performance-snapshot", "--json"], 0, "warn"),
+                (["runtime-certbund-report", "--report-id", "report-1", "--task-id", "task-1", "--json"], 1, "fail"),
                 (["runtime-log-review", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["runtime-scanner-capability-check", "--json"], (0, 1), ("pass", "fail")),
                 (["runtime-scanner-process-check", "--json"], (0, 1), ("pass", "warn", "fail")),
@@ -6610,64 +6611,17 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(mismatches[("bearerAuth", "type")]["actual"], "apiKey")
         self.assertIsNone(mismatches[("bearerAuth", "scheme")]["actual"])
 
-    def test_certbund_report_rows_expand_one_result_per_cert_ref(self):
-        rows = yafvsctl.certbund_report_rows(
-            [
-                {
-                    "host": "192.0.2.10",
-                    "port": "443/tcp",
-                    "name": "Example vulnerability",
-                    "severity": 7.5,
-                    "cves": ["CVE-2026-0001"],
-                    "cert_refs": ["cert-bund:CB-K14/1304", "cert-bund:CB-K14/1305"],
-                }
-            ],
-            [{"host": "192.0.2.10", "best_os_txt": "ExampleOS"}],
-            {
-                "CB-K14/1304": {"severity": 6.8, "title": "First advisory"},
-                "CB-K14/1305": {"severity": 8.1, "title": "Second advisory"},
-            },
-        )
-        self.assertEqual([row["CertBUND-ID"] for row in rows], ["CB-K14/1304", "CB-K14/1305"])
-        self.assertEqual(rows[0]["CVEs"], "CVE-2026-0001")
-        self.assertEqual(rows[0]["OS"], "ExampleOS")
-
-    def test_certbund_report_rows_ignore_results_without_cert_refs(self):
-        rows = yafvsctl.certbund_report_rows(
-            [{"host": "192.0.2.10", "name": "No advisory", "cert_refs": []}, {"host": "192.0.2.11", "name": "Missing refs"}],
-            [],
-            {},
-        )
-        self.assertEqual(rows, [])
-
-    def test_certbund_report_rows_missing_advisory_uses_legacy_na(self):
-        rows = yafvsctl.certbund_report_rows(
-            [
-                {
-                    "host": "192.0.2.10",
-                    "hostname": "fixture-host",
-                    "port": "80/tcp",
-                    "name": "Example vulnerability",
-                    "severity": 5.0,
-                    "cert_refs": ["cert-bund:CB-K14/1304"],
-                }
-            ],
-            [{"host": "192.0.2.10", "best_os_cpe": "cpe:/o:example:os"}],
-            {},
-        )
-        self.assertEqual(rows[0]["Hostname"], "fixture-host")
-        self.assertEqual(rows[0]["OS"], "cpe:/o:example:os")
-        self.assertEqual(rows[0]["CertBUND-Severity"], "N/A")
-        self.assertEqual(rows[0]["CertBUND-Title"], "N/A (could not be retrieved)")
-
-    def test_runtime_certbund_report_command_is_registered(self):
+    def test_runtime_certbund_report_command_is_rust_direct(self):
         root = Path(__file__).resolve().parents[2]
         source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        rust_source = (root / "tools" / "yafvsctl-rs" / "src" / "commands" / "runtime_certbund_report.rs").read_text(encoding="utf-8")
         justfile = (root / "justfile").read_text(encoding="utf-8")
-        self.assertIn("def command_runtime_certbund_report", source)
-        self.assertIn("runtime-certbund-report", source)
+        self.assertNotIn("def command_runtime_certbund_report", source)
+        self.assertNotIn('subparsers.add_parser("runtime-certbund-report"', source)
+        self.assertIn("command_runtime_certbund_report", rust_source)
         self.assertIn("runtime-certbund-report *args:", justfile)
-        self.assertIn('tools/yafvsctl runtime-certbund-report "$@"', justfile)
+        self.assertIn('runtime-certbund-report "$@"', justfile)
+        self.assertNotIn('tools/yafvsctl runtime-certbund-report "$@"', justfile)
 
     def test_native_api_request_validates_relative_api_paths(self):
         self.assertEqual(yafvsctl.validate_native_api_request_path("/api/v1/reports?page_size=1"), "/api/v1/reports?page_size=1")

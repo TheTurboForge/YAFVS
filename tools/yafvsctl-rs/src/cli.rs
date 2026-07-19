@@ -806,6 +806,7 @@ mod tests {
             "feed-generation-rollback",
             "runtime-db-introspect",
             "runtime-performance-snapshot",
+            "runtime-certbund-report",
             "runtime-log-review",
             "runtime-redis-state",
             "runtime-gmp-smoke",

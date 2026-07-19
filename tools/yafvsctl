@@ -14137,20 +14137,6 @@ def native_report_results_pages(repo_root: Path, report_id: str, max_results: in
     return rows, total, first_result, first_parsed
 
 
-CERTBUND_CSV_FIELDS = (
-    "IP",
-    "Port",
-    "Hostname",
-    "OS",
-    "Vulnerability",
-    "Severity",
-    "CVEs",
-    "CertBUND-ID",
-    "CertBUND-Severity",
-    "CertBUND-Title",
-)
-
-
 def native_report_hosts_pages(repo_root: Path, report_id: str, max_hosts: int) -> tuple[list[dict[str, Any]], int | None, subprocess.CompletedProcess[str] | None, dict[str, Any] | None]:
     rows: list[dict[str, Any]] = []
     total: int | None = None
@@ -14179,203 +14165,6 @@ def native_report_hosts_pages(repo_root: Path, report_id: str, max_hosts: int) -
             break
         page += 1
     return rows, total, first_result, first_parsed
-
-
-def certbund_id_from_ref(ref: Any) -> str | None:
-    value = str(ref or "")
-    prefix = "cert-bund:"
-    if not value.lower().startswith(prefix):
-        return None
-    cert_id = value[len(prefix):].strip()
-    return cert_id or None
-
-
-def certbund_report_rows(results: list[dict[str, Any]], hosts: list[dict[str, Any]], advisories: dict[str, dict[str, Any]]) -> list[dict[str, str]]:
-    hosts_by_ip = {str(host.get("host") or "").lower(): host for host in hosts if host.get("host")}
-    rows: list[dict[str, str]] = []
-    for result in results:
-        cert_ids = [cert_id for ref in result.get("cert_refs", []) if (cert_id := certbund_id_from_ref(ref))]
-        if not cert_ids:
-            continue
-        ip = str(result.get("host") or "N/A")
-        host = hosts_by_ip.get(ip.lower(), {})
-        hostname = str(result.get("hostname") or host.get("hostname") or "N/A")
-        operating_system = str(host.get("best_os_txt") or host.get("best_os_cpe") or "N/A")
-        cves = ", ".join(str(cve) for cve in result.get("cves", []) if cve)
-        for cert_id in cert_ids:
-            advisory = advisories.get(cert_id, {})
-            rows.append(
-                {
-                    "IP": ip,
-                    "Port": str(result.get("port") or "N/A"),
-                    "Hostname": hostname,
-                    "OS": operating_system,
-                    "Vulnerability": str(result.get("name") or "N/A"),
-                    "Severity": str(result.get("severity") if result.get("severity") is not None else "N/A"),
-                    "CVEs": cves,
-                    "CertBUND-ID": cert_id,
-                    "CertBUND-Severity": str(advisory.get("severity") if advisory.get("severity") is not None else "N/A"),
-                    "CertBUND-Title": str(advisory.get("title") or "N/A (could not be retrieved)"),
-                }
-            )
-    return rows
-
-
-def write_certbund_csv(path: Path, rows: list[dict[str, str]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        handle.write("sep=,\n")
-        writer = csv.DictWriter(handle, fieldnames=CERTBUND_CSV_FIELDS, extrasaction="ignore", lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(rows)
-
-
-def command_runtime_certbund_report(
-    repo_root: Path,
-    report_id: str | None = None,
-    task_id: str | None = None,
-    max_results: int = 1000,
-    max_hosts: int = 5000,
-    output_format: str = "json",
-    output: str | None = None,
-) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    artifact_dir = report_artifact_dir(repo_root)
-    try:
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        findings.append(finding("pass", "runtime-certbund-report.artifact-dir", "Runtime report artifact directory is ready.", str(artifact_dir)))
-    except OSError as error:
-        findings.append(finding("fail", "runtime-certbund-report.artifact-dir", f"Runtime report artifact directory is not usable: {error}", str(artifact_dir)))
-    if report_id and task_id:
-        findings.append(finding("fail", "runtime-certbund-report.selector", "Use either --report-id or --task-id, not both."))
-    if output_format not in {"json", "csv"}:
-        findings.append(finding("fail", "runtime-certbund-report.format", "Output format must be 'json' or 'csv'.", details={"format": output_format}))
-    findings.append(finding("pass" if container_running(repo_root, "yafvs-api") else "fail", "native-api.container", "yafvs-api container is running." if container_running(repo_root, "yafvs-api") else "yafvs-api container is not running; start the app profile before reading native CERT-Bund report data."))
-
-    selected_report_id = report_id
-    task_json: dict[str, Any] | None = None
-    if task_id and aggregate_status(findings) != "fail":
-        task_path = f"/api/v1/tasks/{urllib.parse.quote(task_id)}"
-        task_result = native_api_curl(repo_root, task_path)
-        parsed_task = parse_json_output(task_result)
-        task_json = parsed_task if isinstance(parsed_task, dict) else None
-        last_report = task_json.get("last_report") if isinstance(task_json, dict) else None
-        selected_report_id = str(last_report.get("id")) if isinstance(last_report, dict) and last_report.get("id") else None
-        findings.append(
-            native_api_probe_finding(
-                "pass" if selected_report_id else "fail",
-                "runtime-certbund-report.task-read",
-                "Native task read resolved last report." if selected_report_id else "Native task read did not resolve a last report.",
-                task_result,
-                compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/tasks/..."),
-                task_json,
-            )
-        )
-    elif selected_report_id:
-        findings.append(finding("pass", "runtime-certbund-report.report-select", "Using explicit raw report id.", details={"report_id": selected_report_id}))
-    elif aggregate_status(findings) != "fail":
-        selected_report_id, select_error, select_result = latest_completed_full_test_report_id(repo_root)
-        if select_error:
-            findings.append(finding("fail", "runtime-certbund-report.report-select", select_error, details={"output_tail": output_tail(select_result.stdout, 80) if select_result else []}))
-        else:
-            findings.append(finding("pass", "runtime-certbund-report.report-select", "Selected latest completed full-test raw report from PostgreSQL.", details={"report_id": selected_report_id}))
-
-    if aggregate_status(findings) == "fail" or not selected_report_id:
-        payload = {
-            "status": "fail",
-            "summary": "Runtime CERT-Bund report stopped at native API prerequisites.",
-            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "yafvs-api", "report_id": selected_report_id, "task_id": task_id},
-        }
-        payload["artifacts"] = [write_json_artifact(artifact_dir, "certbund-report-failed.json", payload)]
-        return make_result("runtime-certbund-report", repo_root, payload["summary"], findings, payload["artifacts"])
-
-    results, result_total, result_response, result_json = native_report_results_pages(repo_root, selected_report_id, max_results)
-    results_ok = result_response is not None and result_response.returncode == 0 and result_total is not None
-    findings.append(
-        native_api_probe_finding(
-            "pass" if results_ok else "fail",
-            "runtime-certbund-report.results-read",
-            "Native raw-report result rows read." if results_ok else "Native raw-report result response was not usable.",
-            result_response or subprocess.CompletedProcess([], 1, "", ""),
-            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../results?..."),
-            result_json if isinstance(result_json, dict) else None,
-        )
-    )
-    hosts, host_total, host_response, host_json = native_report_hosts_pages(repo_root, selected_report_id, max_hosts)
-    hosts_ok = host_response is not None and host_response.returncode == 0 and host_total is not None
-    findings.append(
-        native_api_probe_finding(
-            "pass" if hosts_ok else "fail",
-            "runtime-certbund-report.hosts-read",
-            "Native raw-report host rows read." if hosts_ok else "Native raw-report host response was not usable.",
-            host_response or subprocess.CompletedProcess([], 1, "", ""),
-            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../hosts?..."),
-            host_json if isinstance(host_json, dict) else None,
-        )
-    )
-
-    cert_ids = sorted({cert_id for row in results for ref in row.get("cert_refs", []) if (cert_id := certbund_id_from_ref(ref))})
-    advisories: dict[str, dict[str, Any]] = {}
-    missing_advisories: list[str] = []
-    for cert_id in cert_ids:
-        advisory_result = native_api_curl(repo_root, f"/api/v1/cert-bund-advisories/{urllib.parse.quote(cert_id, safe='')}")
-        advisory_json = parse_json_output(advisory_result)
-        if advisory_result.returncode == 0 and isinstance(advisory_json, dict):
-            advisories[cert_id] = advisory_json
-        else:
-            missing_advisories.append(cert_id)
-    if cert_ids:
-        findings.append(finding("warn" if missing_advisories else "pass", "runtime-certbund-report.advisories-read", "Native CERT-Bund advisory metadata read." if not missing_advisories else "Some CERT-Bund advisory metadata could not be read.", details={"requested": cert_ids, "missing": missing_advisories}))
-    else:
-        findings.append(finding("pass", "runtime-certbund-report.advisories-read", "No CERT-Bund refs were present in the fetched native result rows."))
-
-    if not results_ok or not hosts_ok:
-        payload = {
-            "status": "fail",
-            "summary": "Runtime CERT-Bund report failed while reading native report data.",
-            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "yafvs-api", "report_id": selected_report_id, "task_id": task_id, "results": result_json, "hosts": host_json},
-        }
-        payload["artifacts"] = [write_json_artifact(artifact_dir, "certbund-report-failed.json", payload)]
-        return make_result("runtime-certbund-report", repo_root, payload["summary"], findings, payload["artifacts"])
-
-    rows = certbund_report_rows(results, hosts, advisories)
-    results_complete = result_total is None or len(results) >= result_total
-    hosts_complete = host_total is None or len(hosts) >= host_total
-    payload = {
-        "status": "pass" if results_complete and hosts_complete and not missing_advisories else "warn",
-        "summary": "Runtime CERT-Bund report read through the native API.",
-        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-        "details": {"source": "yafvs-api", "report_id": selected_report_id, "task_id": task_id, "task": task_json},
-        "result_count_scanned": len(results),
-        "result_total": result_total,
-        "host_count_scanned": len(hosts),
-        "host_total": host_total,
-        "results_complete": results_complete,
-        "hosts_complete": hosts_complete,
-        "cert_bund_ids": cert_ids,
-        "missing_advisories": missing_advisories,
-        "row_count": len(rows),
-        "csv_fields": list(CERTBUND_CSV_FIELDS),
-        "rows": rows,
-    }
-    artifacts = [write_json_artifact(artifact_dir, "certbund-report.json", payload)]
-    if output_format == "csv":
-        csv_path = Path(output).expanduser() if output else artifact_dir / "certbund-report.csv"
-        if not csv_path.is_absolute():
-            csv_path = repo_root / csv_path
-        write_certbund_csv(csv_path, rows)
-        artifacts.append(str(csv_path))
-    elif output:
-        output_path = Path(output).expanduser()
-        if not output_path.is_absolute():
-            output_path = repo_root / output_path
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        artifacts.append(str(output_path))
-    payload["artifacts"] = artifacts
-    return make_result("runtime-certbund-report", repo_root, payload["summary"], findings, payload["artifacts"])
 
 
 def command_runtime_report_summary_native(repo_root: Path, report_id: str | None = None, max_results: int = 1000, top_results: int = 10) -> dict[str, Any]:
@@ -29909,13 +29698,6 @@ def build_parser() -> argparse.ArgumentParser:
     report_export.add_argument("--report-id", help="optional report id; defaults to the latest completed full-test report")
     report_export.add_argument("--max-results", type=int, default=1000, help="maximum results to fetch from the selected report")
     report_export.add_argument("--top-results", type=int, default=10, help="number of top results to include")
-    certbund_report = subparsers.add_parser("runtime-certbund-report", parents=[common], help="build a native CERT-Bund CSV/JSON report for a raw report or task")
-    certbund_report.add_argument("--report-id", help="optional raw report id; defaults to the latest completed full-test report unless --task-id is used")
-    certbund_report.add_argument("--task-id", help="optional task id whose last report should be analysed")
-    certbund_report.add_argument("--max-results", type=int, default=1000, help="maximum result rows to fetch from the selected report")
-    certbund_report.add_argument("--max-hosts", type=int, default=5000, help="maximum host rows to fetch from the selected report")
-    certbund_report.add_argument("--format", choices=("json", "csv"), default="json", help="output artifact format; JSON is always written as the command artifact")
-    certbund_report.add_argument("--output", help="optional output artifact path for the selected format")
     report_metrics = subparsers.add_parser("runtime-report-metrics", parents=[common], help="read CVSS Load and authenticated coverage for a raw report")
     report_metrics.add_argument("--report-id", help="optional report id; defaults to the latest completed full-test report")
     subparsers.add_parser("runtime-scope-smoke", parents=[common], help="verify scope reporting without starting scans")
@@ -30231,8 +30013,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_report(repo_root, "summary", report_id=args.report_id, max_results=args.max_results, top_results=args.top_results)
     elif args.command == "runtime-report-export":
         result = command_runtime_report(repo_root, "export", report_id=args.report_id, max_results=args.max_results, top_results=args.top_results)
-    elif args.command == "runtime-certbund-report":
-        result = command_runtime_certbund_report(repo_root, report_id=args.report_id, task_id=args.task_id, max_results=args.max_results, max_hosts=args.max_hosts, output_format=args.format, output=args.output)
     elif args.command == "runtime-report-metrics":
         result = command_runtime_metrics(repo_root, "report", report_id=args.report_id)
     elif args.command == "runtime-scope-smoke":

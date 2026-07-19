@@ -27,6 +27,7 @@ mod runtime_performance_snapshot;
 mod runtime_probe;
 mod runtime_scanner_capability;
 mod runtime_scanner_process;
+mod runtime_webui;
 mod rust_migration;
 mod secret;
 mod security_policy;
@@ -71,5 +72,6 @@ pub use runtime_scanner_capability::{
     command_runtime_nmap_capability_check, command_runtime_scanner_capability_check,
 };
 pub use runtime_scanner_process::command_runtime_scanner_process_check;
+pub use runtime_webui::command_runtime_webui_smoke;
 pub use rust_migration::command_rust_migration_state;
 pub use security_policy::command_security_policy_check;

@@ -32,7 +32,7 @@ not use a failure exit code; `fail` exits non-zero.
 - `just rust-migration-state`: inspect C-to-Rust tooling and the current proof
   candidate.
 
-The incremental Rust command spine currently implements 43 parity-tested
+The incremental Rust command spine currently implements 44 parity-tested
 subcommands. Python remains canonical only for commands not listed in this
 mechanically checked block while the normal `just` recipes continue to provide
 a stable front door:
@@ -80,6 +80,7 @@ runtime-data-state
 runtime-gmp-smoke
 runtime-credential-smoke
 runtime-rbac-smoke
+runtime-webui-smoke
 runtime-full-test-scan-preflight
 runtime-full-test-scan-start
 runtime-full-test-scan-status

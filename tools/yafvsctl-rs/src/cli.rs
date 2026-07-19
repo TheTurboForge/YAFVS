@@ -132,6 +132,8 @@ pub enum CliCommand {
     RuntimeCredentialSmoke,
     /// Characterize the retained shared operator-account compatibility boundary.
     RuntimeRbacSmoke,
+    /// Verify the staged GSA web UI over gsad.
+    RuntimeWebuiSmoke,
     /// Preflight an explicit authorized full test scan without starting it.
     RuntimeFullTestScanPreflight {
         /// Explicit canonical authorized target CIDR; at most 256 addresses.
@@ -249,6 +251,7 @@ impl CliCommand {
             Self::RuntimeGmpSmoke => "runtime-gmp-smoke",
             Self::RuntimeCredentialSmoke => "runtime-credential-smoke",
             Self::RuntimeRbacSmoke => "runtime-rbac-smoke",
+            Self::RuntimeWebuiSmoke => "runtime-webui-smoke",
             Self::RuntimeFullTestScanPreflight { .. } => "runtime-full-test-scan-preflight",
             Self::RuntimeFullTestScanStart { .. } => "runtime-full-test-scan-start",
             Self::RuntimeFullTestScanStatus { .. } => "runtime-full-test-scan-status",
@@ -361,6 +364,7 @@ mod tests {
                 CliCommand::RuntimeCredentialSmoke,
             ),
             ("runtime-rbac-smoke", CliCommand::RuntimeRbacSmoke),
+            ("runtime-webui-smoke", CliCommand::RuntimeWebuiSmoke),
         ] {
             let cli = parse_cli([argument]).unwrap();
             assert_eq!(cli.command, expected);

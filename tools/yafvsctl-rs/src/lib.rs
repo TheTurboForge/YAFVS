@@ -28,8 +28,8 @@ pub use commands::{
     command_runtime_native_api_direct_token, command_runtime_nmap_capability_check,
     command_runtime_performance_snapshot, command_runtime_plan, command_runtime_rbac_smoke,
     command_runtime_redis_state, command_runtime_scanner_capability_check,
-    command_runtime_scanner_process_check, command_rust_migration_state,
-    command_security_policy_check, command_status, find_repo_root,
+    command_runtime_scanner_process_check, command_runtime_webui_smoke,
+    command_rust_migration_state, command_security_policy_check, command_status, find_repo_root,
 };
 pub use render::{render_human, render_json};
 pub use result::{ResultEnvelope, exit_code};
@@ -107,6 +107,7 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         CliCommand::RuntimeGmpSmoke => command_runtime_gmp_smoke(&repo_root),
         CliCommand::RuntimeCredentialSmoke => command_runtime_credential_smoke(&repo_root),
         CliCommand::RuntimeRbacSmoke => command_runtime_rbac_smoke(&repo_root),
+        CliCommand::RuntimeWebuiSmoke => command_runtime_webui_smoke(&repo_root, cli.status_only),
         CliCommand::RuntimeFullTestScanPreflight { target_cidr } => {
             command_runtime_full_test_scan_preflight(&repo_root, target_cidr)
         }

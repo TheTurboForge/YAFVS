@@ -98,6 +98,17 @@ pub enum CliCommand {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Import native targets from the retained target CSV shape.
+    NativeTargetsFromCsv {
+        #[arg(long)]
+        csv_file: PathBuf,
+        #[arg(long)]
+        port_list_id: Option<String>,
+        #[arg(long)]
+        allow_write_control: bool,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Import the retained secret-free target XML subset.
     NativeTargetsFromXml {
         #[arg(long)]
@@ -417,6 +428,7 @@ impl CliCommand {
             Self::NativeUpdateTaskTarget { .. } => "native-update-task-target",
             Self::NativeTargetsFromHostList { .. } => "native-targets-from-host-list",
             Self::NativeTargetsFromXml { .. } => "native-targets-from-xml",
+            Self::NativeTargetsFromCsv { .. } => "native-targets-from-csv",
             Self::NativeStartTask { .. } => "native-start-task",
             Self::NativeStopTask { .. } => "native-stop-task",
             Self::NativeStartTasksFromCsv { .. } => "native-start-tasks-from-csv",
@@ -549,6 +561,32 @@ mod tests {
             }
         );
         assert_eq!(cli.command.name(), "native-targets-from-xml");
+    }
+
+    #[test]
+    fn parses_native_targets_from_csv_controls() {
+        let cli = parse_cli([
+            "native-targets-from-csv",
+            "--csv-file",
+            "targets.csv",
+            "--port-list-id",
+            "11111111-1111-4111-8111-111111111111",
+            "--allow-write-control",
+            "--dry-run",
+            "--status-only",
+        ])
+        .unwrap();
+        assert!(cli.status_only);
+        assert_eq!(
+            cli.command,
+            CliCommand::NativeTargetsFromCsv {
+                csv_file: PathBuf::from("targets.csv"),
+                port_list_id: Some("11111111-1111-4111-8111-111111111111".into()),
+                allow_write_control: true,
+                dry_run: true,
+            }
+        );
+        assert_eq!(cli.command.name(), "native-targets-from-csv");
     }
 
     #[test]

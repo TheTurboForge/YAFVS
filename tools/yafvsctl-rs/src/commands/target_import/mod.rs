@@ -5,6 +5,10 @@
 //!
 //! Format-specific importers live beside this module as their contracts grow.
 
+mod csv;
+
+pub use csv::command_native_targets_from_csv;
+
 use super::common::{iso_system_time, metadata};
 use super::direct_api::validate_operator_uuid;
 use super::native_api_request::{
@@ -61,7 +65,7 @@ trait TargetApi {
         root: &Path,
         path: &str,
         method: &str,
-        body: &Value,
+        body: Option<&Value>,
         request_check: &str,
         config_check: &str,
         token_check: &str,
@@ -77,20 +81,22 @@ impl TargetApi for GuardedApi {
         root: &Path,
         path: &str,
         method: &str,
-        body: &Value,
+        body: Option<&Value>,
         request_check: &str,
         config_check: &str,
         token_check: &str,
         runner: &dyn CommandRunner,
     ) -> Result<ApiReply, Vec<Finding>> {
-        let body = serialize_request_body(body)
+        let body = body
+            .map(serialize_request_body)
+            .transpose()
             .map_err(|error| vec![Finding::new("fail", request_check, error)])?;
         guarded_direct_api_call(
             root,
             path,
             method,
             None,
-            Some(&body),
+            body.as_deref(),
             config_check,
             token_check,
             runner,
@@ -461,7 +467,7 @@ fn command_with(
             root,
             "/api/v1/port-lists",
             "POST",
-            &body,
+            Some(&body),
             &format!("{COMMAND}.request-body"),
             &format!("{COMMAND}.direct-config-shape"),
             &format!("{COMMAND}.direct-token-strength"),
@@ -523,7 +529,7 @@ fn command_with(
             root,
             "/api/v1/targets",
             "POST",
-            &body,
+            Some(&body),
             &format!("{COMMAND}.request-body"),
             &format!("{COMMAND}.direct-config-shape"),
             &format!("{COMMAND}.direct-token-strength"),
@@ -1349,7 +1355,7 @@ fn command_xml_with(
             root,
             "/api/v1/targets",
             "POST",
-            &row.body,
+            Some(&row.body),
             &format!("{XML_COMMAND}.request-body"),
             &format!("{XML_COMMAND}.direct-config-shape"),
             &format!("{XML_COMMAND}.direct-token-strength"),
@@ -1492,16 +1498,17 @@ mod tests {
             _root: &Path,
             path: &str,
             method: &str,
-            body: &Value,
+            body: Option<&Value>,
             _request_check: &str,
             _config_check: &str,
             _token_check: &str,
             _runner: &dyn CommandRunner,
         ) -> Result<ApiReply, Vec<Finding>> {
-            self.calls
-                .lock()
-                .unwrap()
-                .push((path.into(), method.into(), body.clone()));
+            self.calls.lock().unwrap().push((
+                path.into(),
+                method.into(),
+                body.cloned().unwrap_or(Value::Null),
+            ));
             self.replies.lock().unwrap().pop_front().unwrap()
         }
     }

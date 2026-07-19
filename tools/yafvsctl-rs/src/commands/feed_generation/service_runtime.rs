@@ -40,6 +40,64 @@ impl<'a> ServiceRuntime<'a> {
         }
     }
 
+    pub(super) fn stop_apps(&self, check: &str) -> Result<StepOutcome, String> {
+        let mut arguments = vec!["--profile".to_owned(), "app".to_owned(), "stop".to_owned()];
+        arguments.extend(APP_SERVICES.iter().map(|service| (*service).to_owned()));
+        let output = self.run_compose(&arguments, Duration::from_secs(300))?;
+        let mut running = Vec::new();
+        for service in APP_SERVICES {
+            if self.container_running(service)? {
+                running.push(service);
+            }
+        }
+        let passed = output.success && running.is_empty();
+        Ok(outcome(
+            if passed {
+                StepStatus::Pass
+            } else {
+                StepStatus::Fail
+            },
+            check,
+            &format!(
+                "Stop all app services after deployment identity verification exit code {}; {} service(s) remain running.",
+                output.exit_code.unwrap_or(1),
+                running.len()
+            ),
+            json!({"exit_code": output.exit_code, "running_services": running}),
+        ))
+    }
+
+    pub(super) fn app_service_running(&self, service: &str) -> Result<bool, String> {
+        self.container_running(service)
+    }
+
+    pub(super) fn app_service_log_tail(
+        &self,
+        service: &str,
+        lines: usize,
+    ) -> Result<Vec<String>, String> {
+        if !APP_SERVICES.contains(&service) {
+            return Err("invalid application service requested".into());
+        }
+        let bounded_lines = lines.clamp(1, 80);
+        let output = self.run_compose(
+            &[
+                "logs".to_owned(),
+                "--tail".to_owned(),
+                bounded_lines.to_string(),
+                service.to_owned(),
+            ],
+            Duration::from_secs(120),
+        )?;
+        if !output.success {
+            return Err("application service log query failed".into());
+        }
+        Ok(crate::commands::common::output_tail(
+            &output.stdout,
+            bounded_lines,
+        ))
+    }
+
     pub(super) fn environment(&self) -> &BTreeMap<OsString, OsString> {
         self.environment
     }
@@ -588,6 +646,52 @@ mod tests {
         let result = runtime.remove_apps("feed-generation.stop-app").unwrap();
         assert_eq!(result.status, StepStatus::Pass);
         assert!(runner.commands.lock().unwrap()[0].contains(&"rm".to_owned()));
+    }
+
+    #[test]
+    fn stop_apps_preserves_containers_and_requires_every_service_stopped() {
+        let runner = Runner::new(
+            [output(true, "")]
+                .into_iter()
+                .chain(APP_SERVICES.map(|_| output(true, ""))),
+        );
+        let images = images();
+        let environment = BTreeMap::new();
+        let runtime = ServiceRuntime::new(Path::new("/repo"), &runner, &environment, &images);
+        let result = runtime
+            .stop_apps("runtime.app.identity-failure-stop")
+            .unwrap();
+        assert_eq!(result.status, StepStatus::Pass);
+        let commands = runner.commands.lock().unwrap();
+        assert!(commands[0].contains(&"stop".to_owned()));
+        assert!(!commands[0].contains(&"rm".to_owned()));
+        assert!(
+            APP_SERVICES
+                .iter()
+                .all(|service| commands[0].contains(&(*service).to_owned()))
+        );
+    }
+
+    #[test]
+    fn app_service_logs_are_bounded_and_use_an_exact_service() {
+        let output_lines = (0..100)
+            .map(|line| format!("line-{line}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let runner = Runner::new([output(true, output_lines)]);
+        let images = images();
+        let environment = BTreeMap::new();
+        let runtime = ServiceRuntime::new(Path::new("/repo"), &runner, &environment, &images);
+        let tail = runtime.app_service_log_tail("gvmd", 500).unwrap();
+        assert_eq!(tail.len(), 80);
+        let command = &runner.commands.lock().unwrap()[0];
+        assert!(command.ends_with(&[
+            "logs".to_owned(),
+            "--tail".to_owned(),
+            "80".to_owned(),
+            "gvmd".to_owned(),
+        ]));
+        assert!(runtime.app_service_log_tail("not-a-service", 80).is_err());
     }
 
     #[test]

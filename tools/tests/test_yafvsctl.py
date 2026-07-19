@@ -1118,7 +1118,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     env.pop("YAFVS_ENABLE_QUALITY_GATE_SCHEDULE", None)
                 if arguments[0] in {"runtime-status", "runtime-smoke", "gvmd-smoke", "runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-report-summary", "runtime-report-export", "runtime-report-metrics", "runtime-scope-report-summary", "runtime-scope-report-metrics"}:
                     env["COMPOSE_PROJECT_NAME"] = "yafvsctl-parity-no-runtime"
-                if arguments[0] in {"up", "runtime-init", "runtime-manager-init", "runtime-scanner-redis-init"}:
+                if arguments[0] in {"up", "runtime-init", "runtime-manager-init", "runtime-scanner-redis-init", "runtime-app-up"}:
                     blocked_runtime = Path(parity_runtime) / arguments[0]
                     blocked_runtime.write_text(
                         "force runtime setup to fail before Docker\n",
@@ -1237,6 +1237,8 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-init", "--json"], 1, "fail"),
                 (["runtime-manager-init", "--json"], 1, "fail"),
                 (["runtime-scanner-redis-init", "--json"], 1, "fail"),
+                (["runtime-app-up", "--json"], 1, "fail"),
+                (["runtime-app-up", "--status-only", "--json"], 1, "fail"),
                 (["native-api-request", "--path", "/not-api", "--json"], 1, "fail"),
                 (["native-scan-new-system", "--host", "not-an-ip", "--json"], 1, "fail"),
                 (["native-scan-with-delivery", "--host", "not-an-ip", "--alert-id", "not-a-uuid", "--json"], 1, "fail"),

@@ -29,6 +29,15 @@ pub fn command_runtime_feed_keyring_init(repo_root: &Path) -> ResultEnvelope {
     )
 }
 
+pub(crate) fn command_runtime_feed_keyring_init_with_runner(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+) -> ResultEnvelope {
+    let gpg = executable_path("gpg");
+    let curl = executable_path("curl");
+    command_with(repo_root, runner, gpg.as_deref(), curl.as_deref())
+}
+
 fn command_with(
     repo_root: &Path,
     runner: &dyn CommandRunner,

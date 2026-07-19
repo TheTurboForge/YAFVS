@@ -456,6 +456,8 @@ pub enum CliCommand {
     Down,
     /// Stop and remove experimental application runtime containers.
     RuntimeAppDown,
+    /// Start the prepared application deployment with guarded native runtime verification.
+    RuntimeAppUp,
     /// Refuse unsafe sequential copying into live feed paths.
     FeedCopyToRuntime,
     /// Check dependency readiness, optionally for one component.
@@ -693,6 +695,7 @@ impl CliCommand {
             Self::RuntimeScannerRedisInit => "runtime-scanner-redis-init",
             Self::Down => "down",
             Self::RuntimeAppDown => "runtime-app-down",
+            Self::RuntimeAppUp => "runtime-app-up",
             Self::FeedCopyToRuntime => "feed-copy-to-runtime",
             Self::Deps { .. } => "deps",
             Self::RuntimeFeedImportInit => "runtime-feed-import-init",

@@ -278,7 +278,7 @@ fn run_docker(
     )
 }
 
-fn rendered_app_execution_mount_finding(
+pub(crate) fn rendered_app_execution_mount_finding(
     repo_root: &Path,
     environment: &BTreeMap<OsString, OsString>,
     runner: &dyn CommandRunner,

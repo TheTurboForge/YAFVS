@@ -5,6 +5,7 @@
 //! activation-journal validation and detached-signature provenance checks.
 
 mod activation;
+mod app_up;
 mod adapter;
 mod artifact_identity;
 mod canonical_json;
@@ -46,6 +47,8 @@ pub(crate) fn initialize_manager_with_images(
     )
 }
 
+pub use app_up::command_runtime_app_up;
+
 use super::common::{compact_finding, metadata, runtime_dir};
 use super::runtime_lock::{
     DEFAULT_RUNTIME_LOCK_TIMEOUT, FEED_ACTIVATION_LOCK, RuntimeLockError, RuntimeOperationLock,
@@ -77,6 +80,20 @@ pub(crate) fn require_current_app_deployment(
     runner: &dyn CommandRunner,
     environment: &BTreeMap<std::ffi::OsString, std::ffi::OsString>,
 ) -> Result<BTreeMap<String, String>, String> {
+    require_current_app_deployment_snapshot(repo_root, runner, environment)
+        .map(|deployment| deployment.image_ids)
+}
+
+pub(crate) struct CurrentAppDeployment {
+    pub(crate) receipt: Value,
+    pub(crate) image_ids: BTreeMap<String, String>,
+}
+
+pub(crate) fn require_current_app_deployment_snapshot(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    environment: &BTreeMap<std::ffi::OsString, std::ffi::OsString>,
+) -> Result<CurrentAppDeployment, String> {
     let receipt = deployment::require_app_deployment_receipt(&runtime_dir(repo_root))?;
     let image_ids = deployment::validate_app_service_image_ids(
         receipt
@@ -117,7 +134,7 @@ pub(crate) fn require_current_app_deployment(
                 .into(),
         );
     }
-    Ok(image_ids)
+    Ok(CurrentAppDeployment { receipt, image_ids })
 }
 
 pub(crate) fn pinned_app_compose_command(
@@ -167,6 +184,14 @@ pub fn command_feed_generation_runtime_guard(
     repo_root: &Path,
     selector_only: bool,
 ) -> ResultEnvelope {
+    command_feed_generation_runtime_guard_with_runner(repo_root, selector_only, &SystemCommandRunner)
+}
+
+pub(crate) fn command_feed_generation_runtime_guard_with_runner(
+    repo_root: &Path,
+    selector_only: bool,
+    runner: &dyn CommandRunner,
+) -> ResultEnvelope {
     let runtime = runtime_dir(repo_root);
     let selector_journal = active_feed_generation_runtime_guard_finding(
         &runtime,
@@ -194,7 +219,7 @@ pub fn command_feed_generation_runtime_guard(
             journal::read_activation_state(&runtime),
             false,
             || {
-                DatabaseAttestationAdapter::new(repo_root, &SystemCommandRunner)
+                DatabaseAttestationAdapter::new(repo_root, runner)
                     .read()
                     .map(|attestation| attestation.map(|value| value.generation_id().to_owned()))
             },
@@ -204,7 +229,7 @@ pub fn command_feed_generation_runtime_guard(
         metadata(
             repo_root,
             "feed-generation-runtime-guard",
-            &SystemCommandRunner,
+            runner,
         ),
         "Active feed generation runtime guard completed.".into(),
         vec![finding],

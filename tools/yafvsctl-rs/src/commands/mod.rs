@@ -23,6 +23,7 @@ mod production_posture;
 mod quality_gate;
 mod quality_schedule;
 mod redis;
+mod report_selection;
 mod repository;
 mod runtime;
 mod runtime_certbund_report;

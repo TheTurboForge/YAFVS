@@ -9,8 +9,9 @@ use super::native_runtime::{
     NativeJsonResponse, NativeObjectPages, fetch_object_pages, native_api_display_command,
     native_api_get_json, percent_encode_component,
 };
-use super::runtime_performance_snapshot::{psql, psql_value, service_running};
-use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
+use super::report_selection::latest_completed_full_test_report_id;
+use super::runtime_performance_snapshot::service_running;
+use crate::process::{CommandRunner, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
 use serde_json::{Map, Value, json};
 use std::collections::{BTreeMap, BTreeSet};
@@ -25,7 +26,6 @@ const MAX_CERTBUND_IDS: usize = 10_000;
 const MAX_CERTBUND_ID_BYTES: usize = 256;
 const MAX_OUTPUT_ROWS: usize = 100_000;
 const MAX_OUTPUT_TEXT_BYTES: usize = 64 * 1024 * 1024;
-const FULL_TEST_TASK_PREFIX: &str = "YAFVS full test scan ";
 const CSV_FIELDS: [&str; 10] = [
     "IP",
     "Port",
@@ -582,37 +582,6 @@ fn resolve_output_path(repo_root: &Path, output: Option<&str>, default: PathBuf)
     }
 }
 
-fn latest_completed_full_test_report_id(
-    repo_root: &Path,
-    runner: &dyn CommandRunner,
-) -> Result<String, (String, Option<ProcessOutput>)> {
-    if !service_running(repo_root, "postgres", runner) {
-        return Err((
-            "Postgres is not running; start the app profile before selecting the latest full-test report.".into(),
-            None,
-        ));
-    }
-    let query = format!(
-        "SELECT r.uuid FROM reports r JOIN tasks t ON t.id = r.task WHERE t.name LIKE '{}%' AND coalesce(r.scan_run_status, 0) = 1 AND coalesce(r.start_time, 0) > 0 ORDER BY coalesce(r.end_time, 0) DESC, coalesce(r.start_time, 0) DESC, r.id DESC LIMIT 1;",
-        FULL_TEST_TASK_PREFIX.replace('\'', "''")
-    );
-    let output = psql(repo_root, &query, runner);
-    if !output.success {
-        return Err((
-            "Latest full-test report selection query failed.".into(),
-            Some(output),
-        ));
-    }
-    let report_id = psql_value(&output.stdout).trim();
-    if report_id.is_empty() {
-        return Err((
-            "No completed full-test raw report exists; pass --report-id to inspect a specific report.".into(),
-            Some(output),
-        ));
-    }
-    Ok(report_id.to_string())
-}
-
 fn pages_ok(pages: &NativeObjectPages) -> bool {
     pages.error.is_none()
         && pages.total.is_some()
@@ -922,6 +891,7 @@ fn text_tail_lines(value: &str, lines: usize) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::process::ProcessOutput;
     use std::collections::VecDeque;
     use std::ffi::OsString;
     use std::fs;

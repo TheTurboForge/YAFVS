@@ -366,4 +366,4 @@ quality-gate-schedule *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- quality-gate-schedule "$@"
 
 gvmd-smoke *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl gvmd-smoke "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- gvmd-smoke "$@"

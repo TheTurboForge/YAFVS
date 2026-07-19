@@ -21561,56 +21561,6 @@ def command_runtime_browser_regression(repo_root: Path, *, status_only: bool = F
     return runtime_browser_regression_status_only_result(result_payload) if status_only else result_payload
 
 
-def _command_gvmd_smoke_unlocked(repo_root: Path) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    findings.append(active_feed_generation_finding(repo_root))
-    if aggregate_status(findings) == "fail":
-        return make_result("gvmd-smoke", repo_root, "gvmd smoke stopped at feed activation prerequisites.", findings)
-    if pg_gvm_extension_status(repo_root)["status"] != "pass":
-        findings.append(finding("fail", "gvmd.pg-gvm", "pg-gvm extension is not initialized; run just runtime-init before gvmd smoke."))
-        return make_result("gvmd-smoke", repo_root, "gvmd smoke stopped before service startup.", findings)
-    app_env = runtime_app_env(repo_root)
-    receipt, receipt_error = require_app_deployment_receipt(
-        repo_root, app_env=app_env
-    )
-    findings.append(finding("pass" if receipt_error is None else "fail", "runtime.app-deployment-receipt", "Prepared application deployment receipt is valid for the gvmd smoke." if receipt_error is None else receipt_error, str(app_deployment_receipt_path(repo_root))))
-    if receipt_error is not None or receipt is None:
-        return make_result("gvmd-smoke", repo_root, "gvmd smoke stopped because no verified application deployment was prepared.", findings)
-    up_command = compose_command_with_app_images(repo_root, receipt["image_ids"], "--profile", "app", "up", "-d", "--no-deps", "--no-build", "--pull", "never", "gvmd", env=app_env)
-    result = run_command(up_command, repo_root, env=app_env)
-    findings.append(finding("pass" if result.returncode == 0 else "fail", "gvmd.up", f"docker compose up gvmd exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-80:]}))
-    if result.returncode != 0:
-        return make_result("gvmd-smoke", repo_root, "gvmd smoke stopped at container startup.", findings)
-    probe = exec_in_service(repo_root, "gvmd", ["sh", "-lc", "command -v gvmd && gvmd --version"])
-    findings.append(finding("pass" if probe.returncode == 0 else "warn", "gvmd.binary", f"gvmd binary probe exit code {probe.returncode}.", details={"output_tail": probe.stdout.splitlines()[-40:]}))
-    db_probe = exec_in_service(
-        repo_root,
-        "gvmd",
-        [
-            "sh",
-            "-lc",
-            "env PGPASSWORD=${POSTGRES_PASSWORD:-yafvs-dev} psql -h postgres -U ${POSTGRES_USER:-yafvs} -d ${POSTGRES_DB:-yafvs} -At -c \"SELECT extversion FROM pg_extension WHERE extname = 'pg-gvm';\"",
-        ],
-    )
-    findings.append(finding("pass" if db_probe.returncode == 0 and db_probe.stdout.strip() else "warn", "gvmd.database", f"gvmd profile DB probe exit code {db_probe.returncode}.", details={"output_tail": db_probe.stdout.splitlines()[-40:]}))
-    findings.append(finding("warn", "gvmd.deferred", "This smoke does not start the full manager daemon yet; certificates, scanner registration, feeds, and runtime paths remain follow-up work."))
-    return make_result("gvmd-smoke", repo_root, "gvmd profile smoke completed.", findings, [str(runtime_dir(repo_root))])
-
-
-def command_gvmd_smoke(repo_root: Path) -> dict[str, Any]:
-    try:
-        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "gvmd-smoke"):
-            return _command_gvmd_smoke_unlocked(repo_root)
-    except RuntimeLockTimeout as error:
-        return make_result(
-            "gvmd-smoke",
-            repo_root,
-            "gvmd smoke stopped while waiting for the feed lifecycle lock.",
-            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
-            [str(runtime_lock_dir(repo_root))],
-        )
-
-
 def quality_gate_doctor_status(doctor_result: dict[str, Any]) -> tuple[str, str]:
     allowed_warnings = {"git.worktree", "surface.deferred"}
     non_pass = [item for item in doctor_result.get("findings", []) if item.get("status") != "pass"]
@@ -21821,7 +21771,6 @@ def build_parser() -> argparse.ArgumentParser:
     browser_regression.add_argument("--status-only", action="store_true", help="emit compact browser-regression status and only non-pass findings for chat-safe validation")
     quality_gate = subparsers.add_parser("quality-gate", parents=[common], help="run the local deterministic quality gate")
     quality_gate.add_argument("--runtime", action="store_true", help="include runtime-safe status/log/data diagnostics")
-    subparsers.add_parser("gvmd-smoke", parents=[common], help="run a narrow gvmd runtime profile smoke")
     return parser
 
 
@@ -21887,8 +21836,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_browser_regression(repo_root, status_only=args.status_only)
     elif args.command == "quality-gate":
         result = command_quality_gate(repo_root, include_runtime=args.runtime)
-    elif args.command == "gvmd-smoke":
-        result = command_gvmd_smoke(repo_root)
     else:
         parser.error(f"unknown command {args.command}")
     return emit(result, args.json)

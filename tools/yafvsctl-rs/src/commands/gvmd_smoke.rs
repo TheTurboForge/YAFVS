@@ -10,6 +10,7 @@ use super::feed_generation::{
 use super::runtime_health::pg_gvm_extension_finding;
 use super::runtime_lock::{
     DEFAULT_RUNTIME_LOCK_TIMEOUT, FEED_ACTIVATION_LOCK, RuntimeLockError, RuntimeOperationLock,
+    runtime_lock_dir,
 };
 use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
@@ -378,7 +379,7 @@ fn lock_failure(
             Finding::new("fail", "feed-generation.activation-lock", message).with_details(details),
         ],
     )
-    .with_artifacts(vec![runtime_dir(repo_root).display().to_string()])
+    .with_artifacts(vec![runtime_lock_dir(repo_root).display().to_string()])
 }
 
 #[cfg(test)]

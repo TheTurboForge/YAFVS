@@ -1989,6 +1989,7 @@ mod tests {
             "runtime-performance-snapshot",
             "runtime-status",
             "runtime-smoke",
+            "gvmd-smoke",
             "runtime-report-summary",
             "runtime-report-export",
             "runtime-report-metrics",
@@ -2020,9 +2021,9 @@ mod tests {
                 .split_once(&format!("{command} *args:\n"))
                 .unwrap()
                 .1
-                .split_once("\n\n")
-                .unwrap()
-                .0;
+                .split("\n\n")
+                .next()
+                .unwrap();
             assert!(recipe.contains("cargo run --quiet --locked"), "{command}");
             assert!(
                 recipe.contains(&format!("-- {command} \"$@\"")),

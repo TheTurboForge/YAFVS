@@ -295,8 +295,8 @@ request shape, then rerun with explicit write-control intent after direct
 write-control is enabled:
 
 ```sh
-tools/yafvsctl native-targets-from-host-list --json --hosts-file ./hosts.txt --dry-run
-tools/yafvsctl native-targets-from-host-list --json --hosts-file ./hosts.txt --port-range 'T:1-443,U:53' --allow-write-control --status-only
+just native-targets-from-host-list --json --hosts-file ./hosts.txt --dry-run
+just native-targets-from-host-list --json --hosts-file ./hosts.txt --port-range 'T:1-443,U:53' --allow-write-control --status-only
 tools/yafvsctl native-targets-from-csv --json --csv-file ./targets.csv --dry-run
 tools/yafvsctl native-targets-from-csv --json --csv-file ./targets.csv --allow-write-control --status-only
 tools/yafvsctl native-targets-from-xml --json --xml-file ./targets.xml --dry-run

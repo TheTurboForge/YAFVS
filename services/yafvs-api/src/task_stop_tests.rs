@@ -28,7 +28,7 @@ static NEXT_SOCKET_ID: AtomicUsize = AtomicUsize::new(0);
 fn mock_socket_path() -> PathBuf {
     let sequence = NEXT_SOCKET_ID.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir().join(format!(
-        "turbovas-task-stop-{}-{sequence}.sock",
+        "yafvs-task-stop-{}-{sequence}.sock",
         process::id()
     ))
 }

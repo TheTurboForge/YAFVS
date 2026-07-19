@@ -17,10 +17,10 @@ from typing import Any
 
 
 DEFAULT_TIMEOUT_MS = 30_000
-ROUTES_ENV = "TURBOVAS_BROWSER_SMOKE_ROUTES"
+ROUTES_ENV = "YAFVS_BROWSER_SMOKE_ROUTES"
 PLAYWRIGHT_NODE_PATHS = (
     "/home/turboforge/.local/nodejs/node-v22.22.3-linux-x64/lib/node_modules",
-    "/home/turboforge/.local/share/turbovas-tools/playwright/node_modules",
+    "/home/turboforge/.local/share/yafvs-tools/playwright/node_modules",
 )
 
 
@@ -83,7 +83,7 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-const password = process.env.TURBOVAS_BROWSER_SMOKE_PASSWORD || '';
+const password = process.env.YAFVS_BROWSER_SMOKE_PASSWORD || '';
 const findings = [];
 const artifacts = [];
 
@@ -1119,9 +1119,9 @@ def native_api_browser_proxy_delete(repo_root: Path, path: str, *, operator_name
         "exec",
         "-T",
         "-e",
-        "TURBOVAS_BROWSER_SMOKE_OPERATOR_NAME",
+        "YAFVS_BROWSER_SMOKE_OPERATOR_NAME",
         "-e",
-        "TURBOVAS_BROWSER_SMOKE_DELETE_PATH",
+        "YAFVS_BROWSER_SMOKE_DELETE_PATH",
         "yafvs-api",
         "sh",
         "-ceu",
@@ -1129,13 +1129,13 @@ def native_api_browser_proxy_delete(repo_root: Path, path: str, *, operator_name
             "test -n \"${YAFVS_API_BROWSER_PROXY_SECRET:-}\"; "
             "curl -sS --max-time 10 -X DELETE -w '\\n%{http_code}' "
             "-H \"x-yafvs-browser-proxy-secret: ${YAFVS_API_BROWSER_PROXY_SECRET}\" "
-            "-H \"x-yafvs-operator-name: ${TURBOVAS_BROWSER_SMOKE_OPERATOR_NAME}\" "
-            "\"http://127.0.0.1:9080${TURBOVAS_BROWSER_SMOKE_DELETE_PATH}\""
+            "-H \"x-yafvs-operator-name: ${YAFVS_BROWSER_SMOKE_OPERATOR_NAME}\" "
+            "\"http://127.0.0.1:9080${YAFVS_BROWSER_SMOKE_DELETE_PATH}\""
         ),
     ]
     env = os.environ.copy()
-    env["TURBOVAS_BROWSER_SMOKE_OPERATOR_NAME"] = operator_name
-    env["TURBOVAS_BROWSER_SMOKE_DELETE_PATH"] = path
+    env["YAFVS_BROWSER_SMOKE_OPERATOR_NAME"] = operator_name
+    env["YAFVS_BROWSER_SMOKE_DELETE_PATH"] = path
     completed = subprocess.run(
         command,
         cwd=repo_root,
@@ -1254,7 +1254,7 @@ def run_browser_smoke(args: argparse.Namespace) -> dict[str, Any]:
 
     env = dict(os.environ)
     env["NODE_PATH"] = os.pathsep.join([*node_paths, env.get("NODE_PATH", "")]).rstrip(os.pathsep)
-    env["TURBOVAS_BROWSER_SMOKE_PASSWORD"] = password
+    env["YAFVS_BROWSER_SMOKE_PASSWORD"] = password
     completed = subprocess.run(
         ["node", str(script_path), str(config_path)],
         check=False,

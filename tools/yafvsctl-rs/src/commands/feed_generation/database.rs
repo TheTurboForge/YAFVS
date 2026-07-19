@@ -14,7 +14,7 @@ use std::fmt;
 use std::path::Path;
 use std::time::Duration;
 
-const META_NAME: &str = "turbovas_feed_generation_attestation";
+const META_NAME: &str = "yafvs_feed_generation_attestation";
 const FEED_RELEASE: &str = "22.04";
 const IMPORT_CONTRACT: &str = "gvmd-nvt+gvmd-data-all+scap/v1";
 const MAX_BYTES: usize = 4096;
@@ -540,7 +540,7 @@ mod tests {
         assert!(commands[0].iter().any(|value| value == "postgres"));
         let write = commands[0].last().unwrap();
         assert!(write.contains(
-            "INSERT INTO public.meta (name, value) VALUES ('turbovas_feed_generation_attestation',"
+            "INSERT INTO public.meta (name, value) VALUES ('yafvs_feed_generation_attestation',"
         ));
         assert!(write.contains("ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;"));
         let read = commands[1].last().unwrap();

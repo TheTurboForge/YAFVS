@@ -115,9 +115,9 @@ def native_api_browser_proxy_delete(repo_root: Path, path: str, *, operator_name
         "exec",
         "-T",
         "-e",
-        "TURBOVAS_SCOPE_OPERATOR_NAME",
+        "YAFVS_SCOPE_OPERATOR_NAME",
         "-e",
-        "TURBOVAS_SCOPE_DELETE_PATH",
+        "YAFVS_SCOPE_DELETE_PATH",
         "yafvs-api",
         "sh",
         "-ceu",
@@ -125,13 +125,13 @@ def native_api_browser_proxy_delete(repo_root: Path, path: str, *, operator_name
             "test -n \"${YAFVS_API_BROWSER_PROXY_SECRET:-}\"; "
             "curl -sS --max-time 10 -X DELETE -w '\\n%{http_code}' "
             "-H \"x-yafvs-browser-proxy-secret: ${YAFVS_API_BROWSER_PROXY_SECRET}\" "
-            "-H \"x-yafvs-operator-name: ${TURBOVAS_SCOPE_OPERATOR_NAME}\" "
-            "\"http://127.0.0.1:9080${TURBOVAS_SCOPE_DELETE_PATH}\""
+            "-H \"x-yafvs-operator-name: ${YAFVS_SCOPE_OPERATOR_NAME}\" "
+            "\"http://127.0.0.1:9080${YAFVS_SCOPE_DELETE_PATH}\""
         ),
     ]
     env = os.environ.copy()
-    env["TURBOVAS_SCOPE_OPERATOR_NAME"] = operator_name
-    env["TURBOVAS_SCOPE_DELETE_PATH"] = path
+    env["YAFVS_SCOPE_OPERATOR_NAME"] = operator_name
+    env["YAFVS_SCOPE_DELETE_PATH"] = path
     completed = subprocess.run(
         command,
         cwd=repo_root,
@@ -170,31 +170,31 @@ def native_api_browser_proxy_json(
         "exec",
         "-T",
         "-e",
-        "TURBOVAS_SCOPE_OPERATOR_NAME",
+        "YAFVS_SCOPE_OPERATOR_NAME",
         "-e",
-        "TURBOVAS_SCOPE_METHOD",
+        "YAFVS_SCOPE_METHOD",
         "-e",
-        "TURBOVAS_SCOPE_PATH",
+        "YAFVS_SCOPE_PATH",
         "-e",
-        "TURBOVAS_SCOPE_JSON",
+        "YAFVS_SCOPE_JSON",
         "yafvs-api",
         "sh",
         "-ceu",
         (
             "test -n \"${YAFVS_API_BROWSER_PROXY_SECRET:-}\"; "
-            "curl -sS --max-time 10 -X \"${TURBOVAS_SCOPE_METHOD}\" -w '\\n%{http_code}' "
+            "curl -sS --max-time 10 -X \"${YAFVS_SCOPE_METHOD}\" -w '\\n%{http_code}' "
             "-H \"content-type: application/json\" "
             "-H \"x-yafvs-browser-proxy-secret: ${YAFVS_API_BROWSER_PROXY_SECRET}\" "
-            "-H \"x-yafvs-operator-name: ${TURBOVAS_SCOPE_OPERATOR_NAME}\" "
-            "--data \"${TURBOVAS_SCOPE_JSON}\" "
-            "\"http://127.0.0.1:9080${TURBOVAS_SCOPE_PATH}\""
+            "-H \"x-yafvs-operator-name: ${YAFVS_SCOPE_OPERATOR_NAME}\" "
+            "--data \"${YAFVS_SCOPE_JSON}\" "
+            "\"http://127.0.0.1:9080${YAFVS_SCOPE_PATH}\""
         ),
     ]
     env = os.environ.copy()
-    env["TURBOVAS_SCOPE_OPERATOR_NAME"] = operator_name
-    env["TURBOVAS_SCOPE_METHOD"] = method
-    env["TURBOVAS_SCOPE_PATH"] = path
-    env["TURBOVAS_SCOPE_JSON"] = json.dumps(payload)
+    env["YAFVS_SCOPE_OPERATOR_NAME"] = operator_name
+    env["YAFVS_SCOPE_METHOD"] = method
+    env["YAFVS_SCOPE_PATH"] = path
+    env["YAFVS_SCOPE_JSON"] = json.dumps(payload)
     completed = subprocess.run(
         command,
         cwd=repo_root,

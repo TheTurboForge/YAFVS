@@ -52,7 +52,7 @@ SHORT_SECRET_BOUNDARY_CHARS = r"A-Za-z0-9_./-"
 LONG_SECRET_MIN_LENGTH = 12
 EXPECTED_ROOT_DOCS = ("README.md", "UPSTREAMS.md", "LICENSE_AUDIT.md")
 IMPORT_BASELINE_COMMIT = "def84d156dd45c27cad0a75bc2302ce151585d3c"
-TURBOVAS_MODIFICATION_NOTICE = "TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>."
+HISTORICAL_TURBOVAS_MODIFICATION_NOTICE = "TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>."
 COMMENT_NOTICE_SUFFIXES = frozenset({".c", ".h", ".js", ".jsx", ".ts", ".tsx", ".py", ".cmake", ".rs", ".sh", ".sql", ".xml", ".in", ".md", ".txt", ".toml", ".yml", ".yaml"})
 COMMENT_NOTICE_NAMES = frozenset({"Makefile", ".dockerignore", ".gitignore"})
 IMPORTED_ADDED_PREFIXES = ("components/pg-gvm/",)
@@ -322,9 +322,9 @@ DIRECT_API_EXPECTED_RESPONSE_HEADERS = {
     "x-frame-options": "DENY",
 }
 POSTGRES_DEFAULTS = {
-    "user": "turbovas",
+    "user": "yafvs",
     "password": "yafvs-dev",
-    "database": "turbovas",
+    "database": "yafvs",
 }
 POSTGRES_COLLATION_BASE_DATABASES = ("postgres", "template1")
 PG_GVM_CONTROL = "pg-gvm.control"
@@ -336,7 +336,7 @@ DEV_ADMIN_SECRET = "gvmd-admin-password"
 FEED_IMPORT_OWNER_SETTING = "78eceaec-3385-11ea-b237-28d24461215b"
 UUID_PATTERN = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
 FEED_RELEASE = "22.04"
-FEED_DB_ATTESTATION_META_NAME = "turbovas_feed_generation_attestation"
+FEED_DB_ATTESTATION_META_NAME = "yafvs_feed_generation_attestation"
 FEED_DB_ATTESTATION_IMPORT_CONTRACT = "gvmd-nvt+gvmd-data-all+scap/v1"
 FEED_DB_ATTESTATION_MAX_BYTES = 4096
 FEED_SYNC_TYPE = "all"
@@ -5692,7 +5692,7 @@ def wait_for_socket(path: Path, timeout_seconds: int = 20) -> bool:
 
 def runtime_env(repo_root: Path) -> dict[str, str]:
     env = build_env(repo_root)
-    env.setdefault("COMPOSE_PROJECT_NAME", "turbovas")
+    env.setdefault("COMPOSE_PROJECT_NAME", "yafvs")
     env.setdefault("YAFVS_RUNTIME_DIR", str(runtime_dir(repo_root)))
     env.setdefault("YAFVS_REPO_MOUNT_PATH", str(repo_root))
     env.setdefault("YAFVS_UID", str(os.getuid()))
@@ -13676,7 +13676,7 @@ def has_spdx_header(path: Path) -> bool:
 
 
 def text_has_turbovas_modification_notice(text: str) -> bool:
-    return TURBOVAS_MODIFICATION_NOTICE in text[:5000]
+    return HISTORICAL_TURBOVAS_MODIFICATION_NOTICE in text[:5000]
 
 
 def has_turbovas_modification_notice(path: Path) -> bool:

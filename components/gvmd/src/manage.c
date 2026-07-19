@@ -2696,7 +2696,7 @@ yafvs_task_control_lock (task_t task, lockfile_t *lockfile)
   gchar *name;
   int ret;
 
-  name = g_strdup_printf ("turbovas-task-control-%llu.lock", task);
+  name = g_strdup_printf ("yafvs-task-control-%llu.lock", task);
   ret = lockfile_lock (lockfile, name);
   g_free (name);
   return ret;

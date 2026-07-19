@@ -38,7 +38,7 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-const password = process.env.TURBOVAS_BROWSER_REGRESSION_PASSWORD || '';
+const password = process.env.YAFVS_BROWSER_REGRESSION_PASSWORD || '';
 const findings = [];
 const artifacts = [];
 const network = [];
@@ -570,7 +570,7 @@ def run_browser_regression(args: argparse.Namespace) -> dict[str, Any]:
 
     env = dict(os.environ)
     env["NODE_PATH"] = os.pathsep.join([*node_paths, env.get("NODE_PATH", "")]).rstrip(os.pathsep)
-    env["TURBOVAS_BROWSER_REGRESSION_PASSWORD"] = password
+    env["YAFVS_BROWSER_REGRESSION_PASSWORD"] = password
     completed = subprocess.run(
         ["node", str(script_path), str(config_path)],
         check=False,

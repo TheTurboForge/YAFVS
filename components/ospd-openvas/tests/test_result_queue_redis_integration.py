@@ -936,7 +936,7 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
             'default',
             'resetkeys',
             '~test',
-            '~__turbovas_result_admission_probe__',
+            '~__yafvs_result_admission_probe__',
             '+@all',
         )
         previous_address = (

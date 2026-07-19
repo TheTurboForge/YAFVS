@@ -233,36 +233,36 @@ def native_api_browser_proxy_json(
         "exec",
         "-T",
         "-e",
-        "TURBOVAS_FULL_TEST_OPERATOR_NAME",
+        "YAFVS_FULL_TEST_OPERATOR_NAME",
         "-e",
-        "TURBOVAS_FULL_TEST_METHOD",
+        "YAFVS_FULL_TEST_METHOD",
         "-e",
-        "TURBOVAS_FULL_TEST_PATH",
+        "YAFVS_FULL_TEST_PATH",
         "-e",
-        "TURBOVAS_FULL_TEST_JSON",
+        "YAFVS_FULL_TEST_JSON",
         "-e",
-        "TURBOVAS_FULL_TEST_HAS_JSON",
+        "YAFVS_FULL_TEST_HAS_JSON",
         "yafvs-api",
         "sh",
         "-ceu",
         (
             "test -n \"${YAFVS_API_BROWSER_PROXY_SECRET:-}\"; "
-            "if [ \"${TURBOVAS_FULL_TEST_HAS_JSON}\" = 1 ]; then "
-            "set -- -H \"content-type: application/json\" --data \"${TURBOVAS_FULL_TEST_JSON}\"; "
+            "if [ \"${YAFVS_FULL_TEST_HAS_JSON}\" = 1 ]; then "
+            "set -- -H \"content-type: application/json\" --data \"${YAFVS_FULL_TEST_JSON}\"; "
             "else set --; fi; "
-            "curl -sS --max-time 10 -X \"${TURBOVAS_FULL_TEST_METHOD}\" -w '\\n%{http_code}' "
+            "curl -sS --max-time 10 -X \"${YAFVS_FULL_TEST_METHOD}\" -w '\\n%{http_code}' "
             "-H \"x-yafvs-browser-proxy-secret: ${YAFVS_API_BROWSER_PROXY_SECRET}\" "
-            "-H \"x-yafvs-operator-name: ${TURBOVAS_FULL_TEST_OPERATOR_NAME}\" "
+            "-H \"x-yafvs-operator-name: ${YAFVS_FULL_TEST_OPERATOR_NAME}\" "
             "\"$@\" "
-            "\"http://127.0.0.1:9080${TURBOVAS_FULL_TEST_PATH}\""
+            "\"http://127.0.0.1:9080${YAFVS_FULL_TEST_PATH}\""
         ),
     ]
     env = os.environ.copy()
-    env["TURBOVAS_FULL_TEST_OPERATOR_NAME"] = operator_name
-    env["TURBOVAS_FULL_TEST_METHOD"] = method
-    env["TURBOVAS_FULL_TEST_PATH"] = path
-    env["TURBOVAS_FULL_TEST_JSON"] = json.dumps(payload) if payload is not None else ""
-    env["TURBOVAS_FULL_TEST_HAS_JSON"] = "1" if payload is not None else "0"
+    env["YAFVS_FULL_TEST_OPERATOR_NAME"] = operator_name
+    env["YAFVS_FULL_TEST_METHOD"] = method
+    env["YAFVS_FULL_TEST_PATH"] = path
+    env["YAFVS_FULL_TEST_JSON"] = json.dumps(payload) if payload is not None else ""
+    env["YAFVS_FULL_TEST_HAS_JSON"] = "1" if payload is not None else "0"
     completed = subprocess.run(
         command,
         cwd=repo_root,

@@ -22,8 +22,8 @@ const path = require('path');
 const { chromium } = require('playwright');
 
 const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-const loginPassword = process.env.TURBOVAS_CREDENTIAL_SMOKE_LOGIN_PASSWORD || '';
-const credentialPassword = process.env.TURBOVAS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD || '';
+const loginPassword = process.env.YAFVS_CREDENTIAL_SMOKE_LOGIN_PASSWORD || '';
+const credentialPassword = process.env.YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD || '';
 const findings = [];
 const artifacts = [];
 
@@ -262,8 +262,8 @@ def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
 
     env = dict(os.environ)
     env["NODE_PATH"] = os.pathsep.join([*node_paths, env.get("NODE_PATH", "")]).rstrip(os.pathsep)
-    env["TURBOVAS_CREDENTIAL_SMOKE_LOGIN_PASSWORD"] = login_password
-    env["TURBOVAS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD"] = args.credential_password
+    env["YAFVS_CREDENTIAL_SMOKE_LOGIN_PASSWORD"] = login_password
+    env["YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD"] = args.credential_password
     completed = subprocess.run(
         ["node", str(script_path), str(config_path)],
         check=False,

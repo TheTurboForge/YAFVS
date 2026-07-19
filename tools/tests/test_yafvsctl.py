@@ -1247,6 +1247,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["feed-copy-to-runtime", "--json"], 1, "fail"),
                 (["runtime-feed-import-init", "--json"], 1, "fail"),
                 (["runtime-redis-state", "--json"], 0, "warn"),
+                (["runtime-identity-migrate", "--json"], 0, "pass"),
                 (["runtime-data-state", "--json"], 0, "warn"),
                 (["runtime-db-introspect", "--json"], 0, "warn"),
                 (["runtime-performance-snapshot", "--json"], 0, "warn"),
@@ -15754,7 +15755,7 @@ class YAFVSCtlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
-            self.assertEqual(yafvsctl.postgres_collation_databases(root), ("turbovas", "postgres", "template1"))
+            self.assertEqual(yafvsctl.postgres_collation_databases(root), ("yafvs", "postgres", "template1"))
 
     def test_postgres_collation_checks_all_development_databases(self):
         calls = []
@@ -15773,9 +15774,9 @@ class YAFVSCtlTests(unittest.TestCase):
         finally:
             yafvsctl.psql = original_psql
 
-        self.assertEqual([finding["details"]["database"] for finding in findings], ["turbovas", "postgres", "template1"])
+        self.assertEqual([finding["details"]["database"] for finding in findings], ["yafvs", "postgres", "template1"])
         self.assertTrue(all(finding["status"] == "pass" for finding in findings))
-        self.assertEqual([call[1] for call in calls], ["turbovas", "postgres", "template1"])
+        self.assertEqual([call[1] for call in calls], ["yafvs", "postgres", "template1"])
 
     def test_postgres_collation_refreshes_empty_database_from_alternate_connection(self):
         calls = []
@@ -15802,7 +15803,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
         self.assertEqual(finding["status"], "pass")
         self.assertEqual(finding["details"]["database"], "template1")
-        self.assertEqual(calls[-1][1], "turbovas")
+        self.assertEqual(calls[-1][1], "yafvs")
         self.assertIn('ALTER DATABASE "template1" REFRESH COLLATION VERSION', calls[-1][0])
 
     def test_sql_escaping_helpers(self):

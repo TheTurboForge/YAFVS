@@ -383,10 +383,23 @@ table with direct native API calls. It verifies each scanner without starting a
 scan and reports remote/TLS/relay scanners as non-native verification warnings
 until those paths have explicit native contracts.
 
-`native-tags-from-csv` supports the native-safe subset of the inherited tag CSV
-shape: Alert, Config, Credential, Scanner, Schedule, Target, and Task tags with
-exact resource-name lookup. Inherited Report filter tags remain outside this
-helper until their native safety contract is explicit.
+`native-tags-from-csv` supports Alert, Config, Credential, Report, Scanner,
+Schedule, Target, and Task tags. Resource columns use exact name lookup except
+for Report rows, which require exact report UUIDs. It deliberately does not
+recreate inherited Report filter-tag expansion.
+
+`native-schedules-from-csv` accepts the retained headerless name, timezone,
+and iCalendar columns; `native-schedules-from-xml` accepts only direct
+`schedule` children with name, comment, timezone, and iCalendar fields. Both
+commands validate and hash calendar data without logging it, resolve every
+unique schedule name before the first write, and skip duplicate or existing
+names. Use `--dry-run` to inspect the bounded plan and
+`--allow-write-control` for creation:
+
+```sh
+just native-schedules-from-csv --csv-file ./schedules.csv --dry-run --json
+just native-schedules-from-xml --xml-file ./schedules.xml --allow-write-control --status-only --json
+```
 
 `native-targets-from-xml` supports the retained secret-free target XML subset
 with explicit `port_list` IDs. It rejects legacy `port_range` rows and non-SSH

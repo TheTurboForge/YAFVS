@@ -85,7 +85,7 @@ native-targets-from-xml *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- native-targets-from-xml "$@"
 
 native-tags-from-csv *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-tags-from-csv "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- native-tags-from-csv "$@"
 
 native-credentials-from-csv *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl native-credentials-from-csv "$@"

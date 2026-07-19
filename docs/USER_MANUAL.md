@@ -301,8 +301,8 @@ just native-targets-from-csv --json --csv-file ./targets.csv --dry-run
 just native-targets-from-csv --json --csv-file ./targets.csv --allow-write-control --status-only
 just native-targets-from-xml --json --xml-file ./targets.xml --dry-run
 just native-targets-from-xml --json --xml-file ./targets.xml --allow-write-control --status-only
-tools/yafvsctl native-tags-from-csv --json --csv-file ./tags.csv --dry-run
-tools/yafvsctl native-tags-from-csv --json --csv-file ./tags.csv --allow-write-control --status-only
+just native-tags-from-csv --json --csv-file ./tags.csv --dry-run
+just native-tags-from-csv --json --csv-file ./tags.csv --allow-write-control --status-only
 tools/yafvsctl native-verify-scanners --json --allow-write-control --status-only
 just native-start-task --task-id TASK_UUID --allow-write-control
 tools/yafvsctl native-scan-new-system --host 192.0.2.10 --dry-run --status-only

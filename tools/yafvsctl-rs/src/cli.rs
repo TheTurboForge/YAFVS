@@ -94,6 +94,15 @@ pub enum CliCommand {
         #[arg(long)]
         allow_write_control: bool,
     },
+    /// Preview or permanently empty the operator-owned Trashcan.
+    NativeEmptyTrash {
+        #[arg(long)]
+        allow_write_control: bool,
+        #[arg(long)]
+        acknowledge_permanent_deletion: bool,
+        #[arg(long)]
+        expected_total: Option<u64>,
+    },
     /// Verify configured scanners through the guarded direct native API.
     NativeVerifyScanners {
         #[arg(long)]
@@ -513,6 +522,7 @@ impl CliCommand {
             Self::NativeStopTasksFromCsv { .. } => "native-stop-tasks-from-csv",
             Self::NativeStopAllTasks { .. } => "native-stop-all-tasks",
             Self::NativeApiRequest { .. } => "native-api-request",
+            Self::NativeEmptyTrash { .. } => "native-empty-trash",
             Self::NativeVerifyScanners { .. } => "native-verify-scanners",
             Self::Status => "status",
             Self::Inventory { .. } => "inventory",
@@ -585,6 +595,39 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_native_empty_trash_controls() {
+        let preview = parse_cli(["native-empty-trash"]).unwrap();
+        assert!(!preview.status_only);
+        assert_eq!(
+            preview.command,
+            CliCommand::NativeEmptyTrash {
+                allow_write_control: false,
+                acknowledge_permanent_deletion: false,
+                expected_total: None,
+            }
+        );
+        let write = parse_cli([
+            "native-empty-trash",
+            "--allow-write-control",
+            "--acknowledge-permanent-deletion",
+            "--expected-total",
+            "3",
+            "--status-only",
+        ])
+        .unwrap();
+        assert!(write.status_only);
+        assert_eq!(
+            write.command,
+            CliCommand::NativeEmptyTrash {
+                allow_write_control: true,
+                acknowledge_permanent_deletion: true,
+                expected_total: Some(3),
+            }
+        );
+        assert!(parse_cli(["native-empty-trash", "--expected-total", "-1"]).is_err());
+    }
 
     #[test]
     fn parses_native_verify_scanners_options() {

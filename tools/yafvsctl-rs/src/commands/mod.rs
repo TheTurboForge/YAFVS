@@ -18,6 +18,7 @@ mod feed;
 mod feed_generation;
 mod license;
 mod native_api_request;
+mod native_empty_trash;
 mod native_export_report_bundle;
 mod native_export_report_csv;
 mod native_export_report_pdf;
@@ -72,6 +73,7 @@ pub use feed_generation::{
 };
 pub use license::command_license_report;
 pub use native_api_request::command_native_api_request;
+pub use native_empty_trash::command_native_empty_trash;
 pub use native_export_report_bundle::command_native_export_report_bundle;
 pub(crate) use native_export_report_bundle::{
     DEFAULT_MAX_BYTES as NATIVE_REPORT_BUNDLE_DEFAULT_MAX_BYTES,

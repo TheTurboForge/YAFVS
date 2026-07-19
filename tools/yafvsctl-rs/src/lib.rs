@@ -19,11 +19,12 @@ pub use commands::{
     command_feed_generation_state, command_feed_state, command_gsa_npm_audit, command_inventory,
     command_license_report, command_logs, command_native_alerts_from_csv,
     command_native_api_cargo_audit, command_native_api_request, command_native_api_semgrep_audit,
-    command_native_credentials_from_csv, command_native_export_report_bundle,
-    command_native_export_report_csv, command_native_export_report_pdf,
-    command_native_schedules_from_csv, command_native_schedules_from_xml,
-    command_native_start_task, command_native_start_tasks_from_csv, command_native_stop_all_tasks,
-    command_native_stop_task, command_native_stop_tasks_from_csv, command_native_tags_from_csv,
+    command_native_credentials_from_csv, command_native_empty_trash,
+    command_native_export_report_bundle, command_native_export_report_csv,
+    command_native_export_report_pdf, command_native_schedules_from_csv,
+    command_native_schedules_from_xml, command_native_start_task,
+    command_native_start_tasks_from_csv, command_native_stop_all_tasks, command_native_stop_task,
+    command_native_stop_tasks_from_csv, command_native_tags_from_csv,
     command_native_targets_from_csv, command_native_targets_from_host_list,
     command_native_targets_from_xml, command_native_tasks_from_csv,
     command_native_update_task_target, command_native_verify_scanners, command_osv_lockfile_audit,
@@ -53,6 +54,17 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         None => return command_repository_unavailable(cwd, cli.command.name()),
     };
     match &cli.command {
+        CliCommand::NativeEmptyTrash {
+            allow_write_control,
+            acknowledge_permanent_deletion,
+            expected_total,
+        } => command_native_empty_trash(
+            &repo_root,
+            *allow_write_control,
+            *acknowledge_permanent_deletion,
+            *expected_total,
+            cli.status_only,
+        ),
         CliCommand::NativeSchedulesFromCsv {
             csv_file,
             allow_write_control,

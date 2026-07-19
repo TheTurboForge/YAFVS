@@ -42,7 +42,6 @@ if str(TOOLS_MODULE_DIR) in sys.path:
 sys.path.insert(0, str(TOOLS_MODULE_DIR))
 
 STATUSES = ("pass", "warn", "fail")
-MINIMUM_YAFVSCTL_PYTHON = (3, 11)
 COMPOSE_APP_UP_TRANSIENT_ERRORS = (
     "No such container:",
     "removal of container",
@@ -50,24 +49,6 @@ COMPOSE_APP_UP_TRANSIENT_ERRORS = (
 )
 SHORT_SECRET_BOUNDARY_CHARS = r"A-Za-z0-9_./-"
 LONG_SECRET_MIN_LENGTH = 12
-EXPECTED_ROOT_DOCS = ("README.md", "UPSTREAMS.md", "LICENSE_AUDIT.md")
-BASELINE_TOOLS = (
-    "git",
-    "rg",
-    "fd",
-    "jq",
-    "just",
-    "python3",
-    "docker",
-    "cmake",
-    "ninja",
-    "pkg-config",
-    "gcc",
-    "g++",
-    "clang",
-    "cargo",
-    "bear",
-)
 CORE_C_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner")
 C_SERVICES_CHAIN = ("gvm-libs", "openvas-smb", "openvas-scanner", "pg-gvm", "gvmd", "gsad")
 C_BUILD_PROFILES = ("hardened",)
@@ -2543,6 +2524,13 @@ def rust_quality_gate_state_result(repo_root: Path, status_only: bool = False) -
 
 def rust_feed_state_result(repo_root: Path) -> dict[str, Any]:
     return rust_result_envelope(repo_root, "feed-state", ["feed-state"])
+
+
+def rust_doctor_result(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+    arguments = ["doctor"]
+    if status_only:
+        arguments.append("--status-only")
+    return rust_result_envelope(repo_root, "doctor", arguments)
 
 
 def rust_license_report_result(
@@ -7285,87 +7273,6 @@ def scanner_registration_status(repo_root: Path) -> dict[str, Any]:
     scanners = run_gvmd_oneoff(repo_root, ["--get-scanners"], no_deps=False)
     scanner_uuid = parse_named_uuid(scanners.stdout, "OpenVAS Default") if scanners.returncode == 0 else None
     return finding("pass" if scanner_uuid else "warn", "gvmd.scanner.openvas-default", "OpenVAS Default scanner is registered." if scanner_uuid else "OpenVAS Default scanner is not registered.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(scanners.stdout, 80)})
-
-
-def component_inventory(repo_root: Path, scope: str | None = None) -> list[dict[str, Any]]:
-    scope_path = (repo_root / scope).resolve() if scope else None
-    rows: list[dict[str, Any]] = []
-    for component in COMPONENTS:
-        component_path = repo_root / component.path
-        if scope_path and not component_path.resolve().is_relative_to(scope_path):
-            continue
-        rows.append(
-            {
-                "name": component.name,
-                "path": component.path,
-                "role": component.role,
-                "exists": component_path.is_dir(),
-                "license_files": [{"path": f"{component.path}/{license_file}", "exists": (component_path / license_file).is_file()} for license_file in component.licenses],
-                "markers": [{"path": f"{component.path}/{marker}", "exists": (component_path / marker).exists()} for marker in component.markers],
-            }
-        )
-    return rows
-
-
-def nested_git_dirs(repo_root: Path) -> list[str]:
-    components = repo_root / "components"
-    if not components.is_dir():
-        return []
-    return sorted(str(path.relative_to(repo_root)) for path in components.rglob(".git"))
-
-
-def tool_version(program: str) -> str | None:
-    probes = {
-        "clang": ["clang", "--version"],
-        "cmake": ["cmake", "--version"],
-        "gcc": ["gcc", "--version"],
-        "ld": ["ld", "--version"],
-        "node": ["node", "--version"],
-        "npm": ["npm", "--version"],
-        "python3": ["python3", "--version"],
-        "readelf": ["readelf", "--version"],
-        "uv": ["uv", "--version"],
-    }
-    command = probes.get(program)
-    if not command or not shutil.which(command[0]):
-        return None
-    result = run_command(command, Path.cwd())
-    if result.returncode == 0:
-        output = result.stdout.strip()
-        return output.splitlines()[0] if output else None
-    return None
-
-
-def version_tuple(version: str) -> tuple[int, ...]:
-    clean = version.strip().lstrip("v")
-    parts: list[int] = []
-    for piece in clean.split("."):
-        number = ""
-        for character in piece:
-            if character.isdigit():
-                number += character
-            else:
-                break
-        if number:
-            parts.append(int(number))
-        else:
-            break
-    return tuple(parts)
-
-
-def python_version_finding() -> dict[str, Any]:
-    version = tool_version("python3")
-    if not version:
-        return finding("warn", "tool.python-version", "python3 version could not be detected.")
-    parsed = version_tuple(version.removeprefix("Python "))
-    status = "pass" if parsed >= MINIMUM_YAFVSCTL_PYTHON else "warn"
-    required = ".".join(str(part) for part in MINIMUM_YAFVSCTL_PYTHON)
-    message = (
-        f"python3 version {version} satisfies YAFVS tooling requirement >= {required}."
-        if status == "pass"
-        else f"python3 version {version} is older than YAFVS tooling requirement >= {required}; TOML-backed checks need Python 3.11+."
-    )
-    return finding(status, "tool.python-version", message, details={"version": version, "minimum": required})
 
 
 def native_tooling_markers(path: Path, relative_path: str) -> list[str]:
@@ -12378,20 +12285,6 @@ def compact_doctor_finding(item: dict[str, Any]) -> dict[str, Any]:
                 compact_details[key] = {"type": "object", "key_count": len(value)}
         if compact_details:
             compact["details"] = compact_details
-    return compact
-
-
-def doctor_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    compact = dict(result)
-    findings = result.get("findings", [])
-    non_pass = [compact_doctor_finding(item) for item in findings if item.get("status") != "pass"]
-    compact["details"] = {
-        "finding_count": len(findings),
-        "non_pass_count": len(non_pass),
-    }
-    compact["findings"] = non_pass or [
-        finding("pass", "doctor.status-only", "Doctor passed; no non-pass findings.")
-    ]
     return compact
 
 
@@ -31348,35 +31241,6 @@ def command_gvmd_smoke(repo_root: Path) -> dict[str, Any]:
         )
 
 
-def command_doctor(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    findings.append(finding("pass" if (repo_root / ".git").exists() else "fail", "repo.git", "Repository metadata is present." if (repo_root / ".git").exists() else "Repository metadata is missing.", ".git"))
-    porcelain = run_git(repo_root, ["status", "--short"]) or ""
-    findings.append(finding("warn" if porcelain else "pass", "git.worktree", "Worktree has uncommitted changes." if porcelain else "Worktree is clean."))
-    for doc in EXPECTED_ROOT_DOCS:
-        findings.append(finding("pass" if (repo_root / doc).is_file() else "fail", "root.doc", f"Expected root document {doc}", doc))
-    for row in component_inventory(repo_root):
-        findings.append(finding("pass" if row["exists"] else "fail", "component.exists", f"Expected component {row['name']}", row["path"]))
-        for license_file in row["license_files"]:
-            findings.append(finding("pass" if license_file["exists"] else "fail", "component.license", f"Expected license/provenance file for {row['name']}", license_file["path"]))
-    nested = nested_git_dirs(repo_root)
-    findings.append(finding("fail" if nested else "pass", "component.nested_git", "Nested .git directories were found." if nested else "No nested .git directories found under components/.", details={"paths": nested} if nested else None))
-    for tool in BASELINE_TOOLS:
-        findings.append(finding("pass" if shutil.which(tool) else "warn", "tool.available", f"{tool} is available." if shutil.which(tool) else f"{tool} is not available on PATH."))
-    findings.append(python_version_finding())
-    license_result = rust_license_report_result(repo_root)
-    findings.append(finding(license_result["status"], "license.compliance", license_result["summary"], details={"status": license_result["status"], "findings": license_result["findings"]}))
-    findings.append(finding("pass", "surface.available", "Build readiness surface is available.", details={"commands": ["just deps", "just configure", "just build", "just build-core-c", "just build-c-services", "just build-ui", "just build-python", "just build-baseline"]}))
-    findings.append(finding("pass" if compose_file(repo_root).is_file() else "warn", "surface.available", "Runtime infrastructure command surface is available." if compose_file(repo_root).is_file() else "Runtime infrastructure command surface is not available.", details={"commands": ["just runtime-plan", "just up", "just down", "just logs", "just runtime-init", "just runtime-certs-init", "just runtime-manager-init", "just runtime-scanner-redis-init", "just runtime-gmp-smoke", "just runtime-scanner-register", "just runtime-scanner-capability-check", "just runtime-scanner-process-check", "just runtime-nmap-capability-check", "just runtime-feed-keyring-init", "just feed-generation-stage", "just feed-generation-state", "just feed-generation-activate", "just feed-generation-rollback", "just runtime-full-test-scan-preflight", "just runtime-full-test-scan-start", "just runtime-full-test-scan-status", "just runtime-report-summary", "just runtime-report-export", "just runtime-certbund-report", "just runtime-report-metrics", "just runtime-scope-smoke", "just runtime-scope-report-summary", "just runtime-scope-report-metrics", "just runtime-rbac-smoke", "just feed-state", "just feed-cache-sync", "just runtime-status", "just runtime-smoke", "just runtime-log-review", "just runtime-data-state", "just runtime-db-introspect", "just runtime-performance-snapshot", "just runtime-app-up", "just runtime-app-smoke", "just runtime-native-api-smoke", "just runtime-native-api-rebuild", "just runtime-webui-smoke", "just runtime-browser-smoke", "just runtime-browser-regression", "just runtime-credential-smoke", "just runtime-app-down", "just gvmd-smoke", "just quality-gate", "just quality-gate-state", "just quality-gate-schedule"]}))
-    findings.append(finding("pass", "surface.diagnostics", "Native API, Redis, path-coupling, and security-policy diagnostics are available.", details={"commands": ["just native-tooling-state", "just runtime-redis-state", "just path-coupling-state", "just security-policy-check"]}))
-    findings.append(finding("warn", "surface.deferred", "Test command surface is deferred until component checks are mapped.", details={"command": "just test"}))
-    findings.append(finding("warn", "surface.deferred", "Full inherited service orchestration remains experimental until feed, scanner registration, and first UI/API connectivity are stabilized.", details={"commands": ["gvmd", "gsad", "ospd-openvas", "notus-scanner"]}))
-    result = make_result("doctor", repo_root, "Monorepo health checks completed.", findings)
-    if status_only:
-        result = doctor_status_only_result(result)
-    return result
-
-
 def quality_gate_doctor_status(doctor_result: dict[str, Any]) -> tuple[str, str]:
     allowed_warnings = {"git.worktree", "surface.deferred"}
     non_pass = [item for item in doctor_result.get("findings", []) if item.get("status") != "pass"]
@@ -31414,7 +31278,7 @@ def command_quality_gate(repo_root: Path, include_runtime: bool = False) -> dict
     details["steps"]["license-report"] = {"status": license_result["status"], "summary": license_result["summary"]}
     findings.append(finding(license_result["status"], "quality.license-report", license_result["summary"], details={"status": license_result["status"]}))
 
-    doctor_result = command_doctor(repo_root)
+    doctor_result = rust_doctor_result(repo_root)
     doctor_status, doctor_summary = quality_gate_doctor_status(doctor_result)
     doctor_non_pass = [item for item in doctor_result.get("findings", []) if item.get("status") != "pass"]
     details["steps"]["doctor"] = {
@@ -31709,8 +31573,6 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_replacement_dashboard.add_argument("--status-only", action="store_true", help="emit compact dashboard details and only non-pass findings")
     closeout_readiness = subparsers.add_parser("closeout-readiness", parents=[common], help="summarize commit closeout readiness signals without running broad gates")
     closeout_readiness.add_argument("--status-only", action="store_true", help="emit compact closeout readiness details and only non-pass findings")
-    doctor = subparsers.add_parser("doctor", parents=[common], help="run structural and environment health checks")
-    doctor.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe doctor checks")
     production_posture = subparsers.add_parser("production-posture-check", parents=[common], help="run the non-destructive production posture checklist")
     production_posture.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe posture checks")
     configure = subparsers.add_parser("configure", parents=[common], help="configure a CMake component")
@@ -32054,8 +31916,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_native_api_replacement_dashboard(repo_root, status_only=args.status_only)
     elif args.command == "closeout-readiness":
         result = command_closeout_readiness(repo_root, status_only=args.status_only)
-    elif args.command == "doctor":
-        result = command_doctor(repo_root, status_only=args.status_only)
     elif args.command == "production-posture-check":
         result = command_production_posture_check(repo_root, status_only=args.status_only)
     elif args.command == "configure":

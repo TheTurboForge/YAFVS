@@ -1162,8 +1162,6 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_rust_yafvsctl_matches_python_migrated_command_contracts(self):
         self.assert_rust_yafvsctl_parity(
             (
-                ["doctor", "--json"],
-                ["doctor", "--status-only", "--json"],
             ),
             rust_only_contracts=(
                 (["status", "--json"], 0, ("pass", "warn")),
@@ -1180,6 +1178,8 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["quality-gate-state", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["quality-gate-state", "--status-only", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["feed-state", "--json"], 0, ("pass", "warn")),
+                (["doctor", "--json"], (0, 1), ("pass", "warn", "fail")),
+                (["doctor", "--status-only", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["logs", "--lines", "0", "--json"], 1, "fail"),
                 (["logs", "definitely-invalid", "--lines", "1", "--json"], 0, "pass"),
                 (["logs", "--service", "definitely-invalid", "--lines", "1", "--json"], 0, "pass"),
@@ -2416,7 +2416,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "feed-state", "quality-gate-state", "quality-gate-schedule", "runtime-native-api-direct-token", "license-report"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "license-report"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotIn(f"def command_{command.replace('-', '_')}", source)
@@ -2572,6 +2572,36 @@ class YAFVSCtlTests(unittest.TestCase):
         )
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         self.assertIn('findings.extend(rust_feed_state_result(repo_root)["findings"])', source)
+
+    def test_rust_doctor_bridge_forwards_status_only(self):
+        envelope = json.dumps(
+            {
+                "status": "warn",
+                "summary": "Monorepo health checks completed.",
+                "findings": [
+                    {
+                        "status": "warn",
+                        "check": "surface.deferred",
+                        "message": "deferred",
+                    }
+                ],
+                "artifacts": [],
+                "metadata": {"command": "doctor"},
+            }
+        )
+        root = Path("/tmp/repo")
+        with unittest.mock.patch.object(
+            yafvsctl,
+            "run_command",
+            return_value=subprocess.CompletedProcess(["unit"], 0, envelope, ""),
+        ) as run_command:
+            result = yafvsctl.rust_doctor_result(root, status_only=True)
+
+        self.assertEqual(result["status"], "warn")
+        self.assertEqual(
+            run_command.call_args.args[0][-3:],
+            ["doctor", "--status-only", "--json"],
+        )
 
     def test_license_report_consumers_use_rust_wrapper_with_expected_options(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
@@ -4695,44 +4725,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["direct_runtime_alignment_status"], "warn")
         self.assertEqual(result["details"]["direct_body_limit_alignment_status"], "warn")
         self.assertEqual(result["details"]["direct_body_limit_missing_property_count"], 1)
-
-    def test_python_version_finding_warns_below_minimum(self):
-        with unittest.mock.patch.object(yafvsctl, "tool_version", return_value="Python 3.10.12"):
-            finding = yafvsctl.python_version_finding()
-
-        self.assertEqual(finding["status"], "warn")
-        self.assertEqual(finding["check"], "tool.python-version")
-        self.assertIn("Python 3.11", finding["message"])
-
-    def test_python_version_finding_passes_minimum(self):
-        with unittest.mock.patch.object(yafvsctl, "tool_version", return_value="Python 3.11.8"):
-            finding = yafvsctl.python_version_finding()
-
-        self.assertEqual(finding["status"], "pass")
-        self.assertEqual(finding["details"]["minimum"], "3.11")
-
-    def test_doctor_status_only_omits_pass_findings_and_summarizes_details(self):
-        result = {
-            "status": "warn",
-            "summary": "Monorepo health checks completed.",
-            "findings": [
-                {"status": "pass", "check": "repo.git", "message": "ok"},
-                {
-                    "status": "warn",
-                    "check": "surface.deferred",
-                    "message": "deferred",
-                    "details": {"commands": ["one", "two"], "status": "known"},
-                },
-            ],
-        }
-
-        compact = yafvsctl.doctor_status_only_result(result)
-
-        self.assertEqual(compact["details"], {"finding_count": 2, "non_pass_count": 1})
-        self.assertEqual(len(compact["findings"]), 1)
-        self.assertEqual(compact["findings"][0]["check"], "surface.deferred")
-        self.assertEqual(compact["findings"][0]["details"]["commands"], {"type": "list", "count": 2})
-        self.assertEqual(compact["findings"][0]["details"]["status"], "known")
 
     def test_production_posture_status_only_omits_pass_findings(self):
         result = {
@@ -11489,7 +11481,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp, \
              unittest.mock.patch.object(yafvsctl, "rust_license_report_result", return_value=pass_result) as license_report, \
-             unittest.mock.patch.object(yafvsctl, "command_doctor", return_value=pass_result), \
+             unittest.mock.patch.object(yafvsctl, "rust_doctor_result", return_value=pass_result) as doctor, \
              unittest.mock.patch.object(yafvsctl, "command_native_tooling_state", return_value=pass_result), \
              unittest.mock.patch.object(yafvsctl, "command_native_api_client_contract", return_value=pass_result), \
              unittest.mock.patch.object(yafvsctl, "command_native_api_migration_matrix", return_value=pass_result), \
@@ -11506,6 +11498,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("quality.native-api-client-contract", checks)
         self.assertIn("quality.native-api-migration-matrix", checks)
         license_report.assert_called_once_with(Path(tmp))
+        doctor.assert_called_once_with(Path(tmp))
 
     def test_gsa_and_runtime_manager_locks_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
@@ -11635,13 +11628,6 @@ class YAFVSCtlTests(unittest.TestCase):
             with unittest.mock.patch.dict(os.environ, {"NODE_OPTIONS": "--max-old-space-size=6144"}, clear=True):
                 self.assertEqual(yafvsctl.gsa_quality_env(root)["NODE_OPTIONS"], "--max-old-space-size=6144")
 
-    def test_nested_git_detection(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            nested = root / "components" / "example" / ".git"
-            nested.mkdir(parents=True)
-            self.assertEqual(yafvsctl.nested_git_dirs(root), ["components/example/.git"])
-
     def test_cmake_paths_use_ignored_build_tree(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -11654,10 +11640,6 @@ class YAFVSCtlTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self.assertEqual(yafvsctl.venv_python(root, "ospd-openvas"), root / "build" / "venvs" / "ospd-openvas" / "bin" / "python")
-
-    def test_version_tuple_parses_tool_versions(self):
-        self.assertGreaterEqual(yafvsctl.version_tuple("v22.12.0"), (22, 12, 0))
-        self.assertEqual(yafvsctl.version_tuple("11.0.0"), (11, 0, 0))
 
     def test_runtime_dir_defaults_next_to_repo(self):
         with tempfile.TemporaryDirectory() as tmp:

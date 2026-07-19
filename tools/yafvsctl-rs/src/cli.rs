@@ -446,6 +446,8 @@ pub enum CliCommand {
     GvmdSmoke,
     /// Create secure runtime prerequisites and start infrastructure services.
     Up,
+    /// Initialize PostgreSQL collation, roles, and pg-gvm prerequisites.
+    RuntimeInit,
     /// Stop and remove the development runtime infrastructure and application containers.
     Down,
     /// Stop and remove experimental application runtime containers.
@@ -682,6 +684,7 @@ impl CliCommand {
             Self::RuntimeSmoke => "runtime-smoke",
             Self::GvmdSmoke => "gvmd-smoke",
             Self::Up => "up",
+            Self::RuntimeInit => "runtime-init",
             Self::Down => "down",
             Self::RuntimeAppDown => "runtime-app-down",
             Self::FeedCopyToRuntime => "feed-copy-to-runtime",

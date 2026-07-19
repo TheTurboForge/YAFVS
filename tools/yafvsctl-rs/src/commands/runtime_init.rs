@@ -1,0 +1,1187 @@
+// SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+//! Guarded PostgreSQL and pg-gvm initialization for the development runtime.
+
+use super::common::{metadata, output_tail, runtime_dir};
+use super::compose::{compose_command, runtime_lifecycle_environment};
+use super::runtime_setup::ensure_runtime_setup;
+use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
+use crate::result::{Finding, ResultEnvelope, make_result};
+use serde_json::json;
+use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::{CString, OsString};
+use std::fs::{self, File, OpenOptions};
+use std::io;
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+const POSTGRES_COLLATION_BASE_DATABASES: [&str; 2] = ["postgres", "template1"];
+const PG_GVM_CONTROL: &str = "pg-gvm.control";
+const PG_GVM_LIBRARY: &str = "libpg-gvm.so";
+const PG_GVM_EXTENSION: &str = "pg-gvm";
+const READY_ATTEMPTS: usize = 30;
+const READY_INTERVAL: Duration = Duration::from_secs(2);
+
+struct OpenArtifact {
+    file: File,
+    name: String,
+    source_path: PathBuf,
+    destination: String,
+}
+
+struct PgGvmArtifacts {
+    extension_files: Vec<OpenArtifact>,
+    library: OpenArtifact,
+}
+
+pub fn command_runtime_init(repo_root: &Path) -> ResultEnvelope {
+    let mut sleep = std::thread::sleep;
+    command_runtime_init_with(repo_root, &SystemCommandRunner, &mut sleep)
+}
+
+fn command_runtime_init_with(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    sleep: &mut dyn FnMut(Duration),
+) -> ResultEnvelope {
+    let mut findings = ensure_runtime_setup(repo_root, runner);
+    if has_failure(&findings) {
+        return result(
+            repo_root,
+            runner,
+            "Runtime initialization stopped before Postgres changes.",
+            findings,
+        );
+    }
+    let environment = match runtime_lifecycle_environment(repo_root) {
+        Ok(environment) => environment,
+        Err(error) => {
+            findings.push(Finding::new(
+                "fail",
+                "runtime.mqtt-secrets",
+                format!("Runtime MQTT secrets could not be prepared: {error}"),
+            ));
+            return result(
+                repo_root,
+                runner,
+                "Runtime initialization stopped before Postgres changes.",
+                findings,
+            );
+        }
+    };
+
+    let config = run_compose(
+        repo_root,
+        runner,
+        &environment,
+        &["config".into(), "--quiet".into()],
+    );
+    findings.push(process_finding(
+        &config,
+        "compose.config",
+        "Compose config validation",
+        40,
+        Some("compose/dev.yaml"),
+    ));
+
+    let (artifact_findings, artifacts) = inspect_pg_gvm_artifacts(repo_root);
+    findings.extend(artifact_findings);
+    if has_failure(&findings) {
+        return result(
+            repo_root,
+            runner,
+            "Runtime initialization stopped before Postgres changes.",
+            findings,
+        );
+    }
+    let artifacts = artifacts.expect("passing pg-gvm findings have open artifacts");
+
+    let postgres_up = run_compose(
+        repo_root,
+        runner,
+        &environment,
+        &[
+            "up".into(),
+            "-d".into(),
+            "--build".into(),
+            "postgres".into(),
+        ],
+    );
+    findings.push(process_finding(
+        &postgres_up,
+        "postgres.up",
+        "docker compose up postgres",
+        80,
+        None,
+    ));
+    if !process_succeeded(&postgres_up) {
+        return result(
+            repo_root,
+            runner,
+            "Runtime initialization stopped at Postgres startup.",
+            findings,
+        );
+    }
+
+    let mut ready = None;
+    for attempt in 0..READY_ATTEMPTS {
+        let probe = postgres_ready(repo_root, runner, &environment);
+        let succeeded = probe.as_ref().is_some_and(|output| output.success);
+        ready = probe;
+        if succeeded {
+            break;
+        }
+        if attempt + 1 < READY_ATTEMPTS {
+            sleep(READY_INTERVAL);
+        }
+    }
+    findings.push(process_finding(
+        &ready,
+        "postgres.ready",
+        "pg_isready",
+        20,
+        None,
+    ));
+    if has_failure(&findings) {
+        return result(
+            repo_root,
+            runner,
+            "Runtime initialization stopped before database setup.",
+            findings,
+        );
+    }
+
+    findings.extend(ensure_postgres_collation(repo_root, runner, &environment));
+    if has_failure(&findings) {
+        return result(
+            repo_root,
+            runner,
+            "Runtime initialization stopped at Postgres collation check.",
+            findings,
+        );
+    }
+
+    findings.extend(copy_pg_gvm_extension(
+        repo_root,
+        runner,
+        &environment,
+        artifacts,
+    ));
+    if has_failure(&findings) {
+        return result(
+            repo_root,
+            runner,
+            "Runtime initialization stopped while installing pg-gvm files.",
+            findings,
+        );
+    }
+
+    let database = environment_value(&environment, "POSTGRES_DB", "yafvs");
+    let user = environment_value(&environment, "POSTGRES_USER", "yafvs");
+    let create_dba = psql(
+        repo_root,
+        runner,
+        &environment,
+        &database,
+        "DO $$ BEGIN CREATE ROLE dba WITH SUPERUSER NOINHERIT; EXCEPTION WHEN duplicate_object THEN NULL; END $$;",
+    );
+    findings.push(process_finding(
+        &create_dba,
+        "postgres.role.dba",
+        "Create/verify dba role",
+        40,
+        None,
+    ));
+    let grant_dba = psql(
+        repo_root,
+        runner,
+        &environment,
+        &database,
+        &format!("GRANT dba TO {};", sql_identifier(&user)),
+    );
+    findings.push(process_finding(
+        &grant_dba,
+        "postgres.role.grant",
+        &format!("Grant dba to {user}"),
+        40,
+        None,
+    ));
+    let create_extension = psql(
+        repo_root,
+        runner,
+        &environment,
+        &database,
+        "CREATE EXTENSION IF NOT EXISTS \"pg-gvm\";",
+    );
+    findings.push(process_finding(
+        &create_extension,
+        "postgres.extension.pg-gvm",
+        "Create/verify pg-gvm extension",
+        80,
+        None,
+    ));
+    findings.push(pg_gvm_extension_status(
+        repo_root,
+        runner,
+        &environment,
+        &database,
+    ));
+    result(
+        repo_root,
+        runner,
+        "Runtime database initialization completed.",
+        findings,
+    )
+    .with_artifacts(vec![
+        runtime_dir(repo_root).display().to_string(),
+        "build/prefix".to_string(),
+    ])
+}
+
+fn result(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    summary: &str,
+    findings: Vec<Finding>,
+) -> ResultEnvelope {
+    make_result(
+        metadata(repo_root, "runtime-init", runner),
+        summary.to_string(),
+        findings,
+    )
+}
+
+fn has_failure(findings: &[Finding]) -> bool {
+    findings.iter().any(|finding| finding.status == "fail")
+}
+
+fn process_succeeded(output: &Option<ProcessOutput>) -> bool {
+    output.as_ref().is_some_and(|output| output.success)
+}
+
+fn process_finding(
+    output: &Option<ProcessOutput>,
+    check: &str,
+    label: &str,
+    tail_lines: usize,
+    path: Option<&str>,
+) -> Finding {
+    let exit_code = output
+        .as_ref()
+        .and_then(|output| output.exit_code)
+        .unwrap_or(1);
+    let mut finding = Finding::new(
+        if exit_code == 0 { "pass" } else { "fail" },
+        check,
+        format!("{label} exit code {exit_code}."),
+    )
+    .with_details(json!({
+        "output_tail": output
+            .as_ref()
+            .map(|output| output_tail(&output.stdout, tail_lines))
+            .unwrap_or_default(),
+    }));
+    if let Some(path) = path {
+        finding = finding.with_path(path);
+    }
+    finding
+}
+
+fn run_compose(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    environment: &BTreeMap<OsString, OsString>,
+    operation: &[String],
+) -> Option<ProcessOutput> {
+    let command = compose_command(repo_root, operation);
+    let arguments = command.iter().map(String::as_str).collect::<Vec<_>>();
+    runner.run_with(
+        "docker",
+        &arguments,
+        Some(repo_root),
+        Some(environment),
+        None,
+    )
+}
+
+fn postgres_ready(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    environment: &BTreeMap<OsString, OsString>,
+) -> Option<ProcessOutput> {
+    let user = environment_value(environment, "POSTGRES_USER", "yafvs");
+    let database = environment_value(environment, "POSTGRES_DB", "yafvs");
+    exec_in_postgres(
+        repo_root,
+        runner,
+        environment,
+        &[
+            "pg_isready".into(),
+            "-U".into(),
+            user,
+            "-d".into(),
+            database,
+        ],
+    )
+}
+
+fn psql(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    environment: &BTreeMap<OsString, OsString>,
+    database: &str,
+    sql: &str,
+) -> Option<ProcessOutput> {
+    let user = environment_value(environment, "POSTGRES_USER", "yafvs");
+    let password = environment_value(environment, "POSTGRES_PASSWORD", "yafvs-dev");
+    let mut process_environment = environment.clone();
+    process_environment.insert(OsString::from("PGPASSWORD"), OsString::from(password));
+    exec_in_postgres(
+        repo_root,
+        runner,
+        &process_environment,
+        &[
+            "-e".into(),
+            "PGPASSWORD".into(),
+            "psql".into(),
+            "-v".into(),
+            "ON_ERROR_STOP=1".into(),
+            "-U".into(),
+            user,
+            "-d".into(),
+            database.into(),
+            "-At".into(),
+            "-c".into(),
+            sql.into(),
+        ],
+    )
+}
+
+fn exec_in_postgres(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    environment: &BTreeMap<OsString, OsString>,
+    operation: &[String],
+) -> Option<ProcessOutput> {
+    let mut arguments = vec!["exec".into(), "-T".into()];
+    arguments.extend_from_slice(operation);
+    let service_position = if arguments.get(2).is_some_and(|part| part == "-e") {
+        4
+    } else {
+        2
+    };
+    arguments.insert(service_position, "postgres".into());
+    run_compose(repo_root, runner, environment, &arguments)
+}
+
+fn ensure_postgres_collation(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    environment: &BTreeMap<OsString, OsString>,
+) -> Vec<Finding> {
+    let configured = environment_value(environment, "POSTGRES_DB", "yafvs");
+    let mut seen = BTreeSet::new();
+    std::iter::once(configured.as_str())
+        .chain(POSTGRES_COLLATION_BASE_DATABASES)
+        .filter(|database| seen.insert((*database).to_string()))
+        .map(|database| ensure_database_collation(repo_root, runner, environment, database))
+        .collect()
+}
+
+fn ensure_database_collation(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    environment: &BTreeMap<OsString, OsString>,
+    database: &str,
+) -> Finding {
+    const VERSION_SQL: &str = "SELECT datcollversion || '|' || pg_database_collation_actual_version(oid) FROM pg_database WHERE datname = current_database();";
+    const RELATION_SQL: &str = "SELECT count(*) FROM pg_class WHERE relkind IN ('r','i','S','v','m') AND relnamespace NOT IN (SELECT oid FROM pg_namespace WHERE nspname LIKE 'pg_%' OR nspname = 'information_schema');";
+    let version = psql(repo_root, runner, environment, database, VERSION_SQL);
+    if !process_succeeded(&version) {
+        return process_finding(
+            &version,
+            "postgres.collation",
+            &format!("{database}: collation version check"),
+            40,
+            None,
+        )
+        .with_details(json!({
+            "database": database,
+            "output_tail": process_tail(&version, 40),
+        }));
+    }
+    let value = psql_value(version.as_ref().map_or("", |output| &output.stdout));
+    let Some((recorded, actual)) = value.split_once('|') else {
+        return Finding::new(
+            "warn",
+            "postgres.collation",
+            format!("{database}: could not parse database collation version check."),
+        )
+        .with_details(json!({
+            "database": database,
+            "output_tail": process_tail(&version, 40),
+        }));
+    };
+    if recorded == actual {
+        return Finding::new(
+            "pass",
+            "postgres.collation",
+            format!("{database}: database collation version is current: {actual}."),
+        )
+        .with_details(json!({
+            "database": database,
+            "recorded": recorded,
+            "actual": actual,
+        }));
+    }
+
+    let relation_count = psql(repo_root, runner, environment, database, RELATION_SQL);
+    if !process_succeeded(&relation_count) {
+        return Finding::new(
+            "fail",
+            "postgres.collation",
+            format!(
+                "{database}: collation mismatch {recorded} != {actual}; relation-count check failed."
+            ),
+        )
+        .with_details(json!({
+            "database": database,
+            "recorded": recorded,
+            "actual": actual,
+            "output_tail": process_tail(&relation_count, 40),
+        }));
+    }
+    let count = psql_value(relation_count.as_ref().map_or("", |output| &output.stdout));
+    if count != "0" {
+        return Finding::new(
+            "warn",
+            "postgres.collation",
+            format!(
+                "{database}: database collation version mismatch {recorded} != {actual}; manual review required before refreshing a database with objects."
+            ),
+        )
+        .with_details(json!({
+            "database": database,
+            "recorded": recorded,
+            "actual": actual,
+            "relation_count": count,
+        }));
+    }
+
+    let connection_database = collation_connection_database(environment, database);
+    let refresh = psql(
+        repo_root,
+        runner,
+        environment,
+        &connection_database,
+        &format!(
+            "ALTER DATABASE {} REFRESH COLLATION VERSION;",
+            sql_identifier(database)
+        ),
+    );
+    Finding::new(
+        if process_succeeded(&refresh) {
+            "pass"
+        } else {
+            "fail"
+        },
+        "postgres.collation",
+        format!(
+            "{database}: refreshed empty development database collation version from {recorded} to {actual}."
+        ),
+    )
+    .with_details(json!({
+        "database": database,
+        "recorded": recorded,
+        "actual": actual,
+        "relation_count": count,
+        "output_tail": process_tail(&refresh, 40),
+    }))
+}
+
+fn collation_connection_database(
+    environment: &BTreeMap<OsString, OsString>,
+    target: &str,
+) -> String {
+    let configured = environment_value(environment, "POSTGRES_DB", "yafvs");
+    std::iter::once(configured.as_str())
+        .chain(POSTGRES_COLLATION_BASE_DATABASES)
+        .find(|candidate| *candidate != target)
+        .unwrap_or(target)
+        .to_string()
+}
+
+fn inspect_pg_gvm_artifacts(repo_root: &Path) -> (Vec<Finding>, Option<PgGvmArtifacts>) {
+    match open_pg_gvm_artifacts(repo_root) {
+        Ok(artifacts) => {
+            let sql_paths = artifacts
+                .extension_files
+                .iter()
+                .filter(|artifact| artifact.name != PG_GVM_CONTROL)
+                .map(|artifact| relative_display(repo_root, &artifact.source_path))
+                .collect::<Vec<_>>();
+            let control = artifacts
+                .extension_files
+                .iter()
+                .find(|artifact| artifact.name == PG_GVM_CONTROL)
+                .expect("open artifacts include control file");
+            let findings = vec![
+                Finding::new(
+                    "pass",
+                    "pg-gvm.control",
+                    format!("{PG_GVM_CONTROL} is available in build/prefix."),
+                )
+                .with_path(&relative_display(repo_root, &control.source_path)),
+                Finding::new(
+                    "pass",
+                    "pg-gvm.library",
+                    format!("{PG_GVM_LIBRARY} is available in build/prefix."),
+                )
+                .with_path(&relative_display(repo_root, &artifacts.library.source_path)),
+                Finding::new(
+                    "pass",
+                    "pg-gvm.sql",
+                    "pg-gvm extension SQL files are available in build/prefix.".into(),
+                )
+                .with_details(json!({ "files": sql_paths })),
+            ];
+            (findings, Some(artifacts))
+        }
+        Err(error) => (
+            vec![
+                Finding::new(
+                    "fail",
+                    "pg-gvm.artifacts",
+                    format!("pg-gvm build artifacts are unavailable or unsafe: {error}"),
+                )
+                .with_path("build/prefix"),
+            ],
+            None,
+        ),
+    }
+}
+
+fn open_pg_gvm_artifacts(repo_root: &Path) -> io::Result<PgGvmArtifacts> {
+    let repo = open_directory(repo_root)?;
+    let extension_dir = open_directory_chain(
+        repo.as_raw_fd(),
+        &["build", "prefix", "share", "postgresql", "extension"],
+    )?;
+    let library_dir =
+        open_directory_chain(repo.as_raw_fd(), &["build", "prefix", "lib", "postgresql"])?;
+
+    let mut sql_names = Vec::new();
+    for entry in fs::read_dir(format!("/proc/self/fd/{}", extension_dir.as_raw_fd()))? {
+        let name = entry?.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if name.starts_with("pg-gvm--") && name.ends_with(".sql") {
+            sql_names.push(name.to_string());
+        }
+    }
+    sql_names.sort();
+    if sql_names.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "no pg-gvm extension SQL files were found",
+        ));
+    }
+
+    let mut extension_files = Vec::with_capacity(sql_names.len() + 1);
+    extension_files.push(open_artifact_at(
+        extension_dir.as_raw_fd(),
+        PG_GVM_CONTROL,
+        repo_root.join("build/prefix/share/postgresql/extension/pg-gvm.control"),
+        "/usr/share/postgresql/16/extension/pg-gvm.control".into(),
+    )?);
+    for name in sql_names {
+        extension_files.push(open_artifact_at(
+            extension_dir.as_raw_fd(),
+            &name,
+            repo_root
+                .join("build/prefix/share/postgresql/extension")
+                .join(&name),
+            format!("/usr/share/postgresql/16/extension/{name}"),
+        )?);
+    }
+    let library = open_artifact_at(
+        library_dir.as_raw_fd(),
+        PG_GVM_LIBRARY,
+        repo_root.join("build/prefix/lib/postgresql/libpg-gvm.so"),
+        "/usr/lib/postgresql/16/lib/libpg-gvm.so".into(),
+    )?;
+    Ok(PgGvmArtifacts {
+        extension_files,
+        library,
+    })
+}
+
+fn open_directory(path: &Path) -> io::Result<OwnedFd> {
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(path)?;
+    Ok(file.into())
+}
+
+fn open_directory_chain(parent: RawFd, components: &[&str]) -> io::Result<OwnedFd> {
+    let mut current: Option<OwnedFd> = None;
+    let mut parent_fd = parent;
+    for component in components {
+        let name = CString::new(component.as_bytes()).map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidInput, "directory name contains NUL")
+        })?;
+        // SAFETY: name is a valid NUL-terminated string and parent_fd remains open.
+        let fd = unsafe {
+            libc::openat(
+                parent_fd,
+                name.as_ptr(),
+                libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            )
+        };
+        if fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        // SAFETY: openat returned a new owned descriptor.
+        let opened = unsafe { OwnedFd::from_raw_fd(fd) };
+        parent_fd = opened.as_raw_fd();
+        current = Some(opened);
+    }
+    current.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "empty directory chain"))
+}
+
+fn open_artifact_at(
+    directory: RawFd,
+    name: &str,
+    source_path: PathBuf,
+    destination: String,
+) -> io::Result<OpenArtifact> {
+    let name_c = CString::new(name.as_bytes())
+        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "file name contains NUL"))?;
+    // SAFETY: name_c is valid and directory remains open for this call.
+    let fd = unsafe {
+        libc::openat(
+            directory,
+            name_c.as_ptr(),
+            libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        )
+    };
+    if fd < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: openat returned a new owned descriptor.
+    let file = unsafe { File::from_raw_fd(fd) };
+    let metadata = file.metadata()?;
+    // SAFETY: getuid has no preconditions and does not dereference memory.
+    let uid = unsafe { libc::getuid() };
+    if !metadata.file_type().is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("{} is not a regular file", source_path.display()),
+        ));
+    }
+    if metadata.uid() != uid || metadata.nlink() != 1 || metadata.mode() & 0o022 != 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!(
+                "{} must be current-user-owned, single-linked, and not group/world writable",
+                source_path.display()
+            ),
+        ));
+    }
+    Ok(OpenArtifact {
+        file,
+        name: name.to_string(),
+        source_path,
+        destination,
+    })
+}
+
+fn copy_pg_gvm_extension(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    environment: &BTreeMap<OsString, OsString>,
+    artifacts: PgGvmArtifacts,
+) -> Vec<Finding> {
+    let mut extension_outputs = Vec::new();
+    for artifact in &artifacts.extension_files {
+        extension_outputs.push(copy_artifact(repo_root, runner, environment, artifact));
+    }
+    let library_output = copy_artifact(repo_root, runner, environment, &artifacts.library);
+    let extension_ok = extension_outputs.iter().all(process_succeeded);
+    let library_ok = process_succeeded(&library_output);
+    vec![
+        Finding::new(
+            if extension_ok { "pass" } else { "fail" },
+            "pg-gvm.copy.sql",
+            format!(
+                "Copy pg-gvm SQL/control files exit code {}.",
+                if extension_ok { 0 } else { 1 }
+            ),
+        )
+        .with_details(json!({
+            "files": artifacts.extension_files.iter().map(|artifact| artifact.name.as_str()).collect::<Vec<_>>(),
+            "output_tail": extension_outputs.iter().flat_map(|output| process_tail(output, 40)).collect::<Vec<_>>(),
+        })),
+        Finding::new(
+            if library_ok { "pass" } else { "fail" },
+            "pg-gvm.copy.library",
+            format!(
+                "Copy pg-gvm shared library exit code {}.",
+                if library_ok { 0 } else { 1 }
+            ),
+        )
+        .with_details(json!({ "output_tail": process_tail(&library_output, 40) })),
+    ]
+}
+
+fn copy_artifact(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    environment: &BTreeMap<OsString, OsString>,
+    artifact: &OpenArtifact,
+) -> Option<ProcessOutput> {
+    let source = format!("/proc/self/fd/{}", artifact.file.as_raw_fd());
+    let destination = format!("postgres:{}", artifact.destination);
+    let command = compose_command(repo_root, &["cp".into(), source, destination]);
+    let arguments = command.iter().map(String::as_str).collect::<Vec<_>>();
+    runner.run_with_input_and_fd(
+        "docker",
+        &arguments,
+        Some(repo_root),
+        Some(environment),
+        None,
+        None,
+        artifact.file.as_raw_fd(),
+    )
+}
+
+fn pg_gvm_extension_status(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    environment: &BTreeMap<OsString, OsString>,
+    database: &str,
+) -> Finding {
+    let output = psql(
+        repo_root,
+        runner,
+        environment,
+        database,
+        &format!(
+            "SELECT COALESCE((SELECT extversion FROM pg_extension WHERE extname = '{}'), 'missing');",
+            PG_GVM_EXTENSION
+        ),
+    );
+    if !process_succeeded(&output) {
+        return process_finding(
+            &output,
+            "postgres.pg-gvm",
+            "pg-gvm extension status query",
+            40,
+            None,
+        );
+    }
+    let version = psql_value(output.as_ref().map_or("", |output| &output.stdout));
+    Finding::new(
+        if version.is_empty() || version == "missing" {
+            "warn"
+        } else {
+            "pass"
+        },
+        "postgres.pg-gvm",
+        format!("pg-gvm extension is {version}."),
+    )
+    .with_details(json!({ "version": version }))
+}
+
+fn environment_value(
+    environment: &BTreeMap<OsString, OsString>,
+    name: &str,
+    default: &str,
+) -> String {
+    environment
+        .get(&OsString::from(name))
+        .map(|value| value.to_string_lossy().into_owned())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| default.to_string())
+}
+
+fn psql_value(output: &str) -> String {
+    output
+        .lines()
+        .rev()
+        .map(str::trim)
+        .find(|line| {
+            !line.is_empty()
+                && !["WARNING:", "DETAIL:", "HINT:", "NOTICE:"]
+                    .iter()
+                    .any(|prefix| line.starts_with(prefix))
+        })
+        .unwrap_or_default()
+        .to_string()
+}
+
+fn process_tail(output: &Option<ProcessOutput>, lines: usize) -> Vec<String> {
+    output
+        .as_ref()
+        .map(|output| output_tail(&output.stdout, lines))
+        .unwrap_or_default()
+}
+
+fn sql_identifier(value: &str) -> String {
+    format!("\"{}\"", value.replace('"', "\"\""))
+}
+
+fn relative_display(repo_root: &Path, path: &Path) -> String {
+    path.strip_prefix(repo_root)
+        .unwrap_or(path)
+        .display()
+        .to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::{PermissionsExt, symlink};
+    use std::sync::Mutex;
+
+    struct Fixture {
+        root: PathBuf,
+        repo: PathBuf,
+    }
+
+    impl Fixture {
+        fn new(name: &str) -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "yafvsctl-runtime-init-{name}-{}",
+                std::process::id()
+            ));
+            let _ = fs::remove_dir_all(&root);
+            let repo = root.join("YAFVS");
+            fs::create_dir_all(repo.join("compose")).unwrap();
+            fs::write(repo.join("compose/dev.yaml"), "services: {}\n").unwrap();
+            let extension = repo.join("build/prefix/share/postgresql/extension");
+            let library = repo.join("build/prefix/lib/postgresql");
+            fs::create_dir_all(&extension).unwrap();
+            fs::create_dir_all(&library).unwrap();
+            fs::write(extension.join(PG_GVM_CONTROL), "default_version = '22.6'\n").unwrap();
+            fs::write(extension.join("pg-gvm--22.6.sql"), "SELECT 1;\n").unwrap();
+            fs::write(library.join(PG_GVM_LIBRARY), "library\n").unwrap();
+            for path in [
+                extension.join(PG_GVM_CONTROL),
+                extension.join("pg-gvm--22.6.sql"),
+                library.join(PG_GVM_LIBRARY),
+            ] {
+                fs::set_permissions(path, fs::Permissions::from_mode(0o644)).unwrap();
+            }
+            Self { root, repo }
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct Call {
+        args: Vec<String>,
+        environment: BTreeMap<OsString, OsString>,
+        inherited_fd: bool,
+    }
+
+    struct Runner {
+        calls: Mutex<Vec<Call>>,
+        ready: bool,
+        collation: &'static str,
+        relations: &'static str,
+    }
+
+    impl Runner {
+        fn passing() -> Self {
+            Self {
+                calls: Mutex::new(Vec::new()),
+                ready: true,
+                collation: "1|1\n",
+                relations: "0\n",
+            }
+        }
+
+        fn docker_output(&self, args: &[&str]) -> ProcessOutput {
+            let joined = args.join(" ");
+            if joined.contains("pg_isready") {
+                return output(if self.ready { 0 } else { 1 }, "");
+            }
+            if joined.contains("datcollversion") {
+                return output(0, self.collation);
+            }
+            if joined.contains("SELECT count(*) FROM pg_class") {
+                return output(0, self.relations);
+            }
+            if joined.contains("extversion FROM pg_extension") {
+                return output(0, "22.6\n");
+            }
+            output(0, "")
+        }
+
+        fn record(
+            &self,
+            args: &[&str],
+            environment: Option<&BTreeMap<OsString, OsString>>,
+            inherited_fd: bool,
+        ) -> ProcessOutput {
+            self.calls.lock().unwrap().push(Call {
+                args: args
+                    .iter()
+                    .map(|argument| (*argument).to_string())
+                    .collect(),
+                environment: environment.cloned().unwrap_or_default(),
+                inherited_fd,
+            });
+            self.docker_output(args)
+        }
+    }
+
+    impl CommandRunner for Runner {
+        fn run(&self, program: &str, _: &[&str]) -> Option<ProcessOutput> {
+            (program == "git").then(|| output(0, "deadbee\n"))
+        }
+
+        fn run_with(
+            &self,
+            program: &str,
+            args: &[&str],
+            _: Option<&Path>,
+            environment: Option<&BTreeMap<OsString, OsString>>,
+            _: Option<Duration>,
+        ) -> Option<ProcessOutput> {
+            (program == "docker").then(|| self.record(args, environment, false))
+        }
+
+        fn run_with_input_and_fd(
+            &self,
+            program: &str,
+            args: &[&str],
+            _: Option<&Path>,
+            environment: Option<&BTreeMap<OsString, OsString>>,
+            _: Option<Duration>,
+            _: Option<&[u8]>,
+            _: RawFd,
+        ) -> Option<ProcessOutput> {
+            (program == "docker").then(|| self.record(args, environment, true))
+        }
+    }
+
+    fn output(code: i32, stdout: &str) -> ProcessOutput {
+        ProcessOutput {
+            success: code == 0,
+            exit_code: Some(code),
+            stdout: stdout.into(),
+            stderr: String::new(),
+        }
+    }
+
+    #[test]
+    fn initialization_preserves_order_and_keeps_password_out_of_arguments() {
+        let fixture = Fixture::new("success");
+        let runner = Runner::passing();
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "pass", "{:?}", result.findings);
+        assert_eq!(result.summary, "Runtime database initialization completed.");
+        assert_eq!(
+            result.artifacts,
+            vec![
+                fixture.root.join("YAFVS-runtime").display().to_string(),
+                "build/prefix".to_string(),
+            ]
+        );
+        let calls = runner.calls.lock().unwrap();
+        let joined = calls
+            .iter()
+            .map(|call| call.args.join(" "))
+            .collect::<Vec<_>>();
+        let config = joined
+            .iter()
+            .position(|call| call.ends_with("config --quiet"))
+            .unwrap();
+        let up = joined
+            .iter()
+            .position(|call| call.ends_with("up -d --build postgres"))
+            .unwrap();
+        let ready = joined
+            .iter()
+            .position(|call| call.contains("pg_isready"))
+            .unwrap();
+        let copy = joined
+            .iter()
+            .position(|call| call.contains(" cp /proc/self/fd/"))
+            .unwrap();
+        let role = joined
+            .iter()
+            .position(|call| call.contains("CREATE ROLE dba"))
+            .unwrap();
+        assert!(config < up && up < ready && ready < copy && copy < role);
+        assert!(
+            calls
+                .iter()
+                .filter(|call| call.args.iter().any(|arg| arg == "cp"))
+                .all(|call| call.inherited_fd)
+        );
+        for call in calls
+            .iter()
+            .filter(|call| call.args.iter().any(|arg| arg == "psql"))
+        {
+            assert!(!call.args.iter().any(|arg| arg.contains("yafvs-dev")));
+            assert_eq!(
+                call.environment.get(&OsString::from("PGPASSWORD")),
+                Some(&OsString::from("yafvs-dev"))
+            );
+        }
+    }
+
+    #[test]
+    fn unsafe_runtime_setup_stops_before_docker_or_secrets() {
+        let fixture = Fixture::new("setup-failure");
+        fs::write(fixture.root.join("YAFVS-runtime"), "not a directory").unwrap();
+        let runner = Runner::passing();
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "fail");
+        assert_eq!(
+            result.summary,
+            "Runtime initialization stopped before Postgres changes."
+        );
+        assert!(result.artifacts.is_empty());
+        assert!(runner.calls.lock().unwrap().is_empty());
+        assert!(!fixture.root.join("YAFVS-runtime/secrets").exists());
+    }
+
+    #[test]
+    fn missing_or_linked_artifacts_stop_before_postgres_start() {
+        let fixture = Fixture::new("linked-artifact");
+        let control = fixture
+            .repo
+            .join("build/prefix/share/postgresql/extension/pg-gvm.control");
+        fs::remove_file(&control).unwrap();
+        symlink("pg-gvm--22.6.sql", &control).unwrap();
+        let runner = Runner::passing();
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "fail");
+        assert_eq!(
+            result.summary,
+            "Runtime initialization stopped before Postgres changes."
+        );
+        let calls = runner.calls.lock().unwrap();
+        assert!(
+            calls
+                .iter()
+                .any(|call| call.args.ends_with(&["config".into(), "--quiet".into()]))
+        );
+        assert!(
+            !calls
+                .iter()
+                .any(|call| call.args.iter().any(|arg| arg == "up"))
+        );
+    }
+
+    #[test]
+    fn nonempty_collation_mismatch_warns_without_refreshing() {
+        let fixture = Fixture::new("collation-nonempty");
+        let runner = Runner {
+            collation: "1|2\n",
+            relations: "4\n",
+            ..Runner::passing()
+        };
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "warn", "{:?}", result.findings);
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|finding| finding.check == "postgres.collation"
+                    && finding.status == "warn"
+                    && finding.message.contains("manual review"))
+        );
+        assert!(
+            !runner
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|call| call.args.iter().any(|arg| arg.contains("ALTER DATABASE")))
+        );
+    }
+
+    #[test]
+    fn empty_collation_mismatch_refreshes_through_another_database() {
+        let fixture = Fixture::new("collation-empty");
+        let runner = Runner {
+            collation: "1|2\n",
+            relations: "0\n",
+            ..Runner::passing()
+        };
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| {});
+        assert_eq!(result.status, "pass", "{:?}", result.findings);
+        let calls = runner.calls.lock().unwrap();
+        let refreshes = calls
+            .iter()
+            .filter(|call| call.args.iter().any(|arg| arg.contains("ALTER DATABASE")))
+            .collect::<Vec<_>>();
+        assert_eq!(refreshes.len(), 3);
+        assert!(refreshes.iter().all(|call| {
+            call.args
+                .windows(2)
+                .any(|parts| parts[0] == "-d" && !parts[1].is_empty())
+        }));
+    }
+
+    #[test]
+    fn readiness_exhaustion_stops_before_database_mutation() {
+        let fixture = Fixture::new("not-ready");
+        let runner = Runner {
+            ready: false,
+            ..Runner::passing()
+        };
+        let mut sleeps = 0;
+        let result = command_runtime_init_with(&fixture.repo, &runner, &mut |_| sleeps += 1);
+        assert_eq!(result.status, "fail", "{:?}", result.findings);
+        assert_eq!(
+            result.summary,
+            "Runtime initialization stopped before database setup."
+        );
+        let calls = runner.calls.lock().unwrap();
+        assert_eq!(
+            calls
+                .iter()
+                .filter(|call| call.args.iter().any(|arg| arg == "pg_isready"))
+                .count(),
+            READY_ATTEMPTS
+        );
+        assert!(
+            !calls
+                .iter()
+                .any(|call| call.args.iter().any(|arg| arg == "psql"))
+        );
+        assert_eq!(sleeps, READY_ATTEMPTS - 1);
+    }
+
+    #[test]
+    fn artifact_permissions_are_not_broadened_by_inspection() {
+        let fixture = Fixture::new("artifact-mode");
+        let control = fixture
+            .repo
+            .join("build/prefix/share/postgresql/extension/pg-gvm.control");
+        fs::set_permissions(&control, fs::Permissions::from_mode(0o664)).unwrap();
+        let (findings, artifacts) = inspect_pg_gvm_artifacts(&fixture.repo);
+        assert!(artifacts.is_none());
+        assert!(findings.iter().any(|finding| finding.status == "fail"));
+        assert_eq!(
+            fs::metadata(control).unwrap().permissions().mode() & 0o777,
+            0o664
+        );
+    }
+}

@@ -2551,6 +2551,13 @@ def rust_result_envelope(repo_root: Path, expected_command: str, rust_arguments:
         )
 
 
+def rust_quality_gate_state_result(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+    arguments = ["quality-gate-state"]
+    if status_only:
+        arguments.append("--status-only")
+    return rust_result_envelope(repo_root, "quality-gate-state", arguments)
+
+
 def rust_license_report_result(
     repo_root: Path,
     public_release: bool = False,
@@ -13159,7 +13166,7 @@ def closeout_readiness_status_only_result(result: dict[str, Any]) -> dict[str, A
 
 def command_closeout_readiness(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
     git_status = run_git(repo_root, ["status", "--short"]) or ""
-    quality_state = command_quality_gate_state(repo_root, status_only=True)
+    quality_state = rust_quality_gate_state_result(repo_root, status_only=True)
     native_tooling = command_native_tooling_state(repo_root, status_only=True)
     native_client = command_native_api_client_contract(repo_root, status_only=True)
     migration = command_native_api_migration_matrix(repo_root, status_only=True)
@@ -31580,58 +31587,6 @@ def command_quality_gate(repo_root: Path, include_runtime: bool = False) -> dict
     return result
 
 
-def quality_gate_state_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    details = result.get("details") if isinstance(result.get("details"), dict) else {}
-    latest = details.get("latest") if isinstance(details.get("latest"), dict) else None
-    recent_failures = details.get("recent_failures") if isinstance(details.get("recent_failures"), list) else []
-    compact = dict(result)
-    compact["details"] = {
-        "latest": latest,
-        "history_count": details.get("history_count", 0),
-        "recent_failure_count": len(recent_failures),
-    }
-    non_pass = [item for item in result.get("findings", []) if item.get("status") != "pass"]
-    compact["findings"] = non_pass or [
-        finding("pass", "quality-gate-state.status-only", "Quality gate state passed; no non-pass findings.")
-    ]
-    return compact
-
-
-def command_quality_gate_state(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
-    artifact_dir = quality_gate_artifact_dir(repo_root)
-    latest_path = artifact_dir / "quality-gate.json"
-    latest = read_json_artifact(latest_path)
-    history = json_artifact_history(artifact_dir, "quality-gate") if artifact_dir.exists() else []
-    recent_failures = [entry for entry in history if entry.get("status") == "fail"][:5]
-    details: dict[str, Any] = {
-        "artifact_dir": str(artifact_dir),
-        "latest_artifact_path": str(latest_path),
-        "history_count": len(history),
-        "history": history[:10],
-        "recent_failures": recent_failures,
-    }
-    findings: list[dict[str, Any]] = []
-    if latest is None:
-        findings.append(finding("warn", "quality-gate-state.latest", "No quality gate artifact has been written yet.", str(latest_path)))
-        summary = "No quality gate history found."
-    else:
-        latest_status = latest.get("status", "unknown")
-        details["latest"] = {
-            "status": latest_status,
-            "summary": latest.get("summary", ""),
-            "generated_at": latest.get("metadata", {}).get("generated_at"),
-            "artifact_path": str(latest_path),
-        }
-        findings.append(finding(latest_status if latest_status in STATUSES else "warn", "quality-gate-state.latest", f"Latest quality gate status is {latest_status}.", str(latest_path), {"latest": details["latest"]}))
-        summary = f"Latest quality gate status is {latest_status}."
-    findings.append(finding("pass", "quality-gate-state.history", f"Quality gate history contains {len(history)} retained timestamped artifacts.", details={"history_count": len(history), "recent_failure_count": len(recent_failures)}))
-    result = make_result("quality-gate-state", repo_root, summary, findings, [str(latest_path)] if latest_path.exists() else [])
-    result["details"] = details
-    if status_only:
-        result = quality_gate_state_status_only_result(result)
-    return result
-
-
 def print_human(result: dict[str, Any]) -> None:
     print(f"{result['status'].upper()}: {result['summary']}")
     for item in result["findings"]:
@@ -31919,8 +31874,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-rbac-smoke", parents=[common], help="verify all authenticated users share operator privileges")
     quality_gate = subparsers.add_parser("quality-gate", parents=[common], help="run the local deterministic quality gate")
     quality_gate.add_argument("--runtime", action="store_true", help="include runtime-safe status/log/data diagnostics")
-    quality_gate_state = subparsers.add_parser("quality-gate-state", parents=[common], help="show retained local quality gate history")
-    quality_gate_state.add_argument("--status-only", action="store_true", help="emit latest status/counts and only non-pass findings for chat-safe closeout checks")
     subparsers.add_parser("gvmd-smoke", parents=[common], help="run a narrow gvmd runtime profile smoke")
     return parser
 
@@ -32285,8 +32238,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_rbac_smoke(repo_root)
     elif args.command == "quality-gate":
         result = command_quality_gate(repo_root, include_runtime=args.runtime)
-    elif args.command == "quality-gate-state":
-        result = command_quality_gate_state(repo_root, status_only=args.status_only)
     elif args.command == "gvmd-smoke":
         result = command_gvmd_smoke(repo_root)
     else:

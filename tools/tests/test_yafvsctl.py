@@ -1162,8 +1162,6 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_rust_yafvsctl_matches_python_migrated_command_contracts(self):
         self.assert_rust_yafvsctl_parity(
             (
-                ["quality-gate-state", "--json"],
-                ["quality-gate-state", "--status-only", "--json"],
                 ["feed-state", "--json"],
                 ["doctor", "--json"],
                 ["doctor", "--status-only", "--json"],
@@ -1180,6 +1178,8 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["deps", "gsa", "--json"], 0, "pass"),
                 (["deps", "definitely-invalid", "--json"], 1, "fail"),
                 (["runtime-plan", "--json"], 0, "warn"),
+                (["quality-gate-state", "--json"], (0, 1), ("pass", "warn", "fail")),
+                (["quality-gate-state", "--status-only", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["logs", "--lines", "0", "--json"], 1, "fail"),
                 (["logs", "definitely-invalid", "--lines", "1", "--json"], 0, "pass"),
                 (["logs", "--service", "definitely-invalid", "--lines", "1", "--json"], 0, "pass"),
@@ -2323,7 +2323,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "quality-gate-schedule"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "quality-gate-state", "quality-gate-schedule"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-direct-bootstrap", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2409,14 +2409,14 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("--allow-write-control", source)
         self.assertIn("def command_production_posture_check", source)
         self.assertIn("def command_quality_gate", source)
-        self.assertIn("def command_quality_gate_state", source)
+        self.assertNotIn("def command_quality_gate_state", source)
         self.assertNotIn("Use: just native-api-request -- --json --path '/api/v1/...';", justfile)
 
     def test_rust_only_foundation_commands_have_no_python_ownership(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "quality-gate-schedule", "runtime-native-api-direct-token", "license-report"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "quality-gate-state", "quality-gate-schedule", "runtime-native-api-direct-token", "license-report"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotIn(f"def command_{command.replace('-', '_')}", source)
@@ -2497,6 +2497,49 @@ class YAFVSCtlTests(unittest.TestCase):
             result = yafvsctl.rust_license_report_result(root)
         self.assertEqual(result["status"], "fail")
         self.assertNotIn("SECRET_SUBPROCESS_ERROR", json.dumps(result))
+
+    def test_rust_quality_gate_state_bridge_forwards_status_only(self):
+        envelope = json.dumps(
+            {
+                "status": "pass",
+                "summary": "ok",
+                "findings": [
+                    {
+                        "status": "pass",
+                        "check": "quality-gate-state.ok",
+                        "message": "ok",
+                    }
+                ],
+                "artifacts": ["artifacts/quality-gate.json"],
+                "metadata": {"command": "quality-gate-state"},
+            }
+        )
+        root = Path("/tmp/repo")
+        with unittest.mock.patch.object(
+            yafvsctl,
+            "run_command",
+            return_value=subprocess.CompletedProcess(["unit"], 0, envelope, ""),
+        ) as run_command:
+            result = yafvsctl.rust_quality_gate_state_result(root, status_only=True)
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(
+            run_command.call_args.args[0][-3:],
+            ["quality-gate-state", "--status-only", "--json"],
+        )
+
+        with unittest.mock.patch.object(
+            yafvsctl,
+            "run_command",
+            return_value=subprocess.CompletedProcess(["unit"], 0, envelope, ""),
+        ) as run_command:
+            result = yafvsctl.rust_quality_gate_state_result(root)
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(
+            run_command.call_args.args[0][-2:],
+            ["quality-gate-state", "--json"],
+        )
 
     def test_license_report_consumers_use_rust_wrapper_with_expected_options(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
@@ -2601,30 +2644,6 @@ class YAFVSCtlTests(unittest.TestCase):
 
 
 
-
-    def test_quality_gate_state_status_only_omits_history(self):
-        result = {
-            "status": "fail",
-            "summary": "Latest quality gate status is fail.",
-            "details": {
-                "history_count": 30,
-                "history": [{"status": "pass"}],
-                "recent_failures": [{"status": "fail"}, {"status": "fail"}],
-                "latest": {"status": "fail", "generated_at": "2026-06-22T01:38:49+00:00"},
-            },
-            "findings": [
-                {"status": "fail", "check": "quality-gate-state.latest", "message": "failed"},
-                {"status": "pass", "check": "quality-gate-state.history", "message": "ok"},
-            ],
-        }
-
-        compact = yafvsctl.quality_gate_state_status_only_result(result)
-
-        self.assertEqual(compact["details"]["history_count"], 30)
-        self.assertEqual(compact["details"]["recent_failure_count"], 2)
-        self.assertEqual(compact["details"]["latest"]["status"], "fail")
-        self.assertNotIn("history", compact["details"])
-        self.assertEqual(compact["findings"], [{"status": "fail", "check": "quality-gate-state.latest", "message": "failed"}])
 
     def test_native_api_request_just_recipe_accepts_direct_options(self):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
@@ -5582,7 +5601,7 @@ class YAFVSCtlTests(unittest.TestCase):
         prod_result = {"status": "fail", "summary": "production not ready", "findings": [{"status": "fail", "check": "production.default-credentials", "message": "bad"}]}
 
         with unittest.mock.patch.object(yafvsctl, "run_git", return_value=""), \
-             unittest.mock.patch.object(yafvsctl, "command_quality_gate_state", return_value=pass_result), \
+             unittest.mock.patch.object(yafvsctl, "rust_quality_gate_state_result", return_value=pass_result) as quality_state, \
              unittest.mock.patch.object(yafvsctl, "command_native_tooling_state", return_value=pass_result), \
              unittest.mock.patch.object(yafvsctl, "command_native_api_client_contract", return_value=pass_result), \
              unittest.mock.patch.object(yafvsctl, "command_native_api_migration_matrix", return_value=pass_result), \
@@ -5594,6 +5613,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["steps"]["production-posture-check"]["status"], "warn")
         self.assertIn("hosted-workflow", result["details"]["unknown_steps"])
         self.assertTrue(any(item["check"] == "closeout-readiness.production-posture-check" for item in result["findings"]))
+        quality_state.assert_called_once_with(root, status_only=True)
         license_report.assert_called_once_with(root, modified_imported_only=True, diff_scope="staged", status_only=True)
 
     def test_openapi_operation_id_generator_is_stable_and_collision_free(self):

@@ -18,6 +18,7 @@ mod feed;
 mod feed_generation;
 mod license;
 mod native_api_request;
+mod native_delete_overrides;
 mod native_empty_trash;
 mod native_export_report_bundle;
 mod native_export_report_csv;
@@ -73,6 +74,7 @@ pub use feed_generation::{
 };
 pub use license::command_license_report;
 pub use native_api_request::command_native_api_request;
+pub use native_delete_overrides::command_native_delete_overrides_by_filter;
 pub use native_empty_trash::command_native_empty_trash;
 pub use native_export_report_bundle::command_native_export_report_bundle;
 pub(crate) use native_export_report_bundle::{

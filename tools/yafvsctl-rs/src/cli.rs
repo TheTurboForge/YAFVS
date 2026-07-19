@@ -16,7 +16,29 @@ fn validate_page_size(value: &str) -> Result<usize, String> {
     }
 }
 
-#[derive(Debug, Parser, PartialEq, Eq)]
+fn validate_max_overrides(value: &str) -> Result<usize, String> {
+    let maximum = value
+        .parse::<usize>()
+        .map_err(|_| "max overrides must be an integer".to_string())?;
+    if (1..=500).contains(&maximum) {
+        Ok(maximum)
+    } else {
+        Err("max overrides must be between 1 and 500".to_string())
+    }
+}
+
+fn validate_delay_seconds(value: &str) -> Result<f64, String> {
+    let delay = value
+        .parse::<f64>()
+        .map_err(|_| "delay seconds must be a number".to_string())?;
+    if delay.is_finite() && (0.0..=60.0).contains(&delay) {
+        Ok(delay)
+    } else {
+        Err("delay seconds must be between 0 and 60".to_string())
+    }
+}
+
+#[derive(Debug, Parser, PartialEq)]
 #[command(name = "yafvsctl", disable_help_subcommand = true)]
 pub struct Cli {
     /// Emit machine-readable JSON.
@@ -31,7 +53,7 @@ pub struct Cli {
     pub command: CliCommand,
 }
 
-#[derive(Debug, Subcommand, PartialEq, Eq)]
+#[derive(Debug, Subcommand, PartialEq)]
 pub enum CliCommand {
     /// Export one complete versioned native report evidence bundle.
     NativeExportReportBundle {
@@ -93,6 +115,21 @@ pub enum CliCommand {
         exclude_host: Vec<String>,
         #[arg(long)]
         allow_write_control: bool,
+    },
+    /// Snapshot and trash a bounded native override filter result.
+    NativeDeleteOverridesByFilter {
+        #[arg(long)]
+        filter: String,
+        #[arg(long, default_value_t = 100, value_parser = validate_max_overrides)]
+        max_overrides: usize,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        allow_write_control: bool,
+        #[arg(long)]
+        confirm_snapshot: Option<String>,
+        #[arg(long, default_value_t = 1.0, value_parser = validate_delay_seconds)]
+        delay_seconds: f64,
     },
     /// Preview or permanently empty the operator-owned Trashcan.
     NativeEmptyTrash {
@@ -521,6 +558,7 @@ impl CliCommand {
             Self::NativeStartTasksFromCsv { .. } => "native-start-tasks-from-csv",
             Self::NativeStopTasksFromCsv { .. } => "native-stop-tasks-from-csv",
             Self::NativeStopAllTasks { .. } => "native-stop-all-tasks",
+            Self::NativeDeleteOverridesByFilter { .. } => "native-delete-overrides-by-filter",
             Self::NativeApiRequest { .. } => "native-api-request",
             Self::NativeEmptyTrash { .. } => "native-empty-trash",
             Self::NativeVerifyScanners { .. } => "native-verify-scanners",
@@ -595,6 +633,48 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_native_delete_overrides_controls() {
+        let dry_run = parse_cli([
+            "native-delete-overrides-by-filter",
+            "--filter",
+            "CVE 2026",
+            "--dry-run",
+        ])
+        .unwrap();
+        assert_eq!(
+            dry_run.command,
+            CliCommand::NativeDeleteOverridesByFilter {
+                filter: "CVE 2026".into(),
+                max_overrides: 100,
+                dry_run: true,
+                allow_write_control: false,
+                confirm_snapshot: None,
+                delay_seconds: 1.0,
+            }
+        );
+        assert!(
+            parse_cli([
+                "native-delete-overrides-by-filter",
+                "--filter",
+                "CVE",
+                "--max-overrides",
+                "0",
+            ])
+            .is_err()
+        );
+        assert!(
+            parse_cli([
+                "native-delete-overrides-by-filter",
+                "--filter",
+                "CVE",
+                "--delay-seconds",
+                "NaN",
+            ])
+            .is_err()
+        );
+    }
 
     #[test]
     fn parses_native_empty_trash_controls() {

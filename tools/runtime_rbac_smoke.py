@@ -16,7 +16,7 @@ from xml.sax.saxutils import escape, quoteattr
 
 import runtime_full_test_scan
 
-SECONDARY_USER = "turbovas-rbac-smoke"
+SECONDARY_USER = "yafvs-rbac-smoke"
 TEMP_FILTER_PREFIX = "YAFVS RBAC smoke filter"
 
 

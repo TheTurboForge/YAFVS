@@ -575,10 +575,10 @@ fn enterprise_feed_key_support_finding(repo_root: &Path) -> Finding {
         if hits.is_empty() { "pass" } else { "fail" },
         "license.feed-enterprise-key-disabled",
         if hits.is_empty() {
-            "Enterprise feed-key support is absent from live TurboVAS feed-sync source and public docs."
+            "Enterprise feed-key support is absent from live YAFVS feed-sync source and public docs."
                 .to_string()
         } else {
-            "Enterprise feed-key support markers remain in live TurboVAS feed-sync source or public docs."
+            "Enterprise feed-key support markers remain in live YAFVS feed-sync source or public docs."
                 .to_string()
         },
     )

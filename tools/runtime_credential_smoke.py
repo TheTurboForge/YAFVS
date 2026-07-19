@@ -300,7 +300,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--password-file", required=True)
     parser.add_argument("--artifact-dir", required=True)
     parser.add_argument("--credential-name", required=True)
-    parser.add_argument("--credential-login", default="turbovas-smoke")
+    parser.add_argument("--credential-login", default="yafvs-smoke")
     parser.add_argument("--credential-password", required=True)
     parser.add_argument("--timeout-ms", type=int, default=DEFAULT_TIMEOUT_MS)
     return parser

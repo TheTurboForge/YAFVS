@@ -9124,8 +9124,8 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(
             yafvsctl.parse_native_target_host_list_port_ranges("T:1-443,U:53"),
             [
-                {"protocol": "tcp", "start": 1, "end": 443, "comment": "TurboVAS native host-list target import"},
-                {"protocol": "udp", "start": 53, "end": 53, "comment": "TurboVAS native host-list target import"},
+                {"protocol": "tcp", "start": 1, "end": 443, "comment": "YAFVS native host-list target import"},
+                {"protocol": "udp", "start": 53, "end": 53, "comment": "YAFVS native host-list target import"},
             ],
         )
         for bad_range in ("1-443", "T:0-1", "U:10-9", ","):
@@ -13054,14 +13054,14 @@ class YAFVSCtlTests(unittest.TestCase):
             target_create_with_credential_uuid = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbd"
             target_live = {"value": True}
             target_clone_live = {"value": True}
-            target_updated_comment = "TurboVAS direct write smoke updated target metadata"
+            target_updated_comment = "YAFVS direct write smoke updated target metadata"
             scanner_uuid = "dddddddd-dddd-dddd-dddd-dddddddddddd"
             task_uuid = "cccccccc-cccc-cccc-cccc-cccccccccccc"
             task_clone_uuid = "cccccccc-cccc-cccc-cccc-cccccccccccd"
             task_schedule_uuid = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
             task_alert_uuid = "ffffffff-ffff-ffff-ffff-ffffffffffff"
             task_tag_uuid = "abababab-abab-4bab-8bab-abababababab"
-            task_updated_comment = "TurboVAS direct write smoke updated task metadata"
+            task_updated_comment = "YAFVS direct write smoke updated task metadata"
             original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
             commands: list[tuple[str, ...]] = []
             envs: list[dict[str, str]] = []
@@ -13272,7 +13272,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 if method == "PATCH" and path.startswith("/api/v1/scopes/"):
                     if "?" in path:
                         return yafvsctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"request_too_large"}}\n413', "")
-                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": scope_uuid, "comment": "TurboVAS direct write smoke updated temporary scope"}) + "\n200", "")
+                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": scope_uuid, "comment": "YAFVS direct write smoke updated temporary scope"}) + "\n200", "")
                 if method == "DELETE" and path.startswith("/api/v1/scopes/") and body is not None:
                     return yafvsctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"request_too_large"}}\n413', "")
                 if method == "DELETE" and path.startswith("/api/v1/scopes/"):
@@ -13321,7 +13321,7 @@ class YAFVSCtlTests(unittest.TestCase):
                             "definition": {
                                 "method": "SYSLOG",
                                 "name": alert_definition["value"]["name"],
-                                "comment": "TurboVAS direct write smoke replaced temporary alert definition",
+                                "comment": "YAFVS direct write smoke replaced temporary alert definition",
                                 "active": False,
                                 "status": "Done",
                             },
@@ -13535,7 +13535,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     payload = json.loads(body)
                     return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": filter_clone_uuid, "name": payload["name"], "comment": payload["comment"]}) + "\n201", "")
                 if method == "POST" and path.startswith(f"/api/v1/filters/{filter_uuid}/restore"):
-                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": filter_uuid, "comment": "TurboVAS direct write smoke original saved-filter comment"}) + "\n200", "")
+                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": filter_uuid, "comment": "YAFVS direct write smoke original saved-filter comment"}) + "\n200", "")
                 if method == "DELETE" and path.startswith(f"/api/v1/filters/{filter_clone_uuid}/trash"):
                     return yafvsctl.subprocess.CompletedProcess([], 0, "\n204", "")
                 if method == "DELETE" and path.startswith(f"/api/v1/filters/{filter_clone_uuid}"):
@@ -13660,7 +13660,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": scan_config_uuid, "comment": payload["comment"]}) + "\n200", "")
                 if method == "POST" and path.startswith(f"/api/v1/scan-configs/{scan_config_uuid}/clone"):
                     payload = json.loads(body)
-                    assert payload["comment"] == "TurboVAS direct write smoke cloned scan-config comment"
+                    assert payload["comment"] == "YAFVS direct write smoke cloned scan-config comment"
                     return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": scan_config_clone_uuid, "comment": payload["comment"], "name": payload["name"], "predefined": False}) + "\n201", "")
                 if method == "GET" and path == f"/api/v1/scan-configs/{scan_config_uuid}/backup":
                     payload = {
@@ -13668,7 +13668,7 @@ class YAFVSCtlTests(unittest.TestCase):
                         "version": 1,
                         "usage_type": "scan",
                         "name": scan_config_definition["name"],
-                        "comment": "TurboVAS direct write smoke updated scan-config comment",
+                        "comment": "YAFVS direct write smoke updated scan-config comment",
                         "families_growing": scan_config_family_growing["value"],
                         "family_inventory": ["General", "Port scanners"],
                         "selectors": [
@@ -13712,12 +13712,12 @@ class YAFVSCtlTests(unittest.TestCase):
                     return yafvsctl.subprocess.CompletedProcess([], 0, "\n204", "")
                 if method == "POST" and path.startswith(f"/api/v1/scan-configs/{scan_config_uuid}/restore"):
                     scan_config_live["value"] = True
-                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": scan_config_uuid, "comment": "TurboVAS direct write smoke updated scan-config comment"}) + "\n200", "")
+                    return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": scan_config_uuid, "comment": "YAFVS direct write smoke updated scan-config comment"}) + "\n200", "")
                 if method == "GET" and path == f"/api/v1/scan-configs/{scan_config_uuid}":
                     if scan_config_live["value"]:
                         payload = {
                             "id": scan_config_uuid,
-                            "comment": "TurboVAS direct write smoke updated scan-config comment",
+                            "comment": "YAFVS direct write smoke updated scan-config comment",
                             "preferences": {
                                 "scanner": [{"name": "safe_checks", "configured": scan_config_scanner_preference["configured"], "redacted": False, "value": scan_config_scanner_preference["value"], "default": "1"}],
                                 "nvt": [{"name": "fixture password", "id": 2, "type": "password", "configured": scan_config_secret_preference["configured"], "redacted": True, "value": "", "default": "", "nvt": {"oid": override_nvt_id, "name": "fixture NVT"}}],

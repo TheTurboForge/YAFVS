@@ -183,7 +183,7 @@ APP_RUNTIME_ARTIFACT_IGNORED_PATHS = frozenset(
     }
 )
 APP_DEPLOYMENT_RECEIPT = Path("state/app-deployment.json")
-FULL_TEST_TASK_PREFIX = "TurboVAS full test scan "
+FULL_TEST_TASK_PREFIX = "YAFVS full test scan "
 MAX_FULL_TEST_TARGET_ADDRESSES = 256
 COMPLETED_SCAN_RUN_STATUS = 1
 RUNTIME_DIRS = (
@@ -7558,7 +7558,7 @@ def native_tooling_category(relative_path: str) -> tuple[str, str] | None:
     if relative_path == "tools/yafvsctl":
         return "compatibility_bridge", "yafvsctl measures the completed legacy-client teardown and remaining GMP owner tails."
     if relative_path.startswith("tools/runtime_") and relative_path.endswith(".py"):
-        return "required_runtime", "TurboVAS runtime/helper command path still depends on inherited GMP/python-gvm plumbing."
+        return "required_runtime", "YAFVS runtime/helper command path still depends on inherited GMP/python-gvm plumbing."
     if relative_path.startswith("tools/tests/"):
         return "compatibility_bridge", "Diagnostic tests characterize and guard inherited GMP/python-gvm/gvm-tools retirement; they do not require legacy clients at runtime."
     if relative_path == "components/gsa/src/gmp/commands/entity.ts":
@@ -10808,7 +10808,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "notes": [
                     "Atomic strict full replacement with owner, target, namespace, and reference locks.",
                     "SNMP community is write-only and must be explicitly preserved or replaced.",
-                    "Replaces inherited generic GMP create_alert and modify_alert compatibility for retained TurboVAS alert workflows.",
+                    "Replaces inherited generic GMP create_alert and modify_alert compatibility for retained YAFVS alert workflows.",
                 ],
             },
             {
@@ -13880,7 +13880,7 @@ def enterprise_feed_key_support_finding(repo_root: Path) -> dict[str, Any]:
     return finding(
         "pass" if not hits else "fail",
         "license.feed-enterprise-key-disabled",
-        "Enterprise feed-key support is absent from live TurboVAS feed-sync source and public docs." if not hits else "Enterprise feed-key support markers remain in live TurboVAS feed-sync source or public docs.",
+        "Enterprise feed-key support is absent from live YAFVS feed-sync source and public docs." if not hits else "Enterprise feed-key support markers remain in live YAFVS feed-sync source or public docs.",
         details={"markers": list(ENTERPRISE_FEED_KEY_UNSUPPORTED_MARKERS), "scan_paths": list(ENTERPRISE_FEED_KEY_SUPPORT_SCAN_PATHS), "hits": hits},
     )
 
@@ -16880,10 +16880,10 @@ def command_feed_cache_sync(repo_root: Path) -> dict[str, Any]:
     inner_command = (
         f"cd {shlex.quote(str(repo_root))} && "
         "set -o pipefail && "
-        f"{{ printf '%s\\n' 'TurboVAS feed cache sync started at {timestamp}'; "
+        f"{{ printf '%s\\n' 'YAFVS feed cache sync started at {timestamp}'; "
         f"{sync_line}; "
         "status=$?; "
-        "printf '%s\\n' \"TurboVAS feed cache sync exited with status $status\"; "
+        "printf '%s\\n' \"YAFVS feed cache sync exited with status $status\"; "
         "exit $status; "
         f"}} 2>&1 | tee -a {shlex.quote(str(log_path))}"
     )
@@ -17788,7 +17788,7 @@ def direct_task_target_replace_runtime_findings(
         source_body = json.dumps(
             {
                 "name": source_target_name,
-                "comment": "TurboVAS direct write smoke task-target replacement source",
+                "comment": "YAFVS direct write smoke task-target replacement source",
                 "port_list_id": port_list_id,
                 "hosts": ["192.0.2.60"],
                 "exclude_hosts": [],
@@ -17852,7 +17852,7 @@ def direct_task_target_replace_runtime_findings(
         task_body = json.dumps(
             {
                 "name": task_name,
-                "comment": "TurboVAS direct write smoke task-target replacement task",
+                "comment": "YAFVS direct write smoke task-target replacement task",
                 "target_id": source_target_id,
                 "config_id": FULL_AND_FAST_SCAN_CONFIG_ID,
                 "scanner_id": scanner_id,
@@ -18290,7 +18290,7 @@ def direct_trash_empty_runtime_findings(
             {
                 "name": fixture_name,
                 "resource_type": "cpe",
-                "comment": "TurboVAS direct write smoke isolated Trashcan fixture",
+                "comment": "YAFVS direct write smoke isolated Trashcan fixture",
                 "value": "trash-empty-fixture",
                 "active": True,
             },
@@ -18784,7 +18784,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
     alert_resource_id: str | None = None
     filter_id: str | None = None
     filter_clone_id: str | None = None
-    filter_original_comment = "TurboVAS direct write smoke original saved-filter comment"
+    filter_original_comment = "YAFVS direct write smoke original saved-filter comment"
     predefined_port_list_id: str | None = None
     port_list_id: str | None = None
     port_list_clone_id: str | None = None
@@ -18820,7 +18820,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
     smb_alert_name = f"yafvs-direct-write-smoke-smb-alert-{int(time.time())}-{os.getpid()}"
     smb_report_format_name = f"yafvs-direct-write-smoke-smb-format-{int(time.time())}-{os.getpid()}"
     credential_helper_name = f"{credential_name}-csv-helper"
-    credential_updated_comment = "TurboVAS direct write smoke updated credential metadata"
+    credential_updated_comment = "YAFVS direct write smoke updated credential metadata"
     target_id: str | None = None
     target_clone_id: str | None = None
     target_create_with_credential_id: str | None = None
@@ -18829,7 +18829,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
     target_clone_name = f"{target_name}-clone"
     target_create_with_credential_name = f"{target_name}-with-credential"
     target_credential_name = f"{target_name}-credential"
-    target_updated_comment = "TurboVAS direct write smoke updated target metadata"
+    target_updated_comment = "YAFVS direct write smoke updated target metadata"
     task_id: str | None = None
     task_clone_id: str | None = None
     task_name = f"yafvs-direct-write-smoke-task-{int(time.time())}-{os.getpid()}"
@@ -18840,7 +18840,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
     task_alert_name = f"{task_name}-alert"
     task_tag_id: str | None = None
     task_tag_name = f"{task_name}-tag"
-    task_updated_comment = "TurboVAS direct write smoke updated task metadata"
+    task_updated_comment = "YAFVS direct write smoke updated task metadata"
     if aggregate_status(findings) != "fail":
         config = run_command(compose_command(repo_root, "config", "--quiet", env=env), repo_root, env=env)
         findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.direct-write.config", f"Compose direct write-control config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
@@ -19017,7 +19017,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         scope_create_body = json.dumps(
             {
                 "name": scope_name,
-                "comment": "TurboVAS direct write smoke temporary scope",
+                "comment": "YAFVS direct write smoke temporary scope",
                 "protection_requirement": "normal",
                 "target_ids": [],
                 "host_ids": [],
@@ -19032,12 +19032,12 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
 
         if scope_id:
             scope_patch_body = json.dumps(
-                {"comment": "TurboVAS direct write smoke updated temporary scope"},
+                {"comment": "YAFVS direct write smoke updated temporary scope"},
                 separators=(",", ":"),
             )
             scope_patch = direct_native_api_curl(repo_root, f"/api/v1/scopes/{urllib.parse.quote(scope_id)}", token=token, env=env, method="PATCH", body=scope_patch_body, extra_headers=content_type)
             scope_patch_json, scope_patch_status = parse_json_output_with_http_status(scope_patch)
-            scope_patch_ok = scope_patch.returncode == 0 and scope_patch_status == 200 and isinstance(scope_patch_json, dict) and scope_patch_json.get("id") == scope_id and scope_patch_json.get("comment") == "TurboVAS direct write smoke updated temporary scope"
+            scope_patch_ok = scope_patch.returncode == 0 and scope_patch_status == 200 and isinstance(scope_patch_json, dict) and scope_patch_json.get("id") == scope_id and scope_patch_json.get("comment") == "YAFVS direct write smoke updated temporary scope"
             findings.append(native_api_probe_finding("pass" if scope_patch_ok else "fail", "native-api-direct.scope-write-update", "Direct write-control patched temporary scope metadata." if scope_patch_ok else "Direct write-control failed to patch temporary scope metadata.", scope_patch, direct_native_api_display_command(f"/api/v1/scopes/{urllib.parse.quote(scope_id)}", token=token, env=env, method="PATCH", body=scope_patch_body, extra_headers=content_type), scope_patch_json, {"http_status": scope_patch_status, "scope_id": scope_id, **summarize_native_api_response(scope_patch_json)}))
 
             scope_query_patch_body = json.dumps(
@@ -19069,7 +19069,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 "name": tag_name,
                 "resource_type": "cpe",
                 "resource_filter": "sort=name rows=1",
-                "comment": "TurboVAS direct write smoke temporary tag",
+                "comment": "YAFVS direct write smoke temporary tag",
                 "value": "initial",
                 "active": True,
             },
@@ -19098,7 +19098,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         scan_config_create_body = json.dumps(
             {
                 "base_scan_config_id": FULL_AND_FAST_SCAN_CONFIG_ID,
-                "comment": "TurboVAS direct write smoke temporary scan config",
+                "comment": "YAFVS direct write smoke temporary scan config",
                 "name": scan_config_name,
             },
             separators=(",", ":"),
@@ -19110,8 +19110,8 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         findings.append(native_api_probe_finding("pass" if scan_config_create_ok else "fail", "native-api-direct.scan-config-write-create", "Direct write-control created a temporary scan-config from a base config." if scan_config_create_ok else "Direct write-control failed to create a temporary scan-config from a base config.", scan_config_create, direct_native_api_display_command("/api/v1/scan-configs", token=token, env=env, method="POST", body=scan_config_create_body, extra_headers=content_type), scan_config_create_json, {"http_status": scan_config_create_status, "scan_config_id": scan_config_id, "scan_config_name": scan_config_name, **summarize_native_api_response(scan_config_create_json)}))
 
         if scan_config_id:
-            scan_config_patch_comment = "TurboVAS direct write smoke updated scan-config comment"
-            scan_config_clone_comment = "TurboVAS direct write smoke cloned scan-config comment"
+            scan_config_patch_comment = "YAFVS direct write smoke updated scan-config comment"
+            scan_config_clone_comment = "YAFVS direct write smoke cloned scan-config comment"
             scan_config_patch_body = json.dumps(
                 {"comment": scan_config_patch_comment},
                 separators=(",", ":"),
@@ -19538,7 +19538,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         findings.append(filter_fixture_finding)
 
         if filter_id:
-            filter_patch_comment = "TurboVAS direct write smoke updated saved-filter comment"
+            filter_patch_comment = "YAFVS direct write smoke updated saved-filter comment"
             filter_patch_body = json.dumps(
                 {"comment": filter_patch_comment, "filter_type": "result", "term": "rows=1 sort=name"},
                 separators=(",", ":"),
@@ -19560,14 +19560,14 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
             filter_clone_body = json.dumps(
                 {
                     "name": filter_clone_name,
-                    "comment": "TurboVAS direct write smoke cloned saved-filter comment",
+                    "comment": "YAFVS direct write smoke cloned saved-filter comment",
                 },
                 separators=(",", ":"),
             )
             filter_clone = direct_native_api_curl(repo_root, f"/api/v1/filters/{urllib.parse.quote(filter_id)}/clone", token=token, env=env, method="POST", body=filter_clone_body, extra_headers=content_type)
             filter_clone_json, filter_clone_status = parse_json_output_with_http_status(filter_clone)
             filter_clone_id = filter_clone_json.get("id") if isinstance(filter_clone_json, dict) and isinstance(filter_clone_json.get("id"), str) else None
-            filter_clone_ok = filter_clone.returncode == 0 and filter_clone_status == 201 and bool(filter_clone_id) and filter_clone_id != filter_id and filter_clone_json.get("name") == filter_clone_name and filter_clone_json.get("comment") == "TurboVAS direct write smoke cloned saved-filter comment"
+            filter_clone_ok = filter_clone.returncode == 0 and filter_clone_status == 201 and bool(filter_clone_id) and filter_clone_id != filter_id and filter_clone_json.get("name") == filter_clone_name and filter_clone_json.get("comment") == "YAFVS direct write smoke cloned saved-filter comment"
             findings.append(native_api_probe_finding("pass" if filter_clone_ok else "fail", "native-api-direct.filter-write-clone", "Direct write-control cloned the temporary saved-filter fixture." if filter_clone_ok else "Direct write-control failed to clone the temporary saved-filter fixture.", filter_clone, direct_native_api_display_command(f"/api/v1/filters/{urllib.parse.quote(filter_id)}/clone", token=token, env=env, method="POST", body=filter_clone_body, extra_headers=content_type), filter_clone_json, {"http_status": filter_clone_status, "filter_id": filter_id, "filter_clone_id": filter_clone_id, **summarize_native_api_response(filter_clone_json)}))
 
             if filter_clone_id:
@@ -19764,7 +19764,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 )
             )
 
-            schedule_patch_comment = "TurboVAS direct write smoke updated schedule comment"
+            schedule_patch_comment = "YAFVS direct write smoke updated schedule comment"
             schedule_patch_body = json.dumps(
                 {
                     "comment": schedule_patch_comment,
@@ -19788,7 +19788,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
             findings.append(native_api_probe_finding("pass" if schedule_restore_ok else "fail", "native-api-direct.schedule-write-restore", "Direct write-control restored the schedule comment after reversible metadata patching." if schedule_restore_ok else "Direct write-control failed to restore the schedule comment after metadata patching.", schedule_restore, direct_native_api_display_command(f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}", token=token, env=env, method="PATCH", body=schedule_restore_body, extra_headers=content_type), schedule_restore_json, {"http_status": schedule_restore_status, "schedule_id": schedule_id, **summarize_native_api_response(schedule_restore_json)}))
 
             schedule_clone_body = json.dumps(
-                {"name": schedule_clone_name, "comment": "TurboVAS direct write smoke cloned schedule comment"},
+                {"name": schedule_clone_name, "comment": "YAFVS direct write smoke cloned schedule comment"},
                 separators=(",", ":"),
             )
             schedule_clone = direct_native_api_curl(repo_root, f"/api/v1/schedules/{urllib.parse.quote(schedule_id)}/clone", token=token, env=env, method="POST", body=schedule_clone_body, extra_headers=content_type)
@@ -19800,7 +19800,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 and bool(schedule_clone_id)
                 and schedule_clone_id != schedule_id
                 and schedule_clone_json.get("name") == schedule_clone_name
-                and schedule_clone_json.get("comment") == "TurboVAS direct write smoke cloned schedule comment"
+                and schedule_clone_json.get("comment") == "YAFVS direct write smoke cloned schedule comment"
                 and schedule_clone_json.get("timezone") == schedule_restore_json.get("timezone")
                 and schedule_clone_json.get("icalendar") == schedule_restore_json.get("icalendar")
             )
@@ -19883,7 +19883,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         predefined_port_list = bool(port_list_items and isinstance(port_list_items[0], dict) and port_list_items[0].get("predefined") is True)
         if predefined_port_list_id and predefined_port_list:
             port_list_patch_body = json.dumps(
-                {"comment": "TurboVAS direct write smoke must not mutate predefined port lists"},
+                {"comment": "YAFVS direct write smoke must not mutate predefined port lists"},
                 separators=(",", ":"),
             )
             port_list_patch = direct_native_api_curl(repo_root, f"/api/v1/port-lists/{urllib.parse.quote(predefined_port_list_id)}", token=token, env=env, method="PATCH", body=port_list_patch_body, extra_headers=content_type)
@@ -19902,13 +19902,13 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
         port_list_create_body = json.dumps(
             {
                 "name": port_list_name,
-                "comment": "TurboVAS direct write smoke temporary port list",
+                "comment": "YAFVS direct write smoke temporary port list",
                 "port_ranges": [
                     {
                         "protocol": "tcp",
                         "start": 65000,
                         "end": 65001,
-                        "comment": "TurboVAS direct write smoke temporary range",
+                        "comment": "YAFVS direct write smoke temporary range",
                     }
                 ],
             },
@@ -19934,7 +19934,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                     "protocol": "udp",
                     "start": 65002,
                     "end": 65002,
-                    "comment": "TurboVAS direct write smoke added range",
+                    "comment": "YAFVS direct write smoke added range",
                 },
                 separators=(",", ":"),
             )
@@ -19974,7 +19974,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 findings.append(native_api_probe_finding("fail", "native-api-direct.port-list-write-range-delete", "Direct write-control smoke could not find the newly created port range ID needed for range deletion.", port_list_range_create, direct_native_api_display_command(port_list_range_create_path, token=token, env=env, method="POST", body=port_list_range_create_body, extra_headers=content_type), port_list_range_create_json, {"http_status": port_list_range_create_status, "port_list_id": port_list_id, **summarize_native_api_response(port_list_range_create_json)}))
 
             port_list_clone_body = json.dumps(
-                {"name": port_list_clone_name, "comment": "TurboVAS direct write smoke cloned temporary port list"},
+                {"name": port_list_clone_name, "comment": "YAFVS direct write smoke cloned temporary port list"},
                 separators=(",", ":"),
             )
             port_list_clone = direct_native_api_curl(repo_root, f"/api/v1/port-lists/{urllib.parse.quote(port_list_id)}/clone", token=token, env=env, method="POST", body=port_list_clone_body, extra_headers=content_type)
@@ -20101,13 +20101,13 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 findings.append(native_api_probe_finding("pass" if tag_resource_set_ok else "fail", "native-api-direct.tag-resource-set", "Direct write-control replaced explicit temporary tag resource assignments." if tag_resource_set_ok else "Direct write-control failed to replace explicit temporary tag resource assignments.", tag_resource_set, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}/resources", token=token, env=env, method="POST", body=tag_resource_set_body, extra_headers=content_type), tag_resource_set_json, {"http_status": tag_resource_set_status, "tag_id": tag_id, "resource_id": tag_resource_id, **summarize_native_api_response(tag_resource_set_json)}))
 
                 tag_clone_body = json.dumps(
-                    {"name": tag_clone_name, "comment": "TurboVAS direct write smoke cloned temporary tag"},
+                    {"name": tag_clone_name, "comment": "YAFVS direct write smoke cloned temporary tag"},
                     separators=(",", ":"),
                 )
                 tag_clone = direct_native_api_curl(repo_root, f"/api/v1/tags/{urllib.parse.quote(tag_id)}/clone", token=token, env=env, method="POST", body=tag_clone_body, extra_headers=content_type)
                 tag_clone_json, tag_clone_status = parse_json_output_with_http_status(tag_clone)
                 tag_clone_id = tag_clone_json.get("id") if isinstance(tag_clone_json, dict) and isinstance(tag_clone_json.get("id"), str) else None
-                tag_clone_ok = tag_clone.returncode == 0 and tag_clone_status == 201 and bool(tag_clone_id) and tag_clone_id != tag_id and tag_clone_json.get("name") == tag_clone_name and tag_clone_json.get("comment") == "TurboVAS direct write smoke cloned temporary tag" and tag_clone_json.get("resource_type") == "cpe" and tag_clone_json.get("resource_count") == 1
+                tag_clone_ok = tag_clone.returncode == 0 and tag_clone_status == 201 and bool(tag_clone_id) and tag_clone_id != tag_id and tag_clone_json.get("name") == tag_clone_name and tag_clone_json.get("comment") == "YAFVS direct write smoke cloned temporary tag" and tag_clone_json.get("resource_type") == "cpe" and tag_clone_json.get("resource_count") == 1
                 findings.append(native_api_probe_finding("pass" if tag_clone_ok else "fail", "native-api-direct.tag-write-clone", "Direct write-control cloned the temporary tag and copied its resource assignment." if tag_clone_ok else "Direct write-control failed to clone the temporary tag with copied resource assignment.", tag_clone, direct_native_api_display_command(f"/api/v1/tags/{urllib.parse.quote(tag_id)}/clone", token=token, env=env, method="POST", body=tag_clone_body, extra_headers=content_type), tag_clone_json, {"http_status": tag_clone_status, "tag_id": tag_id, "tag_clone_id": tag_clone_id, "resource_id": tag_resource_id, **summarize_native_api_response(tag_clone_json)}))
 
                 if tag_clone_id:
@@ -20159,11 +20159,11 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 {
                     "method": "EMAIL",
                     "name": alert_concurrent_name,
-                    "comment": "TurboVAS concurrent alert create serialization proof",
+                    "comment": "YAFVS concurrent alert create serialization proof",
                     "active": False,
                     "status": "Done",
                     "to_address": "yafvs-smoke@example.invalid",
-                    "subject": "TurboVAS concurrent create proof",
+                    "subject": "YAFVS concurrent create proof",
                     "notice": "simple",
                 },
                 separators=(",", ":"),
@@ -20211,11 +20211,11 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 {
                     "method": "EMAIL",
                     "name": alert_name,
-                    "comment": "TurboVAS direct write smoke temporary EMAIL alert",
+                    "comment": "YAFVS direct write smoke temporary EMAIL alert",
                     "active": False,
                     "status": "Done",
                     "to_address": "yafvs-smoke@example.invalid",
-                    "subject": "TurboVAS delivery subject sentinel",
+                    "subject": "YAFVS delivery subject sentinel",
                     "notice": "simple",
                 },
                 separators=(",", ":"),
@@ -20238,7 +20238,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 and alert_create_json.get("active") is False
                 and alert_metadata_item_ok(alert_create_json)
                 and "yafvs-smoke@example.invalid" not in alert_create_serialized
-                and "TurboVAS delivery subject sentinel" not in alert_create_serialized
+                and "YAFVS delivery subject sentinel" not in alert_create_serialized
             )
             alert_create_committed, alert_create_outcome_uncertain = native_api_create_cleanup_state(
                 alert_create,
@@ -20261,7 +20261,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                     and alert_definition_read_json.get("method") == "EMAIL"
                     and alert_definition_read_json.get("name") == alert_name
                     and alert_definition_read_json.get("to_address") == "yafvs-smoke@example.invalid"
-                    and alert_definition_read_json.get("subject") == "TurboVAS delivery subject sentinel"
+                    and alert_definition_read_json.get("subject") == "YAFVS delivery subject sentinel"
                     and "snmp_community" not in alert_definition_read_json
                 )
                 findings.append(native_api_probe_finding("pass" if alert_definition_read_ok else "fail", "native-api-direct.alert-definition-read", "Direct native API returned the strict retained alert definition without an SNMP community field." if alert_definition_read_ok else "Direct native API failed to return the expected strict retained alert definition.", alert_definition_read, direct_native_api_display_command(alert_definition_path, token=token, env=env), alert_definition_read_json, {"http_status": alert_definition_read_status, "alert_id": alert_resource_id, "method": alert_definition_read_json.get("method") if isinstance(alert_definition_read_json, dict) else None, "snmp_community_present": isinstance(alert_definition_read_json, dict) and "snmp_community" in alert_definition_read_json}))
@@ -20272,7 +20272,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                         "definition": {
                             "method": "SYSLOG",
                             "name": alert_name,
-                            "comment": "TurboVAS direct write smoke replaced temporary alert definition",
+                            "comment": "YAFVS direct write smoke replaced temporary alert definition",
                             "active": False,
                             "status": "Done",
                         },
@@ -20287,7 +20287,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                     and isinstance(alert_definition_put_json, dict)
                     and alert_definition_put_json.get("method") == "SYSLOG"
                     and alert_definition_put_json.get("name") == alert_name
-                    and alert_definition_put_json.get("comment") == "TurboVAS direct write smoke replaced temporary alert definition"
+                    and alert_definition_put_json.get("comment") == "YAFVS direct write smoke replaced temporary alert definition"
                     and "to_address" not in alert_definition_put_json
                     and "subject" not in alert_definition_put_json
                     and "snmp_community" not in alert_definition_put_json
@@ -20321,7 +20321,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                     "active": False,
                     "status": "Done",
                     "to_address": "yafvs-smoke@example.invalid",
-                    "subject": "TurboVAS missing format probe",
+                    "subject": "YAFVS missing format probe",
                     "notice": "include",
                     "report_format_id": "00000000-0000-0000-0000-000000000000",
                 },
@@ -20339,7 +20339,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                     "active": False,
                     "status": "Done",
                     "to_address": "yafvs-smoke@example.invalid",
-                    "subject": "TurboVAS missing credential probe",
+                    "subject": "YAFVS missing credential probe",
                     "notice": "simple",
                     "recipient_credential_id": "00000000-0000-0000-0000-000000000000",
                 },
@@ -20353,20 +20353,20 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
             if alert_resource_id:
                 alert_patch_body = json.dumps(
                     {
-                        "comment": "TurboVAS direct write smoke updated temporary alert comment"
+                        "comment": "YAFVS direct write smoke updated temporary alert comment"
                     },
                     separators=(",", ":"),
                 )
                 alert_patch = direct_native_api_curl(repo_root, f"/api/v1/alerts/{urllib.parse.quote(alert_resource_id)}", token=token, env=env, method="PATCH", body=alert_patch_body, extra_headers=content_type)
                 alert_patch_json, alert_patch_status = parse_json_output_with_http_status(alert_patch)
-                alert_patch_ok = alert_patch.returncode == 0 and alert_patch_status == 200 and isinstance(alert_patch_json, dict) and alert_patch_json.get("id") == alert_resource_id and alert_patch_json.get("comment") == "TurboVAS direct write smoke updated temporary alert comment"
+                alert_patch_ok = alert_patch.returncode == 0 and alert_patch_status == 200 and isinstance(alert_patch_json, dict) and alert_patch_json.get("id") == alert_resource_id and alert_patch_json.get("comment") == "YAFVS direct write smoke updated temporary alert comment"
                 findings.append(native_api_probe_finding("pass" if alert_patch_ok else "fail", "native-api-direct.alert-write-update", "Direct write-control patched temporary alert metadata." if alert_patch_ok else "Direct write-control failed to patch temporary alert metadata.", alert_patch, direct_native_api_display_command(f"/api/v1/alerts/{urllib.parse.quote(alert_resource_id)}", token=token, env=env, method="PATCH", body=alert_patch_body, extra_headers=content_type), alert_patch_json, {"http_status": alert_patch_status, "alert_id": alert_resource_id, **summarize_native_api_response(alert_patch_json)}))
 
                 alert_tag_create_body = json.dumps(
                     {
                         "name": alert_tag_name,
                         "resource_type": "alert",
-                        "comment": "TurboVAS direct write smoke temporary alert tag",
+                        "comment": "YAFVS direct write smoke temporary alert tag",
                         "value": "initial",
                         "active": True,
                     },
@@ -20468,7 +20468,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
             credential_create_body = json.dumps(
                 {
                     "name": credential_name,
-                    "comment": "TurboVAS direct write smoke temporary credential",
+                    "comment": "YAFVS direct write smoke temporary credential",
                     "login": "yafvs-direct-write-smoke-user",
                     "type": "up",
                     "password": "yafvs-direct-write-smoke-secret",
@@ -20569,7 +20569,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                     "trust, trust_time, flags, predefined, report_type, creation_time, modification_time) "
                     "SELECT make_uuid(), id, "
                     f"{sql_literal(smb_report_format_name)}, 'txt', 'text/plain', "
-                    "'TurboVAS direct write smoke SMB report format', "
+                    "'YAFVS direct write smoke SMB report format', "
                     "'Temporary report format used by runtime-native-api-direct-write-smoke SMB coverage.', "
                     "1, m_now(), 0, 0, 'all', m_now(), m_now() "
                     "FROM owner_row RETURNING id, uuid), "
@@ -20597,7 +20597,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                         {
                             "method": "SMB",
                             "name": smb_alert_name,
-                            "comment": "TurboVAS direct write smoke temporary SMB alert",
+                            "comment": "YAFVS direct write smoke temporary SMB alert",
                             "active": False,
                             "status": "Done",
                             "smb_credential_id": credential_id,
@@ -20733,7 +20733,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 target_create_body = json.dumps(
                     {
                         "name": target_name,
-                        "comment": "TurboVAS direct write smoke temporary target",
+                        "comment": "YAFVS direct write smoke temporary target",
                         "port_list_id": predefined_port_list_id,
                         "hosts": ["192.0.2.42"],
                         "exclude_hosts": [],
@@ -20774,7 +20774,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 target_credential_fixture_sql = (
                     "WITH inserted AS (INSERT INTO credentials "
                     "(uuid, owner, name, comment, creation_time, modification_time, type, allow_insecure) "
-                    f"SELECT make_uuid(), id, {sql_literal(target_credential_name)}, 'TurboVAS direct write smoke temporary target credential', m_now(), m_now(), 'up', 0 "
+                    f"SELECT make_uuid(), id, {sql_literal(target_credential_name)}, 'YAFVS direct write smoke temporary target credential', m_now(), m_now(), 'up', 0 "
                     f"FROM users WHERE uuid = {sql_literal(admin_uuid or '')} RETURNING id, uuid), "
                     "inserted_data AS (INSERT INTO credentials_data (credential, type, value) "
                     "SELECT id, 'username', 'yafvs-direct-write-smoke-target-user' FROM inserted "
@@ -20800,7 +20800,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                     target_create_with_credential_body = json.dumps(
                         {
                             "name": target_create_with_credential_name,
-                            "comment": "TurboVAS direct write smoke target created with credential reference",
+                            "comment": "YAFVS direct write smoke target created with credential reference",
                             "port_list_id": predefined_port_list_id,
                             "hosts": ["192.0.2.44"],
                             "exclude_hosts": [],
@@ -20913,7 +20913,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 target_clone_body = json.dumps(
                     {
                         "name": target_clone_name,
-                        "comment": "TurboVAS direct write smoke cloned target comment",
+                        "comment": "YAFVS direct write smoke cloned target comment",
                     },
                     separators=(",", ":"),
                 )
@@ -20921,7 +20921,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 target_clone_json, target_clone_status = parse_json_output_with_http_status(target_clone)
                 target_clone_id = target_clone_json.get("id") if isinstance(target_clone_json, dict) and isinstance(target_clone_json.get("id"), str) else None
                 target_clone_state = psql_value(psql(repo_root, f"SELECT coalesce(hosts, '') || '|' || coalesce(exclude_hosts, '') || '|' || coalesce(alive_test::text, '') || '|' || coalesce(reverse_lookup_only::text, '') || '|' || coalesce(reverse_lookup_unify::text, '') || '|' || coalesce(allow_simultaneous_ips::text, '') || '|' || (SELECT count(*)::text FROM targets_login_data WHERE target = targets.id) FROM targets WHERE uuid = {sql_literal(target_clone_id or '')};"))
-                target_clone_ok = target_clone.returncode == 0 and target_clone_status == 201 and bool(target_clone_id) and target_clone_id != target_id and isinstance(target_clone_json, dict) and target_clone_json.get("name") == target_clone_name and target_clone_json.get("comment") == "TurboVAS direct write smoke cloned target comment" and target_clone_json.get("hosts") == ["192.0.2.42", "192.0.2.43"] and target_clone_json.get("exclude_hosts") == ["192.0.2.43"] and target_clone_state == "192.0.2.42, 192.0.2.43|192.0.2.43|16|1|1|0|0"
+                target_clone_ok = target_clone.returncode == 0 and target_clone_status == 201 and bool(target_clone_id) and target_clone_id != target_id and isinstance(target_clone_json, dict) and target_clone_json.get("name") == target_clone_name and target_clone_json.get("comment") == "YAFVS direct write smoke cloned target comment" and target_clone_json.get("hosts") == ["192.0.2.42", "192.0.2.43"] and target_clone_json.get("exclude_hosts") == ["192.0.2.43"] and target_clone_state == "192.0.2.42, 192.0.2.43|192.0.2.43|16|1|1|0|0"
                 findings.append(native_api_probe_finding("pass" if target_clone_ok else "fail", "native-api-direct.target-write-clone", "Direct write-control cloned the temporary target without tasks or credential secrets." if target_clone_ok else "Direct write-control failed to clone the temporary target safely.", target_clone, direct_native_api_display_command(f"/api/v1/targets/{urllib.parse.quote(target_id)}/clone", token=token, env=env, method="POST", body=target_clone_body, extra_headers=content_type), target_clone_json, {"http_status": target_clone_status, "target_id": target_id, "target_clone_id": target_clone_id, "clone_state": target_clone_state, **summarize_native_api_response(target_clone_json)}))
 
                 if target_clone_id:
@@ -20962,18 +20962,18 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                         "inserted_schedule AS (INSERT INTO schedules "
                         "(uuid, owner, name, comment, first_time, period, period_months, byday, duration, timezone, icalendar, creation_time, modification_time) "
                         "SELECT make_uuid(), id, "
-                        f"{sql_literal(task_schedule_name)}, 'TurboVAS direct write smoke task schedule', "
+                        f"{sql_literal(task_schedule_name)}, 'YAFVS direct write smoke task schedule', "
                         "1893456000, 86400, 0, 0, 3600, 'UTC', "
                         f"{sql_literal(schedule_icalendar)}, m_now(), m_now() FROM owner_row RETURNING uuid), "
                         "inserted_alert AS (INSERT INTO alerts "
                         "(uuid, owner, name, comment, event, condition, method, active, creation_time, modification_time) "
                         "SELECT make_uuid(), id, "
-                        f"{sql_literal(task_alert_name)}, 'TurboVAS direct write smoke task alert', "
+                        f"{sql_literal(task_alert_name)}, 'YAFVS direct write smoke task alert', "
                         "1, 1, 1, 1, m_now(), m_now() FROM owner_row RETURNING uuid), "
                         "inserted_tag AS (INSERT INTO tags "
                         "(uuid, owner, name, comment, value, resource_type, active, creation_time, modification_time) "
                         "SELECT make_uuid(), id, "
-                        f"{sql_literal(task_tag_name)}, 'TurboVAS direct write smoke task tag', '', 'task', 1, m_now(), m_now() "
+                        f"{sql_literal(task_tag_name)}, 'YAFVS direct write smoke task tag', '', 'task', 1, m_now(), m_now() "
                         "FROM owner_row RETURNING uuid) "
                         "SELECT (SELECT uuid::text FROM inserted_schedule) || '|' || "
                         "(SELECT uuid::text FROM inserted_alert) || '|' || "
@@ -21017,7 +21017,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                     task_create_body = json.dumps(
                         {
                             "name": task_name,
-                            "comment": "TurboVAS direct write smoke temporary task",
+                            "comment": "YAFVS direct write smoke temporary task",
                             "target_id": target_id,
                             "config_id": FULL_AND_FAST_SCAN_CONFIG_ID,
                             "scanner_id": task_scanner_id,
@@ -21079,7 +21079,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                         and task_create_json.get("min_qod") == 65
                         and task_create_json.get("hosts_ordering") == "reverse"
                     )
-                    task_create_ok = task_create.returncode == 0 and task_create_status == 201 and bool(task_id) and isinstance(task_create_json, dict) and task_create_json.get("name") == task_name and task_create_json.get("comment") == "TurboVAS direct write smoke temporary task" and task_relation_ok and task_create_preferences_ok and task_tag_link_state == "1"
+                    task_create_ok = task_create.returncode == 0 and task_create_status == 201 and bool(task_id) and isinstance(task_create_json, dict) and task_create_json.get("name") == task_name and task_create_json.get("comment") == "YAFVS direct write smoke temporary task" and task_relation_ok and task_create_preferences_ok and task_tag_link_state == "1"
                     findings.append(native_api_probe_finding("pass" if task_create_ok else "fail", "native-api-direct.task-write-create", "Direct write-control created a scheduled, alerted, tagged, preference-configured temporary scan task without starting a scan." if task_create_ok else "Direct write-control failed to create or persist the scheduled, alerted, tagged, preference-configured temporary scan task.", task_create, direct_native_api_display_command("/api/v1/tasks", token=token, env=env, method="POST", body=task_create_body, extra_headers=content_type), task_create_json, {"http_status": task_create_status, "task_id": task_id, "target_id": target_id, "config_id": FULL_AND_FAST_SCAN_CONFIG_ID, "scanner_id": task_scanner_id, "schedule_id": task_schedule_id, "alert_id": task_alert_id, "tag_id": task_tag_id, "tag_link_state": task_tag_link_state, "relation_state": task_relation_state, "preferences_ok": task_create_preferences_ok, **summarize_native_api_response(task_create_json)}))
                 else:
                     findings.append(finding("warn", "native-api-direct.task-write-create", "Direct write-control smoke skipped native task creation because no scanner fixture was available.", details={"target_id": target_id, "config_id": FULL_AND_FAST_SCAN_CONFIG_ID}))
@@ -21431,7 +21431,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
 
             patch_body = json.dumps(
                 {
-                    "comment": "TurboVAS direct write smoke updated temporary tag",
+                    "comment": "YAFVS direct write smoke updated temporary tag",
                     "value": "updated",
                     "active": False,
                     "resource_type": "target",
@@ -24477,7 +24477,7 @@ def validate_native_scan_new_system_host(host: str) -> str:
 def native_scan_new_system_target_body(host: str, port_list_id: str, timestamp: str) -> dict[str, Any]:
     body = native_target_host_list_target_body(host, port_list_id, timestamp)
     body["name"] = f"Native scan target {host} {timestamp}"
-    body["comment"] = "TurboVAS native scan-new-system target"
+    body["comment"] = "YAFVS native scan-new-system target"
     return body
 
 
@@ -25208,9 +25208,9 @@ def command_native_nvt_diagnostic_scan(
         return native_nvt_diagnostic_result(repo_root, "Native diagnostic NVT scan rejected before runtime access.", findings, details, status_only=status_only)
 
     operation_key = hashlib.sha256(f"{host}\0{nvt_id}\0{source_scan_config_id}".encode("utf-8")).hexdigest()[:16]
-    config_name = f"TurboVAS diagnostic NVT {operation_key}"
-    target_name = f"TurboVAS diagnostic target {operation_key}"
-    task_name = f"TurboVAS diagnostic task {operation_key}"
+    config_name = f"YAFVS diagnostic NVT {operation_key}"
+    target_name = f"YAFVS diagnostic target {operation_key}"
+    task_name = f"YAFVS diagnostic task {operation_key}"
     source_is_default = source_scan_config_id == EMPTY_SCAN_CONFIG_ID
     details.update(
         {
@@ -25341,7 +25341,7 @@ def command_native_nvt_diagnostic_scan(
         return native_nvt_diagnostic_result(repo_root, "Native diagnostic NVT scan rejected during reference preflight; no writes were attempted.", findings, details, status_only=status_only)
 
     content_type = (("Content-Type", "application/json"),)
-    config_body = json.dumps({"name": config_name, "comment": "TurboVAS native diagnostic NVT scan"}, separators=(",", ":"))
+    config_body = json.dumps({"name": config_name, "comment": "YAFVS native diagnostic NVT scan"}, separators=(",", ":"))
     clone_path = f"/api/v1/scan-configs/{urllib.parse.quote(source_scan_config_id)}/clone"
     clone_response = direct_native_api_curl(repo_root, clone_path, token=token, env=env, method="POST", body=config_body, extra_headers=content_type)
     clone_parsed, clone_status = parse_json_output_with_http_status(clone_response)
@@ -25410,7 +25410,7 @@ def command_native_nvt_diagnostic_scan(
 
     target_body = native_scan_new_system_target_body(host, port_list_id, operation_key)
     target_body["name"] = target_name
-    target_body["comment"] = "TurboVAS native diagnostic NVT target"
+    target_body["comment"] = "YAFVS native diagnostic NVT target"
     target_response = direct_native_api_curl(repo_root, "/api/v1/targets", token=token, env=env, method="POST", body=json.dumps(target_body, separators=(",", ":")), extra_headers=content_type)
     target_parsed, target_status = parse_json_output_with_http_status(target_response)
     target_id = target_parsed.get("id") if isinstance(target_parsed, dict) else None
@@ -26258,7 +26258,7 @@ def command_native_export_report_bundle(
                 "schema_version": 1,
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "report_id": report_id,
-                "source": {"contract": "TurboVAS native API v1", "base_path": "/api/v1"},
+                "source": {"contract": "YAFVS native API v1", "base_path": "/api/v1"},
                 "evidence_contract": {
                     "canonical": "collections/raw-results.json",
                     "complete": True,
@@ -27168,7 +27168,7 @@ def parse_native_target_host_list_port_ranges(port_range: str) -> list[dict[str,
                 "protocol": "tcp" if protocol_token.lower().startswith("t") else "udp",
                 "start": start,
                 "end": end,
-                "comment": "TurboVAS native host-list target import",
+                "comment": "YAFVS native host-list target import",
             }
         )
     if not ranges:
@@ -27450,7 +27450,7 @@ def native_target_csv_fetch_exact_items(
             return matches, {"reason": "lookup pagination exceeded safety limit", "page": page, "total": total}
 
 
-NATIVE_CREDENTIAL_CSV_COMMENT = "Created by TurboVAS native-credentials-from-csv"
+NATIVE_CREDENTIAL_CSV_COMMENT = "Created by YAFVS native-credentials-from-csv"
 NATIVE_CREDENTIAL_CSV_MAX_TEXT_BYTES = 4096
 NATIVE_CREDENTIAL_CSV_MAX_SECRET_BYTES = 4096
 NATIVE_CREDENTIAL_CSV_MAX_PRIVATE_KEY_BYTES = 32768
@@ -27912,7 +27912,7 @@ def command_native_credentials_from_csv(
         native_credential_csv_clear_secrets(rows)
 
 
-NATIVE_ALERT_CSV_COMMENT = "Created by TurboVAS native-alerts-from-csv"
+NATIVE_ALERT_CSV_COMMENT = "Created by YAFVS native-alerts-from-csv"
 NATIVE_ALERT_CSV_MAX_FILE_BYTES = 1048576
 NATIVE_ALERT_CSV_MAX_ROWS = 1000
 NATIVE_ALERT_CSV_MAX_TEXT_BYTES = 4096
@@ -28297,7 +28297,7 @@ def command_native_alerts_from_csv(
     return native_alert_csv_finish(result, details, status_only=status_only)
 
 
-NATIVE_SCHEDULE_CSV_COMMENT = "Created by TurboVAS native-schedules-from-csv"
+NATIVE_SCHEDULE_CSV_COMMENT = "Created by YAFVS native-schedules-from-csv"
 NATIVE_SCHEDULE_CSV_MAX_REPORTED_ITEMS = 10
 NATIVE_SCHEDULE_CSV_MAX_NAME_LENGTH = 4096
 NATIVE_SCHEDULE_CSV_MAX_TIMEZONE_LENGTH = 256
@@ -29079,7 +29079,7 @@ def command_native_targets_from_host_list(
         if port_ranges is not None:
             details["planned_port_list"] = {
                 "name": port_list_name or f"Port list for target {hosts_file.stem}",
-                "comment": "Created by TurboVAS native-targets-from-host-list",
+                "comment": "Created by YAFVS native-targets-from-host-list",
                 "port_ranges": port_ranges,
             }
         findings.append(finding("pass", "native-targets-from-host-list.dry-run", "Dry run planned native port-list/target writes without runtime access."))
@@ -29118,7 +29118,7 @@ def command_native_targets_from_host_list(
         port_list_body = json.dumps(
             {
                 "name": port_list_name or f"Port list for target {hosts_file.stem}",
-                "comment": "Created by TurboVAS native-targets-from-host-list",
+                "comment": "Created by YAFVS native-targets-from-host-list",
                 "port_ranges": port_ranges,
             },
             separators=(",", ":"),
@@ -32405,7 +32405,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-app-build", parents=[common], help="build application images explicitly without starting or changing feed state")
     subparsers.add_parser("runtime-app-down", parents=[common], help="stop experimental application services")
     subparsers.add_parser("runtime-app-smoke", parents=[common], help="run experimental application service smoke checks")
-    native_api_smoke = subparsers.add_parser("runtime-native-api-smoke", parents=[common], help="verify the internal TurboVAS native API sidecar")
+    native_api_smoke = subparsers.add_parser("runtime-native-api-smoke", parents=[common], help="verify the internal YAFVS native API sidecar")
     native_api_smoke.add_argument("--status-only", action="store_true", help="emit compact native API smoke status and only non-pass findings for chat-safe validation")
     native_api_direct_smoke = subparsers.add_parser("runtime-native-api-direct-smoke", parents=[common], help="verify the opt-in direct bearer-auth native API listener")
     native_api_direct_smoke.add_argument("--status-only", action="store_true", help="emit compact direct-smoke status and only non-pass findings for chat-safe validation")
@@ -32413,7 +32413,7 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_direct_write_smoke.add_argument("--status-only", action="store_true", help="emit compact write-smoke status and only non-pass findings for chat-safe validation")
     native_api_direct_bootstrap = subparsers.add_parser("runtime-native-api-direct-bootstrap", parents=[common], help="prepare and check opt-in direct native API bootstrap guardrails without starting the listener")
     native_api_direct_bootstrap.add_argument("--status-only", action="store_true", help="emit compact bootstrap status and only non-pass findings for chat-safe validation")
-    subparsers.add_parser("runtime-native-api-rebuild", parents=[common], help="rebuild and restart only the internal TurboVAS native API sidecar")
+    subparsers.add_parser("runtime-native-api-rebuild", parents=[common], help="rebuild and restart only the internal YAFVS native API sidecar")
     webui_smoke = subparsers.add_parser("runtime-webui-smoke", parents=[common], help="verify the staged GSA web UI over gsad")
     webui_smoke.add_argument("--status-only", action="store_true", help="emit compact web UI smoke status and only non-pass findings for chat-safe validation")
     browser_smoke = subparsers.add_parser("runtime-browser-smoke", parents=[common], help="verify report workflows through a headless browser")

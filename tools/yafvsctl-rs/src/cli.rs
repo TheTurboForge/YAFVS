@@ -22,6 +22,20 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand, PartialEq, Eq)]
 pub enum CliCommand {
+    /// Export one bounded CSV report through the guarded direct native API.
+    NativeExportReportCsv {
+        #[arg(long)]
+        report_id: String,
+        #[arg(long)]
+        output: Option<PathBuf>,
+        #[arg(
+            long,
+            default_value_t = crate::commands::NATIVE_REPORT_CSV_DEFAULT_MAX_RESULTS
+        )]
+        max_results: usize,
+        #[arg(long)]
+        overwrite: bool,
+    },
     /// Download one bounded PDF report through the guarded direct native API.
     NativeExportReportPdf {
         #[arg(long)]
@@ -335,6 +349,7 @@ pub enum CliCommand {
 impl CliCommand {
     pub fn name(&self) -> &'static str {
         match self {
+            Self::NativeExportReportCsv { .. } => "native-export-report-csv",
             Self::NativeExportReportPdf { .. } => "native-export-report-pdf",
             Self::NativeUpdateTaskTarget { .. } => "native-update-task-target",
             Self::NativeStartTask { .. } => "native-start-task",
@@ -414,6 +429,33 @@ mod tests {
     use clap::CommandFactory;
     use std::fs;
     use std::path::Path;
+
+    #[test]
+    fn parses_native_csv_export_bounds_and_output_controls() {
+        let cli = parse_cli([
+            "native-export-report-csv",
+            "--report-id",
+            "11111111-1111-4111-8111-111111111111",
+            "--output",
+            "report.csv",
+            "--max-results",
+            "4096",
+            "--overwrite",
+            "--status-only",
+        ])
+        .unwrap();
+        assert!(cli.status_only);
+        assert_eq!(
+            cli.command,
+            CliCommand::NativeExportReportCsv {
+                report_id: "11111111-1111-4111-8111-111111111111".into(),
+                output: Some(PathBuf::from("report.csv")),
+                max_results: 4096,
+                overwrite: true,
+            }
+        );
+        assert_eq!(cli.command.name(), "native-export-report-csv");
+    }
 
     #[test]
     fn parses_native_pdf_export_bounds_and_output_controls() {

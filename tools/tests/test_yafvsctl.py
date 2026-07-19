@@ -1200,6 +1200,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-performance-snapshot", "--json"], 0, "warn"),
                 (["runtime-log-review", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["runtime-scanner-capability-check", "--json"], (0, 1), ("pass", "fail")),
+                (["runtime-scanner-process-check", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["runtime-nmap-capability-check", "--json"], (0, 1), ("pass", "fail")),
                 (["c-hardening-check", "--status-only", "--json"], 1, "fail"),
                 (["path-coupling-state", "--json"], 0, "pass"),
@@ -2647,6 +2648,10 @@ class YAFVSCtlTests(unittest.TestCase):
                 "runtime-nmap-capability-check",
                 yafvsctl.command_runtime_nmap_capability_check,
             ),
+            (
+                "runtime-scanner-process-check",
+                yafvsctl.command_runtime_scanner_process_check,
+            ),
         ]:
             envelope = json.dumps(
                 {
@@ -2681,6 +2686,7 @@ class YAFVSCtlTests(unittest.TestCase):
         direct_recipe = "cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --"
         for command in (
             "runtime-scanner-capability-check",
+            "runtime-scanner-process-check",
             "runtime-nmap-capability-check",
         ):
             self.assertNotIn(f'subparsers.add_parser("{command}"', source)
@@ -2694,6 +2700,15 @@ class YAFVSCtlTests(unittest.TestCase):
             "ospd_setpriv_raw_socket_probe_command",
             "ospd_setpriv_nmap_probe_commands",
             "nmap_privilege_warning_present",
+            "running_service_env_secret_exposure",
+            "running_service_read_only_mount_matches",
+            "running_service_config_secret_exposure",
+            "mqtt_runtime_environment_evidence",
+            "mqtt_runtime_mount_evidence",
+            "parse_process_table",
+            "summarize_scanner_processes",
+            "mqtt_file_secret_exposure_probe_command",
+            "mqtt_authenticated_probe_command",
         ):
             self.assertNotIn(f"def {helper}", source)
 
@@ -12707,40 +12722,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertFalse(yafvsctl.env_values_have_nonempty_key(["OTHER=value"], "TOKEN"))
         self.assertTrue(yafvsctl.env_values_have_nonempty_key(["TOKEN=secret"], "TOKEN"))
 
-    @unittest.mock.patch.object(yafvsctl, "container_id", return_value="cid")
-    @unittest.mock.patch.object(yafvsctl, "run_command")
-    def test_running_service_env_secret_exposure_returns_booleans_only(
-        self, run_command, _container_id
-    ):
-        run_command.return_value = subprocess.CompletedProcess(
-            [],
-            0,
-            json.dumps(
-                [
-                    "PATH=/usr/bin",
-                    "YAFVS_MQTT_OSPD_PASSWORD=fixture-secret",
-                ]
-            ),
-            "",
-        )
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            result = yafvsctl.running_service_env_secret_exposure(
-                root,
-                "ospd-openvas",
-                "YAFVS_MQTT_OSPD_PASSWORD",
-                "fixture-secret",
-            )
-        self.assertEqual(
-            result,
-            {
-                "inspected": True,
-                "key_present": True,
-                "secret_present": True,
-            },
-        )
-        self.assertNotIn("fixture-secret", json.dumps(result))
 
     def test_native_api_create_cleanup_state_marks_malformed_201_and_committed_502_uncertain(self):
         malformed_201 = yafvsctl.subprocess.CompletedProcess([], 0, '{"name":"unexpected"}\n201', "")
@@ -14441,73 +14422,10 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(yafvsctl.GREENBONE_COMMUNITY_KEY_FPR, "8AE4BE429B60A59B311C2E739823FAA60ED1E580")
         self.assertEqual(yafvsctl.GREENBONE_COMMUNITY_KEY_URL, "https://www.greenbone.net/GBCommunitySigningKey.asc")
 
-    def test_scanner_process_summary_counts_zombies_and_active_children(self):
-        output = """    PID    PPID STAT COMMAND         COMMAND
-      1       0 Ss   ospd-openvas    /workspace/build/venvs/ospd-openvas/bin/ospd-openvas --foreground
-    115       1 Z    python3         [python3] <defunct>
-    444       1 ZN   nmap            [nmap] <defunct>
-    800       1 SN   nmap            nmap -sS -O 127.0.0.1
-    900       1 S    openvas         openvas --scan-start
-"""
-        summary = yafvsctl.summarize_scanner_processes(output)
-        self.assertEqual(summary["process_count"], 5)
-        self.assertEqual(summary["zombie_count"], 2)
-        self.assertEqual(summary["active_scanner_child_count"], 2)
-        self.assertEqual([process["comm"] for process in summary["zombies"]], ["python3", "nmap"])
-        self.assertNotIn("args", summary["zombies"][0])
-        self.assertNotIn("args", summary["active_scanner_children"][0])
 
-    def test_scanner_process_summary_ignores_zombies_as_active_children(self):
-        output = """    PID    PPID STAT COMMAND         COMMAND
-      1       0 Ss   ospd-openvas    /workspace/build/venvs/ospd-openvas/bin/ospd-openvas --foreground
-    444       1 ZN   nmap            [nmap] <defunct>
-"""
-        summary = yafvsctl.summarize_scanner_processes(output)
-        self.assertEqual(summary["zombie_count"], 1)
-        self.assertEqual(summary["active_scanner_child_count"], 0)
 
-    def test_scanner_process_summary_does_not_count_docker_init_as_scanner_child(self):
-        output = """    PID    PPID STAT COMMAND         COMMAND
-      1       0 Ss   docker-init     /sbin/docker-init -- sh -lc exec setpriv /workspace/build/venvs/ospd-openvas/bin/ospd-openvas --foreground
-      7       1 Sl   ospd-openvas    /workspace/build/venvs/ospd-openvas/bin/ospd-openvas --foreground
-"""
-        summary = yafvsctl.summarize_scanner_processes(output)
-        self.assertEqual(summary["zombie_count"], 0)
-        self.assertEqual(summary["active_scanner_child_count"], 0)
 
-    def test_ospd_mqtt_secret_exposure_probe_reports_metadata_only(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            command = yafvsctl.ospd_mqtt_secret_exposure_probe_command(root)
-        self.assertEqual(command[0:2], ["setpriv", "--reuid"])
-        self.assertEqual(
-            command[-3],
-            "/workspace/build/venvs/ospd-openvas/bin/python",
-        )
-        self.assertEqual(command[-2], "-c")
-        self.assertIn(
-            yafvsctl.YAFVS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
-            command[-1],
-        )
-        self.assertIn("cmdline_secret_pids", command[-1])
-        self.assertNotIn("YAFVS_MQTT_OSPD_PASSWORD", command[-1])
 
-    def test_mqtt_auth_probe_supports_paho_one_and_two(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            command = yafvsctl.mqtt_authenticated_probe_command(
-                root,
-                "ospd",
-                yafvsctl.YAFVS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
-                "/venv/bin/python",
-                False,
-            )
-        script = command[-1]
-        self.assertIn("hasattr(mqtt, 'CallbackAPIVersion')", script)
-        self.assertIn("else mqtt.Client()", script)
-        self.assertNotIn("YAFVS_MQTT_OSPD_PASSWORD", script)
 
     def test_mqtt_health_probe_uses_file_backed_credentials(self):
         self.assertEqual(
@@ -14515,167 +14433,7 @@ class YAFVSCtlTests(unittest.TestCase):
             ["mosquitto_pub", "-o", "/tmp/yafvs-mqtt-health.options"],
         )
 
-    @unittest.mock.patch.object(yafvsctl, "container_running", return_value=True)
-    @unittest.mock.patch.object(
-        yafvsctl,
-        "mqtt_runtime_environment_evidence",
-        return_value={
-            "expected_pair_count": 12,
-            "inspected_pair_count": 12,
-            "unreadable_secret_names": [],
-            "uninspected_pairs": [],
-            "key_exposure_pairs": [],
-            "value_exposure_pairs": [],
-            "uninspected_config_services": [],
-            "config_secret_exposure_services": [],
-        },
-    )
-    @unittest.mock.patch.object(
-        yafvsctl,
-        "mqtt_runtime_mount_evidence",
-        return_value={
-            "expected_mount_count": 6,
-            "matched_mount_count": 6,
-            "uninspected_mounts": [],
-            "unmatched_mounts": [],
-            "stale_mounts": [],
-        },
-    )
-    @unittest.mock.patch.object(yafvsctl, "exec_in_service")
-    def test_runtime_scanner_process_check_accepts_file_backed_secret(
-        self,
-        exec_in_service,
-        _mount_evidence,
-        _env_evidence,
-        _container_running,
-    ):
-        process_output = """    PID    PPID STAT COMMAND
-      1       0 Ss   docker-init
-      7       1 Sl   ospd-openvas
-"""
-        exposure_output = json.dumps(
-            {
-                "cmdline_secret_pids": [],
-                "inline_password_option_pids": [],
-                "exact_password_file_option_pids": ["7"],
-                "unexpected_password_file_option_pids": [],
-                "cmdline_unreadable_pids": [],
-            }
-        )
-        notus_output = json.dumps(
-            {
-                "cmdline_secret_pids": [],
-                "inline_password_option_pids": [],
-                "exact_password_file_option_pids": ["9"],
-                "unexpected_password_file_option_pids": [],
-                "cmdline_unreadable_pids": [],
-            }
-        )
-        exec_in_service.side_effect = [
-            subprocess.CompletedProcess([], 0, process_output, ""),
-            subprocess.CompletedProcess([], 0, exposure_output, ""),
-            subprocess.CompletedProcess([], 0, notus_output, ""),
-            subprocess.CompletedProcess([], 0, "mqtt-auth-ok\n", ""),
-            subprocess.CompletedProcess([], 0, "mqtt-auth-ok\n", ""),
-        ]
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            yafvsctl.write_private_text(
-                yafvsctl.runtime_secret_path(
-                    root, yafvsctl.YAFVS_MQTT_OSPD_PASSWORD_SECRET
-                ),
-                "fixture-secret\n",
-            )
-            result = yafvsctl.command_runtime_scanner_process_check(root)
-        self.assertEqual(result["status"], "pass")
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(checks["ospd.mqtt-secret-exposure"]["status"], "pass")
-        self.assertEqual(
-            checks["ospd.mqtt-password-file-option"]["status"], "pass"
-        )
-        self.assertNotIn("fixture-secret", json.dumps(result))
 
-    @unittest.mock.patch.object(yafvsctl, "container_running", return_value=True)
-    @unittest.mock.patch.object(
-        yafvsctl,
-        "mqtt_runtime_environment_evidence",
-        return_value={
-            "expected_pair_count": 12,
-            "inspected_pair_count": 12,
-            "unreadable_secret_names": [],
-            "uninspected_pairs": [],
-            "key_exposure_pairs": ["ospd-openvas:password"],
-            "value_exposure_pairs": ["ospd-openvas:password"],
-            "uninspected_config_services": [],
-            "config_secret_exposure_services": ["ospd-openvas"],
-        },
-    )
-    @unittest.mock.patch.object(
-        yafvsctl,
-        "mqtt_runtime_mount_evidence",
-        return_value={
-            "expected_mount_count": 6,
-            "matched_mount_count": 5,
-            "uninspected_mounts": [],
-            "unmatched_mounts": ["ospd-openvas:mqtt-ospd-password"],
-            "stale_mounts": [],
-        },
-    )
-    @unittest.mock.patch.object(yafvsctl, "exec_in_service")
-    def test_runtime_scanner_process_check_rejects_secret_exposure(
-        self,
-        exec_in_service,
-        _mount_evidence,
-        _env_evidence,
-        _container_running,
-    ):
-        process_output = """    PID    PPID STAT COMMAND
-      1       0 Ss   docker-init
-      7       1 Sl   ospd-openvas
-"""
-        exposure_output = json.dumps(
-            {
-                "cmdline_secret_pids": ["7"],
-                "inline_password_option_pids": ["7"],
-                "exact_password_file_option_pids": [],
-                "unexpected_password_file_option_pids": ["7"],
-                "cmdline_unreadable_pids": [],
-            }
-        )
-        notus_output = json.dumps(
-            {
-                "cmdline_secret_pids": ["9"],
-                "inline_password_option_pids": ["9"],
-                "exact_password_file_option_pids": [],
-                "unexpected_password_file_option_pids": ["9"],
-                "cmdline_unreadable_pids": [],
-            }
-        )
-        exec_in_service.side_effect = [
-            subprocess.CompletedProcess([], 0, process_output, ""),
-            subprocess.CompletedProcess([], 0, exposure_output, ""),
-            subprocess.CompletedProcess([], 0, notus_output, ""),
-            subprocess.CompletedProcess([], 1, "", ""),
-            subprocess.CompletedProcess([], 1, "", ""),
-        ]
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            yafvsctl.write_private_text(
-                yafvsctl.runtime_secret_path(
-                    root, yafvsctl.YAFVS_MQTT_OSPD_PASSWORD_SECRET
-                ),
-                "fixture-secret\n",
-            )
-            result = yafvsctl.command_runtime_scanner_process_check(root)
-        self.assertEqual(result["status"], "fail")
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(checks["ospd.mqtt-secret-exposure"]["status"], "fail")
-        self.assertEqual(
-            checks["ospd.mqtt-password-file-option"]["status"], "fail"
-        )
-        self.assertNotIn("fixture-secret", json.dumps(result))
 
     def test_gsa_static_staging_writes_browser_relative_config(self):
         with tempfile.TemporaryDirectory() as tmp:

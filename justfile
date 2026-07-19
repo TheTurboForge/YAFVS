@@ -210,7 +210,7 @@ runtime-scanner-capability-check *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- runtime-scanner-capability-check "$@"
 
 runtime-scanner-process-check *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-scanner-process-check "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- runtime-scanner-process-check "$@"
 
 runtime-nmap-capability-check *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- runtime-nmap-capability-check "$@"

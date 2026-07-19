@@ -14,7 +14,7 @@
 
 ## DESCRIPTION
 
-This function opens the scanner-owned generated krb5.conf file and looks for a KDC entry for the given realm. TurboVAS ignores caller-provided `config_path` and `KRB5_CONFIG` values.
+This function opens the scanner-owned generated krb5.conf file and looks for a KDC entry for the given realm. YAFVS ignores caller-provided `config_path` and `KRB5_CONFIG` values.
 
 ## RETURN VALUE
 

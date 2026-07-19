@@ -4,7 +4,7 @@
 
 Tool for downloading the Greenbone Community Feed.
 
-TurboVAS supports the Greenbone Community Feed only. This fork does not support
+YAFVS supports the Greenbone Community Feed only. This fork does not support
 Greenbone Enterprise Feed subscription keys or Enterprise Feed synchronization.
 Users looking for Greenbone Enterprise Feed access, official Greenbone products,
 or vendor support should contact Greenbone directly.

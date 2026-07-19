@@ -138,7 +138,7 @@ def parse_openvas_result_row(row: Any) -> Optional[Dict[str, str]]:
     return {field: result[field] for field in OPENVAS_RESULT_FIELDS}
 
 
-# TurboVAS defaults scanner plugin execution to 180 seconds because it is
+# YAFVS defaults scanner plugin execution to 180 seconds because it is
 # preferable for things to fail quickly.
 YAFVS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS = 180
 # Keep scanner startup bounded by the same fast-fail default as per-NVT and

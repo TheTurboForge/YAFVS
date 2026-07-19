@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Browser-level TurboVAS runtime regression smoke using Playwright."""
+"""Browser-level YAFVS runtime regression smoke using Playwright."""
 
 from __future__ import annotations
 
@@ -362,7 +362,7 @@ async function assertSavedFilterWriteProxy(page) {
   const create = await fetchNativeJsonWithBrowserToken(page, '/api/v1/filters', {
     method: 'POST',
     body: {
-      name: `TurboVAS browser write smoke ${suffix}`,
+      name: `YAFVS browser write smoke ${suffix}`,
       comment: 'Temporary filter created by runtime-browser-smoke.',
       filter_type: 'task',
       term: 'rows=1',
@@ -656,7 +656,7 @@ async function runForBaseUrl(baseUrl) {
   try {
     const loggedIn = await login(page);
     const shellText = await bodyText(page).catch(() => '');
-    add(/TurboVAS/i.test(shellText) ? 'pass' : 'fail', 'browser.branding', /TurboVAS/i.test(shellText) ? 'Application shell exposes TurboVAS branding.' : 'Application shell does not expose TurboVAS branding.');
+    add(/YAFVS/i.test(shellText) ? 'pass' : 'fail', 'browser.branding', /YAFVS/i.test(shellText) ? 'Application shell exposes YAFVS branding.' : 'Application shell does not expose YAFVS branding.');
     if (!loggedIn) {
       return;
     }

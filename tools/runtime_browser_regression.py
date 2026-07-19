@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Deep browser-level TurboVAS runtime regression checks using Playwright."""
+"""Deep browser-level YAFVS runtime regression checks using Playwright."""
 
 from __future__ import annotations
 

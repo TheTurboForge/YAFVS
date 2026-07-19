@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [Unit]
-Description=TurboVAS local quality gate
+Description=YAFVS local quality gate
 Documentation=file:@REPO_ROOT@/README.md
 
 [Service]

@@ -68,7 +68,7 @@ services:
       - -c
       - |
         # This standalone openvasd fixture does not provision the authenticated
-        # MQTT/Notus pipeline used by TurboVAS. Fail closed instead of restoring
+        # MQTT/Notus pipeline used by YAFVS. Fail closed instead of restoring
         # the removed direct OpenVAS-to-openvasd HTTP transport.
         printf "table_driven_lsc = no\n" > /mnt/openvas.conf
         chmod 644 /mnt/openvas.conf

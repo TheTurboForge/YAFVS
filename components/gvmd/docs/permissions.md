@@ -4,10 +4,10 @@
 
 # Operator Account Model
 
-TurboVAS does not expose the inherited Greenbone/OpenVAS role, group, or
-permission administration model. The TurboVAS console is an operator-only
+YAFVS does not expose the inherited Greenbone/OpenVAS role, group, or
+permission administration model. The YAFVS console is an operator-only
 scanner administration surface: any authenticated operator account can see and
-manage all retained TurboVAS resources.
+manage all retained YAFVS resources.
 
 This is an intentional trust-boundary decision, not an incomplete RBAC port or
 a feature scheduled for restoration. One installation represents one trusted
@@ -17,7 +17,7 @@ lets team members continue one another's work and cover for one another during
 leave or other absences.
 
 People who should not administer scans, targets, credentials, schedules,
-reports, and scanner configuration should not receive TurboVAS console accounts.
+reports, and scanner configuration should not receive YAFVS console accounts.
 Their findings belong in outbound reports, exports, notifications, ticket-system
 integrations, or future delivery workflows.
 
@@ -39,5 +39,5 @@ infrastructure layers.
 
 This document intentionally replaces the inherited RBAC documentation. Legacy
 Agent Controller functionality has been removed separately; future endpoint
-evidence collection must be designed as new TurboVAS behavior, not as hidden
+evidence collection must be designed as new YAFVS behavior, not as hidden
 RBAC or Agent Controller compatibility.

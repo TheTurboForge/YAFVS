@@ -9,7 +9,7 @@
  * @brief The Greenbone Vulnerability Manager management library (Access
  * Control Layer).
  *
- * TurboVAS uses an operator-account model: authentication is the scanner
+ * YAFVS uses an operator-account model: authentication is the scanner
  * administration boundary, and every authenticated user has the same effective
  * access to scanner resources. Owner columns remain as attribution metadata.
  */

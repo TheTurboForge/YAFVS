@@ -79,7 +79,7 @@ def raw_gmp_get_version(socket_path: Path, username: str, password: str, timeout
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run a TurboVAS GMP runtime smoke check")
+    parser = argparse.ArgumentParser(description="Run a YAFVS GMP runtime smoke check")
     parser.add_argument("--socket", required=True, help="gvmd Unix socket path")
     parser.add_argument("--username", required=True, help="GMP username")
     parser.add_argument("--password-file", required=True, help="file containing the GMP password")

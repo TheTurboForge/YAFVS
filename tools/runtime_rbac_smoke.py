@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Verify TurboVAS operator-account semantics over GMP without starting scans."""
+"""Verify YAFVS operator-account semantics over GMP without starting scans."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from xml.sax.saxutils import escape, quoteattr
 import runtime_full_test_scan
 
 SECONDARY_USER = "turbovas-rbac-smoke"
-TEMP_FILTER_PREFIX = "TurboVAS RBAC smoke filter"
+TEMP_FILTER_PREFIX = "YAFVS RBAC smoke filter"
 
 
 def now_iso() -> str:
@@ -217,7 +217,7 @@ def ensure_secondary_user(admin_client: Any, password: str) -> dict[str, Any]:
                 user_id,
                 name=SECONDARY_USER,
                 password=password,
-                comment="TurboVAS RBAC smoke secondary operator",
+                comment="YAFVS RBAC smoke secondary operator",
             ),
             "modify secondary user",
         )
@@ -310,7 +310,7 @@ def write_artifact(artifact_dir: Path, payload: dict[str, Any]) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Verify TurboVAS operator-account semantics over GMP")
+    parser = argparse.ArgumentParser(description="Verify YAFVS operator-account semantics over GMP")
     parser.add_argument("--socket", required=True, help="gvmd Unix socket path")
     parser.add_argument("--username", required=True, help="admin GMP username")
     parser.add_argument("--password-file", required=True, help="file containing the admin GMP password")

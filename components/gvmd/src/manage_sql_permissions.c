@@ -8,7 +8,7 @@
  * @file
  * @brief GVM management layer: SQL permission compatibility helpers.
  *
- * TurboVAS removes inherited role/group/permission authorization. These
+ * YAFVS removes inherited role/group/permission authorization. These
  * helpers remain as no-ops for legacy manager call sites while the live GMP,
  * schema, and UI surfaces are removed.
  */

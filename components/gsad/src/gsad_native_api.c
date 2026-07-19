@@ -6,7 +6,7 @@
 
 /**
  * @file gsad_native_api.c
- * @brief Authenticated same-origin proxy for bounded TurboVAS native API paths.
+ * @brief Authenticated same-origin proxy for bounded YAFVS native API paths.
  */
 
 #include "gsad_native_api.h"

@@ -9869,7 +9869,7 @@ results_extra_where (int trash, report_t report, const gchar* host,
 /**
  * @brief Return the fallback filter used for single-result result iterators.
  *
- * Hidden TurboVAS scope-report filters must also constrain single-result
+ * Hidden YAFVS scope-report filters must also constrain single-result
  * lookups so expanded result details cannot drift back to an unrelated raw
  * report row.
  *
@@ -14596,7 +14596,7 @@ make_task_complete (task_t task)
 }
 
 /**
- * @brief Enforce TurboVAS task defaults.
+ * @brief Enforce YAFVS task defaults.
  *
  * Tasks are always alterable, always processed into assets, and always keep a
  * bounded set of recent raw reports. Scope-report source reports are protected
@@ -14720,7 +14720,7 @@ copy_task (const char* name, const char* comment, const char *task_id,
        new,
        old);
 
-  /* TurboVAS uses an operator-only schema.  The retired RBAC permission
+  /* YAFVS uses an operator-only schema.  The retired RBAC permission
    * tables must not be referenced while copying the owner-scoped task. */
 
   sql_commit ();

@@ -363,7 +363,7 @@ table_driven_lsc
 mqtt_server_uri
 
 :   URI to the MQTT server used for internal communication with Notus
-    (table driven LSC). TurboVAS uses authenticated MQTT as the
+    (table driven LSC). YAFVS uses authenticated MQTT as the
     scanner-to-Notus transport.
 
 mqtt_user

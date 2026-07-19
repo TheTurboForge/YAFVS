@@ -21,7 +21,7 @@ os_release: identifier for the operating system of the target system
 After the KB items are set, these information is also transferred to the main process and a notus scan is triggered. The
 results of the notus scan are then directly published.
 
-TurboVAS passes this bounded package data through the authenticated MQTT Notus
+YAFVS passes this bounded package data through the authenticated MQTT Notus
 pipeline. It does not invoke the removed direct Notus HTTP transport.
 
 ## RETURN VALUE

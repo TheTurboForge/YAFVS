@@ -174,7 +174,7 @@ set (OPENVAS_LIB_INSTALL_DIR     "${LIBDIR}")
 
 set (OPENVAS_CONF     "${OPENVAS_SYSCONF_DIR}/openvas.conf")
 
-# TurboVAS defaults scanner plugin execution to 180 seconds because it is
+# YAFVS defaults scanner plugin execution to 180 seconds because it is
 # preferable for things to fail quickly.
 set (NVT_TIMEOUT "180")
 set (SCANNER_NVT_TIMEOUT "180")

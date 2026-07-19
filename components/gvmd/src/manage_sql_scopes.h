@@ -5,7 +5,7 @@
 
 /**
  * @file
- * @brief SQL handlers for TurboVAS reporting scopes.
+ * @brief SQL handlers for YAFVS reporting scopes.
  */
 
 #ifndef _GVMD_MANAGE_SQL_SCOPES_H

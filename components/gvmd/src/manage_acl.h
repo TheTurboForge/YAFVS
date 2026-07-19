@@ -19,7 +19,7 @@
 /**
  * @brief Generate SQL for user permission check.
  *
- * TurboVAS grants every authenticated operator effective access to scanner
+ * YAFVS grants every authenticated operator effective access to scanner
  * resources. These macros keep the inherited SQL format-argument contracts so
  * older query construction sites stay mechanically safe while RBAC tables are
  * removed.

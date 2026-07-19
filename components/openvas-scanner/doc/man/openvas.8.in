@@ -218,7 +218,7 @@ Defaults to true.
 
 .IP mqtt_server_uri
 URI to the MQTT server used for internal communication with Notus (table driven LSC).
-TurboVAS uses authenticated MQTT as the scanner-to-Notus transport.
+YAFVS uses authenticated MQTT as the scanner-to-Notus transport.
 
 .IP mqtt_user
 Username for authenticated MQTT communication.

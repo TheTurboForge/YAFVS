@@ -5,7 +5,7 @@
 
 /**
  * @file
- * @brief SQL handlers for TurboVAS reporting scopes.
+ * @brief SQL handlers for YAFVS reporting scopes.
  */
 
 #include "manage_sql_scopes.h"

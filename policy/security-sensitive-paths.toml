@@ -17,7 +17,7 @@ required_checks = [
 [[areas]]
 id = "auth-session"
 title = "Authentication, session, and operator boundary"
-risk = "TurboVAS treats login as the scanner-administration boundary, so auth/session changes are high consequence."
+risk = "YAFVS treats login as the scanner-administration boundary, so auth/session changes are high consequence."
 paths = [
   "components/gvmd/src/manage_sql_users.c",
   "components/gsad/src/gsad.c",

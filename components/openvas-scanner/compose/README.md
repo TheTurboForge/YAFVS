@@ -5,9 +5,9 @@
 This directory contains compose files and helper targets for running
 `openvasd` locally with Docker or Podman.
 
-These standalone component fixtures do not provision TurboVAS's authenticated
+These standalone component fixtures do not provision YAFVS's authenticated
 MQTT/Notus pipeline. Table-driven LSC is therefore disabled explicitly instead
-of using the removed direct OpenVAS-to-openvasd HTTP transport. The TurboVAS
+of using the removed direct OpenVAS-to-openvasd HTTP transport. The YAFVS
 product runtime provisions MQTT, OSPD result durability, and Notus separately.
 
 ## Files

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Guarded GMP command surface for the authorized TurboVAS full test scan."""
+"""Guarded GMP command surface for the authorized YAFVS full test scan."""
 
 from __future__ import annotations
 
@@ -64,8 +64,8 @@ def parse_full_test_target(value: str) -> FullTestTarget:
     canonical = str(network)
     return FullTestTarget(
         cidr=canonical,
-        target_name=f"TurboVAS full test target {canonical}",
-        task_name=f"TurboVAS full test scan {canonical}",
+        target_name=f"YAFVS full test target {canonical}",
+        task_name=f"YAFVS full test scan {canonical}",
     )
 
 
@@ -627,7 +627,7 @@ def ensure_target(
                 method="POST",
                 payload={
                     "name": target_config.target_name,
-                    "comment": "Explicitly authorized TurboVAS full test target.",
+                    "comment": "Explicitly authorized YAFVS full test target.",
                     "alive_tests": ["Scan Config Default"],
                     "allow_simultaneous_ips": True,
                     "reverse_lookup_only": False,
@@ -647,7 +647,7 @@ def ensure_target(
         target_config.target_name,
         hosts=[target_config.cidr],
         port_list_id=IANA_TCP_UDP_PORT_LIST_ID,
-        comment="Explicitly authorized TurboVAS full test target.",
+        comment="Explicitly authorized YAFVS full test target.",
     )
     target_id = response_id(response)
     if not target_id:
@@ -678,7 +678,7 @@ def ensure_task(
                 method="POST",
                 payload={
                     "name": target_config.task_name,
-                    "comment": "Explicitly authorized TurboVAS full test scan.",
+                    "comment": "Explicitly authorized YAFVS full test scan.",
                     "target_id": target_id,
                     "config_id": FULL_AND_FAST_SCAN_CONFIG_ID,
                     "scanner_id": scanner_id,
@@ -695,7 +695,7 @@ def ensure_task(
         FULL_AND_FAST_SCAN_CONFIG_ID,
         target_id,
         scanner_id,
-        comment="Explicitly authorized TurboVAS full test scan.",
+        comment="Explicitly authorized YAFVS full test scan.",
     )
     task_id = response_id(response)
     if not task_id:
@@ -929,7 +929,7 @@ def command_status(client: Any, artifact_dir: Path, target_config: FullTestTarge
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Guarded TurboVAS full test scan helper")
+    parser = argparse.ArgumentParser(description="Guarded YAFVS full test scan helper")
     parser.add_argument("command", choices=("preflight", "start", "status"))
     parser.add_argument("--socket", required=True, help="gvmd Unix socket path")
     parser.add_argument("--username", required=True, help="GMP username")

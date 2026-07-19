@@ -5,7 +5,7 @@
 
 /**
  * @file
- * @brief SQL handlers for TurboVAS report metrics.
+ * @brief SQL handlers for YAFVS report metrics.
  */
 
 #include "manage_sql_metrics.h"

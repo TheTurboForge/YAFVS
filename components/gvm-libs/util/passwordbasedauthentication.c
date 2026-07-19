@@ -30,7 +30,7 @@
 #define SHA512_CRYPT_SPEC_MAX_ROUNDS 999999999UL
 #define SHA512_CRYPT_MIN_ROUNDS 1000UL
 #define SHA512_CRYPT_DEFAULT_ROUNDS 5000UL
-// Keep attacker-controlled verification cost within 50 times TurboVAS's
+// Keep attacker-controlled verification cost within 50 times YAFVS's
 // 20,000-round generation default while retaining a generous upgrade range.
 #define PBA_MAX_ROUNDS 1000000UL
 #ifndef CRYPT_GENSALT_OUTPUT_SIZE

@@ -10,7 +10,7 @@
 
 *int* **krb5_gss_prepare_context**(realm: str, kdc: str, host: str, service: str, user: str, password: str);
 
-TurboVAS generates and uses a scanner-owned `/tmp/krb5_*.conf` path. Caller-provided `config_path` and `KRB5_CONFIG` values are ignored. The listed arguments are required.
+YAFVS generates and uses a scanner-owned `/tmp/krb5_*.conf` path. Caller-provided `config_path` and `KRB5_CONFIG` values are ignored. The listed arguments are required.
 
 - realm - The realm of the domain.
 - kdc - The KDC server to use. Can be a comma separated list of servers. The first server in the list is the primary server.

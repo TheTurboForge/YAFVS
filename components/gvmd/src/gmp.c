@@ -17958,7 +17958,7 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
                 XML_ERROR_SYNTAX ("create_task", "Schedule must exist"));
               goto create_task_fail;
             }
-          /* Observer sharing is removed in TurboVAS. */
+          /* Observer sharing is removed in YAFVS. */
 
           if ((scanner == 0) || scanner_type_requires_config (scanner_type (scanner)))
             {

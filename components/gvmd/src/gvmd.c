@@ -211,7 +211,7 @@ static int manager_socket = -1;
 static int manager_socket_2 = -1;
 
 /**
- * @brief Optional private TurboVAS task-stop control socket.
+ * @brief Optional private YAFVS task-stop control socket.
  */
 static int yafvs_control_socket = -1;
 
@@ -2802,7 +2802,7 @@ gvmd (int argc, char** argv, char *env[])
           "<filename>" },
         { "yafvs-control-socket", '\0', 0, G_OPTION_ARG_FILENAME,
           &yafvs_control_socket_path,
-          "Listen for private TurboVAS task-stop control requests at <filename>.",
+          "Listen for private YAFVS task-stop control requests at <filename>.",
           "<filename>" },
         { "user", '\0', 0, G_OPTION_ARG_STRING,
           &user,

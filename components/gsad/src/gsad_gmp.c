@@ -6074,7 +6074,7 @@ delete_report_gmp (gvm_connection_t *connection,
                           response_data);
 }
 
-/* Scope reports are TurboVAS' operator-facing aggregation layer over raw
+/* Scope reports are YAFVS' operator-facing aggregation layer over raw
  * technical scan reports.  GSAD still has to proxy them explicitly because it
  * validates and dispatches every GMP command by name. */
 

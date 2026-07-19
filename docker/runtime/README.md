@@ -1,14 +1,14 @@
 <!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
-# TurboVAS Runtime Groundwork
+# YAFVS Runtime Groundwork
 
 This directory documents the development/runtime Docker scaffolding. It is not a
 production deployment definition yet.
 
 The default Compose stack starts infrastructure services:
 
-- Postgres, using a TurboVAS development image with pg-gvm runtime dependencies
+- Postgres, using a YAFVS development image with pg-gvm runtime dependencies
 - Redis for OpenVAS scanner KB state, using a Unix socket only
 - Mosquitto, with runtime-only credentials and ACLs limited to the retained
   OpenVAS/Notus message flow
@@ -37,7 +37,7 @@ defaults to loopback, but can be explicitly bound for development by setting
 `YAFVS_GSAD_HOST` for one address or comma-separated `YAFVS_GSAD_HOSTS`
 for multiple addresses before startup. The generated GSA `config.js` uses the
 browser's current host so each configured URL can talk back to the same `gsad`
-endpoint. TurboVAS no longer starts the inherited generic Redis service in the
+endpoint. YAFVS no longer starts the inherited generic Redis service in the
 development runtime. The scanner Redis service does not expose a host TCP port.
 The native API sidecar is not published on any host port by default; smoke
 checks reach it from inside the Docker network. Direct development access is an

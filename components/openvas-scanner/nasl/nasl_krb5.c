@@ -180,7 +180,7 @@ build_krb5_credential (lex_ctxt *lexic)
  * The nasl function has two optional parameter:
  * - realm: The realm for which the KDC should be returned. If the realm is not
  * defined, then the env parameter `KRB5_REALM` is used.
- * - config_path: ignored by TurboVAS; the scanner generates and owns the
+ * - config_path: ignored by YAFVS; the scanner generates and owns the
  * /tmp/krb5_*.conf path.
  *
  * This function should only be used for debug purposes.

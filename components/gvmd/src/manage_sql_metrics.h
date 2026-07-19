@@ -5,7 +5,7 @@
 
 /**
  * @file
- * @brief SQL handlers for TurboVAS report metrics.
+ * @brief SQL handlers for YAFVS report metrics.
  */
 
 #ifndef _GVMD_MANAGE_SQL_METRICS_H

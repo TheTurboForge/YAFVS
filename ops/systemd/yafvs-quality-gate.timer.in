@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 [Unit]
-Description=Run the TurboVAS local quality gate daily
+Description=Run the YAFVS local quality gate daily
 Documentation=file:@REPO_ROOT@/README.md
 
 [Timer]

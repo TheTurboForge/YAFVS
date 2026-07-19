@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Exercise TurboVAS scope and scope-report writes over native JSON."""
+"""Exercise YAFVS scope and scope-report writes over native JSON."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 import urllib.parse
 
-SMOKE_SCOPE_PREFIX = "TurboVAS scope smoke"
+SMOKE_SCOPE_PREFIX = "YAFVS scope smoke"
 
 
 def now_iso() -> str:
@@ -410,7 +410,7 @@ def command_smoke(artifact_dir: Path, repo_root: Path, username: str) -> dict[st
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Exercise TurboVAS scope and scope-report writes over native JSON")
+    parser = argparse.ArgumentParser(description="Exercise YAFVS scope and scope-report writes over native JSON")
     parser.add_argument("command", choices=("smoke",))
     parser.add_argument("--username", required=True, help="native API operator name")
     parser.add_argument("--artifact-dir", required=True, help="directory for scope-report artifacts")

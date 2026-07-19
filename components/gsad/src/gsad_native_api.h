@@ -6,7 +6,7 @@
 
 /**
  * @file gsad_native_api.h
- * @brief TurboVAS native API proxy handling.
+ * @brief YAFVS native API proxy handling.
  */
 
 #ifndef _GSAD_NATIVE_API_H

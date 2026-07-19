@@ -9,7 +9,7 @@ use greenbone_scanner_framework::models::{
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-// TurboVAS defaults scanner plugin execution to 180 seconds because it is
+// YAFVS defaults scanner plugin execution to 180 seconds because it is
 // preferable for things to fail quickly.
 const YAFVS_FAST_FAIL_PLUGIN_TIMEOUT_SECONDS: i64 = 180;
 

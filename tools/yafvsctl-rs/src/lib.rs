@@ -13,13 +13,14 @@ use std::path::{Path, PathBuf};
 pub use cli::{Cli, CliCommand, parse_cli};
 pub use commands::{
     command_branding_state, command_c_hardening_check, command_c_hardening_manifest_write,
-    command_deps, command_doctor, command_feed_copy_to_runtime, command_feed_generation_activate,
-    command_feed_generation_rollback, command_feed_generation_runtime_guard,
-    command_feed_generation_stage, command_feed_generation_state, command_feed_state,
-    command_gsa_npm_audit, command_inventory, command_license_report, command_logs,
-    command_native_api_cargo_audit, command_native_api_semgrep_audit, command_osv_lockfile_audit,
-    command_path_coupling_state, command_quality_gate_schedule, command_quality_gate_state,
-    command_repository_unavailable, command_runtime_credential_smoke, command_runtime_data_state,
+    command_deps, command_doctor, command_down, command_feed_copy_to_runtime,
+    command_feed_generation_activate, command_feed_generation_rollback,
+    command_feed_generation_runtime_guard, command_feed_generation_stage,
+    command_feed_generation_state, command_feed_state, command_gsa_npm_audit, command_inventory,
+    command_license_report, command_logs, command_native_api_cargo_audit,
+    command_native_api_semgrep_audit, command_osv_lockfile_audit, command_path_coupling_state,
+    command_quality_gate_schedule, command_quality_gate_state, command_repository_unavailable,
+    command_runtime_app_down, command_runtime_credential_smoke, command_runtime_data_state,
     command_runtime_db_introspect, command_runtime_feed_import_init,
     command_runtime_full_test_scan_preflight, command_runtime_full_test_scan_start,
     command_runtime_full_test_scan_status, command_runtime_gmp_smoke,
@@ -90,6 +91,8 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
             command_security_policy_check(&repo_root, cli.status_only)
         }
         CliCommand::RuntimePlan => command_runtime_plan(&repo_root),
+        CliCommand::Down => command_down(&repo_root),
+        CliCommand::RuntimeAppDown => command_runtime_app_down(&repo_root),
         CliCommand::FeedCopyToRuntime => command_feed_copy_to_runtime(&repo_root),
         CliCommand::Deps { component } => command_deps(&repo_root, component.as_deref()),
         CliCommand::RuntimeFeedImportInit => command_runtime_feed_import_init(&repo_root),

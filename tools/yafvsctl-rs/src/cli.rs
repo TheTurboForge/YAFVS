@@ -101,6 +101,10 @@ pub enum CliCommand {
     SecurityPolicyCheck,
     /// Show the persistent Docker runtime plan.
     RuntimePlan,
+    /// Stop and remove the development runtime infrastructure and application containers.
+    Down,
+    /// Stop and remove experimental application runtime containers.
+    RuntimeAppDown,
     /// Refuse unsafe sequential copying into live feed paths.
     FeedCopyToRuntime,
     /// Check dependency readiness, optionally for one component.
@@ -231,6 +235,8 @@ impl CliCommand {
             Self::OsvLockfileAudit => "osv-lockfile-audit",
             Self::SecurityPolicyCheck => "security-policy-check",
             Self::RuntimePlan => "runtime-plan",
+            Self::Down => "down",
+            Self::RuntimeAppDown => "runtime-app-down",
             Self::FeedCopyToRuntime => "feed-copy-to-runtime",
             Self::Deps { .. } => "deps",
             Self::RuntimeFeedImportInit => "runtime-feed-import-init",

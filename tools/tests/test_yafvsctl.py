@@ -1109,6 +1109,14 @@ class YAFVSCtlTests(unittest.TestCase):
                     env.pop("YAFVS_ENABLE_QUALITY_GATE_SCHEDULE", None)
                 if arguments[0] in {"runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot"}:
                     env["COMPOSE_PROJECT_NAME"] = "yafvsctl-parity-no-runtime"
+                if arguments[0] in {"down", "runtime-app-down"}:
+                    shutdown_runtime = Path(parity_runtime) / arguments[0]
+                    shutdown_runtime.mkdir()
+                    (shutdown_runtime / "run").write_text(
+                        "force the lifecycle lock to fail closed before Docker\n",
+                        encoding="utf-8",
+                    )
+                    env["YAFVS_RUNTIME_DIR"] = str(shutdown_runtime)
                 rust_result = invoke(rust_command, arguments, env=env)
                 expected_exit_codes = (
                     expected_exit_code
@@ -1174,6 +1182,8 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["deps", "gsa", "--json"], 0, "pass"),
                 (["deps", "definitely-invalid", "--json"], 1, "fail"),
                 (["runtime-plan", "--json"], 0, "warn"),
+                (["down", "--json"], 1, "fail"),
+                (["runtime-app-down", "--json"], 1, "fail"),
                 (["quality-gate-state", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["quality-gate-state", "--status-only", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["feed-state", "--json"], 0, ("pass", "warn")),

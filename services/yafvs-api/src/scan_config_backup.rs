@@ -37,7 +37,8 @@ pub(crate) const MAX_SCAN_CONFIG_BACKUP_BODY_BYTES: usize = 2 * 1024 * 1024;
 const MAX_SCAN_CONFIG_BACKUP_FAMILIES: usize = 512;
 const MAX_SCAN_CONFIG_BACKUP_SELECTOR_ROWS: usize = 16 * 1024;
 const MAX_SCAN_CONFIG_BACKUP_PREFERENCES: usize = 4096;
-const BACKUP_SCHEMA: &str = "turbovas.scan-config-backup";
+const BACKUP_SCHEMA: &str = "yafvs.scan-config-backup";
+const LEGACY_BACKUP_SCHEMA: &str = "turbovas.scan-config-backup";
 const BACKUP_VERSION: i32 = 1;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -299,7 +300,7 @@ pub(crate) async fn import_scan_config(
 fn validate_scan_config_backup_document(
     document: ScanConfigBackupDocument,
 ) -> Result<ValidatedScanConfigBackup, ApiError> {
-    if document.schema_name != BACKUP_SCHEMA {
+    if document.schema_name != BACKUP_SCHEMA && document.schema_name != LEGACY_BACKUP_SCHEMA {
         return Err(ApiError::BadRequest(
             "unsupported scan-config backup schema".to_string(),
         ));
@@ -854,6 +855,7 @@ mod tests {
         assert_eq!(serialized.matches("\"value\"").count(), 1);
         let serialized_value: serde_json::Value =
             serde_json::from_str(&serialized).expect("serialized backup JSON");
+        assert_eq!(serialized_value["schema"], BACKUP_SCHEMA);
         assert!(
             serialized_value["omitted_secret_preferences"][0]
                 .get("value")
@@ -868,6 +870,29 @@ mod tests {
             "tags",
         ] {
             assert!(!serialized.contains(forbidden), "backup leaked {forbidden}");
+        }
+    }
+
+    #[test]
+    fn backup_document_accepts_current_and_legacy_v1_schemas_only() {
+        for schema in [BACKUP_SCHEMA, LEGACY_BACKUP_SCHEMA] {
+            let mut value = backup_document();
+            value["schema"] = serde_json::json!(schema);
+            let document = serde_json::from_value::<ScanConfigBackupDocument>(value)
+                .expect("strict JSON shape");
+            assert!(validate_scan_config_backup_document(document).is_ok());
+        }
+
+        for schema in [
+            "turbovas.scan-config-backups",
+            "yafvs.scan-config-backup-v1",
+            "other",
+        ] {
+            let mut value = backup_document();
+            value["schema"] = serde_json::json!(schema);
+            let document = serde_json::from_value::<ScanConfigBackupDocument>(value)
+                .expect("strict JSON shape");
+            assert!(validate_scan_config_backup_document(document).is_err());
         }
     }
 

@@ -13596,7 +13596,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": scan_config_uuid, "comment": payload["comment"], "name": payload["name"], "predefined": False}) + "\n201", "")
                 if method == "POST" and path == "/api/v1/scan-configs/import":
                     payload = json.loads(body)
-                    self.assertEqual(payload["schema"], "turbovas.scan-config-backup")
+                    self.assertEqual(payload["schema"], "yafvs.scan-config-backup")
                     self.assertEqual(payload["version"], 1)
                     self.assertTrue(payload["name"].endswith("-import"))
                     scan_config_import_document["value"] = payload
@@ -13664,7 +13664,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": scan_config_clone_uuid, "comment": payload["comment"], "name": payload["name"], "predefined": False}) + "\n201", "")
                 if method == "GET" and path == f"/api/v1/scan-configs/{scan_config_uuid}/backup":
                     payload = {
-                        "schema": "turbovas.scan-config-backup",
+                        "schema": "yafvs.scan-config-backup",
                         "version": 1,
                         "usage_type": "scan",
                         "name": scan_config_definition["name"],

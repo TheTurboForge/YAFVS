@@ -1,11 +1,11 @@
 {
-  "name": "turbovas-web-ui",
+  "name": "yafvs-web-ui",
   "version": "0.1.0-alpha.0",
   "description": "YAFVS web UI",
   "keywords": [
     "gmp",
     "scanner",
-    "turbovas",
+    "yafvs",
     "vulnerability-management"
   ],
   "repository": {

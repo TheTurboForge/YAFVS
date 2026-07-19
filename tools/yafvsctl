@@ -19363,7 +19363,7 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                 and scan_config_backup_status == 200
                 and isinstance(scan_config_backup_json, dict)
                 and set(scan_config_backup_json) == scan_config_backup_keys
-                and scan_config_backup_json.get("schema") == "turbovas.scan-config-backup"
+                and scan_config_backup_json.get("schema") == "yafvs.scan-config-backup"
                 and scan_config_backup_json.get("version") == 1
                 and scan_config_backup_json.get("usage_type") == "scan"
                 and scan_config_backup_json.get("name") == scan_config_name

@@ -357,7 +357,7 @@ describe('ScanConfigCommand tests', () => {
 
   test('should import a scan config JSON backup through native API', async () => {
     const backup = {
-      schema: 'turbovas.scan-config-backup',
+      schema: 'yafvs.scan-config-backup',
       version: 1,
       usage_type: 'scan',
       name: 'Imported config',

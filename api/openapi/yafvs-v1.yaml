@@ -5218,7 +5218,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scan-config-versioned-json-backup
       summary: Download a portable scan-config JSON backup
-      description: Returns version 1 of the strict turbovas.scan-config-backup JSON document for one scan config. The document contains only scan usage, explicit name/comment, the complete current feed-family inventory, families_growing, canonical type-1 family and type-2 NVT selector rows, and explicit non-secret preference overrides. It excludes source UUID, owner, predefined state, timestamps, tasks, tags, password/file values and defaults. Configured password/file identities are listed without values so a later import can validate and intentionally omit them.
+      description: Returns version 1 of the strict yafvs.scan-config-backup JSON document for one scan config. The document contains only scan usage, explicit name/comment, the complete current feed-family inventory, families_growing, canonical type-1 family and type-2 NVT selector rows, and explicit non-secret preference overrides. It excludes source UUID, owner, predefined state, timestamps, tasks, tags, password/file values and defaults. Configured password/file identities are listed without values so a later import can validate and intentionally omit them.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -9192,7 +9192,7 @@ components:
       properties:
         schema:
           type: string
-          enum: [turbovas.scan-config-backup]
+          enum: [yafvs.scan-config-backup]
         version:
           type: integer
           enum: [1]

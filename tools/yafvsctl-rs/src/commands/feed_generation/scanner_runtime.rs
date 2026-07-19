@@ -9,12 +9,36 @@ use crate::commands::common::runtime_dir;
 use crate::commands::secret::{read_or_create_runtime_secret, write_private_text};
 use crate::result::Finding;
 use serde_json::json;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 const MQTT_OPENVAS_SECRET: &str = "mqtt-openvas-password";
 const OPENVAS_CONFIG_RELATIVE: &str = "state/ospd/openvas.conf";
 const REDIS_SOCKET: &str = "/run/redis-openvas/redis.sock";
+
+pub(crate) struct OpenvasRuntimeConfig {
+    pub(crate) path: PathBuf,
+    pub(crate) secret_created: bool,
+}
+
+pub(crate) enum OpenvasRuntimeConfigError {
+    Secret { path: PathBuf, reason: String },
+    Write { path: PathBuf, reason: String },
+}
+
+impl OpenvasRuntimeConfigError {
+    pub(crate) fn path(&self) -> &Path {
+        match self {
+            Self::Secret { path, .. } | Self::Write { path, .. } => path,
+        }
+    }
+
+    pub(crate) fn reason(&self) -> &str {
+        match self {
+            Self::Secret { reason, .. } | Self::Write { reason, .. } => reason,
+        }
+    }
+}
 
 pub(super) fn verify_scanner_redis(runtime: &ServiceRuntime<'_>) -> StepOutcome {
     verify_scanner_redis_with(runtime, 20, Duration::from_secs(1))
@@ -76,24 +100,23 @@ fn verify_scanner_redis_with(
 }
 
 pub(super) fn ensure_openvas_runtime_config(repo_root: &Path) -> StepOutcome {
-    let path = runtime_dir(repo_root).join(OPENVAS_CONFIG_RELATIVE);
-    let (secret, created) = match read_or_create_runtime_secret(repo_root, MQTT_OPENVAS_SECRET) {
-        Ok(secret) => secret,
-        Err(error) => {
+    let config = match prepare_openvas_runtime_config(repo_root) {
+        Ok(config) => config,
+        Err(OpenvasRuntimeConfigError::Secret { path, reason }) => {
             return failure(
                 "Scanner runtime configuration stopped because the OpenVAS MQTT secret could not be read safely.",
                 &path,
-                &error.to_string(),
+                &reason,
+            );
+        }
+        Err(OpenvasRuntimeConfigError::Write { path, reason }) => {
+            return failure(
+                "Scanner runtime configuration could not be written atomically.",
+                &path,
+                &reason,
             );
         }
     };
-    if let Err(error) = write_private_text(&path, &render_openvas_config(&secret)) {
-        return failure(
-            "Scanner runtime configuration could not be written atomically.",
-            &path,
-            &error.to_string(),
-        );
-    }
     StepOutcome::with_evidence(
         StepStatus::Pass,
         vec![Finding::new(
@@ -102,10 +125,31 @@ pub(super) fn ensure_openvas_runtime_config(repo_root: &Path) -> StepOutcome {
             "OpenVAS runtime configuration uses the active Redis socket and immutable feed mapping."
                 .to_owned(),
         )
-        .with_path(&path.display().to_string())
-        .with_details(json!({"mqtt_secret_created": created}))],
-        vec![path.display().to_string()],
+        .with_path(&config.path.display().to_string())
+        .with_details(json!({"mqtt_secret_created": config.secret_created}))],
+        vec![config.path.display().to_string()],
     )
+}
+
+pub(crate) fn prepare_openvas_runtime_config(
+    repo_root: &Path,
+) -> Result<OpenvasRuntimeConfig, OpenvasRuntimeConfigError> {
+    let path = runtime_dir(repo_root).join(OPENVAS_CONFIG_RELATIVE);
+    let (secret, secret_created) = read_or_create_runtime_secret(repo_root, MQTT_OPENVAS_SECRET)
+        .map_err(|error| OpenvasRuntimeConfigError::Secret {
+            path: path.clone(),
+            reason: error.to_string(),
+        })?;
+    write_private_text(&path, &render_openvas_config(&secret)).map_err(|error| {
+        OpenvasRuntimeConfigError::Write {
+            path: path.clone(),
+            reason: error.to_string(),
+        }
+    })?;
+    Ok(OpenvasRuntimeConfig {
+        path,
+        secret_created,
+    })
 }
 
 fn failure(message: &str, path: &Path, reason: &str) -> StepOutcome {

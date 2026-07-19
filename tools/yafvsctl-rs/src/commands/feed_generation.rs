@@ -24,6 +24,8 @@ mod service_runtime;
 mod stage;
 mod transition;
 
+pub(crate) use scanner_runtime::prepare_openvas_runtime_config;
+
 use super::common::{compact_finding, metadata, runtime_dir};
 use super::runtime_lock::{
     DEFAULT_RUNTIME_LOCK_TIMEOUT, FEED_ACTIVATION_LOCK, RuntimeLockError, RuntimeOperationLock,

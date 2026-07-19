@@ -885,39 +885,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertTrue(yafvsctl.compose_app_up_transient_error("removal of container abc123 is already in progress"))
         self.assertFalse(yafvsctl.compose_app_up_transient_error("database migration failed"))
 
-    def test_gvmd_database_version_finding_matches_source_schema(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            cmake = root / "components" / "gvmd" / "CMakeLists.txt"
-            cmake.parent.mkdir(parents=True)
-            cmake.write_text("set(GVMD_DATABASE_VERSION 287)\n", encoding="utf-8")
-            with unittest.mock.patch.object(
-                yafvsctl,
-                "psql",
-                return_value=subprocess.CompletedProcess([], 0, "287\n", ""),
-            ):
-                result = yafvsctl.gvmd_database_version_finding(root)
-
-        self.assertEqual(result["status"], "pass")
-        self.assertEqual(result["details"]["expected"], 287)
-        self.assertEqual(result["details"]["observed"], "287")
-
-    def test_gvmd_database_version_finding_rejects_stale_runtime(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            cmake = root / "components" / "gvmd" / "CMakeLists.txt"
-            cmake.parent.mkdir(parents=True)
-            cmake.write_text("set(GVMD_DATABASE_VERSION 287)\n", encoding="utf-8")
-            with unittest.mock.patch.object(
-                yafvsctl,
-                "psql",
-                return_value=subprocess.CompletedProcess([], 0, "286\n", ""),
-            ):
-                result = yafvsctl.gvmd_database_version_finding(root)
-
-        self.assertEqual(result["status"], "fail")
-        self.assertIn("without proving", result["message"])
-
     def test_runtime_app_up_validates_mount_graph_before_infrastructure(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         function = source[source.index("def _command_runtime_app_up_unlocked"):source.index("def command_runtime_app_up")]
@@ -967,7 +934,6 @@ class YAFVSCtlTests(unittest.TestCase):
         )
         for function_name in (
             "command_build_ui",
-            "command_runtime_manager_init",
             "command_runtime_scanner_register",
             "command_runtime_app_up",
             "command_runtime_native_api_rebuild",
@@ -1014,6 +980,17 @@ class YAFVSCtlTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("RuntimeOperationLock::acquire", scanner_redis_source)
         self.assertIn("FEED_ACTIVATION_LOCK", scanner_redis_source)
+
+        runtime_manager_source = (
+            Path(__file__).resolve().parents[1]
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "runtime_manager_init.rs"
+        ).read_text(encoding="utf-8")
+        self.assertIn("RuntimeOperationLock::acquire", runtime_manager_source)
+        self.assertIn("FEED_ACTIVATION_LOCK", runtime_manager_source)
+        self.assertIn("RUNTIME_MANAGER_LOCK", runtime_manager_source)
 
         error = yafvsctl.RuntimeLockTimeout(
             yafvsctl.FEED_ACTIVATION_LOCK,
@@ -1439,7 +1416,6 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_runtime_just_wrappers_forward_args(self):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         wrappers = [
-            "runtime-manager-init",
             "runtime-scanner-register",
             "runtime-app-up",
             "runtime-app-smoke",
@@ -7854,12 +7830,37 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_gsa_and_runtime_manager_locks_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
+        manager_source = (
+            Path(__file__).resolve().parents[1]
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "runtime_manager_init.rs"
+        ).read_text(encoding="utf-8")
         self.assertIn("GSA_OPERATION_LOCK", source)
         self.assertIn("RUNTIME_MANAGER_LOCK", source)
         self.assertIn("def acquire_runtime_lock", source)
         self.assertIn("def command_build_node_unlocked", source)
         self.assertIn("quality-gate GSA checks", source)
-        self.assertIn("def command_runtime_manager_init_unlocked", source)
+        self.assertIn("RuntimeOperationLock::acquire", manager_source)
+        self.assertIn("RUNTIME_MANAGER_LOCK", manager_source)
+
+    def test_runtime_manager_init_is_owned_directly_by_rust(self):
+        python_source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(
+            encoding="utf-8"
+        )
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(
+            encoding="utf-8"
+        )
+        recipe = justfile.split("runtime-manager-init *args:\n", 1)[1].split(
+            "\n\n", 1
+        )[0]
+        self.assertNotIn('add_parser("runtime-manager-init"', python_source)
+        self.assertNotIn('args.command == "runtime-manager-init"', python_source)
+        self.assertNotIn("def command_runtime_manager_init", python_source)
+        self.assertIn("cargo run --quiet --locked", recipe)
+        self.assertIn('-- runtime-manager-init "$@"', recipe)
+        self.assertNotIn("tools/yafvsctl ", recipe)
 
     def test_gsa_web_fast_script_is_one_shot(self):
         package_path = Path(__file__).resolve().parents[2] / "components" / "gsa" / "package.json"

@@ -4614,47 +4614,6 @@ def run_gvmd_oneoff(
 
 
 
-def source_gvmd_database_version(repo_root: Path) -> int | None:
-    cmake_path = repo_root / "components" / "gvmd" / "CMakeLists.txt"
-    try:
-        cmake = cmake_path.read_text(encoding="utf-8")
-    except OSError:
-        return None
-    match = re.search(
-        r"(?m)^\s*set\(GVMD_DATABASE_VERSION\s+([0-9]+)\s*\)\s*$",
-        cmake,
-    )
-    return int(match.group(1)) if match else None
-
-
-def gvmd_database_version_finding(repo_root: Path) -> dict[str, Any]:
-    expected = source_gvmd_database_version(repo_root)
-    query = psql(
-        repo_root,
-        "SELECT COALESCE((SELECT value FROM meta WHERE name = 'database_version'), 'missing');",
-    )
-    observed = psql_value(query) if query.returncode == 0 else ""
-    matches = expected is not None and observed == str(expected)
-    details = {
-        "expected": expected,
-        "observed": observed or None,
-        "output_tail": output_tail(query.stdout, 40),
-    }
-    if matches:
-        return finding(
-            "pass",
-            "gvmd.migrate-version",
-            f"Manager database version matches source schema {expected}.",
-            details=details,
-        )
-    return finding(
-        "fail",
-        "gvmd.migrate-version",
-        "Manager migration exited without proving the source database schema version.",
-        details=details,
-    )
-
-
 def parse_user_uuid(output: str, username: str) -> str | None:
     for line in output.splitlines():
         if username in line:
@@ -4671,19 +4630,6 @@ def parse_user_uuid(output: str, username: str) -> str | None:
 def service_log_tail(repo_root: Path, service: str, lines: int = 80) -> list[str]:
     result = run_command(compose_command(repo_root, "logs", "--tail", str(lines), service), repo_root, env=runtime_env(repo_root))
     return result.stdout.splitlines()[-lines:]
-
-
-def runtime_manager_diagnostics(repo_root: Path) -> dict[str, Any]:
-    ps = run_command(compose_command(repo_root, "ps", "--all"), repo_root, env=runtime_env(repo_root), timeout=120)
-    return {
-        "compose_ps_exit_code": ps.returncode,
-        "compose_ps_tail": output_tail(ps.stdout, 120),
-        "postgres_running": container_running(repo_root, "postgres"),
-        "gvmd_running": container_running(repo_root, "gvmd"),
-        "gvmd_socket": unix_socket_status(gvmd_socket_path(repo_root)),
-        "gvmd_logs_tail": service_log_tail(repo_root, "gvmd", lines=80),
-        "postgres_logs_tail": service_log_tail(repo_root, "postgres", lines=80),
-    }
 
 
 def runtime_file_tail(path: Path, lines: int = 80) -> list[str]:
@@ -13028,145 +12974,6 @@ def command_runtime_scanner_redis_init(
         "runtime-scanner-redis-init",
         ["runtime-scanner-redis-init"],
     )
-
-
-def command_runtime_manager_init(
-    repo_root: Path,
-    *,
-    lifecycle_managed: bool = False,
-    build_image: bool = False,
-    app_image_ids: dict[str, str] | None = None,
-) -> dict[str, Any]:
-    if lifecycle_managed:
-        return command_runtime_manager_init_with_manager_lock(
-            repo_root,
-            build_image=build_image,
-            app_image_ids=app_image_ids,
-        )
-    try:
-        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-manager-init"):
-            return command_runtime_manager_init_with_manager_lock(
-                repo_root,
-                build_image=build_image,
-                app_image_ids=app_image_ids,
-            )
-    except RuntimeLockTimeout as error:
-        return make_result(
-            "runtime-manager-init",
-            repo_root,
-            "Runtime manager initialization stopped while waiting for the feed lifecycle lock.",
-            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
-            [str(runtime_dir(repo_root))],
-        )
-
-
-def command_runtime_manager_init_with_manager_lock(
-    repo_root: Path,
-    *,
-    build_image: bool = False,
-    app_image_ids: dict[str, str] | None = None,
-) -> dict[str, Any]:
-    try:
-        with acquire_runtime_lock(repo_root, RUNTIME_MANAGER_LOCK, "runtime-manager-init"):
-            return command_runtime_manager_init_unlocked(
-                repo_root,
-                build_image=build_image,
-                app_image_ids=app_image_ids,
-            )
-    except RuntimeLockTimeout as exc:
-        return make_result(
-            "runtime-manager-init",
-            repo_root,
-            "Runtime manager initialization stopped while waiting for another manager operation.",
-            [runtime_lock_timeout_finding(exc, "runtime.manager-lock")],
-            [str(runtime_dir(repo_root))],
-        )
-
-
-def command_runtime_manager_init_unlocked(
-    repo_root: Path,
-    *,
-    build_image: bool = False,
-    app_image_ids: dict[str, str] | None = None,
-) -> dict[str, Any]:
-    findings = ensure_runtime_dirs(repo_root)
-    findings.extend(ensure_build_runtime_dirs(repo_root))
-    db_init = command_runtime_init(repo_root)
-    findings.append(finding(db_init["status"], "runtime.database-init", db_init["summary"], details={"status": db_init["status"]}))
-    if db_init["status"] == "fail":
-        return make_result("runtime-manager-init", repo_root, "Manager initialization stopped at database prerequisites.", findings, db_init["artifacts"])
-
-    password, created = read_or_create_runtime_secret(repo_root, DEV_ADMIN_SECRET, DEV_ADMIN_PASSWORD)
-    secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
-    if password != DEV_ADMIN_PASSWORD:
-        password = DEV_ADMIN_PASSWORD
-
-        write_private_text(secret_path, password + "\n")
-        created = False
-        findings.append(finding("pass", "runtime.admin-secret", "Development admin password was aligned to the local default in persistent runtime secrets.", str(secret_path)))
-    else:
-        findings.append(finding("pass", "runtime.admin-secret", f"Development admin password {'created' if created else 'reused'} in persistent runtime secrets.", str(secret_path)))
-    findings.extend(cert_file_findings(repo_root))
-
-    if build_image:
-        findings.append(finding("fail", "compose.app-image", "Manager initialization no longer builds application images; run runtime-app-build explicitly."))
-        return make_result("runtime-manager-init", repo_root, "Manager initialization stopped because implicit application builds are disabled.", findings, [str(runtime_dir(repo_root))])
-    if app_image_ids is None:
-        receipt, image_error = require_app_deployment_receipt(
-            repo_root, app_env=deployed_app_env(repo_root)
-        )
-        if image_error is not None or receipt is None:
-            findings.append(finding("fail", "compose.app-image", image_error))
-            return make_result("runtime-manager-init", repo_root, "Manager initialization stopped because a verified application deployment receipt was unavailable.", findings, [str(runtime_dir(repo_root))])
-        app_image_ids = receipt["image_ids"]
-    validate_app_service_image_ids(app_image_ids)
-    findings.append(finding("pass", "compose.app-image", "Manager initialization uses prepared application images without rebuilding."))
-
-    migrate = run_gvmd_oneoff(repo_root, ["--migrate"], no_deps=False, app_image_ids=app_image_ids)
-    migrate_details: dict[str, Any] = {"output_tail": output_tail(migrate.stdout, 100, [password])}
-    if migrate.returncode != 0:
-        migrate_details["runtime_manager_diagnostics"] = runtime_manager_diagnostics(repo_root)
-    findings.append(finding("pass" if migrate.returncode == 0 else "fail", "gvmd.migrate", f"gvmd --migrate exit code {migrate.returncode}.", details=migrate_details))
-    if migrate.returncode != 0:
-        return make_result("runtime-manager-init", repo_root, "Manager initialization stopped at database migration.", findings, [str(runtime_dir(repo_root))])
-
-    version_finding = gvmd_database_version_finding(repo_root)
-    findings.append(version_finding)
-    if version_finding["status"] == "fail":
-        return make_result(
-            "runtime-manager-init",
-            repo_root,
-            "Manager initialization stopped because the migrated database version does not match the source schema.",
-            findings,
-            [str(runtime_dir(repo_root))],
-        )
-
-    users = run_gvmd_oneoff(repo_root, ["--get-users", "--verbose"], no_deps=False, app_image_ids=app_image_ids)
-    admin_uuid = parse_user_uuid(users.stdout, DEV_ADMIN_USER) if users.returncode == 0 else None
-    findings.append(finding("pass" if users.returncode == 0 else "warn", "gvmd.get-users", f"gvmd --get-users --verbose exit code {users.returncode}.", details={"admin_uuid_found": bool(admin_uuid), "output_tail": output_tail(users.stdout, 80, [password])}))
-
-    if not admin_uuid:
-        create = run_gvmd_oneoff(repo_root, [f"--create-user={DEV_ADMIN_USER}", f"--password={password}", "--disable-password-policy"], no_deps=False, app_image_ids=app_image_ids)
-        findings.append(finding("pass" if create.returncode == 0 else "fail", "gvmd.create-admin", f"Create/verify development admin user exit code {create.returncode}.", details={"output_tail": output_tail(create.stdout, 80, [password])}))
-        if create.returncode != 0:
-            return make_result("runtime-manager-init", repo_root, "Manager initialization stopped at admin user creation.", findings, [str(runtime_dir(repo_root))])
-        users = run_gvmd_oneoff(repo_root, ["--get-users", "--verbose"], no_deps=False, app_image_ids=app_image_ids)
-        admin_uuid = parse_user_uuid(users.stdout, DEV_ADMIN_USER) if users.returncode == 0 else None
-        findings.append(finding("pass" if admin_uuid else "warn", "gvmd.admin-uuid", f"Development admin UUID {'found' if admin_uuid else 'not found after creation'}.", details={"admin_uuid": admin_uuid, "output_tail": output_tail(users.stdout, 80, [password])}))
-
-    if admin_uuid:
-        update_password = run_gvmd_oneoff(repo_root, [f"--user={DEV_ADMIN_USER}", f"--new-password={password}", "--disable-password-policy"], no_deps=False, app_image_ids=app_image_ids)
-        findings.append(finding("pass" if update_password.returncode == 0 else "fail", "gvmd.admin-password", f"Set development admin password exit code {update_password.returncode}.", details={"output_tail": output_tail(update_password.stdout, 80, [password])}))
-        if update_password.returncode != 0:
-            return make_result("runtime-manager-init", repo_root, "Manager initialization stopped at admin password update.", findings, [str(runtime_dir(repo_root))])
-
-    if admin_uuid:
-        owner = run_gvmd_oneoff(repo_root, [f"--modify-setting={FEED_IMPORT_OWNER_SETTING}", f"--value={admin_uuid}"], no_deps=False, app_image_ids=app_image_ids)
-        findings.append(finding("pass" if owner.returncode == 0 else "warn", "gvmd.feed-owner", f"Set feed import owner exit code {owner.returncode}.", details={"admin_uuid": admin_uuid, "output_tail": output_tail(owner.stdout, 80, [password])}))
-    else:
-        findings.append(finding("warn", "gvmd.feed-owner", "Feed import owner was not set because the admin UUID could not be determined."))
-
-    return make_result("runtime-manager-init", repo_root, "Runtime manager initialization completed.", findings, [str(runtime_dir(repo_root)), str(secret_path)])
 
 
 def command_runtime_gmp_smoke(repo_root: Path) -> dict[str, Any]:
@@ -21582,7 +21389,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("build-ui", parents=[common], help="build the web UI")
     subparsers.add_parser("build-python", parents=[common], help="build/import-check Python components")
     subparsers.add_parser("build-baseline", parents=[common], help="build the inherited stack baseline")
-    subparsers.add_parser("runtime-manager-init", parents=[common], help="initialize persistent gvmd database/user prerequisites")
     subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
     runtime_app_up = subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
     runtime_app_up.add_argument("--status-only", action="store_true", help="emit compact app startup status and only non-pass findings for chat-safe validation")
@@ -21638,8 +21444,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_build_python_chain(repo_root)
     elif args.command == "build-baseline":
         result = command_build_baseline(repo_root)
-    elif args.command == "runtime-manager-init":
-        result = command_runtime_manager_init(repo_root)
     elif args.command == "runtime-scanner-register":
         result = command_runtime_scanner_register(repo_root)
     elif args.command == "runtime-app-up":

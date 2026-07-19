@@ -33,7 +33,172 @@ pub(crate) fn prepare_secure_artifact_parent(path: &Path) -> Result<(), String> 
     validate_secure_artifact_target(&parent, &target_name)
 }
 
+pub(crate) struct SecureArtifactTransaction {
+    parent: OwnedFd,
+    target: CString,
+    temporary: CString,
+    file: Option<File>,
+    overwrite: bool,
+    committed: bool,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum ArtifactCommit {
+    Durable,
+    InstalledDurabilityUnknown(String),
+}
+
+impl SecureArtifactTransaction {
+    pub(crate) fn file(&self) -> &File {
+        self.file.as_ref().expect("transaction file remains open")
+    }
+
+    pub(crate) fn file_mut(&mut self) -> &mut File {
+        self.file.as_mut().expect("transaction file remains open")
+    }
+
+    pub(crate) fn commit(self) -> Result<ArtifactCommit, String> {
+        self.commit_with_directory_sync(|directory_fd| {
+            // SAFETY: fsync accepts the held directory descriptor.
+            if unsafe { libc::fsync(directory_fd) } == 0 {
+                Ok(())
+            } else {
+                Err(std::io::Error::last_os_error())
+            }
+        })
+    }
+
+    fn commit_with_directory_sync(
+        mut self,
+        sync_directory: impl FnOnce(i32) -> std::io::Result<()>,
+    ) -> Result<ArtifactCommit, String> {
+        self.file()
+            .sync_all()
+            .map_err(|error| format!("temporary artifact could not be persisted: {error}"))?;
+        validate_temporary_identity(&self.parent, &self.temporary, self.file())?;
+        if self.overwrite {
+            validate_secure_artifact_target(&self.parent, &self.target)?;
+            // SAFETY: both names are relative to the same held directory. The
+            // source identity was just matched to the still-open descriptor.
+            if unsafe {
+                libc::renameat(
+                    self.parent.as_raw_fd(),
+                    self.temporary.as_ptr(),
+                    self.parent.as_raw_fd(),
+                    self.target.as_ptr(),
+                )
+            } != 0
+            {
+                return Err(format!(
+                    "artifact could not be atomically installed: {}",
+                    std::io::Error::last_os_error()
+                ));
+            }
+        } else {
+            // SAFETY: renameat2 is constrained to the held directory and
+            // RENAME_NOREPLACE fails atomically with EEXIST if another process
+            // won the target name.
+            if unsafe {
+                libc::renameat2(
+                    self.parent.as_raw_fd(),
+                    self.temporary.as_ptr(),
+                    self.parent.as_raw_fd(),
+                    self.target.as_ptr(),
+                    libc::RENAME_NOREPLACE,
+                )
+            } != 0
+            {
+                return Err(format!(
+                    "artifact target already exists or could not be installed without replacement: {}",
+                    std::io::Error::last_os_error()
+                ));
+            }
+        }
+        self.committed = true;
+        self.file.take();
+        match sync_directory(self.parent.as_raw_fd()) {
+            Ok(()) => Ok(ArtifactCommit::Durable),
+            Err(error) => Ok(ArtifactCommit::InstalledDurabilityUnknown(format!(
+                "artifact was installed but its directory durability could not be confirmed: {error}"
+            ))),
+        }
+    }
+}
+
+impl Drop for SecureArtifactTransaction {
+    fn drop(&mut self) {
+        if self.committed {
+            return;
+        }
+        if self.file.as_ref().is_some_and(|file| {
+            validate_temporary_identity(&self.parent, &self.temporary, file).is_ok()
+        }) {
+            // SAFETY: cleanup is constrained to the held parent and the path
+            // identity was just matched to the still-open descriptor.
+            unsafe {
+                libc::unlinkat(self.parent.as_raw_fd(), self.temporary.as_ptr(), 0);
+            }
+        }
+        self.file.take();
+    }
+}
+
+pub(crate) fn begin_secure_artifact_transaction(
+    path: &Path,
+    overwrite: bool,
+) -> Result<SecureArtifactTransaction, String> {
+    let (parent, target) = open_existing_artifact_parent(path)?;
+    let target_exists = secure_artifact_target_exists(&parent, &target)?;
+    if target_exists && !overwrite {
+        return Err("artifact target already exists; enable overwrite to replace it".into());
+    }
+    for counter in 0..100_u32 {
+        let temporary = temporary_name(&target, counter)?;
+        // SAFETY: parent and temporary are valid. O_EXCL/O_NOFOLLOW create a
+        // private exact entry in the already validated output directory.
+        let descriptor = unsafe {
+            libc::openat(
+                parent.as_raw_fd(),
+                temporary.as_ptr(),
+                libc::O_RDWR | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+                0o600,
+            )
+        };
+        if descriptor < 0 {
+            if std::io::Error::last_os_error().raw_os_error() == Some(libc::EEXIST) {
+                continue;
+            }
+            return Err(format!(
+                "private temporary artifact could not be created: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        // SAFETY: openat returned a new owned descriptor.
+        let file = unsafe { File::from_raw_fd(descriptor) };
+        return Ok(SecureArtifactTransaction {
+            parent,
+            target,
+            temporary,
+            file: Some(file),
+            overwrite,
+            committed: false,
+        });
+    }
+    Err("could not allocate a private temporary artifact".into())
+}
+
 fn open_artifact_parent(path: &Path) -> Result<(OwnedFd, CString), String> {
+    open_artifact_parent_with(path, true)
+}
+
+fn open_existing_artifact_parent(path: &Path) -> Result<(OwnedFd, CString), String> {
+    open_artifact_parent_with(path, false)
+}
+
+fn open_artifact_parent_with(
+    path: &Path,
+    create_directories: bool,
+) -> Result<(OwnedFd, CString), String> {
     let absolute = if path.is_absolute() {
         path.to_path_buf()
     } else {
@@ -76,7 +241,7 @@ fn open_artifact_parent(path: &Path) -> Result<(OwnedFd, CString), String> {
     // SAFETY: open returned a new owned descriptor.
     let mut parent = unsafe { OwnedFd::from_raw_fd(root) };
     for part in parts {
-        parent = open_or_create_directory(&parent, &part)?;
+        parent = open_directory(&parent, &part, create_directories)?;
     }
     let mut stat = std::mem::MaybeUninit::<libc::stat>::uninit();
     // SAFETY: parent is open and stat points to writable storage.
@@ -100,7 +265,7 @@ fn open_artifact_parent(path: &Path) -> Result<(OwnedFd, CString), String> {
     Ok((parent, target_name))
 }
 
-fn open_or_create_directory(parent: &OwnedFd, name: &OsString) -> Result<OwnedFd, String> {
+fn open_directory(parent: &OwnedFd, name: &OsString, create: bool) -> Result<OwnedFd, String> {
     let name = CString::new(name.as_bytes())
         .map_err(|_| "artifact directory name contains an invalid byte".to_string())?;
     let open = || {
@@ -115,7 +280,10 @@ fn open_or_create_directory(parent: &OwnedFd, name: &OsString) -> Result<OwnedFd
         }
     };
     let mut descriptor = open();
-    if descriptor < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::ENOENT) {
+    if create
+        && descriptor < 0
+        && std::io::Error::last_os_error().raw_os_error() == Some(libc::ENOENT)
+    {
         // SAFETY: mkdirat is constrained to the held parent descriptor and
         // creates only this exact child component.
         let created = unsafe { libc::mkdirat(parent.as_raw_fd(), name.as_ptr(), 0o700) };
@@ -138,6 +306,10 @@ fn open_or_create_directory(parent: &OwnedFd, name: &OsString) -> Result<OwnedFd
 }
 
 fn validate_secure_artifact_target(parent: &OwnedFd, name: &CString) -> Result<(), String> {
+    secure_artifact_target_exists(parent, name).map(|_| ())
+}
+
+fn secure_artifact_target_exists(parent: &OwnedFd, name: &CString) -> Result<bool, String> {
     let mut stat = std::mem::MaybeUninit::<libc::stat>::uninit();
     // SAFETY: parent and name are valid; AT_SYMLINK_NOFOLLOW inspects rather
     // than follows the destination entry.
@@ -158,30 +330,93 @@ fn validate_secure_artifact_target(parent: &OwnedFd, name: &CString) -> Result<(
         {
             return Err("artifact target is not a private regular file".into());
         }
+        return Ok(true);
     } else if std::io::Error::last_os_error().raw_os_error() != Some(libc::ENOENT) {
         return Err(format!(
             "artifact target could not be inspected safely: {}",
             std::io::Error::last_os_error()
         ));
     }
+    Ok(false)
+}
+
+fn temporary_name(target: &CString, counter: u32) -> Result<CString, String> {
+    let mut entropy = 0_u64;
+    // SAFETY: entropy is valid writable storage for its full length and
+    // GRND_NONBLOCK avoids waiting during artifact preparation.
+    let entropy_bytes = unsafe {
+        libc::getrandom(
+            std::ptr::from_mut(&mut entropy).cast(),
+            std::mem::size_of::<u64>(),
+            libc::GRND_NONBLOCK,
+        )
+    };
+    if entropy_bytes != std::mem::size_of::<u64>() as isize {
+        return Err(format!(
+            "temporary artifact entropy is unavailable: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let mut temporary_bytes = Vec::with_capacity(target.as_bytes().len() + 48);
+    temporary_bytes.push(b'.');
+    temporary_bytes.extend_from_slice(target.as_bytes());
+    temporary_bytes.extend_from_slice(
+        format!(
+            ".tmp-{}-{}-{counter}-{entropy:016x}",
+            std::process::id(),
+            NEXT_TEMPORARY.fetch_add(1, Ordering::Relaxed)
+        )
+        .as_bytes(),
+    );
+    CString::new(temporary_bytes).map_err(|_| "temporary artifact name is invalid".to_string())
+}
+
+fn validate_temporary_identity(
+    parent: &OwnedFd,
+    name: &CString,
+    file: &File,
+) -> Result<(), String> {
+    let mut descriptor_stat = std::mem::MaybeUninit::<libc::stat>::uninit();
+    // SAFETY: file is open and the stat storage is writable.
+    if unsafe { libc::fstat(file.as_raw_fd(), descriptor_stat.as_mut_ptr()) } != 0 {
+        return Err(format!(
+            "temporary artifact descriptor could not be inspected: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    let mut path_stat = std::mem::MaybeUninit::<libc::stat>::uninit();
+    // SAFETY: parent/name are valid and AT_SYMLINK_NOFOLLOW refuses a link.
+    if unsafe {
+        libc::fstatat(
+            parent.as_raw_fd(),
+            name.as_ptr(),
+            path_stat.as_mut_ptr(),
+            libc::AT_SYMLINK_NOFOLLOW,
+        )
+    } != 0
+    {
+        return Err(format!(
+            "temporary artifact path could not be inspected: {}",
+            std::io::Error::last_os_error()
+        ));
+    }
+    // SAFETY: successful fstat/fstatat initialized both values.
+    let descriptor_stat = unsafe { descriptor_stat.assume_init() };
+    let path_stat = unsafe { path_stat.assume_init() };
+    if descriptor_stat.st_dev != path_stat.st_dev
+        || descriptor_stat.st_ino != path_stat.st_ino
+        || path_stat.st_mode & libc::S_IFMT != libc::S_IFREG
+        || path_stat.st_uid != unsafe { libc::getuid() }
+        || path_stat.st_nlink != 1
+    {
+        return Err("temporary artifact path identity changed before installation".into());
+    }
     Ok(())
 }
 
 fn write_atomic(parent: &OwnedFd, name: &CString, contents: &[u8]) -> Result<(), String> {
     for counter in 0..100_u32 {
-        let mut temporary_bytes = Vec::with_capacity(name.as_bytes().len() + 48);
-        temporary_bytes.push(b'.');
-        temporary_bytes.extend_from_slice(name.as_bytes());
-        temporary_bytes.extend_from_slice(
-            format!(
-                ".tmp-{}-{}-{counter}",
-                std::process::id(),
-                NEXT_TEMPORARY.fetch_add(1, Ordering::Relaxed)
-            )
-            .as_bytes(),
-        );
-        let temporary = CString::new(temporary_bytes)
-            .map_err(|_| "temporary artifact name is invalid".to_string())?;
+        let temporary = temporary_name(name, counter)?;
         // SAFETY: parent and temporary are valid; O_EXCL/O_NOFOLLOW make the
         // new file private to this exact directory entry.
         let descriptor = unsafe {
@@ -249,6 +484,7 @@ fn write_atomic(parent: &OwnedFd, name: &CString, contents: &[u8]) -> Result<(),
         }
         return Ok(());
     }
+
     Err("could not allocate a private temporary artifact".into())
 }
 
@@ -266,6 +502,91 @@ mod tests {
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ))
+    }
+
+    #[test]
+    fn streaming_transaction_preserves_no_clobber_and_allows_explicit_overwrite() {
+        let root = temporary_root("transaction");
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("report.pdf");
+        let mut first = begin_secure_artifact_transaction(&path, false).unwrap();
+        first.file_mut().write_all(b"first").unwrap();
+        first.commit().unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"first");
+        assert!(begin_secure_artifact_transaction(&path, false).is_err());
+
+        let mut second = begin_secure_artifact_transaction(&path, true).unwrap();
+        second.file_mut().write_all(b"second").unwrap();
+        second.commit().unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"second");
+        assert_eq!(
+            fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn streaming_transaction_distinguishes_post_install_durability_failure() {
+        let root = temporary_root("transaction-durability");
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("report.pdf");
+        let mut transaction = begin_secure_artifact_transaction(&path, false).unwrap();
+        transaction.file_mut().write_all(b"installed").unwrap();
+        let outcome = transaction
+            .commit_with_directory_sync(|_| Err(std::io::Error::other("sync denied")))
+            .unwrap();
+        assert!(matches!(
+            outcome,
+            ArtifactCommit::InstalledDurabilityUnknown(ref message)
+                if message.contains("sync denied")
+        ));
+        assert_eq!(fs::read(&path).unwrap(), b"installed");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn streaming_transaction_drop_does_not_unlink_a_replaced_temporary_path() {
+        let root = temporary_root("transaction-drop-race");
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("report.pdf");
+        let transaction = begin_secure_artifact_transaction(&target, false).unwrap();
+        let temporary = root.join(transaction.temporary.to_str().unwrap());
+        fs::remove_file(&temporary).unwrap();
+        fs::write(&temporary, b"replacement").unwrap();
+        drop(transaction);
+        assert_eq!(fs::read(&temporary).unwrap(), b"replacement");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn streaming_transaction_refuses_target_and_temporary_name_races() {
+        let root = temporary_root("transaction-race");
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("report.pdf");
+        let mut raced_target = begin_secure_artifact_transaction(&target, false).unwrap();
+        raced_target.file_mut().write_all(b"candidate").unwrap();
+        fs::write(&target, b"raced").unwrap();
+        assert!(raced_target.commit().is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"raced");
+
+        fs::remove_file(&target).unwrap();
+        let mut raced_temporary = begin_secure_artifact_transaction(&target, false).unwrap();
+        raced_temporary.file_mut().write_all(b"candidate").unwrap();
+        let temporary = root.join(raced_temporary.temporary.to_str().unwrap());
+        fs::remove_file(&temporary).unwrap();
+        fs::write(&temporary, b"replacement").unwrap();
+        assert!(raced_temporary.commit().is_err());
+        assert!(!target.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn streaming_transaction_requires_an_existing_safe_parent() {
+        let root = temporary_root("transaction-parent");
+        let path = root.join("missing/report.pdf");
+        assert!(begin_secure_artifact_transaction(&path, false).is_err());
+        assert!(!root.exists());
     }
 
     #[test]

@@ -58,6 +58,21 @@ pub trait CommandRunner {
     ) -> Option<ProcessOutput> {
         self.run_with_input(program, args, cwd, env, timeout, input)
     }
+
+    #[allow(clippy::too_many_arguments)]
+    fn run_with_input_and_fds(
+        &self,
+        _program: &str,
+        _args: &[&str],
+        _cwd: Option<&Path>,
+        _env: Option<&BTreeMap<OsString, OsString>>,
+        _timeout: Option<Duration>,
+        _input: Option<&[u8]>,
+        _inherited_fds: &[RawFd],
+        _file_size_limit: Option<u64>,
+    ) -> Option<ProcessOutput> {
+        None
+    }
 }
 
 #[derive(Debug, Default)]
@@ -104,6 +119,30 @@ impl CommandRunner for SystemCommandRunner {
     ) -> Option<ProcessOutput> {
         run_system_with_input(program, args, cwd, env, timeout, input, Some(inherited_fd))
     }
+
+    #[allow(clippy::too_many_arguments)]
+    fn run_with_input_and_fds(
+        &self,
+        program: &str,
+        args: &[&str],
+        cwd: Option<&Path>,
+        env: Option<&BTreeMap<OsString, OsString>>,
+        timeout: Option<Duration>,
+        input: Option<&[u8]>,
+        inherited_fds: &[RawFd],
+        file_size_limit: Option<u64>,
+    ) -> Option<ProcessOutput> {
+        run_system_with_input_and_fds(
+            program,
+            args,
+            cwd,
+            env,
+            timeout,
+            input,
+            inherited_fds,
+            file_size_limit,
+        )
+    }
 }
 
 fn run_system(
@@ -125,6 +164,21 @@ fn run_system_with_input(
     input: Option<&[u8]>,
     inherited_fd: Option<RawFd>,
 ) -> Option<ProcessOutput> {
+    let inherited_fds = inherited_fd.as_slice();
+    run_system_with_input_and_fds(program, args, cwd, env, timeout, input, inherited_fds, None)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_system_with_input_and_fds(
+    program: &str,
+    args: &[&str],
+    cwd: Option<&Path>,
+    env: Option<&BTreeMap<OsString, OsString>>,
+    timeout: Option<Duration>,
+    input: Option<&[u8]>,
+    inherited_fds: &[RawFd],
+    file_size_limit: Option<u64>,
+) -> Option<ProcessOutput> {
     let mut command = Command::new(program);
     command
         .args(args)
@@ -132,15 +186,40 @@ fn run_system_with_input(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     command.process_group(0);
-    if let Some(fd) = inherited_fd {
-        // SAFETY: pre_exec runs after fork and before exec. fcntl is
-        // async-signal-safe, and the supplied descriptor remains owned by the
-        // parent for the duration of this synchronous command.
+    if !inherited_fds.is_empty() || file_size_limit.is_some() {
+        let inherited_fds = inherited_fds.to_vec();
+        let file_size_limit = file_size_limit
+            .map(libc::rlim_t::try_from)
+            .transpose()
+            .ok()?;
+        // SAFETY: pre_exec runs after fork and before exec. fcntl and setrlimit
+        // are async-signal-safe, and every supplied descriptor remains owned
+        // by the parent for the duration of this synchronous command.
         unsafe {
             command.pre_exec(move || {
-                let flags = libc::fcntl(fd, libc::F_GETFD);
-                if flags < 0 || libc::fcntl(fd, libc::F_SETFD, flags & !libc::FD_CLOEXEC) < 0 {
+                if libc::syscall(
+                    libc::SYS_close_range,
+                    3_u32,
+                    u32::MAX,
+                    libc::CLOSE_RANGE_CLOEXEC,
+                ) != 0
+                {
                     return Err(std::io::Error::last_os_error());
+                }
+                for fd in &inherited_fds {
+                    let flags = libc::fcntl(*fd, libc::F_GETFD);
+                    if flags < 0 || libc::fcntl(*fd, libc::F_SETFD, flags & !libc::FD_CLOEXEC) < 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                }
+                if let Some(limit) = file_size_limit {
+                    let limit = libc::rlimit {
+                        rlim_cur: limit,
+                        rlim_max: limit,
+                    };
+                    if libc::setrlimit(libc::RLIMIT_FSIZE, &limit) != 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
                 }
                 Ok(())
             });
@@ -280,5 +359,78 @@ mod tests {
             .unwrap();
         assert!(output.success);
         assert_eq!(output.stdout, "descriptor-only-value");
+    }
+
+    #[test]
+    fn exact_descriptor_set_survives_exec_and_file_limit_is_enforced() {
+        let first_name = CString::new("yafvsctl-process-first").unwrap();
+        let second_name = CString::new("yafvsctl-process-second").unwrap();
+        let excluded_name = CString::new("yafvsctl-process-excluded").unwrap();
+        // SAFETY: names are valid C strings and both results are checked.
+        let first_raw = unsafe { libc::memfd_create(first_name.as_ptr(), libc::MFD_CLOEXEC) };
+        let second_raw = unsafe { libc::memfd_create(second_name.as_ptr(), libc::MFD_CLOEXEC) };
+        let excluded_raw = unsafe { libc::memfd_create(excluded_name.as_ptr(), 0) };
+        assert!(first_raw >= 0 && second_raw >= 0 && excluded_raw >= 0);
+        // SAFETY: memfd_create returned new owned descriptors.
+        let mut first = unsafe { File::from_raw_fd(first_raw) };
+        // SAFETY: memfd_create returned a new owned descriptor.
+        let mut second = unsafe { File::from_raw_fd(second_raw) };
+        // SAFETY: memfd_create returned a new owned descriptor.
+        let excluded = unsafe { File::from_raw_fd(excluded_raw) };
+        first.write_all(b"first").unwrap();
+        second.write_all(b"second").unwrap();
+        first.seek(SeekFrom::Start(0)).unwrap();
+        second.seek(SeekFrom::Start(0)).unwrap();
+        let first_fd = first.as_raw_fd();
+        let second_fd = second.as_raw_fd();
+        let excluded_fd = excluded.as_raw_fd();
+        let output = SystemCommandRunner
+            .run_with_input_and_fds(
+                "sh",
+                &[
+                    "-c",
+                    "test ! -e \"/proc/self/fd/$3\"; cat \"/proc/self/fd/$1\"; cat \"/proc/self/fd/$2\"",
+                    "sh",
+                    &first_fd.to_string(),
+                    &second_fd.to_string(),
+                    &excluded_fd.to_string(),
+                ],
+                None,
+                None,
+                Some(Duration::from_secs(1)),
+                None,
+                &[first_fd, second_fd],
+                None,
+            )
+            .unwrap();
+        assert!(output.success);
+        assert_eq!(output.stdout, "firstsecond");
+
+        let limited_name = CString::new("yafvsctl-process-limited").unwrap();
+        // SAFETY: name is valid and the result is checked.
+        let limited_raw = unsafe { libc::memfd_create(limited_name.as_ptr(), libc::MFD_CLOEXEC) };
+        assert!(limited_raw >= 0);
+        // SAFETY: memfd_create returned a new owned descriptor.
+        let limited = unsafe { File::from_raw_fd(limited_raw) };
+        let limited_fd = limited.as_raw_fd();
+        let output = SystemCommandRunner
+            .run_with_input_and_fds(
+                "sh",
+                &[
+                    "-c",
+                    "printf xx >\"/proc/self/fd/$1\"",
+                    "sh",
+                    &limited_fd.to_string(),
+                ],
+                None,
+                None,
+                Some(Duration::from_secs(1)),
+                None,
+                &[limited_fd],
+                Some(1),
+            )
+            .unwrap();
+        assert!(!output.success);
+        assert!(limited.metadata().unwrap().len() <= 1);
     }
 }

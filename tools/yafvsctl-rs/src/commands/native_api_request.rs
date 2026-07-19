@@ -50,6 +50,130 @@ pub fn command_native_api_request(
     )
 }
 
+pub(crate) struct GuardedDirectBinaryDownload {
+    pub(crate) output: ProcessOutput,
+    pub(crate) http_status: Option<i64>,
+    pub(crate) content_type: Option<String>,
+    pub(crate) reported_bytes: Option<u64>,
+    pub(crate) cap_exceeded: bool,
+    pub(crate) config: Finding,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn guarded_direct_api_binary_download(
+    repo_root: &Path,
+    path: &str,
+    max_bytes: u64,
+    output: &File,
+    config_check: &str,
+    token_check: &str,
+    runner: &dyn CommandRunner,
+) -> Result<GuardedDirectBinaryDownload, Vec<Finding>> {
+    let environment = direct_runtime_environment(repo_root, runner).map_err(|_| {
+        vec![Finding::new(
+            "fail",
+            config_check,
+            "Direct native API host, port, or bind settings are malformed.".into(),
+        )]
+    })?;
+    let config = direct_config_shape_finding(&environment, config_check);
+    if config.status == "fail" {
+        return Err(vec![config]);
+    }
+    let token = direct_token(repo_root, &environment).unwrap_or_default();
+    if !bearer_token_is_acceptable(&token) {
+        return Err(vec![
+            config,
+            Finding::new(
+                "fail",
+                token_check,
+                "Direct native API bearer token is too short or contains unsafe characters.".into(),
+            )
+            .with_details(json!({"minimum_token_length": 32})),
+        ]);
+    }
+    let header = match authorization_header(&token) {
+        Ok(header) => header,
+        Err(_) => {
+            return Err(vec![
+                config,
+                Finding::new(
+                    "fail",
+                    token_check,
+                    "Direct native API authorization could not be prepared privately.".into(),
+                ),
+            ]);
+        }
+    };
+    let header_fd = header.as_raw_fd();
+    let output_fd = output.as_raw_fd();
+    let args = vec![
+        "--disable".into(),
+        "-sS".into(),
+        "--noproxy".into(),
+        "*".into(),
+        "--max-filesize".into(),
+        max_bytes.to_string(),
+        "--max-time".into(),
+        "30".into(),
+        "-o".into(),
+        format!("/proc/self/fd/{output_fd}"),
+        "-H".into(),
+        format!("@/proc/self/fd/{header_fd}"),
+        "-w".into(),
+        "\nYAFVS_HTTP_STATUS:%{http_code}\nYAFVS_CONTENT_TYPE:%{content_type}\nYAFVS_SIZE_DOWNLOAD:%{size_download}\n"
+            .into(),
+        format!("{}{}", direct_base_url(&environment), path),
+    ];
+    let curl_env = direct_curl_environment(&environment);
+    let output = runner
+        .run_with_input_and_fds(
+            "curl",
+            &args.iter().map(String::as_str).collect::<Vec<_>>(),
+            Some(repo_root),
+            Some(&curl_env),
+            Some(TIMEOUT),
+            None,
+            &[header_fd, output_fd],
+            Some(max_bytes),
+        )
+        .unwrap_or_else(failed);
+    let http_status = unique_marker(&output.stdout, "YAFVS_HTTP_STATUS:")
+        .and_then(|value| value.parse::<i64>().ok());
+    let content_type = unique_marker(&output.stdout, "YAFVS_CONTENT_TYPE:")
+        .map(normalize_content_type)
+        .filter(|value| !value.is_empty());
+    let reported_bytes = unique_marker(&output.stdout, "YAFVS_SIZE_DOWNLOAD:")
+        .and_then(|value| value.parse::<u64>().ok());
+    let cap_exceeded =
+        output.exit_code == Some(63) || reported_bytes.is_some_and(|bytes| bytes > max_bytes);
+    Ok(GuardedDirectBinaryDownload {
+        output,
+        http_status,
+        content_type,
+        reported_bytes,
+        cap_exceeded,
+        config,
+    })
+}
+
+fn unique_marker<'a>(text: &'a str, prefix: &str) -> Option<&'a str> {
+    let mut values = text
+        .lines()
+        .filter_map(|line| line.strip_prefix(prefix))
+        .map(str::trim);
+    let value = values.next()?;
+    values.next().is_none().then_some(value)
+}
+
+fn normalize_content_type(value: &str) -> String {
+    value
+        .split_once(';')
+        .map_or(value, |(media_type, _)| media_type)
+        .trim()
+        .to_ascii_lowercase()
+}
+
 fn result(
     repo_root: &Path,
     runner: &dyn CommandRunner,
@@ -463,6 +587,12 @@ mod tests {
 
     #[test]
     fn validation_matches_the_public_request_contract() {
+        assert_eq!(unique_marker("x\nK:one\n", "K:"), Some("one"));
+        assert_eq!(unique_marker("K:one\nK:two\n", "K:"), None);
+        assert_eq!(
+            normalize_content_type(" Application/PDF; charset=binary "),
+            "application/pdf"
+        );
         assert_eq!(validate_method("post").unwrap(), "POST");
         assert!(validate_method("HEAD").is_err());
         assert_eq!(validate_path("/api/v1").unwrap(), "/api/v1");

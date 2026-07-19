@@ -18,6 +18,7 @@ mod feed;
 mod feed_generation;
 mod license;
 mod native_api_request;
+mod native_export_report_pdf;
 mod native_runtime;
 mod path_coupling;
 mod production_posture;
@@ -66,6 +67,8 @@ pub use feed_generation::{
 };
 pub use license::command_license_report;
 pub use native_api_request::command_native_api_request;
+pub use native_export_report_pdf::command_native_export_report_pdf;
+pub(crate) use native_export_report_pdf::DEFAULT_MAX_BYTES as NATIVE_REPORT_PDF_DEFAULT_MAX_BYTES;
 pub use path_coupling::command_path_coupling_state;
 pub use production_posture::command_production_posture_check;
 pub use quality_gate::command_quality_gate_state;

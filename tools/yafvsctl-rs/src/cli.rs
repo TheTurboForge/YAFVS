@@ -22,6 +22,17 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand, PartialEq, Eq)]
 pub enum CliCommand {
+    /// Download one bounded PDF report through the guarded direct native API.
+    NativeExportReportPdf {
+        #[arg(long)]
+        report_id: String,
+        #[arg(long)]
+        output: Option<PathBuf>,
+        #[arg(long, default_value_t = crate::commands::NATIVE_REPORT_PDF_DEFAULT_MAX_BYTES)]
+        max_bytes: u64,
+        #[arg(long)]
+        overwrite: bool,
+    },
     /// Replace one task target through the guarded direct native API.
     NativeUpdateTaskTarget {
         #[arg(long)]
@@ -324,6 +335,7 @@ pub enum CliCommand {
 impl CliCommand {
     pub fn name(&self) -> &'static str {
         match self {
+            Self::NativeExportReportPdf { .. } => "native-export-report-pdf",
             Self::NativeUpdateTaskTarget { .. } => "native-update-task-target",
             Self::NativeStartTask { .. } => "native-start-task",
             Self::NativeStopTask { .. } => "native-stop-task",
@@ -402,6 +414,43 @@ mod tests {
     use clap::CommandFactory;
     use std::fs;
     use std::path::Path;
+
+    #[test]
+    fn parses_native_pdf_export_bounds_and_output_controls() {
+        let cli = parse_cli([
+            "native-export-report-pdf",
+            "--report-id",
+            "11111111-1111-4111-8111-111111111111",
+            "--output",
+            "report.pdf",
+            "--max-bytes",
+            "4096",
+            "--overwrite",
+            "--status-only",
+        ])
+        .unwrap();
+        assert!(cli.status_only);
+        assert_eq!(
+            cli.command,
+            CliCommand::NativeExportReportPdf {
+                report_id: "11111111-1111-4111-8111-111111111111".into(),
+                output: Some(PathBuf::from("report.pdf")),
+                max_bytes: 4096,
+                overwrite: true,
+            }
+        );
+        assert_eq!(cli.command.name(), "native-export-report-pdf");
+        assert!(
+            parse_cli([
+                "native-export-report-pdf",
+                "--report-id",
+                "11111111-1111-4111-8111-111111111111",
+                "--max-bytes",
+                "-1",
+            ])
+            .is_err()
+        );
+    }
 
     #[test]
     fn parses_guarded_task_target_replacement_and_requires_one_host_source() {

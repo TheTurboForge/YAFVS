@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 //! Bounded target import commands sharing one guarded native-API boundary.
+//!
+//! Format-specific importers live beside this module as their contracts grow.
 
 use super::common::{iso_system_time, metadata};
 use super::direct_api::validate_operator_uuid;

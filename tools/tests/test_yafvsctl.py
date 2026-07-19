@@ -1209,6 +1209,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["deps", "definitely-invalid", "--json"], 1, "fail"),
                 (["runtime-plan", "--json"], 0, "warn"),
                 (["native-api-request", "--path", "/not-api", "--json"], 1, "fail"),
+                (["native-export-report-bundle", "--report-id", "11111111-1111-4111-8111-111111111111", "--max-items", "0", "--json"], 1, "fail"),
                 (["native-export-report-csv", "--report-id", "11111111-1111-4111-8111-111111111111", "--max-results", "0", "--json"], 1, "fail"),
                 (["native-export-report-pdf", "--report-id", "11111111-1111-4111-8111-111111111111", "--max-bytes", "0", "--json"], 1, "fail"),
                 (["native-start-task", "--task-id", "11111111-1111-4111-8111-111111111111", "--json"], 1, "fail"),
@@ -2362,7 +2363,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 self.assertIn(command, source)
                 self.assertIn(f"{command} *args:", justfile)
                 self.assertIn(f'tools/yafvsctl {command} "$@"', justfile)
-        for command in ("native-export-report-bundle", "native-delete-overrides-by-filter", "native-bulk-modify-schedules"):
+        for command in ("native-delete-overrides-by-filter", "native-bulk-modify-schedules"):
             self.assertIn(command, source)
             self.assertIn(f"{command} *args:", justfile)
             self.assertIn(f'tools/yafvsctl {command} "$@"', justfile)
@@ -2370,6 +2371,9 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("def command_native_tooling_state", source)
         self.assertNotIn("def command_native_export_report_csv", source)
         self.assertNotIn('subparsers.add_parser("native-export-report-csv"', source)
+        self.assertNotIn("def command_native_export_report_bundle", source)
+        self.assertNotIn('subparsers.add_parser("native-export-report-bundle"', source)
+        self.assertIn('tools/yafvsctl-rs/Cargo.toml -- native-export-report-bundle "$@"', justfile)
         self.assertNotIn("def command_native_api_request", source)
         self.assertNotIn('subparsers.add_parser("native-api-request"', source)
         self.assertIn('migration_matrix.add_argument("--summary"', source)
@@ -7225,176 +7229,6 @@ class YAFVSCtlTests(unittest.TestCase):
             )
         self.assertEqual(result["details"]["alert_id"], alert_id)
         self.assertEqual(result["details"]["status"], "dry_run")
-
-    @staticmethod
-    def _native_export_report_row(report_id, row_id, *, name="Finding", severity=7.5):
-        return {
-            "id": row_id,
-            "source_report_id": report_id,
-            "report": {"id": report_id, "name": "Full and fast report"},
-            "task": {"id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "name": "Daily scan"},
-            "host": "192.0.2.10",
-            "host_asset_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-            "hostname": "example.test",
-            "port": "443/tcp",
-            "severity": severity,
-            "qod": 95,
-            "nvt_oid": "1.3.6.1.4.1.25623.1.0.100001",
-            "name": name,
-            "nvt_family": "General",
-            "cves": ["CVE-2026-0001"],
-            "cert_refs": [],
-            "xrefs": ["URL:https://example.test"],
-            "max_epss": {"score": 0.9, "percentile": 0.99},
-            "max_severity": None,
-            "created_at": "2026-07-10T12:00:00Z",
-            "scan_nvt_version": "20260710T000000Z",
-            "description": "Full evidence",
-            "description_excerpt": "Full evidence",
-            "summary": "Summary",
-            "insight": "Insight",
-            "affected": "Affected",
-            "impact": "Impact",
-            "detection": "Detection",
-            "solution_type": "VendorFix",
-            "solution": "Upgrade",
-            "raw_evidence_href": f"/result/{row_id}",
-            "user_tags": [{"id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "name": "Reviewed"}],
-            "overrides": [],
-        }
-
-    def test_native_export_report_bundle_parser_and_pre_runtime_guards(self):
-        report_id = "11111111-1111-4111-8111-111111111111"
-        args = yafvsctl.build_parser().parse_args(["native-export-report-bundle", "--report-id", report_id])
-        self.assertEqual(args.command, "native-export-report-bundle")
-        self.assertEqual(args.max_items, yafvsctl.NATIVE_REPORT_BUNDLE_DEFAULT_MAX_ITEMS)
-        self.assertEqual(args.max_bytes, yafvsctl.NATIVE_REPORT_BUNDLE_DEFAULT_MAX_BYTES)
-        self.assertIsNone(args.output)
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            existing = root / "existing.zip"
-            existing.write_bytes(b"keep")
-            with unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                invalid = yafvsctl.command_native_export_report_bundle(root, report_id="not-a-uuid")
-                exists = yafvsctl.command_native_export_report_bundle(root, report_id=report_id, output=existing)
-                capped = yafvsctl.command_native_export_report_bundle(root, report_id=report_id, max_items=0)
-                curl.assert_not_called()
-            self.assertEqual(existing.read_bytes(), b"keep")
-        self.assertEqual(invalid["status"], "fail")
-        self.assertEqual(exists["status"], "fail")
-        self.assertEqual(capped["status"], "fail")
-
-    def test_native_export_report_bundle_is_complete_atomic_and_redacted(self):
-        report_id = "11111111-1111-4111-8111-111111111111"
-        result_id = "22222222-2222-4222-8222-222222222222"
-        error_id = "33333333-3333-4333-8333-333333333333"
-        result_row = self._native_export_report_row(report_id, result_id)
-        raw_row = {
-            "id": result_id,
-            "source_report_id": report_id,
-            "task_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-            "owner_id": None,
-            "host": "192.0.2.10",
-            "hostname": None,
-            "port": "443/tcp",
-            "nvt_oid": "1.3.6.1.4.1.25623.1.0.100001",
-            "result_type": "Alarm",
-            "description": "Full evidence",
-            "scan_nvt_version": "20260710T000000Z",
-            "severity": 7.5,
-            "qod": 95,
-            "qod_type": "remote_vul",
-            "created_at": "2026-07-10T12:00:00Z",
-            "path": None,
-            "hash_value": "sha256:example",
-        }
-        error_row = {
-            "id": error_id,
-            "source_report_id": report_id,
-            "host": "",
-            "port": "",
-            "nvt_oid": "",
-            "created_at": "2026-07-10T12:01:00Z",
-            "description": "=hostless scanner error",
-        }
-        collection_rows = {
-            "raw-results": [raw_row],
-            "results": [result_row],
-            "errors": [error_row],
-            "hosts": [{"host": "192.0.2.10", "source_report_id": report_id}],
-            "ports": [{"port": "443/tcp", "source_report_ids": [report_id]}],
-            "applications": [{"name": "Service", "version": "1", "cpe": "cpe:/a:test", "source_report_ids": [report_id]}],
-            "operating-systems": [{"name": "Linux", "cpe": "cpe:/o:linux", "source_report_ids": [report_id]}],
-            "cves": [{"id": "CVE-2026-0001", "source_report_ids": [report_id]}],
-            "tls-certificates": [{"id": "44444444-4444-4444-8444-444444444444", "source_report_ids": [report_id]}],
-        }
-
-        def fake_direct(_root, path, **_kwargs):
-            if path == f"/api/v1/reports/{report_id}":
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": report_id, "name": "Report", "result_count": 1}) + "\n200", "")
-            if path == f"/api/v1/reports/{report_id}/metrics":
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": report_id, "summary": {}, "systems": [], "vulnerabilities": []}) + "\n200", "")
-            for collection, rows in collection_rows.items():
-                if path.startswith(f"/api/v1/reports/{report_id}/{collection}?"):
-                    payload = {"items": rows, "page": {"page": 1, "page_size": 500, "total": len(rows)}}
-                    return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
-            self.fail(path)
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            output = root / "report.zip"
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="s" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
-                result = yafvsctl.command_native_export_report_bundle(root, report_id=report_id, output=output, status_only=True)
-            content = output.read_bytes()
-            with zipfile.ZipFile(output) as archive:
-                names = set(archive.namelist())
-                manifest = json.loads(archive.read("manifest.json"))
-                raw = json.loads(archive.read("collections/raw-results.json"))
-                errors_csv = list(csv.DictReader(io.StringIO(archive.read("views/errors.csv").decode("utf-8"))))
-            self.assertEqual(result["status"], "pass")
-            self.assertEqual(result["details"]["sha256"], hashlib.sha256(content).hexdigest())
-            self.assertEqual(result["details"]["byte_count"], len(content))
-            self.assertEqual(result["details"]["collection_counts"]["raw-results"], 1)
-            self.assertEqual(manifest["format"], "yafvs-native-report-bundle")
-            self.assertTrue(manifest["evidence_contract"]["complete"])
-            self.assertFalse(manifest["evidence_contract"]["legacy_xml_byte_or_schema_parity"])
-            self.assertEqual(raw["items"], [raw_row])
-            self.assertEqual(errors_csv[0]["host"], "")
-            self.assertEqual(errors_csv[0]["description"], "'=hostless scanner error")
-            self.assertIn("collections/errors.json", names)
-            self.assertIn("views/results.csv", names)
-            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
-            self.assertNotIn("s" * 64, json.dumps(result))
-            self.assertNotIn("Full evidence", json.dumps(result))
-            self.assertFalse(list(root.glob(".report.zip.tmp-*")))
-
-    def test_native_export_report_bundle_cap_preserves_existing_output(self):
-        report_id = "11111111-1111-4111-8111-111111111111"
-
-        def fake_direct(_root, path, **_kwargs):
-            if path == f"/api/v1/reports/{report_id}":
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": report_id, "name": "Report", "result_count": 2}) + "\n200", "")
-            if path == f"/api/v1/reports/{report_id}/metrics":
-                return subprocess.CompletedProcess(["curl"], 0, json.dumps({"id": report_id}) + "\n200", "")
-            payload = {"items": [], "page": {"page": 1, "page_size": 500, "total": 2}}
-            return subprocess.CompletedProcess(["curl"], 0, json.dumps(payload) + "\n200", "")
-
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            output = root / "report.zip"
-            output.write_bytes(b"preserve")
-            with unittest.mock.patch.object(yafvsctl, "native_api_direct_runtime_env", return_value={}), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_config_shape_finding", return_value=yafvsctl.finding("pass", "direct-config", "ok")), \
-                unittest.mock.patch.object(yafvsctl, "native_api_direct_bearer_token", return_value="s" * 64), \
-                unittest.mock.patch.object(yafvsctl, "direct_native_api_curl", side_effect=fake_direct):
-                result = yafvsctl.command_native_export_report_bundle(root, report_id=report_id, output=output, max_items=1, overwrite=True)
-            self.assertEqual(result["status"], "fail")
-            self.assertEqual(output.read_bytes(), b"preserve")
-            self.assertFalse(list(root.glob(".report.zip.tmp-*")))
 
     def test_native_delete_overrides_by_filter_parser_and_pre_runtime_guards(self):
         args = yafvsctl.build_parser().parse_args(["native-delete-overrides-by-filter", "--filter", "CVE-2026", "--dry-run"])

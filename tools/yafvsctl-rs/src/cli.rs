@@ -1207,6 +1207,7 @@ mod tests {
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let justfile = fs::read_to_string(repo_root.join("justfile")).unwrap();
         for command in [
+            "native-export-report-bundle",
             "native-export-report-csv",
             "native-export-report-pdf",
             "native-update-task-target",

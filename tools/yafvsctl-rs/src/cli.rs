@@ -21,6 +21,20 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand, PartialEq, Eq)]
 pub enum CliCommand {
+    /// Start one task through the guarded direct native API.
+    NativeStartTask {
+        #[arg(long)]
+        task_id: String,
+        #[arg(long)]
+        allow_write_control: bool,
+    },
+    /// Stop one task through the guarded direct native API.
+    NativeStopTask {
+        #[arg(long)]
+        task_id: String,
+        #[arg(long)]
+        allow_write_control: bool,
+    },
     /// Send a bounded native API request.
     NativeApiRequest {
         #[arg(long)]
@@ -292,6 +306,8 @@ pub enum CliCommand {
 impl CliCommand {
     pub fn name(&self) -> &'static str {
         match self {
+            Self::NativeStartTask { .. } => "native-start-task",
+            Self::NativeStopTask { .. } => "native-stop-task",
             Self::NativeApiRequest { .. } => "native-api-request",
             Self::Status => "status",
             Self::Inventory { .. } => "inventory",
@@ -398,6 +414,32 @@ mod tests {
             }
         );
         assert_eq!(cli.command.name(), "native-api-request");
+    }
+
+    #[test]
+    fn parses_guarded_task_control() {
+        let cli = parse_cli([
+            "native-start-task",
+            "--task-id",
+            "11111111-1111-4111-8111-111111111111",
+            "--allow-write-control",
+            "--status-only",
+        ])
+        .unwrap();
+        assert!(cli.status_only);
+        assert_eq!(cli.command.name(), "native-start-task");
+        assert_eq!(
+            parse_cli([
+                "native-stop-task",
+                "--task-id",
+                "11111111-1111-4111-8111-111111111111",
+                "--allow-write-control"
+            ])
+            .unwrap()
+            .command
+            .name(),
+            "native-stop-task"
+        );
     }
 
     #[test]

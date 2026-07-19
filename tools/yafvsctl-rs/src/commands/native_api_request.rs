@@ -181,48 +181,81 @@ fn direct_request(
     status_only: bool,
     runner: &dyn CommandRunner,
 ) -> ResultEnvelope {
-    let environment = match direct_runtime_environment(repo_root, runner) {
-        Ok(value) => value,
-        Err(_) => {
+    let call = match guarded_direct_api_call(
+        repo_root,
+        path,
+        method,
+        request_id,
+        body,
+        "native-api-request.direct-config-shape",
+        "native-api-request.direct-token-strength",
+        runner,
+    ) {
+        Ok(call) => call,
+        Err(findings) => {
             return result(
                 repo_root,
                 runner,
                 "Direct native API request rejected before runtime access.",
-                vec![Finding::new(
-                    "fail",
-                    "native-api-request.direct-config-shape",
-                    "Direct native API host, port, or bind settings are malformed.".into(),
-                )],
+                findings,
             );
         }
     };
-    let config =
-        direct_config_shape_finding(&environment, "native-api-request.direct-config-shape");
+    finish(
+        repo_root,
+        runner,
+        true,
+        path,
+        method,
+        request_id,
+        body,
+        call.output,
+        Some(call.config),
+        status_only,
+    )
+}
+
+pub(crate) struct GuardedDirectApiCall {
+    pub(crate) output: ProcessOutput,
+    pub(crate) parsed: Option<Value>,
+    pub(crate) http_status: Option<i64>,
+    pub(crate) oversized: bool,
+    pub(crate) config: Finding,
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn guarded_direct_api_call(
+    repo_root: &Path,
+    path: &str,
+    method: &str,
+    request_id: Option<&str>,
+    body: Option<&str>,
+    config_check: &str,
+    token_check: &str,
+    runner: &dyn CommandRunner,
+) -> Result<GuardedDirectApiCall, Vec<Finding>> {
+    let environment = direct_runtime_environment(repo_root, runner).map_err(|_| {
+        vec![Finding::new(
+            "fail",
+            config_check,
+            "Direct native API host, port, or bind settings are malformed.".into(),
+        )]
+    })?;
+    let config = direct_config_shape_finding(&environment, config_check);
     if config.status == "fail" {
-        return result(
-            repo_root,
-            runner,
-            "Direct native API request rejected before runtime access.",
-            vec![config],
-        );
+        return Err(vec![config]);
     }
     let token = direct_token(repo_root, &environment).unwrap_or_default();
     if !bearer_token_is_acceptable(&token) {
-        return result(
-            repo_root,
-            runner,
-            "Direct native API request rejected before runtime access.",
-            vec![
-                config,
-                Finding::new(
-                    "fail",
-                    "native-api-request.direct-token-strength",
-                    "Direct native API bearer token is too short or contains unsafe characters."
-                        .into(),
-                )
-                .with_details(json!({"minimum_token_length": 32})),
-            ],
-        );
+        return Err(vec![
+            config,
+            Finding::new(
+                "fail",
+                token_check,
+                "Direct native API bearer token is too short or contains unsafe characters.".into(),
+            )
+            .with_details(json!({"minimum_token_length": 32})),
+        ]);
     }
     let output = direct_curl(
         repo_root,
@@ -234,18 +267,19 @@ fn direct_request(
         &environment,
         runner,
     );
-    finish(
-        repo_root,
-        runner,
-        true,
-        path,
-        method,
-        request_id,
-        body,
+    let oversized = output.stdout.len() > MAX_RESPONSE_BYTES;
+    let (parsed, http_status) = if oversized {
+        (None, None)
+    } else {
+        parse_status(&output.stdout)
+    };
+    Ok(GuardedDirectApiCall {
         output,
-        Some(config),
-        status_only,
-    )
+        parsed,
+        http_status,
+        oversized,
+        config,
+    })
 }
 
 fn direct_token(

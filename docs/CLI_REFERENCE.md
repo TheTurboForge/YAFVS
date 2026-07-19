@@ -49,6 +49,7 @@ native-export-report-bundle
 native-export-report-csv
 native-export-report-pdf
 native-update-task-target
+native-targets-from-host-list
 native-start-tasks-from-csv
 native-stop-tasks-from-csv
 native-stop-all-tasks

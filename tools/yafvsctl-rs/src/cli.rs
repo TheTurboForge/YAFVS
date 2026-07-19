@@ -83,6 +83,21 @@ pub enum CliCommand {
         #[arg(long)]
         allow_write_control: bool,
     },
+    /// Create one native target per non-empty host-list line.
+    NativeTargetsFromHostList {
+        #[arg(long)]
+        hosts_file: PathBuf,
+        #[arg(long, conflicts_with = "port_range")]
+        port_list_id: Option<String>,
+        #[arg(long, conflicts_with = "port_list_id")]
+        port_range: Option<String>,
+        #[arg(long, requires = "port_range")]
+        port_list_name: Option<String>,
+        #[arg(long)]
+        allow_write_control: bool,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Start named tasks from a CSV through the guarded direct native API.
     NativeStartTasksFromCsv {
         #[arg(long)]
@@ -391,6 +406,7 @@ impl CliCommand {
             Self::NativeExportReportCsv { .. } => "native-export-report-csv",
             Self::NativeExportReportPdf { .. } => "native-export-report-pdf",
             Self::NativeUpdateTaskTarget { .. } => "native-update-task-target",
+            Self::NativeTargetsFromHostList { .. } => "native-targets-from-host-list",
             Self::NativeStartTask { .. } => "native-start-task",
             Self::NativeStopTask { .. } => "native-stop-task",
             Self::NativeStartTasksFromCsv { .. } => "native-start-tasks-from-csv",
@@ -471,6 +487,36 @@ mod tests {
     use clap::CommandFactory;
     use std::fs;
     use std::path::Path;
+
+    #[test]
+    fn parses_native_targets_from_host_list_controls() {
+        let cli = parse_cli([
+            "native-targets-from-host-list",
+            "--hosts-file",
+            "hosts.txt",
+            "--port-range",
+            "T:1-443,U:53",
+            "--port-list-name",
+            "Web and DNS",
+            "--allow-write-control",
+            "--dry-run",
+            "--status-only",
+        ])
+        .unwrap();
+        assert!(cli.status_only);
+        assert_eq!(
+            cli.command,
+            CliCommand::NativeTargetsFromHostList {
+                hosts_file: PathBuf::from("hosts.txt"),
+                port_list_id: None,
+                port_range: Some("T:1-443,U:53".into()),
+                port_list_name: Some("Web and DNS".into()),
+                allow_write_control: true,
+                dry_run: true,
+            }
+        );
+        assert_eq!(cli.command.name(), "native-targets-from-host-list");
+    }
 
     #[test]
     fn parses_native_report_bundle_bounds_and_output_controls() {

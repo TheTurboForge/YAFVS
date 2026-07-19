@@ -1121,7 +1121,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 env = feed_generation_env.copy()
                 if arguments[0] == "quality-gate-schedule":
                     env.pop("YAFVS_ENABLE_QUALITY_GATE_SCHEDULE", None)
-                if arguments[0] in {"runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot"}:
+                if arguments[0] in {"runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-report-summary", "runtime-report-export", "runtime-report-metrics"}:
                     env["COMPOSE_PROJECT_NAME"] = "yafvsctl-parity-no-runtime"
                 if arguments[0] in {"down", "runtime-app-down"}:
                     shutdown_runtime = Path(parity_runtime) / arguments[0]
@@ -1236,6 +1236,9 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-data-state", "--json"], 0, "warn"),
                 (["runtime-db-introspect", "--json"], 0, "warn"),
                 (["runtime-performance-snapshot", "--json"], 0, "warn"),
+                (["runtime-report-summary", "--report-id", "report-1", "--max-results", "0", "--json"], 1, "fail"),
+                (["runtime-report-export", "--report-id", "report-1", "--top-results", "100001", "--json"], 1, "fail"),
+                (["runtime-report-metrics", "--report-id", "report-1", "--json"], 1, "fail"),
                 (["runtime-certbund-report", "--report-id", "report-1", "--task-id", "task-1", "--json"], 1, "fail"),
                 (["runtime-log-review", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["runtime-scanner-capability-check", "--json"], (0, 1), ("pass", "fail")),
@@ -1361,7 +1364,6 @@ class YAFVSCtlTests(unittest.TestCase):
             "runtime-app-smoke",
             "runtime-browser-smoke",
             "runtime-browser-regression",
-            "runtime-report-metrics",
             "runtime-scope-report-metrics",
             "gvmd-smoke",
         ]
@@ -1574,15 +1576,17 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("gmp.modify_scope(", runtime_scope_source)
         self.assertNotIn("gmp.delete_scope(", runtime_scope_source)
         self.assertNotIn("gmp.delete_scope_report", runtime_scope_source)
+        rust_report_source = (root / "tools" / "yafvsctl-rs" / "src" / "commands" / "runtime_report.rs").read_text(encoding="utf-8")
         self.assertNotIn("runtime_metrics_probe_path", source)
         self.assertIn("def command_runtime_scope_report_summary_native", source)
         self.assertIn("def native_scope_report_browser_target", source)
-        self.assertIn("def command_runtime_report_summary_native", source)
-        self.assertIn("def command_runtime_report_metrics_native", source)
+        self.assertNotIn("def command_runtime_report_summary_native", source)
+        self.assertNotIn("def command_runtime_report_metrics_native", source)
         self.assertIn("def command_runtime_scope_report_metrics_native", source)
         self.assertIn("/api/v1/scope-reports?page_size=1&sort=-creation_time&filter=Organization", source)
-        self.assertIn("/api/v1/reports/{urllib.parse.quote(report_id)}/results", source)
-        self.assertIn("/api/v1/reports/{urllib.parse.quote(selected_report_id)}/metrics", source)
+        self.assertNotIn("def native_report_results_pages", source)
+        self.assertIn('format!("/api/v1/reports/{encoded_report_id}/results")', rust_report_source)
+        self.assertIn('"/api/v1/reports/{}/metrics"', rust_report_source)
         self.assertIn("/api/v1/scopes/{selected_scope_id}/reports/{selected_scope_report_id}/metrics", source)
         self.assertIn("native_scope_report_browser_target", browser_smoke_command)
         self.assertIn("native_scope_report_browser_target", browser_regression_command)
@@ -16001,65 +16005,13 @@ class YAFVSCtlTests(unittest.TestCase):
 
 
     def test_runtime_report_paths_live_under_runtime_dir(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            self.assertFalse((root / "tools" / "runtime_report.py").exists())
-            self.assertEqual(yafvsctl.report_artifact_dir(root), Path(tmp) / "YAFVS-runtime" / "artifacts" / "reports")
-            self.assertIn("artifacts/reports", yafvsctl.RUNTIME_DIRS)
-
-    def test_runtime_report_summary_helpers_format_native_rows(self):
-        rows = [
-            {
-                "id": "result-low",
-                "name": "ICMP Timestamp Reply Information Disclosure",
-                "host": "192.168.178.1",
-                "hostname": "router.local",
-                "port": "general/icmp",
-                "severity": 2.1,
-                "qod": 80,
-                "nvt_oid": "1.2.3",
-                "nvt_family": "General",
-                "description_excerpt": "Timestamp reply was observed.",
-            },
-            {
-                "id": "result-log",
-                "name": "OS Detection Consolidation and Reporting",
-                "host": "192.168.178.42",
-                "port": "general/tcp",
-                "severity": 0.0,
-                "qod": 80,
-                "nvt_oid": "1.2.4",
-                "nvt_family": "Service detection",
-                "description_excerpt": "Detected a host.",
-            },
-        ]
-        normalized = yafvsctl.runtime_report_summary_row(rows[0])
-        self.assertEqual(normalized["id"], "result-low")
-        self.assertEqual(normalized["host"], "192.168.178.1")
-        self.assertEqual(normalized["hostname"], "router.local")
-        self.assertEqual(normalized["severity_score"], 2.1)
-        self.assertEqual(normalized["threat"], "Low")
-        self.assertEqual(normalized["nvt_family"], "General")
-        csv_text = yafvsctl.runtime_report_results_csv(
-            [
-                normalized,
-                {
-                    **yafvsctl.runtime_report_summary_row(rows[1]),
-                    "description_excerpt": "Detected, with comma",
-                    "ignored_extra": "not exported",
-                },
-            ]
-        )
-        self.assertTrue(csv_text.startswith("id,host,hostname,port,severity,severity_score,threat,qod,name,"))
-        self.assertIn('"Detected, with comma"', csv_text)
-        self.assertNotIn("ignored_extra", csv_text)
-        self.assertEqual(yafvsctl.runtime_report_summary_severity_counts(rows)["Low"], 1)
-        self.assertEqual(yafvsctl.runtime_report_summary_severity_counts(rows)["Log"], 1)
-        affected_hosts = yafvsctl.runtime_report_summary_affected_hosts(rows)
-        self.assertEqual(affected_hosts[0]["host"], "192.168.178.1")
-        self.assertEqual(affected_hosts[0]["hostnames"], ["router.local"])
-        self.assertEqual(affected_hosts[0]["vulnerability_count"], 1)
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        rust_report_source = (root / "tools" / "yafvsctl-rs" / "src" / "commands" / "runtime_report.rs").read_text(encoding="utf-8")
+        self.assertFalse((root / "tools" / "runtime_report.py").exists())
+        self.assertNotIn("def report_artifact_dir", source)
+        self.assertIn('runtime_dir(repo_root).join("artifacts/reports")', rust_report_source)
+        self.assertIn("artifacts/reports", yafvsctl.RUNTIME_DIRS)
 
 
 if __name__ == "__main__":

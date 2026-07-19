@@ -172,9 +172,10 @@ denials, and reruns the internal native API smoke. The helper creates or reuses
 the ignored runtime secret `native-api-bearer-token`; it does not make direct
 API exposure the default.
 
-`runtime-scope-report-metrics` now uses this internal native API path for scope
-report metrics. `runtime-report-metrics` still uses the inherited GMP/XML helper
-until a raw-report metrics endpoint lands.
+`runtime-scope-report-metrics` and the Rust-backed `runtime-report-metrics`
+command use the internal native API path for scope-report and raw-report
+metrics. The inherited `get_report_metrics` GMP command remains a separate
+compatibility surface during the transition.
 
 `runtime-scanner-register` creates or verifies the `OpenVAS Default` scanner
 registration against `/runtime/run/ospd/ospd-openvas.sock` on port `0`.

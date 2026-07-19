@@ -5002,10 +5002,6 @@ def runtime_browser_regression_probe_path(repo_root: Path) -> Path:
     return repo_root / "tools" / "runtime_browser_regression.py"
 
 
-def report_artifact_dir(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "artifacts", "reports")
-
-
 def scope_report_artifact_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "artifacts", "scope-reports")
 
@@ -5061,13 +5057,6 @@ def write_json_artifact(artifact_dir: Path, name: str, payload: dict[str, Any]) 
     artifact_dir.mkdir(parents=True, exist_ok=True)
     path = artifact_dir / name
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return str(path)
-
-
-def write_text_artifact(artifact_dir: Path, name: str, text: str) -> str:
-    artifact_dir.mkdir(parents=True, exist_ok=True)
-    path = artifact_dir / name
-    path.write_text(text, encoding="utf-8")
     return str(path)
 
 
@@ -13861,131 +13850,6 @@ def command_runtime_nmap_capability_check(repo_root: Path) -> dict[str, Any]:
     )
 
 
-def command_runtime_report(
-    repo_root: Path,
-    action: str,
-    report_id: str | None = None,
-    max_results: int = 1000,
-    top_results: int = 10,
-) -> dict[str, Any]:
-    if action == "summary":
-        return command_runtime_report_summary_native(repo_root, report_id=report_id, max_results=max_results, top_results=top_results)
-    if action == "export":
-        return command_runtime_report_export_native(repo_root, report_id=report_id, max_results=max_results, top_results=top_results)
-    return make_result(
-        f"runtime-report-{action}",
-        repo_root,
-        f"Unsupported runtime report action: {action}",
-        [finding("fail", "runtime-report.action", f"Unsupported runtime report action: {action}")],
-        [],
-    )
-
-
-def command_runtime_report_export_native(repo_root: Path, report_id: str | None = None, max_results: int = 1000, top_results: int = 10) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    artifact_dir = report_artifact_dir(repo_root)
-    try:
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        findings.append(finding("pass", "runtime-report.artifact-dir", "Runtime report artifact directory is ready.", str(artifact_dir)))
-    except OSError as error:
-        findings.append(finding("fail", "runtime-report.artifact-dir", f"Runtime report artifact directory is not usable: {error}", str(artifact_dir)))
-    findings.append(finding("pass" if container_running(repo_root, "yafvs-api") else "fail", "native-api.container", "yafvs-api container is running." if container_running(repo_root, "yafvs-api") else "yafvs-api container is not running; start the app profile before exporting native raw-report data."))
-    selected_report_id = report_id
-    select_result = None
-    if selected_report_id is None:
-        selected_report_id, select_error, select_result = latest_completed_full_test_report_id(repo_root)
-        if select_error:
-            findings.append(finding("fail", "runtime-report.report-select", select_error, details={"output_tail": output_tail(select_result.stdout, 80) if select_result else []}))
-        else:
-            findings.append(finding("pass", "runtime-report.report-select", "Selected latest completed full-test raw report from PostgreSQL.", details={"report_id": selected_report_id}))
-    else:
-        findings.append(finding("pass", "runtime-report.report-select", "Using explicit raw report id.", details={"report_id": selected_report_id}))
-    if aggregate_status(findings) == "fail" or not selected_report_id:
-        payload = {
-            "status": "fail",
-            "summary": "Runtime report export stopped at native API prerequisites.",
-            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "yafvs-api", "report_id": selected_report_id},
-        }
-        payload["artifacts"] = [write_json_artifact(artifact_dir, "export-failed.json", payload)]
-        return make_result("runtime-report-export", repo_root, payload["summary"], findings, payload["artifacts"])
-
-    detail_path = f"/api/v1/reports/{urllib.parse.quote(selected_report_id)}"
-    detail = native_api_curl(repo_root, detail_path)
-    detail_json = parse_json_output(detail)
-    detail_ok = detail.returncode == 0 and isinstance(detail_json, dict) and detail_json.get("id") == selected_report_id
-    findings.append(
-        native_api_probe_finding(
-            "pass" if detail_ok else "fail",
-            "runtime-report.export-native-detail",
-            "Native raw-report detail read." if detail_ok else "Native raw-report detail response was not usable.",
-            detail,
-            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/..."),
-            detail_json if isinstance(detail_json, dict) else None,
-        )
-    )
-    rows, total, rows_result, rows_json = native_report_results_pages(repo_root, selected_report_id, max_results)
-    rows_ok = rows_result is not None and rows_result.returncode == 0 and total is not None
-    findings.append(
-        native_api_probe_finding(
-            "pass" if rows_ok else "fail",
-            "runtime-report.export-native-results",
-            "Native raw-report result rows read." if rows_ok else "Native raw-report result response was not usable.",
-            rows_result or detail,
-            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../results?..."),
-            rows_json if isinstance(rows_json, dict) else None,
-        )
-    )
-    if not detail_ok or not rows_ok or not isinstance(detail_json, dict):
-        payload = {
-            "status": "fail",
-            "summary": "Runtime report export failed while reading native report data.",
-            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "yafvs-api", "report_id": selected_report_id, "detail": detail_json, "results": rows_json},
-        }
-        payload["artifacts"] = [write_json_artifact(artifact_dir, "export-failed.json", payload)]
-        return make_result("runtime-report-export", repo_root, payload["summary"], findings, payload["artifacts"])
-
-    task = detail_json.get("task") if isinstance(detail_json.get("task"), dict) else {}
-    normalized_rows = [runtime_report_summary_row(row) for row in rows]
-    export_complete = total is None or len(rows) >= total
-    payload = {
-        "status": "pass" if export_complete else "warn",
-        "summary": "Runtime report export read through the native API.",
-        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-        "details": {"source": "yafvs-api", "report_id": selected_report_id},
-        "report": {
-            "id": detail_json.get("id"),
-            "name": detail_json.get("name"),
-            "task_id": task.get("id"),
-            "task_name": task.get("name"),
-            "scan_run_status": detail_json.get("status"),
-            "scan_start": detail_json.get("scan_start"),
-            "scan_end": detail_json.get("scan_end"),
-            "counts": {
-                "hosts": json_int(detail_json.get("host_count")),
-                "results": json_int(detail_json.get("result_count")),
-                "vulnerabilities": json_int(detail_json.get("vulnerability_count")),
-                "cves": json_int(detail_json.get("cve_count")),
-                "operating_systems": None,
-            },
-        },
-        "result_filter": f"native:/api/v1/reports/{selected_report_id}/results?sort=-severity&max_results={max_results}",
-        "parsed_result_count": len(rows),
-        "export_complete": export_complete,
-        "severity_counts": runtime_report_summary_severity_counts(rows),
-        "affected_hosts": runtime_report_summary_affected_hosts(rows),
-        "top_results": normalized_rows[:top_results],
-        "results": normalized_rows,
-    }
-    csv_text = runtime_report_results_csv(normalized_rows)
-    payload["artifacts"] = [
-        write_json_artifact(artifact_dir, "export.json", payload),
-        write_text_artifact(artifact_dir, "export-results.csv", csv_text),
-    ]
-    return make_result("runtime-report-export", repo_root, payload["summary"], findings, payload["artifacts"])
-
-
 def json_int(value: Any) -> int:
     try:
         return int(value)
@@ -14014,261 +13878,6 @@ def native_result_threat(score: float) -> str:
     if score == -1.0:
         return "False Positive"
     return "Unknown"
-
-
-def runtime_report_summary_row(row: dict[str, Any]) -> dict[str, Any]:
-    severity_score = json_float(row.get("severity"))
-    return {
-        "id": row.get("id"),
-        "name": row.get("name"),
-        "host": row.get("host"),
-        "hostname": row.get("hostname"),
-        "port": row.get("port"),
-        "severity": str(row.get("severity", "")),
-        "severity_score": severity_score,
-        "threat": native_result_threat(severity_score),
-        "qod": json_int(row.get("qod")),
-        "nvt_oid": row.get("nvt_oid"),
-        "nvt_name": row.get("name"),
-        "nvt_family": row.get("nvt_family"),
-        "description_excerpt": row.get("description_excerpt"),
-    }
-
-
-RUNTIME_REPORT_CSV_FIELDS = (
-    "id",
-    "host",
-    "hostname",
-    "port",
-    "severity",
-    "severity_score",
-    "threat",
-    "qod",
-    "name",
-    "nvt_oid",
-    "nvt_name",
-    "nvt_family",
-    "description_excerpt",
-)
-
-
-def runtime_report_results_csv(rows: list[dict[str, Any]]) -> str:
-    buffer = io.StringIO(newline="")
-    writer = csv.DictWriter(buffer, fieldnames=RUNTIME_REPORT_CSV_FIELDS, extrasaction="ignore")
-    writer.writeheader()
-    writer.writerows(rows)
-    return buffer.getvalue()
-
-
-def runtime_report_summary_severity_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
-    counts = {bucket: 0 for bucket in ("Critical", "High", "Medium", "Low", "Log", "False Positive", "Unknown")}
-    for row in rows:
-        counts[native_result_threat(json_float(row.get("severity")))] += 1
-    return counts
-
-
-def runtime_report_summary_affected_hosts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    hosts: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        host = str(row.get("host") or "unknown")
-        current = hosts.setdefault(
-            host,
-            {
-                "host": host,
-                "hostnames": set(),
-                "result_count": 0,
-                "vulnerability_count": 0,
-                "max_severity": 0.0,
-                "threats": set(),
-            },
-        )
-        current["result_count"] += 1
-        severity_score = json_float(row.get("severity"))
-        current["max_severity"] = max(current["max_severity"], severity_score)
-        if severity_score > 0:
-            current["vulnerability_count"] += 1
-        hostname = row.get("hostname")
-        if hostname:
-            current["hostnames"].add(str(hostname))
-        current["threats"].add(native_result_threat(severity_score))
-    return sorted(
-        [
-            {
-                "host": host["host"],
-                "hostnames": sorted(host["hostnames"]),
-                "result_count": host["result_count"],
-                "vulnerability_count": host["vulnerability_count"],
-                "max_severity": host["max_severity"],
-                "threats": sorted(host["threats"]),
-            }
-            for host in hosts.values()
-        ],
-        key=lambda item: (-item["max_severity"], item["host"]),
-    )
-
-
-def native_report_results_pages(repo_root: Path, report_id: str, max_results: int) -> tuple[list[dict[str, Any]], int | None, subprocess.CompletedProcess[str] | None, dict[str, Any] | None]:
-    rows: list[dict[str, Any]] = []
-    total: int | None = None
-    first_result: subprocess.CompletedProcess[str] | None = None
-    first_parsed: dict[str, Any] | None = None
-    page = 1
-    while len(rows) < max_results:
-        page_size = min(500, max_results - len(rows))
-        if page_size <= 0:
-            break
-        path = f"/api/v1/reports/{urllib.parse.quote(report_id)}/results?page={page}&page_size={page_size}&sort=-severity"
-        result = native_api_curl(repo_root, path)
-        parsed = parse_json_output(result)
-        if first_result is None:
-            first_result = result
-            first_parsed = parsed
-        if result.returncode != 0 or not isinstance(parsed, dict):
-            return rows, total, result, parsed
-        items = parsed.get("items", [])
-        page_info = parsed.get("page", {})
-        if not isinstance(items, list) or not isinstance(page_info, dict):
-            return rows, total, result, parsed
-        total = json_int(page_info.get("total"))
-        rows.extend(item for item in items if isinstance(item, dict))
-        if len(rows) >= total or not items:
-            break
-        page += 1
-    return rows, total, first_result, first_parsed
-
-
-def native_report_hosts_pages(repo_root: Path, report_id: str, max_hosts: int) -> tuple[list[dict[str, Any]], int | None, subprocess.CompletedProcess[str] | None, dict[str, Any] | None]:
-    rows: list[dict[str, Any]] = []
-    total: int | None = None
-    first_result: subprocess.CompletedProcess[str] | None = None
-    first_parsed: dict[str, Any] | None = None
-    page = 1
-    while len(rows) < max_hosts:
-        page_size = min(500, max_hosts - len(rows))
-        if page_size <= 0:
-            break
-        path = f"/api/v1/reports/{urllib.parse.quote(report_id)}/hosts?page={page}&page_size={page_size}&sort=host"
-        result = native_api_curl(repo_root, path)
-        parsed = parse_json_output(result)
-        if first_result is None:
-            first_result = result
-            first_parsed = parsed
-        if result.returncode != 0 or not isinstance(parsed, dict):
-            return rows, total, result, parsed
-        items = parsed.get("items", [])
-        page_info = parsed.get("page", {})
-        if not isinstance(items, list) or not isinstance(page_info, dict):
-            return rows, total, result, parsed
-        total = json_int(page_info.get("total"))
-        rows.extend(item for item in items if isinstance(item, dict))
-        if len(rows) >= total or not items:
-            break
-        page += 1
-    return rows, total, first_result, first_parsed
-
-
-def command_runtime_report_summary_native(repo_root: Path, report_id: str | None = None, max_results: int = 1000, top_results: int = 10) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    artifact_dir = report_artifact_dir(repo_root)
-    try:
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        findings.append(finding("pass", "runtime-report.artifact-dir", "Runtime report artifact directory is ready.", str(artifact_dir)))
-    except OSError as error:
-        findings.append(finding("fail", "runtime-report.artifact-dir", f"Runtime report artifact directory is not usable: {error}", str(artifact_dir)))
-    findings.append(finding("pass" if container_running(repo_root, "yafvs-api") else "fail", "native-api.container", "yafvs-api container is running." if container_running(repo_root, "yafvs-api") else "yafvs-api container is not running; start the app profile before reading native raw-report summaries."))
-    selected_report_id = report_id
-    select_result = None
-    if selected_report_id is None:
-        selected_report_id, select_error, select_result = latest_completed_full_test_report_id(repo_root)
-        if select_error:
-            findings.append(finding("fail", "runtime-report.report-select", select_error, details={"output_tail": output_tail(select_result.stdout, 80) if select_result else []}))
-        else:
-            findings.append(finding("pass", "runtime-report.report-select", "Selected latest completed full-test raw report from PostgreSQL.", details={"report_id": selected_report_id}))
-    else:
-        findings.append(finding("pass", "runtime-report.report-select", "Using explicit raw report id.", details={"report_id": selected_report_id}))
-    if aggregate_status(findings) == "fail" or not selected_report_id:
-        payload = {
-            "status": "fail",
-            "summary": "Runtime report summary stopped at native API prerequisites.",
-            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "yafvs-api", "report_id": selected_report_id},
-        }
-        payload["artifacts"] = [write_json_artifact(artifact_dir, "summary-failed.json", payload)]
-        return make_result("runtime-report-summary", repo_root, payload["summary"], findings, payload["artifacts"])
-
-    detail_path = f"/api/v1/reports/{urllib.parse.quote(selected_report_id)}"
-    detail = native_api_curl(repo_root, detail_path)
-    detail_json = parse_json_output(detail)
-    detail_ok = detail.returncode == 0 and isinstance(detail_json, dict) and detail_json.get("id") == selected_report_id
-    findings.append(
-        native_api_probe_finding(
-            "pass" if detail_ok else "fail",
-            "runtime-report.summary-native-detail",
-            "Native raw-report detail read." if detail_ok else "Native raw-report detail response was not usable.",
-            detail,
-            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/..."),
-            detail_json if isinstance(detail_json, dict) else None,
-        )
-    )
-    rows, total, rows_result, rows_json = native_report_results_pages(repo_root, selected_report_id, max_results)
-    rows_ok = rows_result is not None and rows_result.returncode == 0 and total is not None
-    findings.append(
-        native_api_probe_finding(
-            "pass" if rows_ok else "fail",
-            "runtime-report.summary-native-results",
-            "Native raw-report result rows read." if rows_ok else "Native raw-report result response was not usable.",
-            rows_result or detail,
-            compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../results?..."),
-            rows_json if isinstance(rows_json, dict) else None,
-        )
-    )
-    if not detail_ok or not rows_ok or not isinstance(detail_json, dict):
-        payload = {
-            "status": "fail",
-            "summary": "Runtime report summary failed while reading native report data.",
-            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "yafvs-api", "report_id": selected_report_id, "detail": detail_json, "results": rows_json},
-        }
-        payload["artifacts"] = [write_json_artifact(artifact_dir, "summary-failed.json", payload)]
-        return make_result("runtime-report-summary", repo_root, payload["summary"], findings, payload["artifacts"])
-
-    task = detail_json.get("task") if isinstance(detail_json.get("task"), dict) else {}
-    counts = {
-        "hosts": json_int(detail_json.get("host_count")),
-        "results": json_int(detail_json.get("result_count")),
-        "vulnerabilities": json_int(detail_json.get("vulnerability_count")),
-        "cves": json_int(detail_json.get("cve_count")),
-        "operating_systems": None,
-    }
-    normalized_rows = [runtime_report_summary_row(row) for row in rows]
-    export_complete = total is None or len(rows) >= total
-    payload = {
-        "status": "pass" if export_complete else "warn",
-        "summary": "Runtime report summary read through the native API.",
-        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-        "details": {
-            "source": "yafvs-api",
-            "report_id": selected_report_id,
-        },
-        "report": {
-            "id": detail_json.get("id"),
-            "name": detail_json.get("name"),
-            "task_id": task.get("id"),
-            "task_name": task.get("name"),
-            "scan_run_status": detail_json.get("status"),
-            "scan_start": detail_json.get("scan_start"),
-            "scan_end": detail_json.get("scan_end"),
-            "counts": counts,
-        },
-        "result_filter": f"native:/api/v1/reports/{selected_report_id}/results?sort=-severity&max_results={max_results}",
-        "parsed_result_count": len(rows),
-        "export_complete": export_complete,
-        "severity_counts": runtime_report_summary_severity_counts(rows),
-        "affected_hosts": runtime_report_summary_affected_hosts(rows),
-        "top_results": normalized_rows[:top_results],
-    }
-    payload["artifacts"] = [write_json_artifact(artifact_dir, "summary.json", payload)]
-    return make_result("runtime-report-summary", repo_root, payload["summary"], findings, payload["artifacts"])
 
 
 def command_runtime_scope_report_summary_native(repo_root: Path) -> dict[str, Any]:
@@ -14492,14 +14101,6 @@ def runtime_scope_organization_proof_finding(parsed: dict[str, Any] | None) -> d
     )
 
 
-def command_runtime_metrics(repo_root: Path, action: str, report_id: str | None = None, scope_report_id: str | None = None) -> dict[str, Any]:
-    if action == "report":
-        return command_runtime_report_metrics_native(repo_root, report_id=report_id)
-    if action == "scope-report":
-        return command_runtime_scope_report_metrics_native(repo_root, scope_report_id=scope_report_id)
-    return make_result("runtime-metrics", repo_root, f"Unsupported metrics action: {action}", [finding("fail", "runtime-metrics.action", f"Unsupported metrics action: {action}")])
-
-
 def latest_completed_full_test_report_id(repo_root: Path) -> tuple[str | None, str | None, subprocess.CompletedProcess[str] | None]:
     if not container_running(repo_root, "postgres"):
         return None, "Postgres is not running; start the app profile before selecting the latest full-test report.", None
@@ -14519,54 +14120,6 @@ def latest_completed_full_test_report_id(repo_root: Path) -> tuple[str | None, s
     if not report_id:
         return None, "No completed full-test raw report exists; pass --report-id to inspect a specific report.", result
     return report_id, None, result
-
-
-def command_runtime_report_metrics_native(repo_root: Path, report_id: str | None = None) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    artifact_dir = metrics_artifact_dir(repo_root)
-    try:
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        findings.append(finding("pass", "runtime-metrics.artifact-dir", "Runtime metrics artifact directory is ready.", str(artifact_dir)))
-    except OSError as error:
-        findings.append(finding("fail", "runtime-metrics.artifact-dir", f"Runtime metrics artifact directory is not usable: {error}", str(artifact_dir)))
-    findings.append(finding("pass" if container_running(repo_root, "yafvs-api") else "fail", "native-api.container", "yafvs-api container is running." if container_running(repo_root, "yafvs-api") else "yafvs-api container is not running; start the app profile before reading native raw-report metrics."))
-    selected_report_id = report_id
-    select_result = None
-    if selected_report_id is None:
-        selected_report_id, select_error, select_result = latest_completed_full_test_report_id(repo_root)
-        if select_error:
-            findings.append(finding("fail", "runtime-metrics.report-select", select_error, details={"output_tail": output_tail(select_result.stdout, 80) if select_result else []}))
-        else:
-            findings.append(finding("pass", "runtime-metrics.report-select", "Selected latest completed full-test raw report from PostgreSQL.", details={"report_id": selected_report_id}))
-    else:
-        findings.append(finding("pass", "runtime-metrics.report-select", "Using explicit raw report id.", details={"report_id": selected_report_id}))
-    if aggregate_status(findings) == "fail" or not selected_report_id:
-        payload = {
-            "status": "fail",
-            "summary": "Runtime report metrics stopped at native API prerequisites.",
-            "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-            "details": {"source": "yafvs-api", "report_id": selected_report_id},
-        }
-        payload["artifacts"] = [write_json_artifact(artifact_dir, "report-metrics-failed.json", payload)]
-        return make_result("runtime-report-metrics", repo_root, payload["summary"], findings, payload["artifacts"])
-
-    metrics_path = f"/api/v1/reports/{urllib.parse.quote(selected_report_id)}/metrics"
-    metrics = native_api_curl(repo_root, metrics_path)
-    metrics_json = parse_json_output(metrics)
-    metrics_ok = metrics.returncode == 0 and isinstance(metrics_json, dict) and isinstance(metrics_json.get("summary"), dict)
-    payload = {
-        "status": "pass" if metrics_ok else "fail",
-        "summary": "Runtime report metrics read through the native API." if metrics_ok else "Runtime report metrics response did not include report metrics.",
-        "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
-        "details": {
-            "source": "yafvs-api",
-            "report_id": selected_report_id,
-            "metrics": metrics_json,
-        },
-    }
-    payload["artifacts"] = [write_json_artifact(artifact_dir, "report-metrics.json" if metrics_ok else "report-metrics-failed.json", payload)]
-    findings.append(process_step_finding("pass" if metrics_ok else "fail", "runtime-metrics.report-native", payload["summary"], metrics, compose_command(repo_root, "exec", "-T", "yafvs-api", "curl", "-fsS", "http://127.0.0.1:9080/api/v1/reports/.../metrics")))
-    return make_result("runtime-report-metrics", repo_root, payload["summary"], findings, payload["artifacts"])
 
 
 def command_runtime_scope_report_metrics_native(repo_root: Path, scope_report_id: str | None = None) -> dict[str, Any]:
@@ -29690,16 +29243,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-scanner-redis-init", parents=[common], help="initialize dedicated OpenVAS scanner Redis runtime")
     subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
     subparsers.add_parser("runtime-feed-keyring-init", parents=[common], help="initialize the shared feed signature GnuPG keyring")
-    report_summary = subparsers.add_parser("runtime-report-summary", parents=[common], help="summarize the latest runtime full-test report")
-    report_summary.add_argument("--report-id", help="optional report id; defaults to the latest completed full-test report")
-    report_summary.add_argument("--max-results", type=int, default=1000, help="maximum results to fetch from the selected report")
-    report_summary.add_argument("--top-results", type=int, default=10, help="number of top results to include")
-    report_export = subparsers.add_parser("runtime-report-export", parents=[common], help="export parsed runtime full-test report results as JSON")
-    report_export.add_argument("--report-id", help="optional report id; defaults to the latest completed full-test report")
-    report_export.add_argument("--max-results", type=int, default=1000, help="maximum results to fetch from the selected report")
-    report_export.add_argument("--top-results", type=int, default=10, help="number of top results to include")
-    report_metrics = subparsers.add_parser("runtime-report-metrics", parents=[common], help="read CVSS Load and authenticated coverage for a raw report")
-    report_metrics.add_argument("--report-id", help="optional report id; defaults to the latest completed full-test report")
     subparsers.add_parser("runtime-scope-smoke", parents=[common], help="verify scope reporting without starting scans")
     subparsers.add_parser("runtime-scope-report-summary", parents=[common], help="summarize the latest Organization scope report")
     scope_report_metrics = subparsers.add_parser("runtime-scope-report-metrics", parents=[common], help="read CVSS Load and authenticated coverage for a scope report")
@@ -30009,18 +29552,12 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_scanner_register(repo_root)
     elif args.command == "runtime-feed-keyring-init":
         result = command_runtime_feed_keyring_init(repo_root)
-    elif args.command == "runtime-report-summary":
-        result = command_runtime_report(repo_root, "summary", report_id=args.report_id, max_results=args.max_results, top_results=args.top_results)
-    elif args.command == "runtime-report-export":
-        result = command_runtime_report(repo_root, "export", report_id=args.report_id, max_results=args.max_results, top_results=args.top_results)
-    elif args.command == "runtime-report-metrics":
-        result = command_runtime_metrics(repo_root, "report", report_id=args.report_id)
     elif args.command == "runtime-scope-smoke":
         result = command_runtime_scope(repo_root, "smoke")
     elif args.command == "runtime-scope-report-summary":
         result = command_runtime_scope(repo_root, "summary")
     elif args.command == "runtime-scope-report-metrics":
-        result = command_runtime_metrics(repo_root, "scope-report", scope_report_id=args.scope_report_id)
+        result = command_runtime_scope_report_metrics_native(repo_root, scope_report_id=args.scope_report_id)
     elif args.command == "feed-cache-sync":
         result = command_feed_cache_sync(repo_root)
     elif args.command == "runtime-status":

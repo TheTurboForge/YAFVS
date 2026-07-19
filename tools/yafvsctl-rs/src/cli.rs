@@ -1850,6 +1850,7 @@ mod tests {
             "runtime-rbac-smoke",
             "runtime-scope-smoke",
             "runtime-certs-init",
+            "runtime-feed-keyring-init",
             "down",
             "runtime-app-down",
             "runtime-webui-smoke",

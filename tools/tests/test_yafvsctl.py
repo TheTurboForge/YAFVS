@@ -2356,7 +2356,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-delete-overrides-by-filter", "native-bulk-modify-schedules", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-delete-overrides-by-filter", "native-bulk-modify-schedules", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "runtime-feed-keyring-init", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2476,6 +2476,22 @@ class YAFVSCtlTests(unittest.TestCase):
                 self.assertNotIn(f'args.command == "{command}"', source)
                 self.assertIn(f"{command} *args:", justfile)
                 self.assertIn(f'{direct_recipe} {command} "$@"', justfile)
+
+    def test_runtime_feed_keyring_init_is_rust_owned_with_strict_python_bridge(self):
+        source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
+        justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
+        self.assertNotIn('subparsers.add_parser("runtime-feed-keyring-init"', source)
+        self.assertNotIn('args.command == "runtime-feed-keyring-init"', source)
+        self.assertIn("def command_runtime_feed_keyring_init", source)
+        self.assertIn(
+            '"runtime-feed-keyring-init", ["runtime-feed-keyring-init"]',
+            " ".join(source.split()),
+        )
+        self.assertIn("runtime-feed-keyring-init *args:", justfile)
+        self.assertIn(
+            'tools/yafvsctl-rs/Cargo.toml -- runtime-feed-keyring-init "$@"',
+            justfile,
+        )
 
     def test_rust_license_report_bridge_validates_envelopes_and_forwards_flags(self):
         def envelope(status: str) -> str:
@@ -11089,13 +11105,10 @@ class YAFVSCtlTests(unittest.TestCase):
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
             self.assertEqual(yafvsctl.feed_gnupg_home(root), Path(tmp) / "YAFVS-runtime" / "state" / "feed-gnupg")
-            self.assertEqual(yafvsctl.feed_keyring_artifact_dir(root), Path(tmp) / "YAFVS-runtime" / "artifacts" / "feed-keyring")
-            self.assertEqual(yafvsctl.feed_community_key_path(root), Path(tmp) / "YAFVS-runtime" / "artifacts" / "feed-keyring" / "GBCommunitySigningKey.asc")
 
     def test_feed_keyring_constants_match_greenbone_community_key(self):
         self.assertEqual(yafvsctl.GREENBONE_COMMUNITY_FEED_URL, "rsync://feed.community.greenbone.net/community")
         self.assertEqual(yafvsctl.GREENBONE_COMMUNITY_KEY_FPR, "8AE4BE429B60A59B311C2E739823FAA60ED1E580")
-        self.assertEqual(yafvsctl.GREENBONE_COMMUNITY_KEY_URL, "https://www.greenbone.net/GBCommunitySigningKey.asc")
 
 
 
@@ -11131,36 +11144,6 @@ class YAFVSCtlTests(unittest.TestCase):
             config_text = config.read_text(encoding="utf-8")
             self.assertIn("apiServer: window.location.host || '192.168.178.42:19392'", config_text)
             self.assertIn("apiProtocol: (window.location.protocol || 'https:').replace(':', '')", config_text)
-    def test_feed_community_key_download_command_targets_runtime_artifact(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            command = yafvsctl.feed_community_key_download_command(root)
-            self.assertEqual(command[:3], ["curl", "-fsSL", "-o"])
-            self.assertEqual(command[3], str(yafvsctl.feed_community_key_path(root)))
-            self.assertEqual(command[4], yafvsctl.GREENBONE_COMMUNITY_KEY_URL)
-
-    def test_notus_signature_files_use_active_generation(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            signature_files = yafvsctl.notus_signature_files(root)
-            self.assertEqual(
-                signature_files,
-                [
-                    (
-                        "advisories",
-                        Path(tmp) / "YAFVS-runtime" / "feed-store" / "current" / "notus" / "advisories" / "sha256sums",
-                        Path(tmp) / "YAFVS-runtime" / "feed-store" / "current" / "notus" / "advisories" / "sha256sums.asc",
-                    ),
-                    (
-                        "products",
-                        Path(tmp) / "YAFVS-runtime" / "feed-store" / "current" / "notus" / "products" / "sha256sums",
-                        Path(tmp) / "YAFVS-runtime" / "feed-store" / "current" / "notus" / "products" / "sha256sums.asc",
-                    ),
-                ],
-            )
-
     def test_feed_sync_command_uses_full_22_04_cache(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"

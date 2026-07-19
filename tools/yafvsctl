@@ -255,9 +255,7 @@ FEED_SYNC_TYPE = "all"
 FEED_SYNC_SESSION = "yafvs-feed-sync"
 GREENBONE_COMMUNITY_FEED_URL = "rsync://feed.community.greenbone.net/community"
 FEED_RSYNC_TIMEOUT_SECONDS = 900
-GREENBONE_COMMUNITY_KEY_URL = "https://www.greenbone.net/GBCommunitySigningKey.asc"
 GREENBONE_COMMUNITY_KEY_FPR = "8AE4BE429B60A59B311C2E739823FAA60ED1E580"
-NOTUS_SIGNATURE_SUBTREES = ("advisories", "products")
 EMPTY_SCAN_CONFIG_ID = "085569ce-73ed-11df-83c3-002264764cea"
 FULL_AND_FAST_SCAN_CONFIG_ID = "daba56c8-73ec-11df-a475-002264764cea"
 IANA_TCP_UDP_PORT_LIST_ID = "4a4717fe-57d2-11e1-9a26-406186ea4fc5"
@@ -3392,26 +3390,8 @@ def feed_gnupg_home(repo_root: Path) -> Path:
     return runtime_path(repo_root, "state", "feed-gnupg")
 
 
-def feed_keyring_artifact_dir(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "artifacts", "feed-keyring")
-
-
-def feed_community_key_path(repo_root: Path) -> Path:
-    return feed_keyring_artifact_dir(repo_root) / "GBCommunitySigningKey.asc"
-
-
 def gpg_command(repo_root: Path, *args: str) -> list[str]:
     return ["gpg", "--batch", "--homedir", str(feed_gnupg_home(repo_root)), *args]
-
-
-def feed_community_key_download_command(repo_root: Path) -> list[str]:
-    return ["curl", "-fsSL", "-o", str(feed_community_key_path(repo_root)), GREENBONE_COMMUNITY_KEY_URL]
-
-
-def notus_signature_files(repo_root: Path) -> list[tuple[str, Path, Path]]:
-    root = feed_runtime_root(repo_root) / "notus"
-    return [(subtree, root / subtree / "sha256sums", root / subtree / "sha256sums.asc") for subtree in NOTUS_SIGNATURE_SUBTREES]
-
 
 
 def feed_sync_binary(repo_root: Path) -> Path:
@@ -13554,50 +13534,11 @@ def command_runtime_scanner_register(repo_root: Path) -> dict[str, Any]:
 
 
 def command_runtime_feed_keyring_init(repo_root: Path) -> dict[str, Any]:
-    findings = ensure_runtime_dirs(repo_root)
-    home = feed_gnupg_home(repo_root)
-    key_path = feed_community_key_path(repo_root)
-    try:
-        home.mkdir(parents=True, exist_ok=True)
-        home.chmod(0o700)
-        key_path.parent.mkdir(parents=True, exist_ok=True)
-        findings.append(finding("pass", "feed-keyring.dir", "Shared feed signature keyring directory is ready.", str(home)))
-    except OSError as error:
-        findings.append(finding("fail", "feed-keyring.dir", f"Shared feed signature keyring directory is not usable: {error}", str(home)))
-
-    findings.append(finding("pass" if shutil.which("gpg") else "fail", "gpg.available", "gpg is available." if shutil.which("gpg") else "gpg is missing."))
-    findings.append(finding("pass" if shutil.which("curl") else "fail", "curl.available", "curl is available." if shutil.which("curl") else "curl is missing."))
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-feed-keyring-init", repo_root, "Feed keyring initialization stopped at prerequisites.", findings, [str(home)])
-
-    if key_path.is_file() and key_path.stat().st_size > 0:
-        findings.append(finding("pass", "feed-keyring.community-key", "Greenbone Community signing key artifact already exists.", str(key_path)))
-    else:
-        download = run_command(feed_community_key_download_command(repo_root), repo_root, timeout=120)
-        findings.append(finding("pass" if download.returncode == 0 else "fail", "feed-keyring.community-key", f"Download Greenbone Community signing key exit code {download.returncode}.", str(key_path), {"url": GREENBONE_COMMUNITY_KEY_URL, "output_tail": output_tail(download.stdout, 80)}))
-        if download.returncode != 0:
-            return make_result("runtime-feed-keyring-init", repo_root, "Feed keyring initialization stopped while downloading the signing key.", findings, [str(home), str(key_path)])
-
-    imported = run_command(gpg_command(repo_root, "--import", str(key_path)), repo_root, timeout=120)
-    findings.append(finding("pass" if imported.returncode == 0 else "fail", "feed-keyring.import", f"Import Greenbone Community signing key exit code {imported.returncode}.", details={"output_tail": output_tail(imported.stdout, 80)}))
-    if imported.returncode != 0:
-        return make_result("runtime-feed-keyring-init", repo_root, "Feed keyring initialization stopped while importing the signing key.", findings, [str(home), str(key_path)])
-
-    ownertrust = run_command(gpg_command(repo_root, "--import-ownertrust"), repo_root, timeout=60, input_text=f"{GREENBONE_COMMUNITY_KEY_FPR}:6:\n")
-    findings.append(finding("pass" if ownertrust.returncode == 0 else "fail", "feed-keyring.ownertrust", f"Set Greenbone Community signing key ownertrust exit code {ownertrust.returncode}.", details={"fingerprint": GREENBONE_COMMUNITY_KEY_FPR, "output_tail": output_tail(ownertrust.stdout, 80)}))
-
-    fingerprint = run_command(gpg_command(repo_root, "--with-colons", "--fingerprint", GREENBONE_COMMUNITY_KEY_FPR), repo_root, timeout=60)
-    fingerprint_ok = fingerprint.returncode == 0 and GREENBONE_COMMUNITY_KEY_FPR in fingerprint.stdout.replace(" ", "").upper()
-    findings.append(finding("pass" if fingerprint_ok else "fail", "feed-keyring.fingerprint", "Greenbone Community signing key fingerprint is present." if fingerprint_ok else "Greenbone Community signing key fingerprint was not found after import.", details={"fingerprint": GREENBONE_COMMUNITY_KEY_FPR, "output_tail": output_tail(fingerprint.stdout, 80)}))
-
-    for subtree, checksums, signature in notus_signature_files(repo_root):
-        paths_ok = checksums.is_file() and signature.is_file()
-        findings.append(finding("pass" if paths_ok else "fail", f"feed-keyring.notus-{subtree}-files", f"Notus {subtree} signature files are present." if paths_ok else f"Notus {subtree} signature files are missing.", details={"checksums": str(checksums), "signature": str(signature)}))
-        if paths_ok:
-            verify = run_command(gpg_command(repo_root, "--verify", str(signature), str(checksums)), repo_root, timeout=120)
-            findings.append(finding("pass" if verify.returncode == 0 else "fail", f"feed-keyring.notus-{subtree}-signature", f"Verify Notus {subtree} sha256sums signature exit code {verify.returncode}.", details={"output_tail": output_tail(verify.stdout, 80)}))
-
-    return make_result("runtime-feed-keyring-init", repo_root, "Shared feed signature keyring initialization completed.", findings, [str(home), str(key_path)])
+    return rust_result_envelope(
+        repo_root,
+        "runtime-feed-keyring-init",
+        ["runtime-feed-keyring-init"],
+    )
 
 
 
@@ -23136,7 +23077,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-manager-init", parents=[common], help="initialize persistent gvmd database/user prerequisites")
     subparsers.add_parser("runtime-scanner-redis-init", parents=[common], help="initialize dedicated OpenVAS scanner Redis runtime")
     subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
-    subparsers.add_parser("runtime-feed-keyring-init", parents=[common], help="initialize the shared feed signature GnuPG keyring")
     subparsers.add_parser("feed-cache-sync", parents=[common], help="start full Greenbone Community Feed cache sync in tmux")
     subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
@@ -23241,8 +23181,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_scanner_redis_init(repo_root)
     elif args.command == "runtime-scanner-register":
         result = command_runtime_scanner_register(repo_root)
-    elif args.command == "runtime-feed-keyring-init":
-        result = command_runtime_feed_keyring_init(repo_root)
     elif args.command == "feed-cache-sync":
         result = command_feed_cache_sync(repo_root)
     elif args.command == "runtime-status":

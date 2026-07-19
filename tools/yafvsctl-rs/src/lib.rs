@@ -28,6 +28,7 @@ pub use commands::{
     command_runtime_native_api_direct_bootstrap, command_runtime_native_api_direct_token,
     command_runtime_nmap_capability_check, command_runtime_performance_snapshot,
     command_runtime_plan, command_runtime_rbac_smoke, command_runtime_redis_state,
+    command_runtime_report_export, command_runtime_report_metrics, command_runtime_report_summary,
     command_runtime_scanner_capability_check, command_runtime_scanner_process_check,
     command_runtime_webui_smoke, command_rust_migration_state, command_security_policy_check,
     command_status, find_repo_root,
@@ -98,6 +99,29 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         CliCommand::Deps { component } => command_deps(&repo_root, component.as_deref()),
         CliCommand::RuntimeFeedImportInit => command_runtime_feed_import_init(&repo_root),
         CliCommand::RuntimePerformanceSnapshot => command_runtime_performance_snapshot(&repo_root),
+        CliCommand::RuntimeReportSummary {
+            report_id,
+            max_results,
+            top_results,
+        } => command_runtime_report_summary(
+            &repo_root,
+            report_id.as_deref(),
+            *max_results,
+            *top_results,
+        ),
+        CliCommand::RuntimeReportExport {
+            report_id,
+            max_results,
+            top_results,
+        } => command_runtime_report_export(
+            &repo_root,
+            report_id.as_deref(),
+            *max_results,
+            *top_results,
+        ),
+        CliCommand::RuntimeReportMetrics { report_id } => {
+            command_runtime_report_metrics(&repo_root, report_id.as_deref())
+        }
         CliCommand::RuntimeCertbundReport {
             report_id,
             task_id,

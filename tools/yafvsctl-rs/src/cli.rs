@@ -116,6 +116,36 @@ pub enum CliCommand {
     RuntimeFeedImportInit,
     /// Capture a runtime performance snapshot for diagnostics.
     RuntimePerformanceSnapshot,
+    /// Summarize a completed full-test report through the native API.
+    RuntimeReportSummary {
+        /// Optional raw report id; defaults to the latest completed full-test report.
+        #[arg(long)]
+        report_id: Option<String>,
+        /// Maximum result rows to fetch.
+        #[arg(long, default_value_t = 1000)]
+        max_results: usize,
+        /// Maximum highest-severity rows to include in the summary.
+        #[arg(long, default_value_t = 10)]
+        top_results: usize,
+    },
+    /// Export normalized result rows from a completed full-test report.
+    RuntimeReportExport {
+        /// Optional raw report id; defaults to the latest completed full-test report.
+        #[arg(long)]
+        report_id: Option<String>,
+        /// Maximum result rows to fetch.
+        #[arg(long, default_value_t = 1000)]
+        max_results: usize,
+        /// Maximum highest-severity rows to include in the summary.
+        #[arg(long, default_value_t = 10)]
+        top_results: usize,
+    },
+    /// Emit Prometheus-style metrics for a completed full-test report.
+    RuntimeReportMetrics {
+        /// Optional raw report id; defaults to the latest completed full-test report.
+        #[arg(long)]
+        report_id: Option<String>,
+    },
     /// Build a native CERT-Bund JSON or CSV report for a raw report or task.
     RuntimeCertbundReport {
         /// Optional raw report id; defaults to the latest completed full-test report.
@@ -268,6 +298,9 @@ impl CliCommand {
             Self::Deps { .. } => "deps",
             Self::RuntimeFeedImportInit => "runtime-feed-import-init",
             Self::RuntimePerformanceSnapshot => "runtime-performance-snapshot",
+            Self::RuntimeReportSummary { .. } => "runtime-report-summary",
+            Self::RuntimeReportExport { .. } => "runtime-report-export",
+            Self::RuntimeReportMetrics { .. } => "runtime-report-metrics",
             Self::RuntimeCertbundReport { .. } => "runtime-certbund-report",
             Self::RuntimeLogReview => "runtime-log-review",
             Self::RuntimeScannerCapabilityCheck => "runtime-scanner-capability-check",
@@ -329,6 +362,66 @@ mod tests {
             assert_eq!(cli.command, expected);
             assert_eq!(cli.command.name(), argument);
         }
+    }
+
+    #[test]
+    fn parses_and_names_native_report_commands() {
+        assert_eq!(
+            parse_cli([
+                "runtime-report-summary",
+                "--report-id",
+                "report-1",
+                "--max-results",
+                "25",
+                "--top-results",
+                "5",
+            ])
+            .unwrap()
+            .command,
+            CliCommand::RuntimeReportSummary {
+                report_id: Some("report-1".into()),
+                max_results: 25,
+                top_results: 5,
+            }
+        );
+        assert_eq!(
+            parse_cli(["runtime-report-export"]).unwrap().command,
+            CliCommand::RuntimeReportExport {
+                report_id: None,
+                max_results: 1000,
+                top_results: 10,
+            }
+        );
+        assert_eq!(
+            parse_cli(["runtime-report-metrics", "--report-id", "report-2"])
+                .unwrap()
+                .command,
+            CliCommand::RuntimeReportMetrics {
+                report_id: Some("report-2".into()),
+            }
+        );
+        assert_eq!(
+            CliCommand::RuntimeReportSummary {
+                report_id: None,
+                max_results: 1,
+                top_results: 1,
+            }
+            .name(),
+            "runtime-report-summary"
+        );
+        assert_eq!(
+            CliCommand::RuntimeReportExport {
+                report_id: None,
+                max_results: 1,
+                top_results: 1,
+            }
+            .name(),
+            "runtime-report-export"
+        );
+        assert_eq!(
+            CliCommand::RuntimeReportMetrics { report_id: None }.name(),
+            "runtime-report-metrics"
+        );
     }
 
     #[test]

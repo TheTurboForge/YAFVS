@@ -231,6 +231,8 @@ Useful development checks include:
 - `just feed-generation-rollback -- <generation-id>`
 - `just runtime-scope-smoke --json`
 - `just runtime-scope-report-summary --json`
+- `just runtime-report-summary --json`
+- `just runtime-report-export --json`
 - `just runtime-certbund-report --json`
 - `just runtime-report-metrics --json`
 - `just runtime-scope-report-metrics --json`

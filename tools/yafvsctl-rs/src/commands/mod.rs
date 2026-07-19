@@ -33,6 +33,7 @@ mod runtime_lock;
 mod runtime_log_review;
 mod runtime_performance_snapshot;
 mod runtime_probe;
+mod runtime_report;
 mod runtime_scanner_capability;
 mod runtime_scanner_process;
 mod runtime_webui;
@@ -78,6 +79,9 @@ pub use runtime_probe::{
     command_runtime_credential_smoke, command_runtime_full_test_scan_preflight,
     command_runtime_full_test_scan_start, command_runtime_full_test_scan_status,
     command_runtime_gmp_smoke, command_runtime_rbac_smoke,
+};
+pub use runtime_report::{
+    command_runtime_report_export, command_runtime_report_metrics, command_runtime_report_summary,
 };
 pub use runtime_scanner_capability::{
     command_runtime_nmap_capability_check, command_runtime_scanner_capability_check,

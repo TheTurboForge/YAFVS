@@ -72,6 +72,9 @@ feed-copy-to-runtime
 deps
 runtime-feed-import-init
 runtime-performance-snapshot
+runtime-report-summary
+runtime-report-export
+runtime-report-metrics
 runtime-certbund-report
 runtime-log-review
 runtime-scanner-capability-check
@@ -290,10 +293,14 @@ before runtime checks or side effects. Preflight and status never start a scan.
 
 ## Reports And Scopes
 
-- `just runtime-report-summary [--report-id ID]`: summarize a completed raw
-  report.
-- `just runtime-report-export [--report-id ID]`: export parsed raw results.
-- `just runtime-report-metrics [--report-id ID]`: read native report metrics.
+- `just runtime-report-summary [--report-id ID] [--max-results N]
+  [--top-results N]`: summarize a completed raw report in the private runtime
+  artifact `reports/summary.json`.
+- `just runtime-report-export [--report-id ID] [--max-results N]
+  [--top-results N]`: export normalized raw results to the private runtime
+  artifacts `reports/export.json` and `reports/export-results.csv`.
+- `just runtime-report-metrics [--report-id ID]`: read native report metrics
+  into the private runtime artifact `metrics/report-metrics.json`.
 - `just runtime-certbund-report`: create a native CERT-Bund report.
 - `just runtime-scope-smoke`: verify scope reporting without starting scans.
 - `just runtime-scope-report-summary`: summarize the latest Organization scope

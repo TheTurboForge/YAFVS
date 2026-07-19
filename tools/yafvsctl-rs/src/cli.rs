@@ -442,6 +442,8 @@ pub enum CliCommand {
     RuntimeStatus,
     /// Run strict development runtime smoke checks without creating prerequisites.
     RuntimeSmoke,
+    /// Run the narrow experimental manager profile.
+    GvmdSmoke,
     /// Stop and remove the development runtime infrastructure and application containers.
     Down,
     /// Stop and remove experimental application runtime containers.
@@ -676,6 +678,7 @@ impl CliCommand {
             Self::RuntimePlan => "runtime-plan",
             Self::RuntimeStatus => "runtime-status",
             Self::RuntimeSmoke => "runtime-smoke",
+            Self::GvmdSmoke => "gvmd-smoke",
             Self::Down => "down",
             Self::RuntimeAppDown => "runtime-app-down",
             Self::FeedCopyToRuntime => "feed-copy-to-runtime",

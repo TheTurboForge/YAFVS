@@ -889,7 +889,7 @@ fn postgres_collation_findings(
         .collect()
 }
 
-fn pg_gvm_extension_finding(
+pub(crate) fn pg_gvm_extension_finding(
     runner: &dyn CommandRunner,
     repo_root: &Path,
     environment: &BTreeMap<OsString, OsString>,

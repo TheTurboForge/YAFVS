@@ -29,7 +29,7 @@ use super::runtime_lock::{
     DEFAULT_RUNTIME_LOCK_TIMEOUT, FEED_ACTIVATION_LOCK, RuntimeLockError, RuntimeOperationLock,
     runtime_lock_dir,
 };
-use crate::process::SystemCommandRunner;
+use crate::process::{CommandRunner, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
 use database::DatabaseAttestationAdapter;
 use serde_json::{Map, Value, json};
@@ -49,6 +49,62 @@ const MAX_MANIFEST: u64 = 128 * 1024 * 1024;
 const MAX_STORE_ENTRIES: usize = 64;
 const MAX_GENERATIONS: usize = 32;
 const MAX_NAME: usize = 128;
+
+pub(crate) fn require_current_app_deployment(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    environment: &BTreeMap<std::ffi::OsString, std::ffi::OsString>,
+) -> Result<BTreeMap<String, String>, String> {
+    let receipt = deployment::require_app_deployment_receipt(&runtime_dir(repo_root))?;
+    let image_ids = deployment::validate_app_service_image_ids(
+        receipt
+            .get("image_ids")
+            .ok_or("application deployment receipt is invalid")?,
+    )?;
+    let unavailable =
+        compose_identity::unavailable_images(repo_root, runner, environment, &image_ids)?;
+    if !unavailable.is_empty() {
+        return Err(format!(
+            "Pinned application image objects are unavailable for {}; restore those exact image objects by digest from a trusted registry or docker load before continuing",
+            unavailable.join(", ")
+        ));
+    }
+
+    let expected_artifacts = receipt
+        .get("runtime_artifacts")
+        .ok_or("application deployment receipt is invalid")?;
+    let observed_artifacts =
+        artifact_identity::app_runtime_artifact_manifest(repo_root).map_err(|error| {
+            format!("Runtime deployment artifact identity could not be verified: {error}")
+        })?;
+    if observed_artifacts.get("digest") != expected_artifacts.get("digest") {
+        return Err("Bind-mounted runtime artifacts changed during the feed transition.".into());
+    }
+
+    let expected_compose = receipt
+        .get("compose_contract")
+        .ok_or("application deployment receipt is invalid")?;
+    let observed_compose =
+        compose_identity::compose_contract_manifest(repo_root, runner, environment, &image_ids)
+            .map_err(|error| {
+                format!("Application Compose execution contract could not be verified: {error}")
+            })?;
+    if observed_compose.get("digest") != expected_compose.get("digest") {
+        return Err(
+            "Rendered application Compose execution contract changed after deployment preparation."
+                .into(),
+        );
+    }
+    Ok(image_ids)
+}
+
+pub(crate) fn pinned_app_compose_command(
+    repo_root: &Path,
+    image_ids: &BTreeMap<String, String>,
+    arguments: &[String],
+) -> Result<Vec<String>, String> {
+    compose_identity::pinned_compose_command(repo_root, image_ids, arguments)
+}
 
 #[derive(Clone)]
 struct Spec {

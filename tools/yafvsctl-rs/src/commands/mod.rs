@@ -17,6 +17,7 @@ mod doctor;
 mod feed;
 mod feed_cache_sync;
 mod feed_generation;
+mod gvmd_smoke;
 mod license;
 mod native_api_request;
 mod native_delete_overrides;
@@ -79,6 +80,7 @@ pub use feed_generation::{
     command_feed_generation_runtime_guard, command_feed_generation_stage,
     command_feed_generation_state,
 };
+pub use gvmd_smoke::command_gvmd_smoke;
 pub use license::command_license_report;
 pub use native_api_request::command_native_api_request;
 pub use native_bulk_modify_schedules::command_native_bulk_modify_schedules;

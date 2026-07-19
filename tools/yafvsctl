@@ -251,10 +251,6 @@ FEED_RELEASE = "22.04"
 FEED_DB_ATTESTATION_META_NAME = "yafvs_feed_generation_attestation"
 FEED_DB_ATTESTATION_IMPORT_CONTRACT = "gvmd-nvt+gvmd-data-all+scap/v1"
 FEED_DB_ATTESTATION_MAX_BYTES = 4096
-FEED_SYNC_TYPE = "all"
-FEED_SYNC_SESSION = "yafvs-feed-sync"
-GREENBONE_COMMUNITY_FEED_URL = "rsync://feed.community.greenbone.net/community"
-FEED_RSYNC_TIMEOUT_SECONDS = 900
 GREENBONE_COMMUNITY_KEY_FPR = "8AE4BE429B60A59B311C2E739823FAA60ED1E580"
 EMPTY_SCAN_CONFIG_ID = "085569ce-73ed-11df-83c3-002264764cea"
 FULL_AND_FAST_SCAN_CONFIG_ID = "daba56c8-73ec-11df-a475-002264764cea"
@@ -3392,60 +3388,6 @@ def feed_gnupg_home(repo_root: Path) -> Path:
 
 def gpg_command(repo_root: Path, *args: str) -> list[str]:
     return ["gpg", "--batch", "--homedir", str(feed_gnupg_home(repo_root)), *args]
-
-
-def feed_sync_binary(repo_root: Path) -> Path:
-    return repo_root / "build" / "venvs" / "greenbone-feed-sync" / "bin" / "greenbone-feed-sync"
-
-
-def greenbone_community_feed_urls(release: str = FEED_RELEASE) -> dict[str, str]:
-    base = GREENBONE_COMMUNITY_FEED_URL
-    return {
-        "feed-url": base,
-        "gvmd-data-url": f"{base}/data-feed/{release}/",
-        "report-formats-url": f"{base}/data-feed/{release}/report-formats/",
-        "scan-configs-url": f"{base}/data-feed/{release}/scan-configs/",
-        "port-lists-url": f"{base}/data-feed/{release}/port-lists/",
-        "notus-url": f"{base}/vulnerability-feed/{release}/vt-data/notus/",
-        "nasl-url": f"{base}/vulnerability-feed/{release}/vt-data/nasl/",
-        "scap-data-url": f"{base}/vulnerability-feed/{release}/scap-data/",
-        "cert-data-url": f"{base}/vulnerability-feed/{release}/cert-data/",
-    }
-
-
-def feed_sync_command(repo_root: Path, selftest: bool = False) -> list[str]:
-    command = [str(feed_sync_binary(repo_root))]
-    if selftest:
-        command.append("--selftest")
-    community_urls = greenbone_community_feed_urls(FEED_RELEASE)
-    return [
-        *command,
-        "--type",
-        FEED_SYNC_TYPE,
-        "--feed-release",
-        FEED_RELEASE,
-        "--gvmd-data-url",
-        community_urls["gvmd-data-url"],
-        "--report-formats-url",
-        community_urls["report-formats-url"],
-        "--scan-configs-url",
-        community_urls["scan-configs-url"],
-        "--port-lists-url",
-        community_urls["port-lists-url"],
-        "--notus-url",
-        community_urls["notus-url"],
-        "--nasl-url",
-        community_urls["nasl-url"],
-        "--scap-data-url",
-        community_urls["scap-data-url"],
-        "--cert-data-url",
-        community_urls["cert-data-url"],
-        "--destination-prefix",
-        str(feed_cache_var_lib(repo_root)),
-        "--fail-fast",
-        "--rsync-timeout",
-        str(FEED_RSYNC_TIMEOUT_SECONDS),
-    ]
 
 
 def gsa_build_dir(repo_root: Path) -> Path:
@@ -13686,47 +13628,6 @@ def latest_completed_full_test_report_id(repo_root: Path) -> tuple[str | None, s
     return report_id, None, result
 
 
-def command_feed_cache_sync(repo_root: Path) -> dict[str, Any]:
-    findings = ensure_runtime_dirs(repo_root)
-    binary = feed_sync_binary(repo_root)
-    findings.append(finding("pass" if binary.is_file() else "fail", "feed-sync.available", "greenbone-feed-sync venv command is available." if binary.is_file() else "greenbone-feed-sync venv command is missing; run just build-python or just build-baseline.", str(binary)))
-    findings.append(finding("pass" if shutil.which("rsync") else "fail", "rsync.available", "rsync is available." if shutil.which("rsync") else "rsync is missing."))
-    findings.append(finding("pass" if shutil.which("tmux") else "fail", "tmux.available", "tmux is available." if shutil.which("tmux") else "tmux is missing."))
-    if aggregate_status(findings) == "fail":
-        return make_result("feed-cache-sync", repo_root, "Feed cache sync stopped at prerequisites.", findings, [str(feed_cache_var_lib(repo_root))])
-
-    selftest = run_command(feed_sync_command(repo_root, selftest=True), repo_root, env=build_env(repo_root), timeout=120)
-    findings.append(finding("pass" if selftest.returncode == 0 else "fail", "feed-sync.selftest", f"greenbone-feed-sync selftest exit code {selftest.returncode}.", details={"output_tail": output_tail(selftest.stdout, 80)}))
-    if selftest.returncode != 0:
-        return make_result("feed-cache-sync", repo_root, "Feed cache sync stopped at greenbone-feed-sync selftest.", findings, [str(feed_cache_var_lib(repo_root))])
-
-    session_check = run_command(["tmux", "has-session", "-t", FEED_SYNC_SESSION], repo_root)
-    if session_check.returncode == 0:
-        findings.append(finding("warn", "feed-sync.session", f"tmux session {FEED_SYNC_SESSION} is already running; not starting another sync.", details={"session": FEED_SYNC_SESSION}))
-        return make_result("feed-cache-sync", repo_root, "Feed cache sync is already running.", findings, [str(feed_cache_var_lib(repo_root))])
-
-    feed_sync_log_dir(repo_root).mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    log_path = feed_sync_log_dir(repo_root) / f"community-{FEED_RELEASE}-{timestamp}.log"
-    sync_command = feed_sync_command(repo_root)
-    sync_line = " ".join(shlex.quote(part) for part in sync_command)
-    inner_command = (
-        f"cd {shlex.quote(str(repo_root))} && "
-        "set -o pipefail && "
-        f"{{ printf '%s\\n' 'YAFVS feed cache sync started at {timestamp}'; "
-        f"{sync_line}; "
-        "status=$?; "
-        "printf '%s\\n' \"YAFVS feed cache sync exited with status $status\"; "
-        "exit $status; "
-        f"}} 2>&1 | tee -a {shlex.quote(str(log_path))}"
-    )
-    shell_command = f"bash -lc {shlex.quote(inner_command)}"
-    start = run_command(["tmux", "new-session", "-d", "-s", FEED_SYNC_SESSION, shell_command], repo_root)
-    findings.append(finding("pass" if start.returncode == 0 else "fail", "feed-sync.session-start", f"Start tmux feed sync session exit code {start.returncode}.", details={"session": FEED_SYNC_SESSION, "log_path": str(log_path), "output_tail": output_tail(start.stdout, 80)}))
-    return make_result("feed-cache-sync", repo_root, "Feed cache sync session start attempted.", findings, [str(feed_cache_var_lib(repo_root)), str(log_path)])
-
-
-
 def runtime_app_up_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
     compact = dict(result)
     findings = result.get("findings", [])
@@ -23077,7 +22978,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("runtime-manager-init", parents=[common], help="initialize persistent gvmd database/user prerequisites")
     subparsers.add_parser("runtime-scanner-redis-init", parents=[common], help="initialize dedicated OpenVAS scanner Redis runtime")
     subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
-    subparsers.add_parser("feed-cache-sync", parents=[common], help="start full Greenbone Community Feed cache sync in tmux")
     subparsers.add_parser("runtime-status", parents=[common], help="show runtime infrastructure status")
     subparsers.add_parser("runtime-smoke", parents=[common], help="run runtime infrastructure smoke checks")
     runtime_app_up = subparsers.add_parser("runtime-app-up", parents=[common], help="start experimental application services")
@@ -23181,8 +23081,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_scanner_redis_init(repo_root)
     elif args.command == "runtime-scanner-register":
         result = command_runtime_scanner_register(repo_root)
-    elif args.command == "feed-cache-sync":
-        result = command_feed_cache_sync(repo_root)
     elif args.command == "runtime-status":
         result = command_runtime_status(repo_root)
     elif args.command == "runtime-smoke":

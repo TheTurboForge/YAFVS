@@ -1855,6 +1855,7 @@ mod tests {
             "runtime-scope-smoke",
             "runtime-certs-init",
             "runtime-feed-keyring-init",
+            "feed-cache-sync",
             "down",
             "runtime-app-down",
             "runtime-webui-smoke",

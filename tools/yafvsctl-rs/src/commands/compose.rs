@@ -124,7 +124,7 @@ mod tests {
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        let repo = root.join("TurboVAS");
+        let repo = root.join("YAFVS");
         fs::create_dir_all(&repo).unwrap();
         (root, repo)
     }
@@ -133,13 +133,13 @@ mod tests {
     fn compose_command_uses_the_repository_compose_file() {
         assert_eq!(
             compose_command(
-                Path::new("/srv/TurboVAS"),
+                Path::new("/srv/YAFVS"),
                 &["logs".to_string(), "--tail".to_string(), "12".to_string()]
             ),
             vec![
                 "compose",
                 "-f",
-                "/srv/TurboVAS/compose/dev.yaml",
+                "/srv/YAFVS/compose/dev.yaml",
                 "logs",
                 "--tail",
                 "12",
@@ -151,14 +151,14 @@ mod tests {
     fn compose_command_places_extra_files_before_the_operation() {
         assert_eq!(
             compose_command_with_files(
-                Path::new("/srv/TurboVAS"),
+                Path::new("/srv/YAFVS"),
                 &[Path::new("/runtime/app-images.json")],
                 &["config".to_string(), "--quiet".to_string()],
             ),
             vec![
                 "compose",
                 "-f",
-                "/srv/TurboVAS/compose/dev.yaml",
+                "/srv/YAFVS/compose/dev.yaml",
                 "-f",
                 "/runtime/app-images.json",
                 "config",

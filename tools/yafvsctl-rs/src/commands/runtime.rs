@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn logs_retain_only_the_requested_tail() {
         let result =
-            command_logs_with_runner(Path::new("/srv/TurboVAS"), Some("gvmd"), 2, &LogsRunner);
+            command_logs_with_runner(Path::new("/srv/YAFVS"), Some("gvmd"), 2, &LogsRunner);
         assert_eq!(result.status, "pass");
         assert_eq!(
             result.findings[0].message,
@@ -273,7 +273,7 @@ mod tests {
 
     #[test]
     fn logs_reject_non_positive_line_counts_without_running_docker() {
-        let result = command_logs_with_runner(Path::new("/srv/TurboVAS"), None, 0, &LogsRunner);
+        let result = command_logs_with_runner(Path::new("/srv/YAFVS"), None, 0, &LogsRunner);
         assert_eq!(result.status, "fail");
         assert_eq!(result.findings[0].check, "compose.logs.invalid_lines");
     }

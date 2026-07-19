@@ -35,7 +35,7 @@ pub enum CliCommand {
     PathCouplingState,
     /// Inspect Redis dependency and runtime boundary state.
     RuntimeRedisState,
-    /// Plan or apply the atomic TurboVAS runtime identity migration.
+    /// Plan or apply the atomic TurboVAS-to-YAFVS runtime identity migration.
     RuntimeIdentityMigrate {
         /// Perform the rename after all safety checks pass.
         #[arg(long)]

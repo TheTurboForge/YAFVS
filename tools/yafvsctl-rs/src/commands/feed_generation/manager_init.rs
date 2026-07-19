@@ -460,15 +460,15 @@ mod tests {
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        let repo = root.join("TurboVAS");
+        let repo = root.join("YAFVS");
         fs::create_dir_all(repo.join("compose")).unwrap();
         (root, repo)
     }
 
     fn environment() -> BTreeMap<OsString, OsString> {
         BTreeMap::from([
-            (OsString::from("POSTGRES_DB"), OsString::from("turbovas")),
-            (OsString::from("POSTGRES_USER"), OsString::from("turbovas")),
+            (OsString::from("POSTGRES_DB"), OsString::from("yafvs")),
+            (OsString::from("POSTGRES_USER"), OsString::from("yafvs")),
         ])
     }
 
@@ -575,7 +575,7 @@ mod tests {
         let runner = Runner::new([]);
         let environment = BTreeMap::from([
             (OsString::from("POSTGRES_DB"), OsString::from("--unsafe")),
-            (OsString::from("POSTGRES_USER"), OsString::from("turbovas")),
+            (OsString::from("POSTGRES_USER"), OsString::from("yafvs")),
         ]);
         let images = images();
         let runtime = ServiceRuntime::new(&repo, &runner, &environment, &images);

@@ -590,11 +590,11 @@ mod tests {
 
     fn fixture(name: &str) -> (PathBuf, PathBuf) {
         let root = std::env::temp_dir().join(format!(
-            "turbovas-data-state-{name}-{}-{}",
+            "yafvs-data-state-{name}-{}-{}",
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        let repo = root.join("TurboVAS");
+        let repo = root.join("YAFVS");
         fs::create_dir_all(&repo).unwrap();
         (root, repo)
     }

@@ -64,7 +64,7 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
         super().setUpClass()
         cls.admission_script = load_c_admission_script()
         cls.redis_directory = tempfile.TemporaryDirectory(
-            prefix='turbovas-result-queue-redis-'
+            prefix='yafvs-result-queue-redis-'
         )
         cls.socket_path = Path(cls.redis_directory.name) / 'redis.sock'
         cls.redis_url = f'unix://{cls.socket_path}'

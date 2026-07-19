@@ -58,6 +58,7 @@ COMMENT_NOTICE_NAMES = frozenset({"Makefile", ".dockerignore", ".gitignore"})
 IMPORTED_ADDED_PREFIXES = ("components/pg-gvm/",)
 FEED_CONTENT_TRACKED_PREFIXES = (
     "YAFVS-runtime/",
+    "TurboVAS-runtime/",
     "feed-cache/",
     "feeds/openvas/plugins/",
     "feeds/notus/",
@@ -13777,7 +13778,7 @@ def modified_imported_license_findings(
         finding(
             "pass" if not missing_notices else "fail",
             "license.modified-imported-notices",
-            "Modified imported files have TurboVAS modification notices." if not missing_notices else "Modified imported files are missing TurboVAS modification notices.",
+            "Modified imported files have the required historical TurboVAS modification notices." if not missing_notices else "Modified imported files are missing required historical TurboVAS modification notices.",
             details=notice_details,
         )
     ]
@@ -13975,7 +13976,7 @@ def command_license_report(
             finding(
                 "pass" if not missing_spdx else "fail",
                 "license.new-file-spdx",
-                "New TurboVAS-created files have SPDX copyright and license headers." if not missing_spdx else "New TurboVAS-created files are missing SPDX copyright or license headers.",
+                "New YAFVS-created files have SPDX copyright and license headers." if not missing_spdx else "New YAFVS-created files are missing SPDX copyright or license headers.",
                 details={"missing": missing_spdx},
             )
         )

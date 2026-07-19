@@ -727,7 +727,7 @@ mod tests {
 
     fn fixture(name: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(
-            "turbovas-feed-journal-{name}-{}",
+            "yafvs-feed-journal-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()

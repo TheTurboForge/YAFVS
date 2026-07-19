@@ -20,6 +20,7 @@ const COMMENT_NOTICE_SUFFIXES: &[&str] = &[
 const COMMENT_NOTICE_NAMES: &[&str] = &["Makefile", ".dockerignore", ".gitignore"];
 const IMPORTED_ADDED_PREFIXES: &[&str] = &["components/pg-gvm/"];
 const FEED_CONTENT_TRACKED_PREFIXES: &[&str] = &[
+    "YAFVS-runtime/",
     "TurboVAS-runtime/",
     "feed-cache/",
     "feeds/openvas/plugins/",
@@ -212,10 +213,10 @@ pub(crate) fn command_license_report_with_runner(
                     if missing.is_empty() { "pass" } else { "fail" },
                     "license.new-file-spdx",
                     if missing.is_empty() {
-                        "New TurboVAS-created files have SPDX copyright and license headers."
+                        "New YAFVS-created files have SPDX copyright and license headers."
                             .to_string()
                     } else {
-                        "New TurboVAS-created files are missing SPDX copyright or license headers."
+                        "New YAFVS-created files are missing SPDX copyright or license headers."
                             .to_string()
                     },
                 )
@@ -401,9 +402,11 @@ fn modified_imported_license_findings(
             if missing.is_empty() { "pass" } else { "fail" },
             "license.modified-imported-notices",
             if missing.is_empty() {
-                "Modified imported files have TurboVAS modification notices.".to_string()
+                "Modified imported files have the required historical TurboVAS modification notices."
+                    .to_string()
             } else {
-                "Modified imported files are missing TurboVAS modification notices.".to_string()
+                "Modified imported files are missing required historical TurboVAS modification notices."
+                    .to_string()
             },
         )
         .with_details(Value::Object(notice_details)),

@@ -707,7 +707,8 @@ fn compact_tool_path(path: &str, repo_root: &Path) -> String {
     {
         return relative.display().to_string();
     }
-    path.split_once("/TurboVAS/")
+    path.split_once("/YAFVS/")
+        .or_else(|| path.split_once("/TurboVAS/"))
         .map(|(_, relative)| relative.to_string())
         .or_else(|| {
             source_path
@@ -1539,9 +1540,16 @@ mod tests {
 
     #[test]
     fn semgrep_paths_are_repository_relative() {
-        let root = Path::new("/tmp/TurboVAS");
+        let root = Path::new("/tmp/YAFVS");
         assert_eq!(
-            compact_tool_path("/tmp/TurboVAS/services/yafvs-api/src/main.rs", root),
+            compact_tool_path("/tmp/YAFVS/services/yafvs-api/src/main.rs", root),
+            "services/yafvs-api/src/main.rs"
+        );
+        assert_eq!(
+            compact_tool_path(
+                "/archived/TurboVAS/services/yafvs-api/src/main.rs",
+                root
+            ),
             "services/yafvs-api/src/main.rs"
         );
         assert_eq!(compact_tool_path("relative.rs", root), "relative.rs");
@@ -1551,7 +1559,7 @@ mod tests {
     fn summarizes_osv_severity_and_packages() {
         let payload = json!({
             "results": [{
-                "source": {"path": "/repo/TurboVAS/Cargo.lock"},
+                "source": {"path": "/repo/YAFVS/Cargo.lock"},
                 "packages": [{
                     "package": {"ecosystem": "crates.io", "name": "example", "version": "1"},
                     "vulnerabilities": [
@@ -1561,7 +1569,7 @@ mod tests {
                 }],
             }],
         });
-        let summary = summarize_osv_payload(&payload, Path::new("/repo/TurboVAS"));
+        let summary = summarize_osv_payload(&payload, Path::new("/repo/YAFVS"));
         assert_eq!(summary.vulnerable_package_count, 1);
         assert_eq!(summary.vulnerability_count, 2);
         assert_eq!(summary.high_or_critical_count, 1);

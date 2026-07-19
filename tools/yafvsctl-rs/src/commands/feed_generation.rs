@@ -1864,7 +1864,7 @@ mod tests {
 
     fn fixture(name: &str) -> std::path::PathBuf {
         let root = std::env::temp_dir().join(format!(
-            "turbovas-feed-generation-{name}-{}",
+            "yafvs-feed-generation-{name}-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
@@ -2269,7 +2269,7 @@ mod tests {
     #[test]
     fn empty_state_command_and_status_only_have_exact_contract() {
         let root = fixture("state-command-empty");
-        let repo = root.join("TurboVAS");
+        let repo = root.join("YAFVS");
         let runtime = root.join("runtime");
         fs::create_dir(&repo).unwrap();
 
@@ -2644,7 +2644,7 @@ mod tests {
     #[test]
     fn stage_command_reports_exact_lifecycle_lock_timeout_contract() {
         let root = fixture("stage-lock-timeout");
-        let repo = root.join("TurboVAS");
+        let repo = root.join("YAFVS");
         fs::create_dir(&repo).unwrap();
         let holder = RuntimeOperationLock::acquire(
             &repo,

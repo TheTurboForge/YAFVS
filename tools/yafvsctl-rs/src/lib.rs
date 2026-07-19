@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn empty_inventory_is_a_warning_and_success_exit() {
-        let root = Path::new("/definitely/not/a/turbovas/repository");
+        let root = Path::new("/definitely/not/a/yafvs/repository");
         let result = command_inventory(root, Some("not-a-component"));
         assert_eq!(result.status, "warn");
         assert_eq!(exit_code(&result), 0);

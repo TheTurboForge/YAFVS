@@ -61,7 +61,7 @@ fn temp_tree() -> Result<TempTree, String> {
     for _ in 0..64 {
         let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let path = root.join(format!(
-            "turbovas-feed-signature-{}-{now}-{sequence}",
+            "yafvs-feed-signature-{}-{now}-{sequence}",
             std::process::id()
         ));
         match fs::create_dir(&path) {
@@ -394,11 +394,11 @@ mod tests {
 
     fn fixture(name: &str) -> PathBuf {
         let base = std::env::temp_dir().join(format!(
-            "turbovas-feed-provenance-{name}-{}-{}",
+            "yafvs-feed-provenance-{name}-{}-{}",
             std::process::id(),
             TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        let repo = base.join("TurboVAS");
+        let repo = base.join("YAFVS");
         fs::create_dir_all(&repo).unwrap();
         repo
     }

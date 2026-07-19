@@ -519,7 +519,7 @@ mod tests {
         );
         assert!(psql_single_value("one\ntwo\n").is_err());
         let runner = FakeRunner::with_outputs([output(true, "ff")]);
-        let adapter = DatabaseAttestationAdapter::new(Path::new("/srv/TurboVAS"), &runner);
+        let adapter = DatabaseAttestationAdapter::new(Path::new("/srv/YAFVS"), &runner);
         assert_eq!(
             adapter.read().unwrap_err(),
             "feed generation database attestation encoding is invalid"
@@ -531,7 +531,7 @@ mod tests {
         let candidate = DatabaseAttestation::new(ID, TIME).unwrap();
         let json = candidate.canonical_json().unwrap();
         let runner = FakeRunner::with_outputs([output(true, ""), output(true, &encoded(&json))]);
-        let adapter = DatabaseAttestationAdapter::new(Path::new("/srv/TurboVAS"), &runner);
+        let adapter = DatabaseAttestationAdapter::new(Path::new("/srv/YAFVS"), &runner);
         assert_eq!(adapter.write(ID, TIME).unwrap(), candidate);
         let commands = runner.commands.lock().unwrap();
         assert_eq!(commands.len(), 2);
@@ -556,7 +556,7 @@ mod tests {
             .unwrap();
         let runner =
             FakeRunner::with_outputs([output(true, ""), output(true, &encoded(&observed))]);
-        let adapter = DatabaseAttestationAdapter::new(Path::new("/srv/TurboVAS"), &runner);
+        let adapter = DatabaseAttestationAdapter::new(Path::new("/srv/YAFVS"), &runner);
         assert_eq!(
             adapter.write(ID, TIME).unwrap_err(),
             "feed generation database attestation readback mismatch"
@@ -566,7 +566,7 @@ mod tests {
     #[test]
     fn failures_do_not_leak_process_output_or_runtime_password() {
         let runner = FakeRunner::with_outputs([output(false, "password=super-secret")]);
-        let adapter = DatabaseAttestationAdapter::new(Path::new("/srv/TurboVAS"), &runner);
+        let adapter = DatabaseAttestationAdapter::new(Path::new("/srv/YAFVS"), &runner);
         let error = adapter.read().unwrap_err();
         assert_eq!(error, "feed generation database command failed");
         assert!(!error.contains("super-secret"));

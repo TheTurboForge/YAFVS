@@ -301,7 +301,7 @@ mod tests {
             std::process::id(),
             TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        let repo = base.join("TurboVAS");
+        let repo = base.join("YAFVS");
         fs::create_dir_all(&repo).unwrap();
         repo
     }

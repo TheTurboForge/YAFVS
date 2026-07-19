@@ -214,7 +214,7 @@ mod tests {
             std::process::id(),
             TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        let repo = base.join("TurboVAS");
+        let repo = base.join("YAFVS");
         let artifacts = base.join("YAFVS-runtime/artifacts/quality-gate");
         fs::create_dir_all(&repo).unwrap();
         fs::create_dir_all(&artifacts).unwrap();

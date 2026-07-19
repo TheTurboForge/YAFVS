@@ -261,7 +261,7 @@ mod tests {
 
     #[test]
     fn inventory_summary_is_deterministic() {
-        let root = std::env::temp_dir().join(format!("turbovas-branding-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("yafvs-branding-{}", std::process::id()));
         let _ = fs::create_dir_all(root.join("docs"));
         fs::write(root.join("README.md"), "OpenVAS provenance").unwrap();
         fs::write(root.join("docs/example.md"), "Greenbone docs").unwrap();

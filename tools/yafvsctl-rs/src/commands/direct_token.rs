@@ -259,7 +259,7 @@ mod tests {
                 std::process::id(),
                 SEQUENCE.fetch_add(1, Ordering::Relaxed)
             ));
-            let repo = root.join("TurboVAS");
+            let repo = root.join("YAFVS");
             fs::create_dir_all(&repo).unwrap();
             Self { root, repo }
         }

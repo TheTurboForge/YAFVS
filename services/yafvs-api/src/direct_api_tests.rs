@@ -12,7 +12,7 @@ fn token_file(name: &str, value: &str) -> String {
         .duration_since(UNIX_EPOCH)
         .expect("system clock before unix epoch")
         .as_nanos();
-    let path = env::temp_dir().join(format!("turbovas-direct-token-{name}-{nonce}"));
+    let path = env::temp_dir().join(format!("yafvs-direct-token-{name}-{nonce}"));
     fs::write(&path, value).expect("write direct token fixture");
     path.to_string_lossy().into_owned()
 }

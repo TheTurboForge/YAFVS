@@ -153,7 +153,7 @@ mod tests {
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        fs::create_dir_all(root.join("TurboVAS")).unwrap();
+        fs::create_dir_all(root.join("YAFVS")).unwrap();
         root
     }
 
@@ -219,7 +219,7 @@ mqtt_pass = private-value\n"
     #[test]
     fn writes_owner_private_config_without_exposing_the_secret_in_evidence() {
         let root = fixture();
-        let repo = root.join("TurboVAS");
+        let repo = root.join("YAFVS");
         let outcome = ensure_openvas_runtime_config(&repo);
         assert_eq!(outcome.status, StepStatus::Pass);
         let path = runtime_dir(&repo).join(OPENVAS_CONFIG_RELATIVE);
@@ -241,7 +241,7 @@ mqtt_pass = private-value\n"
     #[test]
     fn redis_readiness_uses_the_existing_service_and_exact_unix_socket_probe() {
         let root = fixture();
-        let repo = root.join("TurboVAS");
+        let repo = root.join("YAFVS");
         let runner = Runner::new([
             output(true, "abc123\n"),
             output(true, "true\n"),
@@ -272,7 +272,7 @@ mqtt_pass = private-value\n"
     #[test]
     fn redis_readiness_retries_without_leaking_process_output() {
         let root = fixture();
-        let repo = root.join("TurboVAS");
+        let repo = root.join("YAFVS");
         let runner = Runner::new([
             output(true, "abc123\n"),
             output(true, "true\n"),

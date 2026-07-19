@@ -139,7 +139,7 @@ mod tests {
             .lock()
             .unwrap_or_else(|error| error.into_inner());
         let root = std::env::temp_dir().join(format!(
-            "turbovas-feed-stage-{name}-{}-{}",
+            "yafvs-feed-stage-{name}-{}-{}",
             std::process::id(),
             STAGING_SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));

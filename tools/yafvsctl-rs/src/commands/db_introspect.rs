@@ -771,7 +771,7 @@ mod tests {
     fn successful_command_preserves_full_and_status_only_contracts() {
         let runner = Runner::successful();
         let requests = vec!["public.targets".into(), "public.targets".into()];
-        let full = command_with(Path::new("/srv/TurboVAS"), false, &requests, &runner);
+        let full = command_with(Path::new("/srv/YAFVS"), false, &requests, &runner);
         assert_eq!(full.status, "pass");
         let value = serde_json::to_value(&full).unwrap();
         assert_eq!(
@@ -795,7 +795,7 @@ mod tests {
             "id"
         );
 
-        let compact = command_with(Path::new("/srv/TurboVAS"), true, &requests, &runner);
+        let compact = command_with(Path::new("/srv/YAFVS"), true, &requests, &runner);
         let compact = serde_json::to_value(&compact).unwrap();
         assert_eq!(compact["details"]["table_count"], TABLES.len());
         assert_eq!(compact["details"]["column_count"], COLUMNS.len());
@@ -822,12 +822,12 @@ mod tests {
     #[test]
     fn absent_postgres_and_invalid_requests_preserve_status_semantics() {
         let runner = Runner::default();
-        let warning = command_with(Path::new("/srv/TurboVAS"), true, &[], &runner);
+        let warning = command_with(Path::new("/srv/YAFVS"), true, &[], &runner);
         assert_eq!(warning.status, "warn");
         assert_eq!(warning.findings[0].check, "db-introspect.postgres");
 
         let failed = command_with(
-            Path::new("/srv/TurboVAS"),
+            Path::new("/srv/YAFVS"),
             false,
             &["public.targets;DROP".into(), "private.targets".into()],
             &runner,
@@ -858,7 +858,7 @@ mod tests {
             fail_queries: true,
             ..Runner::default()
         };
-        let failed = command_with(Path::new("/srv/TurboVAS"), false, &[], &failed_runner);
+        let failed = command_with(Path::new("/srv/YAFVS"), false, &[], &failed_runner);
         let serialized = serde_json::to_string(&failed).unwrap();
         assert!(!serialized.contains("yafvs-dev"));
         assert!(serialized.contains("[redacted]"));
@@ -877,7 +877,7 @@ mod tests {
             ..Runner::default()
         };
         let result = command_with(
-            Path::new("/srv/TurboVAS"),
+            Path::new("/srv/YAFVS"),
             false,
             &[],
             &invalid_count_runner,

@@ -686,7 +686,7 @@ mod tests {
         fs::remove_file(root.join("feed-store/generations/.stage.lock")).unwrap();
 
         let link = std::env::temp_dir().join(format!(
-            "turbovas-selector-link-{}",
+            "yafvs-selector-link-{}",
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()

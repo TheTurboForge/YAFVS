@@ -559,7 +559,7 @@ mod tests {
     #[test]
     fn runtime_probe_uses_only_bounded_non_enumerating_redis_commands() {
         let runner = RuntimeRunner::default();
-        let state = runtime(Path::new("/srv/TurboVAS"), &runner);
+        let state = runtime(Path::new("/srv/YAFVS"), &runner);
         assert!(!state.redis.running);
         assert!(state.openvas.running);
         let metrics = state.openvas.metrics.unwrap();

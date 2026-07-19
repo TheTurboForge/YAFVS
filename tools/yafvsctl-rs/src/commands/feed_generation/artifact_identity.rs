@@ -444,7 +444,7 @@ mod tests {
     }
     fn fixture(name: &str) -> Fixture {
         let root = std::env::temp_dir().join(format!(
-            "turbovas-artifact-{name}-{}-{}",
+            "yafvs-artifact-{name}-{}-{}",
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));

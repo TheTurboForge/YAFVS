@@ -237,11 +237,11 @@ mod tests {
     }
     fn fixture_repo() -> (std::path::PathBuf, std::path::PathBuf) {
         let base = std::env::temp_dir().join(format!(
-            "turbovas-manager-import-test-{}-{}",
+            "yafvs-manager-import-test-{}-{}",
             std::process::id(),
             SEQUENCE.fetch_add(1, Ordering::Relaxed)
         ));
-        let repo = base.join("TurboVAS");
+        let repo = base.join("YAFVS");
         std::fs::create_dir_all(&repo).unwrap();
         (base, repo)
     }

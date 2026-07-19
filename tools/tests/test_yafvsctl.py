@@ -1223,6 +1223,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["quality-gate-schedule", "--install", "--json"], 1, "fail"),
                 (["runtime-native-api-direct-token", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["runtime-native-api-direct-bootstrap", "--json"], 0, "pass"),
+                (["production-posture-check", "--status-only", "--json"], 1, "fail"),
                 (["feed-generation-state", "--json"], 0, "warn"),
                 (["feed-generation-state", "--status-only", "--json"], 0, "warn"),
                 (["feed-generation-stage", "--json"], 1, "fail"),
@@ -2340,7 +2341,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "security-policy-check", "feed-state", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2425,7 +2426,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("def native_api_request_display_command", source)
         self.assertIn("native_api_request_display_command(repo_root, request_path, method=method, request_id=request_id, body=body)", source)
         self.assertIn("--allow-write-control", source)
-        self.assertIn("def command_production_posture_check", source)
+        self.assertNotIn("def command_production_posture_check", source)
         self.assertIn("def command_quality_gate", source)
         self.assertNotIn("def command_quality_gate_state", source)
         self.assertNotIn("Use: just native-api-request -- --json --path '/api/v1/...';", justfile)
@@ -2434,7 +2435,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "license-report"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "feed-state", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotIn(f"def command_{command.replace('-', '_')}", source)
@@ -2734,15 +2735,24 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_license_report_consumers_use_rust_wrapper_with_expected_options(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
+        rust_source = (
+            Path(__file__).resolve().parents[1]
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "production_posture.rs"
+        ).read_text(encoding="utf-8")
         self.assertNotIn("command_license_report", source)
         self.assertIn(
             'rust_license_report_result(repo_root, modified_imported_only=True, diff_scope="staged", status_only=True)',
             source,
         )
-        self.assertIn(
+        self.assertNotIn(
             'rust_license_report_result(repo_root, public_release=True, mode="source-public")',
             source,
         )
+        self.assertIn("command_license_report_with_runner(", rust_source)
+        self.assertIn('"source-public"', rust_source)
         self.assertEqual(source.count("license_result = rust_license_report_result(repo_root)"), 1)
 
     def test_runtime_redis_state_is_rust_only(self):
@@ -4855,55 +4865,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(result["details"]["direct_body_limit_alignment_status"], "warn")
         self.assertEqual(result["details"]["direct_body_limit_missing_property_count"], 1)
 
-    def test_production_posture_status_only_omits_pass_findings(self):
-        result = {
-            "status": "fail",
-            "summary": "Production posture checklist completed.",
-            "details": {"public_release_license_gate": {"status": "pass", "summary": "ok"}},
-            "findings": [
-                {"status": "pass", "check": "production.docs", "message": "ok"},
-                {
-                    "status": "fail",
-                    "check": "production.tls",
-                    "message": "missing TLS",
-                    "details": {"cert_files": ["a", "b"]},
-                },
-            ],
-        }
-
-        compact = yafvsctl.production_posture_status_only_result(result)
-
-        self.assertEqual(compact["details"], {"finding_count": 2, "non_pass_count": 1, "public_release_license_status": "pass"})
-        self.assertEqual(compact["findings"][0]["check"], "production.tls")
-        self.assertEqual(compact["findings"][0]["details"]["cert_files"], {"type": "list", "count": 2})
-
-    def test_production_posture_status_only_redacts_sensitive_paths(self):
-        result = {
-            "status": "fail",
-            "summary": "Production posture checklist completed.",
-            "details": {"public_release_license_gate": {"status": "pass", "summary": "ok"}},
-            "findings": [
-                {
-                    "status": "fail",
-                    "check": "production.default-credentials",
-                    "message": "default password",
-                    "path": "/home/user/YAFVS-runtime/secrets/gvmd-admin-password",
-                    "details": {
-                        "token_path": "/tmp/native-api-token",
-                        "safe_count": 1,
-                    },
-                }
-            ],
-        }
-
-        compact = yafvsctl.production_posture_status_only_result(result)
-
-        self.assertEqual(compact["findings"][0]["path"], "[redacted]")
-        self.assertEqual(compact["findings"][0]["details"]["token_path"], "[redacted]")
-        self.assertEqual(compact["findings"][0]["details"]["safe_count"], 1)
-        self.assertNotIn("gvmd-admin-password", json.dumps(compact))
-        self.assertNotIn("native-api-token", json.dumps(compact))
-
     def test_native_api_migration_matrix_combines_inventory_and_openapi_metadata(self):
         root = Path(__file__).resolve().parents[2]
         result = yafvsctl.command_native_api_migration_matrix(root)
@@ -5759,7 +5720,7 @@ class YAFVSCtlTests(unittest.TestCase):
              unittest.mock.patch.object(yafvsctl, "command_native_api_client_contract", return_value=pass_result), \
              unittest.mock.patch.object(yafvsctl, "command_native_api_migration_matrix", return_value=pass_result), \
              unittest.mock.patch.object(yafvsctl, "rust_license_report_result", return_value=pass_result) as license_report, \
-             unittest.mock.patch.object(yafvsctl, "command_production_posture_check", return_value=prod_result):
+             unittest.mock.patch.object(yafvsctl, "rust_production_posture_result", return_value=prod_result) as production_posture:
             result = yafvsctl.command_closeout_readiness(root, status_only=True)
 
         self.assertEqual(result["status"], "warn")
@@ -5768,6 +5729,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertTrue(any(item["check"] == "closeout-readiness.production-posture-check" for item in result["findings"]))
         quality_state.assert_called_once_with(root, status_only=True)
         license_report.assert_called_once_with(root, modified_imported_only=True, diff_scope="staged", status_only=True)
+        production_posture.assert_called_once_with(root, status_only=True)
 
     def test_openapi_operation_id_generator_is_stable_and_collision_free(self):
         root = Path(__file__).resolve().parents[2]
@@ -11852,9 +11814,24 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("--exit-code 7 --report-format json", justfile)
 
     def test_production_posture_tracks_password_rotation_gap(self):
-        source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
+        source = (Path(__file__).resolve().parents[1] / "yafvsctl-rs" / "src" / "commands" / "production_posture.rs").read_text(encoding="utf-8")
         self.assertIn("production.first-login-password-rotation", source)
         self.assertIn("Production first-login/password-rotation bootstrap is not implemented yet", source)
+
+    def test_rust_production_posture_bridge_forwards_status_only(self):
+        root = Path("/tmp/repo")
+        sentinel = {"status": "fail"}
+        with unittest.mock.patch.object(
+            yafvsctl, "rust_result_envelope", return_value=sentinel
+        ) as bridge:
+            result = yafvsctl.rust_production_posture_result(root, status_only=True)
+
+        self.assertIs(result, sentinel)
+        bridge.assert_called_once_with(
+            root,
+            "production-posture-check",
+            ["production-posture-check", "--status-only"],
+        )
 
     def test_gsa_browser_metadata_uses_yafvs_branding(self):
         index = (Path(__file__).resolve().parents[2] / "components" / "gsa" / "index.html").read_text(encoding="utf-8")

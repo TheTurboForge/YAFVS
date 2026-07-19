@@ -744,6 +744,7 @@ mod tests {
             "quality-gate-schedule",
             "runtime-native-api-direct-token",
             "runtime-native-api-direct-bootstrap",
+            "production-posture-check",
         ] {
             let recipe = justfile
                 .split_once(&format!("{command} *args:\n"))

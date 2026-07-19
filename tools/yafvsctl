@@ -2478,6 +2478,13 @@ def rust_quality_gate_state_result(repo_root: Path, status_only: bool = False) -
     return rust_result_envelope(repo_root, "quality-gate-state", arguments)
 
 
+def rust_production_posture_result(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
+    arguments = ["production-posture-check"]
+    if status_only:
+        arguments.append("--status-only")
+    return rust_result_envelope(repo_root, "production-posture-check", arguments)
+
+
 def rust_feed_state_result(repo_root: Path) -> dict[str, Any]:
     return rust_result_envelope(repo_root, "feed-state", ["feed-state"])
 
@@ -11582,49 +11589,6 @@ def native_target_xml_status_only_result(result: dict[str, Any]) -> dict[str, An
     return compact
 
 
-def production_posture_status_only_result(result: dict[str, Any]) -> dict[str, Any]:
-    sensitive_parts = ("secret", "token", "password", "credential", "bearer")
-
-    def sensitive(value: object) -> bool:
-        return any(part in str(value).lower() for part in sensitive_parts)
-
-    compact = dict(result)
-    findings = result.get("findings", [])
-    non_pass = []
-    for item in findings:
-        if item.get("status") == "pass":
-            continue
-        compact_item = compact_doctor_finding(item)
-        path = compact_item.get("path")
-        if isinstance(path, str) and (path.startswith("/") or sensitive(path)):
-            compact_item["path"] = "[redacted]"
-        details = compact_item.get("details")
-        if isinstance(details, dict):
-            compact_item["details"] = {
-                key: "[redacted]" if sensitive(key) or sensitive(value) else value
-                for key, value in details.items()
-            }
-        non_pass.append(compact_item)
-    details = result.get("details", {}) if isinstance(result.get("details"), dict) else {}
-    compact["details"] = {
-        "finding_count": len(findings),
-        "non_pass_count": len(non_pass),
-        "public_release_license_status": details.get("public_release_license_gate", {}).get("status", "unknown")
-        if isinstance(details.get("public_release_license_gate"), dict)
-        else "unknown",
-    }
-    compact["findings"] = non_pass or [
-        finding("pass", "production-posture.status-only", "Production posture check passed; no non-pass findings.")
-    ]
-    return compact
-
-
-
-
-
-
-
-
 def compact_doctor_finding(item: dict[str, Any]) -> dict[str, Any]:
     compact = {
         key: item[key]
@@ -12359,7 +12323,7 @@ def command_closeout_readiness(repo_root: Path, status_only: bool = False) -> di
     native_client = command_native_api_client_contract(repo_root, status_only=True)
     migration = command_native_api_migration_matrix(repo_root, status_only=True)
     license_result = rust_license_report_result(repo_root, modified_imported_only=True, diff_scope="staged", status_only=True)
-    production_posture = command_production_posture_check(repo_root, status_only=True)
+    production_posture = rust_production_posture_result(repo_root, status_only=True)
     steps = {
         "git-worktree": {"status": "warn" if git_status.strip() else "pass", "summary": "Worktree has uncommitted changes." if git_status.strip() else "Worktree is clean.", "changed_path_count": len([line for line in git_status.splitlines() if line.strip()])},
         "quality-gate-state": closeout_readiness_step("quality-gate-state", quality_state),
@@ -13373,82 +13337,6 @@ def rendered_app_execution_mount_finding(repo_root: Path, env: dict[str, str]) -
             path,
         )
     return app_execution_mount_finding(repo_root, payload)
-
-
-def command_production_posture_check(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    details: dict[str, Any] = {}
-
-    required_docs = (
-        "docs/USER_MANUAL.md",
-        "docs/CHANGES_FROM_UPSTREAM.md",
-        "docs/PRODUCTION_POSTURE.md",
-        "docs/PUBLIC_RELEASE_READINESS.md",
-        "docs/VALIDATION_STANDARDS.md",
-        "UPSTREAMS.md",
-        "LICENSE_AUDIT.md",
-    )
-    for relative in required_docs:
-        path = repo_root / relative
-        findings.append(finding("pass" if path.is_file() else "fail", "production.docs", f"{relative} {'exists' if path.is_file() else 'is missing'}.", relative))
-
-    license_gate = rust_license_report_result(repo_root, public_release=True, mode="source-public")
-    details["public_release_license_gate"] = {
-        "status": license_gate["status"],
-        "summary": license_gate["summary"],
-    }
-    findings.append(
-        finding(
-            "pass" if license_gate["status"] == "pass" else "fail",
-            "production.public-release-license-gate",
-            "Public-release license gate passes." if license_gate["status"] == "pass" else "Public-release license gate is not satisfied; do not publish or distribute.",
-            details=details["public_release_license_gate"],
-        )
-    )
-
-    secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
-    secret_value = secret_path.read_text(encoding="utf-8").strip() if secret_path.is_file() else None
-    if secret_value == DEV_ADMIN_PASSWORD:
-        findings.append(finding("fail", "production.default-credentials", "Development admin password is still the default value; rotate before production exposure.", str(secret_path)))
-    elif secret_value:
-        findings.append(finding("pass", "production.default-credentials", "Development admin password is not the default value.", str(secret_path)))
-    else:
-        findings.append(finding("warn", "production.default-credentials", "Development admin password secret is not initialized; verify first-login/password-rotation workflow before production.", str(secret_path)))
-    findings.append(finding("fail", "production.first-login-password-rotation", "Production first-login/password-rotation bootstrap is not implemented yet; do not deploy beyond private development."))
-
-    hosts = gsad_hosts(repo_root)
-    wildcard_hosts = [host for host in hosts if host in {"0.0.0.0", "::", "[::]"}]
-    non_loopback_hosts = [host for host in hosts if host not in {"127.0.0.1", "localhost", "::1", "[::1]"}]
-    if wildcard_hosts:
-        port_status = "fail"
-        port_message = "GSA is configured for broad wildcard host binding."
-    elif non_loopback_hosts:
-        port_status = "warn"
-        port_message = "GSA is configured for explicit non-loopback development access; review network exposure before production."
-    else:
-        port_status = "pass"
-        port_message = "GSA host binding is loopback-only by default."
-    findings.append(finding(port_status, "production.gsad-binding", port_message, details={"hosts": list(hosts), "bindings": list(gsad_port_bindings(repo_root))}))
-
-    findings.extend(direct_native_api_posture_findings(repo_root, runtime_env(repo_root)))
-
-    compose = run_command(compose_command(repo_root, "config", "--quiet"), repo_root, env=runtime_env(repo_root))
-    findings.append(finding("pass" if compose.returncode == 0 else "fail", "production.compose-config", f"Compose config validation exit code {compose.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": compose.stdout.splitlines()[-40:]}))
-    findings.append(rendered_app_execution_mount_finding(repo_root, runtime_env(repo_root)))
-
-    cert_findings = cert_file_findings(repo_root)
-    if certs_complete(repo_root):
-        findings.append(finding("warn", "production.tls", "Development TLS files exist, but trusted production certificates and hostname/SAN policy still need deployment review.", details={"cert_files": [item.get("path") for item in cert_findings]}))
-    else:
-        findings.append(finding("fail", "production.tls", "Runtime TLS files are incomplete; production exposure requires a complete trusted TLS setup.", details={"cert_files": [item.get("path") for item in cert_findings]}))
-
-    findings.append(finding("warn", "production.runtime-model", "The current Docker runtime is documented as development-only; production deployment architecture remains a release blocker."))
-
-    result = make_result("production-posture-check", repo_root, "Production posture checklist completed.", findings)
-    result["details"] = details
-    if status_only:
-        result = production_posture_status_only_result(result)
-    return result
 
 
 def command_up(repo_root: Path) -> dict[str, Any]:
@@ -29992,8 +29880,6 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_replacement_dashboard.add_argument("--status-only", action="store_true", help="emit compact dashboard details and only non-pass findings")
     closeout_readiness = subparsers.add_parser("closeout-readiness", parents=[common], help="summarize commit closeout readiness signals without running broad gates")
     closeout_readiness.add_argument("--status-only", action="store_true", help="emit compact closeout readiness details and only non-pass findings")
-    production_posture = subparsers.add_parser("production-posture-check", parents=[common], help="run the non-destructive production posture checklist")
-    production_posture.add_argument("--status-only", action="store_true", help="emit compact details and only non-pass findings for chat-safe posture checks")
     configure = subparsers.add_parser("configure", parents=[common], help="configure a CMake component")
     configure.add_argument("component", help="component name")
     configure.add_argument("--profile", choices=C_BUILD_PROFILES, help="isolated C build profile")
@@ -30313,8 +30199,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_native_api_replacement_dashboard(repo_root, status_only=args.status_only)
     elif args.command == "closeout-readiness":
         result = command_closeout_readiness(repo_root, status_only=args.status_only)
-    elif args.command == "production-posture-check":
-        result = command_production_posture_check(repo_root, status_only=args.status_only)
     elif args.command == "configure":
         result = command_configure(repo_root, args.component, args.profile)
     elif args.command == "build":

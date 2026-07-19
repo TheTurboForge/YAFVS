@@ -8,12 +8,17 @@
 
 use super::common::{build_env, executable_path, metadata, output_tail, runtime_dir};
 use super::runtime_log_review::redact_text;
+use super::runtime_scanner_capability::{
+    command_runtime_nmap_capability_check, command_runtime_scanner_capability_check,
+};
+use super::runtime_scanner_process::command_runtime_scanner_process_check;
 use super::secret::{read_existing_runtime_secret, runtime_secret_path};
 use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
 use serde_json::{Value, json};
 use std::fs;
 use std::io;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
@@ -23,6 +28,32 @@ use std::time::Duration;
 const ADMIN_SECRET: &str = "gvmd-admin-password";
 const ADMIN_USER: &str = "admin";
 const MAX_HELPER_OUTPUT_BYTES: usize = 1024 * 1024;
+const MAX_FULL_TEST_TARGET_ADDRESSES: u128 = 256;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum FullTestAction {
+    Preflight,
+    Start,
+    Status,
+}
+
+impl FullTestAction {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Preflight => "preflight",
+            Self::Start => "start",
+            Self::Status => "status",
+        }
+    }
+
+    fn command_name(self) -> String {
+        format!("runtime-full-test-scan-{}", self.as_str())
+    }
+
+    fn checks_capabilities(self) -> bool {
+        matches!(self, Self::Preflight | Self::Start)
+    }
+}
 
 pub fn command_runtime_gmp_smoke(repo_root: &Path) -> ResultEnvelope {
     command_runtime_gmp_smoke_with(repo_root, &SystemCommandRunner)
@@ -30,6 +61,350 @@ pub fn command_runtime_gmp_smoke(repo_root: &Path) -> ResultEnvelope {
 
 pub fn command_runtime_rbac_smoke(repo_root: &Path) -> ResultEnvelope {
     command_runtime_rbac_smoke_with(repo_root, &SystemCommandRunner)
+}
+
+pub fn command_runtime_full_test_scan_preflight(
+    repo_root: &Path,
+    target_cidr: &str,
+) -> ResultEnvelope {
+    command_runtime_full_test_scan_with(
+        repo_root,
+        FullTestAction::Preflight,
+        target_cidr,
+        None,
+        &SystemCommandRunner,
+        system_full_test_capability_findings,
+    )
+}
+
+pub fn command_runtime_full_test_scan_start(
+    repo_root: &Path,
+    target_cidr: &str,
+    confirm_authorized_target: Option<&str>,
+) -> ResultEnvelope {
+    command_runtime_full_test_scan_with(
+        repo_root,
+        FullTestAction::Start,
+        target_cidr,
+        confirm_authorized_target,
+        &SystemCommandRunner,
+        system_full_test_capability_findings,
+    )
+}
+
+pub fn command_runtime_full_test_scan_status(
+    repo_root: &Path,
+    target_cidr: &str,
+) -> ResultEnvelope {
+    command_runtime_full_test_scan_with(
+        repo_root,
+        FullTestAction::Status,
+        target_cidr,
+        None,
+        &SystemCommandRunner,
+        system_full_test_capability_findings,
+    )
+}
+
+fn command_runtime_full_test_scan_with<F>(
+    repo_root: &Path,
+    action: FullTestAction,
+    target_cidr: &str,
+    confirm_authorized_target: Option<&str>,
+    runner: &dyn CommandRunner,
+    capability_findings: F,
+) -> ResultEnvelope
+where
+    F: FnOnce(&Path) -> Vec<Finding>,
+{
+    let command_name = action.command_name();
+    let canonical_target = match validated_full_test_target_cidr(target_cidr) {
+        Ok(target) => target,
+        Err(error) => {
+            return make_result(
+                metadata(repo_root, &command_name, runner),
+                "Full test scan command refused an invalid target.".into(),
+                vec![Finding::new("fail", "full-test-scan.target", error)],
+            );
+        }
+    };
+    if action == FullTestAction::Start {
+        let Some(confirmation) = confirm_authorized_target else {
+            return make_result(
+                metadata(repo_root, &command_name, runner),
+                "Full test scan start refused without an exact target confirmation.".into(),
+                vec![Finding::new(
+                    "fail",
+                    "full-test-scan.confirmation",
+                    "Pass --confirm-authorized-target with the exact --target-cidr value.".into(),
+                )],
+            );
+        };
+        let canonical_confirmation = match validated_full_test_target_cidr(confirmation) {
+            Ok(target) => target,
+            Err(error) => {
+                return make_result(
+                    metadata(repo_root, &command_name, runner),
+                    "Full test scan start refused an invalid target confirmation.".into(),
+                    vec![Finding::new("fail", "full-test-scan.confirmation", error)],
+                );
+            }
+        };
+        if canonical_confirmation != canonical_target {
+            return make_result(
+                metadata(repo_root, &command_name, runner),
+                "Full test scan start refused a mismatched target confirmation.".into(),
+                vec![Finding::new(
+                    "fail",
+                    "full-test-scan.confirmation",
+                    "--confirm-authorized-target must exactly match --target-cidr.".into(),
+                )],
+            );
+        }
+    }
+
+    let secret_path = runtime_secret_path(repo_root, ADMIN_SECRET);
+    let socket_path = gvmd_socket_path(repo_root);
+    let probe = repo_root.join("tools/runtime_full_test_scan.py");
+    let artifact_dir = runtime_dir(repo_root).join("artifacts/full-test-scan");
+    let mut findings = vec![simple_socket_prerequisite(&socket_path)];
+    let password = append_secret_prerequisite(
+        repo_root,
+        &secret_path,
+        "Development admin secret is missing.",
+        &mut findings,
+    );
+    findings.push(file_prerequisite(
+        repo_root,
+        &probe,
+        "full-test-scan.probe",
+        "Full test scan helper exists.",
+        "Full test scan helper is missing.",
+    ));
+    match prepare_artifact_dir(&artifact_dir) {
+        Ok(()) => findings.push(
+            Finding::new(
+                "pass",
+                "full-test-scan.artifact-dir",
+                "Full test scan artifact directory is ready.".into(),
+            )
+            .with_path(&artifact_dir.display().to_string()),
+        ),
+        Err(error) => findings.push(
+            Finding::new(
+                "fail",
+                "full-test-scan.artifact-dir",
+                format!("Full test scan artifact directory is not usable: {error}"),
+            )
+            .with_path(&artifact_dir.display().to_string()),
+        ),
+    }
+    if action.checks_capabilities() {
+        findings.extend(capability_findings(repo_root));
+    }
+    if findings.iter().any(|finding| finding.status == "fail") {
+        return make_result(
+            metadata(repo_root, &command_name, runner),
+            "Full test scan command stopped at prerequisites.".into(),
+            findings,
+        )
+        .with_artifacts(vec![artifact_dir.display().to_string()]);
+    }
+
+    let ospd_log = runtime_dir(repo_root).join("logs/ospd/ospd-openvas.log");
+    let repo_root_text = repo_root.display().to_string();
+    let socket_text = socket_path.display().to_string();
+    let secret_text = secret_path.display().to_string();
+    let artifact_text = artifact_dir.display().to_string();
+    let ospd_log_text = ospd_log.display().to_string();
+    let mut arguments = vec![
+        action.as_str(),
+        "--socket",
+        &socket_text,
+        "--username",
+        ADMIN_USER,
+        "--password-file",
+        &secret_text,
+        "--artifact-dir",
+        &artifact_text,
+        "--target-cidr",
+        &canonical_target,
+        "--repo-root",
+        &repo_root_text,
+        "--ospd-log-file",
+        &ospd_log_text,
+    ];
+    if let Some(confirmation) = confirm_authorized_target {
+        // Preserve the characterized wrapper contract: the helper receives the
+        // original confirmed text and independently canonicalizes it again.
+        arguments.extend(["--confirm-authorized-target", confirmation]);
+    }
+    let output = run_probe(
+        repo_root,
+        runner,
+        &probe,
+        &arguments,
+        Duration::from_secs(120),
+    );
+    let redactions = password.into_iter().collect::<Vec<_>>();
+    let mut parsed = parse_bounded_helper_output(&output);
+    if let Some(value) = parsed.as_mut() {
+        redact_json_value(value, &redactions);
+    }
+    let helper_status = parsed
+        .as_ref()
+        .and_then(|value| value.get("status"))
+        .and_then(Value::as_str);
+    let finding_status = if output.success && matches!(helper_status, Some("pass" | "warn")) {
+        helper_status.unwrap_or("fail")
+    } else {
+        "fail"
+    };
+    let exit_code = output.exit_code.unwrap_or(1);
+    let fallback_finding_summary = format!("Full test scan helper exit code {exit_code}.");
+    let finding_summary = parsed
+        .as_ref()
+        .and_then(|value| value.get("summary"))
+        .and_then(Value::as_str)
+        .unwrap_or(&fallback_finding_summary)
+        .to_string();
+    findings.push(
+        Finding::new(
+            finding_status,
+            &format!("full-test-scan.{}", action.as_str()),
+            finding_summary,
+        )
+        .with_details(json!({
+            "helper": parsed,
+            "output_tail": output_tail(&redact_text(&output.stdout, &redactions), 120),
+        })),
+    );
+    let artifacts = parsed_artifacts(parsed.as_ref())
+        .unwrap_or_else(|| vec![artifact_dir.display().to_string()]);
+    let summary = parsed
+        .as_ref()
+        .and_then(|value| value.get("summary"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            format!(
+                "Full test scan {} command completed with exit code {exit_code}.",
+                action.as_str()
+            )
+        });
+    make_result(
+        metadata(repo_root, &command_name, runner),
+        summary,
+        findings,
+    )
+    .with_artifacts(artifacts)
+}
+
+fn system_full_test_capability_findings(repo_root: &Path) -> Vec<Finding> {
+    [
+        (
+            "ospd.capability-check",
+            command_runtime_scanner_capability_check(repo_root),
+        ),
+        (
+            "ospd.process-check",
+            command_runtime_scanner_process_check(repo_root),
+        ),
+        (
+            "nmap.capability-check",
+            command_runtime_nmap_capability_check(repo_root),
+        ),
+    ]
+    .into_iter()
+    .map(|(check, result)| {
+        Finding::new(&result.status, check, result.summary.clone()).with_details(json!({
+            "status": result.status,
+            "findings": result.findings,
+        }))
+    })
+    .collect()
+}
+
+fn validated_full_test_target_cidr(value: &str) -> Result<String, String> {
+    let candidate = value.trim();
+    let Some((address_text, prefix_text)) = candidate.split_once('/') else {
+        return Err("Full-test target must be a canonical CIDR: missing prefix length.".into());
+    };
+    if prefix_text.contains('/') {
+        return Err("Full-test target must be a canonical CIDR: too many '/' separators.".into());
+    }
+    let address = address_text
+        .parse::<IpAddr>()
+        .map_err(|error| format!("Full-test target must be a canonical CIDR: {error}"))?;
+    let prefix = prefix_text
+        .parse::<u8>()
+        .map_err(|error| format!("Full-test target must be a canonical CIDR: {error}"))?;
+    let (canonical_address, address_count, unspecified, multicast) = match address {
+        IpAddr::V4(address) => {
+            if prefix > 32 {
+                return Err(format!(
+                    "Full-test target must be a canonical CIDR: IPv4 prefix {prefix} exceeds 32."
+                ));
+            }
+            let value = u32::from(address);
+            let mask = if prefix == 0 {
+                0
+            } else {
+                u32::MAX << (32 - prefix)
+            };
+            let network = value & mask;
+            if network != value {
+                return Err("Full-test target must be a canonical CIDR: host bits are set.".into());
+            }
+            let count = 1_u128 << (32 - prefix);
+            let network_address = Ipv4Addr::from(network);
+            (
+                IpAddr::V4(network_address),
+                count,
+                // Match Python ipaddress.IPv4Network.is_unspecified: only a
+                // one-address network whose sole address is unspecified.
+                network_address.is_unspecified() && count == 1,
+                network_address.is_multicast(),
+            )
+        }
+        IpAddr::V6(address) => {
+            if prefix > 128 {
+                return Err(format!(
+                    "Full-test target must be a canonical CIDR: IPv6 prefix {prefix} exceeds 128."
+                ));
+            }
+            let value = u128::from(address);
+            let mask = if prefix == 0 {
+                0
+            } else {
+                u128::MAX << (128 - prefix)
+            };
+            let network = value & mask;
+            if network != value {
+                return Err("Full-test target must be a canonical CIDR: host bits are set.".into());
+            }
+            let count = 1_u128
+                .checked_shl((128 - prefix).into())
+                .unwrap_or(u128::MAX);
+            let network_address = Ipv6Addr::from(network);
+            (
+                IpAddr::V6(network_address),
+                count,
+                // Match Python ipaddress.IPv6Network.is_unspecified.
+                network_address.is_unspecified() && count == 1,
+                network_address.is_multicast(),
+            )
+        }
+    };
+    if unspecified || multicast {
+        return Err("Full-test target must not be an unspecified or multicast network.".into());
+    }
+    if address_count > MAX_FULL_TEST_TARGET_ADDRESSES {
+        return Err(format!(
+            "Full-test target may contain at most {MAX_FULL_TEST_TARGET_ADDRESSES} addresses; got {address_count}."
+        ));
+    }
+    Ok(format!("{canonical_address}/{prefix}"))
 }
 
 fn command_runtime_gmp_smoke_with(repo_root: &Path, runner: &dyn CommandRunner) -> ResultEnvelope {
@@ -715,5 +1090,132 @@ mod tests {
             stderr: String::new(),
         };
         assert!(parse_bounded_helper_output(&output).is_none());
+    }
+
+    #[test]
+    fn full_test_target_validation_is_canonical_bounded_and_dual_stack() {
+        assert_eq!(
+            validated_full_test_target_cidr(" 192.0.2.0/24 ").unwrap(),
+            "192.0.2.0/24"
+        );
+        assert_eq!(
+            validated_full_test_target_cidr("2001:0db8::/120").unwrap(),
+            "2001:db8::/120"
+        );
+        assert_eq!(
+            validated_full_test_target_cidr("0.0.0.0/31").unwrap(),
+            "0.0.0.0/31"
+        );
+        assert_eq!(validated_full_test_target_cidr("::/120").unwrap(), "::/120");
+        for (target, message) in [
+            ("192.0.2.1/24", "canonical CIDR"),
+            ("10.0.0.0/16", "at most 256"),
+            ("2001:db8::/64", "at most 256"),
+            ("0.0.0.0/32", "unspecified or multicast"),
+            ("ff02::1/128", "unspecified or multicast"),
+            ("missing-prefix", "canonical CIDR"),
+        ] {
+            let error = validated_full_test_target_cidr(target).unwrap_err();
+            assert!(error.contains(message), "{target}: {error}");
+        }
+    }
+
+    #[test]
+    fn full_test_start_refuses_missing_or_mismatched_confirmation_first() {
+        let (root, repo) = fixture("full-test-confirmation");
+        let missing = command_runtime_full_test_scan_with(
+            &repo,
+            FullTestAction::Start,
+            "192.0.2.0/24",
+            None,
+            &ProbeRunner::default(),
+            |_| panic!("capability checks must not run"),
+        );
+        assert_eq!(missing.status, "fail");
+        assert_eq!(missing.findings[0].check, "full-test-scan.confirmation");
+
+        let mismatch = command_runtime_full_test_scan_with(
+            &repo,
+            FullTestAction::Start,
+            "192.0.2.0/24",
+            Some("192.0.2.1/32"),
+            &ProbeRunner::default(),
+            |_| panic!("capability checks must not run"),
+        );
+        assert_eq!(mismatch.status, "fail");
+        assert_eq!(mismatch.findings[0].check, "full-test-scan.confirmation");
+        assert!(mismatch.summary.contains("mismatched"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn full_test_preflight_stops_on_injected_capability_failure() {
+        let (root, repo) = fixture("full-test-capability");
+        let socket = gvmd_socket_path(&repo);
+        fs::create_dir_all(socket.parent().unwrap()).unwrap();
+        let _listener = UnixListener::bind(&socket).unwrap();
+        prepare_secret(&repo, "full-test-secret");
+        fs::write(repo.join("tools/runtime_full_test_scan.py"), "# helper\n").unwrap();
+        let result = command_runtime_full_test_scan_with(
+            &repo,
+            FullTestAction::Preflight,
+            "192.0.2.0/24",
+            None,
+            &ProbeRunner::default(),
+            |_| {
+                vec![Finding::new(
+                    "fail",
+                    "ospd.capability-check",
+                    "capability failed".into(),
+                )]
+            },
+        );
+        assert_eq!(result.status, "fail");
+        assert_eq!(
+            result.summary,
+            "Full test scan command stopped at prerequisites."
+        );
+        assert_eq!(
+            result.findings.last().unwrap().check,
+            "ospd.capability-check"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn full_test_status_preserves_helper_result_without_capability_checks() {
+        let (root, repo) = fixture("full-test-status");
+        let socket = gvmd_socket_path(&repo);
+        fs::create_dir_all(socket.parent().unwrap()).unwrap();
+        let _listener = UnixListener::bind(&socket).unwrap();
+        prepare_secret(&repo, "full-test-secret");
+        fs::write(repo.join("tools/runtime_full_test_scan.py"), "# helper\n").unwrap();
+        let runner = ProbeRunner {
+            output: Some(ProcessOutput {
+                success: true,
+                exit_code: Some(0),
+                stdout: "{\"status\":\"pass\",\"summary\":\"status collected\",\"artifacts\":[\"status.json\"],\"details\":{\"secret\":\"full-test-secret\"}}".into(),
+                stderr: String::new(),
+            }),
+        };
+        let result = command_runtime_full_test_scan_with(
+            &repo,
+            FullTestAction::Status,
+            "192.0.2.0/24",
+            None,
+            &runner,
+            |_| panic!("status must not run capability checks"),
+        );
+        assert_eq!(result.status, "pass");
+        assert_eq!(result.summary, "status collected");
+        assert_eq!(result.artifacts, ["status.json"]);
+        assert_eq!(
+            result.findings.last().unwrap().check,
+            "full-test-scan.status"
+        );
+        let serialized = serde_json::to_string(&result).unwrap();
+        assert!(!serialized.contains("full-test-secret"));
+        assert!(serialized.contains("[redacted]"));
+        fs::remove_dir_all(root).unwrap();
     }
 }

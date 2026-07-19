@@ -126,6 +126,27 @@ pub enum CliCommand {
     RuntimeGmpSmoke,
     /// Characterize the retained shared operator-account compatibility boundary.
     RuntimeRbacSmoke,
+    /// Preflight an explicit authorized full test scan without starting it.
+    RuntimeFullTestScanPreflight {
+        /// Explicit canonical authorized target CIDR; at most 256 addresses.
+        #[arg(long)]
+        target_cidr: String,
+    },
+    /// Start an explicit authorized full test scan.
+    RuntimeFullTestScanStart {
+        /// Explicit canonical authorized target CIDR; at most 256 addresses.
+        #[arg(long)]
+        target_cidr: String,
+        /// Exact target confirmation required before scan start.
+        #[arg(long)]
+        confirm_authorized_target: Option<String>,
+    },
+    /// Show an explicit authorized full test scan status.
+    RuntimeFullTestScanStatus {
+        /// Explicit canonical authorized target CIDR; at most 256 addresses.
+        #[arg(long)]
+        target_cidr: String,
+    },
     /// Show recent runtime logs.
     Logs {
         /// Optional Compose service name.
@@ -219,6 +240,9 @@ impl CliCommand {
             Self::RuntimeDataState => "runtime-data-state",
             Self::RuntimeGmpSmoke => "runtime-gmp-smoke",
             Self::RuntimeRbacSmoke => "runtime-rbac-smoke",
+            Self::RuntimeFullTestScanPreflight { .. } => "runtime-full-test-scan-preflight",
+            Self::RuntimeFullTestScanStart { .. } => "runtime-full-test-scan-start",
+            Self::RuntimeFullTestScanStatus { .. } => "runtime-full-test-scan-status",
             Self::Logs { .. } => "logs",
             Self::LicenseReport { .. } => "license-report",
             Self::Doctor => "doctor",
@@ -226,7 +250,6 @@ impl CliCommand {
             Self::RuntimeNativeApiDirectToken { .. } => "runtime-native-api-direct-token",
         }
     }
-
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>
@@ -266,6 +289,58 @@ mod tests {
             assert_eq!(cli.command, expected);
             assert_eq!(cli.command.name(), argument);
         }
+    }
+
+    #[test]
+    fn parses_guarded_full_test_scan_commands() {
+        assert_eq!(
+            parse_cli([
+                "runtime-full-test-scan-preflight",
+                "--target-cidr",
+                "192.0.2.0/24",
+            ])
+            .unwrap()
+            .command,
+            CliCommand::RuntimeFullTestScanPreflight {
+                target_cidr: "192.0.2.0/24".into(),
+            }
+        );
+        assert_eq!(
+            parse_cli([
+                "runtime-full-test-scan-start",
+                "--target-cidr",
+                "192.0.2.0/24",
+                "--confirm-authorized-target",
+                "192.0.2.0/24",
+            ])
+            .unwrap()
+            .command,
+            CliCommand::RuntimeFullTestScanStart {
+                target_cidr: "192.0.2.0/24".into(),
+                confirm_authorized_target: Some("192.0.2.0/24".into()),
+            }
+        );
+        assert_eq!(
+            parse_cli([
+                "runtime-full-test-scan-status",
+                "--target-cidr",
+                "2001:db8::/120",
+            ])
+            .unwrap()
+            .command,
+            CliCommand::RuntimeFullTestScanStatus {
+                target_cidr: "2001:db8::/120".into(),
+            }
+        );
+        assert!(
+            parse_cli([
+                "runtime-full-test-scan-start",
+                "--target-cidr",
+                "192.0.2.0/24"
+            ])
+            .is_ok()
+        );
+        assert!(parse_cli(["runtime-full-test-scan-preflight"]).is_err());
     }
 
     #[test]

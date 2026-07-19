@@ -1143,6 +1143,19 @@ class YAFVSCtlTests(unittest.TestCase):
                         yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV,
                     ):
                         env.pop(name, None)
+                if arguments[0] == "runtime-feed-keyring-init":
+                    keyring_runtime = Path(parity_runtime) / "runtime-feed-keyring-init"
+                    key_artifact = (
+                        keyring_runtime
+                        / "artifacts"
+                        / "feed-keyring"
+                        / "GBCommunitySigningKey.asc"
+                    )
+                    key_artifact.parent.mkdir(parents=True)
+                    outside_key = keyring_runtime / "unsafe-linked-key"
+                    outside_key.write_text("not a trusted key\n", encoding="utf-8")
+                    key_artifact.symlink_to(outside_key)
+                    env["YAFVS_RUNTIME_DIR"] = str(keyring_runtime)
                 rust_result = invoke(rust_command, arguments, env=env)
                 expected_exit_codes = (
                     expected_exit_code
@@ -1233,6 +1246,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["native-tasks-from-csv", "--csv-file", "/definitely-missing-yafvs-tasks-create.csv", "--json"], 1, "fail"),
                 (["runtime-scope-smoke", "--json"], 1, "fail"),
                 (["runtime-certs-init", "--json"], 0, "pass"),
+                (["runtime-feed-keyring-init", "--json"], 1, "fail"),
                 (["down", "--json"], 1, "fail"),
                 (["runtime-app-down", "--json"], 1, "fail"),
                 (["quality-gate-state", "--json"], (0, 1), ("pass", "warn", "fail")),

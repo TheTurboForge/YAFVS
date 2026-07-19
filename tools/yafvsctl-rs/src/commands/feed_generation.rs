@@ -42,7 +42,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Component, Path};
 
 const RELEASE: &str = "22.04";
-const FPR: &str = "8AE4BE429B60A59B311C2E739823FAA60ED1E580";
+pub(super) const FPR: &str = "8AE4BE429B60A59B311C2E739823FAA60ED1E580";
 const MANIFEST: &str = "manifest.json";
 const CHUNK: usize = 1024 * 1024;
 const MAX_MANIFEST: u64 = 128 * 1024 * 1024;

@@ -475,6 +475,8 @@ pub enum CliCommand {
     RuntimeScopeSmoke,
     /// Create or verify the persistent development certificate infrastructure.
     RuntimeCertsInit,
+    /// Initialize and verify the shared feed-signature keyring.
+    RuntimeFeedKeyringInit,
     /// Verify the staged GSA web UI over gsad.
     RuntimeWebuiSmoke,
     /// Preflight an explicit authorized full test scan without starting it.
@@ -629,6 +631,7 @@ impl CliCommand {
             Self::RuntimeRbacSmoke => "runtime-rbac-smoke",
             Self::RuntimeScopeSmoke => "runtime-scope-smoke",
             Self::RuntimeCertsInit => "runtime-certs-init",
+            Self::RuntimeFeedKeyringInit => "runtime-feed-keyring-init",
             Self::RuntimeWebuiSmoke => "runtime-webui-smoke",
             Self::RuntimeFullTestScanPreflight { .. } => "runtime-full-test-scan-preflight",
             Self::RuntimeFullTestScanStart { .. } => "runtime-full-test-scan-start",
@@ -1425,6 +1428,10 @@ mod tests {
             ("runtime-rbac-smoke", CliCommand::RuntimeRbacSmoke),
             ("runtime-scope-smoke", CliCommand::RuntimeScopeSmoke),
             ("runtime-certs-init", CliCommand::RuntimeCertsInit),
+            (
+                "runtime-feed-keyring-init",
+                CliCommand::RuntimeFeedKeyringInit,
+            ),
             ("runtime-webui-smoke", CliCommand::RuntimeWebuiSmoke),
         ] {
             let cli = parse_cli([argument]).unwrap();

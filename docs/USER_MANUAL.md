@@ -205,6 +205,7 @@ never inferred from the filesystem selector.
 Useful development checks include:
 
 - `just runtime-certs-init --json`
+- `just runtime-feed-keyring-init --json`
 - `just runtime-status`
 - `just runtime-smoke`
 - `just runtime-log-review --json`
@@ -246,6 +247,13 @@ expected certificate/key paths are absent. A complete safe set is verified
 without regeneration. Any partial, linked, empty, wrong-owner, or
 group/world-readable private-key state is rejected; the command never rotates
 or overwrites such state automatically.
+
+`runtime-feed-keyring-init` prepares the private feed-signature keyring,
+validates the pinned Greenbone Community signing-key fingerprint before
+import, and verifies the active Notus advisory and product checksum
+signatures. A missing public-key artifact is downloaded into a private bounded
+temporary file and installed atomically; linked, nonregular, wrong-owner,
+multiply linked, empty, or oversized key and signature inputs are rejected.
 
 The native HTTP/JSON API is internal by default for browser/runtime migration.
 For development automation, `just runtime-native-api-direct-smoke --json`

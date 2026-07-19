@@ -38,6 +38,7 @@ mod runtime;
 mod runtime_certbund_report;
 mod runtime_certs;
 mod runtime_data_state;
+mod runtime_feed_keyring;
 mod runtime_identity_migrate;
 mod runtime_lock;
 mod runtime_log_review;
@@ -108,6 +109,7 @@ pub use runtime::{command_down, command_logs, command_runtime_app_down, command_
 pub use runtime_certbund_report::command_runtime_certbund_report;
 pub use runtime_certs::command_runtime_certs_init;
 pub use runtime_data_state::command_runtime_data_state;
+pub use runtime_feed_keyring::command_runtime_feed_keyring_init;
 pub use runtime_identity_migrate::command_runtime_identity_migrate;
 pub use runtime_log_review::command_runtime_log_review;
 pub use runtime_performance_snapshot::command_runtime_performance_snapshot;

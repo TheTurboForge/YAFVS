@@ -33,6 +33,7 @@ pub use commands::{
     command_quality_gate_state, command_repository_unavailable, command_runtime_app_down,
     command_runtime_certbund_report, command_runtime_credential_smoke, command_runtime_data_state,
     command_runtime_certs_init, command_runtime_db_introspect, command_runtime_feed_import_init,
+    command_runtime_feed_keyring_init,
     command_runtime_full_test_scan_preflight, command_runtime_full_test_scan_start,
     command_runtime_full_test_scan_status, command_runtime_gmp_smoke,
     command_runtime_identity_migrate, command_runtime_log_review,
@@ -432,6 +433,7 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         CliCommand::RuntimeRbacSmoke => command_runtime_rbac_smoke(&repo_root),
         CliCommand::RuntimeScopeSmoke => command_runtime_scope_smoke(&repo_root),
         CliCommand::RuntimeCertsInit => command_runtime_certs_init(&repo_root),
+        CliCommand::RuntimeFeedKeyringInit => command_runtime_feed_keyring_init(&repo_root),
         CliCommand::RuntimeWebuiSmoke => command_runtime_webui_smoke(&repo_root, cli.status_only),
         CliCommand::RuntimeFullTestScanPreflight { target_cidr } => {
             command_runtime_full_test_scan_preflight(&repo_root, target_cidr)

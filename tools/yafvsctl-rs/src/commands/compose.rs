@@ -63,10 +63,7 @@ pub(crate) fn runtime_environment(repo_root: &Path) -> BTreeMap<OsString, OsStri
 pub(crate) fn runtime_app_environment(
     repo_root: &Path,
 ) -> io::Result<BTreeMap<OsString, OsString>> {
-    let mut environment = runtime_environment(repo_root);
-    for secret_name in MQTT_RUNTIME_SECRETS {
-        read_or_create_runtime_secret(repo_root, secret_name)?;
-    }
+    let mut environment = runtime_lifecycle_environment(repo_root)?;
     for (environment_name, secret_name) in [
         (BROWSER_PROXY_SECRET_ENV, BROWSER_PROXY_SECRET),
         (GVMD_CONTROL_SECRET_ENV, GVMD_CONTROL_SECRET),
@@ -76,6 +73,16 @@ pub(crate) fn runtime_app_environment(
             let (secret, _created) = read_or_create_runtime_secret(repo_root, secret_name)?;
             environment.insert(key, OsString::from(secret));
         }
+    }
+    Ok(environment)
+}
+
+pub(crate) fn runtime_lifecycle_environment(
+    repo_root: &Path,
+) -> io::Result<BTreeMap<OsString, OsString>> {
+    let environment = runtime_environment(repo_root);
+    for secret_name in MQTT_RUNTIME_SECRETS {
+        read_or_create_runtime_secret(repo_root, secret_name)?;
     }
     Ok(environment)
 }

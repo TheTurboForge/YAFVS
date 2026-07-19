@@ -11,6 +11,7 @@ use super::common::{executable_path, metadata, output_tail, runtime_dir};
 use super::compose::{compose_command, runtime_environment};
 use super::runtime_lock::{RuntimeLockError, RuntimeLockStatus, inspect_runtime_lock};
 use super::runtime_probe::socket_readiness_finding;
+use super::runtime_setup::RUNTIME_DIRS;
 use super::secret::runtime_secret_path;
 use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
@@ -25,53 +26,6 @@ use std::path::Path;
 const RUNTIME_MANAGER_LOCK: &str = "runtime-manager";
 const RUNTIME_SERVICES: [&str; 3] = ["postgres", "redis-openvas", "mosquitto"];
 const APP_SERVICES: [&str; 5] = ["gvmd", "ospd-openvas", "notus-scanner", "gsad", "yafvs-api"];
-const RUNTIME_DIRS: [&str; 44] = [
-    "postgres",
-    "mosquitto",
-    "mosquitto/secrets",
-    "feeds",
-    "run",
-    "logs",
-    "artifacts",
-    "certs/CA",
-    "certs/private/CA",
-    "secrets",
-    "state",
-    "state/gvmd-bind-files",
-    "state/ospd",
-    "state/ospd/result-spool",
-    "state/feed-gnupg",
-    "redis-openvas",
-    "run/gvmd-gmp",
-    "run/gvmd-control",
-    "run/gvmd",
-    "run/gsad",
-    "run/ospd",
-    "run/notus",
-    "run/redis-openvas",
-    "logs/gvmd",
-    "logs/ospd",
-    "logs/notus",
-    "logs/gsad",
-    "logs/yafvs-api",
-    "logs/redis-openvas",
-    "logs/feed-sync",
-    "logs/quality-gate",
-    "artifacts/log-review",
-    "artifacts/data-state",
-    "artifacts/quality-gate",
-    "artifacts/performance",
-    "artifacts/reports",
-    "artifacts/credential-smoke",
-    "artifacts/native-api",
-    "feed-cache/community/22.04/var-lib",
-    "feeds/openvas/plugins",
-    "feeds/notus/advisories",
-    "feeds/notus/products",
-    "feeds/gvm/scap-data",
-    "feeds/gvm/cert-data",
-];
-const EXTRA_RUNTIME_DIRS: [&str; 1] = ["feeds/gvm/data-objects/gvmd/22.04"];
 const POSTGRES_COLLATION_BASE_DATABASES: [&str; 2] = ["postgres", "template1"];
 const ADMIN_SECRET: &str = "gvmd-admin-password";
 
@@ -458,7 +412,6 @@ fn runtime_directory_findings(repo_root: &Path) -> Vec<Finding> {
     let root = runtime_dir(repo_root);
     RUNTIME_DIRS
         .iter()
-        .chain(EXTRA_RUNTIME_DIRS.iter())
         .map(|relative| {
             let path = root.join(relative);
             let path_text = path.display().to_string();
@@ -1189,7 +1142,7 @@ mod tests {
 
     fn prepare_runtime_smoke_prerequisites(fixture: &Fixture) -> std::os::unix::net::UnixListener {
         let runtime = fixture.runtime();
-        for relative in RUNTIME_DIRS.iter().chain(EXTRA_RUNTIME_DIRS.iter()) {
+        for relative in RUNTIME_DIRS {
             fs::create_dir_all(runtime.join(relative)).unwrap();
         }
         fs::write(runtime.join("run/feed-update.lock"), "").unwrap();

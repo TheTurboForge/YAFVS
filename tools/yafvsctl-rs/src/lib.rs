@@ -47,7 +47,7 @@ pub use commands::{
     command_runtime_scanner_capability_check, command_runtime_scanner_process_check,
     command_runtime_scope_report_metrics, command_runtime_scope_report_summary,
     command_runtime_webui_smoke, command_rust_migration_state, command_security_policy_check,
-    command_status, find_repo_root,
+    command_status, command_up, find_repo_root,
 };
 pub use render::{render_human, render_json};
 pub use result::{ResultEnvelope, exit_code};
@@ -432,6 +432,7 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
             command_security_policy_check(&repo_root, cli.status_only)
         }
         CliCommand::RuntimePlan => command_runtime_plan(&repo_root),
+        CliCommand::Up => command_up(&repo_root),
         CliCommand::RuntimeStatus => command_runtime_status(&repo_root),
         CliCommand::RuntimeSmoke => command_runtime_smoke(&repo_root),
         CliCommand::GvmdSmoke => command_gvmd_smoke(&repo_root),

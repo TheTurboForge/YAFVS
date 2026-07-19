@@ -52,6 +52,7 @@ mod runtime_report;
 mod runtime_scanner_capability;
 mod runtime_scanner_process;
 mod runtime_scope_report;
+mod runtime_setup;
 mod runtime_webui;
 mod rust_migration;
 mod secret;
@@ -59,6 +60,7 @@ mod security_policy;
 mod task_batch_control;
 mod task_control;
 mod task_target;
+mod up;
 
 pub use audit::{
     command_gsa_npm_audit, command_native_api_cargo_audit, command_native_api_semgrep_audit,
@@ -148,3 +150,4 @@ pub use task_batch_control::{
 };
 pub use task_control::{command_native_start_task, command_native_stop_task};
 pub use task_target::command_native_update_task_target;
+pub use up::command_up;

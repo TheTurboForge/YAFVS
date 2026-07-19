@@ -12,10 +12,13 @@ use super::runtime_scanner_capability::{
     command_runtime_nmap_capability_check, command_runtime_scanner_capability_check,
 };
 use super::runtime_scanner_process::command_runtime_scanner_process_check;
-use super::secret::{read_existing_runtime_secret, runtime_secret_path};
+use super::secret::{
+    random_bytes, random_urlsafe_token, read_existing_runtime_secret, runtime_secret_path,
+};
 use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
 use serde_json::{Value, json};
+use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -37,6 +40,16 @@ enum FullTestAction {
     Status,
 }
 
+pub fn command_runtime_credential_smoke(repo_root: &Path) -> ResultEnvelope {
+    let node_available = executable_path("node").is_some();
+    command_runtime_credential_smoke_with(
+        repo_root,
+        &SystemCommandRunner,
+        node_available,
+        temporary_credential_material,
+    )
+}
+
 impl FullTestAction {
     fn as_str(self) -> &'static str {
         match self {
@@ -53,6 +66,215 @@ impl FullTestAction {
     fn checks_capabilities(self) -> bool {
         matches!(self, Self::Preflight | Self::Start)
     }
+}
+
+fn command_runtime_credential_smoke_with<F>(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    node_available: bool,
+    generate_material: F,
+) -> ResultEnvelope
+where
+    F: FnOnce() -> io::Result<(String, String)>,
+{
+    let secret_path = runtime_secret_path(repo_root, ADMIN_SECRET);
+    let probe = repo_root.join("tools/runtime_credential_smoke.py");
+    let artifact_dir = runtime_dir(repo_root).join("artifacts/credential-smoke");
+    let mut findings = Vec::new();
+    let admin_password = append_secret_prerequisite(
+        repo_root,
+        &secret_path,
+        "Development admin secret is missing.",
+        &mut findings,
+    );
+    findings.push(file_prerequisite(
+        repo_root,
+        &probe,
+        "credential-smoke.probe",
+        "Credential browser smoke helper exists.",
+        "Credential browser smoke helper is missing.",
+    ));
+    findings.push(Finding::new(
+        if node_available { "pass" } else { "fail" },
+        "node.available",
+        if node_available {
+            "node is available for credential browser smoke."
+        } else {
+            "node is not available on PATH."
+        }
+        .into(),
+    ));
+    match prepare_artifact_dir(&artifact_dir) {
+        Ok(()) => findings.push(
+            Finding::new(
+                "pass",
+                "credential-smoke.artifact-dir",
+                "Credential smoke artifact directory is ready.".into(),
+            )
+            .with_path(&artifact_dir.display().to_string()),
+        ),
+        Err(error) => findings.push(
+            Finding::new(
+                "fail",
+                "credential-smoke.artifact-dir",
+                format!("Credential smoke artifact directory is not usable: {error}"),
+            )
+            .with_path(&artifact_dir.display().to_string()),
+        ),
+    }
+    let urls = gsad_urls_from_env(&build_env(repo_root));
+    findings.push(
+        Finding::new(
+            if urls.is_empty() { "fail" } else { "pass" },
+            "gsad.urls",
+            if urls.is_empty() {
+                "No gsad base URLs are configured."
+            } else {
+                "Configured gsad base URLs are available."
+            }
+            .into(),
+        )
+        .with_details(json!({ "base_urls": urls })),
+    );
+    if findings.iter().any(|finding| finding.status == "fail") {
+        return make_result(
+            metadata(repo_root, "runtime-credential-smoke", runner),
+            "Runtime credential smoke stopped at prerequisites.".into(),
+            findings,
+        )
+        .with_artifacts(vec![artifact_dir.display().to_string()]);
+    }
+
+    let (credential_name, credential_password) = match generate_material() {
+        Ok(material) => material,
+        Err(error) => {
+            return credential_entropy_failure(repo_root, runner, findings, &artifact_dir, error);
+        }
+    };
+    let mut environment = build_env(repo_root);
+    environment.insert(
+        OsString::from("YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD"),
+        OsString::from(&credential_password),
+    );
+    let mut arguments = vec![
+        "--username".to_string(),
+        ADMIN_USER.to_string(),
+        "--password-file".to_string(),
+        secret_path.display().to_string(),
+        "--artifact-dir".to_string(),
+        artifact_dir.display().to_string(),
+        "--credential-name".to_string(),
+        credential_name,
+    ];
+    for url in &urls {
+        arguments.extend(["--base-url".to_string(), url.clone()]);
+    }
+    let refs = arguments.iter().map(String::as_str).collect::<Vec<_>>();
+    let output = run_probe_with_env(
+        repo_root,
+        runner,
+        &probe,
+        &refs,
+        Duration::from_secs(300),
+        environment,
+    );
+    let redactions = admin_password
+        .into_iter()
+        .chain(std::iter::once(credential_password))
+        .collect::<Vec<_>>();
+    let mut parsed = parse_bounded_helper_output(&output);
+    if let Some(value) = parsed.as_mut() {
+        redact_json_value(value, &redactions);
+    }
+    let helper_status = parsed
+        .as_ref()
+        .and_then(|value| value.get("status"))
+        .and_then(Value::as_str);
+    let finding_status = if output.success && matches!(helper_status, Some("pass" | "warn")) {
+        helper_status.unwrap_or("fail")
+    } else {
+        "fail"
+    };
+    let exit_code = output.exit_code.unwrap_or(1);
+    let summary = parsed
+        .as_ref()
+        .and_then(|value| value.get("summary"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            format!("Runtime credential smoke completed with exit code {exit_code}.")
+        });
+    findings.push(
+        Finding::new(finding_status, "credential-smoke.run", summary.clone()).with_details(json!({
+            "helper": parsed,
+            "output_tail": output_tail(&redact_text(&output.stdout, &redactions), 120),
+        })),
+    );
+    let artifacts = parsed_artifacts(parsed.as_ref())
+        .unwrap_or_else(|| vec![artifact_dir.display().to_string()]);
+    make_result(
+        metadata(repo_root, "runtime-credential-smoke", runner),
+        summary,
+        findings,
+    )
+    .with_artifacts(artifacts)
+}
+
+fn credential_entropy_failure(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    mut findings: Vec<Finding>,
+    artifact_dir: &Path,
+    error: io::Error,
+) -> ResultEnvelope {
+    findings.push(Finding::new(
+        "fail",
+        "credential-smoke.run",
+        format!("Temporary credential material could not be generated: {error}"),
+    ));
+    make_result(
+        metadata(repo_root, "runtime-credential-smoke", runner),
+        "Runtime credential smoke could not generate temporary credential material.".into(),
+        findings,
+    )
+    .with_artifacts(vec![artifact_dir.display().to_string()])
+}
+
+fn temporary_credential_material() -> io::Result<(String, String)> {
+    let suffix = random_bytes(4)?
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    Ok((
+        format!("yafvs-credential-smoke-{suffix}"),
+        random_urlsafe_token(24)?,
+    ))
+}
+
+fn gsad_urls_from_env(environment: &std::collections::BTreeMap<OsString, OsString>) -> Vec<String> {
+    let hosts = environment
+        .get(&OsString::from("YAFVS_GSAD_HOSTS"))
+        .filter(|value| !value.is_empty())
+        .or_else(|| environment.get(&OsString::from("YAFVS_GSAD_HOST")));
+    let mut unique = Vec::new();
+    for host in hosts
+        .and_then(|value| value.to_str())
+        .unwrap_or("127.0.0.1")
+        .split(",")
+        .map(str::trim)
+        .filter(|host| !host.is_empty())
+    {
+        if !unique.contains(&host) {
+            unique.push(host);
+        }
+    }
+    if unique.is_empty() {
+        unique.push("127.0.0.1");
+    }
+    unique
+        .into_iter()
+        .map(|host| format!("https://{host}:19392"))
+        .collect()
 }
 
 pub fn command_runtime_gmp_smoke(repo_root: &Path) -> ResultEnvelope {
@@ -884,6 +1106,24 @@ fn run_probe(
     arguments: &[&str],
     timeout: Duration,
 ) -> ProcessOutput {
+    run_probe_with_env(
+        repo_root,
+        runner,
+        probe,
+        arguments,
+        timeout,
+        build_env(repo_root),
+    )
+}
+
+fn run_probe_with_env(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    probe: &Path,
+    arguments: &[&str],
+    timeout: Duration,
+    environment: std::collections::BTreeMap<OsString, OsString>,
+) -> ProcessOutput {
     let python = executable_path("python3").unwrap_or_else(|| PathBuf::from("python3"));
     let mut owned = vec![probe.display().to_string()];
     owned.extend(arguments.iter().map(|argument| (*argument).to_string()));
@@ -893,7 +1133,7 @@ fn run_probe(
             &python.display().to_string(),
             &refs,
             Some(repo_root),
-            Some(&build_env(repo_root)),
+            Some(&environment),
             Some(timeout),
         )
         .unwrap_or(ProcessOutput {
@@ -928,6 +1168,7 @@ mod tests {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
     use std::os::unix::net::UnixListener;
+    use std::sync::Mutex;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
@@ -935,6 +1176,49 @@ mod tests {
     #[derive(Default)]
     struct ProbeRunner {
         output: Option<ProcessOutput>,
+    }
+
+    type CredentialInvocation = (Vec<String>, BTreeMap<OsString, OsString>, Duration);
+
+    #[derive(Default)]
+    struct CredentialRunner {
+        calls: Mutex<Vec<CredentialInvocation>>,
+    }
+
+    impl CommandRunner for CredentialRunner {
+        fn run(&self, _program: &str, _args: &[&str]) -> Option<ProcessOutput> {
+            None
+        }
+
+        fn run_with(
+            &self,
+            _program: &str,
+            args: &[&str],
+            _cwd: Option<&Path>,
+            env: Option<&BTreeMap<OsString, OsString>>,
+            timeout: Option<Duration>,
+        ) -> Option<ProcessOutput> {
+            let environment = env.cloned().unwrap_or_default();
+            let password = environment
+                .get(&OsString::from(
+                    "YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD",
+                ))?
+                .to_string_lossy()
+                .into_owned();
+            self.calls.lock().unwrap().push((
+                args.iter().map(|arg| (*arg).to_string()).collect(),
+                environment,
+                timeout?,
+            ));
+            Some(ProcessOutput {
+                success: true,
+                exit_code: Some(0),
+                stdout: format!(
+                    "{{\"status\":\"pass\",\"summary\":\"{password}\",\"nested\":{{\"password\":\"{password}\"}}}}"
+                ),
+                stderr: String::new(),
+            })
+        }
     }
 
     impl CommandRunner for ProbeRunner {
@@ -953,6 +1237,100 @@ mod tests {
             let _ = program;
             self.output.clone()
         }
+    }
+
+    #[test]
+    fn credential_smoke_uses_secret_environment_and_redacts_result() {
+        let (root, repo) = fixture("credential");
+        prepare_secret(&repo, "admin-secret");
+        fs::write(repo.join("tools/runtime_credential_smoke.py"), "# helper\n").unwrap();
+        let runner = CredentialRunner::default();
+        let result = command_runtime_credential_smoke_with(&repo, &runner, true, || {
+            Ok((
+                "yafvs-credential-smoke-001122aa".into(),
+                "credential-secret-material-1234".into(),
+            ))
+        });
+        assert_eq!(result.status, "pass");
+        assert_eq!(
+            result
+                .findings
+                .iter()
+                .map(|item| item.check.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "runtime.admin-secret",
+                "credential-smoke.probe",
+                "node.available",
+                "credential-smoke.artifact-dir",
+                "gsad.urls",
+                "credential-smoke.run"
+            ]
+        );
+        let calls = runner.calls.lock().unwrap();
+        let (args, env, timeout) = &calls[0];
+        let password = env
+            .get(&OsString::from(
+                "YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD",
+            ))
+            .unwrap()
+            .to_string_lossy();
+        assert_eq!(*timeout, Duration::from_secs(300));
+        assert_eq!(password, "credential-secret-material-1234");
+        assert!(!args.iter().any(|arg| arg == &password));
+        assert!(args.iter().any(|arg| arg == "yafvs-credential-smoke-001122aa"));
+        let serialized = serde_json::to_string(&result).unwrap();
+        assert!(!serialized.contains(password.as_ref()));
+        assert!(serialized.contains("[redacted]"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn gsad_urls_are_trimmed_deduplicated_and_prefer_plural() {
+        let environment = BTreeMap::from([
+            (
+                OsString::from("YAFVS_GSAD_HOSTS"),
+                OsString::from(" alpha, ,beta,alpha "),
+            ),
+            (OsString::from("YAFVS_GSAD_HOST"), OsString::from("ignored")),
+        ]);
+        assert_eq!(
+            gsad_urls_from_env(&environment),
+            ["https://alpha:19392", "https://beta:19392"]
+        );
+        assert_eq!(
+            gsad_urls_from_env(&BTreeMap::new()),
+            ["https://127.0.0.1:19392"]
+        );
+    }
+
+    #[test]
+    fn temporary_credential_material_has_exact_shapes() {
+        let (name, password) = temporary_credential_material().unwrap();
+        let suffix = name.strip_prefix("yafvs-credential-smoke-").unwrap();
+        assert_eq!(suffix.len(), 8);
+        assert!(suffix.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+        assert_eq!(password.len(), 32);
+        assert!(
+            password
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+        );
+    }
+
+    #[test]
+    fn credential_smoke_entropy_failure_does_not_run_helper() {
+        let (root, repo) = fixture("credential-entropy");
+        prepare_secret(&repo, "admin-secret");
+        fs::write(repo.join("tools/runtime_credential_smoke.py"), "# helper\n").unwrap();
+        let runner = CredentialRunner::default();
+        let result = command_runtime_credential_smoke_with(&repo, &runner, true, || {
+            Err(io::Error::other("entropy unavailable"))
+        });
+        assert_eq!(result.status, "fail");
+        assert_eq!(result.findings.last().unwrap().check, "credential-smoke.run");
+        assert!(runner.calls.lock().unwrap().is_empty());
+        fs::remove_dir_all(root).unwrap();
     }
 
     fn fixture(name: &str) -> (PathBuf, PathBuf) {

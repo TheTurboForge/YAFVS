@@ -229,10 +229,33 @@ def payload(status: str, summary: str, **details: Any) -> dict[str, Any]:
     return {"status": status, "summary": summary, "generated_at": now_iso(), "details": details}
 
 
+def redact_text(value: str, secrets: list[str]) -> str:
+    redacted = value
+    for secret in sorted((secret for secret in secrets if secret), key=len, reverse=True):
+        redacted = redacted.replace(secret, "[redacted]")
+    return redacted
+
+
+def redact_value(value: Any, secrets: list[str]) -> Any:
+    if isinstance(value, str):
+        return redact_text(value, secrets)
+    if isinstance(value, list):
+        return [redact_value(item, secrets) for item in value]
+    if isinstance(value, dict):
+        return {key: redact_value(item, secrets) for key, item in value.items()}
+    return value
+
+
 def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
     artifact_dir = Path(args.artifact_dir).expanduser().resolve()
     artifact_dir.mkdir(parents=True, exist_ok=True)
     login_password = Path(args.password_file).read_text(encoding="utf-8").strip()
+    credential_password = args.credential_password or os.environ.get("YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD")
+    if not credential_password:
+        failed = payload("fail", "Credential password material is missing.")
+        failed["findings"] = [{"status": "fail", "check": "credential-smoke.credential-password", "message": "Set YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD or pass --credential-password."}]
+        failed["artifacts"] = [write_artifact(artifact_dir, "credential-smoke-failed.json", failed)]
+        return failed
     node_paths = playwright_node_path_candidates()
     if not node_paths:
         failed = payload("fail", "Playwright module was not found.", searched=list(node_paths))
@@ -263,7 +286,7 @@ def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
     env = dict(os.environ)
     env["NODE_PATH"] = os.pathsep.join([*node_paths, env.get("NODE_PATH", "")]).rstrip(os.pathsep)
     env["YAFVS_CREDENTIAL_SMOKE_LOGIN_PASSWORD"] = login_password
-    env["YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD"] = args.credential_password
+    env["YAFVS_CREDENTIAL_SMOKE_CREDENTIAL_PASSWORD"] = credential_password
     completed = subprocess.run(
         ["node", str(script_path), str(config_path)],
         check=False,
@@ -280,10 +303,13 @@ def run_credential_smoke(args: argparse.Namespace) -> dict[str, Any]:
             "fail",
             "Runtime credential browser smoke did not return JSON.",
             exit_code=completed.returncode,
-            output_tail=completed.stdout.splitlines()[-80:],
+            output_tail=redact_text(
+                completed.stdout, [login_password, credential_password]
+            ).splitlines()[-80:],
         )
         result["findings"] = [{"status": "fail", "check": "credential-smoke.output", "message": "Credential smoke did not return parseable JSON."}]
         result["artifacts"] = []
+    result = redact_value(result, [login_password, credential_password])
     result.setdefault("artifacts", [])
     result["artifacts"].extend([str(script_path), str(config_path)])
     result["status"] = result.get("status") if completed.returncode == 0 else "fail"
@@ -301,7 +327,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--artifact-dir", required=True)
     parser.add_argument("--credential-name", required=True)
     parser.add_argument("--credential-login", default="yafvs-smoke")
-    parser.add_argument("--credential-password", required=True)
+    parser.add_argument("--credential-password")
     parser.add_argument("--timeout-ms", type=int, default=DEFAULT_TIMEOUT_MS)
     return parser
 

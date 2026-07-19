@@ -124,6 +124,8 @@ pub enum CliCommand {
     RuntimeDataState,
     /// Run the retained authenticated GMP smoke.
     RuntimeGmpSmoke,
+    /// Run the browser-level temporary credential create/cleanup smoke.
+    RuntimeCredentialSmoke,
     /// Characterize the retained shared operator-account compatibility boundary.
     RuntimeRbacSmoke,
     /// Preflight an explicit authorized full test scan without starting it.
@@ -239,6 +241,7 @@ impl CliCommand {
             Self::RuntimeNmapCapabilityCheck => "runtime-nmap-capability-check",
             Self::RuntimeDataState => "runtime-data-state",
             Self::RuntimeGmpSmoke => "runtime-gmp-smoke",
+            Self::RuntimeCredentialSmoke => "runtime-credential-smoke",
             Self::RuntimeRbacSmoke => "runtime-rbac-smoke",
             Self::RuntimeFullTestScanPreflight { .. } => "runtime-full-test-scan-preflight",
             Self::RuntimeFullTestScanStart { .. } => "runtime-full-test-scan-start",
@@ -347,6 +350,10 @@ mod tests {
     fn parses_runtime_probe_commands() {
         for (argument, expected) in [
             ("runtime-gmp-smoke", CliCommand::RuntimeGmpSmoke),
+            (
+                "runtime-credential-smoke",
+                CliCommand::RuntimeCredentialSmoke,
+            ),
             ("runtime-rbac-smoke", CliCommand::RuntimeRbacSmoke),
         ] {
             let cli = parse_cli([argument]).unwrap();

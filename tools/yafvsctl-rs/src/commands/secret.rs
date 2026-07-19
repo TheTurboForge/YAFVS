@@ -321,11 +321,11 @@ fn descriptor_stat(descriptor: &OwnedFd) -> io::Result<libc::stat> {
     Ok(unsafe { stat.assume_init() })
 }
 
-fn random_urlsafe_token(byte_count: usize) -> io::Result<String> {
+pub(crate) fn random_urlsafe_token(byte_count: usize) -> io::Result<String> {
     Ok(base64_url_no_pad(&random_bytes(byte_count)?))
 }
 
-fn random_bytes(byte_count: usize) -> io::Result<Vec<u8>> {
+pub(crate) fn random_bytes(byte_count: usize) -> io::Result<Vec<u8>> {
     let mut bytes = vec![0_u8; byte_count];
     File::open("/dev/urandom")?.read_exact(&mut bytes)?;
     Ok(bytes)

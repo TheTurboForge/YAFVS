@@ -63,8 +63,9 @@ pub use runtime_identity_migrate::command_runtime_identity_migrate;
 pub use runtime_log_review::command_runtime_log_review;
 pub use runtime_performance_snapshot::command_runtime_performance_snapshot;
 pub use runtime_probe::{
-    command_runtime_full_test_scan_preflight, command_runtime_full_test_scan_start,
-    command_runtime_full_test_scan_status, command_runtime_gmp_smoke, command_runtime_rbac_smoke,
+    command_runtime_credential_smoke, command_runtime_full_test_scan_preflight,
+    command_runtime_full_test_scan_start, command_runtime_full_test_scan_status,
+    command_runtime_gmp_smoke, command_runtime_rbac_smoke,
 };
 pub use runtime_scanner_capability::{
     command_runtime_nmap_capability_check, command_runtime_scanner_capability_check,

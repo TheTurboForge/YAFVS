@@ -25,6 +25,38 @@
 scan_restrictions_t scan_restrictions;
 
 /**
+ * @brief Build the bounded scanner result emitted when the host limit is hit.
+ *
+ * The scanner result queue uses strict version-1 JSON records. Keep the
+ * entire dynamic surface numeric so this inherited C boundary cannot inject
+ * unescaped content into the record.
+ */
+static gchar *
+host_limit_result_message (int num_not_scanned_hosts)
+{
+  return g_strdup_printf (
+    "{\"version\":1,\"result_type\":\"ERRMSG\",\"host_ip\":\"\","
+    "\"host_name\":\" \",\"port\":\" \",\"oid\":\" \","
+    "\"value\":\"Maximum number of allowed scans reached. There may still "
+    "be alive hosts available which are not scanned. Number of alive hosts "
+    "not scanned: [%d]\",\"uri\":\"\"}",
+    num_not_scanned_hosts);
+}
+
+/**
+ * @brief Build the bounded scanner result reporting dead hosts.
+ */
+static gchar *
+dead_host_result_message (int count_dead_hosts)
+{
+  return g_strdup_printf (
+    "{\"version\":1,\"result_type\":\"DEADHOST\",\"host_ip\":\"\","
+    "\"host_name\":\" \",\"port\":\" \",\"oid\":\" \","
+    "\"value\":\"%d\",\"uri\":\"\"}",
+    count_dead_hosts);
+}
+
+/**
  * @brief Check if max_scan_hosts alive hosts reached.
  *
  * @return TRUE if max_scan_hosts alive hosts reached, else FALSE.
@@ -104,19 +136,15 @@ send_limit_msg (int num_not_scanned_hosts)
                             prefs_get ("ov_mainowner"));
   if (main_kb)
     {
-      char buf[256];
-      g_snprintf (buf, 256,
-                  "ERRMSG||| ||| ||| ||| |||Maximum number of allowed scans "
-                  "reached. There may still be alive hosts available which are "
-                  "not scanned. Number of alive hosts not scanned: [%d]",
-                  num_not_scanned_hosts);
-      if (kb_item_push_str (main_kb, "internal/results", buf) != 0)
+      gchar *message = host_limit_result_message (num_not_scanned_hosts);
+      if (kb_item_push_str (main_kb, "internal/results", message) != 0)
         {
           g_warning ("%s: kb_item_push_str() failed to push "
                      "error message.",
                      __func__);
           err = -2;
         }
+      g_free (message);
       kb_lnk_reset (main_kb);
     }
   else
@@ -435,7 +463,7 @@ send_dead_hosts_to_ospd_openvas (int count_dead_hosts)
   kb_t main_kb;
   int maindbid;
   const char *maindbid_pref;
-  char dead_host_msg_to_ospd_openvas[2048];
+  gchar *dead_host_msg_to_ospd_openvas;
 
   maindbid_pref = prefs_get ("ov_maindbid");
   if (maindbid_pref == NULL || prefs_get ("ov_mainowner") == NULL)
@@ -452,10 +480,9 @@ send_dead_hosts_to_ospd_openvas (int count_dead_hosts)
       return;
     }
 
-  snprintf (dead_host_msg_to_ospd_openvas,
-            sizeof (dead_host_msg_to_ospd_openvas),
-            "DEADHOST||| ||| ||| ||| |||%d", count_dead_hosts);
+  dead_host_msg_to_ospd_openvas = dead_host_result_message (count_dead_hosts);
   kb_item_push_str (main_kb, "internal/results", dead_host_msg_to_ospd_openvas);
+  g_free (dead_host_msg_to_ospd_openvas);
 
   kb_lnk_reset (main_kb);
 }

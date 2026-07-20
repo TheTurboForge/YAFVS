@@ -1259,10 +1259,11 @@ paths:
       x-yafvs-replaces: scanner-create
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-configuration-write
       summary: Create an operator-owned scanner
-      description: Creates one scanner configuration owned by the authenticated operator without contacting or verifying the scanner. Supported scanner types are 2, 5, 6, and 8; type 3 CVE scanners cannot be created. Network scanners require a valid host and port plus optional CA certificate and operator-owned certificate credential. Unix socket scanners store port 0 and clear CA and credential fields. Relay configuration is initialized empty. Clone, delete, remote verification, and relay mutation remain inherited.
+      description: Creates one scanner configuration owned by the authenticated operator without contacting or verifying the scanner. Supported scanner types are 2, 5, 6, and 8; type 3 CVE scanners cannot be created. Network scanners require a valid host and port plus optional CA certificate and a human-owned certificate credential visible to the trusted operator team. Unix socket scanners store port 0 and clear CA and credential fields. Relay configuration is initialized empty. Clone, delete, remote verification, and relay mutation remain inherited.
       requestBody:
         required: true
         content:
@@ -1340,10 +1341,11 @@ paths:
       x-yafvs-replaces: scanner-metadata-modify
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Update scanner metadata
-      description: Direct write-control endpoint for updating scanner name and comment only on operator-owned non-built-in scanners. Complete retained editor configuration uses the separate replace-configuration endpoint. Scanner verify is exposed through the separate bounded verify endpoint. Relay mutation, live status beyond verify, remote/TLS/relay verification, inherited export/download formats, clone, restore, and delete remain inherited.
+      description: Direct write-control endpoint for updating scanner name and comment only on human-owned non-built-in scanners. Any authenticated stack operator may continue this work; the scanner's existing owner remains attribution. Complete retained editor configuration uses the separate replace-configuration endpoint. Scanner verify is exposed through the separate bounded verify endpoint. Relay mutation, live status beyond verify, remote/TLS/relay verification, inherited export/download formats, clone, restore, and delete remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       requestBody:
@@ -1388,10 +1390,11 @@ paths:
       x-yafvs-replaces: scanner-complete-retained-editor-configuration-modify
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-configuration-write
       summary: Replace complete retained scanner editor configuration
-      description: Atomically replaces name, comment, host, port, scanner type, CA certificate, and optional certificate credential for an operator-owned non-built-in scanner that is not referenced by a live non-hidden task, without contacting or verifying it. In-use scanners return conflict; their name/comment can still be changed through the metadata PATCH endpoint. Supported scanner types are 2, 5, 6, and 8. Unix socket configurations store port 0 and clear CA and credential fields. Existing relay host and relay port are preserved because the retained editor has no relay controls. Clone, delete, remote verification, and relay mutation remain inherited.
+      description: Atomically replaces name, comment, host, port, scanner type, CA certificate, and optional human-owned certificate credential for a human-owned non-built-in scanner that is not referenced by a live non-hidden task, without contacting or verifying it. Any authenticated stack operator may continue this work; the scanner's existing owner remains attribution. In-use scanners return conflict; their name/comment can still be changed through the metadata PATCH endpoint. Supported scanner types are 2, 5, 6, and 8. Unix socket configurations store port 0 and clear CA and credential fields. Existing relay host and relay port are preserved because the retained editor has no relay controls. Clone, delete, remote verification, and relay mutation remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       requestBody:
@@ -1549,6 +1552,7 @@ paths:
       x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: credential-secret-control
       summary: Create a username/password or username/SSH-key credential
@@ -1624,10 +1628,11 @@ paths:
       x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Update credential metadata
-      description: Direct write-control endpoint for updating credential name and comment only. Secret updates, allow_insecure, credential type changes, target/scanner links, export, download, clone, restore, and delete remain on inherited compatibility paths.
+      description: Direct write-control endpoint for updating the name and comment of any human-owned credential. Any authenticated stack operator may continue this work; the credential's existing owner remains attribution. Ownerless credentials remain protected. Secret updates, allow_insecure, credential type changes, target/scanner links, export, download, clone, restore, and delete remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/CredentialId'
       requestBody:
@@ -1736,6 +1741,7 @@ paths:
       x-yafvs-replaces: saved-filter-create
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Create a saved filter
@@ -4803,10 +4809,11 @@ paths:
       x-yafvs-replaces: scan-config-create-from-base
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Create a scan config from a base config
-      description: Direct write-control endpoint for creating an operator-owned non-predefined scan config from an operator-visible or predefined base scan config. The create-from-base path copies metadata counters, preferences, NVT selector rows, and active user-tag links with a fresh config id and selector id while applying request-owned name/comment metadata. Import/XML create, blank scanner-id create, preference edits, family-mode mutation, and scanner control remain inherited.
+      description: Direct write-control endpoint for creating an operator-owned non-predefined scan config from any human-owned or predefined base scan config visible to the trusted operator team. The create-from-base path copies metadata counters, preferences, NVT selector rows, and active user-tag links with a fresh config id and selector id while applying request-owned name/comment metadata. Import/XML create, blank scanner-id create, preference edits, family-mode mutation, and scanner control remain inherited.
       requestBody:
         required: true
         content:
@@ -4883,10 +4890,11 @@ paths:
       x-yafvs-replaces: scan-config-family-mode-and-preference-mutation
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scan-config-selector-and-preference-write
       summary: Patch scan-config metadata, family selection, and preferences
-      description: Direct write-control endpoint for atomically changing an operator-owned non-predefined scan config name, comment, complete family-selection snapshot, and/or explicit scanner/NVT preference overrides. Family snapshots must name every current non-Credentials feed family exactly once; preference identities must match the current feed catalog exactly. Set and reset are distinct operations, radio selections are normalized against current feed options, and password/file values are write-only and remain redacted in the response. Stale, missing, unknown, whole-only-invalid, shared-selector, or task-referenced mutations fail without partial writes. Legacy XML import/export, blank create, and scanner control remain inherited; versioned native JSON backup import/export and individual NVT selection use separate endpoints.
+      description: Direct write-control endpoint for atomically changing any human-owned non-predefined scan config name, comment, complete family-selection snapshot, and/or explicit scanner/NVT preference overrides. Any authenticated stack operator may continue this work; the config's existing owner remains attribution. Family snapshots must name every current non-Credentials feed family exactly once; preference identities must match the current feed catalog exactly. Set and reset are distinct operations, radio selections are normalized against current feed options, and password/file values are write-only and remain redacted in the response. Stale, missing, unknown, whole-only-invalid, shared-selector, or task-referenced mutations fail without partial writes. Legacy XML import/export, blank create, and scanner control remain inherited; versioned native JSON backup import/export and individual NVT selection use separate endpoints.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       requestBody:
@@ -4928,6 +4936,7 @@ paths:
       x-yafvs-replaces: scan-config-trash-move
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Move scan config to trash
@@ -5012,10 +5021,11 @@ paths:
       x-yafvs-replaces: scan-config-clone
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Clone a scan config
-      description: Direct write-control endpoint for cloning an operator-owned or predefined live scan config into a new operator-owned non-predefined scan config. The clone copies metadata, preferences, NVT selector rows, and active user-tag links with a fresh config id and selector id. Family-mode mutation, legacy XML import/export, scanner control, and blank create remain inherited; preference edits, versioned native JSON backup import/export, and individual NVT selection use separate endpoints.
+      description: Direct write-control endpoint for cloning any human-owned or predefined live scan config into a new operator-owned non-predefined scan config. The clone copies metadata, preferences, NVT selector rows, and active user-tag links with a fresh config id and selector id. Family-mode mutation, legacy XML import/export, scanner control, and blank create remain inherited; preference edits, versioned native JSON backup import/export, and individual NVT selection use separate endpoints.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       requestBody:
@@ -5063,6 +5073,7 @@ paths:
       x-yafvs-replaces: scan-config-restore
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Restore a scan config from trash
@@ -5103,6 +5114,7 @@ paths:
       x-yafvs-replaces: scan-config-hard-delete
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Permanently delete a trashed scan config
@@ -5200,11 +5212,12 @@ paths:
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scan-config-family-nvt-selection-mutation
       x-yafvs-operator-identity: direct-token-operator
-      x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scan-config-nvt-selector-write
       summary: Change NVT selection for one scan config family
-      description: Direct write-control endpoint for changing individual NVT selection in one family. It requires the exact config owner, a non-predefined live config with no task references including hidden tasks, and a private non-universal selector. Every OID must currently belong to the path family; whole-only families are rejected. The mutation preserves the family growing/static mode, writes only selector rows that differ from the family default, and atomically refreshes selection counters and modification time.
+      description: Direct write-control endpoint for changing individual NVT selection in one family. It requires a human-owned non-predefined live config with no task references including hidden tasks and a private non-universal selector. Any authenticated stack operator may continue this work; the config's existing owner remains attribution. Every OID must currently belong to the path family; whole-only families are rejected. The mutation preserves the family growing/static mode, writes only selector rows that differ from the family default, and atomically refreshes selection counters and modification time.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
         - $ref: '#/components/parameters/ScanConfigFamilyName'

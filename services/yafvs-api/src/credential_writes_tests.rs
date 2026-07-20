@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{
-    credential_write_db::ensure_credential_owner_matches_operator,
+    credential_write_db::ensure_credential_is_human_owned,
     credential_write_sql::*,
     credential_write_validation::{
         CredentialCreateRequest, CredentialCreateType, CredentialPatchRequest,
@@ -173,16 +173,17 @@ fn credential_create_maps_only_bounded_control_responses() {
 }
 
 #[test]
-fn credential_patch_rejects_operator_owner_mismatch() {
-    assert!(ensure_credential_owner_matches_operator(7, 7).is_ok());
+fn credential_patch_accepts_any_human_owner_and_rejects_ownerless_credentials() {
+    assert_eq!(ensure_credential_is_human_owned(Some(7)).unwrap(), 7);
+    assert_eq!(ensure_credential_is_human_owned(Some(8)).unwrap(), 8);
     assert!(matches!(
-        ensure_credential_owner_matches_operator(7, 8),
+        ensure_credential_is_human_owned(None),
         Err(ApiError::Forbidden)
     ));
 }
 
 #[test]
-fn credential_patch_handler_requires_operator_and_owner_before_mutation() {
+fn credential_patch_handler_requires_operator_and_preserves_owner_before_mutation() {
     let source = include_str!("credential_writes.rs");
     let handler = source
         .split_once("pub(crate) async fn patch_credential")
@@ -190,7 +191,7 @@ fn credential_patch_handler_requires_operator_and_owner_before_mutation() {
         .1;
 
     let owner_check =
-        "ensure_credential_owner_matches_operator(credential_state.owner_id, operator_owner_id)?;";
+        "let credential_owner_id = ensure_credential_is_human_owned(credential_state.owner_id)?;";
     assert!(handler.contains("let operator = require_credential_write_operator(operator)?;"));
     assert!(handler.contains("resolve_credential_write_operator_owner(&tx, &operator).await?"));
     assert!(handler.contains(owner_check));
@@ -199,8 +200,9 @@ fn credential_patch_handler_requires_operator_and_owner_before_mutation() {
             < handler
                 .find("execute_credential_patch_transaction")
                 .unwrap(),
-        "credential patch must verify owner before metadata mutation"
+        "credential patch must verify human ownership before metadata mutation"
     );
+    assert!(handler.contains("credential_owner_id)"));
 }
 
 #[test]

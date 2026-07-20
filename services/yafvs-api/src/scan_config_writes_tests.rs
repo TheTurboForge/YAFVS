@@ -6,8 +6,8 @@ use crate::errors::ApiError;
 use crate::gvmd_control::MAX_CONTROL_REQUEST_BYTES;
 use crate::scan_config_write_db::{
     ScanConfigPreferenceDefinition, ScanConfigWriteState, ensure_scan_config_clone_source_allowed,
-    ensure_scan_config_family_is_not_whole_only, ensure_scan_config_not_predefined,
-    ensure_scan_config_owner_matches_operator,
+    ensure_scan_config_family_is_not_whole_only, ensure_scan_config_is_human_owned,
+    ensure_scan_config_not_predefined,
 };
 use crate::scan_config_write_sql::*;
 use crate::scan_config_write_transactions::{
@@ -207,7 +207,7 @@ fn scan_config_radio_values_are_canonicalized_from_feed_options() {
 }
 
 #[test]
-fn scan_config_preference_patch_is_atomic_owner_and_task_guarded() {
+fn scan_config_preference_patch_is_atomic_human_owner_and_task_guarded() {
     let source = include_str!("scan_config_writes.rs");
     let handler = source
         .split_once("pub(crate) async fn patch_scan_config")
@@ -218,7 +218,7 @@ fn scan_config_preference_patch_is_atomic_owner_and_task_guarded() {
         .0;
     for required in [
         "config_preferences, nvt_preferences",
-        "ensure_scan_config_owner_matches_operator",
+        "ensure_scan_config_is_human_owned",
         "ensure_scan_config_not_predefined",
         "ensure_scan_config_not_referenced_by_any_task",
         "execute_scan_config_preference_mutations_transaction",
@@ -425,7 +425,7 @@ fn scan_config_family_selection_handler_guards_before_atomic_commit() {
     for required in [
         "parse_scan_config_patch_payload(payload)?",
         "configs, configs_trash, nvt_selectors, tasks, nvts",
-        "ensure_scan_config_owner_matches_operator",
+        "ensure_scan_config_is_human_owned",
         "ensure_scan_config_not_predefined",
         "ensure_unique_scan_config_name",
         "ensure_scan_config_not_referenced_by_any_task",
@@ -758,10 +758,11 @@ fn scan_config_create_from_base_sql_copies_source_without_import_or_preference_m
 }
 
 #[test]
-fn scan_config_write_rejects_operator_owner_mismatch() {
-    assert!(ensure_scan_config_owner_matches_operator(7, 7).is_ok());
+fn scan_config_write_accepts_any_human_owner_and_rejects_ownerless_configs() {
+    assert_eq!(ensure_scan_config_is_human_owned(Some(7)).unwrap(), 7);
+    assert_eq!(ensure_scan_config_is_human_owned(Some(8)).unwrap(), 8);
     assert!(matches!(
-        ensure_scan_config_owner_matches_operator(7, 8),
+        ensure_scan_config_is_human_owned(None),
         Err(ApiError::Forbidden)
     ));
 }
@@ -774,14 +775,14 @@ fn scan_config_create_and_clone_handlers_guard_source_before_insert() {
             "create",
             "pub(crate) async fn create_scan_config",
             "pub(crate) async fn clone_scan_config",
-            "ensure_scan_config_clone_source_allowed(&config_state, operator_owner_id)?;",
+            "ensure_scan_config_clone_source_allowed(&config_state)?;",
             "execute_scan_config_create_from_base_transaction",
         ),
         (
             "clone",
             "pub(crate) async fn clone_scan_config",
             "pub(crate) async fn delete_scan_config",
-            "ensure_scan_config_clone_source_allowed(&config_state, operator_owner_id)?;",
+            "ensure_scan_config_clone_source_allowed(&config_state)?;",
             "execute_scan_config_clone_transaction",
         ),
     ] {
@@ -809,14 +810,14 @@ fn scan_config_create_and_clone_handlers_guard_source_before_insert() {
 }
 
 #[test]
-fn scan_config_mutating_handlers_enforce_owner_and_protection_before_side_effects() {
+fn scan_config_mutating_handlers_enforce_human_ownership_and_protection_before_side_effects() {
     let source = include_str!("scan_config_writes.rs");
     for (label, start, end, owner_check, protection_guard, side_effect) in [
         (
             "delete",
             "pub(crate) async fn delete_scan_config",
             "pub(crate) async fn hard_delete_scan_config",
-            "ensure_scan_config_owner_matches_operator(config_state.owner_id, operator_owner_id)?;",
+            "ensure_scan_config_is_human_owned(config_state.owner_id)?;",
             "ensure_scan_config_not_predefined(&config_state)?;",
             "execute_scan_config_trash_transaction",
         ),
@@ -824,7 +825,7 @@ fn scan_config_mutating_handlers_enforce_owner_and_protection_before_side_effect
             "hard delete",
             "pub(crate) async fn hard_delete_scan_config",
             "pub(crate) async fn restore_scan_config",
-            "ensure_scan_config_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_scan_config_is_human_owned(trash.owner_id)?;",
             "ensure_scan_config_not_in_use_by_trash_tasks",
             "execute_scan_config_hard_delete_transaction",
         ),
@@ -832,7 +833,7 @@ fn scan_config_mutating_handlers_enforce_owner_and_protection_before_side_effect
             "restore",
             "pub(crate) async fn restore_scan_config",
             "fn scan_config_write_location_headers",
-            "ensure_scan_config_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_scan_config_is_human_owned(trash.owner_id)?;",
             "ensure_scan_config_trash_scanner_is_live(&trash)?;",
             "execute_scan_config_restore_transaction",
         ),
@@ -840,7 +841,7 @@ fn scan_config_mutating_handlers_enforce_owner_and_protection_before_side_effect
             "patch",
             "pub(crate) async fn patch_scan_config(\n",
             "tx.commit().await.map_err",
-            "ensure_scan_config_owner_matches_operator(config_state.owner_id, operator_owner_id)?;",
+            "ensure_scan_config_is_human_owned(config_state.owner_id)?;",
             "ensure_scan_config_not_predefined(&config_state)?;",
             "execute_scan_config_metadata_patch_transaction",
         ),
@@ -859,7 +860,7 @@ fn scan_config_mutating_handlers_enforce_owner_and_protection_before_side_effect
         );
         assert!(
             handler.contains(owner_check),
-            "{label} handler must check owner"
+            "{label} handler must check human ownership"
         );
         assert!(
             handler.contains(protection_guard),
@@ -867,7 +868,7 @@ fn scan_config_mutating_handlers_enforce_owner_and_protection_before_side_effect
         );
         assert!(
             handler.find(owner_check).unwrap() < handler.find(side_effect).unwrap(),
-            "{label} handler must check owner before side effects"
+            "{label} handler must check human ownership before side effects"
         );
         assert!(
             handler.find(protection_guard).unwrap() < handler.find(side_effect).unwrap(),
@@ -877,25 +878,31 @@ fn scan_config_mutating_handlers_enforce_owner_and_protection_before_side_effect
 }
 
 #[test]
-fn scan_config_clone_source_allows_predefined_or_operator_owned_sources() {
-    let operator_owned = ScanConfigWriteState {
+fn scan_config_clone_source_allows_predefined_or_any_human_owned_source() {
+    let human_owned = ScanConfigWriteState {
         internal_id: 1,
-        owner_id: 7,
+        owner_id: Some(7),
         predefined: false,
         nvt_selector: "selector-1".to_string(),
         families_growing: 0,
     };
-    assert!(ensure_scan_config_clone_source_allowed(&operator_owned, 7).is_ok());
-    assert!(matches!(
-        ensure_scan_config_clone_source_allowed(&operator_owned, 8),
-        Err(ApiError::Forbidden)
-    ));
+    assert!(ensure_scan_config_clone_source_allowed(&human_owned).is_ok());
 
     let predefined = ScanConfigWriteState {
         predefined: true,
-        ..operator_owned
+        owner_id: None,
+        ..human_owned.clone()
     };
-    assert!(ensure_scan_config_clone_source_allowed(&predefined, 8).is_ok());
+    assert!(ensure_scan_config_clone_source_allowed(&predefined).is_ok());
+
+    let ownerless_custom = ScanConfigWriteState {
+        predefined: false,
+        ..predefined
+    };
+    assert!(matches!(
+        ensure_scan_config_clone_source_allowed(&ownerless_custom),
+        Err(ApiError::Forbidden)
+    ));
 }
 
 #[test]
@@ -925,7 +932,7 @@ fn scan_config_clone_request_trims_optional_name_and_rejects_unknown_fields() {
 fn scan_config_write_blocks_predefined_live_mutations() {
     let mutable = ScanConfigWriteState {
         internal_id: 1,
-        owner_id: 7,
+        owner_id: Some(7),
         predefined: false,
         nvt_selector: "selector-1".to_string(),
         families_growing: 0,
@@ -1010,7 +1017,7 @@ fn scan_config_family_nvt_patch_handler_guards_and_normalizes_before_commit() {
         "parse_scan_config_family_nvts_patch_payload(payload)?",
         "validate_scan_config_family_nvts_patch_request(request)?",
         "LOCK TABLE configs, configs_trash, nvt_selectors, tasks, nvts",
-        "ensure_scan_config_owner_matches_operator",
+        "ensure_scan_config_is_human_owned",
         "ensure_scan_config_not_predefined",
         "ensure_scan_config_not_referenced_by_any_task",
         "ensure_scan_config_selector_is_private",

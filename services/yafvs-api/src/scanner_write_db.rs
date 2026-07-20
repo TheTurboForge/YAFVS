@@ -70,19 +70,14 @@ pub(crate) async fn load_scanner_write_state(
 
 pub(crate) fn ensure_scanner_metadata_patch_allowed(
     state: &ScannerWriteState,
-    operator_owner_id: i32,
 ) -> Result<(), ApiError> {
     if scanner_is_builtin(&state.uuid) {
         return Err(ApiError::Forbidden);
     }
-    if state.owner_id == Some(operator_owner_id) {
+    if state.owner_id.is_some() {
         Ok(())
     } else {
-        tracing::warn!(
-            scanner_owner_id = ?state.owner_id,
-            operator_owner_id,
-            "direct API scanner write owner mismatch"
-        );
+        tracing::warn!("direct API scanner write rejected an ownerless scanner");
         Err(ApiError::Forbidden)
     }
 }
@@ -106,10 +101,9 @@ pub(crate) async fn ensure_unique_scanner_name(
     }
 }
 
-pub(crate) async fn load_owned_scanner_credential(
+pub(crate) async fn load_human_owned_scanner_credential(
     tx: &Transaction<'_>,
     credential_id: &str,
-    operator_owner_id: i32,
 ) -> Result<i32, ApiError> {
     let credential_id = parse_uuid(credential_id)?.to_string();
     let Some(row) = tx
@@ -120,12 +114,8 @@ pub(crate) async fn load_owned_scanner_credential(
         return Err(ApiError::NotFound);
     };
     let owner_id: Option<i32> = row.get(1);
-    if owner_id != Some(operator_owner_id) {
-        tracing::warn!(
-            credential_owner_id = ?owner_id,
-            operator_owner_id,
-            "direct API scanner write operator cannot assign credential"
-        );
+    if owner_id.is_none() {
+        tracing::warn!("direct API scanner write rejected an ownerless credential");
         return Err(ApiError::Forbidden);
     }
     let credential_type: String = row.get(2);

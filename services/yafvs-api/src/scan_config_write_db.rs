@@ -88,7 +88,7 @@ pub(crate) async fn load_scan_config_preference_definition(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ScanConfigWriteState {
     pub(crate) internal_id: i32,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
     pub(crate) predefined: bool,
     pub(crate) nvt_selector: String,
     pub(crate) families_growing: i32,
@@ -99,7 +99,7 @@ pub(crate) struct ScanConfigTrashState {
     pub(crate) internal_id: i32,
     pub(crate) uuid: String,
     pub(crate) name: String,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
     pub(crate) scanner_location: i32,
 }
 
@@ -269,20 +269,13 @@ pub(crate) async fn load_scan_config_trash_state(
         .ok_or(ApiError::NotFound)
 }
 
-pub(crate) fn ensure_scan_config_owner_matches_operator(
-    scan_config_owner_id: i32,
-    operator_owner_id: i32,
-) -> Result<(), ApiError> {
-    if scan_config_owner_id == operator_owner_id {
-        Ok(())
-    } else {
-        tracing::warn!(
-            scan_config_owner_id,
-            operator_owner_id,
-            "direct API scan-config write owner mismatch"
-        );
-        Err(ApiError::Forbidden)
-    }
+pub(crate) fn ensure_scan_config_is_human_owned(
+    scan_config_owner_id: Option<i32>,
+) -> Result<i32, ApiError> {
+    scan_config_owner_id.ok_or_else(|| {
+        tracing::warn!("direct API scan-config write rejected an ownerless config");
+        ApiError::Forbidden
+    })
 }
 
 pub(crate) fn ensure_scan_config_not_predefined(
@@ -299,16 +292,11 @@ pub(crate) fn ensure_scan_config_not_predefined(
 
 pub(crate) fn ensure_scan_config_clone_source_allowed(
     state: &ScanConfigWriteState,
-    operator_owner_id: i32,
 ) -> Result<(), ApiError> {
-    if state.predefined || state.owner_id == operator_owner_id {
+    if state.predefined || state.owner_id.is_some() {
         Ok(())
     } else {
-        tracing::warn!(
-            scan_config_owner_id = state.owner_id,
-            operator_owner_id,
-            "direct API scan-config clone source owner mismatch"
-        );
+        tracing::warn!("direct API scan-config clone rejected an ownerless custom config");
         Err(ApiError::Forbidden)
     }
 }

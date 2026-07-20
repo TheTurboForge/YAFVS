@@ -200,23 +200,20 @@ fn scanner_patch_request_rejects_empty_body_unknown_fields_and_controls() {
 }
 
 #[test]
-fn scanner_patch_blocks_builtin_or_unowned_scanners() {
+fn scanner_patch_blocks_builtin_or_ownerless_scanners() {
     let mutable = ScannerWriteState {
         internal_id: 1,
         uuid: "12345678-1234-1234-1234-123456789abc".to_string(),
         owner_id: Some(42),
     };
-    assert!(ensure_scanner_metadata_patch_allowed(&mutable, 42).is_ok());
+    assert!(ensure_scanner_metadata_patch_allowed(&mutable).is_ok());
 
-    let unowned = ScannerWriteState {
+    let other_human_owned = ScannerWriteState {
         internal_id: 1,
         uuid: mutable.uuid.clone(),
         owner_id: Some(7),
     };
-    assert!(matches!(
-        ensure_scanner_metadata_patch_allowed(&unowned, 42),
-        Err(ApiError::Forbidden)
-    ));
+    assert!(ensure_scanner_metadata_patch_allowed(&other_human_owned).is_ok());
 
     for uuid in [
         "08b69003-5fc2-4037-a479-93b440211c73",
@@ -228,7 +225,7 @@ fn scanner_patch_blocks_builtin_or_unowned_scanners() {
             owner_id: Some(42),
         };
         assert!(matches!(
-            ensure_scanner_metadata_patch_allowed(&builtin, 42),
+            ensure_scanner_metadata_patch_allowed(&builtin),
             Err(ApiError::Forbidden)
         ));
     }
@@ -239,7 +236,7 @@ fn scanner_patch_blocks_builtin_or_unowned_scanners() {
         owner_id: None,
     };
     assert!(matches!(
-        ensure_scanner_metadata_patch_allowed(&null_owner, 42),
+        ensure_scanner_metadata_patch_allowed(&null_owner),
         Err(ApiError::Forbidden)
     ));
 }
@@ -260,7 +257,7 @@ fn scanner_patch_handler_requires_operator_and_allows_mutation_only_after_guard(
             .find("ensure_scanner_metadata_patch_allowed")
             .unwrap()
             < handler.find("execute_scanner_patch_transaction").unwrap(),
-        "scanner patch must verify owner/builtin guard before metadata mutation"
+        "scanner patch must verify human-owner/builtin guard before metadata mutation"
     );
 }
 
@@ -427,10 +424,10 @@ fn scanner_create_and_replace_are_guarded_before_atomic_mutation() {
 }
 
 #[test]
-fn scanner_credential_resolution_is_owner_and_cc_constrained_without_secret_reads() {
+fn scanner_credential_resolution_accepts_any_human_owner_and_requires_cc_without_secret_reads() {
     let db = include_str!("scanner_write_db.rs");
     let loader = db
-        .split_once("pub(crate) async fn load_owned_scanner_credential")
+        .split_once("pub(crate) async fn load_human_owned_scanner_credential")
         .expect("scanner credential loader")
         .1
         .split_once("pub(crate) async fn query_scanner_write_record")
@@ -438,7 +435,7 @@ fn scanner_credential_resolution_is_owner_and_cc_constrained_without_secret_read
         .0;
     for required in [
         "parse_uuid(credential_id)?",
-        "owner_id != Some(operator_owner_id)",
+        "owner_id.is_none()",
         "credential_type != \"cc\"",
         "ApiError::Forbidden",
         "ApiError::BadRequest",

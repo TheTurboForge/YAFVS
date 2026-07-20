@@ -42,7 +42,7 @@ pub(crate) async fn create_scanner(
         .map_err(|error| map_scanner_write_db_error(error, "lock scanner create tables"))?;
     let owner_id = resolve_scanner_write_operator_owner(&tx, &operator).await?;
     ensure_unique_scanner_name(&tx, &request.name, -1).await?;
-    let credential_internal_id = resolve_scanner_credential(&tx, owner_id, &request).await?;
+    let credential_internal_id = resolve_scanner_credential(&tx, &request).await?;
     let record =
         execute_scanner_create_transaction(&tx, owner_id, credential_internal_id, &request).await?;
     tx.commit()
@@ -79,12 +79,12 @@ pub(crate) async fn replace_scanner_configuration(
     tx.batch_execute("LOCK TABLE users, credentials, scanners, tasks IN SHARE ROW EXCLUSIVE MODE;")
         .await
         .map_err(|error| map_scanner_write_db_error(error, "lock scanner replace tables"))?;
-    let owner_id = resolve_scanner_write_operator_owner(&tx, &operator).await?;
+    resolve_scanner_write_operator_owner(&tx, &operator).await?;
     let scanner_state = load_scanner_write_state(&tx, &scanner_id).await?;
-    ensure_scanner_metadata_patch_allowed(&scanner_state, owner_id)?;
+    ensure_scanner_metadata_patch_allowed(&scanner_state)?;
     ensure_scanner_not_in_use_for_configuration_replace(&tx, scanner_state.internal_id).await?;
     ensure_unique_scanner_name(&tx, &request.name, scanner_state.internal_id).await?;
-    let credential_internal_id = resolve_scanner_credential(&tx, owner_id, &request).await?;
+    let credential_internal_id = resolve_scanner_credential(&tx, &request).await?;
     let record = execute_scanner_replace_transaction(
         &tx,
         scanner_state.internal_id,
@@ -116,12 +116,12 @@ pub(crate) async fn patch_scanner(
         .transaction()
         .await
         .map_err(|error| map_scanner_write_db_error(error, "begin patch scanner transaction"))?;
-    let operator_owner_id = resolve_scanner_write_operator_owner(&tx, &operator).await?;
+    resolve_scanner_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute("LOCK TABLE scanners IN SHARE ROW EXCLUSIVE MODE;")
         .await
         .map_err(|error| map_scanner_write_db_error(error, "lock scanners for patch"))?;
     let scanner_state = load_scanner_write_state(&tx, &scanner_id).await?;
-    ensure_scanner_metadata_patch_allowed(&scanner_state, operator_owner_id)?;
+    ensure_scanner_metadata_patch_allowed(&scanner_state)?;
     if let Some(name) = request.name.as_ref() {
         ensure_unique_scanner_name(&tx, name, scanner_state.internal_id).await?;
     }
@@ -140,7 +140,6 @@ pub(crate) async fn patch_scanner(
 
 async fn resolve_scanner_credential(
     tx: &tokio_postgres::Transaction<'_>,
-    owner_id: i32,
     request: &ValidatedScannerConfiguration,
 ) -> Result<Option<i32>, ApiError> {
     if request.unix_socket {
@@ -148,7 +147,7 @@ async fn resolve_scanner_credential(
     }
     match request.credential_id.as_deref() {
         Some(credential_id) => Ok(Some(
-            load_owned_scanner_credential(tx, credential_id, owner_id).await?,
+            load_human_owned_scanner_credential(tx, credential_id).await?,
         )),
         None => Ok(None),
     }

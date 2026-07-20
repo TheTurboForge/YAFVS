@@ -1408,7 +1408,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("patch", "/scan-configs/{scan_config_id}/families/{family}/nvts"): {
         "x-yafvs-maturity": "live-write",
         "x-yafvs-operator-identity": "direct-token-operator",
-        "x-yafvs-owner-semantics": "request-operator-owner",
+        "x-yafvs-owner-semantics": "preserve-existing-owner",
         "x-yafvs-replaces": "scan-config-family-nvt-selection-mutation",
         "x-yafvs-safety-contract": "write-control-v1",
         "x-yafvs-side-effect": "scan-config-nvt-selector-write",

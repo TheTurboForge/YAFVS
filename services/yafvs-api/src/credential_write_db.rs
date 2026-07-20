@@ -17,7 +17,7 @@ pub(crate) struct CredentialWriteRecord {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CredentialWriteState {
     pub(crate) internal_id: i32,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
 }
 
 pub(crate) fn require_credential_write_operator(
@@ -88,16 +88,13 @@ pub(crate) async fn ensure_unique_credential_name(
     }
 }
 
-pub(crate) fn ensure_credential_owner_matches_operator(
-    credential_owner_id: i32,
-    operator_owner_id: i32,
-) -> Result<(), ApiError> {
-    if credential_owner_id == operator_owner_id {
-        Ok(())
-    } else {
-        tracing::warn!("direct API credential write operator does not own credential");
-        Err(ApiError::Forbidden)
-    }
+pub(crate) fn ensure_credential_is_human_owned(
+    credential_owner_id: Option<i32>,
+) -> Result<i32, ApiError> {
+    credential_owner_id.ok_or_else(|| {
+        tracing::warn!("direct API credential write rejected an ownerless credential");
+        ApiError::Forbidden
+    })
 }
 
 pub(crate) async fn query_credential_write_record(

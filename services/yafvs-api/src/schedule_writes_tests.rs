@@ -467,10 +467,10 @@ fn clone_request(name: Option<&str>, comment: Option<&str>) -> ScheduleCloneRequ
 }
 
 #[test]
-fn schedule_write_rejects_operator_owner_mismatch() {
-    assert!(ensure_schedule_owner_matches_operator(7, 7).is_ok());
+fn schedule_write_accepts_any_human_owner_and_rejects_ownerless_rows() {
+    assert_eq!(ensure_schedule_is_human_owned(Some(7)).unwrap(), 7);
     assert!(matches!(
-        ensure_schedule_owner_matches_operator(7, 8),
+        ensure_schedule_is_human_owned(None),
         Err(ApiError::Forbidden)
     ));
 }
@@ -486,7 +486,7 @@ fn schedule_clone_handler_requires_owner_check_before_clone() {
         .expect("delete schedule handler must follow clone handler")
         .0;
 
-    let owner_check = "ensure_schedule_owner_matches_operator(source.owner_id, owner_id)?;";
+    let owner_check = "ensure_schedule_is_human_owned(source.owner_id)?;";
     assert!(handler.contains("let operator = require_schedule_write_operator(operator)?;"));
     assert!(
         handler.contains(
@@ -509,7 +509,7 @@ fn schedule_mutating_handlers_enforce_owner_and_task_safety_before_side_effects(
             "delete",
             "pub(crate) async fn delete_schedule",
             "pub(crate) async fn hard_delete_schedule",
-            "ensure_schedule_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "ensure_schedule_is_human_owned(state.owner_id)?;",
             "ensure_schedule_not_in_use_by_live_tasks",
             "execute_schedule_trash_transaction",
         ),
@@ -517,7 +517,7 @@ fn schedule_mutating_handlers_enforce_owner_and_task_safety_before_side_effects(
             "hard delete",
             "pub(crate) async fn hard_delete_schedule",
             "pub(crate) async fn restore_schedule",
-            "ensure_schedule_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_schedule_is_human_owned(trash.owner_id)?;",
             "ensure_schedule_not_in_use_by_trash_tasks",
             "execute_schedule_hard_delete_transaction",
         ),
@@ -525,7 +525,7 @@ fn schedule_mutating_handlers_enforce_owner_and_task_safety_before_side_effects(
             "restore",
             "pub(crate) async fn restore_schedule",
             "pub(crate) async fn patch_schedule",
-            "ensure_schedule_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_schedule_is_human_owned(trash.owner_id)?;",
             "ensure_schedule_uuid_not_live",
             "execute_schedule_restore_transaction",
         ),
@@ -891,7 +891,7 @@ fn schedule_patch_no_longer_has_a_direct_sql_mutation_path() {
     for forbidden in [
         "transaction()",
         "resolve_schedule_write_operator_owner",
-        "ensure_schedule_owner_matches_operator",
+        "ensure_schedule_is_human_owned",
         "ensure_unique_schedule_name",
         "execute_schedule_patch_transaction",
     ] {

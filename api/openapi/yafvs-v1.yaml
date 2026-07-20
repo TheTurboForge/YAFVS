@@ -2572,6 +2572,7 @@ paths:
       x-yafvs-replaces: tag-metadata-explicit-and-filter-resource-assignment-write
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-and-resource-assignment-write
       summary: Create tag metadata and optional resource assignments
@@ -2690,6 +2691,7 @@ paths:
       x-yafvs-replaces: tag-metadata-resource-type-and-atomic-assignment-write
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-and-resource-assignment-write
       summary: Atomically update tag metadata and optional resource assignments
@@ -2735,6 +2737,7 @@ paths:
       x-yafvs-replaces: tag-trash-move
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Move tag to trash
@@ -2801,10 +2804,11 @@ paths:
       x-yafvs-replaces: tag-clone
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Clone tag metadata and assignments
-      description: Direct write-control endpoint for copying an existing live tag into a new tag owned by the direct API operator when the tag resource type is supported by native explicit resource writes. The clone copies comment, value, resource type, active state, and existing resource assignments; optional name/comment fields override copied metadata. Unsupported resource classes, filter-based bulk actions, and resource-type change semantics remain inherited.
+      description: Direct write-control endpoint for copying any human-owned live tag into a new tag owned by the direct API operator when the tag resource type is supported by native explicit resource writes. The clone copies comment, value, resource type, active state, and existing resource assignments; optional name/comment fields override copied metadata. Unsupported resource classes, filter-based bulk actions, and resource-type change semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -2848,6 +2852,7 @@ paths:
       x-yafvs-replaces: tag-restore
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Restore tag from trash
@@ -2886,6 +2891,7 @@ paths:
       x-yafvs-replaces: tag-hard-delete
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Permanently delete trashed tag
@@ -2953,6 +2959,7 @@ paths:
       x-yafvs-replaces: tag-active-resource-assignment-write
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: resource-assignment-write
       summary: Add, remove, or replace active tag resource assignments
@@ -3839,6 +3846,7 @@ paths:
       x-yafvs-replaces: schedule-create
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Create a schedule
@@ -3911,6 +3919,7 @@ paths:
       x-yafvs-replaces: schedule-metadata-modify
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: schedule-and-task-timing-write
       summary: Patch a schedule
@@ -3960,6 +3969,7 @@ paths:
       x-yafvs-replaces: schedule-trash-move
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Move schedule to trash
@@ -3994,10 +4004,11 @@ paths:
       x-yafvs-replaces: schedule-clone
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Clone a schedule
-      description: Direct write-control endpoint for copying an existing live schedule into a new schedule owned by the direct API operator. The clone copies first-time, period, byday, duration, timezone, iCalendar data, comment, and active-table tag links; optional name/comment fields override copied metadata. Calendar create/edit and task next-time recalculation remain inherited.
+      description: Direct write-control endpoint for copying any human-owned live schedule into a new schedule owned by the direct API operator. The clone copies first-time, period, byday, duration, timezone, iCalendar data, comment, and active-table tag links; optional name/comment fields override copied metadata. Calendar create/edit and task next-time recalculation remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScheduleId'
       requestBody:
@@ -4040,6 +4051,7 @@ paths:
       x-yafvs-replaces: schedule-restore
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Restore a trashed schedule
@@ -4080,6 +4092,7 @@ paths:
       x-yafvs-replaces: schedule-hard-delete
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Hard-delete a trashed schedule

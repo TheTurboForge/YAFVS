@@ -186,7 +186,7 @@ pub(crate) async fn clone_schedule(
     .await
     .map_err(|error| map_schedule_write_db_error(error, "lock schedule tables for clone"))?;
     let source = load_schedule_write_state(&tx, &schedule_id).await?;
-    ensure_schedule_owner_matches_operator(source.owner_id, owner_id)?;
+    ensure_schedule_is_human_owned(source.owner_id)?;
     if let Some(name) = request.name.as_ref() {
         ensure_unique_schedule_name(&tx, name, -1).await?;
     }
@@ -218,14 +218,14 @@ pub(crate) async fn delete_schedule(
         .transaction()
         .await
         .map_err(|error| map_schedule_write_db_error(error, "begin delete schedule transaction"))?;
-    let operator_owner_id = resolve_schedule_write_operator_owner(&tx, &operator).await?;
+    resolve_schedule_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE schedules, schedules_trash, tasks, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_schedule_write_db_error(error, "lock schedule tables for delete"))?;
     let state = load_schedule_write_state(&tx, &schedule_id).await?;
-    ensure_schedule_owner_matches_operator(state.owner_id, operator_owner_id)?;
+    ensure_schedule_is_human_owned(state.owner_id)?;
     ensure_schedule_not_in_use_by_live_tasks(&tx, state.internal_id).await?;
     execute_schedule_trash_transaction(&tx, state.internal_id).await?;
     tx.commit().await.map_err(|error| {
@@ -245,14 +245,14 @@ pub(crate) async fn hard_delete_schedule(
     let tx = client.transaction().await.map_err(|error| {
         map_schedule_write_db_error(error, "begin hard-delete schedule transaction")
     })?;
-    let operator_owner_id = resolve_schedule_write_operator_owner(&tx, &operator).await?;
+    resolve_schedule_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE schedules_trash, tasks, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_schedule_write_db_error(error, "lock schedule trash tables for hard delete"))?;
     let trash = load_schedule_trash_state(&tx, &schedule_id).await?;
-    ensure_schedule_owner_matches_operator(trash.owner_id, operator_owner_id)?;
+    ensure_schedule_is_human_owned(trash.owner_id)?;
     ensure_schedule_not_in_use_by_trash_tasks(&tx, trash.internal_id).await?;
     execute_schedule_hard_delete_transaction(&tx, trash.internal_id).await?;
     tx.commit().await.map_err(|error| {
@@ -272,15 +272,15 @@ pub(crate) async fn restore_schedule(
     let tx = client.transaction().await.map_err(|error| {
         map_schedule_write_db_error(error, "begin restore schedule transaction")
     })?;
-    let operator_owner_id = resolve_schedule_write_operator_owner(&tx, &operator).await?;
+    resolve_schedule_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE schedules, schedules_trash, tasks, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_schedule_write_db_error(error, "lock schedule tables for restore"))?;
     let trash = load_schedule_trash_state(&tx, &schedule_id).await?;
-    ensure_schedule_owner_matches_operator(trash.owner_id, operator_owner_id)?;
-    ensure_unique_live_schedule_name_for_owner(&tx, &trash.name, trash.owner_id).await?;
+    let schedule_owner_id = ensure_schedule_is_human_owned(trash.owner_id)?;
+    ensure_unique_live_schedule_name_for_owner(&tx, &trash.name, schedule_owner_id).await?;
     ensure_schedule_uuid_not_live(&tx, &trash.uuid).await?;
     let record = execute_schedule_restore_transaction(&tx, trash.internal_id).await?;
     tx.commit().await.map_err(|error| {

@@ -75,10 +75,10 @@ fn tag_create_request_accepts_explicit_resource_ids_only() {
 }
 
 #[test]
-fn tag_write_rejects_operator_owner_mismatch() {
-    assert!(ensure_tag_owner_matches_operator(7, 7).is_ok());
+fn tag_write_accepts_any_human_owner_and_rejects_ownerless_rows() {
+    assert_eq!(ensure_tag_is_human_owned(Some(7)).unwrap(), 7);
     assert!(matches!(
-        ensure_tag_owner_matches_operator(7, 8),
+        ensure_tag_is_human_owned(None),
         Err(ApiError::Forbidden)
     ));
 }
@@ -113,7 +113,7 @@ fn tag_mutating_handlers_enforce_owner_and_type_guard_before_side_effects() {
             "restore",
             "pub(crate) async fn restore_tag",
             "pub(crate) async fn hard_delete_tag",
-            "ensure_tag_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_tag_is_human_owned(trash.owner_id)?;",
             "ensure_tag_resource_direct_write_type_is_supported(&trash.resource_type)?;",
             "execute_tag_restore_transaction",
         ),
@@ -121,7 +121,7 @@ fn tag_mutating_handlers_enforce_owner_and_type_guard_before_side_effects() {
             "hard delete",
             "pub(crate) async fn hard_delete_tag",
             "pub(crate) async fn patch_tag",
-            "ensure_tag_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_tag_is_human_owned(trash.owner_id)?;",
             "ensure_tag_resource_direct_write_type_is_supported(&trash.resource_type)?;",
             "execute_tag_hard_delete_transaction",
         ),
@@ -129,7 +129,7 @@ fn tag_mutating_handlers_enforce_owner_and_type_guard_before_side_effects() {
             "patch",
             "pub(crate) async fn patch_tag",
             "pub(crate) async fn clone_tag",
-            "ensure_tag_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "ensure_tag_is_human_owned(state.owner_id)?;",
             "ensure_tag_resource_direct_write_type_is_supported(&state.resource_type)?;",
             "execute_tag_patch_transaction",
         ),
@@ -137,7 +137,7 @@ fn tag_mutating_handlers_enforce_owner_and_type_guard_before_side_effects() {
             "clone",
             "pub(crate) async fn clone_tag",
             "pub(crate) async fn delete_tag",
-            "ensure_tag_owner_matches_operator(source.owner_id, owner_id)?;",
+            "ensure_tag_is_human_owned(source.owner_id)?;",
             "ensure_tag_resource_direct_write_type_is_supported(&source.resource_type)?;",
             "execute_tag_clone_transaction",
         ),
@@ -145,7 +145,7 @@ fn tag_mutating_handlers_enforce_owner_and_type_guard_before_side_effects() {
             "delete",
             "pub(crate) async fn delete_tag",
             "pub(crate) async fn update_tag_resources",
-            "ensure_tag_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "ensure_tag_is_human_owned(state.owner_id)?;",
             "ensure_tag_resource_direct_write_type_is_supported(&state.resource_type)?;",
             "execute_tag_trash_transaction",
         ),
@@ -153,7 +153,7 @@ fn tag_mutating_handlers_enforce_owner_and_type_guard_before_side_effects() {
             "resource update",
             "pub(crate) async fn update_tag_resources",
             "fn tag_write_location_headers",
-            "ensure_tag_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "ensure_tag_is_human_owned(state.owner_id)?;",
             "ensure_tag_resource_direct_write_type_is_supported(&state.resource_type)?;",
             "execute_tag_resource_update_transaction",
         ),
@@ -190,23 +190,17 @@ fn tag_mutating_handlers_enforce_owner_and_type_guard_before_side_effects() {
 }
 
 #[test]
-fn tag_resource_write_rejects_owner_mismatch_for_owner_bearing_types() {
-    assert!(ensure_tag_resource_owner_matches_operator("target", Some(7), 7).is_ok());
+fn tag_resource_write_accepts_human_owned_team_resources() {
+    assert!(ensure_tag_resource_is_team_assignable("target", Some(7)).is_ok());
+    assert!(ensure_tag_resource_is_team_assignable("target", Some(8)).is_ok());
     assert!(matches!(
-        ensure_tag_resource_owner_matches_operator("target", Some(7), 8),
+        ensure_tag_resource_is_team_assignable("target", None),
         Err(ApiError::Forbidden)
     ));
-    assert!(matches!(
-        ensure_tag_resource_owner_matches_operator("target", None, 8),
-        Err(ApiError::Forbidden)
-    ));
-    assert!(ensure_tag_resource_owner_matches_operator("credential", Some(7), 7).is_ok());
-    assert!(matches!(
-        ensure_tag_resource_owner_matches_operator("credential", Some(7), 8),
-        Err(ApiError::Forbidden)
-    ));
-    assert!(ensure_tag_resource_owner_matches_operator("cve", None, 8).is_ok());
-    assert!(ensure_tag_resource_owner_matches_operator("nvt", None, 8).is_ok());
+    assert!(ensure_tag_resource_is_team_assignable("credential", Some(7)).is_ok());
+    assert!(ensure_tag_resource_is_team_assignable("credential", Some(8)).is_ok());
+    assert!(ensure_tag_resource_is_team_assignable("cve", None).is_ok());
+    assert!(ensure_tag_resource_is_team_assignable("nvt", None).is_ok());
 }
 
 #[test]

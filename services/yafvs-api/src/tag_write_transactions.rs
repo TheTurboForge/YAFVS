@@ -11,7 +11,7 @@ use crate::{
         tag_resource_active_lookup_sql, tag_resource_direct_write_id_must_be_uuid,
     },
     tag_write_db::{
-        TagWriteRecord, TagWriteState, ensure_tag_resource_owner_matches_operator,
+        TagWriteRecord, TagWriteState, ensure_tag_resource_is_team_assignable,
         map_tag_write_db_error,
     },
     tag_write_sql::*,
@@ -50,11 +50,7 @@ pub(crate) async fn execute_tag_create_transaction(
     for resource_id in &request.resource_ids {
         let resource =
             resolve_tag_resource_write_record(tx, &request.resource_type, resource_id).await?;
-        ensure_tag_resource_owner_matches_operator(
-            &request.resource_type,
-            resource.owner_id,
-            owner_id,
-        )?;
+        ensure_tag_resource_is_team_assignable(&request.resource_type, resource.owner_id)?;
         tx.execute(
             tag_resource_insert_sql(),
             &[
@@ -180,18 +176,13 @@ pub(crate) async fn execute_tag_hard_delete_transaction(
 pub(crate) async fn execute_tag_resource_update_transaction(
     tx: &Transaction<'_>,
     state: &TagWriteState,
-    operator_owner_id: i32,
     request: &ValidatedTagResourceUpdate,
 ) -> Result<(), ApiError> {
     let mut resources = Vec::new();
     for resource_id in &request.resource_ids {
         let resource =
             resolve_tag_resource_write_record(tx, &state.resource_type, resource_id).await?;
-        ensure_tag_resource_owner_matches_operator(
-            &state.resource_type,
-            resource.owner_id,
-            operator_owner_id,
-        )?;
+        ensure_tag_resource_is_team_assignable(&state.resource_type, resource.owner_id)?;
         resources.push(resource);
     }
 

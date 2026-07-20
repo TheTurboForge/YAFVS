@@ -23,7 +23,7 @@ pub(crate) struct ScheduleTrashWriteRecord {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ScheduleWriteState {
     pub(crate) internal_id: i32,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,7 +31,7 @@ pub(crate) struct ScheduleTrashWriteState {
     pub(crate) internal_id: i32,
     pub(crate) uuid: String,
     pub(crate) name: String,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
 }
 
 pub(crate) fn require_schedule_write_operator(
@@ -79,20 +79,13 @@ pub(crate) async fn load_schedule_write_state(
         .ok_or(ApiError::NotFound)
 }
 
-pub(crate) fn ensure_schedule_owner_matches_operator(
-    schedule_owner_id: i32,
-    operator_owner_id: i32,
-) -> Result<(), ApiError> {
-    if schedule_owner_id == operator_owner_id {
-        Ok(())
-    } else {
-        tracing::warn!(
-            schedule_owner_id,
-            operator_owner_id,
-            "direct API schedule write owner mismatch"
-        );
-        Err(ApiError::Forbidden)
-    }
+pub(crate) fn ensure_schedule_is_human_owned(
+    schedule_owner_id: Option<i32>,
+) -> Result<i32, ApiError> {
+    schedule_owner_id.ok_or_else(|| {
+        tracing::warn!("direct API schedule write rejected an ownerless schedule");
+        ApiError::Forbidden
+    })
 }
 
 pub(crate) async fn load_schedule_trash_state(

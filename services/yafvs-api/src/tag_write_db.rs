@@ -26,7 +26,7 @@ pub(crate) struct TagWriteRecord {
 pub(crate) struct TagWriteState {
     pub(crate) internal_id: i32,
     pub(crate) uuid: String,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
     pub(crate) resource_type: String,
     pub(crate) resource_count: i64,
 }
@@ -35,49 +35,29 @@ pub(crate) struct TagWriteState {
 pub(crate) struct TagTrashWriteState {
     pub(crate) internal_id: i32,
     pub(crate) uuid: String,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
     pub(crate) resource_type: String,
 }
 
-pub(crate) fn ensure_tag_owner_matches_operator(
-    tag_owner_id: i32,
-    operator_owner_id: i32,
-) -> Result<(), ApiError> {
-    if tag_owner_id == operator_owner_id {
-        Ok(())
-    } else {
-        tracing::warn!(
-            tag_owner_id,
-            operator_owner_id,
-            "direct API tag write owner mismatch"
-        );
-        Err(ApiError::Forbidden)
-    }
+pub(crate) fn ensure_tag_is_human_owned(tag_owner_id: Option<i32>) -> Result<i32, ApiError> {
+    tag_owner_id.ok_or_else(|| {
+        tracing::warn!("direct API tag write rejected an ownerless tag");
+        ApiError::Forbidden
+    })
 }
 
-pub(crate) fn ensure_tag_resource_owner_matches_operator(
+pub(crate) fn ensure_tag_resource_is_team_assignable(
     resource_type: &str,
     resource_owner_id: Option<i32>,
-    operator_owner_id: i32,
 ) -> Result<(), ApiError> {
     if !tag_resource_direct_write_requires_owner_match(resource_type) {
         return Ok(());
     }
     match resource_owner_id {
-        Some(owner_id) if owner_id == operator_owner_id => Ok(()),
-        Some(owner_id) => {
-            tracing::warn!(
-                resource_type,
-                resource_owner_id = owner_id,
-                operator_owner_id,
-                "direct API tag resource write owner mismatch"
-            );
-            Err(ApiError::Forbidden)
-        }
+        Some(_) => Ok(()),
         None => {
             tracing::warn!(
                 resource_type,
-                operator_owner_id,
                 "direct API tag resource write missing owner on owner-bearing resource type"
             );
             Err(ApiError::Forbidden)

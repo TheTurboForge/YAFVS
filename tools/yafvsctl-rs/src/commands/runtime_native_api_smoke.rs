@@ -30,6 +30,128 @@ const MAX_REASONABLE_COLLECTION_FILTER_LENGTH: usize = 1_048_576;
 const MAX_SOURCE_BYTES: u64 = 2 * 1024 * 1024;
 const HTTP_STATUS_TRAILER: &str = "__YAFVS_HTTP_STATUS__:";
 
+struct CollectionProbe {
+    detail_key: &'static str,
+    check: &'static str,
+    path: &'static str,
+    description: &'static str,
+    invalid_sort: Option<(&'static str, &'static str)>,
+}
+
+const COLLECTION_PROBES: [CollectionProbe; 15] = [
+    CollectionProbe {
+        detail_key: "scopes",
+        check: "native-api.scopes",
+        path: "/api/v1/scopes?page_size=1&sort=name",
+        description: "scope list",
+        invalid_sort: None,
+    },
+    CollectionProbe {
+        detail_key: "targets",
+        check: "native-api.targets",
+        path: "/api/v1/targets?page_size=1&sort=name",
+        description: "target list",
+        invalid_sort: Some((
+            "native-api.targets.invalid-sort",
+            "/api/v1/targets?page_size=1&sort=not_a_target_sort",
+        )),
+    },
+    CollectionProbe {
+        detail_key: "tasks",
+        check: "native-api.tasks",
+        path: "/api/v1/tasks?page_size=1&sort=name",
+        description: "task list",
+        invalid_sort: None,
+    },
+    CollectionProbe {
+        detail_key: "raw_reports",
+        check: "native-api.raw-reports",
+        path: "/api/v1/reports?page_size=1&sort=-creation_time",
+        description: "raw-report list",
+        invalid_sort: None,
+    },
+    CollectionProbe {
+        detail_key: "vulnerabilities",
+        check: "native-api.vulnerabilities",
+        path: "/api/v1/vulnerabilities?page_size=1&sort=-severity",
+        description: "top-level Vulnerabilities",
+        invalid_sort: Some((
+            "native-api.vulnerabilities.invalid-sort",
+            "/api/v1/vulnerabilities?page_size=1&sort=not_a_vulnerability_sort",
+        )),
+    },
+    CollectionProbe {
+        detail_key: "cves",
+        check: "native-api.cves",
+        path: "/api/v1/cves?page_size=1&sort=-severity",
+        description: "Security Information CVE catalog",
+        invalid_sort: None,
+    },
+    CollectionProbe {
+        detail_key: "cpes",
+        check: "native-api.cpes",
+        path: "/api/v1/cpes?page_size=1&sort=-modified",
+        description: "Security Information CPE catalog",
+        invalid_sort: None,
+    },
+    CollectionProbe {
+        detail_key: "nvts",
+        check: "native-api.nvts",
+        path: "/api/v1/nvts?page_size=1&sort=-created",
+        description: "Security Information NVT catalog",
+        invalid_sort: None,
+    },
+    CollectionProbe {
+        detail_key: "dfn_cert_advisories",
+        check: "native-api.dfn-cert-advisories",
+        path: "/api/v1/dfn-cert-advisories?page_size=1&sort=-created",
+        description: "Security Information DFN-CERT advisory list",
+        invalid_sort: None,
+    },
+    CollectionProbe {
+        detail_key: "cert_bund_advisories",
+        check: "native-api.cert-bund-advisories",
+        path: "/api/v1/cert-bund-advisories?page_size=1&sort=-created",
+        description: "Security Information CERT-Bund advisory list",
+        invalid_sort: None,
+    },
+    CollectionProbe {
+        detail_key: "operating_systems",
+        check: "native-api.operating-systems",
+        path: "/api/v1/operating-systems?page_size=1&sort=-latest_severity",
+        description: "Operating Systems list",
+        invalid_sort: None,
+    },
+    CollectionProbe {
+        detail_key: "hosts",
+        check: "native-api.hosts",
+        path: "/api/v1/hosts?page_size=1&sort=-severity",
+        description: "Hosts list",
+        invalid_sort: None,
+    },
+    CollectionProbe {
+        detail_key: "tls_certificates",
+        check: "native-api.tls-certificates",
+        path: "/api/v1/tls-certificates?page_size=1&sort=-last_seen",
+        description: "TLS Certificates list",
+        invalid_sort: None,
+    },
+    CollectionProbe {
+        detail_key: "scanners",
+        check: "native-api.scanners",
+        path: "/api/v1/scanners?page_size=1&sort=name",
+        description: "scanner list",
+        invalid_sort: None,
+    },
+    CollectionProbe {
+        detail_key: "filters",
+        check: "native-api.filters",
+        path: "/api/v1/filters?page_size=1&sort=name",
+        description: "filter list",
+        invalid_sort: None,
+    },
+];
+
 const EXPECTED_FEED_TYPES: [&str; 4] = ["NVT", "SCAP", "CERT", "GVMD_DATA"];
 const ALLOWED_TRASHCAN_ITEM_KEYS: [&str; 8] = [
     "id",
@@ -235,6 +357,32 @@ pub(crate) fn command_runtime_native_api_smoke_with_runner(
             &response,
             filter_length,
         ));
+    }
+
+    for probe in &COLLECTION_PROBES {
+        let response = native_api_get_json(repo_root, probe.path, runner);
+        details.insert(probe.detail_key.into(), response_summary(&response));
+        let ok = response.usable_object()
+            && response
+                .object()
+                .and_then(|object| object.get("items"))
+                .is_some_and(Value::is_array);
+        findings.push(native_probe_finding(
+            if ok { "pass" } else { "fail" },
+            probe.check,
+            &format!(
+                "Native API {} probe exit code {}.",
+                probe.description,
+                exit_code(&response.output)
+            ),
+            &response,
+            probe.path,
+        ));
+
+        if let Some((check, path)) = probe.invalid_sort {
+            let response = native_api_get_json_with_http_status(repo_root, path, runner);
+            findings.push(expected_bad_request_finding(check, path, &response, None));
+        }
     }
 
     finish(
@@ -900,6 +1048,12 @@ mod tests {
             r#"{"items":[{"id":"scope-report"}],"page":{"total":1}}"#,
         )];
         outputs.extend((0..5).map(|_| bad_request_output()));
+        for probe in &COLLECTION_PROBES {
+            outputs.push(output(true, r#"{"items":[],"page":{"total":0}}"#));
+            if probe.invalid_sort.is_some() {
+                outputs.push(bad_request_output());
+            }
+        }
         outputs
     }
     fn finding<'a>(result: &'a ResultEnvelope, check: &str) -> &'a Finding {
@@ -964,6 +1118,20 @@ mod tests {
         ] {
             assert_eq!(finding(&result, check).status, "pass", "{check}");
         }
+        for probe in &COLLECTION_PROBES {
+            assert_eq!(
+                finding(&result, probe.check).status,
+                "pass",
+                "{}",
+                probe.check
+            );
+        }
+        for check in [
+            "native-api.targets.invalid-sort",
+            "native-api.vulnerabilities.invalid-sort",
+        ] {
+            assert_eq!(finding(&result, check).status, "pass", "{check}");
+        }
         let oversized_url = runner
             .calls()
             .into_iter()
@@ -975,6 +1143,29 @@ mod tests {
         assert!(filter.bytes().all(|byte| byte == b'x'));
         let serialized = serde_json::to_string(&result).unwrap();
         assert!(!serialized.contains(&"x".repeat(64)));
+        let observed_urls = runner
+            .calls()
+            .into_iter()
+            .flat_map(|(_, arguments)| arguments)
+            .filter(|argument| argument.starts_with("http://127.0.0.1:9080/"))
+            .collect::<Vec<_>>();
+        let mut expected_urls = vec![
+            "http://127.0.0.1:9080/healthz".into(),
+            "http://127.0.0.1:9080/api/v1/feeds".into(),
+            "http://127.0.0.1:9080/api/v1/scope-reports?page_size=1&sort=-creation_time".into(),
+        ];
+        expected_urls.extend(
+            scope_report_bad_request_probes(&repo)
+                .into_iter()
+                .map(|(_, path, _, _)| format!("http://127.0.0.1:9080{path}")),
+        );
+        for probe in &COLLECTION_PROBES {
+            expected_urls.push(format!("http://127.0.0.1:9080{}", probe.path));
+            if let Some((_, path)) = probe.invalid_sort {
+                expected_urls.push(format!("http://127.0.0.1:9080{path}"));
+            }
+        }
+        assert_eq!(observed_urls, expected_urls);
         let artifact = fs::read_to_string(
             repo.parent()
                 .unwrap()

@@ -23,6 +23,7 @@ use crate::commands::runtime_lock::{
     DEFAULT_RUNTIME_LOCK_TIMEOUT, FEED_ACTIVATION_LOCK, RuntimeLockError, RuntimeOperationLock,
     runtime_lock_dir,
 };
+use crate::commands::runtime_native_api_smoke::command_runtime_native_api_smoke_with_runner;
 use crate::commands::runtime_setup::ensure_runtime_setup;
 use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
@@ -37,8 +38,6 @@ const COMMAND: &str = "runtime-native-api-rebuild";
 const CONFIG_TIMEOUT: Duration = Duration::from_secs(120);
 const BUILD_TIMEOUT: Duration = Duration::from_secs(1200);
 const START_TIMEOUT: Duration = Duration::from_secs(300);
-const SMOKE_TIMEOUT: Duration = Duration::from_secs(900);
-const MAX_SMOKE_OUTPUT: usize = 1024 * 1024;
 const GSAD_CONTAINER_PORT: &str = "9392";
 const GSAD_HOST_PORT: &str = "19392";
 const GSAD_HOSTS_ENV: &str = "YAFVS_GSAD_HOSTS";
@@ -556,123 +555,19 @@ pub(crate) struct SmokeOutcome {
 pub(crate) fn run_retained_native_api_smoke(
     repo_root: &Path,
     runner: &dyn CommandRunner,
-    environment: &BTreeMap<OsString, OsString>,
+    _environment: &BTreeMap<OsString, OsString>,
 ) -> Result<SmokeOutcome, String> {
-    let program = repo_root.join("tools/yafvsctl");
-    let output = runner
-        .run_with_output_limit(
-            &program.display().to_string(),
-            &["runtime-native-api-smoke", "--status-only", "--json"],
-            Some(repo_root),
-            Some(environment),
-            Some(SMOKE_TIMEOUT),
-            MAX_SMOKE_OUTPUT,
-        )
-        .ok_or_else(|| "Native API smoke command could not be started".to_owned())?;
-    parse_smoke_output(&output)
-}
-
-pub(crate) fn parse_smoke_output(output: &ProcessOutput) -> Result<SmokeOutcome, String> {
-    if output.stdout.len() > MAX_SMOKE_OUTPUT {
-        return Err("Native API smoke result exceeded the 1 MiB result limit".into());
-    }
-    let value: Value = serde_json::from_str(&output.stdout)
-        .map_err(|error| format!("Native API smoke returned invalid JSON: {error}"))?;
-    let object = value
-        .as_object()
-        .ok_or("Native API smoke result is not an object")?;
-    if object
-        .get("metadata")
-        .and_then(Value::as_object)
-        .and_then(|metadata| metadata.get("command"))
-        .and_then(Value::as_str)
-        != Some("runtime-native-api-smoke")
-    {
-        return Err("Native API smoke result has an invalid metadata command".into());
-    }
-    let status = object
-        .get("status")
-        .and_then(Value::as_str)
-        .filter(|status| matches!(*status, "pass" | "warn" | "fail"))
-        .ok_or("Native API smoke result has an invalid status")?
-        .to_owned();
-    if output.success != (status != "fail") {
-        return Err("Native API smoke exit status disagrees with its result envelope".into());
-    }
-    let summary = object
-        .get("summary")
-        .and_then(Value::as_str)
-        .filter(|summary| !summary.is_empty())
-        .ok_or("Native API smoke result has no summary")?
-        .to_owned();
-    let artifacts = object
-        .get("artifacts")
-        .and_then(Value::as_array)
-        .ok_or("Native API smoke result has invalid artifacts")?;
-    if artifacts.len() > 128 {
-        return Err("Native API smoke result has too many artifacts".into());
-    }
-    let artifacts = artifacts
+    let result = command_runtime_native_api_smoke_with_runner(repo_root, true, runner);
+    let findings = result
+        .findings
         .iter()
-        .map(|artifact| {
-            artifact
-                .as_str()
-                .filter(|artifact| !artifact.is_empty())
-                .map(str::to_owned)
-                .ok_or_else(|| "Native API smoke result has invalid artifacts".to_owned())
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let findings = object
-        .get("findings")
-        .and_then(Value::as_array)
-        .ok_or("Native API smoke result has invalid findings")?;
-    if findings.len() > 256 {
-        return Err("Native API smoke result has too many findings".into());
-    }
-    let findings = findings
-        .iter()
-        .map(|finding| {
-            let object = finding
-                .as_object()
-                .ok_or("Native API smoke finding is not an object")?;
-            for field in ["status", "check", "message"] {
-                if object
-                    .get(field)
-                    .and_then(Value::as_str)
-                    .filter(|value| !value.is_empty())
-                    .is_none()
-                {
-                    return Err(format!("Native API smoke finding has invalid {field}"));
-                }
-            }
-            if !matches!(
-                object.get("status").and_then(Value::as_str),
-                Some("pass" | "warn" | "fail")
-            ) {
-                return Err("Native API smoke finding has invalid status".into());
-            }
-            if object.get("path").is_some_and(|path| !path.is_string()) {
-                return Err("Native API smoke finding has invalid path".into());
-            }
-            Ok(finding.clone())
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-    let aggregate = findings
-        .iter()
-        .filter_map(|finding| finding.get("status").and_then(Value::as_str))
-        .max_by_key(|status| match *status {
-            "fail" => 2,
-            "warn" => 1,
-            _ => 0,
-        })
-        .unwrap_or("pass");
-    if aggregate != status {
-        return Err("Native API smoke aggregate status disagrees with its findings".into());
-    }
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Native API smoke findings could not be serialized: {error}"))?;
     Ok(SmokeOutcome {
-        status,
-        summary,
-        artifacts,
+        status: result.status,
+        summary: result.summary,
+        artifacts: result.artifacts,
         findings,
     })
 }
@@ -851,63 +746,6 @@ mod tests {
                 "yafvs-api",
             ]
         );
-    }
-
-    #[test]
-    fn smoke_bridge_requires_consistent_bounded_envelope() {
-        let output = |success: bool, value: Value| ProcessOutput {
-            success,
-            exit_code: Some(if success { 0 } else { 1 }),
-            stdout: value.to_string(),
-            stderr: String::new(),
-        };
-        let envelope = || {
-            json!({
-                "status": "pass",
-                "summary": "smoke passed",
-                "artifacts": ["/runtime/native-api-smoke.json"],
-                "metadata": {"command": "runtime-native-api-smoke"},
-                "findings": [],
-            })
-        };
-        let good = output(true, envelope());
-        let outcome = parse_smoke_output(&good).unwrap();
-        assert_eq!(outcome.status, "pass");
-        assert!(parse_smoke_output(&output(false, envelope())).is_err());
-
-        let mut wrong_command = envelope();
-        wrong_command["metadata"]["command"] = json!("runtime-app-smoke");
-        assert!(parse_smoke_output(&output(true, wrong_command)).is_err());
-
-        let mut invalid_finding = envelope();
-        invalid_finding["findings"] = json!([{
-            "status": "pass",
-            "check": 7,
-            "message": "invalid",
-        }]);
-        assert!(parse_smoke_output(&output(true, invalid_finding)).is_err());
-
-        let mut aggregate_mismatch = envelope();
-        aggregate_mismatch["findings"] = json!([{
-            "status": "warn",
-            "check": "native.warn",
-            "message": "warning",
-        }]);
-        assert!(parse_smoke_output(&output(true, aggregate_mismatch)).is_err());
-
-        let mut too_many = envelope();
-        too_many["findings"] = Value::Array(
-            (0..257)
-                .map(|index| {
-                    json!({
-                        "status": "pass",
-                        "check": format!("check.{index}"),
-                        "message": "pass",
-                    })
-                })
-                .collect(),
-        );
-        assert!(parse_smoke_output(&output(true, too_many)).is_err());
     }
 
     #[test]

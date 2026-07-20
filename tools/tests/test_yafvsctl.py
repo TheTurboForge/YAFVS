@@ -7588,6 +7588,17 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("cargo run --quiet --locked", recipe)
         self.assertIn('-- runtime-native-api-smoke "$@"', recipe)
         self.assertNotIn("tools/yafvsctl ", recipe)
+        rebuild_source = (
+            root
+            / "tools"
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "feed_generation"
+            / "native_api_rebuild.rs"
+        ).read_text(encoding="utf-8")
+        self.assertIn("command_runtime_native_api_smoke_with_runner", rebuild_source)
+        self.assertNotIn('repo_root.join("tools/yafvsctl")', rebuild_source)
 
     def test_gsa_web_fast_script_is_one_shot(self):
         package_path = Path(__file__).resolve().parents[2] / "components" / "gsa" / "package.json"

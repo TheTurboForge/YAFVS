@@ -446,6 +446,9 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         CliCommand::RuntimeNativeApiSmoke => {
             command_runtime_native_api_smoke(&repo_root, cli.status_only)
         }
+        CliCommand::RuntimeNativeApiDirectSmoke => {
+            command_runtime_native_api_direct_smoke(&repo_root, cli.status_only)
+        }
         CliCommand::RuntimeNativeApiRebuild => command_runtime_native_api_rebuild(&repo_root),
         CliCommand::RuntimeStatus => command_runtime_status(&repo_root),
         CliCommand::RuntimeSmoke => command_runtime_smoke(&repo_root),

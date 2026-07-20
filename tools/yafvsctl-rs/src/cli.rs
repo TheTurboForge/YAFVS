@@ -460,6 +460,8 @@ pub enum CliCommand {
     RuntimeAppSmoke,
     /// Verify the internal YAFVS native API sidecar.
     RuntimeNativeApiSmoke,
+    /// Verify the opt-in direct bearer-auth native API listener.
+    RuntimeNativeApiDirectSmoke,
     /// Rebuild and restart only the receipt-pinned native API sidecar.
     RuntimeNativeApiRebuild,
     /// Stop and remove the development runtime infrastructure and application containers.
@@ -744,6 +746,7 @@ impl CliCommand {
             Self::RuntimeAppBuild => "runtime-app-build",
             Self::RuntimeAppSmoke => "runtime-app-smoke",
             Self::RuntimeNativeApiSmoke => "runtime-native-api-smoke",
+            Self::RuntimeNativeApiDirectSmoke => "runtime-native-api-direct-smoke",
             Self::RuntimeNativeApiRebuild => "runtime-native-api-rebuild",
             Self::Down => "down",
             Self::RuntimeAppDown => "runtime-app-down",
@@ -1646,6 +1649,10 @@ mod tests {
                 CliCommand::RuntimeNativeApiSmoke,
             ),
             (
+                "runtime-native-api-direct-smoke",
+                CliCommand::RuntimeNativeApiDirectSmoke,
+            ),
+            (
                 "runtime-scanner-register",
                 CliCommand::RuntimeScannerRegister,
             ),
@@ -2141,6 +2148,7 @@ mod tests {
             "runtime-app-up",
             "runtime-app-smoke",
             "runtime-native-api-smoke",
+            "runtime-native-api-direct-smoke",
             "runtime-webui-smoke",
             "runtime-full-test-scan-preflight",
             "runtime-full-test-scan-start",

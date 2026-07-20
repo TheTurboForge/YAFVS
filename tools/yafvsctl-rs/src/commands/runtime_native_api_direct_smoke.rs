@@ -1158,7 +1158,7 @@ fn finish(
     artifacts.extend(extra_artifacts);
     artifacts.sort();
     artifacts.dedup();
-    let details = direct.map_or_else(|| json!({}), |(environment, token_source)| json!({"base_url": direct_base_url(environment), "container_bind": environment_value(environment, DIRECT_BIND_ENV), "token_source": token_source, "direct_request_example": "tools/yafvsctl native-api-request --direct --json --path '/api/v1/reports?page_size=1'"}));
+    let details = direct.map_or_else(|| json!({}), |(environment, token_source)| json!({"base_url": direct_base_url(environment), "container_bind": environment_value(environment, DIRECT_BIND_ENV), "token_source": token_source, "direct_request_example": "just native-api-request -- --direct --json --path '/api/v1/reports?page_size=1'"}));
     let mut result = make_result(
         metadata(repo_root, COMMAND, runner),
         summary.into(),
@@ -1301,5 +1301,27 @@ mod tests {
         assert!(encoded.contains("safe"));
         assert!(!encoded.contains("secret"));
         assert!(!encoded.contains("password"));
+    }
+
+    #[test]
+    fn host_binding_rejects_wildcard_and_non_loopback_hosts() {
+        for host in ["0.0.0.0", "::", "192.0.2.10"] {
+            let environment = BTreeMap::from([(
+                OsString::from(super::super::direct_api::DIRECT_HOST_ENV),
+                OsString::from(host),
+            )]);
+            assert_eq!(host_binding_finding(&environment).status, "fail", "{host}");
+        }
+    }
+
+    #[test]
+    fn host_binding_accepts_loopback_hosts() {
+        for host in ["127.0.0.1", "127.0.0.2", "::1", "[::1]", "localhost"] {
+            let environment = BTreeMap::from([(
+                OsString::from(super::super::direct_api::DIRECT_HOST_ENV),
+                OsString::from(host),
+            )]);
+            assert_eq!(host_binding_finding(&environment).status, "pass", "{host}");
+        }
     }
 }

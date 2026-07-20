@@ -640,14 +640,21 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(
             encoding="utf-8"
         )
-        for function_name in (
-            "command_runtime_native_api_direct_write_smoke",
-            "command_runtime_native_api_direct_smoke",
-        ):
+        for function_name in ("command_runtime_native_api_direct_write_smoke",):
             start = source.index(f"def {function_name}")
             body = source[start : source.find("\ndef ", start + 5)]
             self.assertIn("acquire_runtime_lock", body)
             self.assertIn("FEED_ACTIVATION_LOCK", body)
+
+        direct_smoke_source = (
+            Path(__file__).resolve().parents[1]
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "runtime_native_api_direct_smoke.rs"
+        ).read_text(encoding="utf-8")
+        self.assertIn("RuntimeOperationLock::acquire", direct_smoke_source)
+        self.assertIn("FEED_ACTIVATION_LOCK", direct_smoke_source)
 
         build_source = (
             Path(__file__).resolve().parents[1]
@@ -965,6 +972,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-app-build", "--json"], 1, "fail"),
                 (["runtime-app-smoke", "--status-only", "--json"], 1, "fail"),
                 (["runtime-native-api-smoke", "--status-only", "--json"], 1, "fail"),
+                (["runtime-native-api-direct-smoke", "--status-only", "--json"], 1, "fail"),
                 (["runtime-native-api-rebuild", "--json"], 1, "fail"),
                 (["runtime-app-up", "--json"], 1, "fail"),
                 (["runtime-app-up", "--status-only", "--json"], 1, "fail"),
@@ -2106,8 +2114,15 @@ class YAFVSCtlTests(unittest.TestCase):
             / "commands"
             / "runtime_native_api_smoke.rs"
         ).read_text(encoding="utf-8")
+        rust_direct_smoke = (
+            Path(__file__).resolve().parents[1]
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "runtime_native_api_direct_smoke.rs"
+        ).read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-nvt-diagnostic-scan", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-delete-overrides-by-filter", "native-bulk-modify-schedules", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "runtime-feed-keyring-init", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-rebuild", "security-policy-check", "feed-state", "feed-cache-sync", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-nvt-diagnostic-scan", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-delete-overrides-by-filter", "native-bulk-modify-schedules", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "runtime-feed-keyring-init", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-rebuild", "security-policy-check", "feed-state", "feed-cache-sync", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-nvt-diagnostic-scan", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2164,7 +2179,10 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("def command_runtime_native_api_smoke", source)
         self.assertNotIn('subparsers.add_parser("runtime-native-api-smoke"', source)
         self.assertNotIn('args.command == "runtime-native-api-smoke"', source)
-        self.assertIn("def command_runtime_native_api_direct_smoke", source)
+        self.assertNotIn("def command_runtime_native_api_direct_smoke", source)
+        self.assertNotIn('subparsers.add_parser("runtime-native-api-direct-smoke"', source)
+        self.assertNotIn('args.command == "runtime-native-api-direct-smoke"', source)
+        self.assertIn("pub fn command_runtime_native_api_direct_smoke", rust_direct_smoke)
         self.assertIn("def command_runtime_native_api_direct_write_smoke", source)
         self.assertNotIn("def command_runtime_native_api_rebuild", source)
         self.assertIn("native-api.scope-report-hosts", rust_smoke)
@@ -2176,7 +2194,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("native-api.trashcan-summary", rust_smoke)
         self.assertIn("native-api.alerts", rust_smoke)
         self.assertIn("/api/v1/alerts/{alert_id}/definition", source)
-        self.assertIn("native-api-direct.alert-definition-put-disabled", source)
+        self.assertIn("native-api-direct.alert-definition-put-disabled", rust_direct_smoke)
         self.assertIn("native-api-direct.alert-definition-read", source)
         self.assertIn("native-api-direct.alert-definition-replace", source)
         self.assertIn("native-api-direct.alert-definition-read-after-replace", source)
@@ -2209,7 +2227,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "feed-state", "feed-cache-sync", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-rebuild", "native-api-request", "native-start-task", "native-stop-task", "native-update-task-target", "native-tasks-from-csv", "native-empty-trash", "native-verify-scanners"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "feed-state", "feed-cache-sync", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-rebuild", "native-api-request", "native-start-task", "native-stop-task", "native-update-task-target", "native-tasks-from-csv", "native-empty-trash", "native-verify-scanners"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotRegex(
@@ -7600,6 +7618,42 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("command_runtime_native_api_smoke_with_runner", rebuild_source)
         self.assertNotIn('repo_root.join("tools/yafvsctl")', rebuild_source)
 
+    def test_runtime_native_api_direct_smoke_is_owned_directly_by_rust(self):
+        root = Path(__file__).resolve().parents[2]
+        python_source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        rust_source = (
+            root
+            / "tools"
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "runtime_native_api_direct_smoke.rs"
+        ).read_text(encoding="utf-8")
+        justfile = (root / "justfile").read_text(encoding="utf-8")
+        recipe = justfile.split(
+            "runtime-native-api-direct-smoke *args:\n", 1
+        )[1].split("\n\n", 1)[0]
+        for surface in (
+            'add_parser("runtime-native-api-direct-smoke"',
+            'args.command == "runtime-native-api-direct-smoke"',
+            "def command_runtime_native_api_direct_smoke",
+            "def _command_runtime_native_api_direct_smoke_unlocked",
+            "def direct_api_response_request_id",
+        ):
+            self.assertNotIn(surface, python_source)
+        for contract in (
+            "pub fn command_runtime_native_api_direct_smoke",
+            "DISABLED_WRITE_PROBES",
+            "RuntimeOperationLock::acquire",
+            "raw_direct_api_request",
+            "command_runtime_native_api_smoke_with_runner",
+            "runtime-native-api-direct-smoke.status-only",
+        ):
+            self.assertIn(contract, rust_source)
+        self.assertIn("cargo run --quiet --locked", recipe)
+        self.assertIn('-- runtime-native-api-direct-smoke "$@"', recipe)
+        self.assertNotIn("tools/yafvsctl ", recipe)
+
     def test_gsa_web_fast_script_is_one_shot(self):
         package_path = Path(__file__).resolve().parents[2] / "components" / "gsa" / "package.json"
         package = json.loads(package_path.read_text(encoding="utf-8"))
@@ -8485,80 +8539,6 @@ class YAFVSCtlTests(unittest.TestCase):
         ):
             with self.subTest(token=token):
                 self.assertFalse(yafvsctl.direct_api_bearer_token_is_acceptable(token))
-
-    def test_direct_native_api_smoke_fails_wrong_container_bind_before_runtime_restart(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            token = "0123456789abcdef0123456789abcdef"
-            original_bind = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_DIRECT_BIND_ENV)
-            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
-            commands: list[tuple[str, ...]] = []
-
-            def fake_run_command(command, *_args, **_kwargs):
-                commands.append(tuple(command))
-                return yafvsctl.subprocess.CompletedProcess(command, 0, "", "")
-
-            try:
-                yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_BIND_ENV] = "0.0.0.0:9999"
-                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = token
-                with unittest.mock.patch.object(yafvsctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(yafvsctl, "current_gsad_published_hosts", return_value=()), unittest.mock.patch.object(yafvsctl, "active_feed_generation_finding", return_value=yafvsctl.finding("pass", "feed-generation.current", "Mock attested generation.")), unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                    result = yafvsctl.command_runtime_native_api_direct_smoke(root)
-            finally:
-                if original_bind is None:
-                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_DIRECT_BIND_ENV, None)
-                else:
-                    yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_BIND_ENV] = original_bind
-                if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
-                else:
-                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
-
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(checks["native-api-direct.config-shape"]["status"], "fail")
-        self.assertEqual(checks["native-api-direct.host-binding"]["status"], "fail")
-        self.assertEqual(len(commands), 1)
-        self.assertIn("config", commands[0])
-        self.assertNotIn("build", commands[0])
-        curl.assert_not_called()
-
-    def test_direct_native_api_smoke_fails_non_loopback_before_runtime_restart(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            token = "0123456789abcdef0123456789abcdef"
-            original_host = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_DIRECT_HOST_ENV)
-            original_token = yafvsctl.os.environ.get(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV)
-            commands: list[tuple[str, ...]] = []
-
-            def fake_run_command(command, *_args, **_kwargs):
-                commands.append(tuple(command))
-                return yafvsctl.subprocess.CompletedProcess(command, 0, "", "")
-
-            try:
-                yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_HOST_ENV] = "192.0.2.10"
-                yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = token
-                with unittest.mock.patch.object(yafvsctl, "run_command", side_effect=fake_run_command), unittest.mock.patch.object(yafvsctl, "current_gsad_published_hosts", return_value=()), unittest.mock.patch.object(yafvsctl, "active_feed_generation_finding", return_value=yafvsctl.finding("pass", "feed-generation.current", "Mock attested generation.")), unittest.mock.patch.object(yafvsctl, "direct_native_api_curl") as curl:
-                    result = yafvsctl.command_runtime_native_api_direct_smoke(root)
-            finally:
-                if original_host is None:
-                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_DIRECT_HOST_ENV, None)
-                else:
-                    yafvsctl.os.environ[yafvsctl.YAFVS_API_DIRECT_HOST_ENV] = original_host
-                if original_token is None:
-                    yafvsctl.os.environ.pop(yafvsctl.YAFVS_API_BEARER_TOKEN_ENV, None)
-                else:
-                    yafvsctl.os.environ[yafvsctl.YAFVS_API_BEARER_TOKEN_ENV] = original_token
-
-        checks = {item["check"]: item for item in result["findings"]}
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(checks["native-api-direct.host-binding"]["status"], "fail")
-        self.assertIn("production TLS/bootstrap/host-binding", checks["native-api-direct.host-binding"]["message"])
-        self.assertEqual(len(commands), 1)
-        self.assertIn("config", commands[0])
-        self.assertNotIn("build", commands[0])
-        curl.assert_not_called()
 
     def test_env_values_have_nonempty_key_rejects_empty_compose_values(self):
         self.assertFalse(yafvsctl.env_values_have_nonempty_key([], "TOKEN"))
@@ -10244,19 +10224,26 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_direct_native_api_direct_smoke_tracks_retention_plan_preview(self):
         root = Path(__file__).resolve().parents[2]
-        native_tooling = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
-        self.assertIn("native-api-direct.scope-report-retention-plan", native_tooling)
-        self.assertIn("native-api-direct.request-shape-guard", native_tooling)
-        self.assertIn("native-api-direct.request-id-unauthorized", native_tooling)
-        self.assertIn("native-api-direct.request-id-client", native_tooling)
-        self.assertIn("native-api-direct.cors-disabled", native_tooling)
-        self.assertIn("native-api-direct.security-headers", native_tooling)
-        self.assertIn("native-api-direct.request-id-unsafe-client", native_tooling)
-        self.assertIn("native-api-direct.scope-write-disabled", native_tooling)
-        self.assertIn("native-api-direct.request-shape-transfer-encoding", native_tooling)
-        self.assertIn("native-api-direct.request-shape-malformed-content-length", native_tooling)
-        self.assertIn("native-api-direct.request-shape-oversized-query", native_tooling)
-        self.assertIn("/retention-plan", native_tooling)
+        direct_smoke = (
+            root
+            / "tools"
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "runtime_native_api_direct_smoke.rs"
+        ).read_text(encoding="utf-8")
+        self.assertIn("native-api-direct.scope-report-retention-plan", direct_smoke)
+        self.assertIn("native-api-direct.request-shape-guard", direct_smoke)
+        self.assertIn("native-api-direct.request-id-unauthorized", direct_smoke)
+        self.assertIn("native-api-direct.request-id-client", direct_smoke)
+        self.assertIn("native-api-direct.cors-disabled", direct_smoke)
+        self.assertIn("native-api-direct.security-headers", direct_smoke)
+        self.assertIn("native-api-direct.request-id-unsafe-client", direct_smoke)
+        self.assertIn("native-api-direct.scope-write-disabled", direct_smoke)
+        self.assertIn("native-api-direct.request-shape-transfer-encoding", direct_smoke)
+        self.assertIn("native-api-direct.request-shape-malformed-content-length", direct_smoke)
+        self.assertIn("native-api-direct.request-shape-oversized-query", direct_smoke)
+        self.assertIn("/retention-plan", direct_smoke)
 
     def test_openvas_config_path_lives_under_runtime_dir(self):
         with tempfile.TemporaryDirectory() as tmp:

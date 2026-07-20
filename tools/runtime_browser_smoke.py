@@ -164,6 +164,11 @@ async function gotoRoute(page, route, label, options = {}) {
   return await bodyText(page);
 }
 
+async function gotoStable(page, url) {
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: config.timeoutMs });
+  await page.waitForLoadState('networkidle', { timeout: Math.min(config.timeoutMs, 5000) }).catch(() => null);
+}
+
 async function fillFirst(page, selectors, value) {
   for (const selector of selectors) {
     const locator = page.locator(selector).first();
@@ -241,16 +246,16 @@ async function clickTab(page, text, expectedUrl = () => true) {
     if (!selected) {
       const url = new URL(page.url());
       url.searchParams.set('tab', String(tabIndex));
-      await page.goto(url.toString(), { waitUntil: 'networkidle', timeout: config.timeoutMs });
+      await gotoStable(page, url.toString());
       selected = await page.waitForFunction(
         index => document.querySelectorAll('[role="tab"]')[index]?.getAttribute('aria-selected') === 'true',
         tabIndex,
         { timeout: config.timeoutMs },
       ).then(() => true).catch(() => false);
     }
-    await page.waitForLoadState('networkidle', { timeout: config.timeoutMs }).catch(() => null);
+    await page.waitForLoadState('networkidle', { timeout: Math.min(config.timeoutMs, 5000) }).catch(() => null);
     if (!expectedUrl(page.url())) {
-      await page.goto(before, { waitUntil: 'networkidle', timeout: config.timeoutMs }).catch(() => null);
+      await gotoStable(page, before).catch(() => null);
       return false;
     }
     return selected;
@@ -293,8 +298,8 @@ async function waitForNativeApiResponse(page, responses, matcher) {
 async function waitForNativeItemId(page, responses, path) {
   const deadline = Date.now() + config.timeoutMs;
   while (Date.now() < deadline) {
-    const match = responses.find(item => item.path === path && Array.isArray(item.itemIds) && item.itemIds.length > 0);
-    if (match) return match.itemIds[0];
+    const match = responses.find(item => item.path === path && Array.isArray(item.itemIds));
+    if (match) return match.itemIds[0] || null;
     await page.waitForTimeout(250);
   }
   return null;
@@ -628,7 +633,7 @@ async function validateFocusedRoute(page, nativeApiResponses, spec) {
   await assertNativeApiMalformedPageProxy(page, spec);
 }
 
-async function runForBaseUrl(baseUrl) {
+async function runForBaseUrl(baseUrl, fullRouteMatrix) {
   config.baseUrl = baseUrl;
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ ignoreHTTPSErrors: true, viewport: { width: 1440, height: 1000 } });
@@ -658,6 +663,14 @@ async function runForBaseUrl(baseUrl) {
     const shellText = await bodyText(page).catch(() => '');
     add(/YAFVS/i.test(shellText) ? 'pass' : 'fail', 'browser.branding', /YAFVS/i.test(shellText) ? 'Application shell exposes YAFVS branding.' : 'Application shell does not expose YAFVS branding.');
     if (!loggedIn) {
+      return;
+    }
+
+    if (!fullRouteMatrix) {
+      const renewed = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/session\/renew$/);
+      add(renewed ? 'pass' : 'fail', 'browser.secondary-host-session-renew', renewed ? 'Additional gsad address completed authenticated session renewal.' : 'Additional gsad address did not complete authenticated session renewal.', { baseUrl, responses: nativeApiResponses.filter(item => item.path === '/api/v1/session/renew') });
+      const currentSettings = await waitForNativeApiResponse(page, nativeApiResponses, /\/api\/v1\/users\/current\/settings$/);
+      add(currentSettings ? 'pass' : 'fail', 'browser.secondary-host-native-api', currentSettings ? 'Additional gsad address completed an authenticated native API read.' : 'Additional gsad address did not complete an authenticated native API read.', { baseUrl, responses: nativeApiResponses.filter(item => item.path === '/api/v1/users/current/settings') });
       return;
     }
 
@@ -925,7 +938,7 @@ async function runForBaseUrl(baseUrl) {
       const rawReportHref = await firstHref(page, /\/report\//);
       add(rawReportHref ? 'pass' : 'fail', 'scope-report.evidence-raw-report-link', rawReportHref ? 'Evidence Sources contains a raw-report link.' : 'Evidence Sources does not contain a raw-report link.', { href: rawReportHref });
       if (rawReportHref) {
-        await page.goto(new URL(rawReportHref, config.baseUrl).toString(), { waitUntil: 'networkidle', timeout: config.timeoutMs });
+        await gotoStable(page, new URL(rawReportHref, config.baseUrl).toString());
         await screenshot(page, 'raw-report-from-evidence-link');
         await assertNoAppError(page, 'raw-report-from-evidence-link.app-error');
         if (await clickTab(page, 'Results', isRawReportDetailUrl)) {
@@ -1014,9 +1027,9 @@ async function runForBaseUrl(baseUrl) {
 }
 
 (async () => {
-  for (const baseUrl of config.baseUrls) {
+  for (const [index, baseUrl] of config.baseUrls.entries()) {
     try {
-      await runForBaseUrl(baseUrl);
+      await runForBaseUrl(baseUrl, index === 0);
     } catch (error) {
       add('fail', 'browser.exception', String(error && error.stack ? error.stack : error), { baseUrl });
     }

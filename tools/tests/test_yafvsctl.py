@@ -817,7 +817,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 env = feed_generation_env.copy()
                 if arguments[0] == "quality-gate-schedule":
                     env.pop("YAFVS_ENABLE_QUALITY_GATE_SCHEDULE", None)
-                if arguments[0] in {"runtime-status", "runtime-smoke", "gvmd-smoke", "runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-report-summary", "runtime-report-export", "runtime-report-metrics", "runtime-scope-report-summary", "runtime-scope-report-metrics"}:
+                if arguments[0] in {"runtime-status", "runtime-smoke", "gvmd-smoke", "runtime-app-smoke", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-report-summary", "runtime-report-export", "runtime-report-metrics", "runtime-scope-report-summary", "runtime-scope-report-metrics"}:
                     env["COMPOSE_PROJECT_NAME"] = "yafvsctl-parity-no-runtime"
                 if arguments[0] in {
                     "up",
@@ -7841,6 +7841,11 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "runtime_browser_smoke.py").read_text(encoding="utf-8")
         self.assertIn("const waitUntil = options.waitUntil || 'domcontentloaded';", source)
         self.assertIn("Math.min(config.timeoutMs, 5000)", source)
+        self.assertIn("runForBaseUrl(baseUrl, index === 0)", source)
+        self.assertIn("browser.secondary-host-session-renew", source)
+        self.assertIn("browser.secondary-host-native-api", source)
+        self.assertIn("await gotoStable(page, new URL(rawReportHref", source)
+        self.assertIn("if (match) return match.itemIds[0] || null;", source)
         self.assertIn("scope-report.metrics-tab", source)
         self.assertIn("scope-report.metrics-native-api", source)
         self.assertIn("scope-report.results-native-api", source)
@@ -7951,7 +7956,7 @@ class YAFVSCtlTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp) / "TurboVAS"
                 source = root / "components" / "gsa" / "src" / "main.tsx"
-                staged = yafvsctl.gsad_static_dir(root) / "index.html"
+                staged = root / yafvsctl.GSA_PRODUCTION_BUILD_PATH / "index.html"
                 source.parent.mkdir(parents=True)
                 staged.parent.mkdir(parents=True)
                 source.write_text("console.log('new');\n", encoding="utf-8")
@@ -7965,6 +7970,7 @@ class YAFVSCtlTests(unittest.TestCase):
         stale = [finding for finding in findings if finding["check"] == "gsa.static-freshness"]
         self.assertEqual(stale[0]["status"], "warn")
         self.assertEqual(stale[0]["details"]["latest_source_path"], "components/gsa/src")
+        self.assertEqual(stale[0]["details"]["latest_build_path"], yafvsctl.GSA_PRODUCTION_BUILD_PATH)
 
     def test_runtime_gsa_freshness_ignores_test_only_source_changes(self):
         original_state = yafvsctl.docker_container_state
@@ -7973,7 +7979,7 @@ class YAFVSCtlTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp) / "TurboVAS"
                 source = root / "components" / "gsa" / "src" / "web" / "pages" / "tasks" / "__tests__" / "Component.test.tsx"
-                staged = yafvsctl.gsad_static_dir(root) / "index.html"
+                staged = root / yafvsctl.GSA_PRODUCTION_BUILD_PATH / "index.html"
                 source.parent.mkdir(parents=True)
                 staged.parent.mkdir(parents=True)
                 source.write_text("test('new');\n", encoding="utf-8")

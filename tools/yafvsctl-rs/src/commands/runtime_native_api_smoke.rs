@@ -4,6 +4,7 @@
 use super::artifact::write_secure_json_artifact;
 use super::common::{compact_finding, output_tail, runtime_dir};
 use super::compose::{compose_command, runtime_environment};
+use super::direct_api::validate_operator_uuid;
 use super::native_runtime::{
     native_api_display_command, native_api_get_json, native_probe_finding,
     percent_encode_component, validate_api_path, NativeJsonResponse, MAX_NATIVE_API_RESPONSE_BYTES,
@@ -29,6 +30,53 @@ const DEFAULT_MAX_COLLECTION_FILTER_LENGTH: usize = 4096;
 const MAX_REASONABLE_COLLECTION_FILTER_LENGTH: usize = 1_048_576;
 const MAX_SOURCE_BYTES: u64 = 2 * 1024 * 1024;
 const HTTP_STATUS_TRAILER: &str = "__YAFVS_HTTP_STATUS__:";
+const ALERT_ALLOWED_KEYS: [&str; 19] = [
+    "id",
+    "name",
+    "comment",
+    "owner_id",
+    "owner",
+    "active",
+    "in_use",
+    "event_type",
+    "condition_type",
+    "method_type",
+    "event",
+    "condition",
+    "method",
+    "filter",
+    "tasks",
+    "task_count",
+    "method_data_redacted",
+    "created_at",
+    "modified_at",
+];
+const ALERT_FORBIDDEN_KEYS: [&str; 24] = [
+    "alert_method_data",
+    "method_data",
+    "event_data",
+    "condition_data",
+    "credential",
+    "credentials",
+    "password",
+    "secret",
+    "token",
+    "url",
+    "uri",
+    "host",
+    "hosts",
+    "path",
+    "email",
+    "message",
+    "certificate",
+    "cert",
+    "private_key",
+    "subject_dn",
+    "issuer_dn",
+    "serial",
+    "md5_fingerprint",
+    "sha256_fingerprint",
+];
 
 struct CollectionProbe {
     detail_key: &'static str,
@@ -337,6 +385,59 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
             object: DetailObject::Root,
             required_array: None,
         }),
+    },
+];
+
+const TAG_PROBE: CollectionProbe = CollectionProbe {
+    detail_key: "tags",
+    check: "native-api.tags",
+    path: "/api/v1/tags?page_size=1&sort=name",
+    description: "top-level Tags",
+    invalid_sort: None,
+    detail: Some(DetailProbe {
+        detail_key: "tag_detail",
+        check: "native-api.tag-detail",
+        path_prefix: "/api/v1/tags",
+        description: "tag detail",
+        missing_id_message: Some("Tags list did not include a tag id for the detail probe."),
+        empty_message: "No tags exist yet, so the tag detail probe was skipped.",
+        object: DetailObject::Root,
+        required_array: None,
+    }),
+};
+
+const TAG_RESOURCE_NAME_PROBES: [CollectionProbe; 4] = [
+    CollectionProbe {
+        detail_key: "tag_resource_names",
+        check: "native-api.tag-resource-names",
+        path: "/api/v1/tags/resource-names/task?page_size=1&sort=name",
+        description: "Tag resource-name",
+        invalid_sort: None,
+        detail: None,
+    },
+    CollectionProbe {
+        detail_key: "tag_resource_names_alert",
+        check: "native-api.tag-resource-names.alert",
+        path: "/api/v1/tags/resource-names/alert?page_size=1&sort=name",
+        description: "Tag alert resource-name",
+        invalid_sort: None,
+        detail: None,
+    },
+    CollectionProbe {
+        detail_key: "tag_resource_names_scanner",
+        check: "native-api.tag-resource-names.scanner",
+        path: "/api/v1/tags/resource-names/scanner?page_size=1&sort=name",
+        description: "Tag scanner resource-name",
+        invalid_sort: None,
+        detail: None,
+    },
+    CollectionProbe {
+        detail_key: "tag_resource_names_schedule",
+        check: "native-api.tag-resource-names.schedule",
+        path: "/api/v1/tags/resource-names/schedule?page_size=1&sort=name",
+        description: "Tag schedule resource-name",
+        invalid_sort: None,
+        detail: None,
     },
 ];
 
@@ -661,6 +762,9 @@ pub(crate) fn command_runtime_native_api_smoke_with_runner(
         }
     }
 
+    probe_alerts(repo_root, runner, &mut findings, &mut details);
+    probe_tags(repo_root, runner, &mut findings, &mut details);
+
     for probe in &OPERATOR_RESOURCE_PROBES {
         let response = probe_collection(repo_root, probe, runner, &mut findings, &mut details);
         if let Some(detail) = probe.detail {
@@ -687,6 +791,312 @@ pub(crate) fn command_runtime_native_api_smoke_with_runner(
         artifact_path,
         status_only,
     )
+}
+
+fn probe_tags(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    findings: &mut Vec<Finding>,
+    details: &mut Map<String, Value>,
+) {
+    let response = probe_collection(repo_root, &TAG_PROBE, runner, findings, details);
+    for probe in &TAG_RESOURCE_NAME_PROBES {
+        probe_collection(repo_root, probe, runner, findings, details);
+    }
+    if let Some(detail) = TAG_PROBE.detail {
+        probe_detail(repo_root, &response, &detail, runner, findings, details);
+    }
+}
+
+fn probe_alerts(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    findings: &mut Vec<Finding>,
+    details: &mut Map<String, Value>,
+) {
+    if !route_declared(repo_root, ".route(\"/api/v1/alerts\"") {
+        findings.push(
+            Finding::new(
+                "pass",
+                "native-api.alerts.deferred",
+                "Alerts metadata list route is not declared yet; runtime probe is deferred until the implementation lands.".into(),
+            )
+            .with_details(json!({
+                "path": "/api/v1/alerts",
+                "detail_endpoint": "not in this tooling slice",
+                "method_data": "redacted/deferred",
+            })),
+        );
+        return;
+    }
+
+    let path = "/api/v1/alerts?page_size=1&sort=name";
+    let response = native_api_get_json(repo_root, path, runner);
+    let items = response
+        .object()
+        .and_then(|object| object.get("items"))
+        .and_then(Value::as_array);
+    let list_summary = alert_list_summary(response.object());
+    details.insert("alerts".into(), list_summary.clone());
+    let forbidden = alert_forbidden_keys(items.into_iter().flatten());
+    let unexpected = alert_unexpected_keys(items.into_iter().flatten());
+    let ok = response.usable_object()
+        && items.is_some()
+        && items.into_iter().flatten().all(alert_metadata_item_ok);
+    findings.push(alert_diagnostic_finding(
+        native_probe_finding(
+            if ok { "pass" } else { "fail" },
+            "native-api.alerts",
+            if ok {
+                "Native API Alerts metadata list probe returned redacted metadata JSON."
+            } else {
+                "Native API Alerts list failed or returned non-redacted alert payload data."
+            },
+            &response,
+            path,
+        ),
+        list_summary,
+        forbidden,
+        unexpected,
+    ));
+
+    let rejection_path = "/api/v1/alerts?page_size=1&sort=not_an_alert_sort";
+    let rejection = native_api_get_json_with_http_status(repo_root, rejection_path, runner);
+    findings.push(expected_bad_request_finding(
+        "native-api.alerts.invalid-sort",
+        rejection_path,
+        &rejection,
+        None,
+    ));
+
+    if !response.output.success {
+        return;
+    }
+    let Some(id) = items
+        .and_then(|items| items.first())
+        .and_then(Value::as_object)
+        .and_then(|item| item.get("id"))
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())
+    else {
+        return;
+    };
+    let detail_path = format!("/api/v1/alerts/{}", percent_encode_component(id));
+    let detail = native_api_get_json(repo_root, &detail_path, runner);
+    let detail_summary = alert_detail_summary(detail.object());
+    details.insert("alert_detail".into(), detail_summary.clone());
+    let forbidden = alert_forbidden_keys(detail.parsed.iter());
+    let unexpected = alert_unexpected_keys(detail.parsed.iter());
+    let ok = detail.usable_object() && detail.parsed.as_ref().is_some_and(alert_metadata_item_ok);
+    findings.push(alert_diagnostic_finding(
+        native_probe_finding(
+            if ok { "pass" } else { "fail" },
+            "native-api.alert-detail",
+            if ok {
+                "Native API Alert detail probe returned redacted metadata JSON."
+            } else {
+                "Native API Alert detail failed or returned non-redacted alert payload data."
+            },
+            &detail,
+            "/api/v1/alerts/...",
+        ),
+        detail_summary,
+        forbidden,
+        unexpected,
+    ));
+}
+
+fn alert_diagnostic_finding(
+    mut finding: Finding,
+    response_summary: Value,
+    forbidden_keys: Vec<String>,
+    unexpected_keys: Vec<String>,
+) -> Finding {
+    if let Some(Value::Object(details)) = finding.details.as_mut() {
+        details.insert("response_summary".into(), response_summary);
+        details.insert("forbidden_keys".into(), Value::from(forbidden_keys));
+        details.insert("unexpected_keys".into(), Value::from(unexpected_keys));
+    }
+    finding
+}
+
+fn alert_forbidden_keys<'a>(values: impl Iterator<Item = &'a Value>) -> Vec<String> {
+    let forbidden = ALERT_FORBIDDEN_KEYS.into_iter().collect::<BTreeSet<_>>();
+    let mut found = BTreeSet::new();
+    for value in values {
+        collect_alert_forbidden_keys(value, &forbidden, &mut found);
+    }
+    found.into_iter().collect()
+}
+
+fn collect_alert_forbidden_keys(
+    value: &Value,
+    forbidden: &BTreeSet<&str>,
+    found: &mut BTreeSet<String>,
+) {
+    match value {
+        Value::Object(object) => {
+            for (key, nested) in object {
+                if forbidden.contains(key.as_str()) {
+                    found.insert(key.clone());
+                }
+                collect_alert_forbidden_keys(nested, forbidden, found);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                collect_alert_forbidden_keys(item, forbidden, found);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn alert_unexpected_keys<'a>(values: impl Iterator<Item = &'a Value>) -> Vec<String> {
+    let allowed = ALERT_ALLOWED_KEYS.into_iter().collect::<BTreeSet<_>>();
+    values
+        .filter_map(Value::as_object)
+        .flat_map(|object| object.keys())
+        .filter(|key| !allowed.contains(key.as_str()))
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+fn alert_metadata_item_ok(value: &Value) -> bool {
+    let Some(item) = value.as_object() else {
+        return false;
+    };
+    let allowed = ALERT_ALLOWED_KEYS.into_iter().collect::<BTreeSet<_>>();
+    if item.keys().any(|key| !allowed.contains(key.as_str()))
+        || !alert_forbidden_keys(std::iter::once(value)).is_empty()
+        || item.get("method_data_redacted") != Some(&Value::Bool(true))
+    {
+        return false;
+    }
+    match item.get("owner_id") {
+        None | Some(Value::Null) => {}
+        Some(Value::String(owner_id)) if validate_operator_uuid(owner_id, "owner_id").is_ok() => {}
+        _ => return false,
+    }
+    if !optional_alert_object(item.get("owner"), &["name"], true)
+        || !optional_alert_object(item.get("filter"), &["id", "name"], false)
+        || !optional_alert_object(item.get("event"), &["type"], false)
+        || !optional_alert_object(item.get("condition"), &["type"], false)
+        || !optional_alert_object(item.get("method"), &["type"], false)
+    {
+        return false;
+    }
+    match item.get("tasks") {
+        None | Some(Value::Null) => {}
+        Some(Value::Array(tasks))
+            if tasks
+                .iter()
+                .all(|task| object_uses_only_keys(task, &["id", "name"])) => {}
+        _ => return false,
+    }
+    true
+}
+
+fn optional_alert_object(value: Option<&Value>, keys: &[&str], allow_string: bool) -> bool {
+    match value {
+        None | Some(Value::Null) => true,
+        Some(Value::String(_)) if allow_string => true,
+        Some(value) => object_uses_only_keys(value, keys),
+    }
+}
+
+fn object_uses_only_keys(value: &Value, keys: &[&str]) -> bool {
+    value.as_object().is_some_and(|object| {
+        object
+            .keys()
+            .all(|key| keys.iter().any(|allowed| key == allowed))
+    })
+}
+
+fn alert_list_summary(object: Option<&Map<String, Value>>) -> Value {
+    let Some(object) = object else {
+        return json!({"parsed": false});
+    };
+    let mut summary = Map::from_iter([("parsed".into(), Value::Bool(true))]);
+    if let Some(page) = object.get("page").filter(|value| value.is_object()) {
+        summary.insert("page".into(), page.clone());
+    }
+    if let Some(items) = object.get("items").and_then(Value::as_array) {
+        summary.insert("item_count_in_response".into(), Value::from(items.len()));
+        summary.insert(
+            "items_sample".into(),
+            Value::Array(items.iter().take(3).map(alert_item_summary).collect()),
+        );
+    }
+    Value::Object(summary)
+}
+
+fn alert_detail_summary(object: Option<&Map<String, Value>>) -> Value {
+    let Some(object) = object else {
+        return json!({"parsed": false});
+    };
+    let mut summary = alert_item_summary_object(object)
+        .as_object()
+        .cloned()
+        .unwrap_or_default();
+    summary.insert("parsed".into(), Value::Bool(true));
+    if let Some(code) = object
+        .get("error")
+        .and_then(Value::as_object)
+        .and_then(|error| error.get("code"))
+        .and_then(Value::as_str)
+    {
+        summary.insert("error_code".into(), Value::String(code.into()));
+    }
+    if let Some(tasks) = object.get("tasks").and_then(Value::as_array) {
+        summary.insert("task_count_in_response".into(), Value::from(tasks.len()));
+    }
+    Value::Object(summary)
+}
+
+fn alert_item_summary(value: &Value) -> Value {
+    let Some(item) = value.as_object() else {
+        return json!({"type": match value {
+            Value::Null => "NoneType",
+            Value::Bool(_) => "bool",
+            Value::Number(number) if number.is_i64() || number.is_u64() => "int",
+            Value::Number(_) => "float",
+            Value::String(_) => "str",
+            Value::Array(_) => "list",
+            Value::Object(_) => unreachable!(),
+        }});
+    };
+    alert_item_summary_object(item)
+}
+
+fn alert_item_summary_object(item: &Map<String, Value>) -> Value {
+    let mut summary = Map::new();
+    for key in ["id", "name"] {
+        if let Some(value) = item.get(key) {
+            summary.insert(key.into(), value.clone());
+        }
+    }
+    for (flat, nested) in [
+        ("event_type", "event"),
+        ("condition_type", "condition"),
+        ("method_type", "method"),
+    ] {
+        if let Some(value) = alert_type_value(item, flat, nested) {
+            summary.insert(flat.into(), Value::String(value.into()));
+        }
+    }
+    Value::Object(summary)
+}
+
+fn alert_type_value<'a>(item: &'a Map<String, Value>, flat: &str, nested: &str) -> Option<&'a str> {
+    item.get(flat).and_then(Value::as_str).or_else(|| {
+        item.get(nested)
+            .and_then(Value::as_object)
+            .and_then(|nested| nested.get("type"))
+            .and_then(Value::as_str)
+    })
 }
 
 fn probe_collection(
@@ -1507,6 +1917,16 @@ mod tests {
                 outputs.push(detail_output(&detail));
             }
         }
+        outputs.push(output(
+            true,
+            &format!(r#"{{"items":[{{"id":"{TEST_DETAIL_ID}"}}],"page":{{"total":1}}}}"#),
+        ));
+        outputs.extend(
+            TAG_RESOURCE_NAME_PROBES
+                .iter()
+                .map(|_| output(true, r#"{"items":[],"page":{"total":0}}"#)),
+        );
+        outputs.push(detail_output(&TAG_PROBE.detail.unwrap()));
         for probe in &OPERATOR_RESOURCE_PROBES {
             outputs.push(output(
                 true,
@@ -1527,6 +1947,13 @@ mod tests {
     fn finding<'a>(result: &'a ResultEnvelope, check: &str) -> &'a Finding {
         result
             .findings
+            .iter()
+            .find(|finding| finding.check == check)
+            .unwrap()
+    }
+
+    fn finding_by_check<'a>(findings: &'a [Finding], check: &str) -> &'a Finding {
+        findings
             .iter()
             .find(|finding| finding.check == check)
             .unwrap()
@@ -1659,6 +2086,26 @@ mod tests {
                 );
             }
         }
+        expected_urls.push(format!("http://127.0.0.1:9080{}", TAG_PROBE.path));
+        for probe in &TAG_RESOURCE_NAME_PROBES {
+            expected_urls.push(format!("http://127.0.0.1:9080{}", probe.path));
+            assert_eq!(
+                finding(&result, probe.check).status,
+                "pass",
+                "{}",
+                probe.check
+            );
+        }
+        let tag_detail = TAG_PROBE.detail.unwrap();
+        expected_urls.push(format!(
+            "http://127.0.0.1:9080{}/{encoded_id}",
+            tag_detail.path_prefix
+        ));
+        assert_eq!(finding(&result, tag_detail.check).status, "pass");
+        assert_eq!(
+            finding(&result, "native-api.alerts.deferred").status,
+            "pass"
+        );
         for probe in &OPERATOR_RESOURCE_PROBES {
             expected_urls.push(format!("http://127.0.0.1:9080{}", probe.path));
             if let Some(detail) = probe.detail {
@@ -1691,6 +2138,99 @@ mod tests {
         )
         .unwrap();
         assert!(!artifact.contains(&"x".repeat(64)));
+        finish_test(&repo);
+    }
+
+    #[test]
+    fn alert_probes_enforce_redaction_shapes_and_never_retain_payload_values() {
+        let repo = repo(r#".route("/api/v1/alerts""#);
+        let safe = json!({
+            "id": TEST_DETAIL_ID,
+            "name": "mail",
+            "owner_id": "11111111-1111-4111-8111-111111111111",
+            "method_data_redacted": true,
+            "event": {"type": "Task run status changed"},
+            "condition": {"type": "Always"},
+            "method": {"type": "Email"},
+            "filter": {"id": "filter", "name": "important"},
+            "tasks": [{"id": "task", "name": "nightly"}],
+        });
+        let runner = FakeRunner::new(vec![
+            output(
+                true,
+                &serde_json::to_string(&json!({"items": [safe.clone()], "page": {"total": 1}}))
+                    .unwrap(),
+            ),
+            bad_request_output(),
+            output(true, &serde_json::to_string(&safe).unwrap()),
+        ]);
+        let mut findings = Vec::new();
+        let mut details = Map::new();
+        probe_alerts(&repo, &runner, &mut findings, &mut details);
+        assert_eq!(
+            findings
+                .iter()
+                .map(|finding| (finding.check.as_str(), finding.status.as_str()))
+                .collect::<Vec<_>>(),
+            vec![
+                ("native-api.alerts", "pass"),
+                ("native-api.alerts.invalid-sort", "pass"),
+                ("native-api.alert-detail", "pass"),
+            ]
+        );
+        assert_eq!(details["alerts"]["items_sample"][0]["method_type"], "Email");
+        assert_eq!(details["alert_detail"]["task_count_in_response"], 1);
+        let urls = runner
+            .calls()
+            .into_iter()
+            .flat_map(|(_, arguments)| arguments)
+            .filter(|argument| argument.starts_with("http://127.0.0.1:9080/"))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            urls,
+            vec![
+                "http://127.0.0.1:9080/api/v1/alerts?page_size=1&sort=name".to_string(),
+                "http://127.0.0.1:9080/api/v1/alerts?page_size=1&sort=not_an_alert_sort"
+                    .to_string(),
+                format!(
+                    "http://127.0.0.1:9080/api/v1/alerts/{}",
+                    percent_encode_component(TEST_DETAIL_ID)
+                ),
+            ]
+        );
+
+        let unsafe_alert = json!({
+            "id": "alert",
+            "method_data_redacted": true,
+            "method": {"type": "Email", "password": "RAW_ALERT_SECRET"},
+        });
+        assert!(!alert_metadata_item_ok(&unsafe_alert));
+        assert_eq!(
+            alert_forbidden_keys(std::iter::once(&unsafe_alert)),
+            vec!["password"]
+        );
+        let runner = FakeRunner::new(vec![
+            output(
+                true,
+                &serde_json::to_string(&json!({"items": [unsafe_alert.clone()]})).unwrap(),
+            ),
+            bad_request_output(),
+            output(true, &serde_json::to_string(&unsafe_alert).unwrap()),
+        ]);
+        findings.clear();
+        details.clear();
+        probe_alerts(&repo, &runner, &mut findings, &mut details);
+        assert_eq!(
+            finding_by_check(&findings, "native-api.alerts").status,
+            "fail"
+        );
+        assert_eq!(
+            finding_by_check(&findings, "native-api.alert-detail").status,
+            "fail"
+        );
+        assert!(!serde_json::to_string(&findings)
+            .unwrap()
+            .contains("RAW_ALERT_SECRET"));
         finish_test(&repo);
     }
 

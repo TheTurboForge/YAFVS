@@ -44,11 +44,11 @@ fn patch_request_with_term_type(
 }
 
 #[test]
-fn filter_write_rejects_operator_owner_mismatch() {
-    assert!(ensure_filter_owner_matches_operator(7, 7).is_ok());
+fn filter_write_accepts_user_owned_resources_and_rejects_global_mutation() {
+    assert!(matches!(ensure_filter_is_user_owned(Some(7)), Ok(7)));
     assert!(matches!(
-        ensure_filter_owner_matches_operator(7, 8),
-        Err(ApiError::Forbidden)
+        ensure_filter_is_user_owned(None),
+        Err(ApiError::Conflict(message)) if message.contains("global saved filters")
     ));
 }
 
@@ -76,7 +76,7 @@ fn filter_create_handler_requires_operator_before_insert() {
 }
 
 #[test]
-fn filter_patch_handler_checks_owner_before_mutation_or_alert_sensitive_changes() {
+fn filter_patch_handler_preserves_attribution_and_checks_mutability_before_changes() {
     let source = include_str!("filter_writes.rs");
     let handler = source
         .split_once("pub(crate) async fn patch_filter")
@@ -86,17 +86,18 @@ fn filter_patch_handler_checks_owner_before_mutation_or_alert_sensitive_changes(
         .expect("test module marker must follow patch handler")
         .0;
 
-    let owner_check = "ensure_filter_owner_matches_operator(state.owner_id, operator_owner_id)?;";
+    let mutability_check = "ensure_filter_is_user_owned(state.owner_id)?;";
     assert!(handler.contains("let operator = require_filter_write_operator(operator)?;"));
     assert!(handler.contains("resolve_filter_write_operator_owner(&tx, &operator).await?"));
-    assert!(handler.contains(owner_check));
+    assert!(handler.contains(mutability_check));
+    assert!(!handler.contains("matches_operator"));
     assert!(handler.contains("if request.changes_alert_linked_type()"));
     assert!(handler.contains("ensure_filter_not_in_use_by_alerts(&tx, state.internal_id).await?;"));
     assert!(!handler.contains("request.term.is_some()"));
     assert!(
-        handler.find(owner_check).unwrap()
+        handler.find(mutability_check).unwrap()
             < handler.find("execute_filter_patch_transaction").unwrap(),
-        "filter patch must check owner before mutation"
+        "filter patch must reject global resources before mutation"
     );
     assert!(
         handler.find("ensure_filter_not_in_use_by_alerts").unwrap()
@@ -106,7 +107,7 @@ fn filter_patch_handler_checks_owner_before_mutation_or_alert_sensitive_changes(
 }
 
 #[test]
-fn filter_clone_handler_enforces_source_owner_check() {
+fn filter_clone_handler_assigns_actor_ownership_without_source_owner_isolation() {
     let source = include_str!("filter_writes.rs");
     let clone_handler = source
         .split_once("pub(crate) async fn clone_filter")
@@ -117,17 +118,11 @@ fn filter_clone_handler_enforces_source_owner_check() {
         .0;
 
     assert!(clone_handler.contains("let source = load_filter_write_state"));
+    assert!(!clone_handler.contains("matches_operator"));
     assert!(
-        clone_handler.contains("ensure_filter_owner_matches_operator(source.owner_id, owner_id)?;")
-    );
-    assert!(
-        clone_handler
-            .find("ensure_filter_owner_matches_operator")
-            .unwrap()
-            < clone_handler
-                .find("execute_filter_clone_transaction")
-                .unwrap(),
-        "clone source owner must be checked before cloning"
+        clone_handler.contains(
+            "execute_filter_clone_transaction(&tx, source.internal_id, owner_id, &request)"
+        )
     );
 }
 
@@ -158,28 +153,28 @@ fn filter_patch_alert_linked_guard_applies_only_to_type_changes() {
 }
 
 #[test]
-fn filter_destructive_handlers_enforce_owner_before_mutation() {
+fn filter_destructive_handlers_validate_actor_and_reject_global_mutation() {
     let source = include_str!("filter_writes.rs");
-    for (label, start, end, owner_check, side_effect) in [
+    for (label, start, end, mutability_check, side_effect) in [
         (
             "delete",
             "pub(crate) async fn delete_filter",
             "pub(crate) async fn clone_filter",
-            "ensure_filter_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "ensure_filter_is_user_owned(state.owner_id)?;",
             "ensure_filter_not_in_use_by_alerts",
         ),
         (
             "restore",
             "pub(crate) async fn restore_filter",
             "pub(crate) async fn hard_delete_filter",
-            "ensure_filter_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_filter_is_user_owned(trash.owner_id)?;",
             "execute_filter_restore_transaction",
         ),
         (
             "hard delete",
             "pub(crate) async fn hard_delete_filter",
             "pub(crate) async fn patch_filter",
-            "ensure_filter_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_filter_is_user_owned(trash.owner_id)?;",
             "ensure_filter_not_in_use_by_trash_alerts",
         ),
     ] {
@@ -192,12 +187,16 @@ fn filter_destructive_handlers_enforce_owner_before_mutation() {
             .0;
 
         assert!(
-            handler.contains(owner_check),
-            "{label} handler must check owner"
+            handler.contains("resolve_filter_write_operator_owner(&tx, &operator).await?"),
+            "{label} handler must validate that the authenticated actor is a database user"
         );
         assert!(
-            handler.find(owner_check).unwrap() < handler.find(side_effect).unwrap(),
-            "{label} owner check must happen before destructive side effects"
+            handler.contains(mutability_check),
+            "{label} handler must reject global resources"
+        );
+        assert!(
+            handler.find(mutability_check).unwrap() < handler.find(side_effect).unwrap(),
+            "{label} mutability check must happen before destructive side effects"
         );
     }
 }

@@ -68,14 +68,14 @@ pub(crate) async fn delete_filter(
         .transaction()
         .await
         .map_err(|error| map_filter_write_db_error(error, "begin delete filter transaction"))?;
-    let operator_owner_id = resolve_filter_write_operator_owner(&tx, &operator).await?;
+    resolve_filter_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE filters, filters_trash, settings, alerts, alerts_trash, alert_condition_data, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_filter_write_db_error(error, "lock filter tables for delete"))?;
     let state = load_filter_write_state(&tx, &filter_uuid).await?;
-    ensure_filter_owner_matches_operator(state.owner_id, operator_owner_id)?;
+    ensure_filter_is_user_owned(state.owner_id)?;
     ensure_filter_not_in_use_by_alerts(&tx, state.internal_id).await?;
     execute_filter_trash_transaction(&tx, state.internal_id, &filter_uuid).await?;
     tx.commit()
@@ -105,7 +105,6 @@ pub(crate) async fn clone_filter(
     .await
     .map_err(|error| map_filter_write_db_error(error, "lock filter tables for clone"))?;
     let source = load_filter_write_state(&tx, &filter_id).await?;
-    ensure_filter_owner_matches_operator(source.owner_id, owner_id)?;
     if let Some(name) = request.name.as_ref() {
         ensure_unique_filter_name(&tx, name, -1).await?;
     }
@@ -137,15 +136,15 @@ pub(crate) async fn restore_filter(
         .transaction()
         .await
         .map_err(|error| map_filter_write_db_error(error, "begin restore filter transaction"))?;
-    let operator_owner_id = resolve_filter_write_operator_owner(&tx, &operator).await?;
+    resolve_filter_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE filters, filters_trash, alerts_trash, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_filter_write_db_error(error, "lock filter tables for restore"))?;
     let trash = load_filter_trash_state(&tx, &filter_id).await?;
-    ensure_filter_owner_matches_operator(trash.owner_id, operator_owner_id)?;
-    ensure_unique_live_filter_name_for_owner(&tx, &trash.name, trash.owner_id).await?;
+    let resource_owner_id = ensure_filter_is_user_owned(trash.owner_id)?;
+    ensure_unique_live_filter_name_for_owner(&tx, &trash.name, resource_owner_id).await?;
     ensure_filter_uuid_not_live(&tx, &trash.uuid).await?;
     let record = execute_filter_restore_transaction(&tx, trash.internal_id).await?;
     tx.commit()
@@ -171,14 +170,14 @@ pub(crate) async fn hard_delete_filter(
     let tx = client.transaction().await.map_err(|error| {
         map_filter_write_db_error(error, "begin hard-delete filter transaction")
     })?;
-    let operator_owner_id = resolve_filter_write_operator_owner(&tx, &operator).await?;
+    resolve_filter_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE filters_trash, alerts_trash, alert_condition_data_trash, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_filter_write_db_error(error, "lock filter trash tables for hard delete"))?;
     let trash = load_filter_trash_state(&tx, &filter_id).await?;
-    ensure_filter_owner_matches_operator(trash.owner_id, operator_owner_id)?;
+    ensure_filter_is_user_owned(trash.owner_id)?;
     ensure_filter_not_in_use_by_trash_alerts(&tx, trash.internal_id).await?;
     execute_filter_hard_delete_transaction(&tx, trash.internal_id).await?;
     tx.commit().await.map_err(|error| {
@@ -201,12 +200,12 @@ pub(crate) async fn patch_filter(
         .transaction()
         .await
         .map_err(|error| map_filter_write_db_error(error, "begin patch filter transaction"))?;
-    let operator_owner_id = resolve_filter_write_operator_owner(&tx, &operator).await?;
+    resolve_filter_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute("LOCK TABLE filters, filters_trash IN SHARE ROW EXCLUSIVE MODE;")
         .await
         .map_err(|error| map_filter_write_db_error(error, "lock filters for patch"))?;
     let state = load_filter_write_state(&tx, &filter_id).await?;
-    ensure_filter_owner_matches_operator(state.owner_id, operator_owner_id)?;
+    ensure_filter_is_user_owned(state.owner_id)?;
     if let Some(name) = request.name.as_ref() {
         ensure_unique_filter_name(&tx, name, state.internal_id).await?;
     }

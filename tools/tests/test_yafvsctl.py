@@ -10729,8 +10729,47 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("from gvm", source)
         self.assertNotIn("gmp.", source)
         self.assertIn("RbacGmpClient", source)
+        self.assertIn("NativeBrowserClient", source)
+        self.assertIn('"user-management/users"', source)
+        self.assertIn("verify_native_cross_user_filter_admin", source)
+        self.assertIn(
+            'FULL_TEST_TASK_PREFIXES = ("YAFVS full test scan ", "TurboVAS full test scan ")',
+            source,
+        )
+        self.assertNotIn("FULL_TEST_TASK_NAME", source)
+        self.assertNotIn("def create_user", source)
+        self.assertNotIn("def modify_user", source)
         self.assertNotIn("def command_runtime_rbac_smoke", wrapper_source)
         self.assertIn("command_runtime_rbac_smoke", rust_wrapper_source)
+
+    def test_runtime_rbac_native_filter_check_uses_secondary_for_full_lifecycle(self):
+        calls = []
+
+        class FakeNativeClient:
+            def __init__(self, role):
+                self.role = role
+
+            def request_json(self, method, path, *, payload=None, query=None):
+                calls.append((self.role, method, path, payload, query))
+                if method == "POST" and path == "filters":
+                    return {"id": "filter-1"}
+                return {}
+
+        result = runtime_rbac_smoke.verify_native_cross_user_filter_admin(
+            FakeNativeClient("admin"),
+            FakeNativeClient("secondary"),
+        )
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(
+            [(role, method, path) for role, method, path, _payload, _query in calls],
+            [
+                ("admin", "POST", "filters"),
+                ("secondary", "PATCH", "filters/filter-1"),
+                ("secondary", "DELETE", "filters/filter-1"),
+                ("secondary", "DELETE", "filters/filter-1/trash"),
+            ],
+        )
 
     def test_runtime_rbac_raw_client_emits_expected_xml_subset(self):
         client = runtime_rbac_smoke.RbacGmpClient(Path("/tmp/gvmd.sock"), "admin", "secret", 10)
@@ -10742,23 +10781,17 @@ class YAFVSCtlTests(unittest.TestCase):
 
         client.send_xml = fake_send
 
-        client.get_users(filter_string="name=yafvs-rbac-smoke")
-        client.create_user("user<one>", password="secret&value")
-        client.modify_user("user-id", name="renamed", password="new-secret", comment="comment")
         client.get_tasks(details=True, ignore_pagination=True)
         client.get_reports(filter_string="task_id=task-1 rows=10 sort-reverse=date", details=True, ignore_pagination=True)
         client.create_filter("filter", filter_type="task", term="rows=1", comment="comment")
         client.modify_filter("filter-id", name="filter two", term="rows=2", filter_type="task", comment="changed")
         client.delete_filter("filter-id", ultimate=True)
 
-        self.assertEqual(sent[0], '<get_users filter="name=yafvs-rbac-smoke"/>')
-        self.assertEqual(sent[1], '<create_user><name>user&lt;one&gt;</name><password>secret&amp;value</password></create_user>')
-        self.assertEqual(sent[2], '<modify_user user_id="user-id"><new_name>renamed</new_name><comment>comment</comment><password>new-secret</password></modify_user>')
-        self.assertEqual(sent[3], '<get_tasks usage_type="scan" details="1" ignore_pagination="1"/>')
-        self.assertEqual(sent[4], '<get_reports usage_type="scan" report_filter="task_id=task-1 rows=10 sort-reverse=date" details="1" ignore_pagination="1"/>')
-        self.assertEqual(sent[5], '<create_filter><name>filter</name><comment>comment</comment><term>rows=1</term><type>task</type></create_filter>')
-        self.assertEqual(sent[6], '<modify_filter filter_id="filter-id"><comment>changed</comment><name>filter two</name><term>rows=2</term><type>task</type></modify_filter>')
-        self.assertEqual(sent[7], '<delete_filter filter_id="filter-id" ultimate="1"/>')
+        self.assertEqual(sent[0], '<get_tasks usage_type="scan" details="1" ignore_pagination="1"/>')
+        self.assertEqual(sent[1], '<get_reports usage_type="scan" report_filter="task_id=task-1 rows=10 sort-reverse=date" details="1" ignore_pagination="1"/>')
+        self.assertEqual(sent[2], '<create_filter><name>filter</name><comment>comment</comment><term>rows=1</term><type>task</type></create_filter>')
+        self.assertEqual(sent[3], '<modify_filter filter_id="filter-id"><comment>changed</comment><name>filter two</name><term>rows=2</term><type>task</type></modify_filter>')
+        self.assertEqual(sent[4], '<delete_filter filter_id="filter-id" ultimate="1"/>')
 
     def test_runtime_rbac_raw_mutation_failures_raise(self):
         response = b'<modify_filter_response status="400" status_text="bad filter"/>'

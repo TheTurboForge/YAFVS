@@ -723,6 +723,11 @@ fn command_runtime_rbac_smoke_with(repo_root: &Path, runner: &dyn CommandRunner)
     let socket_path = gvmd_socket_path(repo_root);
     let probe = repo_root.join("tools/runtime_rbac_smoke.py");
     let artifact_dir = runtime_dir(repo_root).join("artifacts/rbac-smoke");
+    let environment = build_env(repo_root);
+    let base_url = gsad_urls_from_env(&environment)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| "https://127.0.0.1:19392".to_string());
     let mut findings = vec![simple_socket_prerequisite(&socket_path)];
     let password = append_secret_prerequisite(
         repo_root,
@@ -775,6 +780,8 @@ fn command_runtime_rbac_smoke_with(repo_root: &Path, runner: &dyn CommandRunner)
             ADMIN_USER,
             "--password-file",
             &secret_path.display().to_string(),
+            "--base-url",
+            &base_url,
             "--artifact-dir",
             &artifact_dir.display().to_string(),
         ],

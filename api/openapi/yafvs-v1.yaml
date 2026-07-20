@@ -1812,10 +1812,11 @@ paths:
       x-yafvs-inherited-still-owns: saved-filter-alert-linkage
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Patch saved filter metadata
-      description: Direct write-control endpoint for changing saved filter name, comment, type, or term metadata. Term/type changes are rejected for filters referenced by live alerts or alert filter conditions; alert-linkage semantics remain inherited.
+      description: Direct write-control endpoint for changing saved filter name, comment, type, or term metadata. Any authenticated operator in the same trusted-team stack may cover another operator's user-owned filter; the existing owner remains attribution rather than an authorization boundary. Global filters remain immutable. Term/type changes are rejected for filters referenced by live alerts or alert filter conditions; alert-linkage semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       requestBody:
@@ -1860,10 +1861,11 @@ paths:
       x-yafvs-inherited-still-owns: saved-filter-alert-linkage
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Move saved filter to trash
-      description: Direct write-control endpoint for moving an unlinked saved filter to trash. Filters referenced by live alerts or alert conditions are rejected; alert-linkage semantics remain inherited.
+      description: Direct write-control endpoint for moving an unlinked saved filter to trash. Any authenticated operator in the same trusted-team stack may cover another operator's user-owned filter; ownership remains attribution and global filters remain immutable. Filters referenced by live alerts or alert conditions are rejected; alert-linkage semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       responses:
@@ -1926,10 +1928,11 @@ paths:
       x-yafvs-replaces: saved-filter-clone
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Clone a saved filter
-      description: Direct write-control endpoint for copying an existing live saved filter into a new filter owned by the direct API operator. The clone copies the source term, type, comment, and active-table tag links; optional name/comment fields override copied metadata.Alert-linkage mutation semantics remain inherited.
+      description: Direct write-control endpoint for copying an existing live saved filter into a new filter owned by the direct API operator. Any authenticated operator in the same trusted-team stack may clone a teammate's or global filter; the source remains unchanged and the clone records the requesting operator as owner for attribution. The clone copies the source term, type, comment, and active-table tag links; optional name/comment fields override copied metadata. Alert-linkage mutation semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       requestBody:
@@ -1975,10 +1978,11 @@ paths:
       x-yafvs-inherited-still-owns: saved-filter-alert-linkage
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Restore saved filter from trash
-      description: Direct write-control endpoint for restoring a saved filter from trash. Restore preserves UUID and owner, relinks trash-side alert output filters and tag references back to live state, and rejects conflicting live UUID or same-owner live name collisions.Alert-linkage mutation semantics remain inherited.
+      description: Direct write-control endpoint for restoring a user-owned saved filter from trash. Any authenticated operator in the same trusted-team stack may cover another operator; restore preserves UUID and owner attribution, relinks trash-side alert output filters and tag references back to live state, and rejects conflicting live UUID or same-owner live name collisions. Alert-linkage mutation semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       responses:
@@ -2018,10 +2022,11 @@ paths:
       x-yafvs-inherited-still-owns: saved-filter-alert-linkage
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Hard-delete a trashed saved filter
-      description: Direct write-control endpoint for permanently deleting an unlinked trashed saved filter. Filters referenced by trash alerts or trash alert conditions are rejected. This path deletes trash filter tag links and trash filter metadata only; live filters are never deleted through this route.Alert-linkage mutation semantics remain inherited.
+      description: Direct write-control endpoint for permanently deleting an unlinked, user-owned trashed saved filter. Any authenticated operator in the same trusted-team stack may cover another operator; ownership remains attribution. Filters referenced by trash alerts or trash alert conditions are rejected. This path deletes trash filter tag links and trash filter metadata only; live filters are never deleted through this route. Alert-linkage mutation semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       responses:

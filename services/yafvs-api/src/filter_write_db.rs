@@ -27,7 +27,7 @@ pub(crate) struct FilterTrashWriteRecord {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FilterWriteState {
     pub(crate) internal_id: i32,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,7 +35,7 @@ pub(crate) struct FilterTrashWriteState {
     pub(crate) internal_id: i32,
     pub(crate) uuid: String,
     pub(crate) name: String,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
 }
 
 pub(crate) fn require_filter_write_operator(
@@ -81,20 +81,9 @@ pub(crate) async fn load_filter_write_state(
         .ok_or(ApiError::NotFound)
 }
 
-pub(crate) fn ensure_filter_owner_matches_operator(
-    filter_owner_id: i32,
-    operator_owner_id: i32,
-) -> Result<(), ApiError> {
-    if filter_owner_id == operator_owner_id {
-        Ok(())
-    } else {
-        tracing::warn!(
-            filter_owner_id,
-            operator_owner_id,
-            "direct API filter write owner mismatch"
-        );
-        Err(ApiError::Forbidden)
-    }
+pub(crate) fn ensure_filter_is_user_owned(owner_id: Option<i32>) -> Result<i32, ApiError> {
+    owner_id
+        .ok_or_else(|| ApiError::Conflict("global saved filters cannot be modified".to_string()))
 }
 
 pub(crate) async fn load_filter_trash_state(

@@ -12,6 +12,7 @@ import os
 import socket
 import subprocess
 import time
+import uuid
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -225,6 +226,7 @@ def native_api_browser_proxy_json(
         raise ValueError(f"unsupported native browser-proxy JSON method: {method}")
     if not path.startswith("/api/v1/"):
         raise ValueError(f"unsupported native browser-proxy JSON path: {path}")
+    operator_uuid = native_operator_uuid(repo_root, operator_name)
     command = [
         "docker",
         "compose",
@@ -234,6 +236,8 @@ def native_api_browser_proxy_json(
         "-T",
         "-e",
         "YAFVS_FULL_TEST_OPERATOR_NAME",
+        "-e",
+        "YAFVS_FULL_TEST_OPERATOR_UUID",
         "-e",
         "YAFVS_FULL_TEST_METHOD",
         "-e",
@@ -253,12 +257,14 @@ def native_api_browser_proxy_json(
             "curl -sS --max-time 10 -X \"${YAFVS_FULL_TEST_METHOD}\" -w '\\n%{http_code}' "
             "-H \"x-yafvs-browser-proxy-secret: ${YAFVS_API_BROWSER_PROXY_SECRET}\" "
             "-H \"x-yafvs-operator-name: ${YAFVS_FULL_TEST_OPERATOR_NAME}\" "
+            "-H \"x-yafvs-operator-uuid: ${YAFVS_FULL_TEST_OPERATOR_UUID}\" "
             "\"$@\" "
             "\"http://127.0.0.1:9080${YAFVS_FULL_TEST_PATH}\""
         ),
     ]
     env = os.environ.copy()
     env["YAFVS_FULL_TEST_OPERATOR_NAME"] = operator_name
+    env["YAFVS_FULL_TEST_OPERATOR_UUID"] = operator_uuid
     env["YAFVS_FULL_TEST_METHOD"] = method
     env["YAFVS_FULL_TEST_PATH"] = path
     env["YAFVS_FULL_TEST_JSON"] = json.dumps(payload) if payload is not None else ""
@@ -293,6 +299,26 @@ def native_items(repo_root: Path, resource: str, *, page_size: int = 500) -> lis
     payload = native_api_json(repo_root, f"/api/v1/{resource}?page_size={page_size}")
     items = payload.get("items")
     return [item for item in items if isinstance(item, dict)] if isinstance(items, list) else []
+
+
+def native_operator_uuid(repo_root: Path, operator_name: str) -> str:
+    matches = [
+        item
+        for item in native_items(repo_root, "users")
+        if item.get("name") == operator_name
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"expected exactly one native API user named {operator_name!r}; "
+            f"found {len(matches)}"
+        )
+    candidate = matches[0].get("id")
+    try:
+        return str(uuid.UUID(candidate))
+    except (AttributeError, TypeError, ValueError) as error:
+        raise RuntimeError(
+            f"native API user {operator_name!r} has an invalid UUID"
+        ) from error
 
 
 def native_object_rows(repo_root: Path, resource: str) -> list[dict[str, str | None]]:

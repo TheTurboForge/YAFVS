@@ -1428,6 +1428,66 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(payload["alive_tests"], ["Scan Config Default"])
         self.assertNotIn("credentials", payload)
 
+    def test_full_test_scan_browser_proxy_uses_resolved_operator_identity(self):
+        root = Path("/tmp/yafvs-test")
+        operator_uuid = "123e4567-e89b-12d3-a456-426614174000"
+        completed = unittest.mock.Mock(
+            returncode=0,
+            stdout='{"id":"target-1"}\n201',
+            stderr="",
+        )
+        with unittest.mock.patch.object(
+            runtime_full_test_scan,
+            "native_operator_uuid",
+            return_value=operator_uuid,
+        ) as resolve_operator:
+            with unittest.mock.patch.object(
+                runtime_full_test_scan.subprocess,
+                "run",
+                return_value=completed,
+            ) as run:
+                response = runtime_full_test_scan.native_api_browser_proxy_json(
+                    root,
+                    "/api/v1/targets",
+                    method="POST",
+                    payload={"name": "target"},
+                    operator_name="admin",
+                    expected_statuses={"201"},
+                )
+
+        self.assertEqual(response, {"id": "target-1"})
+        resolve_operator.assert_called_once_with(root, "admin")
+        command = run.call_args.args[0]
+        self.assertIn("YAFVS_FULL_TEST_OPERATOR_UUID", command)
+        self.assertIn("x-yafvs-operator-uuid", command[-1])
+        self.assertEqual(
+            run.call_args.kwargs["env"]["YAFVS_FULL_TEST_OPERATOR_UUID"],
+            operator_uuid,
+        )
+
+    def test_full_test_scan_operator_identity_requires_one_valid_uuid(self):
+        root = Path("/tmp/yafvs-test")
+        valid = "123e4567-e89b-12d3-a456-426614174000"
+        with unittest.mock.patch.object(
+            runtime_full_test_scan,
+            "native_items",
+            return_value=[{"id": valid, "name": "admin"}],
+        ):
+            self.assertEqual(
+                runtime_full_test_scan.native_operator_uuid(root, "admin"),
+                valid,
+            )
+
+        for users, message in (
+            ([], "found 0"),
+            ([{"id": "not-a-uuid", "name": "admin"}], "invalid UUID"),
+        ):
+            with unittest.mock.patch.object(
+                runtime_full_test_scan, "native_items", return_value=users
+            ):
+                with self.assertRaisesRegex(RuntimeError, message):
+                    runtime_full_test_scan.native_operator_uuid(root, "admin")
+
     def test_full_test_scan_ensure_task_uses_native_create_when_repo_root_is_available(self):
         root = Path("/tmp/yafvs-test")
         state = {"tasks": []}

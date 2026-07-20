@@ -964,6 +964,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-scanner-register", "--json"], 1, "fail"),
                 (["runtime-app-build", "--json"], 1, "fail"),
                 (["runtime-app-smoke", "--status-only", "--json"], 1, "fail"),
+                (["runtime-native-api-smoke", "--status-only", "--json"], 1, "fail"),
                 (["runtime-native-api-rebuild", "--json"], 1, "fail"),
                 (["runtime-app-up", "--json"], 1, "fail"),
                 (["runtime-app-up", "--status-only", "--json"], 1, "fail"),
@@ -2045,7 +2046,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_browser_native_api_readiness_retries_until_authenticated(self):
         with unittest.mock.patch.object(
             yafvsctl,
-            "command_runtime_native_api_smoke",
+            "rust_result_envelope",
             side_effect=[
                 {"status": "fail", "summary": "not ready", "findings": [{"status": "fail", "check": "native-api.healthz"}]},
                 {"status": "pass", "summary": "ready", "findings": []},
@@ -2073,7 +2074,7 @@ class YAFVSCtlTests(unittest.TestCase):
         }
         with unittest.mock.patch.object(
             yafvsctl,
-            "command_runtime_native_api_smoke",
+            "rust_result_envelope",
             return_value=native_result,
         ) as smoke, unittest.mock.patch.object(yafvsctl.time, "sleep") as sleep:
             item = yafvsctl.browser_native_api_readiness_finding(
@@ -2098,8 +2099,15 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
+        rust_smoke = (
+            Path(__file__).resolve().parents[1]
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "runtime_native_api_smoke.rs"
+        ).read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-nvt-diagnostic-scan", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-delete-overrides-by-filter", "native-bulk-modify-schedules", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "runtime-feed-keyring-init", "runtime-app-build", "runtime-native-api-rebuild", "security-policy-check", "feed-state", "feed-cache-sync", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-nvt-diagnostic-scan", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-delete-overrides-by-filter", "native-bulk-modify-schedules", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "runtime-feed-keyring-init", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-rebuild", "security-policy-check", "feed-state", "feed-cache-sync", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-nvt-diagnostic-scan", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2153,39 +2161,20 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("def command_closeout_readiness", source)
         self.assertIn("def rust_runtime_log_review_result", source)
         self.assertIn('rust_result_envelope(repo_root, "runtime-log-review", ["runtime-log-review"])', source)
-        self.assertIn("def command_runtime_native_api_smoke", source)
-        self.assertIn('native_api_smoke.add_argument("--status-only"', source)
-        self.assertIn("command_runtime_native_api_smoke(repo_root, status_only=args.status_only)", source)
+        self.assertNotIn("def command_runtime_native_api_smoke", source)
+        self.assertNotIn('subparsers.add_parser("runtime-native-api-smoke"', source)
+        self.assertNotIn('args.command == "runtime-native-api-smoke"', source)
         self.assertIn("def command_runtime_native_api_direct_smoke", source)
         self.assertIn("def command_runtime_native_api_direct_write_smoke", source)
         self.assertNotIn("def command_runtime_native_api_rebuild", source)
-        self.assertIn("native-api.scope-report-hosts", source)
-        self.assertIn("native-api.scope-report-ports", source)
-        self.assertIn("native-api.scope-report-cves", source)
-        self.assertIn("native-api.scan-configs", source)
-        self.assertIn("native-api.tags", source)
-        self.assertIn("native-api.overrides", source)
-        self.assertIn("native-api.trashcan-summary", source)
-        self.assertIn("native-api.alerts", source)
-        self.assertIn("def native_api_expected_bad_request_finding", source)
-        self.assertIn("native-api.scope-reports.invalid-sort", source)
-        self.assertIn("/api/v1/scope-reports?page_size=1&sort=not_a_scope_report_sort", source)
-        self.assertIn("native-api.scope-reports.invalid-page", source)
-        self.assertIn("/api/v1/scope-reports?page=0&page_size=1", source)
-        self.assertIn("native-api.scope-reports.malformed-page", source)
-        self.assertIn("/api/v1/scope-reports?page=abc&page_size=1", source)
-
-        self.assertIn("native-api.scope-reports.oversized-page-size", source)
-        self.assertIn("/api/v1/scope-reports?page_size=501", source)
-        self.assertIn("def native_api_oversized_filter_path", source)
-        self.assertIn("native-api.scope-reports.oversized-filter", source)
-        self.assertIn("filter=OVERSIZED_FILTER", source)
-        self.assertIn("native-api.targets.invalid-sort", source)
-        self.assertIn("/api/v1/targets?page_size=1&sort=not_a_target_sort", source)
-        self.assertIn("native-api.vulnerabilities.invalid-sort", source)
-        self.assertIn("/api/v1/vulnerabilities?page_size=1&sort=not_a_vulnerability_sort", source)
-        self.assertIn("native-api.alerts.invalid-sort", source)
-        self.assertIn("/api/v1/alerts?page_size=1&sort=not_an_alert_sort", source)
+        self.assertIn("native-api.scope-report-hosts", rust_smoke)
+        self.assertIn("native-api.scope-report-ports", rust_smoke)
+        self.assertIn("native-api.scope-report-cves", rust_smoke)
+        self.assertIn("native-api.scan-configs", rust_smoke)
+        self.assertIn("native-api.tags", rust_smoke)
+        self.assertIn("native-api.overrides", rust_smoke)
+        self.assertIn("native-api.trashcan-summary", rust_smoke)
+        self.assertIn("native-api.alerts", rust_smoke)
         self.assertIn("/api/v1/alerts/{alert_id}/definition", source)
         self.assertIn("native-api-direct.alert-definition-put-disabled", source)
         self.assertIn("native-api-direct.alert-definition-read", source)
@@ -2198,13 +2187,13 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/alerts/{alert_id}", source)
         self.assertIn("/api/v1/tags", source)
         self.assertIn("/api/v1/tags/resource-names/{resource_type}", source)
-        self.assertIn("native-api.tag-resource-names", source)
-        self.assertIn("native-api.tag-resource-names.alert", source)
-        self.assertIn("native-api.tag-resource-names.scanner", source)
-        self.assertIn("native-api.tag-resource-names.schedule", source)
-        self.assertIn("/api/v1/tags/resource-names/alert", source)
-        self.assertIn("/api/v1/tags/resource-names/scanner", source)
-        self.assertIn("/api/v1/tags/resource-names/schedule", source)
+        self.assertIn("native-api.tag-resource-names", rust_smoke)
+        self.assertIn("native-api.tag-resource-names.alert", rust_smoke)
+        self.assertIn("native-api.tag-resource-names.scanner", rust_smoke)
+        self.assertIn("native-api.tag-resource-names.schedule", rust_smoke)
+        self.assertIn("/api/v1/tags/resource-names/alert", rust_smoke)
+        self.assertIn("/api/v1/tags/resource-names/scanner", rust_smoke)
+        self.assertIn("/api/v1/tags/resource-names/schedule", rust_smoke)
         self.assertIn("/api/v1/tags/{tag_id}", source)
         self.assertIn("/api/v1/tags/{tag_id}/resources", source)
         self.assertIn("/api/v1/overrides", source)
@@ -2220,7 +2209,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "feed-state", "feed-cache-sync", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "runtime-app-build", "runtime-native-api-rebuild", "native-api-request", "native-start-task", "native-stop-task", "native-update-task-target", "native-tasks-from-csv", "native-empty-trash", "native-verify-scanners"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "feed-state", "feed-cache-sync", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-rebuild", "native-api-request", "native-start-task", "native-stop-task", "native-update-task-target", "native-tasks-from-csv", "native-empty-trash", "native-verify-scanners"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotRegex(
@@ -2751,76 +2740,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("systems", summary)
         self.assertNotIn("vulnerabilities", summary)
 
-    def test_native_api_smoke_status_only_keeps_only_compact_findings(self):
-        result = {
-            "status": "warn",
-            "summary": "Native API smoke checks completed.",
-            "details": {
-                "service": "yafvs-api",
-                "health": {"status": "ok"},
-                "large_probe_payload": {"items": list(range(100))},
-            },
-            "findings": [
-                yafvsctl.finding("pass", "native-api.running", "yafvs-api container is running."),
-                yafvsctl.finding("pass", "native-api.healthz", "Native API health probe passed."),
-                yafvsctl.finding("warn", "native-api.scope-report-cves", "No scope reports exist yet, so the CVE collection probe was skipped."),
-            ],
-            "artifacts": ["native-api-smoke.json"],
-        }
-
-        compact = yafvsctl.native_api_smoke_status_only_result(result)
-
-        self.assertEqual(compact["status"], "warn")
-        self.assertEqual(compact["details"]["service"], "yafvs-api")
-        self.assertEqual(compact["details"]["finding_count"], 3)
-        self.assertEqual(compact["details"]["non_pass_count"], 1)
-        self.assertEqual(compact["details"]["artifact_count"], 1)
-        self.assertEqual(compact["details"]["important_checks"]["native-api.running"], "pass")
-        self.assertEqual(compact["details"]["important_checks"]["native-api.healthz"], "pass")
-        self.assertEqual(compact["details"]["important_checks"]["native-api.scope-report-cves"], "warn")
-        self.assertEqual(compact["findings"], [yafvsctl.compact_doctor_finding(result["findings"][2])])
-        self.assertNotIn("large_probe_payload", compact["details"])
-
-    def test_native_api_alert_summary_omits_delivery_payload_values(self):
-        payload = {
-            "page": {"total": 1},
-            "items": [
-                {
-                    "id": "alert-1",
-                    "name": "Daily report",
-                    "comment": "operator note",
-                    "owner": {"name": "admin"},
-                    "active": True,
-                    "event_type": "Task run status changed",
-                    "condition_type": "Always",
-                    "method_type": "Email",
-                    "filter": {"id": "filter-1", "name": "High"},
-                    "task_count": 2,
-                    "method_data_redacted": True,
-                    "created_at": "2026-06-21T00:00:00Z",
-                }
-            ],
-        }
-        summary = yafvsctl.summarize_native_alerts_response(payload)
-        self.assertEqual(summary["item_count_in_response"], 1)
-        self.assertEqual(
-            summary["items_sample"],
-            [
-                {
-                    "id": "alert-1",
-                    "name": "Daily report",
-                    "event_type": "Task run status changed",
-                    "condition_type": "Always",
-                    "method_type": "Email",
-                }
-            ],
-        )
-        sample = summary["items_sample"][0]
-        self.assertNotIn("comment", sample)
-        self.assertNotIn("owner", sample)
-        self.assertNotIn("filter", sample)
-        self.assertNotIn("method_data_redacted", sample)
-
     def test_native_api_alert_metadata_validation_rejects_delivery_values(self):
         safe = {
             "id": "alert-1",
@@ -2865,54 +2784,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(details["response_summary"]["systems_count"], 20)
         self.assertEqual(len(details["response_summary"]["systems_sample"]), 3)
         self.assertNotIn("output_tail", details)
-
-    def test_native_api_expected_bad_request_finding_checks_json_error_code(self):
-        original = yafvsctl.native_api_curl_with_http_status
-
-        def fake_curl(_root, path):
-            self.assertEqual(path, "/api/v1/vulnerabilities?page_size=1&sort=bogus")
-            return yafvsctl.subprocess.CompletedProcess(
-                ["curl"],
-                0,
-                stdout=json.dumps({"error": {"code": "bad_request", "message": "Invalid sort"}}) + "\n400",
-                stderr="",
-            )
-
-        try:
-            yafvsctl.native_api_curl_with_http_status = fake_curl
-            with tempfile.TemporaryDirectory() as tmp:
-                root = Path(tmp) / "TurboVAS"
-                root.mkdir()
-                finding = yafvsctl.native_api_expected_bad_request_finding(
-                    root,
-                    "native-api.vulnerabilities.invalid-sort",
-                    "/api/v1/vulnerabilities?page_size=1&sort=bogus",
-                    "bad_request",
-                )
-        finally:
-            yafvsctl.native_api_curl_with_http_status = original
-
-        self.assertEqual(finding["status"], "pass")
-        self.assertEqual(finding["details"]["response_summary"]["http_status"], 400)
-        self.assertEqual(finding["details"]["response_summary"]["error_code"], "bad_request")
-        self.assertNotIn("output_tail", finding["details"])
-
-    def test_native_api_oversized_filter_path_reads_rust_limit(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            collections = root / "services" / "yafvs-api" / "src"
-            collections.mkdir(parents=True)
-            (collections / "collections.rs").write_text(
-                "pub(crate) const MAX_COLLECTION_FILTER_LENGTH: usize = 3;\n",
-                encoding="utf-8",
-            )
-
-            path, length = yafvsctl.native_api_oversized_filter_path(
-                root, "/api/v1/scope-reports?page_size=1"
-            )
-
-        self.assertEqual(length, 4)
-        self.assertEqual(path, "/api/v1/scope-reports?page_size=1&filter=xxxx")
 
     def test_native_tooling_state_classifies_dependency_surfaces(self):
         root = Path(__file__).resolve().parents[2]
@@ -6870,7 +6741,7 @@ class YAFVSCtlTests(unittest.TestCase):
         openapi = (root / "api" / "openapi" / "yafvs-v1.yaml").read_text(encoding="utf-8")
         route_source = (root / "services" / "yafvs-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
         report_source = (root / "services" / "yafvs-api" / "src" / "report_payloads.rs").read_text(encoding="utf-8")
-        smoke = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        smoke = (root / "tools" / "yafvsctl-rs" / "src" / "commands" / "runtime_native_api_smoke.rs").read_text(encoding="utf-8")
         self.assertIn("/reports:", openapi)
         self.assertIn("/reports/{report_id}:", openapi)
         self.assertIn("/reports/{report_id}/results:", openapi)
@@ -6894,7 +6765,7 @@ class YAFVSCtlTests(unittest.TestCase):
         openapi = (root / "api" / "openapi" / "yafvs-v1.yaml").read_text(encoding="utf-8")
         route_source = (root / "services" / "yafvs-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
         handler_source = (root / "services" / "yafvs-api" / "src" / "scope_report_retention.rs").read_text(encoding="utf-8")
-        smoke = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        smoke = (root / "tools" / "yafvsctl-rs" / "src" / "commands" / "runtime_native_api_smoke.rs").read_text(encoding="utf-8")
         self.assertIn("/scopes/{scope_id}/reports/{scope_report_id}/retention-plan:", openapi)
         operations = {(item["method"], item["path"]): item for item in yafvsctl.openapi_contract_operations(root)}
         retention = operations[("get", "/scopes/{scope_id}/reports/{scope_report_id}/retention-plan")]
@@ -6939,7 +6810,7 @@ class YAFVSCtlTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         openapi = (root / "api" / "openapi" / "yafvs-v1.yaml").read_text(encoding="utf-8")
         source = (root / "services" / "yafvs-api" / "src" / "read_api_routes.rs").read_text(encoding="utf-8")
-        smoke = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        smoke = (root / "tools" / "yafvsctl-rs" / "src" / "commands" / "runtime_native_api_smoke.rs").read_text(encoding="utf-8")
         native_client = (root / "components" / "gsa" / "src" / "gmp" / "native-api" / "scopes.ts").read_text(encoding="utf-8")
         scope_list = (root / "components" / "gsa" / "src" / "web" / "pages" / "scopes" / "ScopeListPage.tsx").read_text(encoding="utf-8")
         scope_details = (root / "components" / "gsa" / "src" / "web" / "pages" / "scopes" / "ScopeDetailsPage.tsx").read_text(encoding="utf-8")
@@ -7111,6 +6982,7 @@ class YAFVSCtlTests(unittest.TestCase):
         strangler = (root / "docs" / "GMP_XML_STRANGLER.md").read_text(encoding="utf-8")
         plan = (root / "docs" / "NATIVE_API_PROOF_PLAN.md").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        rust_smoke = (root / "tools" / "yafvsctl-rs" / "src" / "commands" / "runtime_native_api_smoke.rs").read_text(encoding="utf-8")
         browser_smoke = (root / "tools" / "runtime_browser_smoke.py").read_text(encoding="utf-8")
         docs = "\n".join([contract, strangler, plan])
 
@@ -7121,7 +6993,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("/api/v1/trashcan/summary", native_tooling)
         self.assertIn("/api/v1/trashcan/items", native_tooling)
         self.assertIn("trashcan-redacted-row-metadata-read", native_tooling)
-        self.assertIn("native-api.trashcan-summary", native_tooling)
+        self.assertIn("native-api.trashcan-summary", rust_smoke)
         self.assertIn("trashcan.items-native-api", browser_smoke)
         for forbidden in (
             "/api/v1/trashcan/credentials",
@@ -7158,6 +7030,7 @@ class YAFVSCtlTests(unittest.TestCase):
         api_source = (root / "services" / "yafvs-api" / "src" / "operating_systems.rs").read_text(encoding="utf-8")
         query_source = (root / "services" / "yafvs-api" / "src" / "operating_system_query_sql.rs").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        rust_smoke = (root / "tools" / "yafvsctl-rs" / "src" / "commands" / "runtime_native_api_smoke.rs").read_text(encoding="utf-8")
 
         self.assertIn('/api/v1/operating-systems/:os_id', route_source)
         self.assertIn('/api/v1/operating-systems/:os_id/export', route_source)
@@ -7169,7 +7042,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn('/api/v1/operating-systems/{os_id}', native_tooling)
         self.assertIn('/api/v1/operating-systems/{os_id}/export', native_tooling)
         self.assertIn('"status": "implemented_internal_and_browser_proxied"', native_tooling)
-        self.assertIn('native-api.operating-system-detail', native_tooling)
+        self.assertIn('native-api.operating-system-detail', rust_smoke)
 
     def test_host_asset_detail_contract_is_internal_bounded_and_safe_metadata_only(self):
         root = Path(__file__).resolve().parents[2]
@@ -7178,6 +7051,7 @@ class YAFVSCtlTests(unittest.TestCase):
         api_source = (root / "services" / "yafvs-api" / "src" / "host_assets.rs").read_text(encoding="utf-8")
         query_source = (root / "services" / "yafvs-api" / "src" / "host_asset_query_sql.rs").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        rust_smoke = (root / "tools" / "yafvsctl-rs" / "src" / "commands" / "runtime_native_api_smoke.rs").read_text(encoding="utf-8")
 
         self.assertIn('/api/v1/hosts/:host_id', route_source)
         self.assertIn('/api/v1/hosts/:host_id/export', route_source)
@@ -7199,7 +7073,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn('/api/v1/hosts/{host_id}', native_tooling)
         self.assertIn('/api/v1/hosts/{host_id}/export', native_tooling)
         self.assertIn('GSA top-level Host metadata export', native_tooling)
-        self.assertIn('native-api.host-detail', native_tooling)
+        self.assertIn('native-api.host-detail', rust_smoke)
 
     def test_tls_certificate_asset_detail_contract_is_internal_and_source_only(self):
         root = Path(__file__).resolve().parents[2]
@@ -7209,6 +7083,7 @@ class YAFVSCtlTests(unittest.TestCase):
         tls_query_source = (root / "services" / "yafvs-api" / "src" / "tls_certificate_query_sql.rs").read_text(encoding="utf-8")
         tls_payload_source = (root / "services" / "yafvs-api" / "src" / "tls_certificate_payloads.rs").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        rust_smoke = (root / "tools" / "yafvsctl-rs" / "src" / "commands" / "runtime_native_api_smoke.rs").read_text(encoding="utf-8")
         tls_detail_source = tls_source.split("async fn tls_certificate_asset_detail", 1)[1].split("fn tls_certificate_sources", 1)[0]
 
         self.assertIn('/api/v1/tls-certificates/:certificate_id', route_source)
@@ -7230,7 +7105,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn('/api/v1/tls-certificates/{certificate_id}/certificate', native_tooling)
         self.assertIn('GSA top-level TLS Certificate metadata export', native_tooling)
         self.assertIn('GSA top-level TLS Certificate PEM download', native_tooling)
-        self.assertIn('native-api.tls-certificate-detail', native_tooling)
+        self.assertIn('native-api.tls-certificate-detail', rust_smoke)
 
     def test_scanner_asset_detail_contract_is_internal_metadata_only(self):
         root = Path(__file__).resolve().parents[2]
@@ -7239,6 +7114,7 @@ class YAFVSCtlTests(unittest.TestCase):
         api_source = (root / "services" / "yafvs-api" / "src" / "scanner_assets.rs").read_text(encoding="utf-8")
         query_source = (root / "services" / "yafvs-api" / "src" / "scanner_asset_query_sql.rs").read_text(encoding="utf-8")
         native_tooling = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        rust_smoke = (root / "tools" / "yafvsctl-rs" / "src" / "commands" / "runtime_native_api_smoke.rs").read_text(encoding="utf-8")
         scanner_detail_source = api_source.split("async fn scanner_asset_detail", 1)[1].split("fn scanner_task_references_sql", 1)[0]
 
         self.assertIn('/api/v1/scanners/:scanner_id', route_source)
@@ -7262,7 +7138,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn('ScannerTaskReference', openapi)
         self.assertIn('/api/v1/scanners/{scanner_id}', native_tooling)
         self.assertIn('/api/v1/scanners/{scanner_id}/export', native_tooling)
-        self.assertIn('native-api.scanner-detail', native_tooling)
+        self.assertIn('native-api.scanner-detail', rust_smoke)
 
     def test_retained_json_artifacts_write_latest_history_and_prune(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -7665,13 +7541,52 @@ class YAFVSCtlTests(unittest.TestCase):
             "def runtime_native_api_rebuild_env",
         ):
             self.assertNotIn(surface, python_source)
-        self.assertIn("def command_runtime_native_api_smoke", python_source)
+        self.assertNotIn("def command_runtime_native_api_smoke", python_source)
         self.assertIn("RuntimeOperationLock::acquire", rust_source)
         self.assertIn("FEED_ACTIVATION_LOCK", rust_source)
         self.assertIn("require_current_app_deployment_snapshot", rust_source)
         self.assertIn("pinned_app_compose_command", rust_source)
         self.assertIn("cargo run --quiet --locked", recipe)
         self.assertIn('-- runtime-native-api-rebuild "$@"', recipe)
+        self.assertNotIn("tools/yafvsctl ", recipe)
+
+    def test_runtime_native_api_smoke_is_owned_directly_by_rust(self):
+        root = Path(__file__).resolve().parents[2]
+        python_source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        rust_source = (
+            root
+            / "tools"
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "runtime_native_api_smoke.rs"
+        ).read_text(encoding="utf-8")
+        justfile = (root / "justfile").read_text(encoding="utf-8")
+        recipe = justfile.split("runtime-native-api-smoke *args:\n", 1)[1].split(
+            "\n\n", 1
+        )[0]
+        for surface in (
+            'add_parser("runtime-native-api-smoke"',
+            'args.command == "runtime-native-api-smoke"',
+            "def command_runtime_native_api_smoke",
+            "def native_api_smoke_status_only_result",
+            "def native_api_expected_bad_request_finding",
+            "def native_api_oversized_filter_path",
+            "def latest_completed_full_test_report_id",
+            "def summarize_native_alerts_response",
+        ):
+            self.assertNotIn(surface, python_source)
+        for contract in (
+            "pub fn command_runtime_native_api_smoke",
+            "SCOPE_REPORT_COLLECTION_PROBES",
+            "ALERT_FORBIDDEN_KEYS",
+            "metrics_contract_ok",
+            "destructive_actions",
+            "runtime-native-api-smoke.status-only",
+        ):
+            self.assertIn(contract, rust_source)
+        self.assertIn("cargo run --quiet --locked", recipe)
+        self.assertIn('-- runtime-native-api-smoke "$@"', recipe)
         self.assertNotIn("tools/yafvsctl ", recipe)
 
     def test_gsa_web_fast_script_is_one_shot(self):

@@ -458,6 +458,8 @@ pub enum CliCommand {
     RuntimeAppBuild,
     /// Run observational application-runtime smoke checks.
     RuntimeAppSmoke,
+    /// Verify the internal YAFVS native API sidecar.
+    RuntimeNativeApiSmoke,
     /// Rebuild and restart only the receipt-pinned native API sidecar.
     RuntimeNativeApiRebuild,
     /// Stop and remove the development runtime infrastructure and application containers.
@@ -741,6 +743,7 @@ impl CliCommand {
             Self::RuntimeScannerRegister => "runtime-scanner-register",
             Self::RuntimeAppBuild => "runtime-app-build",
             Self::RuntimeAppSmoke => "runtime-app-smoke",
+            Self::RuntimeNativeApiSmoke => "runtime-native-api-smoke",
             Self::RuntimeNativeApiRebuild => "runtime-native-api-rebuild",
             Self::Down => "down",
             Self::RuntimeAppDown => "runtime-app-down",
@@ -786,7 +789,6 @@ impl CliCommand {
             Self::ProductionPostureCheck => "production-posture-check",
         }
     }
-
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>
@@ -1574,8 +1576,7 @@ mod tests {
             CliCommand::NativeNvtDiagnosticScan {
                 host: "192.0.2.10".into(),
                 nvt_id: "1.3.6.1.4.1.25623.1.0.106223".into(),
-                source_scan_config_id:
-                    crate::commands::native_scan::EMPTY_SCAN_CONFIG_ID.into(),
+                source_scan_config_id: crate::commands::native_scan::EMPTY_SCAN_CONFIG_ID.into(),
                 port_list_id: crate::commands::native_scan::IANA_TCP_UDP_PORT_LIST_ID.into(),
                 scanner_id: crate::commands::native_scan::DEFAULT_SCANNER_ID.into(),
                 allow_scan_control: false,
@@ -1640,7 +1641,14 @@ mod tests {
         for (argument, expected) in [
             ("runtime-gmp-smoke", CliCommand::RuntimeGmpSmoke),
             ("runtime-app-smoke", CliCommand::RuntimeAppSmoke),
-            ("runtime-scanner-register", CliCommand::RuntimeScannerRegister),
+            (
+                "runtime-native-api-smoke",
+                CliCommand::RuntimeNativeApiSmoke,
+            ),
+            (
+                "runtime-scanner-register",
+                CliCommand::RuntimeScannerRegister,
+            ),
             (
                 "runtime-credential-smoke",
                 CliCommand::RuntimeCredentialSmoke,
@@ -2132,6 +2140,7 @@ mod tests {
             "runtime-app-down",
             "runtime-app-up",
             "runtime-app-smoke",
+            "runtime-native-api-smoke",
             "runtime-webui-smoke",
             "runtime-full-test-scan-preflight",
             "runtime-full-test-scan-start",

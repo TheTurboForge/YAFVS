@@ -105,6 +105,17 @@ runtime supports explicit loopback, LAN, and Tailscale bindings; non-loopback
 access is intentionally configured when needed and should not be treated as a
 production exposure model.
 
+For a loopback-only development binding, keep GSA unexposed on the scanner host
+and forward it from the operator workstation with the system SSH client:
+
+```sh
+ssh -N -L 127.0.0.1:19392:127.0.0.1:19392 operator@scanner-host
+```
+
+Then open `https://127.0.0.1:19392/` locally. The development certificate may
+require an explicit browser exception. Ending the SSH process closes the local
+access path; the server-side Web UI remains bound to loopback.
+
 ## Runtime State
 
 The Docker runtime keeps valuable state outside the repository under the

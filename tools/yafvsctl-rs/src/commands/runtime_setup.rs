@@ -204,6 +204,64 @@ fn secure_runtime_root(repo_root: &Path, root: &Path) -> io::Result<OwnedFd> {
     Ok(runtime)
 }
 
+/// Removes an exact runtime socket without following links or deleting another file type.
+pub(crate) fn remove_runtime_socket(repo_root: &Path, relative: &str) -> io::Result<bool> {
+    let relative = Path::new(relative);
+    if relative.is_absolute() || relative.file_name().is_none() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "runtime socket path must be a non-empty relative path",
+        ));
+    }
+
+    let mut parent = match secure_existing_directory(&runtime_dir(repo_root)) {
+        Ok(directory) => directory,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    let root_stat = descriptor_stat(&parent)?;
+    // SAFETY: geteuid has no preconditions.
+    let euid = unsafe { libc::geteuid() };
+    if root_stat.st_uid != euid {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "runtime directory is not owned by the current user",
+        ));
+    }
+
+    for component in relative.parent().unwrap_or(Path::new("")).components() {
+        let Component::Normal(name) = component else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "runtime socket path contains an unsafe component",
+            ));
+        };
+        parent = match open_existing_child_directory(&parent, name) {
+            Ok(directory) => directory,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error),
+        };
+    }
+
+    let name = cstring(relative.file_name().expect("checked above"))?;
+    let stat = match entry_stat(&parent, &name) {
+        Ok(stat) => stat,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    if stat.st_mode & libc::S_IFMT != libc::S_IFSOCK {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "runtime socket path exists but is not a socket",
+        ));
+    }
+    // SAFETY: parent is held open without following links and name names the verified socket.
+    if unsafe { libc::unlinkat(parent.as_raw_fd(), name.as_ptr(), 0) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(true)
+}
+
 fn runtime_directory_failure(path: &Path, error: &io::Error) -> Finding {
     Finding::new(
         "fail",
@@ -896,11 +954,45 @@ mod tests {
     use super::*;
     use crate::process::ProcessOutput;
     use std::os::unix::fs::{PermissionsExt, symlink};
+    use std::os::unix::net::UnixListener;
     use std::sync::Mutex;
 
     struct Fixture {
         root: PathBuf,
         repo: PathBuf,
+    }
+
+    #[test]
+    fn runtime_socket_cleanup_removes_only_an_exact_socket() {
+        let fixture = Fixture::new("socket-cleanup");
+        let socket = fixture.runtime().join("run/gvmd-gmp/gvmd.sock");
+        fs::create_dir_all(socket.parent().unwrap()).unwrap();
+        drop(UnixListener::bind(&socket).unwrap());
+
+        assert!(remove_runtime_socket(&fixture.repo, "run/gvmd-gmp/gvmd.sock").unwrap());
+        assert!(!socket.exists());
+        assert!(!remove_runtime_socket(&fixture.repo, "run/gvmd-gmp/gvmd.sock").unwrap());
+    }
+
+    #[test]
+    fn runtime_socket_cleanup_rejects_other_entries_and_linked_parents() {
+        let fixture = Fixture::new("socket-cleanup-refusal");
+        let runtime = fixture.runtime();
+        let regular = runtime.join("run/gvmd-gmp/gvmd.sock");
+        fs::create_dir_all(regular.parent().unwrap()).unwrap();
+        fs::write(&regular, "keep\n").unwrap();
+        let error = remove_runtime_socket(&fixture.repo, "run/gvmd-gmp/gvmd.sock").unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert_eq!(fs::read_to_string(&regular).unwrap(), "keep\n");
+
+        fs::remove_dir_all(runtime.join("run")).unwrap();
+        let victim = fixture.root.join("victim");
+        fs::create_dir_all(victim.join("gvmd-gmp")).unwrap();
+        let victim_socket = victim.join("gvmd-gmp/gvmd.sock");
+        drop(UnixListener::bind(&victim_socket).unwrap());
+        symlink(&victim, runtime.join("run")).unwrap();
+        assert!(remove_runtime_socket(&fixture.repo, "run/gvmd-gmp/gvmd.sock").is_err());
+        assert!(victim_socket.exists());
     }
     impl Fixture {
         fn new(name: &str) -> Self {

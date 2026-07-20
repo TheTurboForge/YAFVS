@@ -7,6 +7,7 @@ use super::runtime_lock::{
     DEFAULT_RUNTIME_LOCK_TIMEOUT, FEED_ACTIVATION_LOCK, RuntimeLockError, RuntimeOperationLock,
     runtime_lock_dir,
 };
+use super::runtime_setup::remove_runtime_socket;
 use crate::process::{CommandRunner, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
 use serde_json::json;
@@ -17,6 +18,10 @@ use std::time::Duration;
 
 const RUNTIME_SERVICES: [&str; 3] = ["postgres", "redis-openvas", "mosquitto"];
 const APP_SERVICES: [&str; 5] = ["gvmd", "ospd-openvas", "notus-scanner", "gsad", "yafvs-api"];
+const APP_RUNTIME_SOCKETS: [(&str, &str); 2] = [
+    ("gvmd", "run/gvmd-gmp/gvmd.sock"),
+    ("ospd-openvas", "run/ospd/ospd-openvas.sock"),
+];
 
 pub fn command_runtime_plan(repo_root: &Path) -> ResultEnvelope {
     let root = runtime_dir(repo_root);
@@ -203,22 +208,25 @@ fn command_runtime_app_down_with_runner_and_timeout(
                 "-f".to_string(),
             ];
             rm_args.extend(APP_SERVICES.iter().map(|service| (*service).to_string()));
-            let findings = vec![
-                compose_result_finding(
-                    repo_root,
-                    runner,
-                    "compose.app-stop",
-                    "docker compose app stop",
-                    &stop_args,
-                ),
-                compose_result_finding(
-                    repo_root,
-                    runner,
-                    "compose.app-rm",
-                    "docker compose app rm",
-                    &rm_args,
-                ),
-            ];
+            let stop = compose_result_finding(
+                repo_root,
+                runner,
+                "compose.app-stop",
+                "docker compose app stop",
+                &stop_args,
+            );
+            let remove = compose_result_finding(
+                repo_root,
+                runner,
+                "compose.app-rm",
+                "docker compose app rm",
+                &rm_args,
+            );
+            let shutdown_complete = stop.status == "pass" && remove.status == "pass";
+            let mut findings = vec![stop, remove];
+            findings.extend(APP_RUNTIME_SOCKETS.map(|(service, relative)| {
+                runtime_socket_cleanup_finding(repo_root, service, relative, shutdown_complete)
+            }));
             make_result(
                 metadata(repo_root, "runtime-app-down", runner),
                 "Application runtime shutdown attempted.".to_string(),
@@ -235,6 +243,45 @@ fn command_runtime_app_down_with_runner_and_timeout(
             runtime_lock_dir(repo_root).display().to_string(),
             error,
         ),
+    }
+}
+
+fn runtime_socket_cleanup_finding(
+    repo_root: &Path,
+    service: &str,
+    relative: &str,
+    shutdown_complete: bool,
+) -> Finding {
+    let path = runtime_dir(repo_root).join(relative);
+    if !shutdown_complete {
+        return Finding::new(
+            "warn",
+            "runtime.app-socket",
+            format!(
+                "{service} runtime socket cleanup was skipped because app stop and removal did not both succeed."
+            ),
+        )
+        .with_path(&path.display().to_string());
+    }
+    match remove_runtime_socket(repo_root, relative) {
+        Ok(true) => Finding::new(
+            "pass",
+            "runtime.app-socket",
+            format!("Removed the stale {service} runtime socket."),
+        )
+        .with_path(&path.display().to_string()),
+        Ok(false) => Finding::new(
+            "pass",
+            "runtime.app-socket",
+            format!("The {service} runtime socket was already absent."),
+        )
+        .with_path(&path.display().to_string()),
+        Err(error) => Finding::new(
+            "fail",
+            "runtime.app-socket",
+            format!("Could not safely remove the {service} runtime socket: {error}"),
+        )
+        .with_path(&path.display().to_string()),
     }
 }
 
@@ -406,6 +453,7 @@ mod tests {
     use crate::process::ProcessOutput;
     use std::ffi::OsString;
     use std::fs;
+    use std::os::unix::net::UnixListener;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::{Mutex, MutexGuard};
@@ -617,6 +665,9 @@ mod tests {
     #[test]
     fn app_down_removes_services_after_a_stop_failure() {
         let fixture = Fixture::new("app-down");
+        let gvmd = runtime_dir(&fixture.repo).join(APP_RUNTIME_SOCKETS[0].1);
+        fs::create_dir_all(gvmd.parent().unwrap()).unwrap();
+        drop(UnixListener::bind(&gvmd).unwrap());
         let runner = RecordingRunner::new(vec![output(9, 1), output(0, 1)]);
 
         let result = command_runtime_app_down_with_runner_and_timeout(
@@ -627,7 +678,7 @@ mod tests {
 
         assert_eq!(result.status, "fail");
         assert_eq!(result.summary, "Application runtime shutdown attempted.");
-        assert_eq!(result.findings.len(), 2);
+        assert_eq!(result.findings.len(), 4);
         assert_eq!(result.findings[0].status, "fail");
         assert_eq!(result.findings[0].check, "compose.app-stop");
         assert_eq!(
@@ -640,6 +691,12 @@ mod tests {
             result.findings[1].message,
             "docker compose app rm exit code 0."
         );
+        assert!(gvmd.exists());
+        assert!(result.findings[2..].iter().all(|finding| {
+            finding.status == "warn"
+                && finding.check == "runtime.app-socket"
+                && finding.message.contains("did not both succeed")
+        }));
         assert_eq!(
             result.artifacts,
             vec![runtime_dir(&fixture.repo).display().to_string()]
@@ -686,6 +743,71 @@ mod tests {
                     && call.environment_supplied
                     && call.timeout.is_none())
         );
+    }
+
+    #[test]
+    fn app_down_removes_stale_runtime_sockets_after_container_removal() {
+        let fixture = Fixture::new("app-down-sockets");
+        let gvmd = runtime_dir(&fixture.repo).join(APP_RUNTIME_SOCKETS[0].1);
+        let ospd = runtime_dir(&fixture.repo).join(APP_RUNTIME_SOCKETS[1].1);
+        for socket in [&gvmd, &ospd] {
+            fs::create_dir_all(socket.parent().unwrap()).unwrap();
+            drop(UnixListener::bind(socket).unwrap());
+        }
+        let runner = RecordingRunner::new(vec![output(0, 1), output(0, 1)]);
+
+        let result = command_runtime_app_down_with_runner_and_timeout(
+            &fixture.repo,
+            &runner,
+            Duration::ZERO,
+        );
+
+        assert_eq!(result.status, "pass");
+        assert!(!gvmd.exists());
+        assert!(!ospd.exists());
+        assert!(result.findings[2..].iter().all(|finding| {
+            finding.status == "pass" && finding.message.starts_with("Removed the stale")
+        }));
+    }
+
+    #[test]
+    fn app_down_refuses_to_remove_a_non_socket_runtime_entry() {
+        let fixture = Fixture::new("app-down-non-socket");
+        let gvmd = runtime_dir(&fixture.repo).join(APP_RUNTIME_SOCKETS[0].1);
+        fs::create_dir_all(gvmd.parent().unwrap()).unwrap();
+        fs::write(&gvmd, "keep\n").unwrap();
+        let runner = RecordingRunner::new(vec![output(0, 1), output(0, 1)]);
+
+        let result = command_runtime_app_down_with_runner_and_timeout(
+            &fixture.repo,
+            &runner,
+            Duration::ZERO,
+        );
+
+        assert_eq!(result.status, "fail");
+        assert_eq!(fs::read_to_string(gvmd).unwrap(), "keep\n");
+        assert!(result.findings[2].message.contains("not a socket"));
+    }
+
+    #[test]
+    fn app_down_preserves_sockets_when_container_removal_fails() {
+        let fixture = Fixture::new("app-down-rm-failure");
+        let gvmd = runtime_dir(&fixture.repo).join(APP_RUNTIME_SOCKETS[0].1);
+        fs::create_dir_all(gvmd.parent().unwrap()).unwrap();
+        drop(UnixListener::bind(&gvmd).unwrap());
+        let runner = RecordingRunner::new(vec![output(0, 1), output(9, 1)]);
+
+        let result = command_runtime_app_down_with_runner_and_timeout(
+            &fixture.repo,
+            &runner,
+            Duration::ZERO,
+        );
+
+        assert_eq!(result.status, "fail");
+        assert!(gvmd.exists());
+        assert!(result.findings[2..].iter().all(|finding| {
+            finding.status == "warn" && finding.message.contains("did not both succeed")
+        }));
     }
 
     #[test]

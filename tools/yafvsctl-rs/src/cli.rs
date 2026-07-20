@@ -2013,6 +2013,7 @@ mod tests {
             "runtime-init",
             "runtime-manager-init",
             "runtime-scanner-redis-init",
+            "runtime-scanner-register",
             "runtime-report-summary",
             "runtime-report-export",
             "runtime-report-metrics",

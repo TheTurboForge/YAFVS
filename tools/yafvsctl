@@ -5984,6 +5984,8 @@ def native_tooling_category(relative_path: str) -> tuple[str, str] | None:
         return "compatibility_bridge", "Browser smoke keeps a bounded raw GMP cleanup fallback for test artifacts; it imports neither removed legacy client."
     if relative_path == "tools/yafvsctl-rs/src/commands/runtime_probe.rs":
         return "compatibility_bridge", "Rust CLI orchestration retains bounded raw GMP smoke helpers without depending on removed python-gvm or gvm-tools clients."
+    if relative_path == "tools/yafvsctl-rs/src/commands/runtime_scanner_register.rs":
+        return "compatibility_bridge", "Rust scanner registration names and reuses the bounded authenticated GMP readiness probe while using pinned gvmd control without python-gvm or gvm-tools."
     if relative_path == "tools/yafvsctl":
         return "compatibility_bridge", "yafvsctl measures the completed legacy-client teardown and remaining GMP owner tails."
     if relative_path.startswith("tools/runtime_") and relative_path.endswith(".py"):
@@ -12541,73 +12543,6 @@ def browser_gmp_readiness_finding(repo_root: Path, *, check: str) -> dict[str, A
             "failed_checks": [item for item in gmp_result.get("findings", []) if item.get("status") == "fail"],
         },
     )
-
-
-def _command_runtime_scanner_register_unlocked(repo_root: Path) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    receipt, receipt_error = require_app_deployment_receipt(
-        repo_root, app_env=deployed_app_env(repo_root)
-    )
-    findings.append(
-        finding(
-            "pass" if receipt_error is None else "fail",
-            "runtime.app-deployment-receipt",
-            "Scanner registration uses the verified prepared application deployment."
-            if receipt_error is None
-            else receipt_error,
-            str(app_deployment_receipt_path(repo_root)),
-        )
-    )
-    socket_path = ospd_socket_path(repo_root)
-    findings.append(finding("pass" if socket_path.is_socket() else "fail", "ospd.socket", "ospd-openvas socket is ready." if socket_path.is_socket() else "ospd-openvas socket is not ready; run just runtime-app-up and inspect ospd-openvas logs.", str(socket_path)))
-    gmp_smoke = command_runtime_gmp_smoke(repo_root)
-    findings.append(finding(gmp_smoke["status"], "gvmd.gmp", gmp_smoke["summary"], details={"status": gmp_smoke["status"]}))
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-scanner-register", repo_root, "Scanner registration stopped at prerequisites.", findings, [str(runtime_dir(repo_root))])
-    app_image_ids = receipt["image_ids"]
-
-    scanners = run_gvmd_oneoff(repo_root, ["--get-scanners"], no_deps=False, app_image_ids=app_image_ids)
-    scanner_uuid = parse_named_uuid(scanners.stdout, "OpenVAS Default") if scanners.returncode == 0 else None
-    findings.append(finding("pass" if scanners.returncode == 0 else "fail", "gvmd.get-scanners", f"gvmd --get-scanners exit code {scanners.returncode}.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(scanners.stdout, 80)}))
-    if scanners.returncode != 0:
-        return make_result("runtime-scanner-register", repo_root, "Scanner registration stopped while listing scanners.", findings, [str(runtime_dir(repo_root))])
-
-    scanner_args = [
-        "--scanner-name=OpenVAS Default",
-        "--scanner-type=OpenVAS",
-        "--scanner-host=/runtime/run/ospd/ospd-openvas.sock",
-        "--scanner-port=0",
-        "--no-default-certs",
-    ]
-    if scanner_uuid:
-        change = run_gvmd_oneoff(repo_root, [f"--modify-scanner={scanner_uuid}", *scanner_args], no_deps=False, app_image_ids=app_image_ids)
-        findings.append(finding("pass" if change.returncode == 0 else "fail", "gvmd.modify-scanner", f"Modify OpenVAS Default scanner exit code {change.returncode}.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(change.stdout, 80)}))
-    else:
-        change = run_gvmd_oneoff(repo_root, ["--create-scanner=OpenVAS Default", *scanner_args[1:]], no_deps=False, app_image_ids=app_image_ids)
-        scanner_uuid = parse_named_uuid(change.stdout, "OpenVAS Default") or parse_named_uuid(change.stdout, "Scanner")
-        findings.append(finding("pass" if change.returncode == 0 else "fail", "gvmd.create-scanner", f"Create OpenVAS Default scanner exit code {change.returncode}.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(change.stdout, 80)}))
-
-    scanners_after = run_gvmd_oneoff(repo_root, ["--get-scanners"], no_deps=False, app_image_ids=app_image_ids)
-    scanner_uuid = parse_named_uuid(scanners_after.stdout, "OpenVAS Default") if scanners_after.returncode == 0 else scanner_uuid
-    findings.append(finding("pass" if scanner_uuid else "fail", "gvmd.scanner.openvas-default", "OpenVAS Default scanner is registered." if scanner_uuid else "OpenVAS Default scanner registration could not be confirmed.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(scanners_after.stdout, 80)}))
-    if scanner_uuid:
-        verify = run_gvmd_oneoff(repo_root, [f"--verify-scanner={scanner_uuid}"], no_deps=False, app_image_ids=app_image_ids)
-        findings.append(finding("pass" if verify.returncode == 0 else "warn", "gvmd.verify-scanner", f"Verify OpenVAS Default scanner exit code {verify.returncode}.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(verify.stdout, 100)}))
-    return make_result("runtime-scanner-register", repo_root, "Runtime scanner registration completed.", findings, [str(runtime_dir(repo_root))])
-
-
-def command_runtime_scanner_register(repo_root: Path) -> dict[str, Any]:
-    try:
-        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-scanner-register"):
-            return _command_runtime_scanner_register_unlocked(repo_root)
-    except RuntimeLockTimeout as error:
-        return make_result(
-            "runtime-scanner-register",
-            repo_root,
-            "Scanner registration stopped while waiting for the feed lifecycle lock.",
-            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
-            [str(runtime_dir(repo_root))],
-        )
 
 
 def command_runtime_scanner_capability_check(repo_root: Path) -> dict[str, Any]:
@@ -20661,7 +20596,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("build-ui", parents=[common], help="build the web UI")
     subparsers.add_parser("build-python", parents=[common], help="build/import-check Python components")
     subparsers.add_parser("build-baseline", parents=[common], help="build the inherited stack baseline")
-    subparsers.add_parser("runtime-scanner-register", parents=[common], help="create or verify the OpenVAS scanner registration")
     subparsers.add_parser("runtime-app-build", parents=[common], help="build application images explicitly without starting or changing feed state")
     subparsers.add_parser("runtime-app-smoke", parents=[common], help="run experimental application service smoke checks")
     native_api_smoke = subparsers.add_parser("runtime-native-api-smoke", parents=[common], help="verify the internal YAFVS native API sidecar")
@@ -20714,8 +20648,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_build_python_chain(repo_root)
     elif args.command == "build-baseline":
         result = command_build_baseline(repo_root)
-    elif args.command == "runtime-scanner-register":
-        result = command_runtime_scanner_register(repo_root)
     elif args.command == "runtime-app-build":
         result = command_runtime_app_build(repo_root)
     elif args.command == "runtime-app-smoke":

@@ -912,13 +912,41 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn('-- runtime-app-up "$@"', recipe)
         self.assertNotIn("tools/yafvsctl ", recipe)
 
+    def test_runtime_scanner_register_is_owned_directly_by_rust(self):
+        root = Path(__file__).resolve().parents[2]
+        python_source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        rust_source = (
+            root
+            / "tools"
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "runtime_scanner_register.rs"
+        ).read_text(encoding="utf-8")
+        justfile = (root / "justfile").read_text(encoding="utf-8")
+        recipe = justfile.split("runtime-scanner-register *args:\n", 1)[1].split(
+            "\n\n", 1
+        )[0]
+        for surface in (
+            'add_parser("runtime-scanner-register"',
+            'args.command == "runtime-scanner-register"',
+            "def command_runtime_scanner_register",
+            "def _command_runtime_scanner_register_unlocked",
+        ):
+            self.assertNotIn(surface, python_source)
+        self.assertIn("command_runtime_scanner_register", rust_source)
+        self.assertIn("RuntimeOperationLock::acquire", rust_source)
+        self.assertIn("FEED_ACTIVATION_LOCK", rust_source)
+        self.assertIn("cargo run --quiet --locked", recipe)
+        self.assertIn('-- runtime-scanner-register "$@"', recipe)
+        self.assertNotIn("tools/yafvsctl ", recipe)
+
     def test_feed_lifecycle_lock_serializes_stage_and_runtime_mutations(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(
             encoding="utf-8"
         )
         for function_name in (
             "command_build_ui",
-            "command_runtime_scanner_register",
             "command_runtime_native_api_rebuild",
             "command_runtime_native_api_direct_write_smoke",
             "command_runtime_native_api_direct_smoke",
@@ -963,6 +991,16 @@ class YAFVSCtlTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("RuntimeOperationLock::acquire", scanner_redis_source)
         self.assertIn("FEED_ACTIVATION_LOCK", scanner_redis_source)
+
+        scanner_register_source = (
+            Path(__file__).resolve().parents[1]
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "runtime_scanner_register.rs"
+        ).read_text(encoding="utf-8")
+        self.assertIn("RuntimeOperationLock::acquire", scanner_register_source)
+        self.assertIn("FEED_ACTIVATION_LOCK", scanner_register_source)
 
         runtime_manager_source = (
             Path(__file__).resolve().parents[1]
@@ -1370,7 +1408,6 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_runtime_just_wrappers_forward_args(self):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         wrappers = [
-            "runtime-scanner-register",
             "runtime-app-smoke",
             "runtime-browser-smoke",
             "runtime-browser-regression",
@@ -7646,6 +7683,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "doctor",
             "runtime-log-review",
             "runtime-app-down",
+            "runtime-scanner-register",
             "runtime-credential-smoke",
             "runtime-full-test-scan-preflight",
             "runtime-full-test-scan-start",

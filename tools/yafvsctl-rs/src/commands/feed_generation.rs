@@ -29,6 +29,13 @@ mod transition;
 
 pub(crate) use scanner_runtime::prepare_openvas_runtime_config;
 
+pub(crate) fn query_ospd_vts_version_once(
+    socket_path: &Path,
+    timeout: std::time::Duration,
+) -> Result<String, String> {
+    ospd_readiness::query_ospd_vts_version(socket_path, timeout).map_err(|error| error.to_string())
+}
+
 pub(crate) fn initialize_manager_with_images(
     repo_root: &Path,
     runner: &dyn CommandRunner,

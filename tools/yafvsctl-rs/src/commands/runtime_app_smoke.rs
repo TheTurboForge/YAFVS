@@ -7,7 +7,8 @@ use super::common::{metadata, output_tail, runtime_dir};
 use super::compose::{compose_command, runtime_app_environment, runtime_environment};
 use super::feed::command_feed_state;
 use super::feed_generation::{
-    require_current_app_deployment, run_pinned_gvmd, run_retained_native_api_smoke,
+    query_ospd_vts_version_once, require_current_app_deployment, run_pinned_gvmd,
+    run_retained_native_api_smoke,
 };
 use super::runtime_certs::{runtime_certificate_findings, runtime_certificates_complete};
 use super::runtime_feed_keyring::feed_keyring_fingerprint_finding;
@@ -74,6 +75,7 @@ trait AppSmokeContext {
     fn gvmd_socket_finding(&mut self) -> Finding;
     fn gmp_smoke(&mut self) -> NestedCheck;
     fn ospd_socket_finding(&mut self) -> Finding;
+    fn ospd_vt_version(&mut self) -> Result<String, String>;
     fn scanner_capability(&mut self) -> NestedCheck;
     fn scanner_process(&mut self) -> NestedCheck;
     fn nmap_capability(&mut self) -> NestedCheck;
@@ -230,6 +232,13 @@ impl AppSmokeContext for SystemContext<'_> {
         )
     }
 
+    fn ospd_vt_version(&mut self) -> Result<String, String> {
+        query_ospd_vts_version_once(
+            &runtime_dir(self.repo_root).join("run/ospd/ospd-openvas.sock"),
+            Duration::from_secs(5),
+        )
+    }
+
     fn scanner_capability(&mut self) -> NestedCheck {
         NestedCheck::from_result(command_runtime_scanner_capability_check_with(
             self.repo_root,
@@ -372,7 +381,7 @@ fn command_with_context(
     let ospd_ready = ospd_socket.status == "pass";
     findings.push(ospd_socket);
     if running.get("ospd-openvas").copied().unwrap_or(false) {
-        append_ospd_findings(context, &password, &mut findings);
+        append_ospd_findings(context, &password, ospd_ready, &mut findings);
     }
     if running.get("notus-scanner").copied().unwrap_or(false) {
         append_notus_findings(context, &password, &mut findings);
@@ -417,6 +426,7 @@ fn command_with_context(
 fn append_ospd_findings(
     context: &mut dyn AppSmokeContext,
     password: &str,
+    ospd_ready: bool,
     findings: &mut Vec<Finding>,
 ) {
     findings.push(summarized(
@@ -473,7 +483,16 @@ fn append_ospd_findings(
         )
         .with_details(json!({"error_tail": tail_values(&feed_errors, 20)})),
     );
-    let (vt_status, vt_lines) = ospd_vt_load_status(&logs);
+    let live_version = ospd_ready
+        .then(|| context.ospd_vt_version())
+        .and_then(Result::ok);
+    let (vt_status, vt_lines, vt_version) = match live_version {
+        Some(version) => (VtStatus::Pass, Vec::new(), Some(version)),
+        _ => {
+            let (status, lines) = ospd_vt_load_status(&logs);
+            (status, lines, None)
+        }
+    };
     findings.push(
         Finding::new(
             match vt_status {
@@ -491,6 +510,7 @@ fn append_ospd_findings(
         )
         .with_details(json!({
             "status": vt_status.as_str(),
+            "version": vt_version,
             "log_lines": tail_values(&vt_lines, 20),
         })),
     );
@@ -742,6 +762,7 @@ mod tests {
         running: BTreeMap<&'static str, bool>,
         gvmd_socket_status: &'static str,
         ospd_socket_status: &'static str,
+        ospd_vt_version: Result<String, String>,
         ospd_logs: Vec<String>,
         notus_logs: Vec<String>,
         notus_file_logs: Vec<String>,
@@ -760,6 +781,7 @@ mod tests {
                 running: BTreeMap::new(),
                 gvmd_socket_status: "warn",
                 ospd_socket_status: "warn",
+                ospd_vt_version: Err("unavailable".into()),
                 ospd_logs: Vec::new(),
                 notus_logs: Vec::new(),
                 notus_file_logs: Vec::new(),
@@ -861,6 +883,11 @@ mod tests {
                 "ospd.socket",
                 "socket state".into(),
             )
+        }
+
+        fn ospd_vt_version(&mut self) -> Result<String, String> {
+            self.calls.push("ospd-vt-version".into());
+            self.ospd_vt_version.clone()
         }
 
         fn scanner_capability(&mut self) -> NestedCheck {
@@ -1008,6 +1035,7 @@ mod tests {
                 .collect(),
             gvmd_socket_status: "pass",
             ospd_socket_status: "pass",
+            ospd_vt_version: Ok("202607200000".into()),
             ospd_logs: vec!["Loading VTs".into(), "Finished loading VTs".into()],
             scanner_listings: VecDeque::from([process(true, scanner), process(true, scanner)]),
             gsad_urls: vec!["https://127.0.0.1:19392".into()],
@@ -1054,6 +1082,13 @@ mod tests {
             registration.details.as_ref().unwrap()["scanner_uuid"],
             "9f0f8fd7-7d07-4f71-98fd-78a4f6412d88"
         );
+        let vt = result
+            .findings
+            .iter()
+            .find(|finding| finding.check == "ospd.vt-load")
+            .unwrap();
+        assert_eq!(vt.status, "pass");
+        assert_eq!(vt.details.as_ref().unwrap()["version"], "202607200000");
     }
 
     #[test]

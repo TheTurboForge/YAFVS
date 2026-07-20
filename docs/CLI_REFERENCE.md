@@ -102,6 +102,7 @@ runtime-manager-init
 runtime-scanner-redis-init
 runtime-scanner-register
 runtime-app-build
+runtime-native-api-rebuild
 down
 runtime-app-down
 runtime-app-up

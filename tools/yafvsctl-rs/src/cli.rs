@@ -456,6 +456,8 @@ pub enum CliCommand {
     RuntimeScannerRegister,
     /// Build and attest application images without starting the deployment.
     RuntimeAppBuild,
+    /// Rebuild and restart only the receipt-pinned native API sidecar.
+    RuntimeNativeApiRebuild,
     /// Stop and remove the development runtime infrastructure and application containers.
     Down,
     /// Stop and remove experimental application runtime containers.
@@ -699,6 +701,7 @@ impl CliCommand {
             Self::RuntimeScannerRedisInit => "runtime-scanner-redis-init",
             Self::RuntimeScannerRegister => "runtime-scanner-register",
             Self::RuntimeAppBuild => "runtime-app-build",
+            Self::RuntimeNativeApiRebuild => "runtime-native-api-rebuild",
             Self::Down => "down",
             Self::RuntimeAppDown => "runtime-app-down",
             Self::RuntimeAppUp => "runtime-app-up",

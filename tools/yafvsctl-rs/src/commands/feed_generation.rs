@@ -17,6 +17,7 @@ mod feed_mappings;
 mod journal;
 mod manager_import;
 mod manager_init;
+mod native_api_rebuild;
 mod ospd_readiness;
 mod payload;
 mod provenance;
@@ -61,6 +62,7 @@ pub(crate) fn run_pinned_gvmd(
 
 pub use app_build::command_runtime_app_build;
 pub use app_up::command_runtime_app_up;
+pub use native_api_rebuild::command_runtime_native_api_rebuild;
 
 use super::common::{compact_finding, metadata, runtime_dir};
 use super::runtime_lock::{

@@ -367,7 +367,7 @@ fn command_unlocked(
     result(repo_root, runner, summary, findings)
 }
 
-fn run_compose(
+pub(super) fn run_compose(
     repo_root: &Path,
     runner: &dyn CommandRunner,
     environment: &BTreeMap<OsString, OsString>,
@@ -526,7 +526,7 @@ fn valid_image_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn write_app_deployment_receipt(
+pub(super) fn write_app_deployment_receipt(
     repo_root: &Path,
     image_ids: &BTreeMap<String, String>,
     runtime_artifacts: &Value,

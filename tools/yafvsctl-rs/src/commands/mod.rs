@@ -85,6 +85,7 @@ pub use feed_generation::{
     command_feed_generation_activate, command_feed_generation_rollback,
     command_feed_generation_runtime_guard, command_feed_generation_stage,
     command_feed_generation_state, command_runtime_app_build, command_runtime_app_up,
+    command_runtime_native_api_rebuild,
 };
 pub use gvmd_smoke::command_gvmd_smoke;
 pub use license::command_license_report;

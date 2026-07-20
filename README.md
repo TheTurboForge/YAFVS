@@ -119,9 +119,11 @@ confirmation before start.
 ## Engineering Direction
 
 New security-sensitive backend and product infrastructure is Rust-first.
-Python remains appropriate for build, Docker, browser, and subprocess
-orchestration, while retained inherited C is hardened and tested until a
-validated replacement is justified. The native API is being built as typed
+Python remains appropriate for browser automation and specialized orchestration
+where its libraries and glue abstractions are genuinely simpler, while retained
+inherited C is hardened and tested until a validated replacement is justified.
+Build and runtime command ownership is migrating to Rust rather than expanding
+the compatibility entrypoint by inertia. The native API is being built as typed
 product contracts over PostgreSQL, not as a thin REST wrapper around GMP/XML.
 The [product-direction roadmap](docs/ROADMAP.md) connects that engineering
 direction to the vulnerability-management outcomes YAFVS is intended to

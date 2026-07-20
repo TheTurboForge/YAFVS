@@ -5,6 +5,7 @@ mod artifact;
 mod audit;
 mod branding;
 mod build;
+mod build_hardening;
 mod c_hardening;
 mod common;
 mod compose;

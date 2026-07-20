@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-//! Ordinary component configure and build orchestration.
+//! Component configure and build orchestration.
 
-use super::common::{build_env, metadata, output_tail};
+use super::build_hardening;
+use super::c_hardening::command_c_hardening_manifest_write;
+use super::common::{build_env, ensure_real_directory_tree, metadata, output_tail};
 use super::compose::{compose_command, runtime_environment};
 use super::deps::{
     BASELINE_CHAIN, BuildMeta, C_SERVICES_CHAIN, CORE_C_CHAIN, PYTHON_CHAIN, build_meta,
@@ -61,10 +63,8 @@ pub fn command_build_core_c(repo_root: &Path, profile: Option<&str>) -> ResultEn
 }
 
 pub fn command_build_c_services(repo_root: &Path, profile: Option<&str>) -> ResultEnvelope {
-    command_build_chain(
+    command_build_c_services_with_runner(
         repo_root,
-        "build-c-services",
-        C_SERVICES_CHAIN,
         profile,
         &SystemCommandRunner,
         DEFAULT_RUNTIME_LOCK_TIMEOUT,
@@ -107,13 +107,23 @@ fn command_configure_with_runner(
     profile: Option<&str>,
     runner: &dyn CommandRunner,
 ) -> ResultEnvelope {
-    if let Some(profile) = profile {
+    if let Some(profile) = profile.filter(|profile| *profile != build_hardening::PROFILE) {
         return profile_failure(repo_root, "configure", profile, runner);
     }
     let Some(meta) = build_meta(component) else {
         return unknown_component(repo_root, "configure", component, runner);
     };
     if meta.build_system != "cmake" {
+        if let Some(profile) = profile {
+            return non_cmake_profile_failure(
+                repo_root,
+                "configure",
+                component,
+                meta.build_system,
+                profile,
+                runner,
+            );
+        }
         return make_result(
             metadata(repo_root, "configure", runner),
             format!("{component} is not a CMake component."),
@@ -124,10 +134,36 @@ fn command_configure_with_runner(
             )],
         );
     }
-    if let Some(result) = live_app_build_guard(repo_root, "configure", runner) {
+    if profile.is_none()
+        && let Some(result) = live_app_build_guard(repo_root, "configure", runner)
+    {
         return result;
     }
-    let (build, output) = match cmake_configure(repo_root, meta, runner) {
+    let _lock = if profile == Some(build_hardening::PROFILE) {
+        match RuntimeOperationLock::acquire(
+            repo_root,
+            FEED_ACTIVATION_LOCK,
+            &format!("configure {component}"),
+            DEFAULT_RUNTIME_LOCK_TIMEOUT,
+        ) {
+            Ok(lock) => Some(lock),
+            Err(error) => {
+                return lock_failure(
+                    repo_root,
+                    "configure",
+                    format!(
+                        "Configure {component} stopped while waiting for the feed lifecycle lock."
+                    ),
+                    "feed-generation.activation-lock",
+                    error,
+                    runner,
+                );
+            }
+        }
+    } else {
+        None
+    };
+    let (build, output) = match cmake_configure(repo_root, meta, profile, runner) {
         Ok(result) => result,
         Err(error) => {
             return make_result(
@@ -174,7 +210,7 @@ fn command_build_with_runner(
     runner: &dyn CommandRunner,
     timeout: Duration,
 ) -> ResultEnvelope {
-    if let Some(profile) = profile {
+    if let Some(profile) = profile.filter(|profile| *profile != build_hardening::PROFILE) {
         return profile_failure(repo_root, "build", profile, runner);
     }
     let operation = format!("build {component}");
@@ -197,6 +233,7 @@ fn command_build_with_runner(
         component,
         install,
         configure_first,
+        profile,
         runner,
         timeout,
     )
@@ -207,19 +244,33 @@ fn command_build_unlocked(
     component: &str,
     install: bool,
     configure_first: bool,
+    profile: Option<&str>,
     runner: &dyn CommandRunner,
     timeout: Duration,
 ) -> ResultEnvelope {
     let Some(meta) = build_meta(component) else {
         return unknown_component(repo_root, "build", component, runner);
     };
-    if meta.name != "gsa"
+    if let Some(profile) = profile
+        && meta.build_system != "cmake"
+    {
+        return non_cmake_profile_failure(
+            repo_root,
+            "build",
+            component,
+            meta.build_system,
+            profile,
+            runner,
+        );
+    }
+    if profile.is_none()
+        && meta.name != "gsa"
         && let Some(result) = live_app_build_guard(repo_root, "build", runner)
     {
         return result;
     }
     match meta.build_system {
-        "cmake" => build_cmake(repo_root, meta, install, configure_first, runner),
+        "cmake" => build_cmake(repo_root, meta, install, configure_first, profile, runner),
         "node-npm" => build_node(repo_root, meta, runner, timeout),
         "python-uv" | "python-poetry-core" => build_python_component(repo_root, meta, runner),
         other => make_result(
@@ -239,12 +290,13 @@ fn build_cmake(
     meta: &BuildMeta,
     install: bool,
     configure_first: bool,
+    profile: Option<&str>,
     runner: &dyn CommandRunner,
 ) -> ResultEnvelope {
-    let (_, build, prefix) = cmake_paths(repo_root, meta.name);
+    let (_, build, prefix) = cmake_paths(repo_root, meta.name, profile);
     let mut findings = Vec::new();
     if configure_first {
-        let output = match cmake_configure(repo_root, meta, runner) {
+        let output = match cmake_configure(repo_root, meta, profile, runner) {
             Ok((_, output)) => output,
             Err(error) => {
                 return make_result(
@@ -276,7 +328,7 @@ fn build_cmake(
             .with_artifacts(vec![relative(repo_root, &build)]);
         }
     }
-    let environment = build_env(repo_root);
+    let environment = build_environment(repo_root, profile);
     let output = run(
         runner,
         "cmake",
@@ -579,7 +631,7 @@ fn command_build_chain(
     runner: &dyn CommandRunner,
     timeout: Duration,
 ) -> ResultEnvelope {
-    if let Some(profile) = profile {
+    if let Some(profile) = profile.filter(|profile| *profile != build_hardening::PROFILE) {
         return profile_failure(repo_root, command, profile, runner);
     }
     let _lock =
@@ -596,13 +648,14 @@ fn command_build_chain(
                 );
             }
         };
-    build_chain_unlocked(repo_root, command, chain, runner, timeout)
+    build_chain_unlocked(repo_root, command, chain, profile, runner, timeout)
 }
 
 fn build_chain_unlocked(
     repo_root: &Path,
     command: &str,
     chain: &[&str],
+    profile: Option<&str>,
     runner: &dyn CommandRunner,
     timeout: Duration,
 ) -> ResultEnvelope {
@@ -622,6 +675,7 @@ fn build_chain_unlocked(
             component,
             meta.install_for_dependents,
             true,
+            profile,
             runner,
             timeout,
         );
@@ -669,7 +723,7 @@ fn command_build_ui_with_runner(
                 );
             }
         };
-    let mut result = command_build_unlocked(repo_root, "gsa", false, true, runner, timeout);
+    let mut result = command_build_unlocked(repo_root, "gsa", false, true, None, runner, timeout);
     if result.status == "pass" {
         result.findings.push(Finding::new(
             "pass",
@@ -685,23 +739,40 @@ fn command_build_ui_with_runner(
     .with_artifacts(result.artifacts)
 }
 
-fn cmake_paths(repo_root: &Path, component: &str) -> (PathBuf, PathBuf, PathBuf) {
+fn cmake_paths(
+    repo_root: &Path,
+    component: &str,
+    profile: Option<&str>,
+) -> (PathBuf, PathBuf, PathBuf) {
+    let build_root = profile.map_or_else(
+        || repo_root.join("build"),
+        |profile| repo_root.join("build").join(profile),
+    );
     (
         repo_root.join("components").join(component),
-        repo_root.join("build").join(component),
-        repo_root.join("build/prefix"),
+        build_root.join(component),
+        build_root.join("prefix"),
     )
 }
 
-fn cmake_arguments(repo_root: &Path, meta: &BuildMeta) -> Vec<String> {
-    let (source, build, prefix) = cmake_paths(repo_root, meta.name);
+fn cmake_arguments(
+    repo_root: &Path,
+    meta: &BuildMeta,
+    profile: Option<&str>,
+    profile_args: &[String],
+) -> Vec<String> {
+    let (source, build, prefix) = cmake_paths(repo_root, meta.name, profile);
     let run_dir = repo_root.join("build/run/gvm");
     let gvmd_run_dir = repo_root.join("build/run/gvmd");
     let gsad_run_dir = repo_root.join("build/run/gsad");
     let state_dir = repo_root.join("build/var");
     let log_dir = repo_root.join("build/logs");
     let sysconf_dir = prefix.join("etc");
-    let mut arguments = vec![
+    let mut arguments = Vec::new();
+    if profile == Some(build_hardening::PROFILE) {
+        arguments.push("--fresh".into());
+    }
+    arguments.extend(vec![
         "-S".into(),
         source.display().to_string(),
         "-B".into(),
@@ -721,8 +792,9 @@ fn cmake_arguments(repo_root: &Path, meta: &BuildMeta) -> Vec<String> {
             state_dir.join("lib/gvm/gvmd").display()
         ),
         format!("-DGVM_LOG_DIR={}", log_dir.display()),
-    ];
+    ]);
     arguments.extend(meta.cmake_args.iter().map(|argument| (*argument).into()));
+    arguments.extend_from_slice(profile_args);
     if meta.name == "pg-gvm" {
         arguments.push(format!("-DCMAKE_INSTALL_DEV_PREFIX={}", prefix.display()));
     }
@@ -732,22 +804,167 @@ fn cmake_arguments(repo_root: &Path, meta: &BuildMeta) -> Vec<String> {
 fn cmake_configure(
     repo_root: &Path,
     meta: &BuildMeta,
+    profile: Option<&str>,
     runner: &dyn CommandRunner,
 ) -> Result<(PathBuf, ProcessOutput), String> {
-    let (_, build, prefix) = cmake_paths(repo_root, meta.name);
-    fs::create_dir_all(&build)
-        .map_err(|error| format!("Could not create {}: {error}", build.display()))?;
-    fs::create_dir_all(&prefix)
-        .map_err(|error| format!("Could not create {}: {error}", prefix.display()))?;
-    let environment = build_env(repo_root);
+    if profile == Some(build_hardening::PROFILE) {
+        build_hardening::validate_profile_parent(repo_root)?;
+        let (_, build, prefix) = cmake_paths(repo_root, meta.name, profile);
+        build_hardening::validate_existing_profile_directory(repo_root, &build)?;
+        build_hardening::validate_existing_profile_directory(repo_root, &prefix)?;
+        if let Err(error) = build_hardening::cmake_fresh_support(repo_root, runner) {
+            return Ok((
+                cmake_paths(repo_root, meta.name, profile).1,
+                synthetic_failure(2, error),
+            ));
+        }
+    }
+    let (_, build, prefix) = cmake_paths(repo_root, meta.name, profile);
+    if profile == Some(build_hardening::PROFILE) {
+        let build_relative = build
+            .strip_prefix(repo_root)
+            .map_err(|_| "hardened build path escaped the repository".to_string())?;
+        let prefix_relative = prefix
+            .strip_prefix(repo_root)
+            .map_err(|_| "hardened prefix path escaped the repository".to_string())?;
+        ensure_real_directory_tree(repo_root, build_relative)
+            .map_err(|error| format!("Could not create {} safely: {error}", build.display()))?;
+        ensure_real_directory_tree(repo_root, prefix_relative)
+            .map_err(|error| format!("Could not create {} safely: {error}", prefix.display()))?;
+    } else {
+        fs::create_dir_all(&build)
+            .map_err(|error| format!("Could not create {}: {error}", build.display()))?;
+        fs::create_dir_all(&prefix)
+            .map_err(|error| format!("Could not create {}: {error}", prefix.display()))?;
+    }
+    let profile_configuration = if profile == Some(build_hardening::PROFILE) {
+        let configuration = build_hardening::profile_configuration(repo_root, runner)?;
+        if !configuration.failed_required.is_empty() {
+            return Ok((
+                build,
+                synthetic_failure(
+                    2,
+                    format!(
+                        "Required hardened profile feature probe(s) failed: {}",
+                        configuration.failed_required.join(", ")
+                    ),
+                ),
+            ));
+        }
+        configuration.cmake_args
+    } else {
+        Vec::new()
+    };
+    let environment = build_environment(repo_root, profile);
     let output = run(
         runner,
         "cmake",
-        cmake_arguments(repo_root, meta),
+        cmake_arguments(repo_root, meta, profile, &profile_configuration),
         repo_root,
         &environment,
     );
     Ok((build, output))
+}
+
+fn command_build_c_services_with_runner(
+    repo_root: &Path,
+    profile: Option<&str>,
+    runner: &dyn CommandRunner,
+    timeout: Duration,
+) -> ResultEnvelope {
+    if profile != Some(build_hardening::PROFILE) {
+        return command_build_chain(
+            repo_root,
+            "build-c-services",
+            C_SERVICES_CHAIN,
+            profile,
+            runner,
+            timeout,
+        );
+    }
+    let _lock = match RuntimeOperationLock::acquire(
+        repo_root,
+        FEED_ACTIVATION_LOCK,
+        "build-c-services",
+        timeout,
+    ) {
+        Ok(lock) => lock,
+        Err(error) => {
+            return lock_failure(
+                repo_root,
+                "build-c-services",
+                "build-c-services stopped while waiting for the feed lifecycle lock.".into(),
+                "feed-generation.activation-lock",
+                error,
+                runner,
+            );
+        }
+    };
+    let cleanup = build_hardening::preflight_cleanup(repo_root);
+    if cleanup.status == "fail" {
+        return make_result(
+            metadata(repo_root, "build-c-services", runner),
+            "Hardened build stopped during generated-tree cleanup.".into(),
+            vec![cleanup],
+        );
+    }
+    if let Err(error) = build_hardening::invalidate_manifest(repo_root) {
+        return make_result(
+            metadata(repo_root, "build-c-services", runner),
+            "Hardened build stopped while invalidating prior evidence.".into(),
+            vec![
+                Finding::new(
+                    "fail",
+                    "build-c-services.hardening-manifest",
+                    format!("Prior hardened manifest could not be removed: {error}."),
+                )
+                .with_path(build_hardening::BUILD_MANIFEST),
+            ],
+        );
+    }
+    let mut result = build_chain_unlocked(
+        repo_root,
+        "build-c-services",
+        C_SERVICES_CHAIN,
+        profile,
+        runner,
+        timeout,
+    );
+    result.findings.insert(0, cleanup);
+    if result.status == "pass" {
+        let mut manifest = command_c_hardening_manifest_write(repo_root);
+        result.artifacts.extend(manifest.artifacts);
+        result.findings.append(&mut manifest.findings);
+    }
+    let artifacts = result
+        .artifacts
+        .into_iter()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    make_result(
+        metadata(repo_root, "build-c-services", runner),
+        result.summary,
+        result.findings,
+    )
+    .with_artifacts(artifacts)
+}
+
+fn build_environment(repo_root: &Path, profile: Option<&str>) -> BTreeMap<OsString, OsString> {
+    if profile == Some(build_hardening::PROFILE) {
+        build_hardening::hardened_environment(repo_root)
+    } else {
+        build_env(repo_root)
+    }
+}
+
+fn synthetic_failure(exit_code: i32, message: String) -> ProcessOutput {
+    ProcessOutput {
+        success: false,
+        exit_code: Some(exit_code),
+        stdout: message,
+        stderr: String::new(),
+    }
 }
 
 fn live_app_build_guard(
@@ -796,11 +1013,30 @@ fn profile_failure(
 ) -> ResultEnvelope {
     make_result(
         metadata(repo_root, command, runner),
-        format!("Build profile {profile} is not yet owned by the ordinary Rust build layer."),
+        format!("Unknown build profile {profile}."),
         vec![Finding::new(
             "fail",
             "build.profile-unsupported",
-            format!("Profile {profile} requires the separately reviewed hardened build layer."),
+            format!("Build profile {profile} is not supported."),
+        )],
+    )
+}
+
+fn non_cmake_profile_failure(
+    repo_root: &Path,
+    command: &str,
+    component: &str,
+    build_system: &str,
+    profile: &str,
+    runner: &dyn CommandRunner,
+) -> ResultEnvelope {
+    make_result(
+        metadata(repo_root, command, runner),
+        format!("{command} profile {profile} only supports CMake components."),
+        vec![Finding::new(
+            "fail",
+            "build.profile-unsupported",
+            format!("{component} uses {build_system}, not cmake."),
         )],
     )
 }
@@ -938,6 +1174,32 @@ mod tests {
         }
     }
 
+    struct AlwaysSuccessfulBuildRunner;
+
+    impl CommandRunner for AlwaysSuccessfulBuildRunner {
+        fn run(&self, program: &str, args: &[&str]) -> Option<ProcessOutput> {
+            self.run_with(program, args, None, None, None)
+        }
+
+        fn run_with(
+            &self,
+            _program: &str,
+            args: &[&str],
+            _cwd: Option<&Path>,
+            _env: Option<&BTreeMap<OsString, OsString>>,
+            _timeout: Option<Duration>,
+        ) -> Option<ProcessOutput> {
+            Some(output(
+                true,
+                if args == ["--help"] {
+                    "CMake help includes --fresh\n"
+                } else {
+                    "deadbeef\n"
+                },
+            ))
+        }
+    }
+
     fn output(success: bool, stdout: &str) -> ProcessOutput {
         ProcessOutput {
             success,
@@ -950,7 +1212,7 @@ mod tests {
     #[test]
     fn ordinary_cmake_arguments_preserve_component_contracts() {
         let root = Path::new("/repo");
-        let gvmd = cmake_arguments(root, build_meta("gvmd").unwrap());
+        let gvmd = cmake_arguments(root, build_meta("gvmd").unwrap(), None, &[]);
         assert_eq!(
             &gvmd[..6],
             [
@@ -966,7 +1228,7 @@ mod tests {
         assert!(gvmd.contains(&"-DWITH_LIBTHEIA=0".into()));
         assert!(!gvmd.iter().any(|argument| argument == "--fresh"));
 
-        let pg_gvm = cmake_arguments(root, build_meta("pg-gvm").unwrap());
+        let pg_gvm = cmake_arguments(root, build_meta("pg-gvm").unwrap(), None, &[]);
         assert_eq!(
             pg_gvm.last().map(String::as_str),
             Some("-DCMAKE_INSTALL_DEV_PREFIX=/repo/build/prefix")
@@ -974,10 +1236,168 @@ mod tests {
     }
 
     #[test]
-    fn profile_rejection_does_not_run_build_or_compose_processes() {
+    fn hardened_cmake_arguments_are_fresh_and_follow_component_flags() {
+        let root = Path::new("/repo");
+        let profile_args = vec![
+            "-DCMAKE_BUILD_TYPE=Release".into(),
+            "-DCMAKE_PROJECT_INCLUDE=/repo/build/hardened/yafvs-hardening.cmake".into(),
+        ];
+        let scanner = cmake_arguments(
+            root,
+            build_meta("openvas-scanner").unwrap(),
+            Some(build_hardening::PROFILE),
+            &profile_args,
+        );
+        assert_eq!(scanner[0], "--fresh");
+        let component_flags = scanner
+            .iter()
+            .position(|argument| argument.starts_with("-DCMAKE_C_FLAGS="))
+            .unwrap();
+        let profile_flags = scanner
+            .iter()
+            .position(|argument| argument == "-DCMAKE_BUILD_TYPE=Release")
+            .unwrap();
+        assert!(component_flags < profile_flags);
+
+        let pg_gvm = cmake_arguments(
+            root,
+            build_meta("pg-gvm").unwrap(),
+            Some(build_hardening::PROFILE),
+            &profile_args,
+        );
+        assert_eq!(
+            pg_gvm.last().map(String::as_str),
+            Some("-DCMAKE_INSTALL_DEV_PREFIX=/repo/build/hardened/prefix")
+        );
+    }
+
+    #[test]
+    fn hardened_configure_fails_before_creating_paths_without_fresh_support() {
+        let parent =
+            std::env::temp_dir().join(format!("yafvsctl-build-fresh-{}", std::process::id()));
+        let root = parent.join("repo");
+        fs::create_dir_all(&root).unwrap();
+        let runner = MockRunner::new(vec![
+            output(true, "CMake help without the required option"),
+            output(true, "deadbeef\n"),
+        ]);
+        let result = command_configure_with_runner(
+            &root,
+            "gvm-libs",
+            Some(build_hardening::PROFILE),
+            &runner,
+        );
+        assert_eq!(result.status, "fail");
+        assert!(
+            result.findings[0].details.as_ref().unwrap()["output_tail"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|line| line
+                    .as_str()
+                    .is_some_and(|line| line.contains("cmake >= 3.24")))
+        );
+        assert!(!root.join("build").exists());
+        fs::remove_dir_all(parent).unwrap();
+    }
+
+    #[test]
+    fn hardened_manifest_failure_downgrades_a_passing_mock_build_chain() {
+        let parent =
+            std::env::temp_dir().join(format!("yafvsctl-build-manifest-{}", std::process::id()));
+        let root = parent.join("repo");
+        fs::create_dir_all(&root).unwrap();
+        let result = command_build_c_services_with_runner(
+            &root,
+            Some(build_hardening::PROFILE),
+            &AlwaysSuccessfulBuildRunner,
+            Duration::ZERO,
+        );
+        assert_eq!(result.status, "fail");
+        assert!(result.findings.iter().any(|finding| {
+            finding.check == "build-c-services.hardening-manifest" && finding.status == "fail"
+        }));
+        fs::remove_dir_all(parent).unwrap();
+    }
+
+    #[test]
+    fn direct_hardened_configure_refuses_a_linked_component_tree() {
+        let parent =
+            std::env::temp_dir().join(format!("yafvsctl-build-linked-{}", std::process::id()));
+        let root = parent.join("repo");
+        let outside = parent.join("outside");
+        fs::create_dir_all(root.join("build/hardened")).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(outside.join("sentinel"), "keep").unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("build/hardened/gvm-libs")).unwrap();
+        let runner = MockRunner::new(vec![output(true, "deadbeef\n")]);
+        let result = command_configure_with_runner(
+            &root,
+            "gvm-libs",
+            Some(build_hardening::PROFILE),
+            &runner,
+        );
+        assert_eq!(result.status, "fail");
+        assert_eq!(result.findings[0].check, "cmake.configure");
+        assert_eq!(
+            fs::read_to_string(outside.join("sentinel")).unwrap(),
+            "keep"
+        );
+        assert!(
+            runner
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|(program, _)| program == "git")
+        );
+        fs::remove_file(root.join("build/hardened/gvm-libs")).unwrap();
+        fs::remove_dir_all(parent).unwrap();
+    }
+
+    #[test]
+    fn hardened_service_cleanup_refuses_symlink_before_any_build_process() {
+        let parent =
+            std::env::temp_dir().join(format!("yafvsctl-build-cleanup-{}", std::process::id()));
+        let root = parent.join("repo");
+        let outside = parent.join("outside");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&outside).unwrap();
+        fs::write(outside.join("sentinel"), "keep").unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("build")).unwrap();
+        let runner = MockRunner::new(vec![output(true, "deadbeef\n")]);
+        let result = command_build_c_services_with_runner(
+            &root,
+            Some(build_hardening::PROFILE),
+            &runner,
+            Duration::ZERO,
+        );
+        assert_eq!(result.status, "fail");
+        assert_eq!(
+            result.findings[0].check,
+            "build-c-services.hardened-preflight"
+        );
+        assert_eq!(
+            fs::read_to_string(outside.join("sentinel")).unwrap(),
+            "keep"
+        );
+        assert!(
+            runner
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|(program, _)| program == "git")
+        );
+        fs::remove_file(root.join("build")).unwrap();
+        fs::remove_dir_all(parent).unwrap();
+    }
+
+    #[test]
+    fn unknown_profile_rejection_does_not_run_build_or_compose_processes() {
         let runner = MockRunner::new(vec![output(true, "")]);
         let result =
-            command_configure_with_runner(Path::new("/repo"), "gvmd", Some("hardened"), &runner);
+            command_configure_with_runner(Path::new("/repo"), "gvmd", Some("unknown"), &runner);
         assert_eq!(result.status, "fail");
         assert_eq!(result.findings[0].check, "build.profile-unsupported");
         assert!(

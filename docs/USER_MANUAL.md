@@ -166,17 +166,23 @@ contract. These identities are stored in the private durable journal. Import
 and restart remain pinned to them and fail closed if an image object is
 unavailable, a runtime artifact changes, or the Compose command, environment,
 mount, user, capability, or related execution configuration drifts. Deployment
-preparation is explicit through `runtime-app-build`; `runtime-app-up` deploys
-that receipt on an already initialized installation. `build-ui` builds but no
-longer stages or restarts the running UI implicitly.
+preparation is explicit through `runtime-app-build`: after proving the
+application services are stopped and the GSA production assets are current,
+it incrementally rebuilds the C application services before preparing images
+and recording their artifact identity. `runtime-app-up` deploys that receipt
+on an already initialized installation. `build-ui` builds but no longer stages
+or restarts the running UI implicitly.
 
 The development services consume runtime artifacts through read-only bind
 mounts. Read-only prevents container writes, not host-side replacement, so
 runtime-affecting component builds and `runtime-app-build` fail closed while
-application services are running. Use `runtime-app-down`, perform the build,
-then deploy the prepared receipt with `runtime-app-up`. This creates deliberate
-development downtime instead of allowing a running deployment to observe a
-partially replaced artifact tree.
+application services are running. Use `runtime-app-down`, run `build-ui` when
+the UI changed, prepare the deployment with `runtime-app-build`, then deploy
+the receipt with `runtime-app-up`. The preparation step includes the
+incremental C-service build so a new image receipt cannot silently preserve a
+stale bind-mounted C library. This creates deliberate development downtime
+instead of allowing a running deployment to observe a partially replaced
+artifact tree.
 
 The generation boundary verifies Greenbone signatures and exact signed
 checksum coverage for NASL, Notus advisories/products, and CERT data. The

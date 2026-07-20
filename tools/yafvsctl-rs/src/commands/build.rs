@@ -33,6 +33,24 @@ pub fn command_configure(
     command_configure_with_runner(repo_root, component, profile, &SystemCommandRunner)
 }
 
+/// Builds the normal C service chain while reusing an already-held lifecycle lock.
+///
+/// The caller must hold `FEED_ACTIVATION_LOCK` and must already have proved that
+/// no running application service consumes the mutable build prefix.
+pub(crate) fn build_c_services_under_existing_lock(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+) -> ResultEnvelope {
+    build_chain_unlocked(
+        repo_root,
+        "build-c-services",
+        C_SERVICES_CHAIN,
+        None,
+        runner,
+        DEFAULT_RUNTIME_LOCK_TIMEOUT,
+    )
+}
+
 pub fn command_build(
     repo_root: &Path,
     component: &str,

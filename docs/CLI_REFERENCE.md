@@ -311,8 +311,9 @@ relocated with `YAFVS_RUNTIME_DIR`.
   without activation.
 - `just feed-generation-state --status-only --json`: reverify staged and
   active generations.
-- `just runtime-app-build`: prepare application images and the deployment
-  identity without deploying.
+- `just runtime-app-build`: incrementally rebuild the C application services,
+  prepare application images, and record the deployment identity without
+  deploying.
 - `just feed-generation-activate -- <generation-id>
   [--allow-first-activation]`: perform guarded service-coordinated activation.
 - `just feed-generation-activate -- <active-generation-id>

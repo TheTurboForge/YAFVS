@@ -62,6 +62,7 @@ trait BuildContext {
         &mut self,
         environment: &BTreeMap<OsString, OsString>,
     ) -> Result<Vec<String>, String>;
+    fn build_c_services(&mut self) -> ResultEnvelope;
     fn gsa_build_freshness(&mut self) -> Finding;
     fn compose_config(
         &mut self,
@@ -109,6 +110,10 @@ impl BuildContext for SystemBuildContext<'_> {
         environment: &BTreeMap<OsString, OsString>,
     ) -> Result<Vec<String>, String> {
         running_app_services(self.repo_root, self.runner, environment)
+    }
+
+    fn build_c_services(&mut self) -> ResultEnvelope {
+        crate::commands::build::build_c_services_under_existing_lock(self.repo_root, self.runner)
     }
 
     fn gsa_build_freshness(&mut self) -> Finding {
@@ -252,6 +257,37 @@ fn command_unlocked(
         );
     }
     findings.push(gsa_freshness);
+
+    let mut c_services = context.build_c_services();
+    let c_services_ok = c_services.status == "pass";
+    findings.push(
+        Finding::new(
+            if c_services_ok { "pass" } else { "fail" },
+            "runtime.c-services-build",
+            if c_services_ok {
+                "C application services were rebuilt before deployment preparation."
+            } else {
+                "C application service rebuild failed before deployment preparation."
+            }
+            .into(),
+        )
+        .with_details(json!({
+            "summary": c_services.summary,
+            "artifacts": c_services.artifacts,
+        })),
+    );
+    if !c_services_ok {
+        for mut finding in c_services.findings.drain(..) {
+            finding.check = format!("build-c-services.{}", finding.check);
+            findings.push(finding);
+        }
+        return result(
+            repo_root,
+            runner,
+            "Application image build stopped because C application services did not rebuild cleanly.",
+            findings,
+        );
+    }
 
     let config = context.compose_config(&environment);
     let config_ok = config.as_ref().is_some_and(|output| output.success);
@@ -827,6 +863,8 @@ mod tests {
         contract: Result<Value, String>,
         wrote: bool,
         config_calls: usize,
+        c_services_calls: usize,
+        c_services_status: &'static str,
         gsa_freshness: Finding,
     }
 
@@ -846,6 +884,8 @@ mod tests {
                 contract: Ok(contract()),
                 wrote: false,
                 config_calls: 0,
+                c_services_calls: 0,
+                c_services_status: "pass",
                 gsa_freshness: Finding::new("pass", "gsa.static-freshness", "fresh".into()),
             }
         }
@@ -860,6 +900,18 @@ mod tests {
             _environment: &BTreeMap<OsString, OsString>,
         ) -> Result<Vec<String>, String> {
             self.running.clone()
+        }
+        fn build_c_services(&mut self) -> ResultEnvelope {
+            self.c_services_calls += 1;
+            make_result(
+                metadata(Path::new("/repo"), "build-c-services", &NoopRunner),
+                "C services build attempted.".into(),
+                vec![Finding::new(
+                    self.c_services_status,
+                    "build-c-services.component",
+                    "fixture".into(),
+                )],
+            )
         }
         fn gsa_build_freshness(&mut self) -> Finding {
             std::mem::replace(
@@ -930,7 +982,26 @@ mod tests {
             result.findings.last().unwrap().check,
             "gsa.static-freshness"
         );
+        assert_eq!(context.c_services_calls, 0);
         assert_eq!(context.config_calls, 0);
+    }
+
+    #[test]
+    fn failed_c_services_build_refuses_compose_work() {
+        let (_root, repo) = fixture_repo();
+        let mut context = FakeContext::successful();
+        context.c_services_status = "fail";
+        let result = command_unlocked(&repo, &NoopRunner, &mut context);
+        assert_eq!(result.status, "fail");
+        assert!(result.summary.contains("did not rebuild cleanly"));
+        assert_eq!(context.c_services_calls, 1);
+        assert_eq!(context.config_calls, 0);
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|finding| finding.check == "build-c-services.build-c-services.component")
+        );
     }
 
     fn successful_output() -> Option<ProcessOutput> {
@@ -1025,6 +1096,7 @@ mod tests {
         let result = command_unlocked(&repo, &NoopRunner, &mut context);
         assert_eq!(result.status, "fail");
         assert!(result.summary.contains("state is unknown"));
+        assert_eq!(context.c_services_calls, 0);
         assert_eq!(context.config_calls, 0);
     }
 
@@ -1035,6 +1107,7 @@ mod tests {
         let result = command_unlocked(&repo, &NoopRunner, &mut context);
         assert_eq!(result.status, "pass");
         assert!(context.wrote);
+        assert_eq!(context.c_services_calls, 1);
         assert_eq!(
             result.findings.last().unwrap().check,
             "runtime.app-deployment-receipt"

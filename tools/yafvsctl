@@ -4810,13 +4810,6 @@ def deployed_app_env(repo_root: Path) -> dict[str, str]:
     return env
 
 
-def runtime_native_api_rebuild_env(repo_root: Path) -> dict[str, str]:
-    env = deployed_app_env(repo_root)
-    if native_api_direct_requested(env):
-        ensure_native_api_direct_runtime_env_defaults(repo_root, env)
-    return env
-
-
 def compose_file(repo_root: Path) -> Path:
     return repo_root / "compose" / "dev.yaml"
 
@@ -12663,80 +12656,6 @@ def latest_completed_full_test_report_id(repo_root: Path) -> tuple[str | None, s
     return report_id, None, result
 
 
-def _command_runtime_native_api_rebuild_unlocked(repo_root: Path) -> dict[str, Any]:
-    findings = ensure_runtime_dirs(repo_root)
-    findings.extend(ensure_build_runtime_dirs(repo_root))
-    findings.append(active_feed_generation_finding(repo_root))
-    app_env = runtime_native_api_rebuild_env(repo_root)
-    config_command = compose_command(repo_root, "config", "--quiet", env=app_env)
-    config = run_command(config_command, repo_root, env=app_env)
-    findings.append(finding("pass" if config.returncode == 0 else "fail", "compose.config", f"Compose config validation exit code {config.returncode}.", str(compose_file(repo_root).relative_to(repo_root)), {"output_tail": output_tail(config.stdout, 40)}))
-    if aggregate_status(findings) == "fail":
-        return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped at prerequisites.", findings, [str(runtime_dir(repo_root))])
-    receipt, receipt_error = require_app_deployment_receipt(
-        repo_root, app_env=app_env
-    )
-    findings.append(
-        finding(
-            "pass" if receipt_error is None else "fail",
-            "runtime.app-deployment-receipt",
-            "Prepared application deployment receipt is valid before the API-only rebuild."
-            if receipt_error is None
-            else receipt_error,
-            str(app_deployment_receipt_path(repo_root)),
-        )
-    )
-    if receipt_error is not None or receipt is None:
-        return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because no verified application deployment was prepared.", findings, [str(runtime_dir(repo_root))])
-
-    build_command = compose_command(repo_root, "build", "yafvs-api", env=app_env)
-    build = run_command(build_command, repo_root, env=app_env, timeout=1200)
-    findings.append(process_step_finding("pass" if build.returncode == 0 else "fail", "compose.yafvs-api-build", f"docker compose build yafvs-api exit code {build.returncode}.", build, build_command))
-    if build.returncode != 0:
-        return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because image build failed.", findings, [str(runtime_dir(repo_root))])
-    receipt, receipt_error = refresh_app_deployment_receipt_after_image_build(
-        repo_root, receipt, ("yafvs-api",), app_env=app_env
-    )
-    findings.append(
-        finding(
-            "pass" if receipt_error is None else "fail",
-            "runtime.app-deployment-receipt-refresh",
-            "Prepared application deployment receipt now identifies the rebuilt native API image."
-            if receipt_error is None
-            else receipt_error,
-            str(app_deployment_receipt_path(repo_root)),
-        )
-    )
-    if receipt_error is not None or receipt is None:
-        return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because the deployment receipt could not be refreshed.", findings, [str(runtime_dir(repo_root))])
-    app_image_ids = receipt["image_ids"]
-
-    up_command = compose_command_with_app_images(repo_root, app_image_ids, "--profile", "app", "up", "-d", "--no-deps", "--force-recreate", "--no-build", "--pull", "never", "yafvs-api", env=app_env)
-    up = run_command(up_command, repo_root, env=app_env, timeout=300)
-    findings.append(process_step_finding("pass" if up.returncode == 0 else "fail", "compose.yafvs-api-up", f"docker compose up --no-deps yafvs-api exit code {up.returncode}.", up, up_command))
-    if up.returncode != 0:
-        return make_result("runtime-native-api-rebuild", repo_root, "Native API rebuild stopped because yafvs-api restart failed.", findings, [str(runtime_dir(repo_root))])
-
-    smoke = command_runtime_native_api_smoke(repo_root)
-    findings.append(finding(smoke["status"], "native-api.smoke", smoke["summary"], details={"status": smoke["status"], "artifacts": smoke.get("artifacts", [])}))
-    artifacts = sorted(set([str(runtime_dir(repo_root)), *smoke.get("artifacts", [])]))
-    return make_result("runtime-native-api-rebuild", repo_root, "Native API sidecar rebuild attempted.", findings, artifacts)
-
-
-def command_runtime_native_api_rebuild(repo_root: Path) -> dict[str, Any]:
-    try:
-        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-native-api-rebuild"):
-            return _command_runtime_native_api_rebuild_unlocked(repo_root)
-    except RuntimeLockTimeout as error:
-        return make_result(
-            "runtime-native-api-rebuild",
-            repo_root,
-            "Native API rebuild stopped while waiting for the feed lifecycle lock.",
-            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
-            [str(runtime_lock_dir(repo_root))],
-        )
-
-
 def native_api_direct_admin_operator_uuid(
     repo_root: Path,
     *,
@@ -20490,7 +20409,6 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_direct_smoke.add_argument("--status-only", action="store_true", help="emit compact direct-smoke status and only non-pass findings for chat-safe validation")
     native_api_direct_write_smoke = subparsers.add_parser("runtime-native-api-direct-write-smoke", parents=[common], help="verify guarded direct native API write-control with zero-residue tag metadata writes")
     native_api_direct_write_smoke.add_argument("--status-only", action="store_true", help="emit compact write-smoke status and only non-pass findings for chat-safe validation")
-    subparsers.add_parser("runtime-native-api-rebuild", parents=[common], help="rebuild and restart only the internal YAFVS native API sidecar")
     browser_smoke = subparsers.add_parser("runtime-browser-smoke", parents=[common], help="verify report workflows through a headless browser")
     browser_smoke.add_argument("--route", action="append", help="focus browser smoke on one route label or path; may be repeated")
     browser_smoke.add_argument("--status-only", action="store_true", help="emit compact browser-smoke status and only non-pass findings for chat-safe validation")
@@ -20542,8 +20460,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_runtime_native_api_direct_smoke(repo_root, status_only=args.status_only)
     elif args.command == "runtime-native-api-direct-write-smoke":
         result = command_runtime_native_api_direct_write_smoke(repo_root, status_only=args.status_only)
-    elif args.command == "runtime-native-api-rebuild":
-        result = command_runtime_native_api_rebuild(repo_root)
     elif args.command == "runtime-browser-smoke":
         result = command_runtime_browser_smoke(repo_root, args.route, write_filter_smoke=args.write_filter_smoke, status_only=args.status_only)
     elif args.command == "runtime-browser-regression":

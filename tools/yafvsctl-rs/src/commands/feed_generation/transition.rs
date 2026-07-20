@@ -31,6 +31,14 @@ impl GenerationId {
     }
 }
 
+/// Manager imports are incremental only for a new, clean forward transition.
+/// Compensation and every recovery-shaped path deliberately use `Full`.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) enum ManagerImportPlan {
+    Full,
+    Incremental { baseline: GenerationId },
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum TransitionAction {
     Activate,
@@ -309,8 +317,11 @@ pub(super) trait TransitionAdapter {
     fn stop_apps(&mut self, reason: StopReason) -> Result<StepOutcome, AdapterError>;
     fn select_generation(&mut self, generation: &GenerationId)
     -> Result<StepOutcome, AdapterError>;
-    fn import_generation(&mut self, generation: &GenerationId)
-    -> Result<StepOutcome, AdapterError>;
+    fn import_generation(
+        &mut self,
+        generation: &GenerationId,
+        plan: &ManagerImportPlan,
+    ) -> Result<StepOutcome, AdapterError>;
     fn runtime_artifacts_unchanged(
         &mut self,
         compensation: bool,
@@ -403,8 +414,9 @@ impl<A: TransitionAdapter> Engine<'_, A> {
     }
 
     fn commit_target(&mut self, request: &TransitionRequest) -> Result<(), StepFailure> {
+        let plan = clean_forward_import_plan(request);
         let imported = self.call_step(TransitionStep::ImportTarget, |adapter| {
-            adapter.import_generation(&request.target)
+            adapter.import_generation(&request.target, &plan)
         })?;
         self.emit(TransitionPhase::TargetImportReturned);
         if !imported.is_pass() {
@@ -518,7 +530,8 @@ impl<A: TransitionAdapter> Engine<'_, A> {
         self.emit(TransitionPhase::CompensationSelectorSelected);
 
         let imported = self.call_step(TransitionStep::ImportCompensation, |adapter| {
-            adapter.import_generation(previous)
+            // Compensation always rebuilds every manager feed class.
+            adapter.import_generation(previous, &ManagerImportPlan::Full)
         })?;
         self.emit(TransitionPhase::CompensationImportReturned);
         if !imported.is_pass() {
@@ -655,6 +668,23 @@ impl<A: TransitionAdapter> Engine<'_, A> {
     }
 }
 
+fn clean_forward_import_plan(request: &TransitionRequest) -> ManagerImportPlan {
+    match (
+        &request.previous,
+        request.resume_existing,
+        request.recovery_only,
+    ) {
+        (Some(previous), false, false) if previous != &request.target => {
+            ManagerImportPlan::Incremental {
+                baseline: previous.clone(),
+            }
+        }
+        // First activation, attestation repair (same generation), interrupted
+        // recovery, and recovery-only transitions must retain full imports.
+        _ => ManagerImportPlan::Full,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -668,7 +698,7 @@ mod tests {
         RestoreControls,
         Stop(StopReason),
         Select(String),
-        Import(String),
+        Import(String, ManagerImportPlan),
         Artifacts(bool),
         Verify(String),
         Attest(String),
@@ -786,8 +816,10 @@ mod tests {
         fn import_generation(
             &mut self,
             generation: &GenerationId,
+            plan: &ManagerImportPlan,
         ) -> Result<StepOutcome, AdapterError> {
-            self.events.push(Event::Import(generation.0.clone()));
+            self.events
+                .push(Event::Import(generation.0.clone(), plan.clone()));
             let step = if self.events.iter().any(|event| {
                 matches!(
                     event,
@@ -911,6 +943,52 @@ mod tests {
             resume_existing: false,
             recovery_only: false,
         }
+    }
+
+    #[test]
+    fn only_clean_forward_transitions_claim_an_incremental_baseline() {
+        let clean = request(TransitionAction::Activate, true);
+        assert_eq!(
+            clean_forward_import_plan(&clean),
+            ManagerImportPlan::Incremental { baseline: id('b') }
+        );
+        let mut interrupted = clean.clone();
+        interrupted.resume_existing = true;
+        assert_eq!(
+            clean_forward_import_plan(&interrupted),
+            ManagerImportPlan::Full
+        );
+        let mut recovery = clean.clone();
+        recovery.recovery_only = true;
+        assert_eq!(
+            clean_forward_import_plan(&recovery),
+            ManagerImportPlan::Full
+        );
+        assert_eq!(
+            clean_forward_import_plan(&request(TransitionAction::Activate, false)),
+            ManagerImportPlan::Full
+        );
+        let mut repair = clean;
+        repair.previous = Some(repair.target.clone());
+        assert_eq!(clean_forward_import_plan(&repair), ManagerImportPlan::Full);
+    }
+
+    #[test]
+    fn compensation_import_is_always_full() {
+        let mut adapter = MockAdapter::passing();
+        adapter.imports = VecDeque::from([failure("target.import", "failed"), StepOutcome::pass()]);
+        let outcome = run_transition(&mut adapter, request(TransitionAction::Activate, true));
+        assert_eq!(outcome.disposition, TransitionDisposition::Restored);
+        let imports = adapter
+            .events
+            .iter()
+            .filter_map(|event| match event {
+                Event::Import(_, plan) => Some(plan),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(imports.len(), 2);
+        assert_eq!(imports[1], &ManagerImportPlan::Full);
     }
 
     #[test]

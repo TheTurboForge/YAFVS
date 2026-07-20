@@ -22,7 +22,8 @@ use super::selector;
 use super::service_runtime::{SCANNER_SERVICES, ServiceRuntime};
 use super::transition::{
     AdapterError, AttestationOutcome, AttestationReceipt, CompletedJournalRequest, GenerationId,
-    StepOutcome, StepStatus, StopReason, TransitionAdapter, TransitionPhase, TransitionRequest,
+    ManagerImportPlan, StepOutcome, StepStatus, StopReason, TransitionAdapter, TransitionPhase,
+    TransitionRequest,
 };
 use super::{Limits, VerificationWitness, recheck_verified_generation};
 use crate::commands::common::runtime_dir;
@@ -529,6 +530,7 @@ impl TransitionAdapter for ConcreteTransitionAdapter<'_> {
     fn import_generation(
         &mut self,
         generation: &GenerationId,
+        plan: &ManagerImportPlan,
     ) -> Result<StepOutcome, AdapterError> {
         let mut evidence = StepOutcome::pass();
         let generation_root = self
@@ -628,7 +630,41 @@ impl TransitionAdapter for ConcreteTransitionAdapter<'_> {
             }
         }
 
-        let imported = manager_import::import_manager_feed(&services);
+        let imported = match plan {
+            // Keep the full import path explicit: all recovery and compensation
+            // callers arrive here with this plan.
+            ManagerImportPlan::Full => manager_import::import_manager_feed(
+                &services,
+                manager_import::ImportSelection::full(),
+            ),
+            ManagerImportPlan::Incremental { baseline } => {
+                let selection = self
+                    .verified_generations
+                    .get(baseline.as_str())
+                    .zip(self.verified_generations.get(generation.as_str()))
+                    .ok_or_else(|| {
+                        adapter_error(
+                            "incremental manager import lacks a verified comparison witness",
+                            "missing verified generation witness",
+                        )
+                    })
+                    .and_then(|(current, target)| {
+                        manager_import::ImportSelection::from_verified_manifests(
+                            current.manifest(),
+                            target.manifest(),
+                        )
+                        .map_err(|error| {
+                            adapter_error("incremental manager import plan is invalid", error)
+                        })
+                    });
+                match selection {
+                    Ok(selection) => manager_import::import_manager_feed(&services, selection),
+                    Err(error) => {
+                        manager_import::failed_comparison_import(&services, error.message)
+                    }
+                }
+            }
+        };
         absorb(&mut evidence, imported);
         Ok(evidence)
     }

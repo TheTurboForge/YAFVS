@@ -650,6 +650,10 @@ impl VerificationWitness {
         &self.generation_id
     }
 
+    pub(super) fn manifest(&self) -> &Value {
+        &self.manifest
+    }
+
     fn relocated(mut self, entry: &str) -> R<Self> {
         if entry != self.generation_id {
             return Err("verified generation relocation does not match its identifier".into());

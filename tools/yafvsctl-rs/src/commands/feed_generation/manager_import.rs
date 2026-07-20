@@ -6,8 +6,8 @@
 use super::service_runtime::ServiceRuntime;
 use super::transition::{StepOutcome, StepStatus};
 use crate::result::Finding;
-use serde_json::json;
-use std::collections::BTreeMap;
+use serde_json::{Value, json};
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
 use std::time::Duration;
 
@@ -23,11 +23,97 @@ const IMPORTS: [(&str, &[&str]); 3] = [
     ("gvmd.rebuild-gvmd-data", &["--rebuild-gvmd-data=all"]),
     ("gvmd.rebuild-scap", &["--rebuild-scap"]),
 ];
+const CLASS_IMPORTS: [(&str, usize); 3] = [("nasl", 0), ("gvmd", 1), ("scap", 2)];
+const MANIFEST_CLASSES: [&str; 5] = ["cert", "gvmd", "nasl", "notus", "scap"];
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct ImportSelection {
+    selected: [bool; 3],
+}
+
+impl ImportSelection {
+    pub(super) fn full() -> Self {
+        Self {
+            selected: [true; 3],
+        }
+    }
+
+    pub(super) fn from_verified_manifests(current: &Value, target: &Value) -> Result<Self, String> {
+        let current = manifest_material(current)?;
+        let target = manifest_material(target)?;
+        Ok(Self {
+            selected: CLASS_IMPORTS.map(|(class, _)| current[class] != target[class]),
+        })
+    }
+
+    fn selected(&self, index: usize) -> bool {
+        self.selected[index]
+    }
+}
+
+fn manifest_material(manifest: &Value) -> Result<BTreeMap<String, (Value, Vec<Value>)>, String> {
+    let object = manifest
+        .as_object()
+        .ok_or("verified generation manifest is not an object")?;
+    let classes = object
+        .get("classes")
+        .and_then(Value::as_array)
+        .ok_or("verified generation manifest classes are invalid")?;
+    let files = object
+        .get("files")
+        .and_then(Value::as_array)
+        .ok_or("verified generation manifest files are invalid")?;
+    let mut material = BTreeMap::new();
+    for descriptor in classes {
+        let key = descriptor
+            .as_object()
+            .and_then(|row| row.get("key"))
+            .and_then(Value::as_str)
+            .filter(|key| MANIFEST_CLASSES.contains(key))
+            .ok_or("verified generation manifest class descriptor is invalid")?;
+        if material
+            .insert(key.to_owned(), (descriptor.clone(), Vec::new()))
+            .is_some()
+        {
+            return Err("verified generation manifest class descriptors are ambiguous".into());
+        }
+    }
+    if material.len() != MANIFEST_CLASSES.len()
+        || !MANIFEST_CLASSES
+            .iter()
+            .all(|key| material.contains_key(*key))
+    {
+        return Err("verified generation manifest class descriptors are incomplete".into());
+    }
+    let mut seen = BTreeSet::new();
+    for file in files {
+        let class = file
+            .as_object()
+            .and_then(|row| row.get("class"))
+            .and_then(Value::as_str)
+            .filter(|class| material.contains_key(*class))
+            .ok_or("verified generation manifest file record is invalid")?;
+        let canonical = serde_json::to_string(file)
+            .map_err(|_| "verified generation manifest file record is invalid")?;
+        if !seen.insert(canonical) {
+            return Err("verified generation manifest file records are ambiguous".into());
+        }
+        material
+            .get_mut(class)
+            .expect("checked class")
+            .1
+            .push(file.clone());
+    }
+    Ok(material)
+}
 
 /// Runs the prepared manager feed imports and leaves all app containers removed.
 ///
 /// Transition ordering and restarts remain the adapter's responsibility.
-pub(super) fn import_manager_feed(runtime: &ServiceRuntime<'_>) -> StepOutcome {
+pub(super) fn import_manager_feed(
+    runtime: &ServiceRuntime<'_>,
+    selection: ImportSelection,
+) -> StepOutcome {
     let environment = runtime.environment();
     let database = match required_identifier(environment, "POSTGRES_DB") {
         Ok(value) => value,
@@ -39,7 +125,17 @@ pub(super) fn import_manager_feed(runtime: &ServiceRuntime<'_>) -> StepOutcome {
     };
     let mut findings = Vec::new();
     let mut failed = false;
-    for (check, step_arguments) in IMPORTS {
+    for (index, (check, step_arguments)) in IMPORTS.iter().enumerate() {
+        if !selection.selected(index) {
+            findings.push(Finding::new(
+                "pass",
+                "feed-generation.manager-import-skipped",
+                "Manager feed import was skipped because the authenticated manifest class is unchanged."
+                    .to_owned(),
+            )
+            .with_details(json!({"class": CLASS_IMPORTS[index].0, "manager_import": check})));
+            continue;
+        }
         let mut arguments = vec![
             "--profile".to_owned(),
             "app".to_owned(),
@@ -116,6 +212,30 @@ pub(super) fn import_manager_feed(runtime: &ServiceRuntime<'_>) -> StepOutcome {
         findings,
         Vec::new(),
     )
+}
+
+pub(super) fn failed_comparison_import(
+    runtime: &ServiceRuntime<'_>,
+    reason: String,
+) -> StepOutcome {
+    let mut findings = vec![Finding::new(
+        "fail",
+        "feed-generation.manager-import-plan",
+        "Incremental manager import comparison could not be established; no manager import was selected."
+            .to_owned(),
+    )
+    .with_details(json!({"reason": reason}))];
+    let cleanup_check = "runtime.import-failure-stop";
+    match runtime.remove_apps(cleanup_check) {
+        Ok(cleanup) => findings.extend(cleanup.findings),
+        Err(_) => findings.push(Finding::new(
+            "fail",
+            cleanup_check,
+            "Application container removal after manager feed import could not be completed."
+                .to_owned(),
+        )),
+    }
+    StepOutcome::with_evidence(StepStatus::Fail, findings, Vec::new())
 }
 
 fn required_identifier<'a>(
@@ -260,6 +380,111 @@ mod tests {
         outputs
     }
 
+    fn manifest(changed: &[&str]) -> Value {
+        let classes: Vec<Value> = MANIFEST_CLASSES
+            .iter()
+            .map(|key| json!({"key": key, "descriptor": if changed.contains(key) { "changed" } else { "same" }}))
+            .collect();
+        let files: Vec<Value> = MANIFEST_CLASSES
+            .iter()
+            .map(|key| json!({"class": key, "path": if changed.contains(key) { "changed" } else { "same" }}))
+            .collect();
+        json!({"classes": classes, "files": files})
+    }
+
+    fn selected_steps(runner: &Runner) -> Vec<String> {
+        runner
+            .calls
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|(command, _)| {
+                command.iter().find(|argument| {
+                    matches!(
+                        argument.as_str(),
+                        "--rebuild" | "--rebuild-gvmd-data=all" | "--rebuild-scap"
+                    )
+                })
+            })
+            .cloned()
+            .collect()
+    }
+
+    fn assert_selection(changed: &[&str], expected: &[&str]) {
+        let env = environment();
+        let image_ids = images();
+        let (base, repo) = fixture_repo();
+        let mut outputs = vec![output(true, ""); expected.len()];
+        outputs.extend(cleanup_outputs());
+        let runner = Runner::new(outputs);
+        let runtime = runtime(&repo, &runner, &env, &image_ids);
+        let selection =
+            ImportSelection::from_verified_manifests(&manifest(&[]), &manifest(changed)).unwrap();
+        let result = import_manager_feed(&runtime, selection);
+        assert_eq!(result.status, StepStatus::Pass);
+        assert_eq!(
+            selected_steps(&runner),
+            expected
+                .iter()
+                .map(|step| (*step).to_owned())
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|finding| finding.check == "runtime.import-complete-stop")
+        );
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn manifest_selection_runs_only_changed_manager_classes() {
+        assert_selection(
+            &["nasl", "gvmd", "scap"],
+            &["--rebuild", "--rebuild-gvmd-data=all", "--rebuild-scap"],
+        );
+        assert_selection(&["nasl"], &["--rebuild"]);
+        assert_selection(&["gvmd"], &["--rebuild-gvmd-data=all"]);
+        assert_selection(&["scap"], &["--rebuild-scap"]);
+    }
+
+    #[test]
+    fn cert_and_notus_only_changes_skip_manager_commands_with_findings_and_cleanup() {
+        let env = environment();
+        let image_ids = images();
+        let (base, repo) = fixture_repo();
+        let runner = Runner::new(cleanup_outputs());
+        let runtime = runtime(&repo, &runner, &env, &image_ids);
+        let selection =
+            ImportSelection::from_verified_manifests(&manifest(&[]), &manifest(&["cert", "notus"]))
+                .unwrap();
+        let result = import_manager_feed(&runtime, selection);
+        assert_eq!(result.status, StepStatus::Pass);
+        assert!(selected_steps(&runner).is_empty());
+        assert_eq!(
+            result
+                .findings
+                .iter()
+                .filter(|finding| finding.check == "feed-generation.manager-import-skipped")
+                .count(),
+            3
+        );
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|finding| finding.check == "runtime.import-complete-stop")
+        );
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn malformed_manifest_comparison_fails_closed() {
+        let malformed = json!({"classes": [], "files": []});
+        assert!(ImportSelection::from_verified_manifests(&manifest(&[]), &malformed).is_err());
+    }
+
     #[test]
     fn imports_in_order_with_exact_timeout_and_arguments() {
         let env = environment();
@@ -273,7 +498,7 @@ mod tests {
         outputs.extend(cleanup_outputs());
         let runner = Runner::new(outputs);
         let runtime = runtime(&repo, &runner, &env, &image_ids);
-        let result = import_manager_feed(&runtime);
+        let result = import_manager_feed(&runtime, ImportSelection::full());
         assert_eq!(result.status, StepStatus::Pass);
         let calls = runner.calls.lock().unwrap();
         for (index, (_, step)) in IMPORTS.iter().enumerate() {
@@ -330,7 +555,7 @@ mod tests {
         outputs.extend(cleanup_outputs());
         let runner = Runner::new(outputs);
         let runtime = runtime(&repo, &runner, &env, &image_ids);
-        let result = import_manager_feed(&runtime);
+        let result = import_manager_feed(&runtime, ImportSelection::full());
         assert_eq!(result.status, StepStatus::Fail);
         assert!(
             result
@@ -358,7 +583,7 @@ mod tests {
         outputs.extend(cleanup_outputs());
         let runner = Runner::new(outputs);
         let runtime = runtime(&repo, &runner, &env, &image_ids);
-        let result = import_manager_feed(&runtime);
+        let result = import_manager_feed(&runtime, ImportSelection::full());
         assert_eq!(result.status, StepStatus::Pass);
         assert_eq!(
             result.findings.last().unwrap().check,
@@ -377,7 +602,7 @@ mod tests {
             let (base, repo) = fixture_repo();
             let runner = Runner::new([]);
             let runtime = runtime(&repo, &runner, &env, &image_ids);
-            let result = import_manager_feed(&runtime);
+            let result = import_manager_feed(&runtime, ImportSelection::full());
             assert_eq!(result.status, StepStatus::Fail);
             assert!(runner.calls.lock().unwrap().is_empty());
             std::fs::remove_dir_all(base).unwrap();
@@ -394,7 +619,7 @@ mod tests {
         let runner = Runner::new(outputs);
         let runtime = runtime(&repo, &runner, &env, &image_ids);
 
-        let result = import_manager_feed(&runtime);
+        let result = import_manager_feed(&runtime, ImportSelection::full());
 
         assert_eq!(result.status, StepStatus::Fail);
         assert_eq!(result.findings[0].check, "gvmd.rebuild-nvt");
@@ -417,7 +642,7 @@ mod tests {
         let runner = Runner::new([]);
         let runtime = runtime(&repo, &runner, &env, &image_ids);
 
-        let result = import_manager_feed(&runtime);
+        let result = import_manager_feed(&runtime, ImportSelection::full());
 
         assert_eq!(result.status, StepStatus::Fail);
         assert!(runner.calls.lock().unwrap().is_empty());

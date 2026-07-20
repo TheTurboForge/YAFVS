@@ -6,6 +6,7 @@
 #include "result_message.h"
 
 #include <json-glib/json-glib.h>
+#include <string.h>
 
 static void
 add_string_member (JsonBuilder *builder, const char *name, const char *value)
@@ -24,6 +25,32 @@ add_string_member (JsonBuilder *builder, const char *name, const char *value)
   json_builder_set_member_name (builder, name);
   json_builder_add_string_value (builder, valid->str);
   g_string_free (valid, TRUE);
+}
+
+static char *
+escape_raw_json_control_bytes (char *message)
+{
+  const unsigned char *cursor = (const unsigned char *) message;
+  GString *escaped;
+
+  while (*cursor >= 0x20)
+    cursor++;
+  if (*cursor == '\0')
+    return message;
+
+  escaped = g_string_sized_new (strlen (message) + 5);
+  g_string_append_len (escaped, message, (const char *) cursor - message);
+
+  for (; *cursor; cursor++)
+    {
+      if (*cursor < 0x20)
+        g_string_append_printf (escaped, "\\u%04x", (unsigned int) *cursor);
+      else
+        g_string_append_c (escaped, (char) *cursor);
+    }
+
+  g_free (message);
+  return g_string_free (escaped, FALSE);
 }
 
 char *
@@ -51,5 +78,5 @@ openvas_result_message_new (const char *result_type, const char *host_ip,
   message = json_to_string (root, FALSE);
   json_node_free (root);
   g_object_unref (builder);
-  return message;
+  return escape_raw_json_control_bytes (message);
 }

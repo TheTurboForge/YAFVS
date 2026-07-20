@@ -7,6 +7,7 @@
 
 #include <glib.h>
 #include <json-glib/json-glib.h>
+#include <string.h>
 
 static void
 test_fields_round_trip_without_delimiter_semantics (void)
@@ -27,6 +28,31 @@ test_fields_round_trip_without_delimiter_semantics (void)
   g_assert_cmpstr (json_object_get_string_member (object, "value"), ==, value);
   g_assert_cmpstr (json_object_get_string_member (object, "uri"), ==,
                    "/path|||fragment");
+
+  g_object_unref (parser);
+  g_free (message);
+}
+
+static void
+test_ascii_control_bytes_are_losslessly_json_escaped (void)
+{
+  char value[63];
+  for (unsigned int byte = 1; byte <= 0x1f; byte++)
+    {
+      value[(byte - 1) * 2] = 'x';
+      value[(byte - 1) * 2 + 1] = (char) byte;
+    }
+  value[G_N_ELEMENTS (value) - 1] = '\0';
+  char *message = openvas_result_message_new ("LOG", "", "", "", "", value, "");
+  JsonParser *parser = json_parser_new ();
+  JsonObject *object;
+
+  for (unsigned int byte = 1; byte <= 0x1f; byte++)
+    g_assert_null (strchr (message, (int) byte));
+  g_assert_nonnull (strstr (message, "\\u001f"));
+  g_assert_true (json_parser_load_from_data (parser, message, -1, NULL));
+  object = json_node_get_object (json_parser_get_root (parser));
+  g_assert_cmpstr (json_object_get_string_member (object, "value"), ==, value);
 
   g_object_unref (parser);
   g_free (message);
@@ -80,5 +106,7 @@ main (int argc, char **argv)
                    test_null_fields_become_empty_strings);
   g_test_add_func ("/result-message/invalid-utf8",
                    test_invalid_utf8_is_replaced_before_json_encoding);
+  g_test_add_func ("/result-message/ascii-control",
+                   test_ascii_control_bytes_are_losslessly_json_escaped);
   return g_test_run ();
 }

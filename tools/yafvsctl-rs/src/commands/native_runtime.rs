@@ -4,7 +4,7 @@
 use super::compose::{compose_command, runtime_environment};
 use crate::process::{CommandRunner, ProcessOutput};
 use crate::result::Finding;
-use serde_json::{Map, Value, json};
+use serde_json::{json, Map, Value};
 use std::path::Path;
 use std::time::Duration;
 
@@ -351,8 +351,8 @@ fn native_api_get_arguments(repo_root: &Path, path: &str) -> Vec<String> {
 }
 
 fn validate_api_path(path: &str) -> Result<(), String> {
-    if !path.starts_with("/api/v1/") {
-        return Err("native API path must start with /api/v1/".into());
+    if path != "/healthz" && !path.starts_with("/api/v1/") {
+        return Err("native API path must be /healthz or start with /api/v1/".into());
     }
     if path
         .bytes()
@@ -596,12 +596,23 @@ mod tests {
             "/api/v1/reports/",
             "/api/v1/reports#fragment",
         ] {
-            assert!(
-                native_api_get_json(Path::new("/srv/YAFVS"), path, &runner)
-                    .error
-                    .is_some()
-            );
+            assert!(native_api_get_json(Path::new("/srv/YAFVS"), path, &runner)
+                .error
+                .is_some());
         }
+        assert!(runner.calls.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn accepts_the_exact_health_path_and_rejects_health_descendants() {
+        let runner = Runner::new([output(true, r#"{"status":"ok"}"#)]);
+        let response = native_api_get_json(Path::new("/srv/YAFVS"), "/healthz", &runner);
+        assert!(response.usable_object());
+        assert_eq!(runner.calls.lock().unwrap().len(), 1);
+
+        let runner = Runner::new([]);
+        let response = native_api_get_json(Path::new("/srv/YAFVS"), "/healthz/anything", &runner);
+        assert!(response.error.is_some());
         assert!(runner.calls.lock().unwrap().is_empty());
     }
 }

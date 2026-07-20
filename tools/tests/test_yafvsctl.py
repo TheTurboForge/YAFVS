@@ -209,247 +209,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("python-gvm", names)
         self.assertNotIn("gvm-tools", names)
 
-    def test_build_metadata_covers_all_components(self):
-        component_names = {component.name for component in yafvsctl.COMPONENTS}
-        self.assertEqual(set(yafvsctl.BUILD_META), component_names)
-
-    def test_c_service_doc_generation_dependencies_are_explicit(self):
-        for component in ("openvas-smb", "gvmd", "gsad"):
-            with self.subTest(component=component):
-                meta = yafvsctl.BUILD_META[component]
-                self.assertIn("xmltoman", meta.programs)
-                self.assertIn("xmlmantohtml", meta.programs)
-                self.assertIn("xmltoman", meta.package_hints)
-
-    def test_core_c_chain_order_is_stable(self):
-        self.assertEqual(yafvsctl.CORE_C_CHAIN, ("gvm-libs", "openvas-smb", "openvas-scanner"))
-
-    def test_expanded_chains_are_stable(self):
-        self.assertEqual(yafvsctl.C_SERVICES_CHAIN, ("gvm-libs", "openvas-smb", "openvas-scanner", "pg-gvm", "gvmd", "gsad"))
-        self.assertEqual(yafvsctl.RUNTIME_PYTHON_CHAIN, ("greenbone-feed-sync", "ospd-openvas", "notus-scanner"))
-        self.assertEqual(yafvsctl.PYTHON_CHAIN, yafvsctl.RUNTIME_PYTHON_CHAIN)
-        self.assertEqual(yafvsctl.BASELINE_CHAIN, (*yafvsctl.C_SERVICES_CHAIN, "gsa", *yafvsctl.RUNTIME_PYTHON_CHAIN))
-        self.assertNotIn("python-gvm", yafvsctl.BASELINE_CHAIN)
-        self.assertNotIn("gvm-tools", yafvsctl.BASELINE_CHAIN)
-
-    def test_hardened_profile_uses_isolated_build_and_prefix_paths(self):
-        root = Path("/tmp/yafvs-test")
-        source, build, prefix = yafvsctl.cmake_paths(root, "gvmd", "hardened")
-        self.assertEqual(source, root / "components" / "gvmd")
-        self.assertEqual(build, root / "build" / "hardened" / "gvmd")
-        self.assertEqual(prefix, root / "build" / "hardened" / "prefix")
-        _, ordinary_build, ordinary_prefix = yafvsctl.cmake_paths(root, "gvmd")
-        self.assertEqual(ordinary_build, root / "build" / "gvmd")
-        self.assertEqual(ordinary_prefix, root / "build" / "prefix")
-
-    def test_hardened_profile_parser_accepts_explicit_profile(self):
-        parser = yafvsctl.build_parser()
-        for command in (
-            ["configure", "gvmd", "--profile", "hardened"],
-            ["build", "gvmd", "--profile", "hardened"],
-            ["build-c-services", "--profile", "hardened"],
-        ):
-            with self.subTest(command=command):
-                self.assertEqual(parser.parse_args(command).profile, "hardened")
-
-    def test_hardened_configure_is_fresh_and_has_no_removed_profile_c_flags(self):
-        evidence = {name: {"status": "present", "flags": []} for name in yafvsctl.hardened_required_features()}
-        completed = subprocess.CompletedProcess([], 0, "ok")
-        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(
-            yafvsctl, "cmake_fresh_support", return_value=(True, "")
-        ), unittest.mock.patch.object(
-            yafvsctl, "hardened_profile_configuration", return_value=(["-DCMAKE_PROJECT_INCLUDE=/tmp/hardening.cmake"], evidence)
-        ), unittest.mock.patch.object(yafvsctl, "run_command", return_value=completed) as run:
-            yafvsctl.cmake_configure(Path(tmp), yafvsctl.BUILD_META["gvm-libs"], "hardened")
-        command = run.call_args.args[0]
-        self.assertEqual(command[:2], ["cmake", "--fresh"])
-        self.assertFalse(any(argument.startswith("-DCMAKE_C_FLAGS=") for argument in command))
-
-    def test_ordinary_configure_does_not_request_fresh_cache(self):
-        completed = subprocess.CompletedProcess([], 0, "ok")
-        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(
-            yafvsctl, "run_command", return_value=completed
-        ) as run:
-            yafvsctl.cmake_configure(Path(tmp), yafvsctl.BUILD_META["gvm-libs"])
-        self.assertNotIn("--fresh", run.call_args.args[0])
-
-    def test_hardened_configure_fails_clearly_without_cmake_fresh_support(self):
-        message = "installed cmake does not advertise --fresh; cmake >= 3.24 is required for hardened profiles"
-        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(
-            yafvsctl, "cmake_fresh_support", return_value=(False, message)
-        ), unittest.mock.patch.object(yafvsctl, "run_command") as run:
-            result = yafvsctl.cmake_configure(Path(tmp), yafvsctl.BUILD_META["gvm-libs"], "hardened")
-        self.assertEqual(result.returncode, 2)
-        self.assertEqual(result.stdout, message)
-        run.assert_not_called()
-
-    def test_cmake_fresh_support_reports_missing_cmake(self):
-        with unittest.mock.patch.object(yafvsctl.shutil, "which", return_value=None):
-            supported, message = yafvsctl.cmake_fresh_support(Path("/tmp/yafvs-test"))
-        self.assertFalse(supported)
-        self.assertIn("cmake is unavailable", message)
-
-    def test_cmake_fresh_support_rejects_cmake_without_fresh_option(self):
-        completed = subprocess.CompletedProcess([], 0, "CMake usage without the required option")
-        with unittest.mock.patch.object(
-            yafvsctl.shutil, "which", return_value="/usr/bin/cmake"
-        ), unittest.mock.patch.object(yafvsctl, "run_command", return_value=completed):
-            supported, message = yafvsctl.cmake_fresh_support(Path("/tmp/yafvs-test"))
-        self.assertFalse(supported)
-        self.assertIn("cmake >= 3.24", message)
-
-    def test_hardened_profile_uses_fortify_level_two_for_retained_cmake_roots(self):
-        root = Path("/tmp/yafvs-test")
-
-        def probe(_root, flags, **_kwargs):
-            return "-D_FORTIFY_SOURCE=3" not in flags
-
-        with unittest.mock.patch.object(yafvsctl, "hardened_flag_probe", side_effect=probe):
-            args, evidence = yafvsctl.hardened_profile_configuration(root)
-        self.assertEqual(evidence["fortify"]["status"], "present")
-        self.assertIn("-D_FORTIFY_SOURCE=2", evidence["fortify"]["flags"])
-        self.assertFalse(evidence["fortify"]["level_three_supported"])
-        self.assertIn("-DCMAKE_EXPORT_COMPILE_COMMANDS=ON", args)
-        self.assertFalse(any("-fPIE" in argument for argument in args))
-        self.assertFalse(any(argument.startswith("-DCMAKE_C_FLAGS=") for argument in args))
-        self.assertTrue(any(argument.startswith("-DCMAKE_PROJECT_INCLUDE=") for argument in args))
-        self.assertTrue(any(argument.startswith("-DCMAKE_MODULE_LINKER_FLAGS=") for argument in args))
-
-    def test_profile_rejects_non_cmake_components(self):
-        root = Path("/tmp/yafvs-test")
-        build = yafvsctl.command_build(root, "gsa", profile="hardened")
-        configure = yafvsctl.command_configure(root, "gsa", profile="hardened")
-        self.assertEqual(build["status"], "fail")
-        self.assertEqual(configure["status"], "fail")
-        self.assertEqual(build["findings"][0]["check"], "build.profile-unsupported")
-        self.assertEqual(configure["findings"][0]["check"], "build.profile-unsupported")
-
-    def test_configure_without_profile_preserves_non_cmake_warning(self):
-        result = yafvsctl.command_configure(Path("/tmp/yafvs-test"), "gsa")
-        self.assertNotEqual(result["status"], "fail")
-        self.assertEqual(result["findings"][0]["status"], "warn")
-        self.assertEqual(result["findings"][0]["check"], "build.unsupported")
-
-    def test_required_hardened_probe_failure_stops_cmake_configuration(self):
-        evidence = {name: {"status": "present", "flags": []} for name in yafvsctl.hardened_required_features()}
-        evidence["stack_protector"]["status"] = "unsupported"
-        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(
-            yafvsctl, "hardened_profile_configuration", return_value=([], evidence)
-        ), unittest.mock.patch.object(
-            yafvsctl, "cmake_fresh_support", return_value=(True, "")
-        ), unittest.mock.patch.object(yafvsctl, "run_command") as run:
-            result = yafvsctl.cmake_configure(Path(tmp), yafvsctl.BUILD_META["gvm-libs"], "hardened")
-        self.assertEqual(result.returncode, 2)
-        self.assertIn("stack_protector", result.stdout)
-        run.assert_not_called()
-
-    def test_hardened_configuration_preserves_component_c_flags_metadata(self):
-        evidence = {name: {"status": "present", "flags": []} for name in yafvsctl.hardened_required_features()}
-        completed = subprocess.CompletedProcess([], 0, "ok")
-        with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.object(
-            yafvsctl, "hardened_profile_configuration", return_value=(["-DCMAKE_PROJECT_INCLUDE=/tmp/hardening.cmake"], evidence)
-        ), unittest.mock.patch.object(
-            yafvsctl, "cmake_fresh_support", return_value=(True, "")
-        ), unittest.mock.patch.object(yafvsctl, "run_command", return_value=completed) as run:
-            yafvsctl.cmake_configure(Path(tmp), yafvsctl.BUILD_META["openvas-scanner"], "hardened")
-        command = run.call_args.args[0]
-        self.assertEqual(command[:2], ["cmake", "--fresh"])
-        self.assertIn("-DCMAKE_C_FLAGS=-isystem /usr/include/mit-krb5", command)
-        self.assertEqual(sum(argument.startswith("-DCMAKE_C_FLAGS=") for argument in command), 1)
-
-    def test_hardened_build_invalidates_old_manifest_before_chain(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            manifest = root / yafvsctl.HARDENED_BUILD_MANIFEST
-            manifest.parent.mkdir(parents=True)
-            manifest.write_text("stale", encoding="utf-8")
-            chain = {"status": "pass", "summary": "ok", "findings": [], "artifacts": [], "metadata": {}}
-            manifest_finding = {"status": "pass", "check": "manifest", "message": "ok"}
-            with unittest.mock.patch.object(yafvsctl, "command_build_chain", return_value=chain), unittest.mock.patch.object(
-                yafvsctl, "rust_c_hardening_manifest_finding", return_value=manifest_finding
-            ):
-                result = yafvsctl.command_build_c_services(root, "hardened")
-        self.assertFalse(manifest.exists())
-        self.assertEqual(result["status"], "pass")
-
-    def test_rust_c_hardening_manifest_bridge_accepts_valid_envelopes(self):
-        expected_path = str(yafvsctl.HARDENED_BUILD_MANIFEST)
-        for status, returncode in (("pass", 0), ("fail", 1)):
-            item = {
-                "status": status,
-                "check": "build-c-services.hardening-manifest",
-                "message": "manifest result",
-                "path": expected_path,
-            }
-            payload = {
-                "status": status,
-                "summary": "manifest summary",
-                "findings": [item],
-                "metadata": {"command": "c-hardening-manifest-write"},
-            }
-            with self.subTest(status=status), unittest.mock.patch.object(
-                yafvsctl,
-                "run_command",
-                return_value=subprocess.CompletedProcess(
-                    ["cargo"], returncode, json.dumps(payload), "ignored stderr"
-                ),
-            ) as run_command:
-                observed = yafvsctl.rust_c_hardening_manifest_finding(
-                    Path("/tmp/TurboVAS")
-                )
-            self.assertEqual(observed, item)
-            arguments = run_command.call_args.args[0]
-            self.assertEqual(arguments[-2:], ["c-hardening-manifest-write", "--json"])
-
-    def test_rust_c_hardening_manifest_bridge_rejects_invalid_results(self):
-        expected_path = str(yafvsctl.HARDENED_BUILD_MANIFEST)
-        valid_item = {
-            "status": "pass",
-            "check": "build-c-services.hardening-manifest",
-            "message": "manifest result",
-            "path": expected_path,
-        }
-        valid_payload = {
-            "status": "pass",
-            "summary": "manifest summary",
-            "findings": [valid_item],
-            "metadata": {"command": "c-hardening-manifest-write"},
-        }
-        cases = {
-            "invalid-json": (0, "not-json"),
-            "duplicate-key": (0, '{"status":"pass","status":"fail"}'),
-            "wrong-command": (0, json.dumps({**valid_payload, "metadata": {"command": "status"}})),
-            "wrong-check": (0, json.dumps({**valid_payload, "findings": [{**valid_item, "check": "unexpected"}]})),
-            "wrong-path": (0, json.dumps({**valid_payload, "findings": [{**valid_item, "path": "../escape"}]})),
-            "wrong-status": (0, json.dumps({**valid_payload, "status": "warn"})),
-            "wrong-exit": (1, json.dumps(valid_payload)),
-            "multiple-findings": (0, json.dumps({**valid_payload, "findings": [valid_item, valid_item]})),
-            "oversized": (0, " " * (yafvsctl.YAFVSCTL_RUST_BRIDGE_MAX_OUTPUT_BYTES + 1)),
-        }
-        for name, (returncode, stdout) in cases.items():
-            with self.subTest(name=name), unittest.mock.patch.object(
-                yafvsctl,
-                "run_command",
-                return_value=subprocess.CompletedProcess(["cargo"], returncode, stdout, "secret stderr"),
-            ):
-                observed = yafvsctl.rust_c_hardening_manifest_finding(
-                    Path("/tmp/TurboVAS")
-                )
-            self.assertEqual(observed["status"], "fail")
-            self.assertEqual(observed["check"], "build-c-services.hardening-manifest")
-            self.assertIn("failed closed", observed["message"])
-            self.assertNotIn("secret stderr", observed["message"])
-
-    def test_rust_c_hardening_manifest_bridge_handles_subprocess_failure(self):
-        with unittest.mock.patch.object(
-            yafvsctl, "run_command", side_effect=OSError("cargo unavailable")
-        ):
-            observed = yafvsctl.rust_c_hardening_manifest_finding(
-                Path("/tmp/TurboVAS")
-            )
-        self.assertEqual(observed["status"], "fail")
-        self.assertIn("failed closed", observed["message"])
-
     def test_rust_runtime_data_state_bridge_accepts_valid_envelopes(self):
         for status, returncode in (("pass", 0), ("warn", 0), ("fail", 1)):
             payload = {
@@ -546,70 +305,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(observed["status"], "fail")
         self.assertEqual(observed["findings"][0]["check"], "data-state.rust-bridge")
         self.assertNotIn(secret, str(observed))
-
-    def test_hardened_build_preflight_removes_stale_registered_artifact_and_prefix_only(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            stale_artifact = root / "build" / "hardened" / "gvm-libs" / "base" / "libgvm_base.so.stale"
-            stale_artifact.parent.mkdir(parents=True)
-            stale_artifact.write_bytes(b"stale ELF")
-            for component in yafvsctl.C_SERVICES_CHAIN[1:]:
-                marker = root / "build" / "hardened" / component / "stale"
-                marker.parent.mkdir(parents=True)
-                marker.write_text("stale", encoding="utf-8")
-            stale_prefix = root / "build" / "hardened" / "prefix" / "lib" / "stale.so"
-            stale_prefix.parent.mkdir(parents=True)
-            stale_prefix.write_text("stale", encoding="utf-8")
-            ordinary = root / "build" / "gvm-libs" / "keep"
-            ordinary.parent.mkdir(parents=True)
-            ordinary.write_text("ordinary", encoding="utf-8")
-            source = root / "components" / "gvm-libs" / "keep"
-            source.parent.mkdir(parents=True)
-            source.write_text("source", encoding="utf-8")
-            chain = {"status": "fail", "summary": "stop after preflight", "findings": [], "artifacts": [], "metadata": {}}
-
-            def inspect_clean_chain(*_args, **_kwargs):
-                self.assertFalse(stale_artifact.exists())
-                self.assertFalse((root / "build" / "hardened" / "prefix").exists())
-                self.assertTrue(ordinary.is_file())
-                self.assertTrue(source.is_file())
-                for component in yafvsctl.C_SERVICES_CHAIN:
-                    self.assertFalse((root / "build" / "hardened" / component).exists())
-                return chain
-
-            with unittest.mock.patch.object(yafvsctl, "command_build_chain", side_effect=inspect_clean_chain):
-                result = yafvsctl.command_build_c_services(root, "hardened")
-        self.assertEqual(result["status"], "fail")
-        cleanup = next(item for item in result["findings"] if item["check"] == "build-c-services.hardened-preflight")
-        self.assertEqual(cleanup["status"], "pass")
-        self.assertEqual(len(cleanup["details"]["requested_paths"]), 7)
-
-    def test_hardened_build_preflight_refuses_symlinked_build_parent(self):
-        for symlink_parent in ("build", "hardened"):
-            with self.subTest(symlink_parent=symlink_parent), tempfile.TemporaryDirectory() as tmp:
-                base = Path(tmp)
-                root = base / "repo"
-                root.mkdir()
-                external_hardened = base / "external" / "hardened"
-                external_hardened.mkdir(parents=True)
-                artifact_sentinel = external_hardened / "gvm-libs" / "keep"
-                artifact_sentinel.parent.mkdir(parents=True)
-                artifact_sentinel.write_text("outside artifact", encoding="utf-8")
-                manifest_sentinel = external_hardened / "hardening-manifest.json"
-                manifest_sentinel.write_text("outside manifest", encoding="utf-8")
-                if symlink_parent == "build":
-                    (root / "build").symlink_to(external_hardened.parent, target_is_directory=True)
-                else:
-                    (root / "build").mkdir()
-                    (root / "build" / "hardened").symlink_to(external_hardened, target_is_directory=True)
-                with unittest.mock.patch.object(yafvsctl, "command_build_chain") as chain:
-                    result = yafvsctl.command_build_c_services(root, "hardened")
-                self.assertEqual(result["status"], "fail")
-                self.assertEqual(result["findings"][0]["check"], "build-c-services.hardened-preflight")
-                self.assertTrue(artifact_sentinel.is_file())
-                self.assertEqual(manifest_sentinel.read_text(encoding="utf-8"), "outside manifest")
-                self.assertEqual(result["findings"][0]["details"]["removed_paths"], [])
-                chain.assert_not_called()
 
     def test_aggregate_status_prefers_highest_severity(self):
         findings = [
@@ -946,7 +641,6 @@ class YAFVSCtlTests(unittest.TestCase):
             encoding="utf-8"
         )
         for function_name in (
-            "command_build_ui",
             "command_runtime_native_api_direct_write_smoke",
             "command_runtime_native_api_direct_smoke",
         ):
@@ -954,6 +648,16 @@ class YAFVSCtlTests(unittest.TestCase):
             body = source[start : source.find("\ndef ", start + 5)]
             self.assertIn("acquire_runtime_lock", body)
             self.assertIn("FEED_ACTIVATION_LOCK", body)
+
+        build_source = (
+            Path(__file__).resolve().parents[1]
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "build.rs"
+        ).read_text(encoding="utf-8")
+        self.assertIn("RuntimeOperationLock::acquire", build_source)
+        self.assertIn("FEED_ACTIVATION_LOCK", build_source)
 
         rebuild_source = (
             Path(__file__).resolve().parents[1]
@@ -1117,7 +821,21 @@ class YAFVSCtlTests(unittest.TestCase):
                     env.pop("YAFVS_ENABLE_QUALITY_GATE_SCHEDULE", None)
                 if arguments[0] in {"runtime-status", "runtime-smoke", "gvmd-smoke", "runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-report-summary", "runtime-report-export", "runtime-report-metrics", "runtime-scope-report-summary", "runtime-scope-report-metrics"}:
                     env["COMPOSE_PROJECT_NAME"] = "yafvsctl-parity-no-runtime"
-                if arguments[0] in {"up", "runtime-init", "runtime-manager-init", "runtime-scanner-redis-init", "runtime-scanner-register", "runtime-app-build", "runtime-native-api-rebuild", "runtime-app-up"}:
+                if arguments[0] in {
+                    "up",
+                    "runtime-init",
+                    "runtime-manager-init",
+                    "runtime-scanner-redis-init",
+                    "runtime-scanner-register",
+                    "runtime-app-build",
+                    "runtime-native-api-rebuild",
+                    "runtime-app-up",
+                    "build-core-c",
+                    "build-c-services",
+                    "build-ui",
+                    "build-python",
+                    "build-baseline",
+                }:
                     blocked_runtime = Path(parity_runtime) / arguments[0]
                     blocked_runtime.write_text(
                         "force runtime setup to fail before Docker\n",
@@ -1228,6 +946,13 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["deps", "--json"], 0, "pass"),
                 (["deps", "gsa", "--json"], 0, "pass"),
                 (["deps", "definitely-invalid", "--json"], 1, "fail"),
+                (["configure", "definitely-invalid", "--json"], 1, "fail"),
+                (["build", "definitely-invalid", "--json"], 1, "fail"),
+                (["build-core-c", "--json"], 1, "fail"),
+                (["build-c-services", "--json"], 1, "fail"),
+                (["build-ui", "--json"], 1, "fail"),
+                (["build-python", "--json"], 1, "fail"),
+                (["build-baseline", "--json"], 1, "fail"),
                 (["runtime-plan", "--json"], 0, "warn"),
                 (["runtime-status", "--json"], 0, "warn"),
                 (["runtime-smoke", "--json"], 1, "fail"),
@@ -1429,10 +1154,6 @@ class YAFVSCtlTests(unittest.TestCase):
                 self.assertIn(f"{wrapper} *args:", justfile)
                 self.assertIn(f"tools/yafvsctl {wrapper} \"$@\"", justfile)
 
-    def test_build_ui_defers_runtime_staging_and_restart(self):
-        source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
-        self.assertNotIn("def restart_gsad_after_static_stage", source)
-        self.assertIn("gsa.deployment-deferred", source)
 
     def test_native_scope_report_finding_counts_exclude_scanner_errors(self):
         source = (Path(__file__).resolve().parents[2] / "services" / "yafvs-api" / "src" / "scope_reports.rs").read_text(encoding="utf-8")
@@ -7702,8 +7423,6 @@ class YAFVSCtlTests(unittest.TestCase):
             "runtime-full-test-scan-preflight",
             "runtime-full-test-scan-start",
             "runtime-full-test-scan-status",
-        }
-        python_owned = (
             "configure",
             "build",
             "build-core-c",
@@ -7711,8 +7430,8 @@ class YAFVSCtlTests(unittest.TestCase):
             "build-ui",
             "build-python",
             "build-baseline",
-        )
-        for recipe in rust_owned | set(python_owned):
+        }
+        for recipe in rust_owned:
             with self.subTest(recipe=recipe):
                 self.assertIn(f"{recipe} *args:", justfile)
         for recipe in rust_owned:
@@ -7721,9 +7440,45 @@ class YAFVSCtlTests(unittest.TestCase):
                     f'tools/yafvsctl-rs/Cargo.toml -- {recipe} "$@"',
                     justfile,
                 )
-        for recipe in python_owned:
-            with self.subTest(recipe=recipe):
-                self.assertIn(f'tools/yafvsctl {recipe} "$@"', justfile)
+
+    def test_component_build_surface_is_owned_directly_by_rust(self):
+        root = Path(__file__).resolve().parents[2]
+        python_source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        rust_source = (
+            root / "tools" / "yafvsctl-rs" / "src" / "commands" / "build.rs"
+        ).read_text(encoding="utf-8")
+        justfile = (root / "justfile").read_text(encoding="utf-8")
+        commands = (
+            "configure",
+            "build",
+            "build-core-c",
+            "build-c-services",
+            "build-ui",
+            "build-python",
+            "build-baseline",
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                self.assertNotIn(f'add_parser("{command}"', python_source)
+                self.assertNotIn(f'args.command == "{command}"', python_source)
+                recipe = justfile.split(f"{command} *args:\n", 1)[1].split(
+                    "\n\n", 1
+                )[0]
+                self.assertIn(f'-- {command} "$@"', recipe)
+                self.assertNotIn("tools/yafvsctl ", recipe)
+        for function_name in (
+            "command_configure",
+            "command_build",
+            "command_build_core_c",
+            "command_build_c_services",
+            "command_build_ui",
+            "command_build_python",
+            "command_build_baseline",
+        ):
+            self.assertNotIn(f"def {function_name}", python_source)
+            self.assertIn(f"pub fn {function_name}", rust_source)
+        self.assertNotIn("class BuildMeta", python_source)
+        self.assertNotIn("BUILD_META", python_source)
 
     def test_quality_gate_downgrades_known_doctor_notes_only(self):
         status, summary = yafvsctl.quality_gate_doctor_status(
@@ -7818,6 +7573,13 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_gsa_and_runtime_manager_locks_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
+        build_source = (
+            Path(__file__).resolve().parents[1]
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "build.rs"
+        ).read_text(encoding="utf-8")
         manager_source = (
             Path(__file__).resolve().parents[1]
             / "yafvsctl-rs"
@@ -7828,8 +7590,9 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("GSA_OPERATION_LOCK", source)
         self.assertIn("RUNTIME_MANAGER_LOCK", source)
         self.assertIn("def acquire_runtime_lock", source)
-        self.assertIn("def command_build_node_unlocked", source)
         self.assertIn("quality-gate GSA checks", source)
+        self.assertIn("GSA_OPERATION_LOCK", build_source)
+        self.assertIn("RuntimeOperationLock::acquire", build_source)
         self.assertIn("RuntimeOperationLock::acquire", manager_source)
         self.assertIn("RUNTIME_MANAGER_LOCK", manager_source)
 
@@ -8204,19 +7967,6 @@ class YAFVSCtlTests(unittest.TestCase):
                 self.assertEqual(yafvsctl.gsa_quality_env(root)["NODE_OPTIONS"], "--trace-warnings --max-old-space-size=4096")
             with unittest.mock.patch.dict(os.environ, {"NODE_OPTIONS": "--max-old-space-size=6144"}, clear=True):
                 self.assertEqual(yafvsctl.gsa_quality_env(root)["NODE_OPTIONS"], "--max-old-space-size=6144")
-
-    def test_cmake_paths_use_ignored_build_tree(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            source, build, prefix = yafvsctl.cmake_paths(root, "gvm-libs")
-            self.assertEqual(source, root / "components" / "gvm-libs")
-            self.assertEqual(build, root / "build" / "gvm-libs")
-            self.assertEqual(prefix, root / "build" / "prefix")
-
-    def test_runtime_python_venv_path_uses_ignored_build_tree(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            self.assertEqual(yafvsctl.venv_python(root, "ospd-openvas"), root / "build" / "venvs" / "ospd-openvas" / "bin" / "python")
 
     def test_runtime_dir_defaults_next_to_repo(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -11126,17 +10876,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("missing prepared receipt", result.stderr)
         run_command.assert_not_called()
 
-    def test_component_build_refuses_running_bind_mount_consumers(self):
-        with unittest.mock.patch.object(
-            yafvsctl, "running_app_services", return_value=("ospd-openvas",)
-        ), unittest.mock.patch.object(yafvsctl, "run_command") as run_command:
-            result = yafvsctl.command_build(
-                Path("/tmp"), "gvm-libs", lifecycle_managed=True
-            )
-
-        self.assertEqual(result["status"], "fail")
-        self.assertIn("runtime-app-down", result["findings"][0]["message"])
-        run_command.assert_not_called()
 
     def test_receipt_identity_can_precede_explicit_compose_mode_transition(self):
         image_ids = {

@@ -9,8 +9,8 @@ use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::{
-    atomic::{AtomicBool, AtomicUsize, Ordering},
     Arc,
+    atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 use std::thread;
 use std::time::{Duration, Instant};
@@ -289,6 +289,13 @@ fn run_system_with_input_and_fds(
                     }
                 }
                 if let Some(limit) = file_size_limit {
+                    // A file-size limit violation should surface as EFBIG, not
+                    // terminate the child and hand its memory to the host core
+                    // dump handler. Some bounded helpers carry secrets through
+                    // inherited descriptors.
+                    if libc::signal(libc::SIGXFSZ, libc::SIG_IGN) == libc::SIG_ERR {
+                        return Err(std::io::Error::last_os_error());
+                    }
                     let limit = libc::rlimit {
                         rlim_cur: limit,
                         rlim_max: limit,
@@ -686,6 +693,7 @@ mod tests {
             )
             .unwrap();
         assert!(!output.success);
+        assert!(output.exit_code.is_some());
         assert!(limited.metadata().unwrap().len() <= 1);
     }
 }

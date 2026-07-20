@@ -2026,6 +2026,7 @@ mod tests {
             "feed-cache-sync",
             "down",
             "runtime-app-down",
+            "runtime-app-up",
             "runtime-webui-smoke",
             "runtime-full-test-scan-preflight",
             "runtime-full-test-scan-start",

@@ -880,53 +880,37 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(compact["findings"][0]["details"]["artifacts"], {"type": "list", "count": 2})
         self.assertNotIn("response_json", json.dumps(compact))
 
-    def test_runtime_app_up_retry_is_limited_to_docker_removal_races(self):
-        self.assertTrue(yafvsctl.compose_app_up_transient_error("Error response from daemon: No such container: abc123"))
-        self.assertTrue(yafvsctl.compose_app_up_transient_error("removal of container abc123 is already in progress"))
-        self.assertFalse(yafvsctl.compose_app_up_transient_error("database migration failed"))
-
-    def test_runtime_app_up_validates_mount_graph_before_infrastructure(self):
-        source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
-        function = source[source.index("def _command_runtime_app_up_unlocked"):source.index("def command_runtime_app_up")]
-
-        self.assertLess(function.index("rendered_app_execution_mount_finding"), function.index('rust_result_envelope(repo_root, "up", ["up"])'))
-        self.assertLess(function.index("active_feed_generation_selector_journal_finding"), function.index('rust_result_envelope(repo_root, "up", ["up"])'))
-        self.assertLess(function.index("command_runtime_init(repo_root)"), function.index("active_feed_generation_finding"))
-        self.assertLess(function.index("active_feed_generation_finding"), function.index("compose_app_services_up_with_retry"))
-        self.assertIn('"Application runtime startup stopped at mount prerequisites."', function)
-
-    def test_runtime_app_up_refuses_missing_active_feed_generation(self):
-        rust_up = unittest.mock.Mock(
-            return_value={"status": "pass", "summary": "should not run"}
-        )
-        completed = subprocess.CompletedProcess([], 0, "", "")
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            (root / "compose").mkdir()
-            (root / "compose/dev.yaml").write_text("services: {}\n", encoding="utf-8")
-            with unittest.mock.patch.multiple(
-                yafvsctl,
-                ensure_runtime_dirs=unittest.mock.Mock(return_value=[]),
-                ensure_build_runtime_dirs=unittest.mock.Mock(return_value=[]),
-                active_feed_generation_selector_journal_finding=unittest.mock.Mock(
-                    return_value=yafvsctl.finding(
-                        "fail", "feed-generation.selector-journal", "No completed activation."
-                    )
-                ),
-                runtime_app_env=unittest.mock.Mock(return_value={}),
-                run_command=unittest.mock.Mock(return_value=completed),
-                rendered_app_execution_mount_finding=unittest.mock.Mock(
-                    return_value=yafvsctl.finding(
-                        "pass", "production.app-execution-mounts", "Mock mounts."
-                    )
-                ),
-                rust_result_envelope=rust_up,
-            ):
-                result = yafvsctl.command_runtime_app_up(root)
-        self.assertEqual(result["status"], "fail")
-        self.assertIn("mount prerequisites", result["summary"])
-        rust_up.assert_not_called()
+    def test_runtime_app_up_is_owned_directly_by_rust(self):
+        root = Path(__file__).resolve().parents[2]
+        python_source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        rust_source = (
+            root
+            / "tools"
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "feed_generation"
+            / "app_up.rs"
+        ).read_text(encoding="utf-8")
+        justfile = (root / "justfile").read_text(encoding="utf-8")
+        recipe = justfile.split("runtime-app-up *args:\n", 1)[1].split(
+            "\n\n", 1
+        )[0]
+        for surface in (
+            'add_parser("runtime-app-up"',
+            'args.command == "runtime-app-up"',
+            "def command_runtime_app_up",
+            "def _command_runtime_app_up_unlocked",
+            "def compose_app_services_up_with_retry",
+            "def runtime_app_up_status_only_result",
+        ):
+            self.assertNotIn(surface, python_source)
+        self.assertIn("command_runtime_app_up", rust_source)
+        self.assertIn("RuntimeOperationLock::acquire", rust_source)
+        self.assertIn("FEED_ACTIVATION_LOCK", rust_source)
+        self.assertIn("cargo run --quiet --locked", recipe)
+        self.assertIn('-- runtime-app-up "$@"', recipe)
+        self.assertNotIn("tools/yafvsctl ", recipe)
 
     def test_feed_lifecycle_lock_serializes_stage_and_runtime_mutations(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(
@@ -935,7 +919,6 @@ class YAFVSCtlTests(unittest.TestCase):
         for function_name in (
             "command_build_ui",
             "command_runtime_scanner_register",
-            "command_runtime_app_up",
             "command_runtime_native_api_rebuild",
             "command_runtime_native_api_direct_write_smoke",
             "command_runtime_native_api_direct_smoke",
@@ -992,52 +975,20 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("FEED_ACTIVATION_LOCK", runtime_manager_source)
         self.assertIn("RUNTIME_MANAGER_LOCK", runtime_manager_source)
 
-        error = yafvsctl.RuntimeLockTimeout(
-            yafvsctl.FEED_ACTIVATION_LOCK,
-            "runtime-app-up",
-            {"operation": "feed-generation-activate"},
-        )
-        with unittest.mock.patch.object(
-            yafvsctl, "acquire_runtime_lock", side_effect=error
-        ):
-            result = yafvsctl.command_runtime_app_up(Path("/tmp"))
-        self.assertEqual(result["status"], "fail")
-        self.assertIn("feed lifecycle lock", result["summary"])
+        app_up_source = (
+            Path(__file__).resolve().parents[1]
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "feed_generation"
+            / "app_up.rs"
+        ).read_text(encoding="utf-8")
+        self.assertIn("RuntimeOperationLock::acquire", app_up_source)
+        self.assertIn("FEED_ACTIVATION_LOCK", app_up_source)
 
 
 
 
-
-    def test_runtime_app_up_status_only_omits_pass_output_tails(self):
-        result = {
-            "status": "pass",
-            "summary": "Application runtime startup attempted.",
-            "artifacts": ["/runtime"],
-            "findings": [
-                yafvsctl.finding("pass", "compose.config", "Compose config validation exit code 0."),
-                yafvsctl.finding("pass", "runtime.infrastructure", "Runtime infrastructure startup attempted.", details={"status": "pass"}),
-                yafvsctl.finding("pass", "runtime.database-init", "Runtime database initialization completed.", details={"status": "pass"}),
-                yafvsctl.finding("pass", "runtime.scanner-redis", "Scanner Redis initialization completed.", details={"status": "pass"}),
-                yafvsctl.finding("pass", "runtime.feed-keyring", "Shared feed signature keyring initialization completed.", details={"status": "pass"}),
-                yafvsctl.finding("pass", "gsa.build.index", "GSA production build index.html exists."),
-                yafvsctl.finding("pass", "gsa.static-stage", "GSA production build is staged for gsad."),
-                yafvsctl.finding("pass", "gsa.config-js", "GSA config.js uses browser host fallback."),
-                yafvsctl.finding("pass", "compose.app-up", "docker compose app up exit code 0.", details={"output_tail": ["large build output"]}),
-                yafvsctl.finding("pass", "runtime.app.running", "gsad container is running.", details={"service": "gsad", "logs_tail": ["large log tail"]}),
-            ],
-        }
-
-        compact = yafvsctl.runtime_app_up_status_only_result(result)
-
-        self.assertEqual(compact["status"], "pass")
-        self.assertEqual(compact["details"]["finding_count"], 10)
-        self.assertEqual(compact["details"]["non_pass_count"], 0)
-        self.assertEqual(compact["details"]["artifact_count"], 1)
-        self.assertEqual(compact["details"]["important_checks"]["compose.app-up"], "pass")
-        self.assertEqual(compact["details"]["service_status"], {"gsad": "pass"})
-        self.assertEqual(compact["findings"][0]["check"], "runtime-app-up.status-only")
-        self.assertNotIn("output_tail", json.dumps(compact))
-        self.assertNotIn("logs_tail", json.dumps(compact))
 
     def assert_rust_yafvsctl_parity(
         self,
@@ -1419,7 +1370,6 @@ class YAFVSCtlTests(unittest.TestCase):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         wrappers = [
             "runtime-scanner-register",
-            "runtime-app-up",
             "runtime-app-smoke",
             "runtime-browser-smoke",
             "runtime-browser-regression",
@@ -2431,8 +2381,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("def command_runtime_native_api_smoke", source)
         self.assertIn('native_api_smoke.add_argument("--status-only"', source)
         self.assertIn("command_runtime_native_api_smoke(repo_root, status_only=args.status_only)", source)
-        self.assertIn('runtime_app_up.add_argument("--status-only"', source)
-        self.assertIn("command_runtime_app_up(repo_root, status_only=args.status_only)", source)
         self.assertIn("def command_runtime_native_api_direct_smoke", source)
         self.assertIn("def command_runtime_native_api_direct_write_smoke", source)
         self.assertIn("def command_runtime_native_api_rebuild", source)
@@ -2508,16 +2456,12 @@ class YAFVSCtlTests(unittest.TestCase):
                 self.assertIn(f"{command} *args:", justfile)
                 self.assertIn(f'{direct_recipe} {command} "$@"', justfile)
 
-    def test_runtime_feed_keyring_init_is_rust_owned_with_strict_python_bridge(self):
+    def test_runtime_feed_keyring_init_is_owned_directly_by_rust(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         self.assertNotIn('subparsers.add_parser("runtime-feed-keyring-init"', source)
         self.assertNotIn('args.command == "runtime-feed-keyring-init"', source)
-        self.assertIn("def command_runtime_feed_keyring_init", source)
-        self.assertIn(
-            '"runtime-feed-keyring-init", ["runtime-feed-keyring-init"]',
-            " ".join(source.split()),
-        )
+        self.assertNotIn("def command_runtime_feed_keyring_init", source)
         self.assertIn("runtime-feed-keyring-init *args:", justfile)
         self.assertIn(
             'tools/yafvsctl-rs/Cargo.toml -- runtime-feed-keyring-init "$@"',
@@ -2898,37 +2842,26 @@ class YAFVSCtlTests(unittest.TestCase):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         self.assertNotIn('subparsers.add_parser("up"', source)
         self.assertNotIn("def command_up", source)
-        self.assertIn('rust_result_envelope(repo_root, "up", ["up"])', source)
+        self.assertNotIn('rust_result_envelope(repo_root, "up", ["up"])', source)
         self.assertIn("up *args:", justfile)
         self.assertIn("tools/yafvsctl-rs/Cargo.toml -- up", justfile)
 
-    def test_runtime_init_is_rust_owned_with_strict_python_bridge(self):
+    def test_runtime_init_is_owned_directly_by_rust(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         self.assertNotIn('subparsers.add_parser("runtime-init"', source)
         self.assertNotIn('args.command == "runtime-init"', source)
-        self.assertIn("def command_runtime_init", source)
-        self.assertIn(
-            '"runtime-init", ["runtime-init"]',
-            " ".join(source.split()),
-        )
+        self.assertNotIn("def command_runtime_init", source)
         self.assertIn("runtime-init *args:", justfile)
         self.assertIn("tools/yafvsctl-rs/Cargo.toml -- runtime-init", justfile)
 
-    def test_runtime_scanner_redis_init_is_rust_owned_with_internal_python_bridge(self):
+    def test_runtime_scanner_redis_init_is_owned_directly_by_rust(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         self.assertNotIn('subparsers.add_parser("runtime-scanner-redis-init"', source)
         self.assertNotIn('args.command == "runtime-scanner-redis-init"', source)
-        self.assertIn("def _command_runtime_scanner_redis_init_unlocked", source)
-        self.assertIn("def command_runtime_scanner_redis_init", source)
-        command = source.split("def command_runtime_scanner_redis_init", 1)[1]
-        command = command.split("\ndef ", 1)[0]
-        self.assertIn("if lifecycle_managed:", command)
-        self.assertIn(
-            '"runtime-scanner-redis-init", ["runtime-scanner-redis-init"]',
-            " ".join(command.split()),
-        )
+        self.assertNotIn("def _command_runtime_scanner_redis_init_unlocked", source)
+        self.assertNotIn("def command_runtime_scanner_redis_init", source)
         self.assertIn("runtime-scanner-redis-init *args:", justfile)
         self.assertIn(
             "tools/yafvsctl-rs/Cargo.toml -- runtime-scanner-redis-init",
@@ -8179,126 +8112,6 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_app_services_are_experimental_profile_services(self):
         self.assertEqual(yafvsctl.APP_SERVICES, ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "yafvs-api"))
-        self.assertEqual(yafvsctl.APP_EXECUTION_MOUNT_SERVICES, ("gvmd", "ospd-openvas", "notus-scanner", "gsad"))
-
-    def make_app_execution_mount_fixture(self, tmp):
-        root = Path(tmp) / "TurboVAS"
-        runtime = Path(tmp) / "YAFVS-runtime"
-        (root / "build").mkdir(parents=True)
-        for directory in (
-            runtime,
-            runtime / "logs" / "gvmd",
-            runtime / "logs" / "gsad",
-            runtime / "run" / "gvmd",
-            runtime / "run" / "gsad",
-            runtime / "state" / "gvmd",
-            runtime / "state" / "gvmd-bind-files",
-            runtime / "state" / "ospd",
-        ):
-            directory.mkdir(parents=True, exist_ok=True)
-        (runtime / "state" / "gvmd-bind-files" / "gvmd.sem").write_text("", encoding="utf-8")
-        (runtime / "state" / "ospd" / "openvas.conf").write_text("db_address = /runtime/run/redis-openvas/redis.sock\n", encoding="utf-8")
-        services = {}
-        for service in yafvsctl.APP_EXECUTION_MOUNT_SERVICES:
-            volumes = [
-                {"type": "bind", "source": str(root), "target": "/workspace", "read_only": True},
-                {"type": "bind", "source": str(root / "build"), "target": "/workspace/build", "read_only": True},
-                {"type": "bind", "source": str(root), "target": str(root), "read_only": True},
-            ]
-            for target, (source, read_only) in yafvsctl.app_execution_overlay_contract(root, service).items():
-                volumes.append({"type": "bind", "source": str(source), "target": target, "read_only": read_only})
-            services[service] = {"volumes": volumes}
-        return root, runtime, {"services": services}
-
-    def app_mount_violations(self, root, payload):
-        finding = yafvsctl.app_execution_mount_finding(root, payload)
-        self.assertEqual(finding["status"], "fail")
-        return finding["details"]["violations"]
-
-    def test_app_execution_mount_posture_accepts_exact_graph(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
-            finding = yafvsctl.app_execution_mount_finding(root, payload)
-
-        self.assertEqual(finding["status"], "pass")
-        self.assertEqual(finding["details"]["violations"], [])
-        self.assertEqual(len(finding["details"]["validated_mounts"]), 19)
-
-    def test_app_execution_mount_posture_rejects_writable_build_mount(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
-            payload["services"]["ospd-openvas"]["volumes"][1]["read_only"] = False
-            violations = self.app_mount_violations(root, payload)
-
-        self.assertTrue(any(item.get("target") == "/workspace/build" and "read_only" in item["reason"] for item in violations))
-
-    def test_app_execution_mount_posture_rejects_named_volume_build_bypass(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
-            payload["services"]["gvmd"]["volumes"][1] = {"type": "volume", "source": "build-bypass", "target": "/workspace/build"}
-            violations = self.app_mount_violations(root, payload)
-
-        self.assertTrue(any(item.get("type") == "volume" and item.get("target") == "/workspace/build" for item in violations))
-
-    def test_app_execution_mount_posture_rejects_alias_source_replacement(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
-            payload["services"]["notus-scanner"]["volumes"][2]["source"] = "/tmp"
-            violations = self.app_mount_violations(root, payload)
-
-        self.assertTrue(any(item.get("source") == "/tmp" and "bind source must be" in item["reason"] for item in violations))
-
-    def test_app_execution_mount_posture_rejects_tmpfs_protected_mount(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
-            payload["services"]["gsad"]["volumes"][0] = {"type": "tmpfs", "target": "/workspace"}
-            violations = self.app_mount_violations(root, payload)
-
-        self.assertTrue(any(item.get("type") == "tmpfs" and item.get("target") == "/workspace" for item in violations))
-
-    def test_app_execution_mount_posture_rejects_symlink_runtime_source(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, runtime, payload = self.make_app_execution_mount_fixture(tmp)
-            logs = runtime / "logs" / "gvmd"
-            logs.rmdir()
-            logs.symlink_to(runtime / "logs" / "gsad", target_is_directory=True)
-            violations = self.app_mount_violations(root, payload)
-
-        self.assertTrue(any("symlink" in item["reason"] and item.get("target") == str(root / "build" / "logs") for item in violations))
-
-    def test_app_execution_mount_posture_rejects_dotdot_target(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
-            payload["services"]["ospd-openvas"]["volumes"][1]["target"] = "/workspace/../workspace/build"
-            violations = self.app_mount_violations(root, payload)
-
-        self.assertTrue(any("dot path components" in item["reason"] for item in violations))
-
-    def test_app_execution_mount_posture_rejects_nonallowlisted_nested_mount(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, runtime, payload = self.make_app_execution_mount_fixture(tmp)
-            payload["services"]["gvmd"]["volumes"].append(
-                {"type": "bind", "source": str(runtime / "logs" / "gvmd"), "target": "/workspace/build/extra", "read_only": True}
-            )
-            violations = self.app_mount_violations(root, payload)
-
-        self.assertTrue(any(item.get("target") == "/workspace/build/extra" and "non-allowlisted" in item["reason"] for item in violations))
-
-    def test_app_execution_mount_posture_rejects_missing_required_mount(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
-            payload["services"]["notus-scanner"]["volumes"].pop(2)
-            violations = self.app_mount_violations(root, payload)
-
-        self.assertTrue(any(item.get("target") == str(root) and item.get("count") == 0 for item in violations))
-
-    def test_app_execution_mount_posture_rejects_duplicate_required_mount(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root, _runtime, payload = self.make_app_execution_mount_fixture(tmp)
-            payload["services"]["gvmd"]["volumes"].append(dict(payload["services"]["gvmd"]["volumes"][0]))
-            violations = self.app_mount_violations(root, payload)
-
-        self.assertTrue(any(item.get("target") == "/workspace" and item.get("count") == 2 for item in violations))
 
     def test_dev_shell_source_and_build_mounts_remain_writable(self):
         compose = (Path(__file__).resolve().parents[2] / "compose" / "dev.yaml").read_text(encoding="utf-8")
@@ -8322,36 +8135,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(yafvsctl.YAFVS_API_DIRECT_WRITE_CONTROL_ENV, "YAFVS_API_DIRECT_WRITE_CONTROL")
         self.assertEqual(yafvsctl.DEV_ADMIN_USER, "admin")
         self.assertEqual(yafvsctl.DEV_ADMIN_PASSWORD, "admin")
-
-    def test_gsad_binding_transition_warns_before_dropping_external_hosts(self):
-        original = yafvsctl.current_gsad_published_hosts
-        try:
-            yafvsctl.current_gsad_published_hosts = lambda _root: ("192.168.178.42", "100.80.139.13")
-            with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.dict(os.environ, {}, clear=True):
-                root = Path(tmp) / "TurboVAS"
-                root.mkdir()
-                findings = yafvsctl.gsad_binding_transition_findings(root)
-        finally:
-            yafvsctl.current_gsad_published_hosts = original
-
-        self.assertEqual(len(findings), 1)
-        self.assertEqual(findings[0]["status"], "warn")
-        self.assertEqual(findings[0]["check"], "gsad.host-binding.transition")
-        self.assertEqual(findings[0]["details"]["requested_hosts"], ("127.0.0.1",))
-        self.assertEqual(findings[0]["details"]["lost_external_hosts"], ("192.168.178.42", "100.80.139.13"))
-
-    def test_gsad_binding_transition_allows_explicit_external_hosts(self):
-        original = yafvsctl.current_gsad_published_hosts
-        try:
-            yafvsctl.current_gsad_published_hosts = lambda _root: ("192.168.178.42", "100.80.139.13")
-            with tempfile.TemporaryDirectory() as tmp, unittest.mock.patch.dict(os.environ, {yafvsctl.GSAD_HOSTS_ENV: "192.168.178.42,100.80.139.13"}, clear=True):
-                root = Path(tmp) / "TurboVAS"
-                root.mkdir()
-                findings = yafvsctl.gsad_binding_transition_findings(root)
-        finally:
-            yafvsctl.current_gsad_published_hosts = original
-
-        self.assertEqual(findings, [])
 
     def test_runtime_gsa_freshness_warns_for_stale_static_assets(self):
         original_state = yafvsctl.docker_container_state
@@ -10692,11 +10475,10 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("native-api-direct.request-shape-oversized-query", native_tooling)
         self.assertIn("/retention-plan", native_tooling)
 
-    def test_scanner_redis_paths_live_under_runtime_dir(self):
+    def test_openvas_config_path_lives_under_runtime_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
-            self.assertEqual(yafvsctl.scanner_redis_socket_path(root), Path(tmp) / "YAFVS-runtime" / "run" / "redis-openvas" / "redis.sock")
             self.assertEqual(yafvsctl.openvas_runtime_config_path(root), Path(tmp) / "YAFVS-runtime" / "state" / "ospd" / "openvas.conf")
 
     def test_feed_paths_live_under_runtime_dir(self):
@@ -10987,20 +10769,6 @@ class YAFVSCtlTests(unittest.TestCase):
             "fail",
         )
 
-    def test_openvas_runtime_config_includes_feed_paths(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            path = yafvsctl.write_openvas_runtime_config(root)
-            text = path.read_text(encoding="utf-8")
-            self.assertIn("db_address = /runtime/run/redis-openvas/redis.sock", text)
-            self.assertIn("plugins_folder = /runtime/feeds/openvas/plugins", text)
-            self.assertIn("include_folders = /runtime/feeds/openvas/plugins", text)
-            self.assertIn("mqtt_server_uri = mosquitto:1883", text)
-            self.assertIn("mqtt_user = openvas", text)
-            self.assertIn("mqtt_pass = ", text)
-            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
-
     def test_runtime_app_env_keeps_mqtt_secrets_out_of_child_environment(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
@@ -11033,52 +10801,6 @@ class YAFVSCtlTests(unittest.TestCase):
                 yafvsctl.MAX_RUNTIME_SECRET_BYTES,
             )
             self.assertNotIn("legacy-environment-secret", stored)
-
-    def test_runtime_app_up_refreshes_secret_file_bind_mounts(self):
-        source = YAFVSCTL_PATH.read_text(encoding="utf-8")
-        broker_helper = source.split("def refresh_mqtt_broker", 1)[1]
-        broker_helper = broker_helper.split("\ndef ", 1)[0]
-        app_helper = source.split("def compose_app_services_up_with_retry", 1)[
-            1
-        ]
-        app_helper = app_helper.split("\ndef ", 1)[0]
-
-        self.assertIn('"--force-recreate"', broker_helper)
-        self.assertIn('"--wait"', broker_helper)
-        self.assertIn('"--force-recreate"', app_helper)
-
-    def test_feed_app_restart_uses_restore_env_for_compose_and_process(self):
-        app_env = {
-            yafvsctl.GSAD_HOSTS_ENV: "192.168.178.42,100.80.139.13"
-        }
-        image_ids = {
-            service: "sha256:" + f"{index + 1:x}" * 64
-            for index, service in enumerate(yafvsctl.APP_SERVICES)
-        }
-        compose = unittest.mock.Mock(return_value=["docker", "compose", "up"])
-        run = unittest.mock.Mock(
-            return_value=subprocess.CompletedProcess([], 0, "", "")
-        )
-        with unittest.mock.patch.multiple(
-            yafvsctl,
-            compose_command_with_app_images=compose,
-            run_command=run,
-        ):
-            findings = yafvsctl.compose_app_services_up_with_retry(
-                Path("/tmp"),
-                "feed-generation.app-restart",
-                "Mock restart",
-                app_env=app_env,
-                app_image_ids=image_ids,
-            )
-
-        self.assertEqual(findings[0]["status"], "pass")
-        self.assertIs(compose.call_args.args[1], image_ids)
-        self.assertIs(compose.call_args.kwargs["env"], app_env)
-        self.assertIs(run.call_args.kwargs["env"], app_env)
-        self.assertIn("--no-build", compose.call_args.args)
-        self.assertIn("never", compose.call_args.args)
-        self.assertNotIn("--build", compose.call_args.args)
 
     def test_feed_image_snapshot_rejects_partial_running_deployment(self):
         running = {
@@ -11332,39 +11054,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("runtime-app-down", result["findings"][0]["message"])
         run_command.assert_not_called()
 
-    def test_identity_failure_containment_stops_all_app_services(self):
-        completed = subprocess.CompletedProcess([], 0, "stopped\n", "")
-        with unittest.mock.patch.object(
-            yafvsctl, "compose_command", return_value=["docker", "compose", "stop"]
-        ), unittest.mock.patch.object(
-            yafvsctl, "run_command", return_value=completed
-        ) as run_command:
-            result = yafvsctl.stop_app_services_after_identity_failure(
-                Path("/tmp"), app_env={}, check="test.identity-stop"
-            )
-
-        self.assertEqual(result["status"], "pass")
-        run_command.assert_called_once()
-        self.assertIn("stopped", result["message"])
-
-    def test_app_start_contains_post_start_identity_drift(self):
-        source = YAFVSCTL_PATH.read_text(encoding="utf-8")
-        app_up = source[
-            source.index("def _command_runtime_app_up_unlocked") : source.index(
-                "def command_runtime_app_up"
-            )
-        ]
-
-        self.assertLess(
-            app_up.index('check="runtime.app.artifacts-before-start"'),
-            app_up.index("compose_app_services_up_with_retry"),
-        )
-        self.assertGreater(
-            app_up.index('check="runtime.app.artifacts-after-start"'),
-            app_up.index("compose_app_services_up_with_retry"),
-        )
-        self.assertIn("stop_app_services_after_identity_failure", app_up)
-
     def test_receipt_identity_can_precede_explicit_compose_mode_transition(self):
         image_ids = {
             service: "sha256:" + f"{index + 1:x}" * 64
@@ -11467,16 +11156,6 @@ class YAFVSCtlTests(unittest.TestCase):
         payload["restore_gsad_hosts"] = ["not-an-ip"]
         with self.assertRaisesRegex(ValueError, "restore_gsad_hosts"):
             yafvsctl.validate_feed_activation_state(payload)
-
-    def test_runtime_scanner_config_artifact_is_runtime_relative(self):
-        source = YAFVSCTL_PATH.read_text(encoding="utf-8")
-        helper = source.split("def _command_runtime_scanner_redis_init_unlocked", 1)[1]
-        helper = helper.split("\ndef ", 1)[0]
-
-        self.assertIn(
-            "config_path.relative_to(runtime_dir(repo_root))", helper
-        )
-        self.assertNotIn("config_path.relative_to(repo_root)", helper)
 
     def test_runtime_containment_compose_and_broker_policy(self):
         root = Path(__file__).resolve().parents[2]

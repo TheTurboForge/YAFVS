@@ -312,7 +312,7 @@ path-coupling-state *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- path-coupling-state "$@"
 
 runtime-app-up *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-app-up "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- runtime-app-up "$@"
 
 runtime-app-build *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl runtime-app-build "$@"

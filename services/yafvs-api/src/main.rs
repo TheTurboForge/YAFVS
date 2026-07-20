@@ -53,6 +53,7 @@ mod credentials;
 mod current_user_password;
 mod cve_catalog;
 mod cve_catalog_payloads;
+mod database_compatibility;
 mod direct_api;
 mod direct_api_contract;
 mod direct_api_routes;

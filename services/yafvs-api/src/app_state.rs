@@ -9,17 +9,19 @@ use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 use serde::Serialize;
 use tokio_postgres::{Config as PgConfig, NoTls};
 
-use crate::errors::ApiError;
+use crate::{database_compatibility::DatabaseCompatibility, errors::ApiError};
 
 #[derive(Clone)]
 pub(crate) struct AppState {
     pub(crate) pool: Pool,
+    pub(crate) database_compatibility: DatabaseCompatibility,
 }
 
 #[derive(Debug, Serialize)]
 pub(crate) struct HealthResponse {
     status: &'static str,
     database: &'static str,
+    database_compatibility: DatabaseCompatibility,
 }
 
 pub(crate) fn create_pool() -> Result<Pool, ApiError> {
@@ -49,5 +51,6 @@ pub(crate) async fn healthz(
     Ok(Json(HealthResponse {
         status: "ok",
         database: "ok",
+        database_compatibility: state.database_compatibility,
     }))
 }

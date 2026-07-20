@@ -5,7 +5,7 @@ openapi: 3.1.0
 info:
   title: YAFVS Native API
   version: 0.1.0-contract
-  description: Contract baseline for DB-backed YAFVS product workflows. Current live operations are read-focused; future write/control operations must carry explicit safety metadata before replacing inherited GMP/XML paths. Direct listener responses include X-Request-Id for correlation.
+  description: Contract baseline for DB-backed YAFVS product workflows. Current live operations include guarded reads, writes, and control paths. Every native mutation is additionally subject to the service-wide database compatibility gate and returns 503 with database_write_incompatible when the detected gvmd/pg-gvm schema is not the exact characterized write schema; reads remain available on a best-effort basis. Direct listener responses include X-Request-Id for correlation.
 servers:
   - url: /api/v1
   - url: http://127.0.0.1:19080/api/v1
@@ -7736,7 +7736,7 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     ServiceUnavailable:
-      description: The private gvmd control service is temporarily unavailable.
+      description: The private gvmd control service is temporarily unavailable, or the service-wide database compatibility gate has blocked all native mutations for an unrecognized gvmd/pg-gvm schema. Inspect the Error code; database_write_incompatible is not retryable until the deployed schema and API compatibility contract are aligned.
       content:
         application/json:
           schema:

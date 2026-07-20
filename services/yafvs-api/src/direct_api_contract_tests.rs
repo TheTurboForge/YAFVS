@@ -674,9 +674,18 @@ fn runtime_accepts_distinct_internal_and_direct_routers() {
             .contains("browser_proxy_native_api_router(base_router.clone(), browser_proxy_auth)")
     );
     assert!(startup_source.contains(".with_state(state.clone())"));
-    assert!(startup_source.contains(
-        "direct_native_api_router(base_router, auth.write_control_enabled()).with_state(state)"
-    ));
+    assert!(
+        startup_source
+            .contains("direct_native_api_router(base_router, auth.write_control_enabled())")
+    );
+    assert_eq!(
+        startup_source
+            .matches("require_native_write_schema_compatibility")
+            .count(),
+        3,
+        "the imported middleware plus both native route trees must fail closed on unknown write schemas"
+    );
+    assert!(startup_source.matches(".with_state(state.clone())").count() >= 2);
     assert!(startup_source.contains("app: direct_app"));
     assert!(!startup_source.contains("app: app.clone()"));
 }

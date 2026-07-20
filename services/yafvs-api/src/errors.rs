@@ -72,6 +72,8 @@ pub(crate) enum ApiError {
     Conflict(String),
     #[error("database error")]
     Database,
+    #[error("database schema is not compatible with native writes")]
+    DatabaseWriteIncompatible,
     #[error("configuration error")]
     Config,
     #[error("task stop requested but scanner absence is unverified")]
@@ -110,7 +112,9 @@ impl ApiError {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Conflict(_) => StatusCode::CONFLICT,
-            Self::Database | Self::Config => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Database => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::DatabaseWriteIncompatible => StatusCode::SERVICE_UNAVAILABLE,
+            Self::Config => StatusCode::INTERNAL_SERVER_ERROR,
             Self::TaskStopRequested => StatusCode::CONFLICT,
             Self::ScannerUnverified => StatusCode::BAD_GATEWAY,
             Self::ControlFailure => StatusCode::BAD_GATEWAY,
@@ -142,6 +146,7 @@ impl ApiError {
             Self::NotFound => "not_found",
             Self::Conflict(_) => "conflict",
             Self::Database => "database_error",
+            Self::DatabaseWriteIncompatible => "database_write_incompatible",
             Self::Config => "configuration_error",
             Self::TaskStopRequested => "stop_requested",
             Self::ScannerUnverified => "scanner_unverified",
@@ -198,6 +203,10 @@ impl ApiError {
             Self::NotFound => "The requested resource was not found.".to_string(),
             Self::Conflict(message) => message.clone(),
             Self::Database => "The database query failed.".to_string(),
+            Self::DatabaseWriteIncompatible => {
+                "Native writes are unavailable because this database schema is not recognized; read operations remain available."
+                    .to_string()
+            }
             Self::Config => "The API service is not configured correctly.".to_string(),
             Self::TaskStopRequested => {
                 "The stop was requested, but scanner absence is not yet verified.".to_string()
@@ -371,6 +380,19 @@ mod tests {
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
                 "database query failed",
+                &[
+                    "secret",
+                    "token",
+                    "password",
+                    "credential",
+                    "connection string",
+                ][..],
+            ),
+            (
+                ApiError::DatabaseWriteIncompatible,
+                StatusCode::SERVICE_UNAVAILABLE,
+                "database_write_incompatible",
+                "schema is not recognized",
                 &[
                     "secret",
                     "token",

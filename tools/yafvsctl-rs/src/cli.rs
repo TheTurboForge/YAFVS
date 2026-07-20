@@ -423,6 +423,9 @@ pub enum CliCommand {
     FeedGenerationRollback {
         /// Generation identifier to roll back from.
         generation_id: String,
+        /// Replace an interrupted transition's pinned app identity with the current verified deployment receipt.
+        #[arg(long)]
+        repair_deployment: bool,
     },
     /// Inspect Rust migration tooling and the first dry-run candidate.
     RustMigrationState,
@@ -1990,10 +1993,11 @@ mod tests {
             }
         );
         assert_eq!(
-            parse_cli(["feed-generation-rollback", "gen-002"]).unwrap(),
+            parse_cli(["feed-generation-rollback", "gen-002", "--repair-deployment",]).unwrap(),
             Cli {
                 command: CliCommand::FeedGenerationRollback {
                     generation_id: "gen-002".to_string(),
+                    repair_deployment: true,
                 },
                 json: false,
                 status_only: false,

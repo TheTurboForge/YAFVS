@@ -4,8 +4,9 @@
 //! Transactional selection of fully verified immutable feed generations.
 
 use super::{
-    Limits, R, absolute_dir, digest, identity, is_dir, is_lnk, is_reg, mode, open_dir_at,
-    path_is_missing, selector, stat, stat_at, uid, verify,
+    Limits, R, RELEASE, VerificationWitness, absolute_dir, canonical, digest, exact_keys, identity,
+    is_dir, is_lnk, is_reg, manifest, mode, open_dir_at, path_is_missing,
+    recheck_verified_generation, selector, sha, stat, stat_at, strv, uid, verify,
 };
 use serde_json::{Value, json};
 use std::ffi::CString;
@@ -21,6 +22,79 @@ struct Store {
     generations_path: PathBuf,
     store: OwnedFd,
     generations: OwnedFd,
+}
+
+/// Resolve the current immutable generation and authenticate its manifest.
+///
+/// Activation performs the expensive payload hashing. Routine app startup
+/// authenticates that exact manifest identity, the selector, activation
+/// journal, and database attestation without rereading every payload byte.
+pub(super) fn read_current_generation_attested_reference(runtime_root: &Path) -> R<Option<Value>> {
+    let store_path = runtime_root.join("feed-store");
+    let store = match absolute_dir(&store_path) {
+        Ok(store) => store,
+        Err(_) if path_is_missing(&store_path) => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    private_user_directory(store.as_raw_fd())?;
+    let Some(generation_id) = selector(store.as_raw_fd())? else {
+        return Ok(None);
+    };
+    let generations = open_dir_at(store.as_raw_fd(), "generations")?;
+    private_user_directory(generations.as_raw_fd())?;
+    let entry = stat_at(generations.as_raw_fd(), &generation_id)?;
+    let opened = open_dir_at(generations.as_raw_fd(), &generation_id)?;
+    let opened_stat = stat(opened.as_raw_fd())?;
+    if !is_dir(&entry)
+        || !is_dir(&opened_stat)
+        || identity(&entry) != identity(&opened_stat)
+        || opened_stat.st_uid != uid()
+        || mode(&opened_stat) & 0o222 != 0
+    {
+        return Err("current feed generation reference is unsafe".into());
+    }
+    let value = manifest(opened.as_raw_fd())?;
+    let object = value
+        .as_object()
+        .ok_or("generation manifest root is not an object")?;
+    if !exact_keys(
+        object,
+        &[
+            "schema_version",
+            "feed_release",
+            "classes",
+            "files",
+            "signature_provenance",
+            "generation_id",
+            "created_at",
+            "source_snapshot",
+        ],
+    ) || object.get("schema_version") != Some(&json!(1))
+        || strv(object, "feed_release")? != RELEASE
+        || strv(object, "generation_id")? != generation_id
+    {
+        return Err("current feed generation manifest identity is invalid".into());
+    }
+    let content = json!({
+        "schema_version": object["schema_version"],
+        "feed_release": object["feed_release"],
+        "classes": object["classes"],
+        "files": object["files"],
+        "signature_provenance": object["signature_provenance"],
+    });
+    let mut canon = String::new();
+    canonical(&content, &mut canon);
+    if sha(canon.as_bytes()) != generation_id {
+        return Err("current feed generation manifest identity is invalid".into());
+    }
+    if selector(store.as_raw_fd())? != Some(generation_id.clone()) {
+        return Err("current feed generation selector changed while resolving".into());
+    }
+    Ok(Some(json!({
+        "generation_id": generation_id,
+        "verified": false,
+        "manifest_authenticated": true,
+    })))
 }
 
 struct TempSelector {
@@ -469,6 +543,74 @@ pub(super) fn select_generation(
     Ok(verified)
 }
 
+pub(super) fn select_verified_generation(
+    runtime_root: &Path,
+    generation_id: &str,
+    limits: &Limits,
+    target: &VerificationWitness,
+    previous: Option<&VerificationWitness>,
+) -> R<Value> {
+    if !digest(&Value::String(generation_id.to_owned())) || target.generation_id() != generation_id
+    {
+        return Err("feed generation verification witness does not match the target".into());
+    }
+    let opened = open_store(runtime_root)?;
+    let _lock = lock_store(opened.generations.as_raw_fd())?;
+    let previous_generation_id = selector(opened.store.as_raw_fd())?;
+    if previous_generation_id.as_deref() != previous.map(VerificationWitness::generation_id) {
+        return Err("current feed selector changed after generation verification".into());
+    }
+    if let Some(previous) = previous
+        && previous.generation_id() != target.generation_id()
+    {
+        recheck_verified_generation(&opened.generations_path, previous, limits)?;
+    }
+    let mut verified = recheck_verified_generation(&opened.generations_path, target, limits)?;
+    let selection: R<()> = (|| {
+        replace_current_selector(opened.store.as_raw_fd(), generation_id)?;
+        injected_failure(&opened.path, false)?;
+        if selector(opened.store.as_raw_fd())?.as_deref() != Some(generation_id) {
+            return Err("feed generation selector did not retain the requested generation".into());
+        }
+        recheck_verified_generation(&opened.generations_path, target, limits)?;
+        Ok(())
+    })();
+    if let Err(selection_error) = selection {
+        let restoration = (|| {
+            injected_failure(&opened.path, true)?;
+            if let (Some(previous_id), Some(previous)) =
+                (previous_generation_id.as_deref(), previous)
+            {
+                replace_current_selector(opened.store.as_raw_fd(), previous_id)?;
+                recheck_verified_generation(&opened.generations_path, previous, limits)?;
+                Ok(())
+            } else {
+                restore_absent_selector(opened.store.as_raw_fd(), generation_id)
+            }
+        })();
+        return match restoration {
+            Ok(()) => Err(format!(
+                "feed generation selection failed; prior selector was restored: {selection_error}"
+            )),
+            Err(restoration_error) => Err(format!(
+                "feed generation selection failed: {selection_error}; prior selector restoration failed: {restoration_error}"
+            )),
+        };
+    }
+    let object = verified
+        .as_object_mut()
+        .ok_or_else(|| "verified generation result is not an object".to_owned())?;
+    object.insert(
+        "previous_generation_id".into(),
+        previous_generation_id.map_or(Value::Null, Value::String),
+    );
+    object.insert(
+        "current_generation_id".into(),
+        Value::String(generation_id.to_owned()),
+    );
+    Ok(verified)
+}
+
 pub(super) fn clear_current_generation(runtime_root: &Path, expected_generation_id: &str) -> R<()> {
     if !digest(&Value::String(expected_generation_id.to_owned())) {
         return Err("expected feed generation identifier is invalid".into());
@@ -510,6 +652,31 @@ mod tests {
         assert_eq!(first["previous_generation_id"], Value::Null);
         assert_eq!(first["current_generation_id"], id);
         let second = select_generation(&root, &id, &Limits::default()).unwrap();
+        assert_eq!(second["previous_generation_id"], id);
+        assert_eq!(second["current_generation_id"], id);
+        cleanup(&root);
+    }
+
+    #[test]
+    fn witnessed_selection_reuses_full_verification_and_requires_prior_witness() {
+        let _serial = TEST_SERIAL.lock().unwrap();
+        let (root, id) = valid_generation("select-witness");
+        let generations = root.join("feed-store/generations");
+        let verified =
+            super::super::verify_with_witness(&generations, &id, &Limits::default()).unwrap();
+        let (_, witness) = verified.into_parts();
+
+        let first =
+            select_verified_generation(&root, &id, &Limits::default(), &witness, None).unwrap();
+        assert_eq!(first["previous_generation_id"], Value::Null);
+        assert_eq!(first["verification_reused"], true);
+        assert_eq!(
+            select_verified_generation(&root, &id, &Limits::default(), &witness, None).unwrap_err(),
+            "current feed selector changed after generation verification"
+        );
+        let second =
+            select_verified_generation(&root, &id, &Limits::default(), &witness, Some(&witness))
+                .unwrap();
         assert_eq!(second["previous_generation_id"], id);
         assert_eq!(second["current_generation_id"], id);
         cleanup(&root);
@@ -565,6 +732,12 @@ mod tests {
         let reference = read_current_generation_reference(&root).unwrap().unwrap();
         assert_eq!(reference["generation_id"], id);
         assert_eq!(reference["verified"], false);
+        assert_eq!(
+            read_current_generation_attested_reference(&root)
+                .unwrap()
+                .unwrap()["manifest_authenticated"],
+            true
+        );
 
         let payload = root
             .join("feed-store/generations")
@@ -576,6 +749,12 @@ mod tests {
 
         assert_eq!(
             read_current_generation_reference(&root).unwrap().unwrap()["generation_id"],
+            id
+        );
+        assert_eq!(
+            read_current_generation_attested_reference(&root)
+                .unwrap()
+                .unwrap()["generation_id"],
             id
         );
         assert!(read_current_generation(&root, &Limits::default()).is_err());

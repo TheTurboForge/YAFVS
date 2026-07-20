@@ -1007,22 +1007,28 @@ pub(super) fn stage_generation(
         write_manifest(staging.as_raw_fd(), &manifest)?;
         seal(staging.as_raw_fd())?;
         sync(staging.as_raw_fd())?;
-        verify_entry(
+        let staged = verify_entry_with_witness(
             &runtime_root.join("feed-store/generations"),
             &id,
             &staging_name,
             limits,
         )?;
-        let reused = match rename_noreplace(generations.as_raw_fd(), &staging_name, &id) {
-            Ok(()) => false,
+        let (staged_details, staged_witness) = staged.into_parts();
+        let mut installed_witness = None;
+        let reused_verified = match rename_noreplace(generations.as_raw_fd(), &staging_name, &id) {
+            Ok(()) => {
+                installed_witness = Some(staged_witness.relocated(&id)?);
+                None
+            }
             Err(error) if error.raw_os_error() == Some(libc::EEXIST) => {
-                verify(&runtime_root.join("feed-store/generations"), &id, limits)?;
+                let verified = verify(&runtime_root.join("feed-store/generations"), &id, limits)?;
                 remove_exact(generations.as_raw_fd(), &staging_name, staging_id)?;
                 cleanup_needed = false;
-                true
+                Some(verified)
             }
             Err(error) => return Err(format!("could not install staged generation: {error}")),
         };
+        let reused = reused_verified.is_some();
         if unsafe { libc::fsync(generations.as_raw_fd()) } != 0 {
             return Err(err("could not sync generation store"));
         }
@@ -1030,7 +1036,19 @@ pub(super) fn stage_generation(
         if take_fault(FaultPoint::PostInstall) {
             return Err("injected post-install verification failure".into());
         }
-        let verified = verify(&runtime_root.join("feed-store/generations"), &id, limits)?;
+        let verified = match reused_verified {
+            Some(verified) => verified,
+            None => {
+                recheck_verified_generation(
+                    &runtime_root.join("feed-store/generations"),
+                    installed_witness
+                        .as_ref()
+                        .expect("newly installed generation has a witness"),
+                    limits,
+                )?;
+                staged_details
+            }
+        };
         cleanup_needed = false;
         Ok(
             json!({"generation_id":verified["generation_id"],"feed_release":verified["feed_release"],"file_count":verified["file_count"],"byte_count":verified["byte_count"],"class_count":verified["class_count"],"created_at":verified["created_at"],"verified":true,"path":runtime_root.join("feed-store/generations").join(&id),"reused":reused,"current_pointer_changed":false}),

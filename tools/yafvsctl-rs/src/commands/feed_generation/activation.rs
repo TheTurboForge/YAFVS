@@ -19,7 +19,7 @@ use super::transition::{
     AdapterError, GenerationId, StepStatus, TransitionAction, TransitionDisposition,
     TransitionOutcome, TransitionRequest, run_transition,
 };
-use super::{Limits, verify};
+use super::{Limits, VerificationWitness, verify_with_witness};
 use crate::process::SystemCommandRunner;
 use crate::result::{Finding, ResultEnvelope, make_result};
 use serde_json::{Value, json};
@@ -46,6 +46,7 @@ pub(super) fn command(
     rollback: bool,
     allow_first_activation: bool,
     repair_attestation: bool,
+    repair_deployment: bool,
 ) -> ResultEnvelope {
     command_with_timeout(
         repo_root,
@@ -53,6 +54,7 @@ pub(super) fn command(
         rollback,
         allow_first_activation,
         repair_attestation,
+        repair_deployment,
         DEFAULT_RUNTIME_LOCK_TIMEOUT,
     )
 }
@@ -63,6 +65,7 @@ fn command_with_timeout(
     rollback: bool,
     allow_first_activation: bool,
     repair_attestation: bool,
+    repair_deployment: bool,
     timeout: Duration,
 ) -> ResultEnvelope {
     let command_name = if rollback {
@@ -82,6 +85,7 @@ fn command_with_timeout(
             rollback,
             allow_first_activation,
             repair_attestation,
+            repair_deployment,
             command_name,
         ),
         Err(RuntimeLockError::Timeout {
@@ -120,6 +124,7 @@ fn command_unlocked(
     rollback: bool,
     allow_first_activation: bool,
     repair_attestation: bool,
+    repair_deployment: bool,
     command_name: &str,
 ) -> ResultEnvelope {
     let runtime = runtime_dir(repo_root);
@@ -137,7 +142,7 @@ fn command_unlocked(
             );
         }
     };
-    let target = match verify(&generations, generation_id, &Limits::default()) {
+    let target = match verify_with_witness(&generations, generation_id, &Limits::default()) {
         Ok(target) => target,
         Err(error) => {
             return failure(
@@ -150,6 +155,7 @@ fn command_unlocked(
             );
         }
     };
+    let (target_details, target_witness) = target.into_parts();
     let mut findings = vec![
         Finding::new(
             "pass",
@@ -157,8 +163,10 @@ fn command_unlocked(
             "Target feed generation is complete and verified.".into(),
         )
         .with_path(&generations.join(generation_id).display().to_string())
-        .with_details(target),
+        .with_details(target_details),
     ];
+    let mut verified_generations = std::collections::BTreeMap::new();
+    verified_generations.insert(generation_id.to_owned(), target_witness);
     let signature_findings = provenance::signature_findings(
         repo_root,
         &generations.join(generation_id),
@@ -178,8 +186,7 @@ fn command_unlocked(
         )
         .with_artifacts(vec![generations.join(generation_id).display().to_string()]);
     }
-
-    let current = match selector::read_current_generation(&runtime, &Limits::default()) {
+    let current = match selector::read_current_generation_reference(&runtime) {
         Ok(current) => current,
         Err(error) => {
             return failure_with(
@@ -196,8 +203,62 @@ fn command_unlocked(
     let current_id = current
         .as_ref()
         .and_then(|value| value.get("generation_id"))
-        .and_then(Value::as_str);
-    let state = match journal::read_activation_state(&runtime) {
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    if let Some(current_id) = current_id.as_deref()
+        && current_id != generation_id
+    {
+        let verified = match verify_with_witness(&generations, current_id, &Limits::default()) {
+            Ok(verified) => verified,
+            Err(error) => {
+                return failure_with(
+                    repo_root,
+                    command_name,
+                    "Feed generation transition stopped at selector verification.",
+                    findings,
+                    "feed-generation.current",
+                    &format!("Active feed generation verification failed closed: {error}"),
+                    vec![runtime.join("feed-store").display().to_string()],
+                );
+            }
+        };
+        let (details, witness) = verified.into_parts();
+        let observed = selector::read_current_generation_reference(&runtime)
+            .ok()
+            .flatten()
+            .and_then(|value| {
+                value
+                    .get("generation_id")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+            });
+        if observed.as_deref() != Some(current_id) {
+            return failure_with(
+                repo_root,
+                command_name,
+                "Feed generation transition stopped at selector verification.",
+                findings,
+                "feed-generation.current",
+                "Active feed selector changed while its generation was being verified.",
+                vec![runtime.join("feed-store").display().to_string()],
+            );
+        }
+        findings.push(
+            Finding::new(
+                "pass",
+                "feed-generation.current",
+                "Existing active feed generation is verified for guarded recovery.".into(),
+            )
+            .with_details(details),
+        );
+        verified_generations.insert(current_id.to_owned(), witness);
+    }
+    let state_result = if repair_attestation {
+        journal::read_activation_state_for_repair(&runtime)
+    } else {
+        journal::read_activation_state(&runtime).map(|state| (state, false))
+    };
+    let (state, legacy_identity) = match state_result {
         Ok(state) => state,
         Err(error) => {
             return failure_with(
@@ -215,6 +276,20 @@ fn command_unlocked(
             );
         }
     };
+    if legacy_identity {
+        findings.push(
+            Finding::new(
+                "warn",
+                "feed-generation.journal-identity-migration",
+                "Explicit attestation repair accepted the completed pre-rename application identity; the current prepared receipt will replace it after real imports."
+                    .into(),
+            )
+            .with_details(json!({
+                "legacy_service": "turbovas-api",
+                "current_service": "yafvs-api",
+            })),
+        );
+    }
 
     let active_state = state
         .as_ref()
@@ -240,7 +315,7 @@ fn command_unlocked(
     let database_generation_id = database.as_ref().map(|value| value.generation_id());
     let prepared = match resolve_request(
         target_id,
-        current_id,
+        current_id.as_deref(),
         state.as_ref(),
         database_generation_id,
         rollback,
@@ -264,8 +339,25 @@ fn command_unlocked(
             );
         }
     };
+    if repair_deployment && !prepared.request.resume_existing {
+        return failure_with(
+            repo_root,
+            command_name,
+            "Feed generation transition stopped at deployment-repair scope validation.",
+            findings,
+            "feed-generation.deployment-repair-scope",
+            "Deployment repair is limited to an explicitly interrupted transition.",
+            vec![
+                journal::activation_state_path(&runtime)
+                    .display()
+                    .to_string(),
+            ],
+        );
+    }
 
-    if let Some(current_id) = current_id {
+    if let Some(current_id) = current_id.as_deref()
+        && current_id == generation_id
+    {
         findings.push(
             Finding::new(
                 "pass",
@@ -275,7 +367,7 @@ fn command_unlocked(
             .with_details(json!({"generation_id": current_id})),
         );
     }
-    if active_state && database_generation_id == current_id {
+    if active_state && database_generation_id == current_id.as_deref() {
         findings.push(
             Finding::new(
                 "pass",
@@ -339,13 +431,20 @@ fn command_unlocked(
             );
         }
     };
-    let identity_source = if prepared.request.resume_existing {
-        state
-            .as_ref()
-            .expect("resumed request has activation state")
-    } else {
+    if !prepared.request.resume_existing || repair_deployment {
         match require_app_deployment_receipt(&runtime) {
             Ok(receipt) => {
+                if repair_deployment {
+                    findings.push(
+                        Finding::new(
+                            "warn",
+                            "feed-generation.deployment-repair",
+                            "Explicit interrupted-transition recovery selected the current verified application deployment receipt; feed and database attestations will still be recreated by real import and runtime verification."
+                                .into(),
+                        )
+                        .with_details(json!({"generation_id": generation_id})),
+                    );
+                }
                 return run_with_deployment(
                     repo_root,
                     command_name,
@@ -359,6 +458,7 @@ fn command_unlocked(
                         app_compose_contract: receipt["compose_contract"].clone(),
                     },
                     generation_id,
+                    verified_generations,
                 );
             }
             Err(error) => {
@@ -378,7 +478,10 @@ fn command_unlocked(
                 );
             }
         }
-    };
+    }
+    let identity_source = state
+        .as_ref()
+        .expect("resumed request has activation state");
     run_with_deployment(
         repo_root,
         command_name,
@@ -392,6 +495,7 @@ fn command_unlocked(
             app_compose_contract: identity_source["app_compose_contract"].clone(),
         },
         generation_id,
+        verified_generations,
     )
 }
 
@@ -404,6 +508,7 @@ fn run_with_deployment(
     environment: std::collections::BTreeMap<OsString, OsString>,
     deployment: PinnedDeployment,
     generation_id: &str,
+    verified_generations: std::collections::BTreeMap<String, VerificationWitness>,
 ) -> ResultEnvelope {
     let mut adapter = match ConcreteTransitionAdapter::new(
         repo_root,
@@ -411,7 +516,7 @@ fn run_with_deployment(
         environment,
         deployment,
     ) {
-        Ok(adapter) => adapter,
+        Ok(adapter) => adapter.with_verified_generations(verified_generations),
         Err(error) => {
             return failure_with(
                 repo_root,
@@ -614,20 +719,31 @@ fn restore_hosts(
             .as_array()
             .and_then(|hosts| hosts.iter().map(Value::as_str).collect::<Option<Vec<_>>>())
             .ok_or_else(|| "Recorded GSAD published hosts are invalid".to_owned())?;
-        environment.insert(
-            OsString::from("YAFVS_GSAD_HOST"),
-            OsString::from(values.join(",")),
-        );
+        let values = canonical_restore_hosts(values)?;
+        apply_restore_hosts(environment, &values);
         return Ok(Some(hosts.clone()));
     }
-    let Some(text) = environment
-        .get(&OsString::from("YAFVS_GSAD_HOST"))
-        .and_then(|value| value.to_str())
+    let Some(text) = ["YAFVS_GSAD_HOSTS", "YAFVS_GSAD_HOST"]
+        .iter()
+        .find_map(|name| {
+            environment
+                .get(&OsString::from(name))
+                .and_then(|value| value.to_str())
+                .filter(|value| !value.is_empty())
+        })
     else {
         return Ok(None);
     };
+    let hosts = canonical_restore_hosts(text.split(','))?;
+    apply_restore_hosts(environment, &hosts);
+    Ok(Some(json!(hosts)))
+}
+
+fn canonical_restore_hosts<'a>(
+    values: impl IntoIterator<Item = &'a str>,
+) -> Result<Vec<String>, String> {
     let mut hosts = Vec::new();
-    for host in text.split(',').filter(|host| !host.is_empty()) {
+    for host in values {
         let parsed = host
             .parse::<IpAddr>()
             .map_err(|_| "GSAD published host is not a canonical IP address".to_owned())?;
@@ -639,7 +755,23 @@ fn restore_hosts(
     if hosts.is_empty() || hosts.len() > 16 {
         return Err("GSAD published host set is invalid".into());
     }
-    Ok(Some(json!(hosts)))
+    Ok(hosts)
+}
+
+fn apply_restore_hosts(
+    environment: &mut std::collections::BTreeMap<OsString, OsString>,
+    hosts: &[String],
+) {
+    environment.insert(
+        OsString::from("YAFVS_GSAD_HOST"),
+        OsString::from(hosts.first().expect("validated host set")),
+    );
+    let plural = OsString::from("YAFVS_GSAD_HOSTS");
+    if hosts.len() > 1 {
+        environment.insert(plural, OsString::from(hosts.join(",")));
+    } else {
+        environment.remove(&plural);
+    }
 }
 
 fn transition_result(
@@ -1094,21 +1226,55 @@ mod tests {
         assert_eq!(restored, Some(state["restore_gsad_hosts"].clone()));
         assert_eq!(
             environment[&OsString::from("YAFVS_GSAD_HOST")],
+            OsString::from("192.0.2.10")
+        );
+        assert_eq!(
+            environment[&OsString::from("YAFVS_GSAD_HOSTS")],
             OsString::from("192.0.2.10,2001:db8::10")
         );
 
-        let mut environment = std::collections::BTreeMap::from([(
-            OsString::from("YAFVS_GSAD_HOST"),
-            OsString::from("198.51.100.4,2001:db8::4"),
-        )]);
+        let mut environment = std::collections::BTreeMap::from([
+            (
+                OsString::from("YAFVS_GSAD_HOSTS"),
+                OsString::from("198.51.100.4,2001:db8::4"),
+            ),
+            (
+                OsString::from("YAFVS_GSAD_HOST"),
+                OsString::from("127.0.0.1"),
+            ),
+        ]);
         assert_eq!(
             restore_hosts(None, &mut environment).unwrap(),
             Some(json!(["198.51.100.4", "2001:db8::4"]))
         );
+        assert_eq!(
+            environment[&OsString::from("YAFVS_GSAD_HOST")],
+            OsString::from("198.51.100.4")
+        );
+        environment.insert(OsString::from("YAFVS_GSAD_HOSTS"), OsString::new());
         environment.insert(
             OsString::from("YAFVS_GSAD_HOST"),
             OsString::from("not-an-ip"),
         );
         assert!(restore_hosts(None, &mut environment).is_err());
+
+        for malformed in ["192.0.2.1,", ",192.0.2.1", "192.0.2.1,,2001:db8::1"] {
+            environment.insert(
+                OsString::from("YAFVS_GSAD_HOSTS"),
+                OsString::from(malformed),
+            );
+            assert!(restore_hosts(None, &mut environment).is_err());
+        }
+
+        let single = json!({"restore_gsad_hosts": ["192.0.2.20"]});
+        assert_eq!(
+            restore_hosts(Some(&single), &mut environment).unwrap(),
+            Some(single["restore_gsad_hosts"].clone())
+        );
+        assert_eq!(
+            environment[&OsString::from("YAFVS_GSAD_HOST")],
+            OsString::from("192.0.2.20")
+        );
+        assert!(!environment.contains_key(&OsString::from("YAFVS_GSAD_HOSTS")));
     }
 }

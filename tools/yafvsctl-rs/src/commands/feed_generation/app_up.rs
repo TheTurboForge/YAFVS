@@ -8,7 +8,7 @@ use super::compose_identity::compose_contract_manifest;
 use super::deployment::APP_SERVICES;
 use super::service_runtime::ServiceRuntime;
 use super::{
-    command_feed_generation_runtime_guard_with_runner, require_current_app_deployment_snapshot,
+    command_feed_generation_startup_guard_with_runner, require_current_app_deployment_snapshot,
 };
 use crate::commands::common::{compact_finding, metadata, output_tail, runtime_dir};
 use crate::commands::compose::runtime_app_environment;
@@ -158,7 +158,7 @@ fn command_unlocked(
     append_result(
         &mut findings,
         "feed-generation.current",
-        command_feed_generation_runtime_guard_with_runner(repo_root, false, runner),
+        command_feed_generation_startup_guard_with_runner(repo_root, runner),
     );
     if failed(&findings) {
         return result(

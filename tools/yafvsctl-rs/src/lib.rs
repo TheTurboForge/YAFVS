@@ -420,9 +420,10 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
             *allow_first_activation,
             *repair_attestation,
         ),
-        CliCommand::FeedGenerationRollback { generation_id } => {
-            command_feed_generation_rollback(&repo_root, generation_id)
-        }
+        CliCommand::FeedGenerationRollback {
+            generation_id,
+            repair_deployment,
+        } => command_feed_generation_rollback(&repo_root, generation_id, *repair_deployment),
         CliCommand::RustMigrationState => command_rust_migration_state(&repo_root),
         CliCommand::NativeApiCargoAudit => {
             command_native_api_cargo_audit(&repo_root, cli.status_only)

@@ -3,7 +3,6 @@
 
 //! Concrete fail-closed adapter for feed-generation transition primitives.
 
-use super::Limits;
 use super::artifact_identity::app_runtime_artifact_manifest;
 use super::compose_identity::{compose_contract_manifest, unavailable_images};
 use super::database::DatabaseAttestationAdapter;
@@ -25,6 +24,7 @@ use super::transition::{
     AdapterError, AttestationOutcome, AttestationReceipt, CompletedJournalRequest, GenerationId,
     StepOutcome, StepStatus, StopReason, TransitionAdapter, TransitionPhase, TransitionRequest,
 };
+use super::{Limits, VerificationWitness, recheck_verified_generation};
 use crate::commands::common::runtime_dir;
 use crate::process::CommandRunner;
 use crate::result::Finding;
@@ -80,6 +80,7 @@ pub(super) struct ConcreteTransitionAdapter<'a> {
     deployment: PinnedDeployment,
     image_ids: BTreeMap<String, String>,
     preflight_controls: Vec<String>,
+    verified_generations: BTreeMap<String, VerificationWitness>,
 }
 
 impl<'a> ConcreteTransitionAdapter<'a> {
@@ -99,7 +100,16 @@ impl<'a> ConcreteTransitionAdapter<'a> {
             deployment,
             image_ids,
             preflight_controls: Vec::new(),
+            verified_generations: BTreeMap::new(),
         })
+    }
+
+    pub(super) fn with_verified_generations(
+        mut self,
+        verified_generations: BTreeMap<String, VerificationWitness>,
+    ) -> Self {
+        self.verified_generations = verified_generations;
+        self
     }
 
     fn services(&self) -> ServiceRuntime<'_> {
@@ -478,9 +488,36 @@ impl TransitionAdapter for ConcreteTransitionAdapter<'_> {
         &mut self,
         generation: &GenerationId,
     ) -> Result<StepOutcome, AdapterError> {
-        let selected =
+        let selected = if let Some(target) = self.verified_generations.get(generation.as_str()) {
+            let previous_id = selector::read_current_generation_reference(&self.runtime)
+                .map_err(|error| adapter_error("feed selector resolution failed", error))?
+                .and_then(|value| {
+                    value
+                        .get("generation_id")
+                        .and_then(Value::as_str)
+                        .map(str::to_owned)
+                });
+            let previous = match previous_id.as_deref() {
+                Some(id) => Some(self.verified_generations.get(id).ok_or_else(|| {
+                    adapter_error(
+                        "feed generation selection failed",
+                        "current generation has no verification witness",
+                    )
+                })?),
+                None => None,
+            };
+            selector::select_verified_generation(
+                &self.runtime,
+                generation.as_str(),
+                &Limits::default(),
+                target,
+                previous,
+            )
+            .map_err(|error| adapter_error("feed generation selection failed", error))?
+        } else {
             selector::select_generation(&self.runtime, generation.as_str(), &Limits::default())
-                .map_err(|error| adapter_error("feed generation selection failed", error))?;
+                .map_err(|error| adapter_error("feed generation selection failed", error))?
+        };
         Ok(single_outcome(
             StepStatus::Pass,
             "feed-generation.select",
@@ -611,8 +648,31 @@ impl TransitionAdapter for ConcreteTransitionAdapter<'_> {
         &mut self,
         generation: &GenerationId,
     ) -> Result<StepOutcome, AdapterError> {
-        let current = selector::read_current_generation(&self.runtime, &Limits::default())
-            .map_err(|error| adapter_error("selected feed verification failed", error))?;
+        let current = if let Some(witness) = self.verified_generations.get(generation.as_str()) {
+            let current = selector::read_current_generation_reference(&self.runtime)
+                .map_err(|error| adapter_error("selected feed resolution failed", error))?;
+            let observed = current
+                .as_ref()
+                .and_then(|value| value.get("generation_id"))
+                .and_then(Value::as_str);
+            if observed != Some(generation.as_str()) {
+                current
+            } else {
+                Some(
+                    recheck_verified_generation(
+                        &self.runtime.join("feed-store/generations"),
+                        witness,
+                        &Limits::default(),
+                    )
+                    .map_err(|error| {
+                        adapter_error("selected feed verification recheck failed", error)
+                    })?,
+                )
+            }
+        } else {
+            selector::read_current_generation(&self.runtime, &Limits::default())
+                .map_err(|error| adapter_error("selected feed verification failed", error))?
+        };
         let observed = current
             .as_ref()
             .and_then(|current| current.get("generation_id"))

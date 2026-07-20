@@ -44,6 +44,29 @@ pub(crate) fn initialize_manager_with_images(
     )
 }
 
+pub(crate) fn command_feed_generation_startup_guard_with_runner(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+) -> ResultEnvelope {
+    let runtime = runtime_dir(repo_root);
+    let finding = active_feed_generation_runtime_guard_finding(
+        &runtime,
+        selector::read_current_generation_attested_reference(&runtime),
+        journal::read_activation_state(&runtime),
+        false,
+        || {
+            DatabaseAttestationAdapter::new(repo_root, runner)
+                .read()
+                .map(|attestation| attestation.map(|value| value.generation_id().to_owned()))
+        },
+    );
+    make_result(
+        metadata(repo_root, "feed-generation-startup-guard", runner),
+        "Active feed generation startup guard completed.".into(),
+        vec![finding],
+    )
+}
+
 pub(crate) fn run_pinned_gvmd(
     repo_root: &Path,
     runner: &dyn CommandRunner,
@@ -187,11 +210,23 @@ pub fn command_feed_generation_activate(
         false,
         allow_first_activation,
         repair_attestation,
+        false,
     )
 }
 
-pub fn command_feed_generation_rollback(repo_root: &Path, generation_id: &str) -> ResultEnvelope {
-    activation::command(repo_root, generation_id, true, false, false)
+pub fn command_feed_generation_rollback(
+    repo_root: &Path,
+    generation_id: &str,
+    repair_deployment: bool,
+) -> ResultEnvelope {
+    activation::command(
+        repo_root,
+        generation_id,
+        true,
+        false,
+        false,
+        repair_deployment,
+    )
 }
 
 /// Verify the selected immutable feed generation against the private activation
@@ -552,7 +587,7 @@ fn specs() -> [Spec; 5] {
 }
 
 #[derive(Clone, Copy)]
-struct Limits {
+pub(super) struct Limits {
     files: usize,
     dirs: usize,
     total: u64,
@@ -586,10 +621,42 @@ struct Snap {
     cn: i64,
     links: u64,
 }
+#[derive(Clone, Eq, PartialEq)]
 struct Inventory {
     files: Vec<Snap>,
     dirs: Vec<Snap>,
     total: u64,
+}
+#[derive(Clone)]
+pub(super) struct VerificationWitness {
+    generation_id: String,
+    entry: String,
+    store_identity: (u64, u64),
+    generation_identity: (u64, u64),
+    inventory: Inventory,
+    manifest: Value,
+}
+pub(super) struct VerifiedGeneration {
+    details: Value,
+    witness: VerificationWitness,
+}
+impl VerifiedGeneration {
+    pub(super) fn into_parts(self) -> (Value, VerificationWitness) {
+        (self.details, self.witness)
+    }
+}
+impl VerificationWitness {
+    pub(super) fn generation_id(&self) -> &str {
+        &self.generation_id
+    }
+
+    fn relocated(mut self, entry: &str) -> R<Self> {
+        if entry != self.generation_id {
+            return Err("verified generation relocation does not match its identifier".into());
+        }
+        self.entry = entry.to_owned();
+        Ok(self)
+    }
 }
 type R<T> = Result<T, String>;
 
@@ -1160,6 +1227,51 @@ fn stream_sha(root: i32, path: &str, size: u64) -> R<String> {
     }
     Ok(format!("{:x}", hasher.finalize()))
 }
+fn verify_payload_hashes(root: i32, expected: &BTreeMap<String, (u64, String, String)>) -> R<()> {
+    let jobs = expected
+        .iter()
+        .map(|(path, (size, digest, _))| (path.as_str(), *size, digest.as_str()))
+        .collect::<Vec<_>>();
+    let worker_count = std::thread::available_parallelism()
+        .map(usize::from)
+        .unwrap_or(1)
+        .min(8)
+        .min(jobs.len().max(1));
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let errors = std::sync::Mutex::new(Vec::<(usize, String)>::new());
+    std::thread::scope(|scope| {
+        for _ in 0..worker_count {
+            scope.spawn(|| {
+                loop {
+                    let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let Some((path, size, digest)) = jobs.get(index).copied() else {
+                        break;
+                    };
+                    let result = stream_sha(root, path, size).and_then(|actual| {
+                        if actual == digest {
+                            Ok(())
+                        } else {
+                            Err(format!(
+                                "generation file digest differs from manifest: {path}"
+                            ))
+                        }
+                    });
+                    if let Err(error) = result {
+                        errors.lock().unwrap().push((index, error));
+                    }
+                }
+            });
+        }
+    });
+    let mut errors = errors
+        .into_inner()
+        .map_err(|_| "parallel generation verification state was poisoned".to_owned())?;
+    errors.sort_by_key(|(index, _)| *index);
+    match errors.into_iter().next() {
+        Some((_, error)) => Err(error),
+        None => Ok(()),
+    }
+}
 fn parse_sums(b: &[u8], mp: &str, l: &Limits) -> R<BTreeMap<String, String>> {
     let t = std::str::from_utf8(b)
         .map_err(|_| format!("signed checksum manifest is not UTF-8: {mp}"))?;
@@ -1202,9 +1314,17 @@ fn parse_sums(b: &[u8], mp: &str, l: &Limits) -> R<BTreeMap<String, String>> {
     }
 }
 fn verify(root: &Path, id: &str, l: &Limits) -> R<Value> {
-    verify_entry(root, id, id, l)
+    verify_with_witness(root, id, l).map(|verified| verified.details)
 }
-fn verify_entry(root: &Path, id: &str, entry: &str, l: &Limits) -> R<Value> {
+pub(super) fn verify_with_witness(root: &Path, id: &str, l: &Limits) -> R<VerifiedGeneration> {
+    verify_entry_with_witness(root, id, id, l)
+}
+fn verify_entry_with_witness(
+    root: &Path,
+    id: &str,
+    entry: &str,
+    l: &Limits,
+) -> R<VerifiedGeneration> {
     if !digest(&Value::String(id.into())) {
         return Err(format!("invalid generation identifier: {id:?}"));
     };
@@ -1587,11 +1707,7 @@ fn verify_entry(root: &Path, id: &str, entry: &str, l: &Limits) -> R<Value> {
     if first.dirs.iter().any(|x| x.mode & 0o222 != 0) {
         return Err("generation contains a writable directory".into());
     };
-    for (p, (sz, d, _)) in &expected {
-        if stream_sha(generation_fd.as_raw_fd(), p, *sz)? != *d {
-            return Err(format!("generation file digest differs from manifest: {p}"));
-        }
-    }
+    verify_payload_hashes(generation_fd.as_raw_fd(), &expected)?;
     verify_final_hook(root);
     let last = inventory(generation_fd.as_raw_fd(), l)?;
     let final_manifest = manifest(generation_fd.as_raw_fd())?;
@@ -1632,9 +1748,70 @@ fn verify_entry(root: &Path, id: &str, entry: &str, l: &Limits) -> R<Value> {
     {
         return Err("generation directory changed while it was being verified".into());
     }
-    Ok(
-        json!({"generation_id":id,"feed_release":RELEASE,"file_count":expected.len(),"byte_count":total,"class_count":5,"created_at":o["created_at"],"verified":true}),
-    )
+    Ok(VerifiedGeneration {
+        details: json!({"generation_id":id,"feed_release":RELEASE,"file_count":expected.len(),"byte_count":total,"class_count":5,"created_at":o["created_at"],"verified":true}),
+        witness: VerificationWitness {
+            generation_id: id.to_owned(),
+            entry: entry.to_owned(),
+            store_identity: identity(&ss),
+            generation_identity: identity(&gs),
+            inventory: last,
+            manifest: final_manifest,
+        },
+    })
+}
+
+pub(super) fn recheck_verified_generation(
+    root: &Path,
+    witness: &VerificationWitness,
+    l: &Limits,
+) -> R<Value> {
+    if !digest(&Value::String(witness.generation_id.clone())) {
+        return Err("verified generation witness has an invalid identifier".into());
+    }
+    let store = absolute_dir(root)?;
+    let store_stat = stat(store.as_raw_fd())?;
+    if identity(&store_stat) != witness.store_identity
+        || store_stat.st_uid != uid()
+        || mode(&store_stat) & 0o077 != 0
+    {
+        return Err("feed generation store changed after verification".into());
+    }
+    let parent_entry = stat_at(store.as_raw_fd(), &witness.entry)?;
+    let generation = open_dir_at(store.as_raw_fd(), &witness.entry)?;
+    let generation_stat = stat(generation.as_raw_fd())?;
+    if !is_dir(&parent_entry)
+        || identity(&parent_entry) != witness.generation_identity
+        || identity(&generation_stat) != witness.generation_identity
+        || generation_stat.st_uid != uid()
+        || mode(&generation_stat) & 0o222 != 0
+    {
+        return Err("generation directory changed after verification".into());
+    }
+    let current = inventory(generation.as_raw_fd(), l)?;
+    if current != witness.inventory {
+        return Err("generation tree changed after verification".into());
+    }
+    if manifest(generation.as_raw_fd())? != witness.manifest {
+        return Err("generation manifest changed after verification".into());
+    }
+    let final_generation = stat(generation.as_raw_fd())?;
+    let reopened_store = absolute_dir(root)?;
+    let reopened_store_stat = stat(reopened_store.as_raw_fd())?;
+    if identity(&final_generation) != witness.generation_identity
+        || final_generation.st_uid != uid()
+        || mode(&final_generation) & 0o222 != 0
+        || identity(&reopened_store_stat) != witness.store_identity
+        || reopened_store_stat.st_uid != uid()
+        || mode(&reopened_store_stat) & 0o077 != 0
+    {
+        return Err("verified generation path changed while rechecking".into());
+    }
+    Ok(json!({
+        "generation_id": witness.generation_id,
+        "verified": true,
+        "verification_reused": true,
+    }))
 }
 
 fn selector(store: i32) -> R<Option<String>> {
@@ -2592,6 +2769,32 @@ mod tests {
             state(&root, &Limits::default()).unwrap_err(),
             "feed generation store contains too many entries"
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn verification_witness_recheck_rejects_post_hash_mutation() {
+        let (root, id) = valid_generation("witness-mutation");
+        let generations = root.join("feed-store/generations");
+        let verified = verify_with_witness(&generations, &id, &Limits::default()).unwrap();
+        let (_, witness) = verified.into_parts();
+        assert!(recheck_verified_generation(&generations, &witness, &Limits::default()).is_ok());
+
+        let payload = generations.join(&id).join("gvm/scap-data/feed.xml");
+        let parent = payload.parent().unwrap();
+        fs::set_permissions(parent, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::set_permissions(&payload, fs::Permissions::from_mode(0o644)).unwrap();
+        let mut changed = fs::read(&payload).unwrap();
+        changed[0] ^= 1;
+        fs::write(&payload, changed).unwrap();
+        readonly(&payload, false);
+        readonly(parent, true);
+
+        assert_eq!(
+            recheck_verified_generation(&generations, &witness, &Limits::default()).unwrap_err(),
+            "generation tree changed after verification"
+        );
+        cleanup_tree(&root);
         fs::remove_dir_all(root).unwrap();
     }
 

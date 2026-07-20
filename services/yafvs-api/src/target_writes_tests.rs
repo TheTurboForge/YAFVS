@@ -812,9 +812,7 @@ fn target_patch_state_and_uniqueness_are_live_metadata_only() {
     assert!(in_use.contains("target = $1"));
     assert!(in_use.contains("target_location = 0"));
     assert!(in_use.contains("hidden = 0"));
-    assert!(in_use.contains(
-        "run_status IN (0, 3, 4, 10, 11, 14, 16, 17, 18, 19)"
-    ));
+    assert!(in_use.contains("run_status IN (0, 3, 4, 10, 11, 14, 16, 17, 18, 19)"));
     for terminal_status in [1, 2, 12, 13] {
         assert!(!in_use.contains(&format!("IN ({terminal_status}")));
     }

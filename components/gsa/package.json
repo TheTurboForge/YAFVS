@@ -16,6 +16,7 @@
   "license": "AGPL-3.0+",
   "type": "module",
   "scripts": {
+    "check:openapi": "node scripts/check-openapi.mjs",
     "test": "vitest",
     "test:web-fast": "vitest run --pool=vmForks --project web --project store",
     "test:coverage": "vitest run --coverage",
@@ -113,6 +114,7 @@
     "vite": "^7.3.5",
     "vite-plugin-eslint2": "^5.1.0",
     "vite-plugin-svgr": "^5.2.0",
-    "vitest": "^4.0.17"
+    "vitest": "^4.0.17",
+    "yaml": "^2.8.2"
   }
 }

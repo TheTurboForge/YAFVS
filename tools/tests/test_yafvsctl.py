@@ -940,7 +940,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["inventory", "--scope", "components/gsa", "--json"], 0, "pass"),
                 (["inventory", "--scope", "definitely-invalid", "--json"], 0, "warn"),
                 (["branding-state", "--json"], 0, "pass"),
-                (["rust-migration-state", "--json"], 0, "pass"),
+                (["rust-migration-state", "--json"], (0, 1), ("pass", "fail")),
                 (["deps", "--json"], 0, "pass"),
                 (["deps", "gsa", "--json"], 0, "pass"),
                 (["deps", "definitely-invalid", "--json"], 1, "fail"),
@@ -7433,6 +7433,9 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_quality_gate_runs_native_api_contract_checks(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         self.assertIn("quality.native-tooling-state", source)
+        self.assertIn("quality.openapi-syntax", source)
+        self.assertIn('["npm", "run", "check:openapi", "--prefix", "components/gsa"]', source)
+        self.assertIn('"--test-threads=1"', source)
         self.assertIn("quality.native-api-client-contract", source)
         self.assertIn("quality.native-api-migration-matrix", source)
         self.assertIn("command_native_tooling_state(repo_root, status_only=True)", source)
@@ -7458,10 +7461,12 @@ class YAFVSCtlTests(unittest.TestCase):
 
         steps = result["details"]["steps"]
         self.assertEqual(result["status"], "pass")
+        self.assertEqual(steps["openapi-syntax"]["exit_code"], 0)
         self.assertEqual(steps["native-tooling-state"]["status"], "pass")
         self.assertEqual(steps["native-api-client-contract"]["status"], "pass")
         self.assertEqual(steps["native-api-migration-matrix"]["status"], "pass")
         checks = {item["check"] for item in result["findings"]}
+        self.assertIn("quality.openapi-syntax", checks)
         self.assertIn("quality.native-tooling-state", checks)
         self.assertIn("quality.native-api-client-contract", checks)
         self.assertIn("quality.native-api-migration-matrix", checks)

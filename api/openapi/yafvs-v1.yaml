@@ -4714,7 +4714,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scan-config-metadata-list-read
       summary: List scan configs
-      description: Scan-config metadata backed by gvmd/PostgreSQL. Native direct write-control can create a scan config from an existing base, patch name/comment metadata for non-predefined scan configs, clone operator-owned or predefined scan configs, change individual NVT selection in an eligible family, move live scan configs to trash when no live task references remain, restore trashed scan configs when their scanner is live, and permanently delete unreferenced trashed scan configs. Preference edits, family-mode mutation, import/export, scanner control, and blank create remain inherited.
+      description: Scan-config metadata backed by gvmd/PostgreSQL. Native direct write-control can create a scan config from an existing base, patch name/comment/family/preference state for non-predefined scan configs, clone operator-owned or predefined scan configs, change individual NVT selection in an eligible family, export and import versioned native JSON backups, move live scan configs to trash when no live task references remain, restore trashed scan configs when their scanner is live, and permanently delete unreferenced trashed scan configs. Family-mode mutation, legacy XML import/export, scanner control, and blank create remain inherited.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -4835,7 +4835,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scan-config-selector-and-preference-write
       summary: Patch scan-config metadata, family selection, and preferences
-      description: Direct write-control endpoint for atomically changing an operator-owned non-predefined scan config name, comment, complete family-selection snapshot, and/or explicit scanner/NVT preference overrides. Family snapshots must name every current non-Credentials feed family exactly once; preference identities must match the current feed catalog exactly. Set and reset are distinct operations, radio selections are normalized against current feed options, and password/file values are write-only and remain redacted in the response. Stale, missing, unknown, whole-only-invalid, shared-selector, or task-referenced mutations fail without partial writes. Import, inherited XML export, blank create, and scanner control remain inherited; individual NVT selection has a separate family-scoped PATCH endpoint.
+      description: Direct write-control endpoint for atomically changing an operator-owned non-predefined scan config name, comment, complete family-selection snapshot, and/or explicit scanner/NVT preference overrides. Family snapshots must name every current non-Credentials feed family exactly once; preference identities must match the current feed catalog exactly. Set and reset are distinct operations, radio selections are normalized against current feed options, and password/file values are write-only and remain redacted in the response. Stale, missing, unknown, whole-only-invalid, shared-selector, or task-referenced mutations fail without partial writes. Legacy XML import/export, blank create, and scanner control remain inherited; versioned native JSON backup import/export and individual NVT selection use separate endpoints.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       requestBody:
@@ -4878,7 +4878,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Move scan config to trash
-      description: Direct write-control endpoint for moving a live scan config to trash. Scan configs referenced by non-hidden live tasks are rejected; hidden/trash task links, preferences, and tag links are relinked to the trash row. Import/export, selector/preference mutation, scanner control, blank create, and cache recalculation remain inherited.
+      description: Direct write-control endpoint for moving a live scan config to trash. Scan configs referenced by non-hidden live tasks are rejected; hidden/trash task links, preferences, and tag links are relinked to the trash row. Legacy XML import/export, selector/preference mutation, scanner control, blank create, and cache recalculation remain inherited; versioned native JSON backup import/export uses separate endpoints.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -4962,7 +4962,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Clone a scan config
-      description: Direct write-control endpoint for cloning an operator-owned or predefined live scan config into a new operator-owned non-predefined scan config. The clone copies metadata, preferences, NVT selector rows, and active user-tag links with a fresh config id and selector id. Preference edits, family-mode mutation, import/export, scanner control, and blank create remain inherited; individual NVT selection has a separate family-scoped PATCH endpoint.
+      description: Direct write-control endpoint for cloning an operator-owned or predefined live scan config into a new operator-owned non-predefined scan config. The clone copies metadata, preferences, NVT selector rows, and active user-tag links with a fresh config id and selector id. Family-mode mutation, legacy XML import/export, scanner control, and blank create remain inherited; preference edits, versioned native JSON backup import/export, and individual NVT selection use separate endpoints.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       requestBody:
@@ -5011,7 +5011,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Restore a scan config from trash
-      description: Direct write-control endpoint for restoring a trashed scan config when no live config with the same id or name exists and the associated scanner is not in the trash. Preferences, task links, and tag links are relinked to the restored live row. Import/export, selector/preference mutation, scanner control, blank create, and cache recalculation remain inherited.
+      description: Direct write-control endpoint for restoring a trashed scan config when no live config with the same id or name exists and the associated scanner is not in the trash. Preferences, task links, and tag links are relinked to the restored live row. Legacy XML import/export, selector/preference mutation, scanner control, blank create, and cache recalculation remain inherited; versioned native JSON backup import/export uses separate endpoints.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -5049,7 +5049,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Permanently delete a trashed scan config
-      description: Direct write-control endpoint for permanently deleting an unreferenced trashed scan config. The endpoint rejects scan configs referenced by trash tasks, then deletes active/trash tag links pointing at the trashed config id, the non-universal NVT selector, trash preferences, and trash metadata only. Live scan configs are never deleted through this route. Import/export, selector/preference mutation, scanner control, blank create, and cache recalculation remain inherited.
+      description: Direct write-control endpoint for permanently deleting an unreferenced trashed scan config. The endpoint rejects scan configs referenced by trash tasks, then deletes active/trash tag links pointing at the trashed config id, the non-universal NVT selector, trash preferences, and trash metadata only. Live scan configs are never deleted through this route. Legacy XML import/export, selector/preference mutation, scanner control, blank create, and cache recalculation remain inherited; versioned native JSON backup import/export uses separate endpoints.
       parameters:
         - $ref: '#/components/parameters/ScanConfigId'
       responses:
@@ -5259,7 +5259,16 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scan-config-selector-and-preference-write
       summary: Import a portable scan-config JSON backup
-      description: Direct write-control only. Validates the strict versioned JSON document, its 2 MiB bounded size, duplicate identities, canonical selector form, complete current feed-family inventory, all referenced NVTs, and every preference identity against the current feed. It never overwrites: import creates a fresh UUID, current-operator-owned, non-predefined scan config with the explicit unique document name. Password/file override identities are validated but no secret value/default is accepted or written. Metadata, selectors, non-secret overrides, and cache recomputation commit in one transaction or roll back together.
+      description: >-
+        Direct write-control only. Validates the strict versioned JSON document,
+        its 2 MiB bounded size, duplicate identities, canonical selector form,
+        complete current feed-family inventory, all referenced NVTs, and every
+        preference identity against the current feed. It never overwrites:
+        import creates a fresh UUID, current-operator-owned, non-predefined scan
+        config with the explicit unique document name. Password/file override
+        identities are validated but no secret value/default is accepted or
+        written. Metadata, selectors, non-secret overrides, and cache
+        recomputation commit in one transaction or roll back together.
       requestBody:
         required: true
         content:

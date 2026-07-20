@@ -15976,6 +15976,20 @@ def command_quality_gate(repo_root: Path, include_runtime: bool = False) -> dict
     }
     findings.append(finding(doctor_status, "quality.doctor", doctor_summary, details={"status": doctor_result["status"], "quality_status": doctor_status}))
 
+    openapi_command = ["npm", "run", "check:openapi", "--prefix", "components/gsa"]
+    openapi = run_command(openapi_command, repo_root, env=build_env(repo_root), timeout=120)
+    details["steps"]["openapi-syntax"] = {
+        "exit_code": openapi.returncode,
+        "output_tail": output_tail(openapi.stdout, 120),
+    }
+    findings.append(process_step_finding(
+        "pass" if openapi.returncode == 0 else "fail",
+        "quality.openapi-syntax",
+        f"OpenAPI strict YAML parse exit code {openapi.returncode}.",
+        openapi,
+        openapi_command,
+    ))
+
     native_contract_checks = (
         ("native-tooling-state", "quality.native-tooling-state", command_native_tooling_state(repo_root, status_only=True)),
         ("native-api-client-contract", "quality.native-api-client-contract", command_native_api_client_contract(repo_root, status_only=True)),
@@ -16005,8 +16019,15 @@ def command_quality_gate(repo_root: Path, include_runtime: bool = False) -> dict
             "build/yafvsctl-rs",
             "--manifest-path",
             str(rust_cli_manifest),
+            "--",
+            "--test-threads=1",
         ]
-        rust_cli_test = run_command(rust_cli_test_command, repo_root, env=build_env(repo_root), timeout=300)
+        rust_cli_test = run_command(
+            rust_cli_test_command,
+            repo_root,
+            env=quality_gate_unit_env(repo_root),
+            timeout=300,
+        )
         details["steps"]["yafvsctl-rust-test"] = {"exit_code": rust_cli_test.returncode, "output_tail": output_tail(rust_cli_test.stdout, 160)}
         findings.append(process_step_finding("pass" if rust_cli_test.returncode == 0 else "fail", "quality.yafvsctl-rust-test", f"Rust yafvsctl cargo test exit code {rust_cli_test.returncode}.", rust_cli_test, rust_cli_test_command))
 

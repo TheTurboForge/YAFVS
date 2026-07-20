@@ -394,6 +394,32 @@ describe('UserCommand tests', () => {
     expect(data?.value).toEqual('42');
   });
 
+  test('should treat a missing current-user setting as unset', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const cmd = new UserCommand(createNativeHttp());
+
+    const {data} = await cmd.getSetting('missing');
+
+    expect(data).toBeUndefined();
+  });
+
+  test('should use empty report composer defaults when the setting is unset', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const cmd = new UserCommand(createNativeHttp());
+
+    const {data} = await cmd.getReportComposerDefaults();
+
+    expect(data).toEqual({});
+  });
+
   test('should fetch and update current-user settings through native API', async () => {
     const fetchMock = testing
       .fn()

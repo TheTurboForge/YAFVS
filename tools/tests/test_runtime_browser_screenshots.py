@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 import sys
 import tempfile
@@ -56,6 +57,50 @@ class RuntimeBrowserScreenshotTests(unittest.TestCase):
                     timeout=10,
                 )
                 self.assertEqual(completed.returncode, 0, completed.stdout)
+
+    def test_browser_regression_timeout_terminates_process_group(self) -> None:
+        module = load_tool_module(
+            "runtime_browser_regression_for_timeout_test",
+            "runtime_browser_regression.py",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            ready_path = Path(tmp) / "child-ready"
+            terminated_path = Path(tmp) / "child-terminated"
+            child_script = (
+                "import pathlib, signal, sys, time; "
+                "ready = pathlib.Path(sys.argv[1]); "
+                "terminated = pathlib.Path(sys.argv[2]); "
+                "signal.signal(signal.SIGTERM, "
+                "lambda *_: (terminated.write_text('terminated'), sys.exit(0))); "
+                "ready.write_text('ready'); time.sleep(30)"
+            )
+            parent_script = (
+                "import pathlib, subprocess, sys, time; "
+                "ready = pathlib.Path(sys.argv[1]); "
+                "subprocess.Popen([sys.executable, '-c', sys.argv[3], "
+                "sys.argv[1], sys.argv[2]]); "
+                "deadline = time.monotonic() + 5; "
+                "\nwhile not ready.exists() and time.monotonic() < deadline: "
+                "time.sleep(0.01); "
+                "\ntime.sleep(30)"
+            )
+            completed = module.run_browser_process(
+                [
+                    sys.executable,
+                    "-c",
+                    parent_script,
+                    str(ready_path),
+                    str(terminated_path),
+                    child_script,
+                ],
+                dict(os.environ),
+                2,
+            )
+
+            self.assertEqual(completed.returncode, 124, completed.stdout)
+            self.assertIn("Timed out after 2 seconds.", completed.stdout)
+            self.assertTrue(ready_path.exists(), completed.stdout)
+            self.assertTrue(terminated_path.exists(), completed.stdout)
 
 
 if __name__ == "__main__":

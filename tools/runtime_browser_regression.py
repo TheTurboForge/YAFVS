@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -30,6 +31,41 @@ def write_artifact(artifact_dir: Path, name: str, payload: dict[str, Any]) -> st
     path = artifact_dir / name
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return str(path)
+
+
+def run_browser_process(
+    command: list[str], env: dict[str, str], timeout: int
+) -> subprocess.CompletedProcess[str]:
+    process = subprocess.Popen(
+        command,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        stdout, _ = process.communicate(timeout=timeout)
+        return subprocess.CompletedProcess(command, process.returncode, stdout)
+    except subprocess.TimeoutExpired as error:
+        partial = error.output or ""
+        if isinstance(partial, bytes):
+            partial = partial.decode("utf-8", errors="replace")
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            stdout, _ = process.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            stdout, _ = process.communicate()
+        output = stdout or partial
+        output += f"\nTimed out after {timeout} seconds."
+        return subprocess.CompletedProcess(command, 124, output)
 
 
 BROWSER_SCRIPT = r"""
@@ -133,7 +169,7 @@ async function login(page) {
   } else {
     await page.keyboard.press('Enter');
   }
-  await page.waitForLoadState('networkidle', { timeout: config.timeoutMs }).catch(() => null);
+  await page.waitForLoadState('networkidle', { timeout: Math.min(config.timeoutMs, 5000) }).catch(() => null);
   await screenshot(page, 'login-after-submit');
   const text = await bodyText(page).catch(() => '');
   const loggedIn = !/username|password/i.test(text) || /tasks|scans|reports/i.test(text);
@@ -141,10 +177,15 @@ async function login(page) {
 }
 
 async function gotoRoute(page, route, check) {
-  await page.goto(new URL(route, config.baseUrl).toString(), { waitUntil: 'networkidle', timeout: config.timeoutMs });
+  await gotoStable(page, new URL(route, config.baseUrl).toString());
   await screenshot(page, check.replace(/[^a-z0-9_-]+/gi, '-'));
   await assertNoAppError(page, `${check}.app-error`);
   await assertNotUnexpectedTasks(page, `${check}.not-tasks`, route === '/tasks');
+}
+
+async function gotoStable(page, url) {
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: config.timeoutMs });
+  await page.waitForLoadState('networkidle', { timeout: Math.min(config.timeoutMs, 5000) }).catch(() => null);
 }
 
 async function clickTab(page, label) {
@@ -153,7 +194,7 @@ async function clickTab(page, label) {
   const index = texts.findIndex(text => new RegExp(`^\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text));
   if (index < 0) return false;
   await tabs.nth(index).click();
-  await page.waitForLoadState('networkidle', { timeout: config.timeoutMs }).catch(() => null);
+  await page.waitForLoadState('networkidle', { timeout: Math.min(config.timeoutMs, 5000) }).catch(() => null);
   await page.waitForTimeout(250);
   return true;
 }
@@ -235,7 +276,7 @@ async function firstExpandedRowDetailHref(page, matcher) {
     return { href: null, reason: 'selector-failure-row-details-toggle-click-failed', error: String(error), state };
   }
 
-  await page.waitForLoadState('networkidle', { timeout: config.timeoutMs }).catch(() => null);
+  await page.waitForLoadState('networkidle', { timeout: Math.min(config.timeoutMs, 5000) }).catch(() => null);
   await page.waitForTimeout(300);
   const href = await firstHref(page, matcher);
   if (href) return { href, reason: 'expanded-row' };
@@ -268,7 +309,7 @@ async function checkTopLevelRoute(page, route, check, nativePattern, detailPatte
     add(noLiveDetail ? 'pass' : 'warn', `${check}.detail-link`, noLiveDetail ? 'No live detail rows or data were available; detail-link route check was skipped.' : 'Detail rows existed, but no matching detail link was available after checking visible and expanded row links.', { route, detailPattern: String(detailPattern), expandedDetails });
     return;
   }
-  await page.goto(new URL(detailHref, config.baseUrl).toString(), { waitUntil: 'networkidle', timeout: config.timeoutMs });
+  await gotoStable(page, new URL(detailHref, config.baseUrl).toString());
   await screenshot(page, `${check}-detail`);
   const pathname = new URL(page.url()).pathname;
   const expected = detailPattern.test(pathname);
@@ -314,7 +355,7 @@ async function exercisePagination(page, check) {
       break;
     }
     clicks += 1;
-    await page.waitForLoadState('networkidle', { timeout: config.timeoutMs }).catch(() => null);
+    await page.waitForLoadState('networkidle', { timeout: Math.min(config.timeoutMs, 5000) }).catch(() => null);
     await page.waitForTimeout(350);
     const afterPath = new URL(page.url()).pathname;
     if (afterPath !== beforePath) {
@@ -359,7 +400,7 @@ async function checkVulnerabilitiesRoute(page) {
     const toggle = page.getByTestId('row-details-toggle').first();
     await toggle.scrollIntoViewIfNeeded({ timeout: config.timeoutMs });
     await toggle.click({ timeout: config.timeoutMs });
-    await page.waitForLoadState('networkidle', { timeout: config.timeoutMs }).catch(() => null);
+    await page.waitForLoadState('networkidle', { timeout: Math.min(config.timeoutMs, 5000) }).catch(() => null);
     await page.waitForTimeout(300);
     await screenshot(page, 'vulnerabilities-inline-details');
     const afterUrl = page.url();
@@ -378,7 +419,7 @@ async function checkScopeReport(page) {
   const detailHref = config.scopeReportPath || await firstHref(page, /\/scopes\/[^/]+\/reports\/[^/]+/);
   add(detailHref ? 'pass' : 'fail', 'scope-report.detail-link', detailHref ? 'Found a scope-report detail link.' : 'No scope-report detail link was found.', { href: detailHref });
   if (!detailHref) return;
-  await page.goto(new URL(detailHref, config.baseUrl).toString(), { waitUntil: 'networkidle', timeout: config.timeoutMs });
+  await gotoStable(page, new URL(detailHref, config.baseUrl).toString());
   await screenshot(page, 'scope-report-detail');
   await assertNoAppError(page, 'scope-report-detail.app-error');
   const detailPath = new URL(page.url()).pathname;
@@ -395,14 +436,14 @@ async function checkScopeReport(page) {
     add(badNested ? 'fail' : 'pass', 'scope-report.result-evidence-link-shape', badNested ? 'Result evidence link uses an unsupported nested raw-report route.' : 'Result evidence links avoid unsupported nested raw-report routes.', { href: badNested });
     const resultHref = await firstHref(page, /^\/result\/[^/]+/);
     if (resultHref) {
-      await page.goto(new URL(resultHref, config.baseUrl).toString(), { waitUntil: 'networkidle', timeout: config.timeoutMs });
+      await gotoStable(page, new URL(resultHref, config.baseUrl).toString());
       await screenshot(page, 'scope-report-result-evidence');
       const pathname = new URL(page.url()).pathname;
       add(/^\/result\/[^/]+$/.test(pathname) ? 'pass' : 'fail', 'scope-report.result-evidence-route', /^\/result\/[^/]+$/.test(pathname) ? 'Result evidence link opened the raw result detail route.' : 'Result evidence link opened the wrong route.', { resultHref, pathname });
       await assertNativeSuccess(/\/api\/v1\/results\/[0-9a-fA-F-]{36}$/, 'scope-report.result-evidence-native-api');
       await assertNoAppError(page, 'scope-report.result-evidence-app-error');
       await assertNotUnexpectedTasks(page, 'scope-report.result-evidence-not-tasks');
-      await page.goto(new URL(detailPath, config.baseUrl).toString(), { waitUntil: 'networkidle', timeout: config.timeoutMs });
+      await gotoStable(page, new URL(detailPath, config.baseUrl).toString());
       await clickTab(page, 'Results');
     } else {
       add(config.expectResultRow ? 'fail' : 'warn', 'scope-report.result-evidence-link', 'No direct raw result evidence link was available in live Results data.', { detailPath });
@@ -413,7 +454,7 @@ async function checkScopeReport(page) {
   }
 
   for (const tab of ['Hosts', 'Ports', 'CVEs', 'Error Messages']) {
-    await page.goto(new URL(detailPath, config.baseUrl).toString(), { waitUntil: 'networkidle', timeout: config.timeoutMs });
+    await gotoStable(page, new URL(detailPath, config.baseUrl).toString());
     if (await clickTab(page, tab)) {
       await screenshot(page, `scope-report-${tab.toLowerCase().replace(/\s+/g, '-')}`);
       await exercisePagination(page, `scope-report.${tab.toLowerCase().replace(/\s+/g, '-')}`);
@@ -422,13 +463,13 @@ async function checkScopeReport(page) {
     }
   }
 
-  await page.goto(new URL(detailPath, config.baseUrl).toString(), { waitUntil: 'networkidle', timeout: config.timeoutMs });
+  await gotoStable(page, new URL(detailPath, config.baseUrl).toString());
   if (await clickTab(page, 'Evidence Sources')) {
     await screenshot(page, 'scope-report-evidence-sources');
     const rawReportHref = await firstHref(page, /^\/report\/[^/?#]+/);
     add(rawReportHref ? 'pass' : 'fail', 'scope-report.evidence-raw-report-link', rawReportHref ? 'Evidence Sources has a raw-report link.' : 'Evidence Sources lacks a raw-report link.', { href: rawReportHref });
     if (rawReportHref) {
-      await page.goto(new URL(rawReportHref, config.baseUrl).toString(), { waitUntil: 'networkidle', timeout: config.timeoutMs });
+      await gotoStable(page, new URL(rawReportHref, config.baseUrl).toString());
       await screenshot(page, 'scope-report-evidence-raw-report');
       const pathname = new URL(page.url()).pathname;
       add(/^\/report\/[^/]+$/.test(pathname) ? 'pass' : 'fail', 'scope-report.evidence-raw-report-route', /^\/report\/[^/]+$/.test(pathname) ? 'Raw-report evidence link opened a raw report.' : 'Raw-report evidence link opened the wrong route.', { rawReportHref, pathname });
@@ -447,7 +488,14 @@ async function runForBaseUrl(baseUrl) {
   page.setDefaultTimeout(config.timeoutMs);
   page.on('pageerror', error => pageErrors.push(String(error && error.stack ? error.stack : error)));
   page.on('console', message => {
-    if (message.type() === 'error') consoleErrors.push(message.text());
+    if (message.type() !== 'error') return;
+    let path = '';
+    try {
+      path = new URL(message.location().url).pathname;
+    } catch {
+      // Preserve the message without leaking query parameters from malformed URLs.
+    }
+    consoleErrors.push({ message: message.text(), path });
   });
   page.on('response', async response => {
     try {
@@ -488,7 +536,17 @@ async function runForBaseUrl(baseUrl) {
       add('fail', 'browser.exception', String(error && error.stack ? error.stack : error), { baseUrl });
     }
   }
-  const nativeFailures = network.filter(item => item.status >= 400);
+  const expectedNativeAbsences = network.filter(
+    item => item.status === 404 && /^\/api\/v1\/users\/current\/settings\/[^/]+$/.test(item.path),
+  );
+  const nativeFailures = network.filter(
+    item =>
+      item.status >= 400 &&
+      !(item.status === 404 && /^\/api\/v1\/users\/current\/settings\/[^/]+$/.test(item.path)),
+  );
+  if (expectedNativeAbsences.length) {
+    add('pass', 'network.native-api-expected-absences', 'Missing optional user settings were handled as expected.', { responses: expectedNativeAbsences });
+  }
   if (nativeFailures.length) {
     add('fail', 'network.native-api-failures', 'One or more native API browser responses failed.', { failures: nativeFailures });
   } else {
@@ -499,8 +557,20 @@ async function runForBaseUrl(baseUrl) {
   } else {
     add('pass', 'browser.page-errors', 'No unhandled browser page errors were observed.');
   }
-  if (consoleErrors.length) {
-    add('warn', 'browser.console-errors', 'Console error messages were observed.', { errors: consoleErrors.slice(0, 20), count: consoleErrors.length });
+  const expectedAbsenceConsoleErrors = consoleErrors.filter(
+    item =>
+      item.message === 'Failed to load resource: the server responded with a status of 404 (Not Found)' &&
+      /^\/api\/v1\/users\/current\/settings\/[^/]+$/.test(item.path),
+  );
+  const unexpectedConsoleErrors = consoleErrors.filter(
+    item => !expectedAbsenceConsoleErrors.includes(item),
+  );
+  const expectedAbsenceConsoleCount = expectedAbsenceConsoleErrors.length;
+  if (expectedAbsenceConsoleCount) {
+    add('pass', 'browser.console-expected-absences', 'Browser resource messages matched expected optional-setting absences.', { count: expectedAbsenceConsoleCount });
+  }
+  if (unexpectedConsoleErrors.length) {
+    add('warn', 'browser.console-errors', 'Console error messages were observed.', { errors: unexpectedConsoleErrors.slice(0, 20), count: unexpectedConsoleErrors.length });
   } else {
     add('pass', 'browser.console-errors', 'No console error messages were observed.');
   }
@@ -571,14 +641,14 @@ def run_browser_regression(args: argparse.Namespace) -> dict[str, Any]:
     env = dict(os.environ)
     env["NODE_PATH"] = os.pathsep.join([*node_paths, env.get("NODE_PATH", "")]).rstrip(os.pathsep)
     env["YAFVS_BROWSER_REGRESSION_PASSWORD"] = password
-    completed = subprocess.run(
+    overall_timeout = max(
+        120,
+        min(300, (args.timeout_ms // 1000) * max(1, len(args.base_url)) * 6),
+    )
+    completed = run_browser_process(
         ["node", str(script_path), str(config_path)],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        env=env,
-        timeout=max(120, (args.timeout_ms // 1000) * max(1, len(args.base_url)) * 16),
+        env,
+        overall_timeout,
     )
     try:
         payload = json.loads(completed.stdout.strip().splitlines()[-1])

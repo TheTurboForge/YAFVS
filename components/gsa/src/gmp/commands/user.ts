@@ -118,6 +118,16 @@ interface NativeSettingsPayload {
   items?: NativeSettingPayload[];
 }
 
+class NativeApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = 'NativeApiRequestError';
+  }
+}
+
 const nativeSettingToModel = (setting: NativeSettingPayload) =>
   new Setting({
     _id: setting.id,
@@ -143,7 +153,10 @@ const fetchNativeJson = async <T>(
     },
   );
   if (!response.ok) {
-    throw new Error(`Native API request failed with status ${response.status}`);
+    throw new NativeApiRequestError(
+      `Native API request failed with status ${response.status}`,
+      response.status,
+    );
   }
   return (await response.json()) as T;
 };
@@ -295,11 +308,18 @@ class UserCommand extends HttpCommand {
   }
 
   async getSetting(id: string) {
-    const setting = await fetchNativeJson<NativeSettingPayload>(
-      this.http,
-      `api/v1/users/current/settings/${id}`,
-    );
-    return new Response(nativeSettingToModel(setting));
+    try {
+      const setting = await fetchNativeJson<NativeSettingPayload>(
+        this.http,
+        `api/v1/users/current/settings/${id}`,
+      );
+      return new Response(nativeSettingToModel(setting));
+    } catch (error) {
+      if (error instanceof NativeApiRequestError && error.status === 404) {
+        return new Response<Setting | undefined>(undefined);
+      }
+      throw error;
+    }
   }
 
   async currentSettings(_options: HttpCommandOptions = {}) {

@@ -11,7 +11,7 @@ use crate::{
 fn startable_task(run_status: i32) -> TaskStartState {
     TaskStartState {
         internal_id: 41,
-        owner_id: 7,
+        owner_id: Some(7),
         run_status,
         target_id: Some(19),
         target_has_hosts: true,
@@ -152,10 +152,10 @@ fn task_start_handler_locks_validates_and_queues_in_one_transaction() {
         "transaction()",
         "resolve_task_write_operator_owner(&tx, &operator).await?",
         "load_task_start_state(&tx, &task_id).await?",
-        "ensure_task_owner_matches_operator(task.owner_id, operator_owner_id)?",
+        "ensure_task_is_human_owned(task.owner_id)?",
         "ensure_task_is_startable(&task)?",
         "ensure_task_is_not_already_queued(&tx, task.internal_id).await?",
-        "insert_task_start_report(&tx, &task).await?",
+        "insert_task_start_report(&tx, &task, task_owner_id).await?",
         "insert_task_start_scan_queue(&tx, report_internal_id).await?",
         "mark_task_start_requested(&tx, task.internal_id).await?",
         "tx.commit()",

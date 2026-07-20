@@ -17,7 +17,7 @@ use crate::{
     path_ids::parse_uuid,
     task_control_sql::*,
     task_write_db::{
-        ensure_task_owner_matches_operator, map_task_write_db_error, require_task_write_operator,
+        ensure_task_is_human_owned, map_task_write_db_error, require_task_write_operator,
         resolve_task_write_operator_owner,
     },
 };
@@ -32,7 +32,7 @@ pub(crate) struct TaskStartResult {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TaskStartState {
     pub(crate) internal_id: i32,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
     pub(crate) run_status: i32,
     pub(crate) target_id: Option<i32>,
     pub(crate) target_has_hosts: bool,
@@ -53,12 +53,13 @@ pub(crate) async fn start_task(
         .transaction()
         .await
         .map_err(|error| map_task_write_db_error(error, "begin task start transaction"))?;
-    let operator_owner_id = resolve_task_write_operator_owner(&tx, &operator).await?;
+    resolve_task_write_operator_owner(&tx, &operator).await?;
     let task = load_task_start_state(&tx, &task_id).await?;
-    ensure_task_owner_matches_operator(task.owner_id, operator_owner_id)?;
+    let task_owner_id = ensure_task_is_human_owned(task.owner_id)?;
     ensure_task_is_startable(&task)?;
     ensure_task_is_not_already_queued(&tx, task.internal_id).await?;
-    let (report_internal_id, report_id) = insert_task_start_report(&tx, &task).await?;
+    let (report_internal_id, report_id) =
+        insert_task_start_report(&tx, &task, task_owner_id).await?;
     insert_task_start_scan_queue(&tx, report_internal_id).await?;
     mark_task_start_requested(&tx, task.internal_id).await?;
     tx.commit()
@@ -160,11 +161,12 @@ async fn ensure_task_is_not_already_queued(
 async fn insert_task_start_report(
     tx: &Transaction<'_>,
     task: &TaskStartState,
+    task_owner_id: i32,
 ) -> Result<(i32, String), ApiError> {
     let row = tx
         .query_one(
             task_start_insert_report_sql(),
-            &[&task.owner_id, &task.internal_id],
+            &[&task_owner_id, &task.internal_id],
         )
         .await
         .map_err(|error| map_task_write_db_error(error, "create requested task report"))?;

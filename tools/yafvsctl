@@ -252,6 +252,7 @@ OPENAPI_ALLOWED_YAFVS_OPERATION_FIELDS = frozenset(
         "x-yafvs-replaces",
         "x-yafvs-safety-contract",
         "x-yafvs-side-effect",
+        "x-yafvs-team-authority",
     }
 )
 OPENAPI_ALLOWED_EXPOSURE_VALUES = frozenset(
@@ -267,6 +268,9 @@ OPENAPI_ALLOWED_OPERATOR_IDENTITY_VALUES = frozenset(
         "resolved-request-operator",
         "service-admin-dev-only",
     }
+)
+OPENAPI_ALLOWED_TEAM_AUTHORITY_VALUES = frozenset(
+    {"authenticated-stack-operator"}
 )
 OPENAPI_ALLOWED_OWNER_SEMANTICS_VALUES = frozenset(
     {
@@ -558,6 +562,7 @@ OPENAPI_ALLOWED_MIGRATION_METADATA_VALUES = {
     "x-yafvs-replaces": OPENAPI_ALLOWED_REPLACES_VALUES,
     "x-yafvs-safety-contract": OPENAPI_ALLOWED_SAFETY_CONTRACT_VALUES,
     "x-yafvs-side-effect": OPENAPI_ALLOWED_SIDE_EFFECT_VALUES,
+    "x-yafvs-team-authority": OPENAPI_ALLOWED_TEAM_AUTHORITY_VALUES,
 }
 OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/alerts"): "direct-read",

@@ -16,13 +16,15 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from xml.sax.saxutils import escape, quoteattr
 
 import runtime_full_test_scan
 
 SECONDARY_USER = "yafvs-rbac-smoke"
 TEMP_FILTER_PREFIX = "YAFVS RBAC smoke filter"
+TEMP_TARGET_PREFIX = "YAFVS RBAC smoke target"
+TEMP_TASK_PREFIX = "YAFVS RBAC smoke task"
 FULL_TEST_TASK_PREFIXES = ("YAFVS full test scan ", "TurboVAS full test scan ")
 
 
@@ -138,6 +140,11 @@ class RbacGmpClient(runtime_full_test_scan.RawGmpClient):
             f"<delete_filter filter_id={quoteattr(filter_id)} ultimate={quoteattr(xml_bool(ultimate))}/>"
         )
 
+    def delete_task(self, task_id: str, *, ultimate: bool | None = False) -> bytes:
+        return self.send_xml(
+            f"<delete_task task_id={quoteattr(task_id)} ultimate={quoteattr(xml_bool(ultimate))}/>"
+        )
+
 
 class NativeBrowserClient:
     """Small same-origin native API client for operator-model checks."""
@@ -202,8 +209,19 @@ class NativeBrowserClient:
             with self.opener.open(request, timeout=self.timeout) as response:
                 response_body = response.read()
         except urllib.error.HTTPError as error:
+            response_body = error.read()
+            detail = ""
+            try:
+                problem = json.loads(response_body)
+                if isinstance(problem, dict):
+                    code = problem.get("error")
+                    message = problem.get("message")
+                    if isinstance(code, str) and isinstance(message, str):
+                        detail = f": {code}: {message}"
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                pass
             raise RuntimeError(
-                f"Native API request failed with status {error.code}"
+                f"Native API request failed with status {error.code}{detail}"
             ) from error
         except urllib.error.URLError as error:
             raise RuntimeError("Native API request failed") from error
@@ -434,6 +452,147 @@ def verify_native_cross_user_filter_admin(
         }
 
 
+def first_native_resource_id(
+    client: NativeBrowserClient,
+    path: str,
+    predicate: Callable[[dict[str, Any]], bool] | None = None,
+) -> str:
+    collection = client.request_json(
+        "GET",
+        path,
+        query={"page": "1", "page_size": "500", "sort": "name", "filter": ""},
+    )
+    for item in collection.get("items", []):
+        if (
+            isinstance(item, dict)
+            and isinstance(item.get("id"), str)
+            and item["id"]
+            and (predicate is None or predicate(item))
+        ):
+            return item["id"]
+    raise RuntimeError(f"Native {path} collection contains no assignable resource")
+
+
+def verify_native_cross_user_target_task_admin(
+    admin_client: NativeBrowserClient,
+    secondary_client: NativeBrowserClient,
+    secondary_gmp_client: RbacGmpClient,
+) -> dict[str, Any]:
+    """Prove target/task team authority without starting a scan."""
+    suffix = secrets.token_hex(4)
+    target_id: str | None = None
+    task_id: str | None = None
+    target_state = "absent"
+    task_state = "absent"
+    try:
+        port_list_id = first_native_resource_id(admin_client, "port-lists")
+        config_id = first_native_resource_id(admin_client, "scan-configs")
+        scanner_id = first_native_resource_id(
+            admin_client,
+            "scanners",
+            lambda item: item.get("scanner_type") in (2, 5, 6, 8),
+        )
+        target = admin_client.request_json(
+            "POST",
+            "targets",
+            payload={
+                "name": f"{TEMP_TARGET_PREFIX} {suffix}",
+                "comment": "Temporary target created by runtime-rbac-smoke.",
+                "alive_tests": ["Consider Alive"],
+                "allow_simultaneous_ips": False,
+                "reverse_lookup_only": False,
+                "reverse_lookup_unify": False,
+                "port_list_id": port_list_id,
+                "hosts": ["127.0.0.1"],
+                "exclude_hosts": [],
+            },
+        )
+        target_id = target.get("id")
+        if not isinstance(target_id, str) or not target_id:
+            raise RuntimeError("Native target create returned no id")
+        target_state = "live"
+
+        task = secondary_client.request_json(
+            "POST",
+            "tasks",
+            payload={
+                "name": f"{TEMP_TASK_PREFIX} {suffix}",
+                "comment": "Temporary task created by runtime-rbac-smoke.",
+                "target_id": target_id,
+                "config_id": config_id,
+                "scanner_id": scanner_id,
+            },
+        )
+        task_id = task.get("id")
+        if not isinstance(task_id, str) or not task_id:
+            raise RuntimeError("Native task create returned no id")
+        task_state = "live"
+
+        admin_client.request_json(
+            "PATCH",
+            f"tasks/{task_id}",
+            payload={"comment": "Modified by the admin runtime-rbac-smoke account."},
+        )
+        admin_client.request_json("DELETE", f"tasks/{task_id}")
+        task_state = "trash"
+        require_ok_response(
+            secondary_gmp_client.delete_task(task_id, ultimate=True),
+            "hard-delete temporary task as secondary user",
+        )
+        task_state = "deleted"
+
+        secondary_client.request_json(
+            "PATCH",
+            f"targets/{target_id}",
+            payload={"comment": "Modified by the secondary runtime-rbac-smoke account."},
+        )
+        secondary_client.request_json("DELETE", f"targets/{target_id}")
+        target_state = "trash"
+        secondary_client.request_json("POST", f"targets/{target_id}/restore")
+        target_state = "live"
+        secondary_client.request_json("DELETE", f"targets/{target_id}")
+        target_state = "trash"
+        secondary_client.request_json("DELETE", f"targets/{target_id}/trash")
+        target_state = "deleted"
+
+        return {
+            "status": "pass",
+            "target_id": target_id,
+            "task_id": task_id,
+            "target_created_by": "admin",
+            "task_created_by": SECONDARY_USER,
+            "task_modified_and_deleted_by": "admin",
+            "target_modified_and_deleted_by": SECONDARY_USER,
+            "scans_started": 0,
+        }
+    except Exception as error:  # pylint: disable=broad-except
+        if task_id and task_state != "deleted":
+            try:
+                require_ok_response(
+                    secondary_gmp_client.delete_task(task_id, ultimate=True),
+                    "cleanup temporary task",
+                )
+            except Exception:
+                pass
+        if target_id and target_state != "deleted":
+            try:
+                if target_state == "live":
+                    admin_client.request_json("DELETE", f"targets/{target_id}")
+                admin_client.request_json("DELETE", f"targets/{target_id}/trash")
+            except Exception:
+                pass
+        return {
+            "status": "fail",
+            "target_id": target_id,
+            "target_state": target_state,
+            "task_id": task_id,
+            "task_state": task_state,
+            "error_type": type(error).__name__,
+            "error": str(error),
+            "scans_started": 0,
+        }
+
+
 def write_artifact(artifact_dir: Path, payload: dict[str, Any]) -> str:
     artifact_dir.mkdir(parents=True, exist_ok=True)
     path = artifact_dir / "rbac-smoke.json"
@@ -479,7 +638,15 @@ def main(argv: list[str] | None = None) -> int:
         native_filter_admin = verify_native_cross_user_filter_admin(
             native_admin, native_secondary
         )
-        checks = (visibility, filter_admin, native_filter_admin)
+        native_target_task_admin = verify_native_cross_user_target_task_admin(
+            native_admin, native_secondary, secondary_client
+        )
+        checks = (
+            visibility,
+            filter_admin,
+            native_filter_admin,
+            native_target_task_admin,
+        )
         status = "pass" if all(check["status"] == "pass" for check in checks) else "fail"
         payload = result(
             status,
@@ -488,6 +655,7 @@ def main(argv: list[str] | None = None) -> int:
             full_test_visibility=visibility,
             cross_user_filter_admin=filter_admin,
             native_cross_user_filter_admin=native_filter_admin,
+            native_cross_user_target_task_admin=native_target_task_admin,
             scans_started=0,
         )
     except Exception as error:  # pylint: disable=broad-except

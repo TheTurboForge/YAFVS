@@ -21,7 +21,7 @@ pub(crate) struct TaskWriteRecordWithInternalId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TaskWriteState {
     pub(crate) internal_id: i32,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
     pub(crate) run_status: i32,
     pub(crate) alterable: bool,
 }
@@ -62,7 +62,7 @@ pub(crate) async fn load_assignable_task_schedule(
     let internal_id: i32 = row.get(0);
     let owner_id: Option<i32> = row.get(1);
     let next_time: i32 = row.get(2);
-    if owner_id == Some(operator_owner_id) {
+    if owner_id.is_some() {
         Ok(AssignableTaskSchedule {
             internal_id,
             next_time,
@@ -71,7 +71,7 @@ pub(crate) async fn load_assignable_task_schedule(
         tracing::warn!(
             schedule_owner_id = owner_id,
             operator_owner_id,
-            "direct API task create operator cannot assign schedule"
+            "direct API task create rejects an ownerless schedule"
         );
         Err(ApiError::Forbidden)
     }
@@ -86,13 +86,13 @@ pub(crate) async fn load_assignable_task_alert(
         load_task_resource_row(tx, task_assignable_alert_state_sql(), alert_id, "alert").await?;
     let internal_id: i32 = row.get(0);
     let owner_id: Option<i32> = row.get(1);
-    if owner_id == Some(operator_owner_id) {
+    if owner_id.is_some() {
         Ok(AssignableTaskResource { internal_id })
     } else {
         tracing::warn!(
             alert_owner_id = owner_id,
             operator_owner_id,
-            "direct API task create operator cannot assign alert"
+            "direct API task create rejects an ownerless alert"
         );
         Err(ApiError::Forbidden)
     }
@@ -107,13 +107,13 @@ pub(crate) async fn load_assignable_task_target(
         load_task_resource_row(tx, task_assignable_target_state_sql(), target_id, "target").await?;
     let internal_id: i32 = row.get(0);
     let owner_id: Option<i32> = row.get(1);
-    if owner_id == Some(operator_owner_id) {
+    if owner_id.is_some() {
         Ok(AssignableTaskResource { internal_id })
     } else {
         tracing::warn!(
             target_owner_id = owner_id,
             operator_owner_id,
-            "direct API task create operator cannot assign target"
+            "direct API task create rejects an ownerless target"
         );
         Err(ApiError::Forbidden)
     }
@@ -129,13 +129,13 @@ pub(crate) async fn load_assignable_task_config(
     let internal_id: i32 = row.get(0);
     let owner_id: Option<i32> = row.get(1);
     let predefined: i32 = row.get(2);
-    if predefined != 0 || owner_id == Some(operator_owner_id) {
+    if predefined != 0 || owner_id.is_some() {
         Ok(AssignableTaskResource { internal_id })
     } else {
         tracing::warn!(
             config_owner_id = owner_id,
             operator_owner_id,
-            "direct API task create operator cannot assign scan config"
+            "direct API task create rejects an ownerless scan config"
         );
         Err(ApiError::Forbidden)
     }
@@ -144,7 +144,7 @@ pub(crate) async fn load_assignable_task_config(
 pub(crate) async fn load_assignable_task_scanner(
     tx: &Transaction<'_>,
     scanner_id: &str,
-    operator_owner_id: i32,
+    _operator_owner_id: i32,
 ) -> Result<AssignableTaskResource, ApiError> {
     const SCANNER_TYPE_OPENVAS: i32 = 2;
     const SCANNER_TYPE_OSP_SENSOR: i32 = 5;
@@ -159,7 +159,6 @@ pub(crate) async fn load_assignable_task_scanner(
     )
     .await?;
     let internal_id: i32 = row.get(0);
-    let owner_id: Option<i32> = row.get(1);
     let scanner_type: i32 = row.get(2);
     if !matches!(
         scanner_type,
@@ -172,16 +171,7 @@ pub(crate) async fn load_assignable_task_scanner(
             "scanner_id must reference a scanner type that can run scan tasks".to_string(),
         ));
     }
-    if owner_id.is_none() || owner_id == Some(operator_owner_id) {
-        Ok(AssignableTaskResource { internal_id })
-    } else {
-        tracing::warn!(
-            scanner_owner_id = ?owner_id,
-            operator_owner_id,
-            "direct API task create operator cannot assign scanner"
-        );
-        Err(ApiError::Forbidden)
-    }
+    Ok(AssignableTaskResource { internal_id })
 }
 
 pub(crate) async fn load_assignable_task_tag(
@@ -193,13 +183,13 @@ pub(crate) async fn load_assignable_task_tag(
         load_task_resource_row(tx, task_assignable_tag_state_sql(), tag_id, "task tag").await?;
     let internal_id: i32 = row.get(0);
     let owner_id: Option<i32> = row.get(1);
-    if owner_id == Some(operator_owner_id) {
+    if owner_id.is_some() {
         Ok(AssignableTaskResource { internal_id })
     } else {
         tracing::warn!(
             tag_owner_id = owner_id,
             operator_owner_id,
-            "direct API task create operator cannot assign tag"
+            "direct API task create rejects an ownerless task tag"
         );
         Err(ApiError::Forbidden)
     }
@@ -347,16 +337,11 @@ pub(crate) async fn execute_task_write_sql(
         .map_err(|error| map_task_write_db_error(error, action))
 }
 
-pub(crate) fn ensure_task_owner_matches_operator(
-    task_owner_id: i32,
-    operator_owner_id: i32,
-) -> Result<(), ApiError> {
-    if task_owner_id == operator_owner_id {
-        Ok(())
-    } else {
-        tracing::warn!("direct API task write operator does not own task");
-        Err(ApiError::Forbidden)
-    }
+pub(crate) fn ensure_task_is_human_owned(task_owner_id: Option<i32>) -> Result<i32, ApiError> {
+    task_owner_id.ok_or_else(|| {
+        tracing::warn!("direct API task write rejects an ownerless task");
+        ApiError::Forbidden
+    })
 }
 
 pub(crate) async fn query_task_write_record(

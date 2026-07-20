@@ -139,14 +139,14 @@ pub(crate) async fn patch_task(
         .transaction()
         .await
         .map_err(|error| map_task_write_db_error(error, "begin patch task transaction"))?;
-    let operator_owner_id = resolve_task_write_operator_owner(&tx, &operator).await?;
+    resolve_task_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute("LOCK TABLE tasks IN SHARE ROW EXCLUSIVE MODE;")
         .await
         .map_err(|error| map_task_write_db_error(error, "lock tasks for patch"))?;
     let task_state = load_task_write_state(&tx, &task_id).await?;
-    ensure_task_owner_matches_operator(task_state.owner_id, operator_owner_id)?;
+    let task_owner_id = ensure_task_is_human_owned(task_state.owner_id)?;
     if let Some(name) = request.name.as_ref() {
-        ensure_unique_task_name(&tx, name, task_state.internal_id, task_state.owner_id).await?;
+        ensure_unique_task_name(&tx, name, task_state.internal_id, task_owner_id).await?;
     }
     let record = execute_task_patch_transaction(&tx, task_state.internal_id, &request).await?;
     tx.commit()
@@ -182,15 +182,9 @@ pub(crate) async fn replace_task(
     .await
     .map_err(|error| map_task_write_db_error(error, "lock task replacement tables"))?;
     let task_state = load_task_write_state(&tx, &task_id).await?;
-    ensure_task_owner_matches_operator(task_state.owner_id, operator_owner_id)?;
+    let task_owner_id = ensure_task_is_human_owned(task_state.owner_id)?;
     ensure_task_configuration_mutable(task_state.run_status, task_state.alterable)?;
-    ensure_unique_task_name(
-        &tx,
-        &request.name,
-        task_state.internal_id,
-        operator_owner_id,
-    )
-    .await?;
+    ensure_unique_task_name(&tx, &request.name, task_state.internal_id, task_owner_id).await?;
     let target = load_assignable_task_target(&tx, &request.target_id, operator_owner_id).await?;
     let config = load_assignable_task_config(&tx, &request.config_id, operator_owner_id).await?;
     let scanner = load_assignable_task_scanner(&tx, &request.scanner_id, operator_owner_id).await?;
@@ -246,14 +240,14 @@ pub(crate) async fn delete_task(
         .transaction()
         .await
         .map_err(|error| map_task_write_db_error(error, "begin delete task transaction"))?;
-    let operator_owner_id = resolve_task_write_operator_owner(&tx, &operator).await?;
+    resolve_task_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE tasks, reports, report_counts, results, results_trash, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_task_write_db_error(error, "lock task trash tables"))?;
     let task_state = load_task_write_state(&tx, &task_id).await?;
-    ensure_task_owner_matches_operator(task_state.owner_id, operator_owner_id)?;
+    ensure_task_is_human_owned(task_state.owner_id)?;
     ensure_task_not_in_use_for_native_trash(task_state.run_status)?;
     execute_task_trash_transaction(&tx, task_state.internal_id).await?;
     tx.commit()

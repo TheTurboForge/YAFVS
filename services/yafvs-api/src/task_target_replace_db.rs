@@ -86,22 +86,13 @@ pub(crate) fn ensure_task_target_replace_state(
 pub(crate) fn ensure_task_target_replace_ownership(
     task_owner_id: Option<i32>,
     source_target_owner_id: Option<i32>,
-    operator_owner_id: i32,
 ) -> Result<(), ApiError> {
-    let Some(task_owner_id) = task_owner_id else {
+    if task_owner_id.is_none() {
         tracing::warn!("task target replacement rejects an ownerless task");
         return Err(ApiError::Forbidden);
-    };
-    let Some(source_target_owner_id) = source_target_owner_id else {
-        tracing::warn!("task target replacement rejects an ownerless source target");
-        return Err(ApiError::Forbidden);
-    };
-    if task_owner_id != operator_owner_id {
-        tracing::warn!("direct API task target replacement operator does not own task");
-        return Err(ApiError::Forbidden);
     }
-    if source_target_owner_id != task_owner_id {
-        tracing::warn!("task source target owner does not match task owner");
+    if source_target_owner_id.is_none() {
+        tracing::warn!("task target replacement rejects an ownerless source target");
         return Err(ApiError::Forbidden);
     }
     Ok(())

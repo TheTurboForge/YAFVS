@@ -5,8 +5,8 @@
 use crate::{
     errors::ApiError,
     task_write_db::{
-        ensure_task_configuration_mutable, ensure_task_not_in_use_for_native_trash,
-        ensure_task_owner_matches_operator,
+        ensure_task_configuration_mutable, ensure_task_is_human_owned,
+        ensure_task_not_in_use_for_native_trash,
     },
     task_write_sql::*,
     task_write_validation::{
@@ -298,12 +298,12 @@ fn task_create_openapi_contract_covers_optional_schedule_alerts_and_ordering() {
 
     for required in [
         "schedule_id:",
-        "description: Optional schedule owned by the direct API operator.",
+        "description: Optional human-owned schedule.",
         "alert_ids:",
         "maxItems: 5",
         "uniqueItems: true",
         "default: []",
-        "description: Optional distinct alerts owned by the direct API operator.",
+        "description: Optional distinct human-owned alerts.",
         "hosts_ordering:",
         "enum: [random, sequential, reverse]",
         "forwarded to OSP/OpenVASD",
@@ -452,17 +452,17 @@ fn task_clone_uses_authoritative_control_and_verifies_committed_owner() {
 }
 
 #[test]
-fn task_create_schedule_and_alert_loaders_require_operator_ownership() {
+fn task_create_reference_loaders_allow_human_owned_resources_only() {
     let source = include_str!("task_write_db.rs");
 
     for required in [
         "pub(crate) async fn load_assignable_task_schedule",
         "task_assignable_schedule_state_sql()",
-        "if owner_id == Some(operator_owner_id)",
-        "direct API task create operator cannot assign schedule",
+        "if owner_id.is_some()",
+        "direct API task create rejects an ownerless schedule",
         "pub(crate) async fn load_assignable_task_alert",
         "task_assignable_alert_state_sql()",
-        "direct API task create operator cannot assign alert",
+        "direct API task create rejects an ownerless alert",
         "Err(ApiError::Forbidden)",
     ] {
         assert!(
@@ -590,7 +590,7 @@ fn task_replace_is_state_guarded_and_transactional() {
         .0;
     for required in [
         "require_task_write_operator(operator)?",
-        "ensure_task_owner_matches_operator",
+        "ensure_task_is_human_owned",
         "ensure_task_configuration_mutable",
         "ensure_unique_task_name",
         "load_assignable_task_target",
@@ -643,10 +643,11 @@ fn task_delete_rejects_in_use_run_statuses_before_trash_move() {
 }
 
 #[test]
-fn task_patch_rejects_operator_owner_mismatch() {
-    assert!(ensure_task_owner_matches_operator(7, 7).is_ok());
+fn task_writes_accept_any_human_owner_and_reject_ownerless_tasks() {
+    assert!(ensure_task_is_human_owned(Some(7)).is_ok());
+    assert!(ensure_task_is_human_owned(Some(8)).is_ok());
     assert!(matches!(
-        ensure_task_owner_matches_operator(7, 8),
+        ensure_task_is_human_owned(None),
         Err(ApiError::Forbidden)
     ));
 }
@@ -659,8 +660,7 @@ fn task_patch_handler_requires_operator_and_owner_before_mutation() {
         .expect("patch task handler must exist")
         .1;
 
-    let owner_check =
-        "ensure_task_owner_matches_operator(task_state.owner_id, operator_owner_id)?;";
+    let owner_check = "ensure_task_is_human_owned(task_state.owner_id)?;";
     assert!(handler.contains("let operator = require_task_write_operator(operator)?;"));
     assert!(handler.contains("resolve_task_write_operator_owner(&tx, &operator).await?"));
     assert!(handler.contains(owner_check));
@@ -793,8 +793,7 @@ fn task_delete_handler_requires_operator_owner_and_in_use_check_before_trash_mov
         .expect("delete task handler must exist")
         .1;
 
-    let owner_check =
-        "ensure_task_owner_matches_operator(task_state.owner_id, operator_owner_id)?;";
+    let owner_check = "ensure_task_is_human_owned(task_state.owner_id)?;";
     let in_use_check = "ensure_task_not_in_use_for_native_trash(task_state.run_status)?;";
     assert!(handler.contains("let operator = require_task_write_operator(operator)?;"));
     assert!(handler.contains("resolve_task_write_operator_owner(&tx, &operator).await?"));

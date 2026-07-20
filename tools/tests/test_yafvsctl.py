@@ -5565,6 +5565,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 "      x-yafvs-maturity: stale\n"
                 "      x-yafvs-replaces: everything\n"
                 "      x-yafvs-inherited-still-owns: all-the-things\n"
+                "      x-yafvs-team-authority: authenticated-stack-operator\n"
                 "      x-yafvs-surprise: true\n"
                 "      responses:\n"
                 "        '200':\n"
@@ -10732,6 +10733,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("NativeBrowserClient", source)
         self.assertIn('"user-management/users"', source)
         self.assertIn("verify_native_cross_user_filter_admin", source)
+        self.assertIn("verify_native_cross_user_target_task_admin", source)
         self.assertIn(
             'FULL_TEST_TASK_PREFIXES = ("YAFVS full test scan ", "TurboVAS full test scan ")',
             source,
@@ -10786,12 +10788,63 @@ class YAFVSCtlTests(unittest.TestCase):
         client.create_filter("filter", filter_type="task", term="rows=1", comment="comment")
         client.modify_filter("filter-id", name="filter two", term="rows=2", filter_type="task", comment="changed")
         client.delete_filter("filter-id", ultimate=True)
+        client.delete_task("task-id", ultimate=True)
 
         self.assertEqual(sent[0], '<get_tasks usage_type="scan" details="1" ignore_pagination="1"/>')
         self.assertEqual(sent[1], '<get_reports usage_type="scan" report_filter="task_id=task-1 rows=10 sort-reverse=date" details="1" ignore_pagination="1"/>')
         self.assertEqual(sent[2], '<create_filter><name>filter</name><comment>comment</comment><term>rows=1</term><type>task</type></create_filter>')
         self.assertEqual(sent[3], '<modify_filter filter_id="filter-id"><comment>changed</comment><name>filter two</name><term>rows=2</term><type>task</type></modify_filter>')
         self.assertEqual(sent[4], '<delete_filter filter_id="filter-id" ultimate="1"/>')
+        self.assertEqual(sent[5], '<delete_task task_id="task-id" ultimate="1"/>')
+
+    def test_runtime_rbac_native_target_task_check_uses_secondary_without_starting_scan(self):
+        calls = []
+
+        class FakeNativeClient:
+            def __init__(self, role):
+                self.role = role
+
+            def request_json(self, method, path, *, payload=None, query=None):
+                calls.append((self.role, method, path, payload, query))
+                if method == "GET":
+                    item = {"id": f"{path}-1"}
+                    if path == "scanners":
+                        item["scanner_type"] = 2
+                    return {"items": [item]}
+                if method == "POST" and path == "targets":
+                    return {"id": "target-1"}
+                if method == "POST" and path == "tasks":
+                    return {"id": "task-1"}
+                return {}
+
+        class FakeGmpClient:
+            def delete_task(self, task_id, *, ultimate=False):
+                calls.append(("secondary-gmp", "DELETE", task_id, ultimate, None))
+                return b'<delete_task_response status="200" status_text="OK"/>'
+
+        result = runtime_rbac_smoke.verify_native_cross_user_target_task_admin(
+            FakeNativeClient("admin"),
+            FakeNativeClient("secondary"),
+            FakeGmpClient(),
+        )
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["scans_started"], 0)
+        operations = [(role, method, path) for role, method, path, _payload, _query in calls]
+        self.assertNotIn(("admin", "POST", "tasks/task-1/start"), operations)
+        self.assertIn(("secondary", "POST", "tasks"), operations)
+        self.assertIn(("admin", "PATCH", "tasks/task-1"), operations)
+        self.assertIn(("admin", "DELETE", "tasks/task-1"), operations)
+        self.assertIn(("secondary-gmp", "DELETE", "task-1"), operations)
+        self.assertIn(("secondary", "PATCH", "targets/target-1"), operations)
+        self.assertIn(("secondary", "POST", "targets/target-1/restore"), operations)
+        self.assertEqual(
+            operations[-2:],
+            [
+                ("secondary", "DELETE", "targets/target-1"),
+                ("secondary", "DELETE", "targets/target-1/trash"),
+            ],
+        )
 
     def test_runtime_rbac_raw_mutation_failures_raise(self):
         response = b'<modify_filter_response status="400" status_text="bad filter"/>'

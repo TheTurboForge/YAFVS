@@ -626,9 +626,9 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     assert!(list.contains("Return only scan tasks with an attached schedule."));
     assert!(list.contains("type: boolean"));
     assert!(list.contains("task creation and complete retained editor configuration"));
-    assert!(
-        list.contains("Direct write-control endpoint for creating a new operator-owned scan task")
-    );
+    assert!(list.contains(
+        "Direct write-control endpoint for creating a new scan task owned by the authenticated operator"
+    ));
     assert!(list.contains("Resume, hard-delete, inherited file export"));
 
     let detail = openapi_path_block("/tasks/{task_id}");
@@ -640,9 +640,9 @@ fn openapi_documents_task_metadata_and_guarded_control_contracts() {
     assert!(detail.contains("x-yafvs-replaces: task-metadata-modify"));
     assert!(detail.contains("$ref: '#/components/schemas/TaskPatchRequest'"));
     assert!(!detail.contains("x-yafvs-inherited-still-owns:"));
-    assert!(
-        detail.contains("Direct write-control endpoint for updating task name and comment only")
-    );
+    assert!(detail.contains(
+        "Direct write-control endpoint for updating a human-owned task's name and comment only"
+    ));
     assert!(detail.contains("Task clone, start, and stop have separate guarded control routes"));
     assert!(detail.contains("operationId: deleteTasksByTaskId"));
     assert!(detail.contains("x-yafvs-replaces: task-trash-move"));

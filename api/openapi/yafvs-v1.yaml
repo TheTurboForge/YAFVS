@@ -6371,11 +6371,12 @@ paths:
       x-yafvs-replaces: target-create-with-optional-credential-references
       x-yafvs-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows
       x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-owner-semantics: request-operator-owner
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Create target metadata, bounded scan inputs, and optional credential references
-      description: Direct write-control endpoint for creating an operator-owned target with name, comment, existing port-list reference, simple explicit host lists, alive-test bitfield, reverse-DNS flags, simultaneous-IP behavior, and optional existing credential references only. CIDR/range host grammar, host-filter/file input variants, inline port-list creation, task/control semantics, and credential secret material remain inherited.
+      description: Direct write-control endpoint for creating a target owned by the authenticated operator with name, comment, an existing predefined or human-owned port-list reference, simple explicit host lists, alive-test bitfield, reverse-DNS flags, simultaneous-IP behavior, and optional existing human-owned credential references only. Every authenticated stack operator may use eligible human-owned references; ownerless resources are rejected. CIDR/range host grammar, host-filter/file input variants, inline port-list creation, task/control semantics, and credential secret material remain inherited.
       requestBody:
         required: true
         content:
@@ -6454,11 +6455,12 @@ paths:
       x-yafvs-replaces: target-metadata-simple-scan-inputs-and-credential-links-modify
       x-yafvs-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows
       x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Update target metadata and bounded scan inputs
-      description: Direct write-control endpoint for updating target name, comment, port-list reference, simple explicit host lists, alive-test bitfield, reverse-DNS flags, simultaneous-IP behavior, and credential-link references. Host-list, port-list, reverse-DNS, simultaneous-IP, and credential-link changes are rejected while the target is referenced by live tasks, matching inherited safety semantics. CIDR/range host grammar, host-filter/file input variants, task/control semantics, and credential secret material remain inherited.
+      description: Direct write-control endpoint for updating a human-owned target's name, comment, port-list reference, simple explicit host lists, alive-test bitfield, reverse-DNS flags, simultaneous-IP behavior, and credential-link references without changing its owner. Every authenticated stack operator may manage it; ownerless resources remain immutable. Host-list, port-list, reverse-DNS, simultaneous-IP, and credential-link changes are rejected while the target is referenced by live tasks, matching inherited safety semantics. CIDR/range host grammar, host-filter/file input variants, task/control semantics, and credential secret material remain inherited.
       parameters:
         - $ref: '#/components/parameters/TargetId'
       requestBody:
@@ -6500,11 +6502,12 @@ paths:
       x-yafvs-replaces: target-trash-move
       x-yafvs-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows
       x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Move target to trash
-      description: Direct write-control endpoint for moving an operator-owned live target to trash. Live tasks and YAFVS scope memberships block deletion; credential links are moved as references only and credential secret material is never copied or exposed. File/host-filter input variants, task/control semantics, and credential secret material remain inherited.
+      description: Direct write-control endpoint for moving a human-owned live target to trash without changing its owner. Every authenticated stack operator may perform the action. Live tasks and YAFVS scope memberships block deletion; credential links are moved as references only and credential secret material is never copied or exposed. File/host-filter input variants and task/control semantics remain inherited.
       parameters:
         - $ref: '#/components/parameters/TargetId'
       responses:
@@ -6569,11 +6572,12 @@ paths:
       x-yafvs-replaces: target-clone
       x-yafvs-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows
       x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-owner-semantics: request-operator-owner
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Clone target metadata and references
-      description: Direct write-control endpoint for copying an existing direct-operator-owned live target into a new direct-operator-owned target. The clone copies target scan-input metadata, port-list reference, credential link references, and active user-tag links without exposing credential secret material, copying tasks, starting scans, or changing credential links.
+      description: Direct write-control endpoint for copying a human-owned live target into a new target owned by the authenticated operator. The clone copies target scan-input metadata, eligible predefined or human-owned port-list and credential references, and active user-tag links without exposing credential secret material, copying tasks, starting scans, or changing credential links. Ownerless references remain unavailable.
       parameters:
         - $ref: '#/components/parameters/TargetId'
       requestBody:
@@ -6623,11 +6627,12 @@ paths:
       x-yafvs-replaces: target-restore
       x-yafvs-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows
       x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Restore target from trash
-      description: Direct write-control endpoint for restoring an operator-owned trashed target to live state. Restore preserves UUID and owner, relinks trash-side task and tag references back to live state, and rejects conflicting live UUID or same-owner live name collisions as well as trashed port-list or credential references. File/host-filter input variants, task/control semantics, and credential secret material remain inherited.
+      description: Direct write-control endpoint for restoring a human-owned trashed target to live state. Every authenticated stack operator may restore it. Restore preserves UUID and owner, relinks trash-side task and tag references back to live state, and rejects conflicting live UUID or same-owner live name collisions as well as trashed port-list or credential references. File/host-filter input variants, task/control semantics, and credential secret material remain inherited.
       parameters:
         - $ref: '#/components/parameters/TargetId'
       responses:
@@ -6666,11 +6671,12 @@ paths:
       x-yafvs-replaces: target-hard-delete
       x-yafvs-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows
       x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Hard-delete a trashed target
-      description: Direct write-control endpoint for permanently deleting an operator-owned trashed target. Trash-side task references block hard-delete. This route deletes trash target metadata, trash credential-link references, and target tag links only; live targets are never deleted through this route and credential secret material is never copied or exposed. File/host-filter input variants, task/control semantics, and credential secret material remain inherited.
+      description: Direct write-control endpoint for permanently deleting a human-owned trashed target. Every authenticated stack operator may perform the action, but trash-side task references block it. This route deletes trash target metadata, trash credential-link references, and target tag links only; live targets are never deleted through this route and credential secret material is never copied or exposed.
       parameters:
         - $ref: '#/components/parameters/TargetId'
       responses:
@@ -6740,11 +6746,12 @@ paths:
       x-yafvs-replaces: task-create-with-retained-editor-configuration
       x-yafvs-inherited-still-owns: task-resume-file-hard-delete-and-other-scanner-control
       x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-owner-semantics: request-operator-owner
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-control
       summary: Create a scan task
-      description: Direct write-control endpoint for creating a new operator-owned scan task from explicit target, scan config, and scanner references, with retained scanner preferences, optional host ordering, an operator-owned schedule, up to five distinct operator-owned alerts, and one optional operator-owned task tag. All references are validated before task metadata, computed schedule time, fixed report-retention defaults, mutable scanner preferences, alert links, and the optional tag link are written atomically. The endpoint does not immediately start scans, but an attached schedule authorizes future automatic scanner execution.
+      description: Direct write-control endpoint for creating a new scan task owned by the authenticated operator from explicit target, scan config, and scanner references, with retained scanner preferences, optional host ordering, a human-owned schedule, up to five distinct human-owned alerts, and one optional human-owned task tag. Every authenticated stack operator may use eligible human-owned references; predefined or global resources remain available only under their existing rules. All references are validated before task metadata, computed schedule time, fixed report-retention defaults, mutable scanner preferences, alert links, and the optional tag link are written atomically. The endpoint does not immediately start scans, but an attached schedule authorizes future automatic scanner execution.
       requestBody:
         required: true
         content:
@@ -6817,11 +6824,12 @@ paths:
       x-yafvs-maturity: live-write
       x-yafvs-replaces: task-metadata-modify
       x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Update task metadata
-      description: Direct write-control endpoint for updating task name and comment only. Complete retained editor configuration uses the separate replace-configuration action. Task clone, start, and stop have separate guarded control routes.
+      description: Direct write-control endpoint for updating a human-owned task's name and comment only without changing its owner. Every authenticated stack operator may perform the action. Complete retained editor configuration uses the separate replace-configuration action. Task clone, start, and stop have separate guarded control routes.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       requestBody:
@@ -6862,11 +6870,12 @@ paths:
       x-yafvs-maturity: live-write
       x-yafvs-replaces: task-trash-move
       x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Move a non-running scan task to trash
-      description: Direct write-control endpoint for moving an operator-owned, live, non-running scan task to the trashcan by setting the inherited task trash marker and moving task/report/result tag/result evidence locations consistently. Running, queued, requested, stop/delete-waiting, processing, hard-delete, file export, target/config/schedule/scanner mutation, alert links, preferences, and other scanner side effects remain on inherited compatibility paths.
+      description: Direct write-control endpoint for moving a human-owned, live, non-running scan task to the trashcan while preserving its owner. Every authenticated stack operator may perform the action. The inherited task trash marker and task/report/result tag and result evidence locations move consistently. Running, queued, requested, stop/delete-waiting, processing, hard-delete, file export, target/config/schedule/scanner mutation, alert links, preferences, and other scanner side effects remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       responses:
@@ -6898,6 +6907,7 @@ paths:
       x-yafvs-maturity: live-write
       x-yafvs-replaces: task-clone
       x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-owner-semantics: request-operator-owner
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-control
@@ -6947,11 +6957,12 @@ paths:
       x-yafvs-maturity: live-write
       x-yafvs-replaces: task-target-clone-rebind-delete
       x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-control
       summary: Replace the target hosts of a New scan task
-      description: Guarded direct write-control endpoint for atomically cloning the complete retained configuration of an operator-owned task target, replacing its host and exclusion lists, and rebinding exactly one operator-owned New scan task that has no reports. The source target is moved to trash only when no other live task or scope still references it; otherwise it is retained. The route never starts a scan and refuses historical, running, container, trash-side, ownerless, cross-owner, or otherwise non-live task/target state.
+      description: Guarded direct write-control endpoint for atomically cloning the complete retained configuration of a human-owned task target into a new target owned by the authenticated operator, replacing its host and exclusion lists, and rebinding exactly one human-owned New scan task that has no reports. Task and source target owners may differ from each other and from the operator. The source target is moved to trash only when no other live task or scope still references it; otherwise it is retained. The route never starts a scan and refuses ownerless, historical, running, container, trash-side, or otherwise non-live task/target state.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       requestBody:
@@ -6993,11 +7004,12 @@ paths:
       x-yafvs-maturity: live-write
       x-yafvs-replaces: task-retained-editor-configuration-modify
       x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-control
       summary: Replace the retained configuration of a scan task
-      description: Guarded direct write-control endpoint that atomically replaces the name, comment, target, scan config, scanner, schedule, schedule periods, alerts, host ordering, asset override/QoD preferences, and scanner concurrency of an operator-owned New or alterable task. Every referenced resource is validated before mutation, alert and managed-preference sets are replaced transactionally, and fixed YAFVS report-retention defaults remain unchanged. The action never starts a scan, but its scanner settings and any attached schedule govern future execution.
+      description: Guarded direct write-control endpoint that atomically replaces the name, comment, target, scan config, scanner, schedule, schedule periods, alerts, host ordering, asset override/QoD preferences, and scanner concurrency of a human-owned New or alterable task without changing its owner. Every authenticated stack operator may use eligible human-owned references; predefined and global resources retain their existing availability rules. Every referenced resource is validated before mutation, alert and managed-preference sets are replaced transactionally, and fixed YAFVS report-retention defaults remain unchanged. The action never starts a scan, but its scanner settings and any attached schedule govern future execution.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       requestBody:
@@ -7042,11 +7054,12 @@ paths:
       x-yafvs-maturity: live-control
       x-yafvs-replaces: task-start
       x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-control
       summary: Start an existing scan task through the gvmd scan queue
-      description: Guarded direct write-control endpoint for starting an operator-owned, inactive scan task whose target and scanner references are valid. The endpoint creates the requested report and scan-queue rows transactionally and returns the report id; gvmd remains responsible for scanner protocol execution, result ingestion, and later task/report state transitions. The deployed gvmd must run with scan-queue processing enabled. Stop is provided by the separate private gvmd control-socket route. Resume, CVE-only tasks, remote scanner transport changes, alerts, schedules, and task mutation are outside this route.
+      description: Guarded direct write-control endpoint for starting a human-owned inactive scan task without changing its owner. Every authenticated stack operator may request the action when the task's target and scanner references are valid. The endpoint creates the requested report and scan-queue rows transactionally and returns the report id; gvmd remains responsible for scanner protocol execution, result ingestion, and later task/report state transitions. The deployed gvmd must run with scan-queue processing enabled. Stop is provided by the separate private gvmd control-socket route. Resume, CVE-only tasks, remote scanner transport changes, alerts, schedules, and task mutation are outside this route.
       parameters:
         - $ref: '#/components/parameters/TaskId'
       responses:
@@ -7083,6 +7096,7 @@ paths:
       x-yafvs-maturity: live-control
       x-yafvs-replaces: task-stop
       x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-owner-semantics: gvmd-acl-user-and-task-permission
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-control
@@ -8250,7 +8264,7 @@ components:
         port_list_id:
           type: string
           format: uuid
-          description: Existing port list to assign to the target. The referenced port list must be predefined or owned by the direct operator.
+          description: Existing port list to assign to the target. The reference must be predefined or human-owned.
         hosts:
           type: array
           minItems: 1
@@ -8304,7 +8318,7 @@ components:
         port_list_id:
           type: string
           format: uuid
-          description: Port list to assign to the target. The referenced port list must be predefined or owned by the direct operator, and assignment is rejected while the target is referenced by a live task.
+          description: Port list to assign to the target. The reference must be predefined or human-owned, and assignment is rejected while the target is referenced by a live task.
         hosts:
           type: array
           maxItems: 4095
@@ -8328,7 +8342,7 @@ components:
         id:
           type: string
           format: uuid
-          description: Existing credential to assign. The credential must be owned by the direct operator and have a type allowed for the selected target credential use.
+          description: Existing credential to assign. The credential must be human-owned and have a type allowed for the selected target credential use.
     TargetSshCredentialLinkPatchRequest:
       type: object
       additionalProperties: false
@@ -8337,7 +8351,7 @@ components:
         id:
           type: string
           format: uuid
-          description: Existing SSH credential to assign. The credential must be owned by the direct operator and have type up or usk.
+          description: Existing SSH credential to assign. The credential must be human-owned and have type up or usk.
         port:
           type: integer
           minimum: 1
@@ -8438,25 +8452,25 @@ components:
         target_id:
           type: string
           format: uuid
-          description: Operator-owned target to scan.
+          description: Human-owned target to scan.
         config_id:
           type: string
           format: uuid
-          description: Operator-owned or predefined scan config.
+          description: Human-owned or predefined scan config.
         scanner_id:
           type: string
           format: uuid
-          description: Operator-owned or built-in scanner capable of running scan tasks.
+          description: Human-owned or built-in scanner capable of running scan tasks.
         schedule_id:
           type: string
           format: uuid
-          description: Optional schedule owned by the direct API operator. Its next run time is computed when the task is created.
+          description: Optional human-owned schedule. Its next run time is computed when the task is created.
         alert_ids:
           type: array
           maxItems: 5
           uniqueItems: true
           default: []
-          description: Optional distinct alerts owned by the direct API operator.
+          description: Optional distinct human-owned alerts.
           items:
             type: string
             format: uuid
@@ -8493,7 +8507,7 @@ components:
         tag_id:
           type: string
           format: uuid
-          description: Optional operator-owned task tag attached atomically at creation.
+          description: Optional human-owned task tag attached atomically at creation.
     TaskPatchRequest:
       type: object
       additionalProperties: false

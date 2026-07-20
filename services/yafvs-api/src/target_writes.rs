@@ -94,9 +94,9 @@ pub(crate) async fn clone_target(
     .await
     .map_err(|error| map_target_write_db_error(error, "lock target tables for clone"))?;
     let source = load_target_write_state(&tx, &target_id).await?;
-    ensure_target_owner_matches_operator(source.owner_id, owner_id)?;
-    ensure_target_source_port_list_assignable(&tx, source.internal_id, owner_id).await?;
-    ensure_target_source_credentials_assignable(&tx, source.internal_id, owner_id).await?;
+    ensure_target_is_human_owned(source.owner_id)?;
+    ensure_target_source_port_list_assignable(&tx, source.internal_id).await?;
+    ensure_target_source_credentials_assignable(&tx, source.internal_id).await?;
     if let Some(name) = request.name.as_ref() {
         ensure_unique_target_name(&tx, name, -1, owner_id).await?;
     }
@@ -132,14 +132,14 @@ pub(crate) async fn delete_target(
         .transaction()
         .await
         .map_err(|error| map_target_write_db_error(error, "begin delete target transaction"))?;
-    let owner_id = resolve_target_write_operator_owner(&tx, &operator).await?;
+    resolve_target_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE targets, targets_trash, targets_login_data, targets_trash_login_data, tasks, scope_targets, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_target_write_db_error(error, "lock target tables for delete"))?;
     let state = load_target_write_state(&tx, &target_id).await?;
-    ensure_target_owner_matches_operator(state.owner_id, owner_id)?;
+    ensure_target_is_human_owned(state.owner_id)?;
     ensure_target_not_in_use_for_delete(&tx, state.internal_id).await?;
     ensure_target_not_in_scope(&tx, state.internal_id).await?;
     execute_target_trash_transaction(&tx, state.internal_id).await?;
@@ -160,14 +160,14 @@ pub(crate) async fn hard_delete_target(
     let tx = client.transaction().await.map_err(|error| {
         map_target_write_db_error(error, "begin hard-delete target transaction")
     })?;
-    let owner_id = resolve_target_write_operator_owner(&tx, &operator).await?;
+    resolve_target_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE targets_trash, targets_trash_login_data, tasks, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_target_write_db_error(error, "lock target trash tables for hard delete"))?;
     let trash = load_target_trash_state(&tx, &target_id).await?;
-    ensure_target_owner_matches_operator(trash.owner_id, owner_id)?;
+    ensure_target_is_human_owned(trash.owner_id)?;
     ensure_trash_target_not_in_use(&tx, trash.internal_id).await?;
     execute_target_hard_delete_transaction(&tx, trash.internal_id).await?;
     tx.commit().await.map_err(|error| {
@@ -188,15 +188,15 @@ pub(crate) async fn restore_target(
         .transaction()
         .await
         .map_err(|error| map_target_write_db_error(error, "begin restore target transaction"))?;
-    let owner_id = resolve_target_write_operator_owner(&tx, &operator).await?;
+    resolve_target_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE targets, targets_trash, targets_login_data, targets_trash_login_data, tasks, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_target_write_db_error(error, "lock target tables for restore"))?;
     let trash = load_target_trash_state(&tx, &target_id).await?;
-    ensure_target_owner_matches_operator(trash.owner_id, owner_id)?;
-    ensure_unique_live_target_name_for_owner(&tx, &trash.name, trash.owner_id).await?;
+    let target_owner_id = ensure_target_is_human_owned(trash.owner_id)?;
+    ensure_unique_live_target_name_for_owner(&tx, &trash.name, target_owner_id).await?;
     ensure_target_uuid_not_live(&tx, &trash.uuid).await?;
     ensure_trash_target_references_live_resources(&tx, trash.internal_id).await?;
     let record = execute_target_restore_transaction(&tx, trash.internal_id).await?;
@@ -233,10 +233,9 @@ pub(crate) async fn patch_target(
         .await
         .map_err(|error| map_target_write_db_error(error, "lock targets for patch"))?;
     let target_state = load_target_write_state(&tx, &target_id).await?;
-    ensure_target_owner_matches_operator(target_state.owner_id, operator_owner_id)?;
+    let target_owner_id = ensure_target_is_human_owned(target_state.owner_id)?;
     if let Some(name) = request.name.as_ref() {
-        ensure_unique_target_name(&tx, name, target_state.internal_id, target_state.owner_id)
-            .await?;
+        ensure_unique_target_name(&tx, name, target_state.internal_id, target_owner_id).await?;
     }
     let port_list_internal_id = if let Some(port_list_id) = request.port_list_id.as_ref() {
         Some(

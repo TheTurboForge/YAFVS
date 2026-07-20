@@ -102,22 +102,15 @@ fn task_target_replace_requires_exactly_new_live_scan_task_with_live_target() {
 }
 
 #[test]
-fn task_target_replace_requires_operator_task_and_source_target_ownership() {
-    assert!(ensure_task_target_replace_ownership(Some(11), Some(11), 11).is_ok());
+fn task_target_replace_accepts_different_human_owners_and_rejects_ownerless_resources() {
+    assert!(ensure_task_target_replace_ownership(Some(11), Some(11)).is_ok());
+    assert!(ensure_task_target_replace_ownership(Some(11), Some(12)).is_ok());
     assert!(matches!(
-        ensure_task_target_replace_ownership(Some(11), Some(11), 12),
+        ensure_task_target_replace_ownership(None, Some(11)),
         Err(ApiError::Forbidden)
     ));
     assert!(matches!(
-        ensure_task_target_replace_ownership(Some(11), Some(12), 11),
-        Err(ApiError::Forbidden)
-    ));
-    assert!(matches!(
-        ensure_task_target_replace_ownership(None, Some(11), 11),
-        Err(ApiError::Forbidden)
-    ));
-    assert!(matches!(
-        ensure_task_target_replace_ownership(Some(11), None, 11),
+        ensure_task_target_replace_ownership(Some(11), None),
         Err(ApiError::Forbidden)
     ));
 }

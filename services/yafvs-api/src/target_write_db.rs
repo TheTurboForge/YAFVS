@@ -21,14 +21,14 @@ pub(crate) struct TargetWriteRecordWithInternalId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TargetWriteState {
     pub(crate) internal_id: i32,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TargetTrashState {
     pub(crate) internal_id: i32,
     pub(crate) uuid: String,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
     pub(crate) name: String,
 }
 
@@ -170,14 +170,14 @@ pub(crate) async fn load_assignable_target_credential(
         return Err(ApiError::NotFound);
     };
     let internal_id: i32 = row.get(0);
-    let owner_id: i32 = row.get(1);
+    let owner_id: Option<i32> = row.get(1);
     let credential_type: String = row.get(2);
-    if owner_id != operator_owner_id {
+    if owner_id.is_none() {
         tracing::warn!(
             credential_owner_id = owner_id,
             operator_owner_id,
             field_name,
-            "direct API target write operator cannot assign credential"
+            "direct API target write rejects an ownerless credential"
         );
         return Err(ApiError::Forbidden);
     }
@@ -354,15 +354,15 @@ pub(crate) async fn load_assignable_target_port_list(
         return Err(ApiError::NotFound);
     };
     let internal_id: i32 = row.get(0);
-    let owner_id: i32 = row.get(1);
+    let owner_id: Option<i32> = row.get(1);
     let predefined = row.get::<_, i32>(2) != 0;
-    if predefined || owner_id == operator_owner_id {
+    if predefined || owner_id.is_some() {
         Ok(AssignableTargetPortList { internal_id })
     } else {
         tracing::warn!(
             port_list_owner_id = owner_id,
             operator_owner_id,
-            "direct API target write operator cannot assign port list"
+            "direct API target write rejects an ownerless port list"
         );
         Err(ApiError::Forbidden)
     }
@@ -371,12 +371,11 @@ pub(crate) async fn load_assignable_target_port_list(
 pub(crate) async fn ensure_target_source_port_list_assignable(
     tx: &Transaction<'_>,
     target_internal_id: i32,
-    operator_owner_id: i32,
 ) -> Result<(), ApiError> {
     let count: i64 = tx
         .query_one(
             target_source_port_list_is_assignable_sql(),
-            &[&target_internal_id, &operator_owner_id],
+            &[&target_internal_id],
         )
         .await
         .map_err(|error| map_target_write_db_error(error, "check target clone port list"))?
@@ -386,7 +385,6 @@ pub(crate) async fn ensure_target_source_port_list_assignable(
     } else {
         tracing::warn!(
             target_internal_id,
-            operator_owner_id,
             "direct API target clone source references an unassignable port list"
         );
         Err(ApiError::Forbidden)
@@ -396,12 +394,11 @@ pub(crate) async fn ensure_target_source_port_list_assignable(
 pub(crate) async fn ensure_target_source_credentials_assignable(
     tx: &Transaction<'_>,
     target_internal_id: i32,
-    operator_owner_id: i32,
 ) -> Result<(), ApiError> {
     let count: i64 = tx
         .query_one(
             target_source_unassignable_credential_count_sql(),
-            &[&target_internal_id, &operator_owner_id],
+            &[&target_internal_id],
         )
         .await
         .map_err(|error| map_target_write_db_error(error, "check target clone credentials"))?
@@ -411,7 +408,6 @@ pub(crate) async fn ensure_target_source_credentials_assignable(
     } else {
         tracing::warn!(
             target_internal_id,
-            operator_owner_id,
             unassignable_credential_count = count,
             "direct API target clone source references unassignable credentials"
         );
@@ -419,16 +415,11 @@ pub(crate) async fn ensure_target_source_credentials_assignable(
     }
 }
 
-pub(crate) fn ensure_target_owner_matches_operator(
-    target_owner_id: i32,
-    operator_owner_id: i32,
-) -> Result<(), ApiError> {
-    if target_owner_id == operator_owner_id {
-        Ok(())
-    } else {
-        tracing::warn!("direct API target write operator does not own target");
-        Err(ApiError::Forbidden)
-    }
+pub(crate) fn ensure_target_is_human_owned(target_owner_id: Option<i32>) -> Result<i32, ApiError> {
+    target_owner_id.ok_or_else(|| {
+        tracing::warn!("direct API target write rejects an ownerless target");
+        ApiError::Forbidden
+    })
 }
 
 pub(crate) async fn query_target_write_record(

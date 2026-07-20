@@ -71,11 +71,9 @@ pub(crate) async fn replace_task_target(
     let source_target_internal_id = ensure_task_target_replace_state(&task)?;
     let source_target =
         load_task_target_replace_source_target_state(&tx, source_target_internal_id).await?;
-    ensure_task_target_replace_ownership(task.owner_id, source_target.owner_id, operator_owner_id)?;
-    ensure_target_source_port_list_assignable(&tx, source_target.internal_id, operator_owner_id)
-        .await?;
-    ensure_target_source_credentials_assignable(&tx, source_target.internal_id, operator_owner_id)
-        .await?;
+    ensure_task_target_replace_ownership(task.owner_id, source_target.owner_id)?;
+    ensure_target_source_port_list_assignable(&tx, source_target.internal_id).await?;
+    ensure_target_source_credentials_assignable(&tx, source_target.internal_id).await?;
     ensure_task_target_replace_has_no_reports(&tx, task.internal_id).await?;
 
     let (new_target, disposition) = execute_task_target_replace_transaction(

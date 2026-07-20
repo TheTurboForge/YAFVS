@@ -8,7 +8,7 @@ use crate::{
     target_alive_tests::validate_alive_tests,
     target_host_validation::MAX_TARGET_HOSTS,
     target_text_validation::MAX_TARGET_TEXT_BYTES,
-    target_write_db::ensure_target_owner_matches_operator,
+    target_write_db::ensure_target_is_human_owned,
     target_write_sql::*,
     target_write_validation::{
         TargetCloneRequest, TargetCreateRequest, TargetCredentialLinkPatchRequest,
@@ -341,10 +341,11 @@ fn hosts_patch_request(hosts: &[&str], exclude_hosts: &[&str]) -> TargetPatchReq
 }
 
 #[test]
-fn target_patch_rejects_operator_owner_mismatch() {
-    assert!(ensure_target_owner_matches_operator(7, 7).is_ok());
+fn target_writes_accept_any_human_owner_and_reject_ownerless_targets() {
+    assert!(ensure_target_is_human_owned(Some(7)).is_ok());
+    assert!(ensure_target_is_human_owned(Some(8)).is_ok());
     assert!(matches!(
-        ensure_target_owner_matches_operator(7, 8),
+        ensure_target_is_human_owned(None),
         Err(ApiError::Forbidden)
     ));
 }
@@ -380,35 +381,35 @@ fn target_mutating_handlers_enforce_owner_before_side_effects() {
             "clone",
             "pub(crate) async fn clone_target",
             "pub(crate) async fn delete_target",
-            "ensure_target_owner_matches_operator(source.owner_id, owner_id)?;",
+            "ensure_target_is_human_owned(source.owner_id)?;",
             "execute_target_clone_transaction",
         ),
         (
             "delete",
             "pub(crate) async fn delete_target",
             "pub(crate) async fn hard_delete_target",
-            "ensure_target_owner_matches_operator(state.owner_id, owner_id)?;",
+            "ensure_target_is_human_owned(state.owner_id)?;",
             "execute_target_trash_transaction",
         ),
         (
             "hard delete",
             "pub(crate) async fn hard_delete_target",
             "pub(crate) async fn restore_target",
-            "ensure_target_owner_matches_operator(trash.owner_id, owner_id)?;",
+            "ensure_target_is_human_owned(trash.owner_id)?;",
             "execute_target_hard_delete_transaction",
         ),
         (
             "restore",
             "pub(crate) async fn restore_target",
             "pub(crate) async fn patch_target",
-            "ensure_target_owner_matches_operator(trash.owner_id, owner_id)?;",
+            "ensure_target_is_human_owned(trash.owner_id)?;",
             "execute_target_restore_transaction",
         ),
         (
             "patch",
             "pub(crate) async fn patch_target",
             "fn target_write_location_headers",
-            "ensure_target_owner_matches_operator(target_state.owner_id, operator_owner_id)?;",
+            "ensure_target_is_human_owned(target_state.owner_id)?;",
             "execute_target_patch_transaction",
         ),
     ] {
@@ -736,11 +737,11 @@ fn target_clone_sql_copies_metadata_credential_references_and_active_tags_only()
 
     let port_list_guard = target_source_port_list_is_assignable_sql();
     assert!(port_list_guard.contains("JOIN port_lists"));
-    assert!(port_list_guard.contains("coalesce(pl.predefined, 0) != 0 OR pl.owner = $2"));
+    assert!(port_list_guard.contains("coalesce(pl.predefined, 0) != 0 OR pl.owner IS NOT NULL"));
 
     let credential_guard = target_source_unassignable_credential_count_sql();
     assert!(credential_guard.contains("JOIN credentials"));
-    assert!(credential_guard.contains("c.owner != $2"));
+    assert!(credential_guard.contains("c.owner IS NULL"));
     assert!(!credential_guard.contains("credentials_data"));
 }
 

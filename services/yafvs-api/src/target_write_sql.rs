@@ -27,7 +27,7 @@ pub(crate) fn target_source_port_list_is_assignable_sql() -> &'static str {
        FROM targets t
        JOIN port_lists pl ON pl.id = t.port_list
       WHERE t.id = $1
-        AND NOT (coalesce(pl.predefined, 0) != 0 OR pl.owner = $2);"
+        AND NOT (coalesce(pl.predefined, 0) != 0 OR pl.owner IS NOT NULL);"
 }
 
 pub(crate) fn target_source_unassignable_credential_count_sql() -> &'static str {
@@ -35,7 +35,7 @@ pub(crate) fn target_source_unassignable_credential_count_sql() -> &'static str 
        FROM targets_login_data tld
        JOIN credentials c ON c.id = tld.credential
       WHERE tld.target = $1
-        AND c.owner != $2;"
+        AND c.owner IS NULL;"
 }
 
 pub(crate) fn target_unique_name_sql() -> &'static str {

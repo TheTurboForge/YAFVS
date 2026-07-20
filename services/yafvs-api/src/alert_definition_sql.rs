@@ -60,7 +60,6 @@ pub(crate) fn alert_definition_read_sql() -> &'static str {
                        AND coalesce(amd.data, '') <> '') = 1) AS snmp_community_configured
          FROM alerts a
         WHERE a.uuid = $1
-          AND a.owner = $2
         LIMIT 1;"#
 }
 

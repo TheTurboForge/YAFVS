@@ -16,7 +16,7 @@ pub(crate) struct AlertWriteRecord {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AlertWriteState {
     pub(crate) internal_id: i32,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
 }
 
 pub(crate) fn require_alert_write_operator(
@@ -62,20 +62,11 @@ pub(crate) async fn load_alert_write_state(
         .ok_or(ApiError::NotFound)
 }
 
-pub(crate) fn ensure_alert_owner_matches_operator(
-    alert_owner_id: i32,
-    operator_owner_id: i32,
-) -> Result<(), ApiError> {
-    if alert_owner_id == operator_owner_id {
-        Ok(())
-    } else {
-        tracing::warn!(
-            alert_owner_id,
-            operator_owner_id,
-            "direct API alert write owner mismatch"
-        );
-        Err(ApiError::Forbidden)
-    }
+pub(crate) fn ensure_alert_is_human_owned(alert_owner_id: Option<i32>) -> Result<i32, ApiError> {
+    alert_owner_id.ok_or_else(|| {
+        tracing::warn!("direct API alert write rejected an ownerless alert");
+        ApiError::Forbidden
+    })
 }
 
 pub(crate) async fn ensure_unique_alert_name(

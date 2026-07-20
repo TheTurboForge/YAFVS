@@ -19,7 +19,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AlertDefinitionWriteState {
     pub(crate) internal_id: i32,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
     pub(crate) revision: String,
     pub(crate) method: i32,
     pub(crate) snmp_community_configured: bool,
@@ -34,7 +34,7 @@ where
     C: deadpool_postgres::GenericClient + Sync,
 {
     let alert_id = parse_uuid(alert_id)?.to_string();
-    let owner_id = client
+    client
         .query_opt(
             alert_definition_operator_owner_sql(),
             &[&operator.user_uuid()],
@@ -44,12 +44,12 @@ where
         .map(|row| row.get::<_, i32>(0))
         .ok_or(ApiError::Forbidden)?;
     let row = client
-        .query_opt(alert_definition_read_sql(), &[&alert_id, &owner_id])
+        .query_opt(alert_definition_read_sql(), &[&alert_id])
         .await
         .map_err(|error| map_alert_definition_db_error(error, "load alert definition"))?
         .ok_or(ApiError::NotFound)?;
-    let alert_owner_id: i32 = row.get("owner_id");
-    ensure_alert_definition_owner_matches(alert_owner_id, owner_id)?;
+    let alert_owner_id: Option<i32> = row.get("owner_id");
+    ensure_alert_definition_is_human_owned(alert_owner_id)?;
     let event: i32 = row.get("event");
     let condition: i32 = row.get("condition");
     let filter_id: Option<i32> = row.get("filter_id");
@@ -128,16 +128,13 @@ pub(crate) fn ensure_alert_definition_revision_matches(
     }
 }
 
-pub(crate) fn ensure_alert_definition_owner_matches(
-    alert_owner_id: i32,
-    operator_owner_id: i32,
-) -> Result<(), ApiError> {
-    if alert_owner_id == operator_owner_id {
-        Ok(())
-    } else {
-        tracing::warn!("alert definition request rejected for owner mismatch");
-        Err(ApiError::Forbidden)
-    }
+pub(crate) fn ensure_alert_definition_is_human_owned(
+    alert_owner_id: Option<i32>,
+) -> Result<i32, ApiError> {
+    alert_owner_id.ok_or_else(|| {
+        tracing::warn!("alert definition request rejected an ownerless alert");
+        ApiError::Forbidden
+    })
 }
 
 pub(crate) fn ensure_snmp_community_preserve_allowed(
@@ -186,7 +183,6 @@ pub(crate) fn ensure_alert_definition_name_count_is_unique(
 
 pub(crate) async fn lock_alert_definition_references(
     tx: &Transaction<'_>,
-    owner_id: i32,
     request: &ValidatedAlertDefinitionReplace,
 ) -> Result<(), ApiError> {
     match request {
@@ -194,7 +190,7 @@ pub(crate) async fn lock_alert_definition_references(
             let recipient_id = sensitive_text(&request.recipient_credential_id);
             if !recipient_id.is_empty() {
                 let credential = load_credential_reference(tx, recipient_id).await?;
-                ensure_owned_credential(&credential, owner_id)?;
+                ensure_human_owned_credential(&credential)?;
                 if !matches!(credential.credential_type.as_str(), "pgp" | "smime") {
                     return Err(ApiError::BadRequest(
                         "recipient_credential_id must reference a PGP or S/MIME credential"
@@ -210,7 +206,7 @@ pub(crate) async fn lock_alert_definition_references(
         ValidatedAlertDefinitionReplace::Smb(request) => {
             let credential =
                 load_credential_reference(tx, sensitive_text(&request.smb_credential_id)).await?;
-            ensure_owned_credential(&credential, owner_id)?;
+            ensure_human_owned_credential(&credential)?;
             if credential.credential_type != "up" || !credential.smb_username_valid() {
                 return Err(ApiError::BadRequest(
                     "smb_credential_id must reference an SMB-compatible username/password credential"
@@ -222,7 +218,7 @@ pub(crate) async fn lock_alert_definition_references(
         ValidatedAlertDefinitionReplace::Scp(request) => {
             let credential =
                 load_credential_reference(tx, sensitive_text(&request.scp_credential_id)).await?;
-            ensure_owned_credential(&credential, owner_id)?;
+            ensure_human_owned_credential(&credential)?;
             if !matches!(credential.credential_type.as_str(), "up" | "usk")
                 || !credential.scp_username_valid()
             {
@@ -242,10 +238,8 @@ pub(crate) async fn lock_alert_definition_references(
                     map_alert_definition_db_error(error, "lock alert definition task reference")
                 })?
                 .ok_or(ApiError::NotFound)?;
-            let task_owner_id: i32 = row.get(1);
-            if task_owner_id != owner_id {
-                return Err(ApiError::Forbidden);
-            }
+            let task_owner_id: Option<i32> = row.get(1);
+            task_owner_id.ok_or(ApiError::Forbidden)?;
         }
         ValidatedAlertDefinitionReplace::Syslog(_) | ValidatedAlertDefinitionReplace::Snmp(_) => {}
     }
@@ -295,11 +289,8 @@ async fn load_credential_reference(
     .ok_or(ApiError::NotFound)
 }
 
-fn ensure_owned_credential(
-    credential: &CredentialReference,
-    owner_id: i32,
-) -> Result<(), ApiError> {
-    if credential.owner_id == Some(owner_id) {
+fn ensure_human_owned_credential(credential: &CredentialReference) -> Result<(), ApiError> {
+    if credential.owner_id.is_some() {
         Ok(())
     } else {
         Err(ApiError::Forbidden)

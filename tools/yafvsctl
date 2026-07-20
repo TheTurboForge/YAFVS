@@ -760,7 +760,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("get", "/alerts/{alert_id}/definition"): {
         "x-yafvs-maturity": "live-read",
         "x-yafvs-operator-identity": "resolved-request-operator",
-        "x-yafvs-owner-semantics": "request-operator-owner",
+        "x-yafvs-owner-semantics": "preserve-existing-owner",
         "x-yafvs-replaces": "alert-retained-definition-read",
     },
     ("put", "/alerts/{alert_id}/definition"): {
@@ -786,7 +786,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("post", "/alerts/{alert_id}/test"): {
         "x-yafvs-maturity": "live-write",
         "x-yafvs-operator-identity": "direct-token-operator",
-        "x-yafvs-owner-semantics": "request-operator-owner",
+        "x-yafvs-owner-semantics": "preserve-existing-owner",
         "x-yafvs-replaces": "alert-test-actions",
         "x-yafvs-safety-contract": "write-control-v1",
         "x-yafvs-side-effect": "alert-real-delivery-control",
@@ -794,7 +794,7 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("post", "/alerts/{alert_id}/deliver-report"): {
         "x-yafvs-maturity": "live-write",
         "x-yafvs-operator-identity": "direct-token-operator",
-        "x-yafvs-owner-semantics": "request-operator-owner",
+        "x-yafvs-owner-semantics": "preserve-existing-owner",
         "x-yafvs-replaces": "alert-deliver-report",
         "x-yafvs-safety-contract": "write-control-v1",
         "x-yafvs-side-effect": "alert-report-delivery-control",

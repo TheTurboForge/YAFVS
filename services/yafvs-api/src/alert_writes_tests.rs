@@ -4,7 +4,7 @@
 
 use crate::{
     alert_payloads::AlertAssetItem,
-    alert_write_db::ensure_alert_owner_matches_operator,
+    alert_write_db::ensure_alert_is_human_owned,
     alert_write_sql::*,
     alert_write_validation::{
         AlertCloneRequest, AlertCreateRequest, AlertEmailCreateRequest, AlertPatchRequest,
@@ -1387,10 +1387,11 @@ fn clone_request(name: Option<&str>, comment: Option<&str>) -> AlertCloneRequest
 }
 
 #[test]
-fn alert_patch_rejects_operator_owner_mismatch() {
-    assert!(ensure_alert_owner_matches_operator(7, 7).is_ok());
+fn alert_writes_accept_any_human_owner_and_reject_ownerless_alerts() {
+    assert_eq!(ensure_alert_is_human_owned(Some(7)).unwrap(), 7);
+    assert_eq!(ensure_alert_is_human_owned(Some(8)).unwrap(), 8);
     assert!(matches!(
-        ensure_alert_owner_matches_operator(7, 8),
+        ensure_alert_is_human_owned(None),
         Err(ApiError::Forbidden)
     ));
 }
@@ -1406,7 +1407,7 @@ fn alert_clone_handler_requires_operator_owner_and_unique_name_before_mutation()
         .expect("delete alert handler follows clone handler")
         .0;
 
-    let owner_check = "ensure_alert_owner_matches_operator(source.owner_id, owner_id)?;";
+    let owner_check = "ensure_alert_is_human_owned(source.owner_id)?;";
     let unique_check = "ensure_unique_alert_name(&tx, name, -1).await?;";
     assert!(handler.contains("let operator = require_alert_write_operator(operator)?;"));
     assert!(handler.contains("let request = validate_alert_clone_request(request)?;"));
@@ -1435,7 +1436,7 @@ fn alert_delete_handler_requires_operator_owner_and_live_task_guard_before_mutat
         .expect("patch alert handler follows delete handler")
         .0;
 
-    let owner_check = "ensure_alert_owner_matches_operator(state.owner_id, operator_owner_id)?;";
+    let owner_check = "ensure_alert_is_human_owned(state.owner_id)?;";
     let task_guard = "ensure_alert_not_in_use_by_live_tasks(&tx, state.internal_id).await?;";
     assert!(handler.contains("let operator = require_alert_write_operator(operator)?;"));
     assert!(handler.contains("resolve_alert_write_operator_owner(&tx, &operator).await?"));
@@ -1460,8 +1461,7 @@ fn alert_patch_handler_requires_operator_and_owner_before_mutation() {
         .expect("patch alert handler must exist")
         .1;
 
-    let owner_check =
-        "ensure_alert_owner_matches_operator(alert_state.owner_id, operator_owner_id)?;";
+    let owner_check = "ensure_alert_is_human_owned(alert_state.owner_id)?;";
     assert!(handler.contains("let operator = require_alert_write_operator(operator)?;"));
     assert!(handler.contains("resolve_alert_write_operator_owner(&tx, &operator).await?"));
     assert!(handler.contains(owner_check));

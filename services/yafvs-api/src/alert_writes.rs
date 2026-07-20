@@ -469,7 +469,7 @@ pub(crate) async fn clone_alert(
     .await
     .map_err(|error| map_alert_write_db_error(error, "lock alert tables for clone"))?;
     let source = load_alert_write_state(&tx, &alert_id).await?;
-    ensure_alert_owner_matches_operator(source.owner_id, owner_id)?;
+    ensure_alert_is_human_owned(source.owner_id)?;
     if let Some(name) = request.name.as_ref() {
         ensure_unique_alert_name(&tx, name, -1).await?;
     }
@@ -502,14 +502,14 @@ pub(crate) async fn delete_alert(
         .transaction()
         .await
         .map_err(|error| map_alert_write_db_error(error, "begin delete alert transaction"))?;
-    let operator_owner_id = resolve_alert_write_operator_owner(&tx, &operator).await?;
+    resolve_alert_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE alerts, alerts_trash, alert_condition_data, alert_condition_data_trash, alert_event_data, alert_event_data_trash, alert_method_data, alert_method_data_trash, task_alerts, tasks, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_alert_write_db_error(error, "lock alert tables for delete"))?;
     let state = load_alert_write_state(&tx, &alert_id).await?;
-    ensure_alert_owner_matches_operator(state.owner_id, operator_owner_id)?;
+    ensure_alert_is_human_owned(state.owner_id)?;
     ensure_alert_not_in_use_by_live_tasks(&tx, state.internal_id).await?;
     execute_alert_trash_transaction(&tx, state.internal_id).await?;
     tx.commit()
@@ -532,12 +532,12 @@ pub(crate) async fn patch_alert(
         .transaction()
         .await
         .map_err(|error| map_alert_write_db_error(error, "begin patch alert transaction"))?;
-    let operator_owner_id = resolve_alert_write_operator_owner(&tx, &operator).await?;
+    resolve_alert_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute("LOCK TABLE alerts IN SHARE ROW EXCLUSIVE MODE;")
         .await
         .map_err(|error| map_alert_write_db_error(error, "lock alerts for patch"))?;
     let alert_state = load_alert_write_state(&tx, &alert_id).await?;
-    ensure_alert_owner_matches_operator(alert_state.owner_id, operator_owner_id)?;
+    ensure_alert_is_human_owned(alert_state.owner_id)?;
     if let Some(name) = request.name.as_ref() {
         ensure_unique_alert_name(&tx, name, alert_state.internal_id).await?;
     }

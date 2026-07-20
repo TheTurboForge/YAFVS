@@ -7,7 +7,8 @@ use serde_json::{Value, json};
 use super::{
     alert_definition_db::{
         AlertDefinitionWriteState, alert_definition_filter_is_retained,
-        ensure_alert_definition_revision_matches, ensure_snmp_community_preserve_allowed,
+        ensure_alert_definition_is_human_owned, ensure_alert_definition_revision_matches,
+        ensure_snmp_community_preserve_allowed,
     },
     alert_definition_payloads::{
         AlertDefinitionBase, AlertDefinitionReplaceRequest, build_alert_definition,
@@ -38,6 +39,13 @@ fn replacement_request(value: Value) -> AlertDefinitionReplaceRequest {
 fn retained_definition_maps_boolean_active_to_the_legacy_integer_column() {
     assert_eq!(alert_definition_active_database_value(false), 0);
     assert_eq!(alert_definition_active_database_value(true), 1);
+}
+
+#[test]
+fn alert_definition_accepts_any_human_owner_and_rejects_ownerless_rows() {
+    assert_eq!(ensure_alert_definition_is_human_owned(Some(7)).unwrap(), 7);
+    assert_eq!(ensure_alert_definition_is_human_owned(Some(8)).unwrap(), 8);
+    assert!(ensure_alert_definition_is_human_owned(None).is_err());
 }
 
 #[test]
@@ -129,7 +137,7 @@ fn snmp_preserve_requires_existing_nonempty_snmp_secret() {
     let request = parse_and_validate(preserve.clone());
     let eligible = AlertDefinitionWriteState {
         internal_id: 1,
-        owner_id: 7,
+        owner_id: Some(7),
         revision: "7".to_string(),
         method: 9,
         snmp_community_configured: true,
@@ -278,7 +286,7 @@ fn snmp_definition_rejects_missing_empty_and_duplicate_community_rows() {
 fn full_replacement_rejects_stale_or_malformed_revisions() {
     let state = AlertDefinitionWriteState {
         internal_id: 1,
-        owner_id: 7,
+        owner_id: Some(7),
         revision: "42".to_string(),
         method: 5,
         snmp_community_configured: false,

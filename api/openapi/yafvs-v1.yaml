@@ -2125,6 +2125,7 @@ paths:
       x-yafvs-inherited-still-owns: delivery-payload-mutations
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: alert-delivery-control
       summary: Create a task-status EMAIL, SMB, Syslog, SNMP, SCP, or Start Task alert
@@ -2208,10 +2209,11 @@ paths:
       x-yafvs-replaces: alert-metadata-modify
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Update alert metadata
-      description: Direct write-control endpoint for updating alert name and comment only. Alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, restore, hard-delete, and delivery-payload mutation remain on inherited compatibility paths.
+      description: Direct write-control endpoint for updating the name and comment of any human-owned alert. Any authenticated stack operator may continue this work; the alert's existing owner remains attribution. Alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, restore, hard-delete, and delivery-payload mutation remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       requestBody:
@@ -2253,10 +2255,11 @@ paths:
       x-yafvs-replaces: alert-trash-move
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Move alert to trash
-      description: Direct write-control endpoint for moving an operator-owned live alert to trash. Alerts referenced by visible live tasks are rejected; hidden/trash task references, alert condition/event/method data, and tag links are moved consistently. Delivery-payload mutation, inherited XML export, restore, and hard-delete remain on inherited compatibility paths.
+      description: Direct write-control endpoint for moving a human-owned live alert to trash. Any authenticated stack operator may continue this work; the alert's existing owner remains attribution. Alerts referenced by visible live tasks are rejected; hidden/trash task references, alert condition/event/method data, and tag links are moved consistently. Delivery-payload mutation, inherited XML export, restore, and hard-delete remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       responses:
@@ -2286,9 +2289,10 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: alert-retained-definition-read
       x-yafvs-operator-identity: resolved-request-operator
-      x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       summary: Read one retained alert definition
-      description: Authenticated operator-owned DB-backed definition read for fixed Task run status changed, Always, no-filter EMAIL, SMB, SYSLOG, SNMP, SCP, and START_TASK alerts. The strict tagged response includes all retained non-secret method fields. SNMP community data is never selected or returned; snmp_community_configured reports only whether exactly one nonempty secret is configured. Other alert methods, events, conditions, and filter-backed semantics are intentionally not retained; malformed or unsupported definitions return 409.
+      description: Authenticated trusted-team DB-backed definition read for any human-owned fixed Task run status changed, Always, no-filter EMAIL, SMB, SYSLOG, SNMP, SCP, or START_TASK alert. The strict tagged response includes all retained non-secret method fields. SNMP community data is never selected or returned; snmp_community_configured reports only whether exactly one nonempty secret is configured. Other alert methods, events, conditions, and filter-backed semantics are intentionally not retained; malformed or unsupported definitions return 409.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       responses:
@@ -2324,10 +2328,11 @@ paths:
       x-yafvs-replaces: alert-retained-definition-modify
       x-yafvs-operator-identity: resolved-request-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: alert-delivery-control
       summary: Fully replace one retained alert definition
-      description: Atomically replaces an operator-owned alert with a strict Task run status changed, Always, no-filter EMAIL, SMB, SYSLOG, SNMP, SCP, or START_TASK definition. The required opaque expected_revision prevents a stale editor from overwriting a newer definition. The transaction locks the operator/name namespace, target alert, and every referenced credential, report format, or task before deleting and reinserting the fixed definition. Unknown method fields are rejected and SQL is prepared and parameterized. SNMP requires snmp_community_mode preserve or replace. Preserve is valid only when the target is already SNMP with exactly one nonempty community row and retains that row without selecting its value; replace requires a bounded nonempty write-only community. Other alert methods, events, conditions, and filter-backed semantics are intentionally not retained. A 502 mutation_outcome_indeterminate response means commit acknowledgement failed and current state must be checked before retrying. A 502 committed_response_unavailable response means commit succeeded but the authoritative response reload failed.
+      description: Atomically replaces any human-owned alert with a strict Task run status changed, Always, no-filter EMAIL, SMB, SYSLOG, SNMP, SCP, or START_TASK definition. Any authenticated stack operator may continue this work; the alert's existing owner remains attribution. The required opaque expected_revision prevents a stale editor from overwriting a newer definition. The transaction locks the operator/name namespace, target alert, and every referenced human-owned credential or task plus the selected report format before deleting and reinserting the fixed definition. Unknown method fields are rejected and SQL is prepared and parameterized. SNMP requires snmp_community_mode preserve or replace. Preserve is valid only when the target is already SNMP with exactly one nonempty community row and retains that row without selecting its value; replace requires a bounded nonempty write-only community. Other alert methods, events, conditions, and filter-backed semantics are intentionally not retained. A 502 mutation_outcome_indeterminate response means commit acknowledgement failed and current state must be checked before retrying. A 502 committed_response_unavailable response means commit succeeded but the authoritative response reload failed.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       requestBody:
@@ -2376,10 +2381,11 @@ paths:
       x-yafvs-replaces: alert-clone
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Clone an alert
-      description: Direct write-control endpoint for cloning an operator-owned live alert. The clone copies alert metadata, active state, filter reference, condition data, event data, method data, and active user-tag links with a fresh alert id and optional name/comment override. Delivery-payload mutation, inherited XML export, restore, and hard-delete remain on inherited compatibility paths.
+      description: Direct write-control endpoint for cloning any human-owned live alert into a new alert owned by the acting operator. The clone copies alert metadata, active state, filter reference, condition data, event data, method data, and active user-tag links with a fresh alert id and optional name/comment override. Delivery-payload mutation, inherited XML export, restore, and hard-delete remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       requestBody:
@@ -2421,7 +2427,8 @@ paths:
       x-yafvs-maturity: live-write
       x-yafvs-replaces: alert-test-actions
       x-yafvs-operator-identity: direct-token-operator
-      x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: alert-real-delivery-control
       summary: Send a real test delivery for an alert
@@ -2461,7 +2468,8 @@ paths:
       x-yafvs-maturity: live-write
       x-yafvs-replaces: alert-deliver-report
       x-yafvs-operator-identity: direct-token-operator
-      x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: alert-report-delivery-control
       summary: Deliver a report through an alert

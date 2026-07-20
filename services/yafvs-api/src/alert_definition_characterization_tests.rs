@@ -57,15 +57,18 @@ fn replacement_locks_namespace_target_owner_and_references_before_writes() {
 }
 
 #[test]
-fn reads_and_all_credential_references_are_operator_owned() {
-    assert!(SQL.contains("AND a.owner = $2"));
+fn reads_and_references_accept_human_owned_team_resources() {
+    assert!(!SQL.contains("AND a.owner = $2"));
     assert!(
         DATABASE
-            .matches("ensure_owned_credential(&credential, owner_id)?")
+            .matches("ensure_human_owned_credential(&credential)?")
             .count()
             >= 3
     );
-    assert!(DATABASE.contains("alert_definition_read_sql(), &[&alert_id, &owner_id]"));
+    assert!(DATABASE.contains("alert_definition_read_sql(), &[&alert_id]"));
+    assert!(DATABASE.contains("ensure_alert_definition_is_human_owned(alert_owner_id)?"));
+    assert!(DATABASE.contains("let task_owner_id: Option<i32> = row.get(1);"));
+    assert!(DATABASE.contains("task_owner_id.ok_or(ApiError::Forbidden)?;"));
 }
 
 #[test]

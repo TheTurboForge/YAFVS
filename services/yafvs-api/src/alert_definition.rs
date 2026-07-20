@@ -9,7 +9,7 @@ use axum::{
 
 use crate::{
     alert_definition_db::{
-        ensure_alert_definition_owner_matches, ensure_alert_definition_revision_matches,
+        ensure_alert_definition_is_human_owned, ensure_alert_definition_revision_matches,
         ensure_snmp_community_preserve_allowed, ensure_unique_alert_definition_name,
         load_alert_definition, load_alert_definition_state_for_update,
         lock_alert_definition_references, map_alert_definition_commit_error,
@@ -50,7 +50,7 @@ pub(crate) async fn put_alert_definition(
     let tx = client.transaction().await.map_err(|error| {
         map_alert_definition_db_error(error, "begin alert definition replacement transaction")
     })?;
-    let owner_id = resolve_alert_definition_operator_owner(&tx, &operator).await?;
+    resolve_alert_definition_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE alerts, alert_condition_data, alert_event_data, alert_method_data IN SHARE ROW EXCLUSIVE MODE; LOCK TABLE credentials_data IN SHARE MODE;",
     )
@@ -59,11 +59,11 @@ pub(crate) async fn put_alert_definition(
         map_alert_definition_db_error(error, "lock alert definition replacement namespace")
     })?;
     let alert_state = load_alert_definition_state_for_update(&tx, &alert_id).await?;
-    ensure_alert_definition_owner_matches(alert_state.owner_id, owner_id)?;
+    ensure_alert_definition_is_human_owned(alert_state.owner_id)?;
     ensure_alert_definition_revision_matches(&alert_state, &expected_revision)?;
     ensure_snmp_community_preserve_allowed(&alert_state, &request)?;
     ensure_unique_alert_definition_name(&tx, request.name(), alert_state.internal_id).await?;
-    lock_alert_definition_references(&tx, owner_id, &request).await?;
+    lock_alert_definition_references(&tx, &request).await?;
     let alert_id =
         execute_alert_definition_replace_transaction(&tx, alert_state.internal_id, &request)
             .await?;

@@ -252,7 +252,9 @@ fn temporary_credential_material() -> io::Result<(String, String)> {
     ))
 }
 
-fn gsad_urls_from_env(environment: &std::collections::BTreeMap<OsString, OsString>) -> Vec<String> {
+pub(crate) fn gsad_urls_from_env(
+    environment: &std::collections::BTreeMap<OsString, OsString>,
+) -> Vec<String> {
     let hosts = environment
         .get(&OsString::from("YAFVS_GSAD_HOSTS"))
         .filter(|value| !value.is_empty())

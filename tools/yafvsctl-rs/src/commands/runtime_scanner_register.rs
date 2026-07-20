@@ -315,6 +315,32 @@ fn parse_openvas_default_uuid(output: &str) -> Option<String> {
     parse_uuid_on_named_line(output, &["OpenVAS", "Default"])
 }
 
+pub(crate) fn scanner_registration_finding(output: Option<&ProcessOutput>) -> Finding {
+    let scanner_uuid = output
+        .filter(|output| output.success)
+        .and_then(|output| parse_openvas_default_uuid(&output.stdout));
+    Finding::new(
+        if scanner_uuid.is_some() {
+            "pass"
+        } else {
+            "warn"
+        },
+        "gvmd.scanner.openvas-default",
+        if scanner_uuid.is_some() {
+            "OpenVAS Default scanner is registered."
+        } else {
+            "OpenVAS Default scanner is not registered."
+        }
+        .into(),
+    )
+    .with_details(json!({
+        "scanner_uuid": scanner_uuid,
+        "output_tail": output
+            .map(|output| output_tail(&output.stdout, 80))
+            .unwrap_or_default(),
+    }))
+}
+
 fn parse_created_scanner_uuid(output: &str) -> Option<String> {
     parse_openvas_default_uuid(output).or_else(|| parse_uuid_on_named_line(output, &["Scanner"]))
 }

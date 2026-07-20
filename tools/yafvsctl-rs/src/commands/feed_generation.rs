@@ -63,6 +63,7 @@ pub(crate) fn run_pinned_gvmd(
 pub use app_build::command_runtime_app_build;
 pub use app_up::command_runtime_app_up;
 pub use native_api_rebuild::command_runtime_native_api_rebuild;
+pub(crate) use native_api_rebuild::run_retained_native_api_smoke;
 
 use super::common::{compact_finding, metadata, runtime_dir};
 use super::runtime_lock::{

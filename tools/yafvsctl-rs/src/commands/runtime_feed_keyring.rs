@@ -29,6 +29,77 @@ pub fn command_runtime_feed_keyring_init(repo_root: &Path) -> ResultEnvelope {
     )
 }
 
+/// Inspect the shared keyring without creating it or importing keys.
+pub(crate) fn feed_keyring_fingerprint_finding(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+) -> Finding {
+    let gpg = executable_path("gpg");
+    feed_keyring_fingerprint_finding_with(repo_root, runner, gpg.as_deref())
+}
+
+fn feed_keyring_fingerprint_finding_with(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    gpg: Option<&Path>,
+) -> Finding {
+    let home = keyring_home(repo_root);
+    let safe_home = fs::symlink_metadata(&home).is_ok_and(|metadata| {
+        metadata.file_type().is_dir()
+            && metadata.uid() == current_euid()
+            && metadata.mode() & 0o077 == 0
+    });
+    let Some(gpg) = gpg.filter(|_| safe_home) else {
+        return Finding::new(
+            "fail",
+            "feed-keyring.fingerprint",
+            "Shared feed signature keyring is not initialized; run just runtime-feed-keyring-init."
+                .into(),
+        )
+        .with_path(&home.display().to_string());
+    };
+    let home_text = home.display().to_string();
+    let args = [
+        "--homedir",
+        home_text.as_str(),
+        "--with-colons",
+        "--fingerprint",
+        FPR,
+    ];
+    let output = runner.run_with(
+        &gpg.display().to_string(),
+        &args,
+        Some(repo_root),
+        None,
+        Some(Duration::from_secs(60)),
+    );
+    let ok = output.as_ref().is_some_and(|output| {
+        output.success
+            && output
+                .stdout
+                .replace(' ', "")
+                .to_ascii_uppercase()
+                .contains(FPR)
+    });
+    Finding::new(
+        if ok { "pass" } else { "fail" },
+        "feed-keyring.fingerprint",
+        if ok {
+            "Shared feed signature keyring contains the Greenbone Community signing key."
+        } else {
+            "Shared feed signature keyring is missing the Greenbone Community signing key."
+        }
+        .into(),
+    )
+    .with_path(&home_text)
+    .with_details(json!({
+        "fingerprint": FPR,
+        "output_tail": output
+            .map(|output| output_tail(&output.stdout, 60))
+            .unwrap_or_default(),
+    }))
+}
+
 pub(crate) fn command_runtime_feed_keyring_init_with_runner(
     repo_root: &Path,
     runner: &dyn CommandRunner,
@@ -676,6 +747,23 @@ mod tests {
             None
         }
 
+        fn run_with(
+            &self,
+            program: &str,
+            args: &[&str],
+            _cwd: Option<&Path>,
+            _env: Option<&std::collections::BTreeMap<std::ffi::OsString, std::ffi::OsString>>,
+            _timeout: Option<Duration>,
+        ) -> Option<ProcessOutput> {
+            self.calls.lock().unwrap().push((
+                program.into(),
+                args.iter().map(|argument| (*argument).into()).collect(),
+                None,
+                Vec::new(),
+            ));
+            Some(self.output(args))
+        }
+
         fn run_with_input(
             &self,
             program: &str,
@@ -795,6 +883,43 @@ mod tests {
             "Feed keyring initialization stopped at prerequisites."
         );
         assert!(runner.calls.lock().unwrap().is_empty());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn observational_fingerprint_requires_private_directory_and_exact_key() {
+        let (root, repo) = fixture("observational");
+        let runner = Runner {
+            fingerprint: true,
+            ..Runner::default()
+        };
+        let missing = feed_keyring_fingerprint_finding_with(
+            &repo,
+            &runner,
+            Some(Path::new("gpg")),
+        );
+        assert_eq!(missing.status, "fail");
+        assert!(runner.calls.lock().unwrap().is_empty());
+
+        let home = keyring_home(&repo);
+        fs::create_dir_all(&home).unwrap();
+        fs::set_permissions(&home, fs::Permissions::from_mode(0o755)).unwrap();
+        let broad = feed_keyring_fingerprint_finding_with(
+            &repo,
+            &runner,
+            Some(Path::new("gpg")),
+        );
+        assert_eq!(broad.status, "fail");
+        assert!(runner.calls.lock().unwrap().is_empty());
+
+        fs::set_permissions(&home, fs::Permissions::from_mode(0o700)).unwrap();
+        let present = feed_keyring_fingerprint_finding_with(
+            &repo,
+            &runner,
+            Some(Path::new("gpg")),
+        );
+        assert_eq!(present.status, "pass");
+        assert_eq!(runner.calls.lock().unwrap().len(), 1);
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -25,7 +25,7 @@ pub fn command_runtime_scanner_capability_check(repo_root: &Path) -> ResultEnvel
     command_runtime_scanner_capability_check_with(repo_root, &SystemCommandRunner)
 }
 
-fn command_runtime_scanner_capability_check_with(
+pub(crate) fn command_runtime_scanner_capability_check_with(
     repo_root: &Path,
     runner: &dyn CommandRunner,
 ) -> ResultEnvelope {
@@ -229,7 +229,7 @@ pub fn command_runtime_nmap_capability_check(repo_root: &Path) -> ResultEnvelope
     command_runtime_nmap_capability_check_with(repo_root, &SystemCommandRunner)
 }
 
-fn command_runtime_nmap_capability_check_with(
+pub(crate) fn command_runtime_nmap_capability_check_with(
     repo_root: &Path,
     runner: &dyn CommandRunner,
 ) -> ResultEnvelope {

@@ -215,6 +215,10 @@ fn cert_state(files: &[CertFile]) -> CertState {
     }
 }
 
+pub(crate) fn runtime_certificates_complete(repo_root: &Path) -> bool {
+    matches!(cert_state(&cert_files(repo_root)), CertState::Complete)
+}
+
 fn cert_file_valid(file: &CertFile) -> bool {
     let Ok(metadata) = fs::symlink_metadata(&file.path) else {
         return false;

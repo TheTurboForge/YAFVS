@@ -589,7 +589,7 @@ fn relative_or_absolute(repo_root: &Path, path: &Path) -> String {
         .to_string()
 }
 
-fn container_running(
+pub(crate) fn container_running(
     runner: &dyn CommandRunner,
     repo_root: &Path,
     service: &str,

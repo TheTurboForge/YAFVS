@@ -36,6 +36,7 @@ pub use commands::{
     command_path_coupling_state, command_production_posture_check, command_quality_gate_schedule,
     command_quality_gate_state, command_repository_unavailable, command_runtime_app_build,
     command_runtime_app_down, command_runtime_app_up, command_runtime_native_api_rebuild,
+    command_runtime_app_smoke,
     command_runtime_certbund_report, command_runtime_credential_smoke, command_runtime_data_state,
     command_runtime_certs_init, command_runtime_db_introspect, command_runtime_feed_import_init,
     command_runtime_feed_keyring_init,

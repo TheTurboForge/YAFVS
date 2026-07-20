@@ -40,6 +40,7 @@ mod report_selection;
 mod repository;
 mod resource_import;
 mod runtime;
+mod runtime_app_smoke;
 mod runtime_certbund_report;
 mod runtime_certs;
 mod runtime_data_state;
@@ -129,6 +130,7 @@ pub use resource_import::{
     command_native_tasks_from_csv,
 };
 pub use runtime::{command_down, command_logs, command_runtime_app_down, command_runtime_plan};
+pub use runtime_app_smoke::command_runtime_app_smoke;
 pub use runtime_certbund_report::command_runtime_certbund_report;
 pub use runtime_certs::command_runtime_certs_init;
 pub use runtime_data_state::command_runtime_data_state;

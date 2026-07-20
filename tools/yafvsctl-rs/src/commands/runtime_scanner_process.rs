@@ -63,7 +63,7 @@ pub fn command_runtime_scanner_process_check(repo_root: &Path) -> ResultEnvelope
     command_runtime_scanner_process_check_with(repo_root, &SystemCommandRunner)
 }
 
-fn command_runtime_scanner_process_check_with(
+pub(crate) fn command_runtime_scanner_process_check_with(
     repo_root: &Path,
     runner: &dyn CommandRunner,
 ) -> ResultEnvelope {

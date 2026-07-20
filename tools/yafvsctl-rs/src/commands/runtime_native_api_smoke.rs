@@ -104,6 +104,15 @@ struct ReportCollectionProbe {
     require_source_report_id: bool,
 }
 
+struct ScopeReportCollectionProbe {
+    detail_key: &'static str,
+    check: &'static str,
+    suffix: &'static str,
+    description: &'static str,
+    missing_pair_message: &'static str,
+    empty_message: &'static str,
+}
+
 #[derive(Clone, Copy)]
 enum DetailObject {
     Root,
@@ -404,6 +413,94 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
         }),
     },
 ];
+
+const SCOPE_REPORT_COLLECTION_PROBES: [ScopeReportCollectionProbe; 8] = [
+    ScopeReportCollectionProbe {
+        detail_key: "results",
+        check: "native-api.scope-report-results",
+        suffix: "results?page_size=5&sort=-severity",
+        description: "scope-report Results",
+        missing_pair_message:
+            "Scope-report list did not include a scope/report id pair for the Results probe.",
+        empty_message: "No scope reports exist yet, so the Results probe was skipped.",
+    },
+    ScopeReportCollectionProbe {
+        detail_key: "hosts",
+        check: "native-api.scope-report-hosts",
+        suffix: "hosts?page_size=5&sort=host",
+        description: "scope-report Hosts",
+        missing_pair_message:
+            "Scope-report list did not include a scope/report id pair for the host probe.",
+        empty_message: "No scope reports exist yet, so the host collection probe was skipped.",
+    },
+    ScopeReportCollectionProbe {
+        detail_key: "ports",
+        check: "native-api.scope-report-ports",
+        suffix: "ports?page_size=5&sort=port",
+        description: "scope-report Ports",
+        missing_pair_message:
+            "Scope-report list did not include a scope/report id pair for the Ports probe.",
+        empty_message: "No scope reports exist yet, so the Ports collection probe was skipped.",
+    },
+    ScopeReportCollectionProbe {
+        detail_key: "applications",
+        check: "native-api.scope-report-applications",
+        suffix: "applications?page_size=5&sort=name",
+        description: "scope-report Applications",
+        missing_pair_message:
+            "Scope-report list did not include a scope/report id pair for the Applications probe.",
+        empty_message:
+            "No scope reports exist yet, so the Applications collection probe was skipped.",
+    },
+    ScopeReportCollectionProbe {
+        detail_key: "operating_systems",
+        check: "native-api.scope-report-operating-systems",
+        suffix: "operating-systems?page_size=5&sort=name",
+        description: "scope-report Operating Systems",
+        missing_pair_message:
+            "Scope-report list did not include a scope/report id pair for the Operating Systems probe.",
+        empty_message:
+            "No scope reports exist yet, so the Operating Systems collection probe was skipped.",
+    },
+    ScopeReportCollectionProbe {
+        detail_key: "cves",
+        check: "native-api.scope-report-cves",
+        suffix: "cves?page_size=5&sort=-max_severity",
+        description: "scope-report CVEs",
+        missing_pair_message:
+            "Scope-report list did not include a scope/report id pair for the CVE probe.",
+        empty_message: "No scope reports exist yet, so the CVE collection probe was skipped.",
+    },
+    ScopeReportCollectionProbe {
+        detail_key: "tls_certificates",
+        check: "native-api.scope-report-tls-certificates",
+        suffix: "tls-certificates?page_size=5&sort=-not_after",
+        description: "scope-report TLS Certificates",
+        missing_pair_message:
+            "Scope-report list did not include a scope/report id pair for the TLS Certificates probe.",
+        empty_message:
+            "No scope reports exist yet, so the TLS Certificates collection probe was skipped.",
+    },
+    ScopeReportCollectionProbe {
+        detail_key: "errors",
+        check: "native-api.scope-report-errors",
+        suffix: "errors?page_size=5&sort=-created_at",
+        description: "scope-report Error Messages",
+        missing_pair_message:
+            "Scope-report list did not include a scope/report id pair for the Error Messages probe.",
+        empty_message:
+            "No scope reports exist yet, so the Error Messages collection probe was skipped.",
+    },
+];
+
+const SCOPE_REPORT_METRICS_MISSING_PAIR: &str =
+    "Scope-report list did not include a scope/report id pair for the Metrics probe.";
+const SCOPE_REPORT_METRICS_EMPTY: &str =
+    "No scope reports exist yet, so the Metrics probe was skipped.";
+const SCOPE_REPORT_RETENTION_MISSING_PAIR: &str =
+    "Scope-report list did not include a scope/report id pair for the retention-plan probe.";
+const SCOPE_REPORT_RETENTION_EMPTY: &str =
+    "No scope reports exist yet, so the retention-plan probe was skipped.";
 
 const RAW_REPORT_HEAD_PROBES: [ReportCollectionProbe; 2] = [
     ReportCollectionProbe {
@@ -876,6 +973,7 @@ pub(crate) fn command_runtime_native_api_smoke_with_runner(
         probe_raw_report_graph(repo_root, raw_reports, runner, &mut findings, &mut details);
     }
     probe_raw_report_metrics(repo_root, runner, &mut findings, &mut details);
+    probe_scope_report_graph(repo_root, &reports, runner, &mut findings, &mut details);
 
     finish(
         repo_root,
@@ -1173,6 +1271,143 @@ fn metrics_response_summary(response: &NativeJsonResponse) -> Value {
         }
     }
     summary
+}
+
+fn probe_scope_report_graph(
+    repo_root: &Path,
+    collection: &NativeJsonResponse,
+    runner: &dyn CommandRunner,
+    findings: &mut Vec<Finding>,
+    details: &mut Map<String, Value>,
+) {
+    let items = collection
+        .object()
+        .and_then(|object| object.get("items"))
+        .and_then(Value::as_array);
+    let Some(first) = items.and_then(|items| items.first()) else {
+        for probe in &SCOPE_REPORT_COLLECTION_PROBES {
+            findings.push(Finding::new(
+                "warn",
+                probe.check,
+                probe.empty_message.into(),
+            ));
+        }
+        findings.push(Finding::new(
+            "warn",
+            "native-api.scope-report-metrics",
+            SCOPE_REPORT_METRICS_EMPTY.into(),
+        ));
+        findings.push(Finding::new(
+            "warn",
+            "native-api.scope-report-retention-plan",
+            SCOPE_REPORT_RETENTION_EMPTY.into(),
+        ));
+        return;
+    };
+    let scope_id = first
+        .as_object()
+        .and_then(|report| report.get("scope"))
+        .and_then(Value::as_object)
+        .and_then(|scope| scope.get("id"))
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty());
+    let report_id = first
+        .as_object()
+        .and_then(|report| report.get("id"))
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty());
+    let (Some(scope_id), Some(report_id)) = (scope_id, report_id) else {
+        for probe in &SCOPE_REPORT_COLLECTION_PROBES {
+            findings.push(Finding::new(
+                "fail",
+                probe.check,
+                probe.missing_pair_message.into(),
+            ));
+        }
+        findings.push(Finding::new(
+            "fail",
+            "native-api.scope-report-metrics",
+            SCOPE_REPORT_METRICS_MISSING_PAIR.into(),
+        ));
+        findings.push(Finding::new(
+            "fail",
+            "native-api.scope-report-retention-plan",
+            SCOPE_REPORT_RETENTION_MISSING_PAIR.into(),
+        ));
+        return;
+    };
+    let encoded_scope_id = percent_encode_component(scope_id);
+    let encoded_report_id = percent_encode_component(report_id);
+    let prefix = format!("/api/v1/scopes/{encoded_scope_id}/reports/{encoded_report_id}");
+    for probe in &SCOPE_REPORT_COLLECTION_PROBES {
+        let path = format!("{prefix}/{}", probe.suffix);
+        let response = native_api_get_json(repo_root, &path, runner);
+        details.insert(probe.detail_key.into(), response_summary(&response));
+        let ok = response.usable_object()
+            && response
+                .object()
+                .and_then(|object| object.get("items"))
+                .is_some_and(Value::is_array);
+        let display_suffix = probe.suffix.split('&').next().unwrap_or(probe.suffix);
+        findings.push(native_probe_finding(
+            if ok { "pass" } else { "fail" },
+            probe.check,
+            &format!(
+                "Native API {} probe exit code {}.",
+                probe.description,
+                exit_code(&response.output)
+            ),
+            &response,
+            &format!("/api/v1/scopes/.../reports/.../{display_suffix}"),
+        ));
+    }
+
+    let metrics_path = format!("{prefix}/metrics");
+    let metrics = native_api_get_json(repo_root, &metrics_path, runner);
+    details.insert("metrics".into(), metrics_response_summary(&metrics));
+    findings.push(native_probe_finding(
+        if metrics_contract_ok(&metrics) {
+            "pass"
+        } else {
+            "fail"
+        },
+        "native-api.scope-report-metrics",
+        &format!(
+            "Native API scope-report Metrics probe exit code {}.",
+            exit_code(&metrics.output)
+        ),
+        &metrics,
+        "/api/v1/scopes/.../reports/.../metrics",
+    ));
+
+    let retention_path = format!("{prefix}/retention-plan");
+    let retention = native_api_get_json(repo_root, &retention_path, runner);
+    details.insert("retention_plan".into(), response_summary(&retention));
+    let retention_ok = retention.usable_object()
+        && retention
+            .object()
+            .and_then(|object| object.get("policy"))
+            .and_then(Value::as_object)
+            .and_then(|policy| policy.get("destructive_actions"))
+            == Some(&Value::Bool(false))
+        && retention
+            .object()
+            .and_then(|object| object.get("summary"))
+            .is_some_and(Value::is_object)
+        && retention
+            .object()
+            .and_then(|object| object.get("sources"))
+            .is_some_and(Value::is_array);
+    findings.push(native_probe_finding(
+        if retention_ok { "pass" } else { "fail" },
+        "native-api.scope-report-retention-plan",
+        &format!(
+            "Native API scope-report retention-plan probe exit code {}.",
+            exit_code(&retention.output)
+        ),
+        &retention,
+        "/api/v1/scopes/.../reports/.../retention-plan",
+    ));
 }
 
 fn probe_tags(
@@ -2038,6 +2273,13 @@ fn response_object_summary(object: &Map<String, Value>) -> Value {
             Value::Array(items.iter().take(3).map(native_item_summary).collect()),
         );
     }
+    if let Some(sources) = object.get("sources").and_then(Value::as_array) {
+        summary.insert("source_count".into(), Value::from(sources.len()));
+        summary.insert(
+            "sources_sample".into(),
+            Value::Array(sources.iter().take(3).map(native_item_summary).collect()),
+        );
+    }
     Value::Object(summary)
 }
 
@@ -2330,7 +2572,9 @@ mod tests {
     fn successful_scope_tail() -> Vec<ProcessOutput> {
         let mut outputs = vec![output(
             true,
-            &format!(r#"{{"items":[{{"id":"{TEST_DETAIL_ID}"}}],"page":{{"total":1}}}}"#),
+            &format!(
+                r#"{{"items":[{{"id":"{TEST_DETAIL_ID}","scope":{{"id":"{TEST_DETAIL_ID}","name":"scope"}}}}],"page":{{"total":1}}}}"#
+            ),
         )];
         outputs.extend((0..5).map(|_| bad_request_output()));
         outputs.push(output(
@@ -2416,6 +2660,21 @@ mod tests {
             output(
                 true,
                 r#"{"summary":{"result_count":1},"systems":[],"vulnerabilities":[]}"#,
+            ),
+        ]);
+        outputs.extend(
+            SCOPE_REPORT_COLLECTION_PROBES
+                .iter()
+                .map(|_| output(true, r#"{"items":[],"page":{"total":0}}"#)),
+        );
+        outputs.extend([
+            output(
+                true,
+                r#"{"summary":{"result_count":1},"systems":[],"vulnerabilities":[]}"#,
+            ),
+            output(
+                true,
+                r#"{"policy":{"destructive_actions":false},"summary":{},"sources":[]}"#,
             ),
         ]);
         outputs
@@ -2655,6 +2914,32 @@ mod tests {
             result.details.as_ref().unwrap()["raw_report_metrics"]["systems_count"],
             json!(0)
         );
+        for probe in &SCOPE_REPORT_COLLECTION_PROBES {
+            expected_urls.push(format!(
+                "http://127.0.0.1:9080/api/v1/scopes/{encoded_id}/reports/{encoded_id}/{}",
+                probe.suffix
+            ));
+            assert_eq!(
+                finding(&result, probe.check).status,
+                "pass",
+                "{}",
+                probe.check
+            );
+        }
+        expected_urls.push(format!(
+            "http://127.0.0.1:9080/api/v1/scopes/{encoded_id}/reports/{encoded_id}/metrics"
+        ));
+        expected_urls.push(format!(
+            "http://127.0.0.1:9080/api/v1/scopes/{encoded_id}/reports/{encoded_id}/retention-plan"
+        ));
+        assert_eq!(
+            finding(&result, "native-api.scope-report-metrics").status,
+            "pass"
+        );
+        assert_eq!(
+            finding(&result, "native-api.scope-report-retention-plan").status,
+            "pass"
+        );
         assert_eq!(observed_urls, expected_urls);
         let artifact = fs::read_to_string(
             repo.parent()
@@ -2663,6 +2948,98 @@ mod tests {
         )
         .unwrap();
         assert!(!artifact.contains(&"x".repeat(64)));
+        finish_test(&repo);
+    }
+
+    #[test]
+    fn scope_report_graph_preserves_empty_and_missing_pair_findings_without_calls() {
+        let repo = repo("");
+        let runner = FakeRunner::new(Vec::new());
+        let mut findings = Vec::new();
+        let mut details = Map::new();
+        probe_scope_report_graph(
+            &repo,
+            &parsed_response(json!({"items": []})),
+            &runner,
+            &mut findings,
+            &mut details,
+        );
+        assert_eq!(findings.len(), 10);
+        assert!(findings.iter().all(|finding| finding.status == "warn"));
+        assert_eq!(
+            finding_by_check(&findings, "native-api.scope-report-results").message,
+            "No scope reports exist yet, so the Results probe was skipped."
+        );
+        assert!(runner.calls().is_empty());
+
+        findings.clear();
+        probe_scope_report_graph(
+            &repo,
+            &parsed_response(json!({"items": [{"id": TEST_DETAIL_ID, "scope": {}}]})),
+            &runner,
+            &mut findings,
+            &mut details,
+        );
+        assert_eq!(findings.len(), 10);
+        assert!(findings.iter().all(|finding| finding.status == "fail"));
+        assert_eq!(
+            finding_by_check(&findings, "native-api.scope-report-retention-plan").message,
+            SCOPE_REPORT_RETENTION_MISSING_PAIR
+        );
+        assert!(runner.calls().is_empty());
+        finish_test(&repo);
+    }
+
+    #[test]
+    fn scope_report_graph_rejects_bad_metric_and_destructive_retention_shapes() {
+        let repo = repo("");
+        let mut outputs = SCOPE_REPORT_COLLECTION_PROBES
+            .iter()
+            .map(|_| output(true, r#"{"items":[]}"#))
+            .collect::<Vec<_>>();
+        outputs.extend([
+            output(true, r#"{"summary":[],"systems":[],"vulnerabilities":[]}"#),
+            output(
+                true,
+                r#"{"policy":{"destructive_actions":true},"summary":{},"sources":[]}"#,
+            ),
+        ]);
+        let runner = FakeRunner::new(outputs);
+        let mut findings = Vec::new();
+        let mut details = Map::new();
+        probe_scope_report_graph(
+            &repo,
+            &parsed_response(json!({
+                "items": [{
+                    "id": TEST_DETAIL_ID,
+                    "scope": {"id": TEST_DETAIL_ID}
+                }]
+            })),
+            &runner,
+            &mut findings,
+            &mut details,
+        );
+        assert_eq!(
+            finding_by_check(&findings, "native-api.scope-report-metrics").status,
+            "fail"
+        );
+        assert_eq!(
+            finding_by_check(&findings, "native-api.scope-report-retention-plan").status,
+            "fail"
+        );
+        assert!(
+            finding_by_check(&findings, "native-api.scope-report-retention-plan")
+                .details
+                .as_ref()
+                .unwrap()["command"]
+                .as_str()
+                .unwrap()
+                .contains("/api/v1/scopes/.../reports/.../retention-plan")
+        );
+        let calls = runner.calls();
+        assert!(calls.iter().flat_map(|(_, arguments)| arguments).any(
+            |argument| argument.contains("/api/v1/scopes/entity%2Fid%20with%20space/reports/entity%2Fid%20with%20space/retention-plan")
+        ));
         finish_test(&repo);
     }
 

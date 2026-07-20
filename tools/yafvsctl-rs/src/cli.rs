@@ -456,6 +456,8 @@ pub enum CliCommand {
     RuntimeScannerRegister,
     /// Build and attest application images without starting the deployment.
     RuntimeAppBuild,
+    /// Run observational application-runtime smoke checks.
+    RuntimeAppSmoke,
     /// Rebuild and restart only the receipt-pinned native API sidecar.
     RuntimeNativeApiRebuild,
     /// Stop and remove the development runtime infrastructure and application containers.
@@ -738,6 +740,7 @@ impl CliCommand {
             Self::RuntimeScannerRedisInit => "runtime-scanner-redis-init",
             Self::RuntimeScannerRegister => "runtime-scanner-register",
             Self::RuntimeAppBuild => "runtime-app-build",
+            Self::RuntimeAppSmoke => "runtime-app-smoke",
             Self::RuntimeNativeApiRebuild => "runtime-native-api-rebuild",
             Self::Down => "down",
             Self::RuntimeAppDown => "runtime-app-down",
@@ -783,6 +786,7 @@ impl CliCommand {
             Self::ProductionPostureCheck => "production-posture-check",
         }
     }
+
 }
 
 pub fn parse_cli<I, S>(args: I) -> Result<Cli, clap::Error>
@@ -1635,6 +1639,7 @@ mod tests {
     fn parses_runtime_probe_commands() {
         for (argument, expected) in [
             ("runtime-gmp-smoke", CliCommand::RuntimeGmpSmoke),
+            ("runtime-app-smoke", CliCommand::RuntimeAppSmoke),
             ("runtime-scanner-register", CliCommand::RuntimeScannerRegister),
             (
                 "runtime-credential-smoke",
@@ -2126,6 +2131,7 @@ mod tests {
             "down",
             "runtime-app-down",
             "runtime-app-up",
+            "runtime-app-smoke",
             "runtime-webui-smoke",
             "runtime-full-test-scan-preflight",
             "runtime-full-test-scan-start",

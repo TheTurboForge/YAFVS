@@ -445,6 +445,7 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         CliCommand::RuntimeScannerRedisInit => command_runtime_scanner_redis_init(&repo_root),
         CliCommand::RuntimeScannerRegister => command_runtime_scanner_register(&repo_root),
         CliCommand::RuntimeAppBuild => command_runtime_app_build(&repo_root),
+        CliCommand::RuntimeAppSmoke => command_runtime_app_smoke(&repo_root),
         CliCommand::RuntimeNativeApiRebuild => command_runtime_native_api_rebuild(&repo_root),
         CliCommand::RuntimeStatus => command_runtime_status(&repo_root),
         CliCommand::RuntimeSmoke => command_runtime_smoke(&repo_root),

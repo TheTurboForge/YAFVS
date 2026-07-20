@@ -9,6 +9,7 @@ use super::native_runtime::{
     native_api_display_command, native_api_get_json, native_probe_finding,
     percent_encode_component, validate_api_path, NativeJsonResponse, MAX_NATIVE_API_RESPONSE_BYTES,
 };
+use super::report_selection::latest_completed_full_test_report_id;
 use super::runtime_health::container_running;
 use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
 use crate::result::{make_result, Finding, ResultEnvelope};
@@ -874,6 +875,7 @@ pub(crate) fn command_runtime_native_api_smoke_with_runner(
     if let Some(raw_reports) = raw_reports.as_ref() {
         probe_raw_report_graph(repo_root, raw_reports, runner, &mut findings, &mut details);
     }
+    probe_raw_report_metrics(repo_root, runner, &mut findings, &mut details);
 
     finish(
         repo_root,
@@ -1096,6 +1098,81 @@ fn probe_report_collection(
         &format!("/api/v1/reports/.../{display_suffix}"),
     ));
     response
+}
+
+fn probe_raw_report_metrics(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    findings: &mut Vec<Finding>,
+    details: &mut Map<String, Value>,
+) {
+    let report_id = match latest_completed_full_test_report_id(repo_root, runner) {
+        Ok(report_id) => report_id,
+        Err((message, output)) => {
+            let mut finding = Finding::new("warn", "native-api.raw-report-metrics", message);
+            if let Some(output) = output {
+                finding =
+                    finding.with_details(json!({"output_tail": output_tail(&output.stdout, 80)}));
+            }
+            findings.push(finding);
+            return;
+        }
+    };
+    let path = format!(
+        "/api/v1/reports/{}/metrics",
+        percent_encode_component(&report_id)
+    );
+    let response = native_api_get_json(repo_root, &path, runner);
+    details.insert(
+        "raw_report_metrics".into(),
+        metrics_response_summary(&response),
+    );
+    findings.push(native_probe_finding(
+        if metrics_contract_ok(&response) {
+            "pass"
+        } else {
+            "fail"
+        },
+        "native-api.raw-report-metrics",
+        &format!(
+            "Native API raw-report Metrics probe exit code {}.",
+            exit_code(&response.output)
+        ),
+        &response,
+        "/api/v1/reports/.../metrics",
+    ));
+}
+
+fn metrics_contract_ok(response: &NativeJsonResponse) -> bool {
+    response.usable_object()
+        && response
+            .object()
+            .and_then(|object| object.get("summary"))
+            .is_some_and(Value::is_object)
+        && response
+            .object()
+            .and_then(|object| object.get("systems"))
+            .is_some_and(Value::is_array)
+        && response
+            .object()
+            .and_then(|object| object.get("vulnerabilities"))
+            .is_some_and(Value::is_array)
+}
+
+fn metrics_response_summary(response: &NativeJsonResponse) -> Value {
+    let mut summary = response_summary(response);
+    if let (Some(summary), Some(response)) = (summary.as_object_mut(), response.object()) {
+        for key in ["systems", "vulnerabilities"] {
+            if let Some(values) = response.get(key).and_then(Value::as_array) {
+                summary.insert(format!("{key}_count"), Value::from(values.len()));
+                summary.insert(
+                    format!("{key}_sample"),
+                    Value::Array(values.iter().take(3).map(native_item_summary).collect()),
+                );
+            }
+        }
+    }
+    summary
 }
 
 fn probe_tags(
@@ -2332,6 +2409,15 @@ mod tests {
                 .iter()
                 .map(|_| output(true, r#"{"items":[],"page":{"total":0}}"#)),
         );
+        outputs.extend([
+            output(true, "postgres-container\n"),
+            output(true, "true\n"),
+            output(true, TEST_DETAIL_ID),
+            output(
+                true,
+                r#"{"summary":{"result_count":1},"systems":[],"vulnerabilities":[]}"#,
+            ),
+        ]);
         outputs
     }
     fn finding<'a>(result: &'a ResultEnvelope, check: &str) -> &'a Finding {
@@ -2558,6 +2644,17 @@ mod tests {
                 probe.check
             );
         }
+        expected_urls.push(format!(
+            "http://127.0.0.1:9080/api/v1/reports/{encoded_id}/metrics"
+        ));
+        assert_eq!(
+            finding(&result, "native-api.raw-report-metrics").status,
+            "pass"
+        );
+        assert_eq!(
+            result.details.as_ref().unwrap()["raw_report_metrics"]["systems_count"],
+            json!(0)
+        );
         assert_eq!(observed_urls, expected_urls);
         let artifact = fs::read_to_string(
             repo.parent()
@@ -2566,6 +2663,78 @@ mod tests {
         )
         .unwrap();
         assert!(!artifact.contains(&"x".repeat(64)));
+        finish_test(&repo);
+    }
+
+    #[test]
+    fn raw_report_metrics_reuses_selector_encodes_id_and_requires_typed_shape() {
+        let repo = repo("");
+        let mut findings = Vec::new();
+        let mut details = Map::new();
+        let runner = FakeRunner::new(vec![
+            output(true, "postgres-container\n"),
+            output(true, "true\n"),
+            output(true, TEST_DETAIL_ID),
+            output(
+                true,
+                r#"{"summary":{"result_count":1},"systems":[{"host":"safe-host","description":"RAW_METRICS_SECRET"}],"vulnerabilities":[]}"#,
+            ),
+        ]);
+        probe_raw_report_metrics(&repo, &runner, &mut findings, &mut details);
+        let finding = finding_by_check(&findings, "native-api.raw-report-metrics");
+        assert_eq!(finding.status, "pass");
+        assert!(finding.details.as_ref().unwrap()["command"]
+            .as_str()
+            .unwrap()
+            .contains("/api/v1/reports/.../metrics"));
+        assert_eq!(details["raw_report_metrics"]["systems_count"], json!(1));
+        assert_eq!(
+            details["raw_report_metrics"]["systems_sample"][0]["host"],
+            json!("safe-host")
+        );
+        assert!(!serde_json::to_string(&details)
+            .unwrap()
+            .contains("RAW_METRICS_SECRET"));
+        let calls = runner.calls();
+        assert!(calls
+            .iter()
+            .flat_map(|(_, arguments)| arguments)
+            .any(|argument| argument.contains("SELECT r.uuid FROM reports")));
+        assert!(calls.iter().flat_map(|(_, arguments)| arguments).any(
+            |argument| argument.contains("/api/v1/reports/entity%2Fid%20with%20space/metrics")
+        ));
+        finish_test(&repo);
+    }
+
+    #[test]
+    fn raw_report_metrics_warns_on_selector_absence_and_fails_bad_shapes() {
+        let repo = repo("");
+        let mut findings = Vec::new();
+        let mut details = Map::new();
+        let runner = FakeRunner::new(vec![output(true, "")]);
+        probe_raw_report_metrics(&repo, &runner, &mut findings, &mut details);
+        assert_eq!(findings[0].status, "warn");
+        assert_eq!(
+            findings[0].message,
+            "Postgres is not running; start the app profile before selecting the latest full-test report."
+        );
+        assert_eq!(runner.calls().len(), 1);
+
+        findings.clear();
+        let runner = FakeRunner::new(vec![
+            output(true, "postgres-container\n"),
+            output(true, "true\n"),
+            output(true, TEST_DETAIL_ID),
+            output(
+                true,
+                r#"{"summary":[],"systems":{},"vulnerabilities":null}"#,
+            ),
+        ]);
+        probe_raw_report_metrics(&repo, &runner, &mut findings, &mut details);
+        assert_eq!(
+            finding_by_check(&findings, "native-api.raw-report-metrics").status,
+            "fail"
+        );
         finish_test(&repo);
     }
 

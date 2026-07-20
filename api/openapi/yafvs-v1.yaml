@@ -5,7 +5,7 @@ openapi: 3.1.0
 info:
   title: YAFVS Native API
   version: 0.1.0-contract
-  description: Contract baseline for DB-backed YAFVS product workflows. Current live operations include guarded reads, writes, and control paths. Every native mutation is additionally subject to the service-wide database compatibility gate and returns 503 with database_write_incompatible when the detected gvmd/pg-gvm schema is not the exact characterized write schema; reads remain available on a best-effort basis. Direct listener responses include X-Request-Id for correlation.
+  description: Contract baseline for DB-backed YAFVS product workflows. Current live operations include guarded reads, writes, and control paths. Every native mutation is additionally subject to the service-wide database compatibility gate and returns 503 with database_write_incompatible when the detected gvmd/pg-gvm schema is not the exact characterized write schema; reads remain available on a best-effort basis. Every native request has a bounded whole-request deadline. Read timeouts return 504 request_timed_out; mutation timeouts conservatively return 502 mutation_outcome_indeterminate because cancellation can race a commit or control acknowledgement. Direct listener responses include X-Request-Id for correlation.
 servers:
   - url: /api/v1
   - url: http://127.0.0.1:19080/api/v1
@@ -7737,6 +7737,12 @@ components:
             $ref: '#/components/schemas/Error'
     ServiceUnavailable:
       description: The private gvmd control service is temporarily unavailable, or the service-wide database compatibility gate has blocked all native mutations for an unrecognized gvmd/pg-gvm schema. Inspect the Error code; database_write_incompatible is not retryable until the deployed schema and API compatibility contract are aligned.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    GatewayTimeout:
+      description: The native request exceeded its bounded whole-request processing deadline. Inspect current state before retrying a mutation because cancellation may race a database or private-control commit acknowledgement.
       content:
         application/json:
           schema:

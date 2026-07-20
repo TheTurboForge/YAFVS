@@ -139,6 +139,7 @@ mod report_raw_result_query_sql;
 mod report_raw_results;
 mod report_tls_certificate_query_sql;
 mod report_tls_certificates;
+mod request_deadline;
 mod request_ids;
 mod request_shapes;
 mod result_payload_rows;

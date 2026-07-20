@@ -60,6 +60,8 @@ pub(crate) enum ApiError {
     MethodNotAllowed,
     #[error("request too large")]
     RequestTooLarge,
+    #[error("request timed out")]
+    RequestTimedOut,
     #[error("report PDF is too large")]
     ReportPdfTooLarge,
     #[error("too many requests")]
@@ -107,6 +109,7 @@ impl ApiError {
             Self::AuthenticationSettingsInternalError => StatusCode::BAD_GATEWAY,
             Self::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
             Self::RequestTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
+            Self::RequestTimedOut => StatusCode::GATEWAY_TIMEOUT,
             Self::ReportPdfTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
@@ -140,6 +143,7 @@ impl ApiError {
             Self::AuthenticationSettingsInternalError => "internal_error",
             Self::MethodNotAllowed => "method_not_allowed",
             Self::RequestTooLarge => "request_too_large",
+            Self::RequestTimedOut => "request_timed_out",
             Self::ReportPdfTooLarge => "report_pdf_too_large",
             Self::TooManyRequests => "too_many_requests",
             Self::BadRequest(_) => "bad_request",
@@ -191,6 +195,9 @@ impl ApiError {
             }
             Self::RequestTooLarge => {
                 "Direct native API requests must fit the bounded request shape.".to_string()
+            }
+            Self::RequestTimedOut => {
+                "The native API request exceeded its bounded processing deadline.".to_string()
             }
             Self::ReportPdfTooLarge => {
                 "The report exceeds the bounded native PDF download limit. Use the typed report evidence endpoints for the complete report data.".to_string()
@@ -346,6 +353,13 @@ mod tests {
                 "request_too_large",
                 "bounded request",
                 &[],
+            ),
+            (
+                ApiError::RequestTimedOut,
+                StatusCode::GATEWAY_TIMEOUT,
+                "request_timed_out",
+                "processing deadline",
+                &["secret", "token", "password", "credential"][..],
             ),
             (
                 ApiError::TooManyRequests,

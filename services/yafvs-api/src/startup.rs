@@ -14,6 +14,7 @@ use crate::{
     direct_api::direct_api_config,
     errors::ApiError,
     operator_identity::resolve_configured_direct_api_operator,
+    request_deadline::enforce_native_request_deadline,
     routes::{browser_proxy_native_api_router, direct_native_api_router, native_api_router},
     runtime::{DirectApiListener, serve_api},
 };
@@ -52,6 +53,7 @@ pub(crate) async fn run() -> Result<(), ApiError> {
             state.clone(),
             require_native_write_schema_compatibility,
         ))
+        .layer(middleware::from_fn(enforce_native_request_deadline))
         .with_state(state.clone());
     let direct_api = direct_api.map(|(bind, auth)| {
         let direct_app = direct_native_api_router(base_router, auth.write_control_enabled())
@@ -59,6 +61,7 @@ pub(crate) async fn run() -> Result<(), ApiError> {
                 state.clone(),
                 require_native_write_schema_compatibility,
             ))
+            .layer(middleware::from_fn(enforce_native_request_deadline))
             .with_state(state.clone());
         DirectApiListener {
             bind,

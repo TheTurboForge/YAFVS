@@ -30,6 +30,14 @@ const DEFAULT_MAX_COLLECTION_FILTER_LENGTH: usize = 4096;
 const MAX_REASONABLE_COLLECTION_FILTER_LENGTH: usize = 1_048_576;
 const MAX_SOURCE_BYTES: u64 = 2 * 1024 * 1024;
 const HTTP_STATUS_TRAILER: &str = "__YAFVS_HTTP_STATUS__:";
+const DESCRIPTIVE_RESULT_FIELDS: [&str; 6] = [
+    "description",
+    "summary",
+    "insight",
+    "affected",
+    "impact",
+    "detection",
+];
 const ALERT_ALLOWED_KEYS: [&str; 19] = [
     "id",
     "name",
@@ -931,11 +939,122 @@ fn probe_raw_report_graph(
         "/api/v1/reports/...",
     ));
 
-    for probe in RAW_REPORT_HEAD_PROBES
-        .iter()
-        .chain(&RAW_REPORT_COLLECTION_PROBES)
-    {
+    let mut raw_results = None;
+    for probe in &RAW_REPORT_HEAD_PROBES {
+        let response =
+            probe_report_collection(repo_root, id, &encoded_id, probe, runner, findings, details);
+        if probe.check == "native-api.raw-report-results" {
+            raw_results = Some(response);
+        }
+    }
+    if let Some(raw_results) = raw_results.as_ref() {
+        probe_raw_result_detail(repo_root, raw_results, runner, findings, details);
+    }
+    for probe in &RAW_REPORT_COLLECTION_PROBES {
         probe_report_collection(repo_root, id, &encoded_id, probe, runner, findings, details);
+    }
+}
+
+fn probe_raw_result_detail(
+    repo_root: &Path,
+    collection: &NativeJsonResponse,
+    runner: &dyn CommandRunner,
+    findings: &mut Vec<Finding>,
+    details: &mut Map<String, Value>,
+) {
+    let items = collection
+        .object()
+        .and_then(|object| object.get("items"))
+        .and_then(Value::as_array);
+    let Some(first) = items.and_then(|items| items.first()) else {
+        findings.push(Finding::new(
+            "warn",
+            "native-api.raw-result-detail",
+            "Raw report Results probe returned no rows, so the result detail probe was skipped."
+                .into(),
+        ));
+        return;
+    };
+    let Some(id) = first
+        .as_object()
+        .and_then(|item| item.get("id"))
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())
+    else {
+        return;
+    };
+    let path = format!("/api/v1/results/{}", percent_encode_component(id));
+    let response = native_api_get_json(repo_root, &path, runner);
+    let descriptive_fields = response
+        .object()
+        .into_iter()
+        .flat_map(|object| {
+            DESCRIPTIVE_RESULT_FIELDS
+                .into_iter()
+                .filter(move |key| object.get(*key).is_some_and(python_truthy))
+        })
+        .collect::<Vec<_>>();
+    let mut summary = response_summary(&response);
+    if let Some(summary) = summary.as_object_mut() {
+        summary.insert("descriptive_fields".into(), json!(descriptive_fields));
+    }
+    details.insert("raw_result_detail".into(), summary);
+    let detail_ok = response.usable_object()
+        && response
+            .object()
+            .and_then(|object| object.get("id"))
+            .and_then(Value::as_str)
+            == Some(id);
+    findings.push(native_probe_finding(
+        if detail_ok { "pass" } else { "fail" },
+        "native-api.raw-result-detail",
+        &format!(
+            "Native API raw-result detail probe exit code {}.",
+            exit_code(&response.output)
+        ),
+        &response,
+        "/api/v1/results/...",
+    ));
+    if detail_ok {
+        findings.push(
+            Finding::new(
+                if descriptive_fields.is_empty() {
+                    "warn"
+                } else {
+                    "pass"
+                },
+                "native-api.raw-result-detail-descriptive-fields",
+                if descriptive_fields.is_empty() {
+                    "Native API raw-result detail returned metadata only; the selected live row may not have descriptive fields."
+                } else {
+                    "Native API raw-result detail includes descriptive result/NVT fields."
+                }
+                .into(),
+            )
+            .with_details(json!({
+                "result_id": id,
+                "fields": descriptive_fields,
+            })),
+        );
+    }
+}
+
+fn python_truthy(value: &Value) -> bool {
+    match value {
+        Value::Null | Value::Bool(false) => false,
+        Value::Bool(true) => true,
+        Value::Number(number) => {
+            if let Some(value) = number.as_i64() {
+                value != 0
+            } else if let Some(value) = number.as_u64() {
+                value != 0
+            } else {
+                number.as_f64().is_some_and(|value| value != 0.0)
+            }
+        }
+        Value::String(value) => !value.is_empty(),
+        Value::Array(value) => !value.is_empty(),
+        Value::Object(value) => !value.is_empty(),
     }
 }
 
@@ -2187,10 +2306,7 @@ mod tests {
             }
         }
         outputs.push(output(true, &format!(r#"{{"id":"{TEST_DETAIL_ID}"}}"#)));
-        for probe in RAW_REPORT_HEAD_PROBES
-            .iter()
-            .chain(&RAW_REPORT_COLLECTION_PROBES)
-        {
+        for probe in &RAW_REPORT_HEAD_PROBES {
             outputs.push(if probe.require_source_report_id {
                 output(
                     true,
@@ -2199,9 +2315,23 @@ mod tests {
                     ),
                 )
             } else {
-                output(true, r#"{"items":[],"page":{"total":0}}"#)
+                output(
+                    true,
+                    &format!(
+                        r#"{{"items":[{{"id":"{TEST_DETAIL_ID}"}}],"page":{{"total":1}}}}"#
+                    ),
+                )
             });
         }
+        outputs.push(output(
+            true,
+            &format!(r#"{{"id":"{TEST_DETAIL_ID}","description":"described"}}"#),
+        ));
+        outputs.extend(
+            RAW_REPORT_COLLECTION_PROBES
+                .iter()
+                .map(|_| output(true, r#"{"items":[],"page":{"total":0}}"#)),
+        );
         outputs
     }
     fn finding<'a>(result: &'a ResultEnvelope, check: &str) -> &'a Finding {
@@ -2395,10 +2525,28 @@ mod tests {
             finding(&result, "native-api.raw-report-detail").status,
             "pass"
         );
-        for probe in RAW_REPORT_HEAD_PROBES
-            .iter()
-            .chain(&RAW_REPORT_COLLECTION_PROBES)
-        {
+        for probe in &RAW_REPORT_HEAD_PROBES {
+            expected_urls.push(format!(
+                "http://127.0.0.1:9080/api/v1/reports/{encoded_id}/{}",
+                probe.suffix
+            ));
+            assert_eq!(
+                finding(&result, probe.check).status,
+                "pass",
+                "{}",
+                probe.check
+            );
+        }
+        expected_urls.push(format!("http://127.0.0.1:9080/api/v1/results/{encoded_id}"));
+        assert_eq!(
+            finding(&result, "native-api.raw-result-detail").status,
+            "pass"
+        );
+        assert_eq!(
+            finding(&result, "native-api.raw-result-detail-descriptive-fields").status,
+            "pass"
+        );
+        for probe in &RAW_REPORT_COLLECTION_PROBES {
             expected_urls.push(format!(
                 "http://127.0.0.1:9080/api/v1/reports/{encoded_id}/{}",
                 probe.suffix
@@ -2418,6 +2566,117 @@ mod tests {
         )
         .unwrap();
         assert!(!artifact.contains(&"x".repeat(64)));
+        finish_test(&repo);
+    }
+
+    #[test]
+    fn raw_result_detail_preserves_skip_shape_redaction_and_descriptive_field_order() {
+        let repo = repo("");
+        let mut findings = Vec::new();
+        let mut details = Map::new();
+        let runner = FakeRunner::new(Vec::new());
+        probe_raw_result_detail(
+            &repo,
+            &parsed_response(json!({"items": []})),
+            &runner,
+            &mut findings,
+            &mut details,
+        );
+        assert_eq!(findings[0].status, "warn");
+        assert_eq!(
+            findings[0].message,
+            "Raw report Results probe returned no rows, so the result detail probe was skipped."
+        );
+        assert!(runner.calls().is_empty());
+
+        findings.clear();
+        probe_raw_result_detail(
+            &repo,
+            &parsed_response(json!({"items": [{}]})),
+            &runner,
+            &mut findings,
+            &mut details,
+        );
+        assert!(findings.is_empty());
+        assert!(runner.calls().is_empty());
+
+        let secret = "RAW_RESULT_DESCRIPTION_SECRET";
+        let runner = FakeRunner::new(vec![output(
+            true,
+            &format!(
+                r#"{{"id":"{TEST_DETAIL_ID}","description":"{secret}","summary":"","insight":false,"affected":[],"impact":{{}},"detection":"yes"}}"#
+            ),
+        )]);
+        findings.clear();
+        probe_raw_result_detail(
+            &repo,
+            &parsed_response(json!({"items": [{"id": TEST_DETAIL_ID}]})),
+            &runner,
+            &mut findings,
+            &mut details,
+        );
+        assert_eq!(
+            finding_by_check(&findings, "native-api.raw-result-detail").status,
+            "pass"
+        );
+        let descriptive =
+            finding_by_check(&findings, "native-api.raw-result-detail-descriptive-fields");
+        assert_eq!(descriptive.status, "pass");
+        assert_eq!(
+            descriptive.details.as_ref().unwrap()["fields"],
+            json!(["description", "detection"])
+        );
+        let calls = runner.calls();
+        assert!(calls[0]
+            .1
+            .iter()
+            .any(|argument| argument.contains("/api/v1/results/entity%2Fid%20with%20space")));
+        let serialized = serde_json::to_string(&json!({
+            "findings": findings,
+            "details": details,
+        }))
+        .unwrap();
+        assert!(!serialized.contains(secret));
+        finish_test(&repo);
+    }
+
+    #[test]
+    fn raw_result_detail_requires_matching_id_and_warns_for_metadata_only() {
+        let repo = repo("");
+        let mut findings = Vec::new();
+        let mut details = Map::new();
+        let runner = FakeRunner::new(vec![output(true, r#"{"id":"wrong","description":"x"}"#)]);
+        probe_raw_result_detail(
+            &repo,
+            &parsed_response(json!({"items": [{"id": TEST_DETAIL_ID}]})),
+            &runner,
+            &mut findings,
+            &mut details,
+        );
+        assert_eq!(
+            finding_by_check(&findings, "native-api.raw-result-detail").status,
+            "fail"
+        );
+        assert!(findings
+            .iter()
+            .all(|finding| finding.check != "native-api.raw-result-detail-descriptive-fields"));
+
+        findings.clear();
+        let runner = FakeRunner::new(vec![output(
+            true,
+            &format!(r#"{{"id":"{TEST_DETAIL_ID}","description":""}}"#),
+        )]);
+        probe_raw_result_detail(
+            &repo,
+            &parsed_response(json!({"items": [{"id": TEST_DETAIL_ID}]})),
+            &runner,
+            &mut findings,
+            &mut details,
+        );
+        assert_eq!(
+            finding_by_check(&findings, "native-api.raw-result-detail-descriptive-fields").status,
+            "warn"
+        );
         finish_test(&repo);
     }
 

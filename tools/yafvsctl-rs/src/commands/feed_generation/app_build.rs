@@ -16,6 +16,7 @@ use crate::commands::runtime_lock::{
     DEFAULT_RUNTIME_LOCK_TIMEOUT, FEED_ACTIVATION_LOCK, RuntimeLockError, RuntimeOperationLock,
     runtime_lock_dir,
 };
+use crate::commands::runtime_webui::gsa_build_freshness_finding;
 use crate::commands::secret::write_private_text;
 use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
@@ -61,6 +62,7 @@ trait BuildContext {
         &mut self,
         environment: &BTreeMap<OsString, OsString>,
     ) -> Result<Vec<String>, String>;
+    fn gsa_build_freshness(&mut self) -> Finding;
     fn compose_config(
         &mut self,
         environment: &BTreeMap<OsString, OsString>,
@@ -107,6 +109,10 @@ impl BuildContext for SystemBuildContext<'_> {
         environment: &BTreeMap<OsString, OsString>,
     ) -> Result<Vec<String>, String> {
         running_app_services(self.repo_root, self.runner, environment)
+    }
+
+    fn gsa_build_freshness(&mut self) -> Finding {
+        gsa_build_freshness_finding(self.repo_root)
     }
 
     fn compose_config(
@@ -233,6 +239,19 @@ fn command_unlocked(
             );
         }
     }
+
+    let mut gsa_freshness = context.gsa_build_freshness();
+    if gsa_freshness.status != "pass" {
+        gsa_freshness.status = "fail".into();
+        findings.push(gsa_freshness);
+        return result(
+            repo_root,
+            runner,
+            "Application image build refused stale or missing GSA production assets.",
+            findings,
+        );
+    }
+    findings.push(gsa_freshness);
 
     let config = context.compose_config(&environment);
     let config_ok = config.as_ref().is_some_and(|output| output.success);
@@ -808,6 +827,7 @@ mod tests {
         contract: Result<Value, String>,
         wrote: bool,
         config_calls: usize,
+        gsa_freshness: Finding,
     }
 
     impl FakeContext {
@@ -826,6 +846,7 @@ mod tests {
                 contract: Ok(contract()),
                 wrote: false,
                 config_calls: 0,
+                gsa_freshness: Finding::new("pass", "gsa.static-freshness", "fresh".into()),
             }
         }
     }
@@ -839,6 +860,12 @@ mod tests {
             _environment: &BTreeMap<OsString, OsString>,
         ) -> Result<Vec<String>, String> {
             self.running.clone()
+        }
+        fn gsa_build_freshness(&mut self) -> Finding {
+            std::mem::replace(
+                &mut self.gsa_freshness,
+                Finding::new("fail", "gsa.static-freshness", "already consumed".into()),
+            )
         }
         fn compose_config(
             &mut self,
@@ -890,6 +917,20 @@ mod tests {
                 "prepared_at": "2026-07-19T00:00:00Z",
             }))
         }
+    }
+
+    #[test]
+    fn stale_gsa_build_refuses_compose_work() {
+        let (_root, repo) = fixture_repo();
+        let mut context = FakeContext::successful();
+        context.gsa_freshness = Finding::new("warn", "gsa.static-freshness", "stale".into());
+        let result = command_unlocked(&repo, &NoopRunner, &mut context);
+        assert_eq!(result.status, "fail");
+        assert_eq!(
+            result.findings.last().unwrap().check,
+            "gsa.static-freshness"
+        );
+        assert_eq!(context.config_calls, 0);
     }
 
     fn successful_output() -> Option<ProcessOutput> {

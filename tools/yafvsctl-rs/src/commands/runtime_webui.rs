@@ -16,6 +16,7 @@ use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
 const STATIC_RELATIVE_PATH: &str = "build/prefix/share/gvm/gsad/web";
+const GSA_PRODUCTION_BUILD_PATH: &str = "components/gsa/build";
 const GSAD_PORT: &str = "19392";
 const EXPECTED_API_SERVER: &str = "apiServer: window.location.host";
 const GSA_SOURCE_PATHS: [&str; 7] = [
@@ -291,42 +292,7 @@ fn runtime_gsa_freshness_findings(
 ) -> Vec<Finding> {
     let mut findings = Vec::new();
     let staged_latest = path_latest_mtime(static_dir, false);
-    let source_latest = paths_latest_mtime(repo_root, &GSA_SOURCE_PATHS, true);
-
-    if let (Some(staged_time), Some((source_time, source_path))) = (staged_latest, source_latest)
-        && source_time > staged_time
-    {
-        findings.push(
-            Finding::new(
-                "warn",
-                "gsa.static-freshness",
-                "GSA source inputs are newer than staged gsad static assets; run just build-ui before browser validation."
-                    .to_string(),
-            )
-            .with_path(&static_dir.display().to_string())
-            .with_details(json!({
-                "latest_source_path": source_path,
-                "latest_source_mtime": iso_system_time(source_time),
-                "latest_staged_path": STATIC_RELATIVE_PATH,
-                "latest_staged_mtime": iso_system_time(staged_time),
-            })),
-        );
-    } else if let Some(staged_time) = staged_latest {
-        findings.push(
-            Finding::new(
-                "pass",
-                "gsa.static-freshness",
-                "Staged GSA static assets are not older than tracked GSA source inputs."
-                    .to_string(),
-            )
-            .with_path(&static_dir.display().to_string())
-            .with_details(json!({
-                "latest_staged_mtime": iso_system_time(staged_time),
-                "latest_source_mtime": source_latest
-                    .and_then(|(time, _)| iso_system_time(time)),
-            })),
-        );
-    }
+    findings.push(gsa_build_freshness_finding(repo_root));
 
     let container_state = docker_container_state(repo_root, "gsad", environment, runner);
     let started_at = container_state
@@ -387,6 +353,57 @@ fn runtime_gsa_freshness_findings(
         );
     }
     findings
+}
+
+pub(crate) fn gsa_build_freshness_finding(repo_root: &Path) -> Finding {
+    let source_latest = paths_latest_mtime(repo_root, &GSA_SOURCE_PATHS, true);
+    let build_path = repo_root.join(GSA_PRODUCTION_BUILD_PATH);
+    let build_latest = path_latest_mtime(&build_path, false);
+    match (source_latest, build_latest) {
+        (Some((source_time, source_path)), Some(build_time)) if source_time > build_time => {
+            Finding::new(
+                "warn",
+                "gsa.static-freshness",
+                "GSA production assets are older than tracked source inputs; run just build-ui before deployment or browser validation."
+                    .to_string(),
+            )
+            .with_path(&build_path.display().to_string())
+            .with_details(json!({
+                "latest_source_path": source_path,
+                "latest_source_mtime": iso_system_time(source_time),
+                "latest_build_path": GSA_PRODUCTION_BUILD_PATH,
+                "latest_build_mtime": iso_system_time(build_time),
+            }))
+        }
+        (Some((source_time, _)), Some(build_time)) => Finding::new(
+            "pass",
+            "gsa.static-freshness",
+            "GSA production assets are not older than tracked source inputs.".to_string(),
+        )
+        .with_path(&build_path.display().to_string())
+        .with_details(json!({
+            "latest_source_mtime": iso_system_time(source_time),
+            "latest_build_mtime": iso_system_time(build_time),
+        })),
+        (None, Some(build_time)) => Finding::new(
+            "pass",
+            "gsa.static-freshness",
+            "GSA production assets exist and no tracked production source input was found."
+                .to_string(),
+        )
+        .with_path(&build_path.display().to_string())
+        .with_details(json!({
+            "latest_source_mtime": Value::Null,
+            "latest_build_mtime": iso_system_time(build_time),
+        })),
+        (_, None) => Finding::new(
+            "warn",
+            "gsa.static-freshness",
+            "GSA production assets are missing; run just build-ui before deployment or browser validation."
+                .to_string(),
+        )
+        .with_path(&build_path.display().to_string()),
+    }
 }
 
 fn paths_latest_mtime<'a>(
@@ -880,17 +897,18 @@ mod tests {
             [
                 "webui.static-index",
                 "webui.static-config",
+                "gsa.static-freshness",
                 "webui.static-asset-ref",
                 "webui.http-index",
                 "webui.http-config",
             ],
         );
         assert_eq!(
-            result.findings[3].message,
+            result.findings[4].message,
             "GSA index HTTP probe exit code 1.",
         );
         assert_eq!(
-            result.findings[4].message,
+            result.findings[5].message,
             "GSA config.js HTTP probe exit code 1.",
         );
         let calls = runner.calls.lock().unwrap();
@@ -1009,6 +1027,9 @@ mod tests {
     fn static_freshness_warns_for_new_source_and_skips_tests_and_build_trees() {
         let (root, repo) = fixture("static-freshness");
         let static_dir = stage_static(&repo, r#"<script src="/assets/app.js"></script>"#);
+        let production_build = repo.join(GSA_PRODUCTION_BUILD_PATH);
+        fs::create_dir_all(production_build.join("assets")).unwrap();
+        fs::write(production_build.join("index.html"), "built\n").unwrap();
         thread::sleep(Duration::from_millis(20));
         let source = repo.join("components/gsa/src");
         fs::create_dir_all(source.join("__tests__")).unwrap();
@@ -1039,8 +1060,8 @@ mod tests {
             "components/gsa/src",
         );
         assert_eq!(
-            stale[0].details.as_ref().unwrap()["latest_staged_path"],
-            STATIC_RELATIVE_PATH,
+            stale[0].details.as_ref().unwrap()["latest_build_path"],
+            GSA_PRODUCTION_BUILD_PATH,
         );
         fs::remove_dir_all(root).unwrap();
     }
@@ -1067,15 +1088,17 @@ mod tests {
             &stale_runner,
         );
 
-        assert_eq!(stale.len(), 1);
-        assert_eq!(stale[0].check, "gsad.runtime-freshness");
-        assert_eq!(stale[0].status, "warn");
+        let stale = stale
+            .iter()
+            .find(|finding| finding.check == "gsad.runtime-freshness")
+            .unwrap();
+        assert_eq!(stale.status, "warn");
         assert_eq!(
-            stale[0].details.as_ref().unwrap()["container_id"],
+            stale.details.as_ref().unwrap()["container_id"],
             "container-id",
         );
         assert_eq!(
-            stale[0].details.as_ref().unwrap()["latest_gsad_source_path"],
+            stale.details.as_ref().unwrap()["latest_gsad_source_path"],
             GSAD_SOURCE_PATHS[0],
         );
 
@@ -1092,10 +1115,13 @@ mod tests {
             &environment,
             &fresh_runner,
         );
-        assert_eq!(fresh.len(), 1);
-        assert_eq!(fresh[0].status, "pass");
+        let fresh = fresh
+            .iter()
+            .find(|finding| finding.check == "gsad.runtime-freshness")
+            .unwrap();
+        assert_eq!(fresh.status, "pass");
         assert_eq!(
-            fresh[0].details.as_ref().unwrap()["started_at"],
+            fresh.details.as_ref().unwrap()["started_at"],
             "2099-01-01T00:00:00Z",
         );
         let calls = fresh_runner.calls.lock().unwrap();

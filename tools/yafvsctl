@@ -53,6 +53,7 @@ APP_RUNTIME_ARTIFACT_ROOTS = (
     Path("components/ospd-openvas/ospd_openvas"),
     Path("components/notus-scanner/notus/scanner"),
 )
+GSA_PRODUCTION_BUILD_PATH = "components/gsa/build"
 APP_RUNTIME_ARTIFACT_FILES = (Path("build/openvas-scanner/src/openvas"),)
 APP_RUNTIME_ARTIFACT_IGNORED_DIRS = frozenset({".pytest_cache"})
 APP_RUNTIME_ARTIFACT_IGNORED_SUFFIXES: frozenset[str] = frozenset()
@@ -3372,23 +3373,27 @@ def runtime_gsa_freshness_findings(repo_root: Path) -> list[dict[str, Any]]:
     staged = gsad_static_dir(repo_root)
     staged_latest, staged_latest_path = paths_latest_mtime(repo_root, (str(staged.relative_to(repo_root)),)) if staged.exists() else (None, None)
     source_latest, source_latest_path = paths_latest_mtime(repo_root, GSA_FRESHNESS_SOURCE_PATHS, skip_dirs=GSA_FRESHNESS_SKIP_DIRS, skip_file=gsa_freshness_should_skip_source_file)
-    if staged_latest is not None and source_latest is not None and source_latest > staged_latest:
+    production_build = repo_root / GSA_PRODUCTION_BUILD_PATH
+    build_latest = path_latest_mtime(production_build)
+    if build_latest is not None and source_latest is not None and source_latest > build_latest:
         findings.append(
             finding(
                 "warn",
                 "gsa.static-freshness",
-                "GSA source inputs are newer than staged gsad static assets; run just build-ui before browser validation.",
-                str(staged),
+                "GSA production assets are older than tracked source inputs; run just build-ui before deployment or browser validation.",
+                str(production_build),
                 {
                     "latest_source_path": source_latest_path,
                     "latest_source_mtime": iso_mtime(source_latest),
-                    "latest_staged_path": staged_latest_path,
-                    "latest_staged_mtime": iso_mtime(staged_latest),
+                    "latest_build_path": GSA_PRODUCTION_BUILD_PATH,
+                    "latest_build_mtime": iso_mtime(build_latest),
                 },
             )
         )
-    elif staged_latest is not None:
-        findings.append(finding("pass", "gsa.static-freshness", "Staged GSA static assets are not older than tracked GSA source inputs.", str(staged), {"latest_staged_mtime": iso_mtime(staged_latest), "latest_source_mtime": iso_mtime(source_latest)}))
+    elif build_latest is not None:
+        findings.append(finding("pass", "gsa.static-freshness", "GSA production assets are not older than tracked source inputs.", str(production_build), {"latest_build_mtime": iso_mtime(build_latest), "latest_source_mtime": iso_mtime(source_latest)}))
+    else:
+        findings.append(finding("warn", "gsa.static-freshness", "GSA production assets are missing; run just build-ui before deployment or browser validation.", str(production_build)))
 
     gsad_state = docker_container_state(repo_root, "gsad")
     started_at = parse_container_started_at(gsad_state.get("StartedAt") if gsad_state else None)

@@ -4,7 +4,7 @@
 use super::compose::{compose_command, runtime_environment};
 use crate::process::{CommandRunner, ProcessOutput};
 use crate::result::Finding;
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 use std::path::Path;
 use std::time::Duration;
 
@@ -596,9 +596,11 @@ mod tests {
             "/api/v1/reports/",
             "/api/v1/reports#fragment",
         ] {
-            assert!(native_api_get_json(Path::new("/srv/YAFVS"), path, &runner)
-                .error
-                .is_some());
+            assert!(
+                native_api_get_json(Path::new("/srv/YAFVS"), path, &runner)
+                    .error
+                    .is_some()
+            );
         }
         assert!(runner.calls.lock().unwrap().is_empty());
     }

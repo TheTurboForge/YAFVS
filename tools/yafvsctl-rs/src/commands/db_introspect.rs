@@ -812,11 +812,7 @@ mod tests {
                 .iter()
                 .all(|present| !present)
         );
-        assert!(
-            !serde_json::to_string(&full)
-                .unwrap()
-                .contains("yafvs-dev")
-        );
+        assert!(!serde_json::to_string(&full).unwrap().contains("yafvs-dev"));
     }
 
     #[test]
@@ -876,12 +872,7 @@ mod tests {
             invalid_row_count: true,
             ..Runner::default()
         };
-        let result = command_with(
-            Path::new("/srv/YAFVS"),
-            false,
-            &[],
-            &invalid_count_runner,
-        );
+        let result = command_with(Path::new("/srv/YAFVS"), false, &[], &invalid_count_runner);
         let value = serde_json::to_value(result).unwrap();
         assert!(value["details"]["tables"]["public.meta"]["row_count"].is_null());
     }

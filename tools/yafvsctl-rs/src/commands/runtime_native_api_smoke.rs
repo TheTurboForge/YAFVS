@@ -6,14 +6,14 @@ use super::common::{compact_finding, output_tail, runtime_dir};
 use super::compose::{compose_command, runtime_environment};
 use super::direct_api::validate_operator_uuid;
 use super::native_runtime::{
-    native_api_display_command, native_api_get_json, native_probe_finding,
-    percent_encode_component, validate_api_path, NativeJsonResponse, MAX_NATIVE_API_RESPONSE_BYTES,
+    MAX_NATIVE_API_RESPONSE_BYTES, NativeJsonResponse, native_api_display_command,
+    native_api_get_json, native_probe_finding, percent_encode_component, validate_api_path,
 };
 use super::report_selection::latest_completed_full_test_report_id;
 use super::runtime_health::container_running;
 use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
-use crate::result::{make_result, Finding, ResultEnvelope};
-use serde_json::{json, Map, Value};
+use crate::result::{Finding, ResultEnvelope, make_result};
+use serde_json::{Map, Value, json};
 use std::collections::BTreeSet;
 use std::fs::OpenOptions;
 use std::io::Read;
@@ -156,9 +156,7 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
             check: "native-api.scope-detail",
             path_prefix: "/api/v1/scopes",
             description: "scope detail",
-            missing_id_message: Some(
-                "Scope list did not include a scope id for the detail probe.",
-            ),
+            missing_id_message: Some("Scope list did not include a scope id for the detail probe."),
             empty_message: "No scopes exist yet, so the scope detail probe was skipped.",
             object: DetailObject::Root,
             required_array: None,
@@ -197,9 +195,7 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
             check: "native-api.task-detail",
             path_prefix: "/api/v1/tasks",
             description: "task detail",
-            missing_id_message: Some(
-                "Task list did not include a task id for the detail probe.",
-            ),
+            missing_id_message: Some("Task list did not include a task id for the detail probe."),
             empty_message: "No tasks exist yet, so the task detail probe was skipped.",
             object: DetailObject::Root,
             required_array: None,
@@ -349,9 +345,7 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
             check: "native-api.host-detail",
             path_prefix: "/api/v1/hosts",
             description: "top-level Host detail",
-            missing_id_message: Some(
-                "Hosts list did not include a host id for the detail probe.",
-            ),
+            missing_id_message: Some("Hosts list did not include a host id for the detail probe."),
             empty_message: "No Hosts exist yet, so the detail probe was skipped.",
             object: DetailObject::Nested("asset"),
             required_array: None,
@@ -420,8 +414,7 @@ const SCOPE_REPORT_COLLECTION_PROBES: [ScopeReportCollectionProbe; 8] = [
         check: "native-api.scope-report-results",
         suffix: "results?page_size=5&sort=-severity",
         description: "scope-report Results",
-        missing_pair_message:
-            "Scope-report list did not include a scope/report id pair for the Results probe.",
+        missing_pair_message: "Scope-report list did not include a scope/report id pair for the Results probe.",
         empty_message: "No scope reports exist yet, so the Results probe was skipped.",
     },
     ScopeReportCollectionProbe {
@@ -429,8 +422,7 @@ const SCOPE_REPORT_COLLECTION_PROBES: [ScopeReportCollectionProbe; 8] = [
         check: "native-api.scope-report-hosts",
         suffix: "hosts?page_size=5&sort=host",
         description: "scope-report Hosts",
-        missing_pair_message:
-            "Scope-report list did not include a scope/report id pair for the host probe.",
+        missing_pair_message: "Scope-report list did not include a scope/report id pair for the host probe.",
         empty_message: "No scope reports exist yet, so the host collection probe was skipped.",
     },
     ScopeReportCollectionProbe {
@@ -438,8 +430,7 @@ const SCOPE_REPORT_COLLECTION_PROBES: [ScopeReportCollectionProbe; 8] = [
         check: "native-api.scope-report-ports",
         suffix: "ports?page_size=5&sort=port",
         description: "scope-report Ports",
-        missing_pair_message:
-            "Scope-report list did not include a scope/report id pair for the Ports probe.",
+        missing_pair_message: "Scope-report list did not include a scope/report id pair for the Ports probe.",
         empty_message: "No scope reports exist yet, so the Ports collection probe was skipped.",
     },
     ScopeReportCollectionProbe {
@@ -447,28 +438,23 @@ const SCOPE_REPORT_COLLECTION_PROBES: [ScopeReportCollectionProbe; 8] = [
         check: "native-api.scope-report-applications",
         suffix: "applications?page_size=5&sort=name",
         description: "scope-report Applications",
-        missing_pair_message:
-            "Scope-report list did not include a scope/report id pair for the Applications probe.",
-        empty_message:
-            "No scope reports exist yet, so the Applications collection probe was skipped.",
+        missing_pair_message: "Scope-report list did not include a scope/report id pair for the Applications probe.",
+        empty_message: "No scope reports exist yet, so the Applications collection probe was skipped.",
     },
     ScopeReportCollectionProbe {
         detail_key: "operating_systems",
         check: "native-api.scope-report-operating-systems",
         suffix: "operating-systems?page_size=5&sort=name",
         description: "scope-report Operating Systems",
-        missing_pair_message:
-            "Scope-report list did not include a scope/report id pair for the Operating Systems probe.",
-        empty_message:
-            "No scope reports exist yet, so the Operating Systems collection probe was skipped.",
+        missing_pair_message: "Scope-report list did not include a scope/report id pair for the Operating Systems probe.",
+        empty_message: "No scope reports exist yet, so the Operating Systems collection probe was skipped.",
     },
     ScopeReportCollectionProbe {
         detail_key: "cves",
         check: "native-api.scope-report-cves",
         suffix: "cves?page_size=5&sort=-max_severity",
         description: "scope-report CVEs",
-        missing_pair_message:
-            "Scope-report list did not include a scope/report id pair for the CVE probe.",
+        missing_pair_message: "Scope-report list did not include a scope/report id pair for the CVE probe.",
         empty_message: "No scope reports exist yet, so the CVE collection probe was skipped.",
     },
     ScopeReportCollectionProbe {
@@ -476,20 +462,16 @@ const SCOPE_REPORT_COLLECTION_PROBES: [ScopeReportCollectionProbe; 8] = [
         check: "native-api.scope-report-tls-certificates",
         suffix: "tls-certificates?page_size=5&sort=-not_after",
         description: "scope-report TLS Certificates",
-        missing_pair_message:
-            "Scope-report list did not include a scope/report id pair for the TLS Certificates probe.",
-        empty_message:
-            "No scope reports exist yet, so the TLS Certificates collection probe was skipped.",
+        missing_pair_message: "Scope-report list did not include a scope/report id pair for the TLS Certificates probe.",
+        empty_message: "No scope reports exist yet, so the TLS Certificates collection probe was skipped.",
     },
     ScopeReportCollectionProbe {
         detail_key: "errors",
         check: "native-api.scope-report-errors",
         suffix: "errors?page_size=5&sort=-created_at",
         description: "scope-report Error Messages",
-        missing_pair_message:
-            "Scope-report list did not include a scope/report id pair for the Error Messages probe.",
-        empty_message:
-            "No scope reports exist yet, so the Error Messages collection probe was skipped.",
+        missing_pair_message: "Scope-report list did not include a scope/report id pair for the Error Messages probe.",
+        empty_message: "No scope reports exist yet, so the Error Messages collection probe was skipped.",
     },
 ];
 
@@ -690,8 +672,7 @@ const OPERATOR_RESOURCE_PROBES: [CollectionProbe; 5] = [
             missing_id_message: Some(
                 "Scan Configs list did not include a scan config id for the detail probe.",
             ),
-            empty_message:
-                "No scan configs exist yet, so the scan-config detail probe was skipped.",
+            empty_message: "No scan configs exist yet, so the scan-config detail probe was skipped.",
             object: DetailObject::Root,
             required_array: None,
         }),
@@ -708,8 +689,7 @@ const OPERATOR_RESOURCE_PROBES: [CollectionProbe; 5] = [
             path_prefix: "/api/v1/report-formats",
             description: "report-format detail",
             missing_id_message: None,
-            empty_message:
-                "No report formats exist yet, so the report-format detail probe was skipped.",
+            empty_message: "No report formats exist yet, so the report-format detail probe was skipped.",
             object: DetailObject::Root,
             required_array: None,
         }),
@@ -2469,8 +2449,8 @@ mod tests {
     use super::*;
     use std::collections::VecDeque;
     use std::fs;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     static NEXT_TEMP: AtomicUsize = AtomicUsize::new(0);
 
@@ -2712,11 +2692,12 @@ mod tests {
         );
         assert_eq!(finding(&result, "native-api.running").status, "fail");
         assert_eq!(result.findings.len(), 1);
-        assert!(repo
-            .parent()
-            .unwrap()
-            .join("YAFVS-runtime/artifacts/native-api/native-api-smoke.json")
-            .is_file());
+        assert!(
+            repo.parent()
+                .unwrap()
+                .join("YAFVS-runtime/artifacts/native-api/native-api-smoke.json")
+                .is_file()
+        );
         finish_test(&repo);
     }
 
@@ -2734,10 +2715,12 @@ mod tests {
             finding(&result, "native-api.trashcan-summary.deferred").status,
             "pass"
         );
-        assert!(result
-            .findings
-            .iter()
-            .all(|finding| finding.check != "native-api.trashcan-items"));
+        assert!(
+            result
+                .findings
+                .iter()
+                .all(|finding| finding.check != "native-api.trashcan-items")
+        );
         let feeds = finding(&result, "native-api.feeds")
             .details
             .as_ref()
@@ -3060,26 +3043,36 @@ mod tests {
         probe_raw_report_metrics(&repo, &runner, &mut findings, &mut details);
         let finding = finding_by_check(&findings, "native-api.raw-report-metrics");
         assert_eq!(finding.status, "pass");
-        assert!(finding.details.as_ref().unwrap()["command"]
-            .as_str()
-            .unwrap()
-            .contains("/api/v1/reports/.../metrics"));
+        assert!(
+            finding.details.as_ref().unwrap()["command"]
+                .as_str()
+                .unwrap()
+                .contains("/api/v1/reports/.../metrics")
+        );
         assert_eq!(details["raw_report_metrics"]["systems_count"], json!(1));
         assert_eq!(
             details["raw_report_metrics"]["systems_sample"][0]["host"],
             json!("safe-host")
         );
-        assert!(!serde_json::to_string(&details)
-            .unwrap()
-            .contains("RAW_METRICS_SECRET"));
+        assert!(
+            !serde_json::to_string(&details)
+                .unwrap()
+                .contains("RAW_METRICS_SECRET")
+        );
         let calls = runner.calls();
-        assert!(calls
-            .iter()
-            .flat_map(|(_, arguments)| arguments)
-            .any(|argument| argument.contains("SELECT r.uuid FROM reports")));
-        assert!(calls.iter().flat_map(|(_, arguments)| arguments).any(
-            |argument| argument.contains("/api/v1/reports/entity%2Fid%20with%20space/metrics")
-        ));
+        assert!(
+            calls
+                .iter()
+                .flat_map(|(_, arguments)| arguments)
+                .any(|argument| argument.contains("SELECT r.uuid FROM reports"))
+        );
+        assert!(
+            calls
+                .iter()
+                .flat_map(|(_, arguments)| arguments)
+                .any(|argument| argument
+                    .contains("/api/v1/reports/entity%2Fid%20with%20space/metrics"))
+        );
         finish_test(&repo);
     }
 
@@ -3173,10 +3166,12 @@ mod tests {
             json!(["description", "detection"])
         );
         let calls = runner.calls();
-        assert!(calls[0]
-            .1
-            .iter()
-            .any(|argument| argument.contains("/api/v1/results/entity%2Fid%20with%20space")));
+        assert!(
+            calls[0]
+                .1
+                .iter()
+                .any(|argument| argument.contains("/api/v1/results/entity%2Fid%20with%20space"))
+        );
         let serialized = serde_json::to_string(&json!({
             "findings": findings,
             "details": details,
@@ -3203,9 +3198,11 @@ mod tests {
             finding_by_check(&findings, "native-api.raw-result-detail").status,
             "fail"
         );
-        assert!(findings
-            .iter()
-            .all(|finding| finding.check != "native-api.raw-result-detail-descriptive-fields"));
+        assert!(
+            findings
+                .iter()
+                .all(|finding| finding.check != "native-api.raw-result-detail-descriptive-fields")
+        );
 
         findings.clear();
         let runner = FakeRunner::new(vec![output(
@@ -3379,9 +3376,11 @@ mod tests {
             finding_by_check(&findings, "native-api.alert-detail").status,
             "fail"
         );
-        assert!(!serde_json::to_string(&findings)
-            .unwrap()
-            .contains("RAW_ALERT_SECRET"));
+        assert!(
+            !serde_json::to_string(&findings)
+                .unwrap()
+                .contains("RAW_ALERT_SECRET")
+        );
         finish_test(&repo);
     }
 
@@ -3554,10 +3553,12 @@ mod tests {
             &mut details,
         );
         assert_eq!(findings[0].status, "fail");
-        assert!(findings[0].details.as_ref().unwrap()["command"]
-            .as_str()
-            .unwrap()
-            .contains("/api/v1/scope-reports/..."));
+        assert!(
+            findings[0].details.as_ref().unwrap()["command"]
+                .as_str()
+                .unwrap()
+                .contains("/api/v1/scope-reports/...")
+        );
 
         findings.clear();
         let runner = FakeRunner::new(vec![output(
@@ -3566,10 +3567,12 @@ mod tests {
         )]);
         probe_scan_config_families(&repo, TEST_DETAIL_ID, &runner, &mut findings, &mut details);
         assert_eq!(findings[0].status, "fail");
-        assert!(findings[0].details.as_ref().unwrap()["command"]
-            .as_str()
-            .unwrap()
-            .contains("/api/v1/scan-configs/.../families"));
+        assert!(
+            findings[0].details.as_ref().unwrap()["command"]
+                .as_str()
+                .unwrap()
+                .contains("/api/v1/scan-configs/.../families")
+        );
         finish_test(&repo);
     }
 
@@ -3605,9 +3608,11 @@ mod tests {
             let details = finding.details.unwrap();
             assert!(details.get("stdout").is_none());
             assert!(details.get("stderr").is_none());
-            assert!(!serde_json::to_string(&details)
-                .unwrap()
-                .contains("RAW_BODY_SENTINEL"));
+            assert!(
+                !serde_json::to_string(&details)
+                    .unwrap()
+                    .contains("RAW_BODY_SENTINEL")
+            );
         }
 
         let runner = FakeRunner::new(vec![output(

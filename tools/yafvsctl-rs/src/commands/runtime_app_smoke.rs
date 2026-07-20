@@ -12,7 +12,7 @@ use super::feed_generation::{
 use super::runtime_certs::{runtime_certificate_findings, runtime_certificates_complete};
 use super::runtime_feed_keyring::feed_keyring_fingerprint_finding;
 use super::runtime_health::{container_running, pg_gvm_extension_finding};
-use super::runtime_lock::{inspect_runtime_lock, RuntimeLockStatus};
+use super::runtime_lock::{RuntimeLockStatus, inspect_runtime_lock};
 use super::runtime_probe::{
     command_runtime_gmp_smoke_with, gsad_urls_from_env, socket_readiness_finding,
 };
@@ -23,8 +23,8 @@ use super::runtime_scanner_process::command_runtime_scanner_process_check_with;
 use super::runtime_scanner_register::scanner_registration_finding;
 use super::secret::{read_existing_runtime_secret, runtime_secret_path};
 use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
-use crate::result::{make_result, Finding, ResultEnvelope};
-use serde_json::{json, Value};
+use crate::result::{Finding, ResultEnvelope, make_result};
+use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs::OpenOptions;

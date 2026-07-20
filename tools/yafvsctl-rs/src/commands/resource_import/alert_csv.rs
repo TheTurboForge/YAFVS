@@ -8,14 +8,14 @@ use super::ApiReply;
 use super::{GuardedApi, TargetApi};
 use crate::commands::common::metadata;
 use crate::commands::direct_api::{
-    direct_runtime_environment, environment_value, validate_operator_uuid, OPERATOR_UUID_ENV,
+    OPERATOR_UUID_ENV, direct_runtime_environment, environment_value, validate_operator_uuid,
 };
 use crate::commands::native_runtime::percent_encode_component;
 use crate::process::{CommandRunner, SystemCommandRunner};
-use crate::result::{make_result, Finding, ResultEnvelope};
+use crate::result::{Finding, ResultEnvelope, make_result};
 use csv::ReaderBuilder;
 use regex::Regex;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::fs::OpenOptions;
 use std::io::{Read, Take};
@@ -351,10 +351,11 @@ fn command_with(
 ) -> ResultEnvelope {
     let mut details = base_details(allow_write_control);
     details["row_count"] = json!(rows.len());
-    details["email_row_count"] = json!(rows
-        .iter()
-        .filter(|row| row.method == Method::Email)
-        .count());
+    details["email_row_count"] = json!(
+        rows.iter()
+            .filter(|row| row.method == Method::Email)
+            .count()
+    );
     details["smb_row_count"] = json!(rows.iter().filter(|row| row.method == Method::Smb).count());
     let mut findings = vec![Finding::new(
         "pass",
@@ -1120,12 +1121,14 @@ mod tests {
             Some("00000000-0000-4000-8000-000000000002"),
         );
         assert_eq!(result.status, "fail");
-        assert!(malformed
-            .calls
-            .lock()
-            .unwrap()
-            .iter()
-            .all(|call| call.1 == "GET"));
+        assert!(
+            malformed
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .all(|call| call.1 == "GET")
+        );
     }
     #[test]
     fn incompatible_smb_credential_metadata_blocks_every_post() {
@@ -1209,8 +1212,10 @@ mod tests {
         assert_eq!(details["created_alert_count"], 1);
         assert_eq!(details["indeterminate_alert_count"], 1);
         assert_eq!(details["unattempted_alert_count"], 1);
-        assert!(!serde_json::to_string(&details)
-            .unwrap()
-            .contains("from@example.invalid"));
+        assert!(
+            !serde_json::to_string(&details)
+                .unwrap()
+                .contains("from@example.invalid")
+        );
     }
 }

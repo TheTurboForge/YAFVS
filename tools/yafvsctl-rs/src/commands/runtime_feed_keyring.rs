@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use super::artifact::{begin_secure_artifact_transaction, ArtifactCommit};
+use super::artifact::{ArtifactCommit, begin_secure_artifact_transaction};
 use super::common::{executable_path, metadata, output_tail, runtime_dir};
 use super::feed_generation::FPR;
 use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
-use crate::result::{make_result, Finding, ResultEnvelope};
+use crate::result::{Finding, ResultEnvelope, make_result};
 use serde_json::json;
 use std::fs::{self, File, OpenOptions};
 use std::os::fd::AsRawFd;
@@ -730,8 +730,8 @@ fn result(
 mod tests {
     use super::*;
     use std::io::Write;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
 
@@ -895,31 +895,19 @@ mod tests {
             fingerprint: true,
             ..Runner::default()
         };
-        let missing = feed_keyring_fingerprint_finding_with(
-            &repo,
-            &runner,
-            Some(Path::new("gpg")),
-        );
+        let missing = feed_keyring_fingerprint_finding_with(&repo, &runner, Some(Path::new("gpg")));
         assert_eq!(missing.status, "fail");
         assert!(runner.calls.lock().unwrap().is_empty());
 
         let home = keyring_home(&repo);
         fs::create_dir_all(&home).unwrap();
         fs::set_permissions(&home, fs::Permissions::from_mode(0o755)).unwrap();
-        let broad = feed_keyring_fingerprint_finding_with(
-            &repo,
-            &runner,
-            Some(Path::new("gpg")),
-        );
+        let broad = feed_keyring_fingerprint_finding_with(&repo, &runner, Some(Path::new("gpg")));
         assert_eq!(broad.status, "fail");
         assert!(runner.calls.lock().unwrap().is_empty());
 
         fs::set_permissions(&home, fs::Permissions::from_mode(0o700)).unwrap();
-        let present = feed_keyring_fingerprint_finding_with(
-            &repo,
-            &runner,
-            Some(Path::new("gpg")),
-        );
+        let present = feed_keyring_fingerprint_finding_with(&repo, &runner, Some(Path::new("gpg")));
         assert_eq!(present.status, "pass");
         assert_eq!(runner.calls.lock().unwrap().len(), 1);
         fs::remove_dir_all(root).unwrap();
@@ -968,15 +956,21 @@ mod tests {
             "Feed keyring initialization stopped before importing an unverified key artifact."
         );
         let calls = runner.calls.lock().unwrap();
-        assert!(calls
-            .iter()
-            .any(|(program, _, _, _)| program.ends_with("curl")));
-        assert!(calls
-            .iter()
-            .any(|(_, args, _, _)| args.iter().any(|arg| arg == "--show-keys")));
-        assert!(!calls
-            .iter()
-            .any(|(_, args, _, _)| args.iter().any(|arg| arg == "--import")));
+        assert!(
+            calls
+                .iter()
+                .any(|(program, _, _, _)| program.ends_with("curl"))
+        );
+        assert!(
+            calls
+                .iter()
+                .any(|(_, args, _, _)| args.iter().any(|arg| arg == "--show-keys"))
+        );
+        assert!(
+            !calls
+                .iter()
+                .any(|(_, args, _, _)| args.iter().any(|arg| arg == "--import"))
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -998,12 +992,16 @@ mod tests {
         assert_eq!(result.status, "pass");
         assert!(key_path(&repo).is_file());
         let calls = runner.calls.lock().unwrap();
-        assert!(calls
-            .iter()
-            .any(|(program, _, _, _)| program.ends_with("curl")));
-        assert!(calls
-            .iter()
-            .any(|(_, args, _, _)| args.iter().any(|arg| arg == "--import")));
+        assert!(
+            calls
+                .iter()
+                .any(|(program, _, _, _)| program.ends_with("curl"))
+        );
+        assert!(
+            calls
+                .iter()
+                .any(|(_, args, _, _)| args.iter().any(|arg| arg == "--import"))
+        );
         assert!(calls.iter().any(|(_, args, input, _)| {
             args.iter().any(|arg| arg == "--import-ownertrust")
                 && input.as_deref() == Some(format!("{FPR}:6:\n").as_bytes())
@@ -1035,15 +1033,21 @@ mod tests {
         );
         assert_eq!(result.status, "pass");
         let calls = runner.calls.lock().unwrap();
-        assert!(!calls
-            .iter()
-            .any(|(program, _, _, _)| program.ends_with("curl")));
-        assert!(calls
-            .iter()
-            .any(|(_, args, _, _)| args.iter().any(|arg| arg == "--show-keys")));
-        assert!(calls
-            .iter()
-            .any(|(_, args, _, _)| args.iter().any(|arg| arg == "--import")));
+        assert!(
+            !calls
+                .iter()
+                .any(|(program, _, _, _)| program.ends_with("curl"))
+        );
+        assert!(
+            calls
+                .iter()
+                .any(|(_, args, _, _)| args.iter().any(|arg| arg == "--show-keys"))
+        );
+        assert!(
+            calls
+                .iter()
+                .any(|(_, args, _, _)| args.iter().any(|arg| arg == "--import"))
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -1063,9 +1067,11 @@ mod tests {
         );
         assert_eq!(result.status, "fail");
         let calls = runner.calls.lock().unwrap();
-        assert!(!calls
-            .iter()
-            .any(|(_, args, _, _)| args.iter().any(|arg| arg == "--verify")));
+        assert!(
+            !calls
+                .iter()
+                .any(|(_, args, _, _)| args.iter().any(|arg| arg == "--verify"))
+        );
         fs::remove_dir_all(root).unwrap();
     }
 }

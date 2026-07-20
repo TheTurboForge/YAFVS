@@ -1546,10 +1546,7 @@ mod tests {
             "services/yafvs-api/src/main.rs"
         );
         assert_eq!(
-            compact_tool_path(
-                "/archived/TurboVAS/services/yafvs-api/src/main.rs",
-                root
-            ),
+            compact_tool_path("/archived/TurboVAS/services/yafvs-api/src/main.rs", root),
             "services/yafvs-api/src/main.rs"
         );
         assert_eq!(compact_tool_path("relative.rs", root), "relative.rs");

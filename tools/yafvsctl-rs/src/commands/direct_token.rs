@@ -7,8 +7,8 @@ use super::direct_api::{
 };
 use super::secret::{rotate_runtime_secret, runtime_secret_path};
 use crate::process::{CommandRunner, SystemCommandRunner};
-use crate::result::{make_result, Finding, ResultEnvelope};
-use serde_json::{json, Value};
+use crate::result::{Finding, ResultEnvelope, make_result};
+use serde_json::{Value, json};
 use std::fs;
 #[cfg(test)]
 use std::os::unix::fs::PermissionsExt;

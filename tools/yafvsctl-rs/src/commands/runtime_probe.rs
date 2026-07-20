@@ -830,8 +830,7 @@ fn command_runtime_scope_smoke_with(
     const BROWSER_PROXY_SECRET_ENV: &str = "YAFVS_API_BROWSER_PROXY_SECRET";
     let probe = repo_root.join("tools/runtime_scope.py");
     let artifact_dir = runtime_dir(repo_root).join("artifacts/scope-reports");
-    let (running, service_environment) =
-        running_service_state(repo_root, runner, "yafvs-api");
+    let (running, service_environment) = running_service_state(repo_root, runner, "yafvs-api");
     let browser_proxy_secret = service_environment
         .get(BROWSER_PROXY_SECRET_ENV)
         .is_some_and(|value| !value.trim().is_empty());
@@ -1585,7 +1584,10 @@ mod tests {
         assert_eq!(*timeout, Duration::from_secs(300));
         assert_eq!(password, "credential-secret-material-1234");
         assert!(!args.iter().any(|arg| arg == &password));
-        assert!(args.iter().any(|arg| arg == "yafvs-credential-smoke-001122aa"));
+        assert!(
+            args.iter()
+                .any(|arg| arg == "yafvs-credential-smoke-001122aa")
+        );
         let serialized = serde_json::to_string(&result).unwrap();
         assert!(!serialized.contains(password.as_ref()));
         assert!(serialized.contains("[redacted]"));
@@ -1729,7 +1731,11 @@ mod tests {
         let (name, password) = temporary_credential_material().unwrap();
         let suffix = name.strip_prefix("yafvs-credential-smoke-").unwrap();
         assert_eq!(suffix.len(), 8);
-        assert!(suffix.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+        assert!(
+            suffix
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        );
         assert_eq!(password.len(), 32);
         assert!(
             password
@@ -1748,7 +1754,10 @@ mod tests {
             Err(io::Error::other("entropy unavailable"))
         });
         assert_eq!(result.status, "fail");
-        assert_eq!(result.findings.last().unwrap().check, "credential-smoke.run");
+        assert_eq!(
+            result.findings.last().unwrap().check,
+            "credential-smoke.run"
+        );
         assert!(runner.calls.lock().unwrap().is_empty());
         fs::remove_dir_all(root).unwrap();
     }

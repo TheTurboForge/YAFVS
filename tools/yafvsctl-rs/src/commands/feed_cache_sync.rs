@@ -3,14 +3,14 @@
 
 use super::common::{build_env, executable_path, metadata, output_tail, runtime_dir};
 use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
-use crate::result::{make_result, Finding, ResultEnvelope};
+use crate::result::{Finding, ResultEnvelope, make_result};
 use serde_json::json;
 use std::fs::{self, OpenOptions};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
-use time::{format_description, OffsetDateTime};
+use time::{OffsetDateTime, format_description};
 
 const COMMAND: &str = "feed-cache-sync";
 const RELEASE: &str = "22.04";
@@ -468,8 +468,8 @@ fn result(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
 
@@ -569,12 +569,14 @@ mod tests {
         let result = command_with(&repo, &runner, None, None, "20260719T200000Z");
         assert_eq!(result.status, "fail");
         assert_eq!(result.summary, "Feed cache sync stopped at prerequisites.");
-        assert!(!runner
-            .calls
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|(_, args)| args.contains(&"--selftest".into())));
+        assert!(
+            !runner
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(_, args)| args.contains(&"--selftest".into()))
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -601,12 +603,14 @@ mod tests {
             result.summary,
             "Feed cache sync stopped at greenbone-feed-sync selftest."
         );
-        assert!(!runner
-            .calls
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|(_, args)| args.first() == Some(&"has-session".into())));
+        assert!(
+            !runner
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(_, args)| args.first() == Some(&"has-session".into()))
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -630,12 +634,14 @@ mod tests {
         );
         assert_eq!(result.status, "warn");
         assert_eq!(result.summary, "Feed cache sync is already running.");
-        assert!(!runner
-            .calls
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|(_, args)| args.first() == Some(&"new-session".into())));
+        assert!(
+            !runner
+                .calls
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(_, args)| args.first() == Some(&"new-session".into()))
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -727,10 +733,12 @@ mod tests {
             "20260719T200000Z",
         );
         assert_eq!(result.status, "fail");
-        assert!(result
-            .findings
-            .iter()
-            .any(|finding| finding.check == "feed-sync.cache-dir" && finding.status == "fail"));
+        assert!(
+            result
+                .findings
+                .iter()
+                .any(|finding| finding.check == "feed-sync.cache-dir" && finding.status == "fail")
+        );
         fs::remove_dir_all(root).unwrap();
     }
 }

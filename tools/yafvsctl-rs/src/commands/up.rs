@@ -17,7 +17,10 @@ pub fn command_up(repo_root: &Path) -> ResultEnvelope {
     command_up_with_runner(repo_root, &SystemCommandRunner)
 }
 
-pub(crate) fn command_up_with_runner(repo_root: &Path, runner: &dyn CommandRunner) -> ResultEnvelope {
+pub(crate) fn command_up_with_runner(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+) -> ResultEnvelope {
     let mut findings = ensure_runtime_setup(repo_root, runner);
     if findings.iter().any(|finding| finding.status == "fail") {
         return make_result(

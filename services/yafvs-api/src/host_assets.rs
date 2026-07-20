@@ -21,8 +21,8 @@ use crate::{
     },
     path_ids::parse_uuid,
     query::{
-        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe,
-        normalize_collection_query, sort_clause,
+        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe_params,
+        normalize_collection_query, normalize_optional_exact_query, sort_clause,
     },
     user_tags::ReportUserTag,
 };
@@ -31,6 +31,7 @@ pub(crate) async fn host_assets(
     State(state): State<AppState>,
     ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<HostAssetItem>>, ApiError> {
+    let name_filter = normalize_optional_exact_query(query.name.as_deref(), "name")?;
     let params = normalize_collection_query(query, HOST_ASSET_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, HOST_ASSET_SORT_FIELDS)?;
     let sql = format!(
@@ -107,21 +108,43 @@ pub(crate) async fn host_assets(
                      OR lower(coalesce(ip, '')) LIKE '%' || lower($1) || '%'
                      OR lower(coalesce(best_os_cpe, '')) LIKE '%' || lower($1) || '%'
                      OR lower(coalesce(best_os_txt, '')) LIKE '%' || lower($1) || '%')
+                AND ($4 = '' OR lower(name) = lower($4))
          )
          SELECT count(*) OVER()::bigint AS total, * FROM filtered
           ORDER BY {sort_sql}, name ASC, id ASC LIMIT $2 OFFSET $3;"#,
     );
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let rows = client
-        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .query(
+            &sql,
+            &[
+                &params.filter,
+                &params.page_size,
+                &params.offset,
+                &name_filter,
+            ],
+        )
         .await
         .map_err(|error| {
             tracing::warn!(%error, "host asset list query failed");
             ApiError::Database
         })?;
-    let total =
-        collection_total_with_empty_page_probe(&client, &rows, &sql, &params, "host asset list")
-            .await?;
+    let probe_page_size = 1_i64;
+    let probe_offset = 0_i64;
+    let total = collection_total_with_empty_page_probe_params(
+        &client,
+        &rows,
+        &sql,
+        &params,
+        &[
+            &params.filter,
+            &probe_page_size,
+            &probe_offset,
+            &name_filter,
+        ],
+        "host asset list",
+    )
+    .await?;
     let items = rows.iter().map(host_asset_from_row).collect();
     Ok(Json(Collection {
         page: params.page_info(total),

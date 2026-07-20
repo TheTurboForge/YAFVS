@@ -16,8 +16,9 @@ use crate::{
     errors::ApiError,
     path_ids::parse_uuid,
     query::{
-        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe,
-        collection_total_with_empty_page_probe_params, normalize_collection_query, sort_clause,
+        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe_params,
+        normalize_collection_query, normalize_optional_exact_query, normalize_optional_uuid_query,
+        sort_clause,
     },
     report_helpers::raw_report_exists,
     result_payload_rows::{
@@ -31,6 +32,8 @@ pub(crate) async fn results(
     State(state): State<AppState>,
     ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ResultItem>>, ApiError> {
+    let task_id = normalize_optional_uuid_query(query.task_id.as_deref(), "task_id")?;
+    let nvt_oid = normalize_optional_exact_query(query.nvt_oid.as_deref(), "nvt_oid")?;
     let params = normalize_collection_query(query, RESULT_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, RESULT_SORT_FIELDS)?;
     let sql = format!(
@@ -84,6 +87,8 @@ pub(crate) async fn results(
                      OR lower(name) LIKE '%' || lower($1) || '%'
                      OR lower(coalesce(task_name, '')) LIKE '%' || lower($1) || '%'
                      OR lower(source_report_name) LIKE '%' || lower($1) || '%')
+                AND ($4 = '' OR lower(coalesce(task_id, '')) = lower($4))
+                AND ($5 = '' OR lower(nvt_oid) = lower($5))
          ),
          page_rows AS (
              SELECT count(*) OVER()::bigint AS total, * FROM filtered
@@ -174,15 +179,38 @@ pub(crate) async fn results(
     );
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let rows = client
-        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .query(
+            &sql,
+            &[
+                &params.filter,
+                &params.page_size,
+                &params.offset,
+                &task_id,
+                &nvt_oid,
+            ],
+        )
         .await
         .map_err(|error| {
             tracing::warn!(%error, "result list query failed");
             ApiError::Database
         })?;
-    let total =
-        collection_total_with_empty_page_probe(&client, &rows, &sql, &params, "result list")
-            .await?;
+    let probe_page_size = 1_i64;
+    let probe_offset = 0_i64;
+    let total = collection_total_with_empty_page_probe_params(
+        &client,
+        &rows,
+        &sql,
+        &params,
+        &[
+            &params.filter,
+            &probe_page_size,
+            &probe_offset,
+            &task_id,
+            &nvt_oid,
+        ],
+        "result list",
+    )
+    .await?;
     let items = rows.iter().map(result_from_row).collect();
     Ok(Json(Collection {
         page: params.page_info(total),

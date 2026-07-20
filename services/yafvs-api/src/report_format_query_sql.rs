@@ -35,6 +35,9 @@ pub(crate) fn report_format_assets_sql(sort_sql: &str) -> String {
                      OR lower(summary) LIKE '%' || lower($1) || '%'
                      OR lower(extension) LIKE '%' || lower($1) || '%'
                      OR lower(content_type) LIKE '%' || lower($1) || '%')
+                AND ($4 = ''
+                     OR ($4 = '1' AND predefined_int = 1)
+                     OR ($4 = '0' AND predefined_int = 0))
          )
          SELECT count(*) OVER()::bigint AS total, * FROM filtered
           ORDER BY {sort_sql}, name ASC, id ASC LIMIT $2 OFFSET $3;"#,

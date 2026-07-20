@@ -57,6 +57,7 @@ pub(crate) fn override_assets_sql(sort_sql: &str) -> String {
                 AND ($6 = ''
                      OR ($6 = '1' AND active_int = 1)
                      OR ($6 = '0' AND active_int = 0))
+                AND ($7 = '' OR lower(coalesce(task_id, '')) = lower($7))
          )
          SELECT count(*) OVER()::bigint AS total, * FROM filtered
           ORDER BY {sort_sql}, text ASC, id ASC LIMIT $2 OFFSET $3;"#,

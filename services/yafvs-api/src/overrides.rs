@@ -17,7 +17,7 @@ use crate::{
     path_ids::parse_uuid,
     query::{
         ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe_params,
-        normalize_collection_query, sort_clause,
+        normalize_collection_query, normalize_optional_uuid_query, sort_clause,
     },
 };
 
@@ -28,6 +28,7 @@ pub(crate) async fn override_assets(
     let active_filter = query.active.clone().unwrap_or_default();
     let text_filter = query.text.clone().unwrap_or_default();
     let task_name_filter = query.task_name.clone().unwrap_or_default();
+    let task_id_filter = normalize_optional_uuid_query(query.task_id.as_deref(), "task_id")?;
     let params = normalize_collection_query(query, OVERRIDE_ASSET_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, OVERRIDE_ASSET_SORT_FIELDS)?;
     let sql = override_assets_sql(&sort_sql);
@@ -42,6 +43,7 @@ pub(crate) async fn override_assets(
                 &text_filter,
                 &task_name_filter,
                 &active_filter,
+                &task_id_filter,
             ],
         )
         .await
@@ -63,6 +65,7 @@ pub(crate) async fn override_assets(
             &text_filter,
             &task_name_filter,
             &active_filter,
+            &task_id_filter,
         ],
         "override asset list",
     )

@@ -9,6 +9,7 @@ import Filter from 'gmp/models/filter';
 import {
   fetchNativeOverride,
   fetchNativeOverrides,
+  nativeOverridesQueryFromFilter,
 } from 'gmp/native-api/overrides';
 import {loadEntities, loadEntity} from 'web/store/entities/overrides';
 import {createState} from 'web/store/entities/utils/testing';
@@ -27,6 +28,24 @@ afterEach(() => {
 });
 
 describe('native API overrides', () => {
+  test('preserves exact task filters in native override-list requests', () => {
+    const taskId = '12345678-1234-1234-1234-123456789abc';
+    expect(
+      nativeOverridesQueryFromFilter(
+        Filter.fromString(`task_id=${taskId} rows=25 first=1`),
+      ),
+    ).toEqual({
+      page: 1,
+      pageSize: 25,
+      sort: 'text',
+      filter: '',
+      active: '',
+      text: '',
+      taskName: '',
+      taskId,
+    });
+  });
+
   test('fetches top-level overrides as inherited Override models', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -68,6 +87,7 @@ describe('native API overrides', () => {
       active: '1',
       text: 'control',
       taskName: '',
+      taskId: '12345678-1234-1234-1234-123456789abc',
     });
 
     const override = response.overrides[0];
@@ -92,6 +112,7 @@ describe('native API overrides', () => {
       active: '1',
       text: 'control',
       task_name: '',
+      task_id: '12345678-1234-1234-1234-123456789abc',
     });
     expect(fetchMock).toHaveBeenCalledWith(
       'https://yafvs.example/api/v1/overrides',

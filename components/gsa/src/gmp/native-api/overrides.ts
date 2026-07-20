@@ -106,6 +106,7 @@ export interface NativeOverridesQuery {
   active: string;
   text: string;
   taskName: string;
+  taskId?: string;
 }
 
 export interface NativeOverridesResponse {
@@ -170,6 +171,7 @@ export const nativeOverridesQueryFromFilter = (
 ): NativeOverridesQuery => {
   const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
   const first = Math.max(1, integerValue(filter?.get('first'), 1));
+  const taskId = stringValue(filter?.get('task_id')).trim();
   return {
     page: Math.floor((first - 1) / pageSize) + 1,
     pageSize,
@@ -178,6 +180,7 @@ export const nativeOverridesQueryFromFilter = (
     active: nativeActiveFromFilter(filter),
     text: stringValue(filter?.get('text')),
     taskName: stringValue(filter?.get('task_name')),
+    ...(taskId === '' ? {} : {taskId}),
   };
 };
 
@@ -326,6 +329,7 @@ export const fetchNativeOverrides = async (
       active: query.active,
       text: query.text,
       task_name: query.taskName,
+      ...(query.taskId === undefined ? {} : {task_id: query.taskId}),
     },
   );
   const page = normalizePage(payload.page, query);

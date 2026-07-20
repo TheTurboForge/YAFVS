@@ -15,8 +15,6 @@ interface NativeApiSession {
   readonly token?: string;
 }
 
-const NATIVE_PDF_REPORT_FORMAT_ID = 'c402cc3e-b531-11e1-9163-406186ea4fc5';
-
 interface NativeReportApplicationPayload {
   name: string;
   version?: string;
@@ -273,6 +271,7 @@ export interface NativeReportQuery {
   sort: string;
   filter: string;
   taskId?: string;
+  nvtOid?: string;
 }
 
 export interface NativeReportsResponse {
@@ -434,6 +433,8 @@ export interface NativeReportErrorsResponse {
   items: NativeReportErrorItem[];
   page: NativeReportPage;
 }
+
+const NATIVE_PDF_REPORT_FORMAT_ID = 'c402cc3e-b531-11e1-9163-406186ea4fc5';
 
 const REPORT_SORT_FIELDS: Record<string, string> = {
   date: 'creation_time',
@@ -755,11 +756,15 @@ export const nativeReportResultsQueryFromFilter = (
 ): NativeReportQuery => {
   const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
   const first = Math.max(1, integerValue(filter?.get('first'), 1));
+  const taskId = stringValue(filter?.get('task_id')).trim();
+  const nvtOid = stringValue(filter?.get('nvt')).trim();
   return {
     page: Math.floor((first - 1) / pageSize) + 1,
     pageSize,
     sort: nativeResultSortFromFilter(filter),
     filter: nativeSearchFromFilter(filter),
+    ...(taskId === '' ? {} : {taskId}),
+    ...(nvtOid === '' ? {} : {nvtOid}),
   };
 };
 
@@ -1258,6 +1263,8 @@ export const fetchNativeResults = async (
       page_size: query.pageSize,
       sort: query.sort,
       filter: query.filter,
+      ...(query.taskId === undefined ? {} : {task_id: query.taskId}),
+      ...(query.nvtOid === undefined ? {} : {nvt_oid: query.nvtOid}),
     },
   );
   const page = {

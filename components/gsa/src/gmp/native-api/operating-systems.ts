@@ -59,6 +59,7 @@ export interface NativeOperatingSystemQuery {
   pageSize: number;
   sort: string;
   filter: string;
+  name?: string;
 }
 
 export interface NativeOperatingSystemsResponse {
@@ -120,11 +121,13 @@ export const nativeOperatingSystemsQueryFromFilter = (
 ): NativeOperatingSystemQuery => {
   const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
   const first = Math.max(1, integerValue(filter?.get('first'), 1));
+  const name = stringValue(filter?.get('name')).trim();
   return {
     page: Math.floor((first - 1) / pageSize) + 1,
     pageSize,
     sort: nativeSortFromFilter(filter),
     filter: nativeSearchFromFilter(filter),
+    ...(name === '' ? {} : {name}),
   };
 };
 
@@ -206,6 +209,7 @@ export const fetchNativeOperatingSystems = async (
       page_size: query.pageSize,
       sort: query.sort,
       filter: query.filter,
+      ...(query.name === undefined ? {} : {name: query.name}),
     },
   );
   const page = {

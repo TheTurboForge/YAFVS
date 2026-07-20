@@ -62,6 +62,7 @@ pub(crate) fn operating_system_assets_sql(sort_sql: &str) -> String {
                      OR lower(id) LIKE '%' || lower($1) || '%'
                      OR lower(name) LIKE '%' || lower($1) || '%'
                      OR lower(title) LIKE '%' || lower($1) || '%')
+                AND ($4 = '' OR lower(name) = lower($4))
          )
          SELECT count(*) OVER()::bigint AS total, * FROM filtered
           ORDER BY {sort_sql}, name ASC, id ASC LIMIT $2 OFFSET $3;"#,

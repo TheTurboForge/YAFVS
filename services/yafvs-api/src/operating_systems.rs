@@ -16,8 +16,8 @@ use crate::{
     operating_system_query_sql::{operating_system_asset_detail_sql, operating_system_assets_sql},
     path_ids::parse_uuid,
     query::{
-        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe,
-        normalize_collection_query, sort_clause,
+        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe_params,
+        normalize_collection_query, normalize_optional_exact_query, sort_clause,
     },
     user_tags::ReportUserTag,
 };
@@ -26,22 +26,39 @@ pub(crate) async fn operating_system_assets(
     State(state): State<AppState>,
     ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<OperatingSystemAssetItem>>, ApiError> {
+    let name_filter = normalize_optional_exact_query(query.name.as_deref(), "name")?;
     let params = normalize_collection_query(query, OPERATING_SYSTEM_ASSET_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, OPERATING_SYSTEM_ASSET_SORT_FIELDS)?;
     let sql = operating_system_assets_sql(&sort_sql);
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let rows = client
-        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .query(
+            &sql,
+            &[
+                &params.filter,
+                &params.page_size,
+                &params.offset,
+                &name_filter,
+            ],
+        )
         .await
         .map_err(|error| {
             tracing::warn!(%error, "operating system asset list query failed");
             ApiError::Database
         })?;
-    let total = collection_total_with_empty_page_probe(
+    let probe_page_size = 1_i64;
+    let probe_offset = 0_i64;
+    let total = collection_total_with_empty_page_probe_params(
         &client,
         &rows,
         &sql,
         &params,
+        &[
+            &params.filter,
+            &probe_page_size,
+            &probe_offset,
+            &name_filter,
+        ],
         "operating system asset list",
     )
     .await?;

@@ -10,9 +10,11 @@ import {
   nativeReportToModel,
   nativeReportErrorsQueryFromFilter,
   nativeReportQueryFromFilter,
+  nativeReportResultsQueryFromFilter,
   nativeReportTlsCertificatesQueryFromFilter,
   fetchNativeReports,
   fetchNativeReportPdf,
+  fetchNativeResults,
 } from 'gmp/native-api/reports';
 
 const createNativeHttp = () => ({
@@ -56,6 +58,46 @@ describe('report native API query builders', () => {
       sort: '-creation_time',
       filter: '',
       task_id: taskId,
+    });
+  });
+
+  test('should preserve task and NVT filters in the native result-list request', async () => {
+    const taskId = '12345678-1234-1234-1234-123456789abc';
+    const nvtOid = '1.3.6.1.4.1.25623.1.0.900001';
+    const query = nativeReportResultsQueryFromFilter(
+      Filter.fromString(`task_id=${taskId} nvt=${nvtOid} rows=10 first=11`),
+    );
+
+    expect(query).toEqual({
+      page: 2,
+      pageSize: 10,
+      sort: 'severity',
+      filter: '',
+      taskId,
+      nvtOid,
+    });
+
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 2, page_size: 10, total: 0},
+        items: [],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createNativeHttp();
+
+    await fetchNativeResults(gmp, query);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/results', {
+      token: 'test-token',
+      page: 2,
+      page_size: 10,
+      sort: 'severity',
+      filter: '',
+      task_id: taskId,
+      nvt_oid: nvtOid,
     });
   });
 

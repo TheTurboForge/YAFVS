@@ -79,7 +79,7 @@ static const gchar *updated_password;
 static const gchar *revoked_session_keep_id;
 static const gchar *revoked_session_uuid;
 
-Ensure (gsad_native_api, should_forward_typed_task_filter_for_collection_reads)
+Ensure (gsad_native_api, should_forward_typed_filters_for_collection_reads)
 {
   gchar *target = NULL;
 
@@ -89,7 +89,10 @@ Ensure (gsad_native_api, should_forward_typed_task_filter_for_collection_reads)
   assert_that (
     target,
     is_equal_to_string (
-      "/api/v1/reports?page=2&task_id=12345678-1234-1234-1234-123456789abc"));
+      "/api/v1/reports?page=2&task_id=12345678-1234-1234-1234-123456789abc"
+      "&nvt_oid=1.3.6.1.4.1.25623.1.0.900001"
+      "&vulnerability_id=1.3.6.1.4.1.25623.1.0.900001"
+      "&name=192.0.2.10&predefined=1"));
   g_free (target);
 }
 
@@ -807,6 +810,14 @@ params_value (params_t *params, const gchar *name)
         return "2";
       if (g_strcmp0 (name, "task_id") == 0)
         return "12345678-1234-1234-1234-123456789abc";
+      if (g_strcmp0 (name, "nvt_oid") == 0)
+        return "1.3.6.1.4.1.25623.1.0.900001";
+      if (g_strcmp0 (name, "vulnerability_id") == 0)
+        return "1.3.6.1.4.1.25623.1.0.900001";
+      if (g_strcmp0 (name, "name") == 0)
+        return "192.0.2.10";
+      if (g_strcmp0 (name, "predefined") == 0)
+        return "1";
     }
   return NULL;
 }
@@ -965,7 +976,7 @@ main (int argc, char **argv)
                          should_only_forward_the_canonical_pdf_format);
   add_test_with_context (
     suite, gsad_native_api,
-    should_forward_typed_task_filter_for_collection_reads);
+    should_forward_typed_filters_for_collection_reads);
   add_test_with_context (suite, gsad_native_api,
                          should_require_a_session_user_for_browser_reads);
   add_test_with_context (

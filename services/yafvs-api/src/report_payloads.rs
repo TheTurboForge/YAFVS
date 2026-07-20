@@ -17,23 +17,14 @@ use crate::{
     path_ids::parse_uuid,
     query::{
         ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe_params,
-        normalize_collection_query, sort_clause,
+        normalize_collection_query, normalize_optional_uuid_query, sort_clause,
     },
     report_evidence_payloads::ReportSeverityCounts,
     user_tags::ReportUserTag,
 };
 
 pub(crate) fn normalize_report_task_id(task_id: Option<&str>) -> Result<String, ApiError> {
-    let Some(task_id) = task_id else {
-        return Ok(String::new());
-    };
-    let task_id = task_id.trim();
-    if task_id.is_empty() {
-        return Err(ApiError::BadRequest("task_id must be a UUID".to_string()));
-    }
-    parse_uuid(task_id)
-        .map(|task_id| task_id.to_string())
-        .map_err(|_| ApiError::BadRequest("task_id must be a UUID".to_string()))
+    normalize_optional_uuid_query(task_id, "task_id")
 }
 
 #[derive(Debug, Serialize)]

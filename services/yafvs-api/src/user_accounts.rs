@@ -44,6 +44,8 @@ impl UserAccountCollectionQuery {
             filter: self.filter.clone(),
             filter_type: self.filter_type.clone(),
             active: self.active.clone(),
+            name: None,
+            nvt_oid: None,
             predefined: self.predefined.clone(),
             resource_type: self.resource_type.clone(),
             schedules_only: None,
@@ -52,6 +54,7 @@ impl UserAccountCollectionQuery {
             task_name: self.task_name.clone(),
             task_id: None,
             value: self.value.clone(),
+            vulnerability_id: None,
         }
     }
 }

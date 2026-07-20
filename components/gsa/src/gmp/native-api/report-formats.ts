@@ -7,8 +7,8 @@
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
-import ReportFormat from 'gmp/models/report-format';
 import type QueryFilter from 'gmp/models/filter';
+import ReportFormat from 'gmp/models/report-format';
 import {NO_VALUE, YES_VALUE, type YesNo} from 'gmp/parser';
 
 interface NativeApiSession {
@@ -75,6 +75,7 @@ export interface NativeReportFormatsQuery {
   pageSize: number;
   sort: string;
   filter: string;
+  predefined?: string;
 }
 
 export interface NativeReportFormatsResponse {
@@ -127,11 +128,13 @@ export const nativeReportFormatsQueryFromFilter = (
 ): NativeReportFormatsQuery => {
   const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
   const first = Math.max(1, integerValue(filter?.get('first'), 1));
+  const predefined = stringValue(filter?.get('predefined')).trim();
   return {
     page: Math.floor((first - 1) / pageSize) + 1,
     pageSize,
     sort: nativeSortFromFilter(filter),
     filter: nativeSearchFromFilter(filter),
+    ...(predefined === '' ? {} : {predefined}),
   };
 };
 
@@ -263,6 +266,7 @@ export const fetchNativeReportFormats = async (
       page_size: query.pageSize,
       sort: query.sort,
       filter: query.filter,
+      ...(query.predefined === undefined ? {} : {predefined: query.predefined}),
     },
   );
   const page = normalizePage(payload.page, query);

@@ -14,7 +14,7 @@ use crate::{
     errors::ApiError,
     path_ids::parse_uuid,
     query::{
-        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe,
+        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe_params,
         normalize_collection_query, sort_clause,
     },
     report_format_payloads::{
@@ -31,22 +31,42 @@ pub(crate) async fn report_format_assets(
     State(state): State<AppState>,
     ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ReportFormatAssetItem>>, ApiError> {
+    let predefined_filter = query.predefined.clone().unwrap_or_default();
+    if !matches!(predefined_filter.as_str(), "" | "0" | "1") {
+        return Err(ApiError::BadRequest("invalid predefined filter".into()));
+    }
     let params = normalize_collection_query(query, REPORT_FORMAT_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, REPORT_FORMAT_SORT_FIELDS)?;
     let sql = report_format_assets_sql(&sort_sql);
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let rows = client
-        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .query(
+            &sql,
+            &[
+                &params.filter,
+                &params.page_size,
+                &params.offset,
+                &predefined_filter,
+            ],
+        )
         .await
         .map_err(|error| {
             tracing::warn!(%error, "report format asset list query failed");
             ApiError::Database
         })?;
-    let total = collection_total_with_empty_page_probe(
+    let probe_page_size = 1_i64;
+    let probe_offset = 0_i64;
+    let total = collection_total_with_empty_page_probe_params(
         &client,
         &rows,
         &sql,
         &params,
+        &[
+            &params.filter,
+            &probe_page_size,
+            &probe_offset,
+            &predefined_filter,
+        ],
         "report format asset list",
     )
     .await?;

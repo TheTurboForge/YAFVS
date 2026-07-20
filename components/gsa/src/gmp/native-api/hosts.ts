@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
+import CollectionCounts from 'gmp/collection/collection-counts';
 import {
   filterFromCommandParams,
   nativeCollectionMeta,
   NATIVE_COMMAND_PAGE_SIZE,
 } from 'gmp/commands/native';
-import CollectionCounts from 'gmp/collection/collection-counts';
-import Response from 'gmp/http/response';
 import type Http from 'gmp/http/http';
+import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
 import type Filter from 'gmp/models/filter';
 import Host from 'gmp/models/host';
@@ -104,6 +104,7 @@ export interface NativeHostsQuery {
   pageSize: number;
   sort: string;
   filter: string;
+  name?: string;
 }
 
 export interface NativeHostsResponse {
@@ -188,11 +189,13 @@ export const nativeHostsQueryFromFilter = (
 ): NativeHostsQuery => {
   const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
   const first = Math.max(1, integerValue(filter?.get('first'), 1));
+  const name = stringValue(filter?.get('name')).trim();
   return {
     page: Math.floor((first - 1) / pageSize) + 1,
     pageSize,
     sort: nativeSortFromFilter(filter),
     filter: nativeSearchFromFilter(filter),
+    ...(name === '' ? {} : {name}),
   };
 };
 
@@ -394,6 +397,7 @@ export const fetchNativeHosts = async (
       page_size: query.pageSize,
       sort: query.sort,
       filter: query.filter,
+      ...(query.name === undefined ? {} : {name: query.name}),
     },
   );
   const page = {

@@ -28,6 +28,8 @@ paths:
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/CollectionTaskId'
+        - $ref: '#/components/parameters/NvtOidFilter'
       responses:
         '200':
           description: Result collection across raw scan reports
@@ -124,6 +126,7 @@ paths:
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/VulnerabilityIdFilter'
       responses:
         '200':
           description: Vulnerability collection aggregated from positive-severity raw scan results
@@ -684,6 +687,7 @@ paths:
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/ExactNameFilter'
       responses:
         '200':
           description: Operating-system asset collection
@@ -781,6 +785,7 @@ paths:
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/ExactNameFilter'
       responses:
         '200':
           description: Host asset collection
@@ -2964,6 +2969,7 @@ paths:
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/CollectionTaskId'
       responses:
         '200':
           description: Override collection
@@ -5347,6 +5353,7 @@ paths:
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/PredefinedFilter'
       responses:
         '200':
           description: Report-format collection
@@ -7682,6 +7689,49 @@ components:
       schema:
         type: string
         format: uuid
+    CollectionTaskId:
+      name: task_id
+      in: query
+      required: false
+      description: Return only collection rows associated with the specified scan task.
+      schema:
+        type: string
+        format: uuid
+    NvtOidFilter:
+      name: nvt_oid
+      in: query
+      required: false
+      description: Return only result rows emitted by the specified vulnerability test OID.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 4096
+    VulnerabilityIdFilter:
+      name: vulnerability_id
+      in: query
+      required: false
+      description: Return only the vulnerability row with the specified aggregate identifier, normally an NVT OID.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 4096
+    ExactNameFilter:
+      name: name
+      in: query
+      required: false
+      description: Return only collection rows whose canonical name exactly matches this value.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 4096
+    PredefinedFilter:
+      name: predefined
+      in: query
+      required: false
+      description: Return only predefined or only non-predefined collection rows.
+      schema:
+        type: integer
+        enum: [0, 1]
     FilterType:
       name: filter_type
       in: query

@@ -2052,6 +2052,10 @@ native_api_request_target (const gchar *path, params_t *params)
   append_query_param (target, params, "sort");
   append_query_param (target, params, "filter");
   append_query_param (target, params, "task_id");
+  append_query_param (target, params, "nvt_oid");
+  append_query_param (target, params, "vulnerability_id");
+  append_query_param (target, params, "name");
+  append_query_param (target, params, "predefined");
 
   return g_string_free (target, FALSE);
 }

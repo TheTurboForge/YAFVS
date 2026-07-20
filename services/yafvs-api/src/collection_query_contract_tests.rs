@@ -100,6 +100,100 @@ fn collection_handler_sources() -> Vec<(&'static str, &'static str)> {
 }
 
 #[test]
+fn structured_deep_link_filters_reach_typed_sql_and_total_probes() {
+    let cases = [
+        (
+            "result_payloads.rs",
+            include_str!("result_payloads.rs"),
+            &[
+                "normalize_optional_uuid_query(query.task_id.as_deref(), \"task_id\")",
+                "normalize_optional_exact_query(query.nvt_oid.as_deref(), \"nvt_oid\")",
+                "AND ($4 = '' OR lower(coalesce(task_id, '')) = lower($4))",
+                "AND ($5 = '' OR lower(nvt_oid) = lower($5))",
+                "collection_total_with_empty_page_probe_params",
+            ][..],
+        ),
+        (
+            "overrides.rs",
+            include_str!("overrides.rs"),
+            &[
+                "normalize_optional_uuid_query(query.task_id.as_deref(), \"task_id\")",
+                "&task_id_filter",
+                "collection_total_with_empty_page_probe_params",
+            ][..],
+        ),
+        (
+            "host_assets.rs",
+            include_str!("host_assets.rs"),
+            &[
+                "normalize_optional_exact_query(query.name.as_deref(), \"name\")",
+                "AND ($4 = '' OR lower(name) = lower($4))",
+                "collection_total_with_empty_page_probe_params",
+            ][..],
+        ),
+        (
+            "operating_systems.rs",
+            include_str!("operating_systems.rs"),
+            &[
+                "normalize_optional_exact_query(query.name.as_deref(), \"name\")",
+                "&name_filter",
+                "collection_total_with_empty_page_probe_params",
+            ][..],
+        ),
+        (
+            "vulnerability_payloads.rs",
+            include_str!("vulnerability_payloads.rs"),
+            &[
+                "query.vulnerability_id.as_deref()",
+                "AND ($4 = '' OR lower(id) = lower($4))",
+                "collection_total_with_empty_page_probe_params",
+            ][..],
+        ),
+        (
+            "report_formats.rs",
+            include_str!("report_formats.rs"),
+            &[
+                "matches!(predefined_filter.as_str(), \"\" | \"0\" | \"1\")",
+                "&predefined_filter",
+                "collection_total_with_empty_page_probe_params",
+            ][..],
+        ),
+    ];
+
+    for (path, source, expected) in cases {
+        for marker in expected {
+            assert!(source.contains(marker), "{path} missing {marker}");
+        }
+    }
+
+    let override_sql = include_str!("override_query_sql.rs");
+    assert!(override_sql.contains("AND ($7 = '' OR lower(coalesce(task_id, '')) = lower($7))"));
+    let operating_system_sql = include_str!("operating_system_query_sql.rs");
+    assert!(operating_system_sql.contains("AND ($4 = '' OR lower(name) = lower($4))"));
+    let report_format_sql = include_str!("report_format_query_sql.rs");
+    assert!(report_format_sql.contains("($4 = '1' AND predefined_int = 1)"));
+    assert!(report_format_sql.contains("($4 = '0' AND predefined_int = 0)"));
+}
+
+#[test]
+fn openapi_documents_each_typed_deep_link_filter() {
+    let openapi = include_str!("../../../api/openapi/yafvs-v1.yaml");
+    for (parameter, expected_refs) in [
+        ("CollectionTaskId", 3),
+        ("NvtOidFilter", 2),
+        ("VulnerabilityIdFilter", 2),
+        ("ExactNameFilter", 3),
+        ("PredefinedFilter", 2),
+    ] {
+        assert_eq!(
+            openapi.matches(parameter).count(),
+            expected_refs,
+            "unexpected OpenAPI definition/reference count for {parameter}"
+        );
+    }
+}
+
+#[test]
 fn collection_handlers_use_api_query_contract_extractor() {
     let source = collection_handler_sources()
         .iter()

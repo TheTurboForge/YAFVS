@@ -69,6 +69,7 @@ export interface NativeVulnerabilityQuery {
   pageSize: number;
   sort: string;
   filter: string;
+  vulnerabilityId?: string;
 }
 
 export interface NativeVulnerabilitiesResponse {
@@ -152,11 +153,13 @@ export const nativeVulnerabilitiesQueryFromFilter = (
 ): NativeVulnerabilityQuery => {
   const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
   const first = Math.max(1, integerValue(filter?.get('first'), 1));
+  const vulnerabilityId = stringValue(filter?.get('uuid')).trim();
   return {
     page: Math.floor((first - 1) / pageSize) + 1,
     pageSize,
     sort: nativeSortFromFilter(filter),
     filter: nativeSearchFromFilter(filter),
+    ...(vulnerabilityId === '' ? {} : {vulnerabilityId}),
   };
 };
 
@@ -246,6 +249,9 @@ export const fetchNativeVulnerabilities = async (
       page_size: query.pageSize,
       sort: query.sort,
       filter: query.filter,
+      ...(query.vulnerabilityId === undefined
+        ? {}
+        : {vulnerability_id: query.vulnerabilityId}),
     },
   );
   const page = {
@@ -289,7 +295,5 @@ export const exportNativeVulnerabilitiesMetadata = async (
       return payload;
     }),
   );
-  return new Response(
-    `${JSON.stringify({vulnerabilities}, null, 2)}\n`,
-  );
+  return new Response(`${JSON.stringify({vulnerabilities}, null, 2)}\n`);
 };

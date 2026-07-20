@@ -15,6 +15,7 @@ use crate::{
         DEFAULT_COLLECTION_PAGE_SIZE, MAX_COLLECTION_FILTER_LENGTH, MAX_COLLECTION_PAGE_SIZE,
     },
     errors::ApiError,
+    path_ids::parse_uuid,
 };
 
 #[derive(Debug, Deserialize)]
@@ -25,6 +26,8 @@ pub(crate) struct CollectionQuery {
     pub(crate) filter: Option<String>,
     pub(crate) filter_type: Option<String>,
     pub(crate) active: Option<String>,
+    pub(crate) name: Option<String>,
+    pub(crate) nvt_oid: Option<String>,
     pub(crate) predefined: Option<String>,
     pub(crate) resource_type: Option<String>,
     pub(crate) schedules_only: Option<String>,
@@ -33,6 +36,7 @@ pub(crate) struct CollectionQuery {
     pub(crate) task_name: Option<String>,
     pub(crate) task_id: Option<String>,
     pub(crate) value: Option<String>,
+    pub(crate) vulnerability_id: Option<String>,
 }
 
 #[derive(Debug)]
@@ -52,6 +56,41 @@ where
             .map(|Query(query)| Self(query))
             .map_err(|_| ApiError::BadRequest("invalid query parameter".to_string()))
     }
+}
+
+pub(crate) fn normalize_optional_exact_query(
+    value: Option<&str>,
+    name: &str,
+) -> Result<String, ApiError> {
+    let Some(value) = value else {
+        return Ok(String::new());
+    };
+    let value = value.trim();
+    if value.is_empty() {
+        return Err(ApiError::BadRequest(format!("{name} must not be empty")));
+    }
+    if value.len() > MAX_COLLECTION_FILTER_LENGTH {
+        return Err(ApiError::BadRequest(format!(
+            "{name} must be at most {MAX_COLLECTION_FILTER_LENGTH} bytes"
+        )));
+    }
+    Ok(value.to_string())
+}
+
+pub(crate) fn normalize_optional_uuid_query(
+    value: Option<&str>,
+    name: &str,
+) -> Result<String, ApiError> {
+    let Some(value) = value else {
+        return Ok(String::new());
+    };
+    let value = value.trim();
+    if value.is_empty() {
+        return Err(ApiError::BadRequest(format!("{name} must be a UUID")));
+    }
+    parse_uuid(value)
+        .map(|value| value.to_string())
+        .map_err(|_| ApiError::BadRequest(format!("{name} must be a UUID")))
 }
 
 #[derive(Debug, Serialize)]
@@ -205,6 +244,8 @@ mod tests {
                 filter: Some("router".to_string()),
                 filter_type: None,
                 active: None,
+                name: None,
+                nvt_oid: None,
                 predefined: None,
                 resource_type: None,
                 schedules_only: None,
@@ -213,6 +254,7 @@ mod tests {
                 task_name: None,
                 task_id: None,
                 value: None,
+                vulnerability_id: None,
             },
             "host",
         )
@@ -234,6 +276,8 @@ mod tests {
                 filter: None,
                 filter_type: None,
                 active: None,
+                name: None,
+                nvt_oid: None,
                 predefined: None,
                 resource_type: None,
                 schedules_only: None,
@@ -242,6 +286,7 @@ mod tests {
                 task_name: None,
                 task_id: None,
                 value: None,
+                vulnerability_id: None,
             },
             "host",
         )
@@ -276,6 +321,8 @@ mod tests {
                 filter: None,
                 filter_type: None,
                 active: None,
+                name: None,
+                nvt_oid: None,
                 predefined: None,
                 resource_type: None,
                 schedules_only: None,
@@ -284,6 +331,7 @@ mod tests {
                 task_name: None,
                 task_id: None,
                 value: None,
+                vulnerability_id: None,
             },
             "host",
         )
@@ -301,6 +349,8 @@ mod tests {
                 filter: None,
                 filter_type: None,
                 active: None,
+                name: None,
+                nvt_oid: None,
                 predefined: None,
                 resource_type: None,
                 schedules_only: None,
@@ -309,6 +359,7 @@ mod tests {
                 task_name: None,
                 task_id: None,
                 value: None,
+                vulnerability_id: None,
             },
             "host",
         )
@@ -328,6 +379,8 @@ mod tests {
                 filter: Some("x".repeat(MAX_COLLECTION_FILTER_LENGTH + 1)),
                 filter_type: None,
                 active: None,
+                name: None,
+                nvt_oid: None,
                 predefined: None,
                 resource_type: None,
                 schedules_only: None,
@@ -336,6 +389,7 @@ mod tests {
                 task_name: None,
                 task_id: None,
                 value: None,
+                vulnerability_id: None,
             },
             "host",
         )
@@ -343,6 +397,35 @@ mod tests {
         assert!(
             matches!(err, ApiError::BadRequest(message) if message.contains("filter must be at most"))
         );
+    }
+
+    #[test]
+    fn typed_exact_queries_reject_empty_and_oversized_values() {
+        assert_eq!(normalize_optional_exact_query(None, "name").unwrap(), "");
+        assert_eq!(
+            normalize_optional_exact_query(Some("  router  "), "name").unwrap(),
+            "router"
+        );
+        assert!(normalize_optional_exact_query(Some("  "), "name").is_err());
+        assert!(
+            normalize_optional_exact_query(
+                Some(&"x".repeat(MAX_COLLECTION_FILTER_LENGTH + 1)),
+                "name"
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn typed_uuid_queries_are_canonical_and_strict() {
+        assert_eq!(normalize_optional_uuid_query(None, "task_id").unwrap(), "");
+        assert_eq!(
+            normalize_optional_uuid_query(Some("12345678-1234-1234-1234-123456789ABC"), "task_id")
+                .unwrap(),
+            "12345678-1234-1234-1234-123456789abc"
+        );
+        assert!(normalize_optional_uuid_query(Some(""), "task_id").is_err());
+        assert!(normalize_optional_uuid_query(Some("not-a-uuid"), "task_id").is_err());
     }
 
     #[test]

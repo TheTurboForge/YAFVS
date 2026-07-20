@@ -340,6 +340,98 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
     },
 ];
 
+const OPERATOR_RESOURCE_PROBES: [CollectionProbe; 5] = [
+    CollectionProbe {
+        detail_key: "overrides",
+        check: "native-api.overrides",
+        path: "/api/v1/overrides?page_size=1&sort=text",
+        description: "top-level Overrides",
+        invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "override_detail",
+            check: "native-api.override-detail",
+            path_prefix: "/api/v1/overrides",
+            description: "override detail",
+            missing_id_message: None,
+            empty_message: "No overrides exist yet, so the override detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
+    },
+    CollectionProbe {
+        detail_key: "port_lists",
+        check: "native-api.port-lists",
+        path: "/api/v1/port-lists?page_size=1&sort=name",
+        description: "top-level Port Lists",
+        invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "port_list_detail",
+            check: "native-api.port-list-detail",
+            path_prefix: "/api/v1/port-lists",
+            description: "port-list detail",
+            missing_id_message: None,
+            empty_message: "No port lists exist yet, so the port-list detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
+    },
+    CollectionProbe {
+        detail_key: "schedules",
+        check: "native-api.schedules",
+        path: "/api/v1/schedules?page_size=1&sort=name",
+        description: "top-level Schedules",
+        invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "schedule_detail",
+            check: "native-api.schedule-detail",
+            path_prefix: "/api/v1/schedules",
+            description: "schedule detail",
+            missing_id_message: None,
+            empty_message: "No schedules exist yet, so the schedule detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
+    },
+    CollectionProbe {
+        detail_key: "scan_configs",
+        check: "native-api.scan-configs",
+        path: "/api/v1/scan-configs?page_size=1&sort=name",
+        description: "top-level Scan Configs",
+        invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "scan_config_detail",
+            check: "native-api.scan-config-detail",
+            path_prefix: "/api/v1/scan-configs",
+            description: "scan-config detail",
+            missing_id_message: Some(
+                "Scan Configs list did not include a scan config id for the detail probe.",
+            ),
+            empty_message:
+                "No scan configs exist yet, so the scan-config detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
+    },
+    CollectionProbe {
+        detail_key: "report_formats",
+        check: "native-api.report-formats",
+        path: "/api/v1/report-formats?page_size=1&sort=name",
+        description: "top-level Report Formats",
+        invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "report_format_detail",
+            check: "native-api.report-format-detail",
+            path_prefix: "/api/v1/report-formats",
+            description: "report-format detail",
+            missing_id_message: None,
+            empty_message:
+                "No report formats exist yet, so the report-format detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
+    },
+];
+
 const EXPECTED_FEED_TYPES: [&str; 4] = ["NVT", "SCAP", "CERT", "GVMD_DATA"];
 const ALLOWED_TRASHCAN_ITEM_KEYS: [&str; 8] = [
     "id",
@@ -556,29 +648,7 @@ pub(crate) fn command_runtime_native_api_smoke_with_runner(
     );
 
     for probe in &COLLECTION_PROBES {
-        let response = native_api_get_json(repo_root, probe.path, runner);
-        details.insert(probe.detail_key.into(), response_summary(&response));
-        let ok = response.usable_object()
-            && response
-                .object()
-                .and_then(|object| object.get("items"))
-                .is_some_and(Value::is_array);
-        findings.push(native_probe_finding(
-            if ok { "pass" } else { "fail" },
-            probe.check,
-            &format!(
-                "Native API {} probe exit code {}.",
-                probe.description,
-                exit_code(&response.output)
-            ),
-            &response,
-            probe.path,
-        ));
-
-        if let Some((check, path)) = probe.invalid_sort {
-            let response = native_api_get_json_with_http_status(repo_root, path, runner);
-            findings.push(expected_bad_request_finding(check, path, &response, None));
-        }
+        let response = probe_collection(repo_root, probe, runner, &mut findings, &mut details);
         if let Some(detail) = probe.detail {
             probe_detail(
                 repo_root,
@@ -588,6 +658,23 @@ pub(crate) fn command_runtime_native_api_smoke_with_runner(
                 &mut findings,
                 &mut details,
             );
+        }
+    }
+
+    for probe in &OPERATOR_RESOURCE_PROBES {
+        let response = probe_collection(repo_root, probe, runner, &mut findings, &mut details);
+        if let Some(detail) = probe.detail {
+            let id = probe_detail(
+                repo_root,
+                &response,
+                &detail,
+                runner,
+                &mut findings,
+                &mut details,
+            );
+            if let ("native-api.scan-configs", Some(id)) = (probe.check, id) {
+                probe_scan_config_families(repo_root, &id, runner, &mut findings, &mut details);
+            }
         }
     }
 
@@ -602,6 +689,38 @@ pub(crate) fn command_runtime_native_api_smoke_with_runner(
     )
 }
 
+fn probe_collection(
+    repo_root: &Path,
+    probe: &CollectionProbe,
+    runner: &dyn CommandRunner,
+    findings: &mut Vec<Finding>,
+    details: &mut Map<String, Value>,
+) -> NativeJsonResponse {
+    let response = native_api_get_json(repo_root, probe.path, runner);
+    details.insert(probe.detail_key.into(), response_summary(&response));
+    let ok = response.usable_object()
+        && response
+            .object()
+            .and_then(|object| object.get("items"))
+            .is_some_and(Value::is_array);
+    findings.push(native_probe_finding(
+        if ok { "pass" } else { "fail" },
+        probe.check,
+        &format!(
+            "Native API {} probe exit code {}.",
+            probe.description,
+            exit_code(&response.output)
+        ),
+        &response,
+        probe.path,
+    ));
+    if let Some((check, path)) = probe.invalid_sort {
+        let rejection = native_api_get_json_with_http_status(repo_root, path, runner);
+        findings.push(expected_bad_request_finding(check, path, &rejection, None));
+    }
+    response
+}
+
 fn probe_detail(
     repo_root: &Path,
     collection: &NativeJsonResponse,
@@ -609,7 +728,7 @@ fn probe_detail(
     runner: &dyn CommandRunner,
     findings: &mut Vec<Finding>,
     details: &mut Map<String, Value>,
-) {
+) -> Option<String> {
     let items = collection
         .object()
         .and_then(|object| object.get("items"))
@@ -620,7 +739,7 @@ fn probe_detail(
             probe.check,
             probe.empty_message.into(),
         ));
-        return;
+        return None;
     };
     let id = first
         .as_object()
@@ -631,7 +750,7 @@ fn probe_detail(
         if let Some(message) = probe.missing_id_message {
             findings.push(Finding::new("fail", probe.check, message.into()));
         }
-        return;
+        return None;
     };
     let path = format!("{}/{}", probe.path_prefix, percent_encode_component(id));
     let response = native_api_get_json(repo_root, &path, runner);
@@ -663,6 +782,42 @@ fn probe_detail(
         ),
         &response,
         &format!("{}/...", probe.path_prefix),
+    ));
+    Some(id.to_string())
+}
+
+fn probe_scan_config_families(
+    repo_root: &Path,
+    id: &str,
+    runner: &dyn CommandRunner,
+    findings: &mut Vec<Finding>,
+    details: &mut Map<String, Value>,
+) {
+    let path = format!(
+        "/api/v1/scan-configs/{}/families",
+        percent_encode_component(id)
+    );
+    let response = native_api_get_json(repo_root, &path, runner);
+    details.insert("scan_config_families".into(), response_summary(&response));
+    let ok = response.usable_object()
+        && response
+            .object()
+            .and_then(|object| object.get("scan_config_id"))
+            .and_then(Value::as_str)
+            == Some(id)
+        && response
+            .object()
+            .and_then(|object| object.get("families"))
+            .is_some_and(Value::is_array);
+    findings.push(native_probe_finding(
+        if ok { "pass" } else { "fail" },
+        "native-api.scan-config-families",
+        &format!(
+            "Native API scan-config families probe exit code {}.",
+            exit_code(&response.output)
+        ),
+        &response,
+        "/api/v1/scan-configs/.../families",
     ));
 }
 
@@ -1352,6 +1507,21 @@ mod tests {
                 outputs.push(detail_output(&detail));
             }
         }
+        for probe in &OPERATOR_RESOURCE_PROBES {
+            outputs.push(output(
+                true,
+                &format!(r#"{{"items":[{{"id":"{TEST_DETAIL_ID}"}}],"page":{{"total":1}}}}"#),
+            ));
+            if let Some(detail) = probe.detail {
+                outputs.push(detail_output(&detail));
+            }
+            if probe.check == "native-api.scan-configs" {
+                outputs.push(output(
+                    true,
+                    &format!(r#"{{"scan_config_id":"{TEST_DETAIL_ID}","families":[]}}"#),
+                ));
+            }
+        }
         outputs
     }
     fn finding<'a>(result: &'a ResultEnvelope, check: &str) -> &'a Finding {
@@ -1486,6 +1656,30 @@ mod tests {
                     "pass",
                     "{}",
                     detail.check
+                );
+            }
+        }
+        for probe in &OPERATOR_RESOURCE_PROBES {
+            expected_urls.push(format!("http://127.0.0.1:9080{}", probe.path));
+            if let Some(detail) = probe.detail {
+                expected_urls.push(format!(
+                    "http://127.0.0.1:9080{}/{encoded_id}",
+                    detail.path_prefix
+                ));
+                assert_eq!(
+                    finding(&result, detail.check).status,
+                    "pass",
+                    "{}",
+                    detail.check
+                );
+            }
+            if probe.check == "native-api.scan-configs" {
+                expected_urls.push(format!(
+                    "http://127.0.0.1:9080/api/v1/scan-configs/{encoded_id}/families"
+                ));
+                assert_eq!(
+                    finding(&result, "native-api.scan-config-families").status,
+                    "pass"
                 );
             }
         }
@@ -1673,6 +1867,18 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("/api/v1/scope-reports/..."));
+
+        findings.clear();
+        let runner = FakeRunner::new(vec![output(
+            true,
+            r#"{"scan_config_id":"wrong","families":[]}"#,
+        )]);
+        probe_scan_config_families(&repo, TEST_DETAIL_ID, &runner, &mut findings, &mut details);
+        assert_eq!(findings[0].status, "fail");
+        assert!(findings[0].details.as_ref().unwrap()["command"]
+            .as_str()
+            .unwrap()
+            .contains("/api/v1/scan-configs/.../families"));
         finish_test(&repo);
     }
 

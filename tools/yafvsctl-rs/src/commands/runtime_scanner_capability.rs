@@ -589,7 +589,10 @@ mod tests {
         }
     }
 
-    fn scanner_outputs(hostname: &str, capabilities: &str) -> Vec<ProcessOutput> {
+    fn scanner_outputs(repo_root: &Path, hostname: &str, capabilities: &str) -> Vec<ProcessOutput> {
+        let environment = runtime_environment(repo_root);
+        let uid = environment_value(&environment, "YAFVS_UID");
+        let gid = environment_value(&environment, "YAFVS_GID");
         vec![
             output(true, "container-id\n"),
             output(true, "true\n"),
@@ -597,7 +600,7 @@ mod tests {
             output(
                 true,
                 &format!(
-                    "Uid:\t1000\t1000\t1000\t1000\nGid:\t1000\t1000\t1000\t1000\n\
+                    "Uid:\t{uid}\t{uid}\t{uid}\t{uid}\nGid:\t{gid}\t{gid}\t{gid}\t{gid}\n\
                      CapPrm:\t{capabilities}\nCapEff:\t{capabilities}\nCapAmb:\t{capabilities}\n"
                 ),
             ),
@@ -632,9 +635,13 @@ mod tests {
 
     #[test]
     fn scanner_success_preserves_findings_and_non_root_probe() {
-        let runner = ScriptedRunner::new(scanner_outputs(STABLE_HOSTNAME, "0000000000003000"));
-        let result =
-            command_runtime_scanner_capability_check_with(Path::new("/srv/YAFVS"), &runner);
+        let repo_root = Path::new("/srv/YAFVS");
+        let runner = ScriptedRunner::new(scanner_outputs(
+            repo_root,
+            STABLE_HOSTNAME,
+            "0000000000003000",
+        ));
+        let result = command_runtime_scanner_capability_check_with(repo_root, &runner);
 
         assert_eq!(result.status, "pass");
         assert_eq!(
@@ -658,8 +665,11 @@ mod tests {
         );
         let calls = runner.calls();
         let raw = &calls.last().unwrap().1;
-        assert!(raw.windows(2).any(|pair| pair == ["--reuid", "1000"]));
-        assert!(raw.windows(2).any(|pair| pair == ["--regid", "1000"]));
+        let environment = runtime_environment(repo_root);
+        let uid = environment_value(&environment, "YAFVS_UID");
+        let gid = environment_value(&environment, "YAFVS_GID");
+        assert!(raw.windows(2).any(|pair| pair == ["--reuid", uid.as_str()]));
+        assert!(raw.windows(2).any(|pair| pair == ["--regid", gid.as_str()]));
         assert!(raw.contains(&"--ambient-caps".into()));
         assert!(raw.contains(&"+net_raw,+net_admin".into()));
         assert!(raw.iter().any(|value| value.contains("socket.SOCK_RAW")));
@@ -675,9 +685,9 @@ mod tests {
         assert!(docker_short_hostname("b758d8ce41ff"));
         assert!(!docker_short_hostname(STABLE_HOSTNAME));
 
-        let runner = ScriptedRunner::new(scanner_outputs("b758d8ce41ff", "not-hex"));
-        let result =
-            command_runtime_scanner_capability_check_with(Path::new("/srv/YAFVS"), &runner);
+        let repo_root = Path::new("/srv/YAFVS");
+        let runner = ScriptedRunner::new(scanner_outputs(repo_root, "b758d8ce41ff", "not-hex"));
+        let result = command_runtime_scanner_capability_check_with(repo_root, &runner);
         assert_eq!(result.status, "fail");
         assert_eq!(
             result.findings[5].message,

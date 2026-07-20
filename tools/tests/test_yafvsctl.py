@@ -941,7 +941,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["inventory", "--scope", "definitely-invalid", "--json"], 0, "warn"),
                 (["branding-state", "--json"], 0, "pass"),
                 (["rust-migration-state", "--json"], (0, 1), ("pass", "fail")),
-                (["deps", "--json"], 0, "pass"),
+                (["deps", "--json"], (0, 1), ("pass", "fail")),
                 (["deps", "gsa", "--json"], 0, "pass"),
                 (["deps", "definitely-invalid", "--json"], 1, "fail"),
                 (["configure", "definitely-invalid", "--json"], 1, "fail"),

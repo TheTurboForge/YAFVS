@@ -55,6 +55,7 @@ mod runtime_scanner_capability;
 mod runtime_scanner_process;
 mod runtime_scope_report;
 mod runtime_scanner_redis;
+mod runtime_scanner_register;
 mod runtime_setup;
 mod runtime_webui;
 mod rust_migration;
@@ -147,6 +148,7 @@ pub use runtime_scope_report::{
     command_runtime_scope_report_metrics, command_runtime_scope_report_summary,
 };
 pub use runtime_scanner_redis::command_runtime_scanner_redis_init;
+pub use runtime_scanner_register::command_runtime_scanner_register;
 pub use runtime_webui::command_runtime_webui_smoke;
 pub use rust_migration::command_rust_migration_state;
 pub use security_policy::command_security_policy_check;

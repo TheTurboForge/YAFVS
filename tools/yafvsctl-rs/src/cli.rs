@@ -452,6 +452,8 @@ pub enum CliCommand {
     RuntimeManagerInit,
     /// Initialize the scanner Redis service and OpenVAS runtime configuration.
     RuntimeScannerRedisInit,
+    /// Register the prepared OpenVAS scanner with gvmd.
+    RuntimeScannerRegister,
     /// Stop and remove the development runtime infrastructure and application containers.
     Down,
     /// Stop and remove experimental application runtime containers.
@@ -693,6 +695,7 @@ impl CliCommand {
             Self::RuntimeInit => "runtime-init",
             Self::RuntimeManagerInit => "runtime-manager-init",
             Self::RuntimeScannerRedisInit => "runtime-scanner-redis-init",
+            Self::RuntimeScannerRegister => "runtime-scanner-register",
             Self::Down => "down",
             Self::RuntimeAppDown => "runtime-app-down",
             Self::RuntimeAppUp => "runtime-app-up",
@@ -1582,6 +1585,7 @@ mod tests {
     fn parses_runtime_probe_commands() {
         for (argument, expected) in [
             ("runtime-gmp-smoke", CliCommand::RuntimeGmpSmoke),
+            ("runtime-scanner-register", CliCommand::RuntimeScannerRegister),
             (
                 "runtime-credential-smoke",
                 CliCommand::RuntimeCredentialSmoke,

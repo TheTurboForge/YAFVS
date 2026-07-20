@@ -339,7 +339,7 @@ fn run_gvmd_with_admin_password(
         .map_err(|_| ())
 }
 
-fn run_gvmd(
+pub(super) fn run_gvmd(
     runtime: &ServiceRuntime<'_>,
     command: &[&str],
     timeout: Duration,

@@ -47,6 +47,17 @@ pub(crate) fn initialize_manager_with_images(
     )
 }
 
+pub(crate) fn run_pinned_gvmd(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+    environment: &BTreeMap<std::ffi::OsString, std::ffi::OsString>,
+    image_ids: &BTreeMap<String, String>,
+    command: &[&str],
+) -> Result<crate::process::ProcessOutput, ()> {
+    let runtime = service_runtime::ServiceRuntime::new(repo_root, runner, environment, image_ids);
+    manager_init::run_gvmd(&runtime, command, std::time::Duration::from_secs(300))
+}
+
 pub use app_up::command_runtime_app_up;
 
 use super::common::{compact_finding, metadata, runtime_dir};

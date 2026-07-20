@@ -634,7 +634,10 @@ fn validated_full_test_target_cidr(value: &str) -> Result<String, String> {
     Ok(format!("{canonical_address}/{prefix}"))
 }
 
-fn command_runtime_gmp_smoke_with(repo_root: &Path, runner: &dyn CommandRunner) -> ResultEnvelope {
+pub(crate) fn command_runtime_gmp_smoke_with(
+    repo_root: &Path,
+    runner: &dyn CommandRunner,
+) -> ResultEnvelope {
     let secret_path = runtime_secret_path(repo_root, ADMIN_SECRET);
     let socket_path = gvmd_socket_path(repo_root);
     let probe = repo_root.join("tools/runtime_gmp_smoke.py");

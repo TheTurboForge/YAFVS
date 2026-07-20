@@ -67,16 +67,21 @@ const H1 = styled.h1`
   flex-grow: 1;
 `;
 
-const NonAffiliationNotice = styled.div`
-  color: ${Theme.darkGray};
-  font-size: 0.8rem;
-  line-height: 1.35;
-  margin: 0.25rem 0 1rem;
-  text-align: center;
+const BrandLockup = styled.div`
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1.5rem;
+`;
 
-  p {
-    margin: 0.15rem 0;
-  }
+const ProductSubtitle = styled.p`
+  color: ${Theme.darkGray};
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: 0.015em;
+  line-height: 1.4;
+  margin: -0.25rem 0 0;
+  text-align: center;
 `;
 
 const LoginForm = ({
@@ -108,24 +113,12 @@ const LoginForm = ({
   return (
     <Paper>
       <Divider flex="column" grow="1" margin="10px">
-        <Layout align="center">
+        <BrandLockup>
           <LoginLogo />
-        </Layout>
-
-        <NonAffiliationNotice data-testid="non-affiliation-notice">
-          <p>{_('Independent project. Not affiliated with Greenbone AG.')}</p>
-          <p>
-            {_('For official Greenbone products and services, visit ')}
-            <a
-              href="https://www.greenbone.net/"
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              {_('greenbone.net')}
-            </a>
-            .
-          </p>
-        </NonAffiliationNotice>
+          <ProductSubtitle data-testid="product-subtitle">
+            {_('Yet Another Fine Vulnerability Scanner')}
+          </ProductSubtitle>
+        </BrandLockup>
 
         <Layout flex="column">
           {showProtocolInsecure && (
@@ -194,7 +187,6 @@ const LoginForm = ({
             </Button>
           </FormGroup>
         )}
-
       </Divider>
     </Paper>
   );

@@ -32,7 +32,7 @@ describe('LoginForm tests', () => {
     expect(screen.getByName('password')).toBeInTheDocument();
   });
 
-  test('should display non-affiliation notice', () => {
+  test('should display product subtitle without Greenbone language', () => {
     const handleSubmit = testing.fn();
     const handleClick = testing.fn();
 
@@ -42,17 +42,10 @@ describe('LoginForm tests', () => {
       <LoginForm onGuestLoginClick={handleClick} onSubmit={handleSubmit} />,
     );
 
-    const notice = screen.getByTestId('non-affiliation-notice');
-    expect(notice).toHaveTextContent(
-      'Independent project. Not affiliated with Greenbone AG.',
+    expect(screen.getByTestId('product-subtitle')).toHaveTextContent(
+      'Yet Another Fine Vulnerability Scanner',
     );
-    expect(notice).toHaveTextContent(
-      'For official Greenbone products and services, visit greenbone.net.',
-    );
-    expect(screen.getByText('greenbone.net')).toHaveAttribute(
-      'href',
-      'https://www.greenbone.net/',
-    );
+    expect(screen.queryByText(/Greenbone/i)).not.toBeInTheDocument();
   });
 
   test('should display error', () => {

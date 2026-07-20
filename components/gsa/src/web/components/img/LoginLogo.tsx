@@ -12,7 +12,7 @@ const StyledLogo = styled(YAFVSLogo)`
   height: 72px;
   color: #111111;
   font-size: 42px;
-  justify-content: flex-start;
+  justify-content: center;
 `;
 
 const LoginLogo = () => {

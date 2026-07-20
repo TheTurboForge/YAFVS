@@ -5,7 +5,7 @@
 //! activation journal.
 
 use super::{absolute_dir, identity, is_dir, is_lnk, is_reg, mode, open_at, stat, stat_at};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::collections::BTreeSet;
 use std::ffi::CString;
 use std::fs::File;
@@ -348,6 +348,26 @@ fn final_parent_sync(parent: &OwnedFd, _path: &Path) -> Result<(), String> {
     )
 }
 const APP_SERVICES: [&str; 5] = ["gvmd", "ospd-openvas", "notus-scanner", "gsad", "yafvs-api"];
+const LEGACY_APP_SERVICES: [&str; 5] = [
+    "gvmd",
+    "ospd-openvas",
+    "notus-scanner",
+    "gsad",
+    "turbovas-api",
+];
+const LEGACY_ACTIVE_KEYS: [&str; 11] = [
+    "schema_version",
+    "status",
+    "current_generation_id",
+    "target_generation_id",
+    "previous_generation_id",
+    "rollback_generation_id",
+    "completed_at",
+    "restore_gsad_hosts",
+    "app_image_ids",
+    "app_runtime_artifacts",
+    "app_compose_contract",
+];
 const ARTIFACT_ROOTS: [&str; 9] = [
     "build/prefix",
     "build/venvs/ospd-openvas",
@@ -705,6 +725,52 @@ fn decode_activation_state(content: &str) -> Result<Value, String> {
     Ok(value)
 }
 
+fn decode_legacy_active_state_for_repair(content: &str) -> Result<Value, String> {
+    let value: Value = serde_json::from_str(content)
+        .map_err(|error| format!("feed activation state is not valid JSON: {error}"))?;
+    let mut candidate = value.clone();
+    let object = candidate
+        .as_object_mut()
+        .ok_or("legacy feed activation state schema is invalid")?;
+    if object.len() != LEGACY_ACTIVE_KEYS.len()
+        || !LEGACY_ACTIVE_KEYS
+            .iter()
+            .all(|key| object.contains_key(*key))
+        || object.get("schema_version") != Some(&Value::from(1))
+        || object.get("status").and_then(Value::as_str) != Some("active")
+    {
+        return Err("legacy feed activation state is not completed".into());
+    }
+    let images = object
+        .get_mut("app_image_ids")
+        .and_then(Value::as_object_mut)
+        .ok_or("legacy feed activation app image identities are incomplete")?;
+    if images.len() != LEGACY_APP_SERVICES.len()
+        || !LEGACY_APP_SERVICES
+            .iter()
+            .all(|service| images.contains_key(*service))
+        || images.contains_key("yafvs-api")
+    {
+        return Err("legacy feed activation app image identities are incomplete".into());
+    }
+    let api_image = images
+        .remove("turbovas-api")
+        .ok_or("legacy feed activation app image identities are incomplete")?;
+    images.insert("yafvs-api".into(), api_image);
+
+    let services = object
+        .get_mut("app_compose_contract")
+        .and_then(Value::as_object_mut)
+        .and_then(|contract| contract.get_mut("services"))
+        .ok_or("legacy application Compose execution contract is invalid")?;
+    if services != &json!(LEGACY_APP_SERVICES) {
+        return Err("legacy application Compose execution contract is invalid".into());
+    }
+    *services = json!(APP_SERVICES);
+    validate(&candidate)?;
+    Ok(value)
+}
+
 pub(super) fn read_activation_state(runtime: &Path) -> Result<Option<Value>, String> {
     let path = activation_state_path(runtime);
     match std::fs::symlink_metadata(&path) {
@@ -715,6 +781,25 @@ pub(super) fn read_activation_state(runtime: &Path) -> Result<Option<Value>, Str
     read_private_text(&path)
         .and_then(|content| decode_activation_state(&content))
         .map(Some)
+}
+
+pub(super) fn read_activation_state_for_repair(
+    runtime: &Path,
+) -> Result<(Option<Value>, bool), String> {
+    let path = activation_state_path(runtime);
+    match std::fs::symlink_metadata(&path) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok((None, false)),
+        Err(error) => return Err(format!("could not inspect {}: {error}", path.display())),
+        Ok(_) => {}
+    }
+    let content = read_private_text(&path)?;
+    match decode_activation_state(&content) {
+        Ok(value) => Ok((Some(value), false)),
+        Err(current_error) => match decode_legacy_active_state_for_repair(&content) {
+            Ok(value) => Ok((Some(value), true)),
+            Err(_) => Err(current_error),
+        },
+    }
 }
 
 #[cfg(test)]
@@ -811,6 +896,59 @@ mod tests {
         )
         .unwrap();
         assert!(read_activation_state(&runtime).is_err());
+        fs::remove_dir_all(runtime).unwrap();
+    }
+
+    #[test]
+    fn repair_reader_accepts_only_strict_completed_pre_rename_identity() {
+        let runtime = fixture("legacy-repair");
+        let image_digest = "b".repeat(64);
+        let legacy_images = LEGACY_APP_SERVICES
+            .iter()
+            .map(|service| {
+                (
+                    (*service).to_string(),
+                    json!(format!("sha256:{image_digest}")),
+                )
+            })
+            .collect::<serde_json::Map<_, _>>();
+        let legacy = json!({
+            "schema_version":1,
+            "status":"active",
+            "current_generation_id":"a".repeat(64),
+            "target_generation_id":null,
+            "previous_generation_id":null,
+            "rollback_generation_id":null,
+            "completed_at":"2026-07-13T15:05:08+00:00",
+            "restore_gsad_hosts":["192.0.2.10"],
+            "app_image_ids":legacy_images,
+            "app_runtime_artifacts":{"roots":ARTIFACT_ROOTS,"byte_count":0,"entry_count":1,"digest":"c".repeat(64),"algorithm":"sha256","schema_version":1},
+            "app_compose_contract":{"services":LEGACY_APP_SERVICES,"digest":"d".repeat(64),"schema_version":1,"algorithm":"sha256"},
+        });
+        write(&runtime, &legacy);
+        assert!(read_activation_state(&runtime).is_err());
+        let (state, migrated) = read_activation_state_for_repair(&runtime).unwrap();
+        assert_eq!(state, Some(legacy.clone()));
+        assert!(migrated);
+
+        let mut transitioning = legacy.clone();
+        transitioning["status"] = Value::from("transitioning");
+        transitioning["target_generation_id"] = Value::from("a".repeat(64));
+        write(&runtime, &transitioning);
+        assert!(read_activation_state_for_repair(&runtime).is_err());
+
+        let mut malformed = legacy;
+        malformed["app_image_ids"]["unexpected"] = Value::from(format!("sha256:{image_digest}"));
+        write(&runtime, &malformed);
+        assert!(read_activation_state_for_repair(&runtime).is_err());
+
+        malformed["app_image_ids"]
+            .as_object_mut()
+            .unwrap()
+            .remove("unexpected");
+        malformed["unexpected"] = Value::Bool(true);
+        write(&runtime, &malformed);
+        assert!(read_activation_state_for_repair(&runtime).is_err());
         fs::remove_dir_all(runtime).unwrap();
     }
 

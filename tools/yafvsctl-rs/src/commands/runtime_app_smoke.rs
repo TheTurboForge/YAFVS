@@ -4,7 +4,7 @@
 //! Observational application-runtime smoke orchestration.
 
 use super::common::{metadata, output_tail, runtime_dir};
-use super::compose::{compose_command, runtime_environment};
+use super::compose::{compose_command, runtime_app_environment, runtime_environment};
 use super::feed::command_feed_state;
 use super::feed_generation::{
     require_current_app_deployment, run_pinned_gvmd, run_retained_native_api_smoke,
@@ -95,7 +95,8 @@ impl<'a> SystemContext<'a> {
         Self {
             repo_root,
             runner,
-            environment: runtime_environment(repo_root),
+            environment: runtime_app_environment(repo_root)
+                .unwrap_or_else(|_| runtime_environment(repo_root)),
         }
     }
 }

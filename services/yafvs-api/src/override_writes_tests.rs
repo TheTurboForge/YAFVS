@@ -14,10 +14,11 @@ const INHERITED_PERMISSIONS_SOURCE: &str =
     include_str!("../../../components/gvmd/src/manage_sql_permissions.c");
 
 #[test]
-fn override_delete_requires_exact_operator_owner_match() {
-    assert!(ensure_override_owner_matches_operator(7, 7).is_ok());
+fn override_write_accepts_any_human_owner_and_rejects_ownerless_rows() {
+    assert_eq!(ensure_override_is_human_owned(Some(7)).unwrap(), 7);
+    assert_eq!(ensure_override_is_human_owned(Some(8)).unwrap(), 8);
     assert!(matches!(
-        ensure_override_owner_matches_operator(7, 8),
+        ensure_override_is_human_owned(None),
         Err(ApiError::Forbidden)
     ));
 }
@@ -69,7 +70,7 @@ fn override_create_patch_and_clone_sql_are_parameterized_and_cache_safe() {
 }
 
 #[test]
-fn override_scope_validation_preserves_operator_ownership_and_reference_consistency() {
+fn override_scope_validation_preserves_human_ownership_and_reference_consistency() {
     for sql in [override_task_scope_sql(), override_result_scope_sql()] {
         assert!(sql.contains("owner"));
     }
@@ -78,11 +79,11 @@ fn override_scope_validation_preserves_operator_ownership_and_reference_consiste
     assert!(HANDLER_SOURCE.contains("ensure_override_task_result_match"));
     assert!(HANDLER_SOURCE.contains("ensure_override_nvt_exists"));
     assert!(HANDLER_SOURCE.contains("resolve_override_write_operator_owner"));
-    assert!(HANDLER_SOURCE.contains("ensure_override_owner_matches_operator"));
+    assert!(HANDLER_SOURCE.contains("ensure_override_is_human_owned"));
 }
 
 #[test]
-fn override_restore_and_hard_delete_are_bounded_to_owned_trash_rows() {
+fn override_restore_and_hard_delete_are_bounded_to_human_owned_trash_rows() {
     let restore = override_restore_sql();
     assert!(restore.contains("INSERT INTO overrides"));
     assert!(restore.contains("FROM overrides_trash"));
@@ -107,7 +108,7 @@ fn override_restore_and_hard_delete_are_bounded_to_owned_trash_rows() {
         .expect("hard-delete boundary")
         .0;
     assert!(restore_handler.contains("load_override_trash_state"));
-    assert!(restore_handler.contains("ensure_override_owner_matches_operator"));
+    assert!(restore_handler.contains("ensure_override_is_human_owned"));
     assert!(restore_handler.contains("ensure_override_live_uuid_available"));
     assert!(restore_handler.contains("execute_override_restore_transaction"));
     assert!(
@@ -123,7 +124,7 @@ fn override_restore_and_hard_delete_are_bounded_to_owned_trash_rows() {
         .expect("reload helper boundary")
         .0;
     assert!(hard_delete_handler.contains("load_override_trash_state"));
-    assert!(hard_delete_handler.contains("ensure_override_owner_matches_operator"));
+    assert!(hard_delete_handler.contains("ensure_override_is_human_owned"));
     assert!(hard_delete_handler.contains("execute_override_hard_delete_transaction"));
     assert!(!hard_delete_handler.contains("DELETE FROM overrides"));
 }
@@ -275,7 +276,7 @@ fn override_delete_handler_authenticates_checks_owner_and_commits_before_204() {
         .find("load_override_write_state")
         .expect("override state");
     let owner_match = handler
-        .find("ensure_override_owner_matches_operator")
+        .find("ensure_override_is_human_owned")
         .expect("owner match");
     let execute = handler
         .find("execute_override_trash_transaction")

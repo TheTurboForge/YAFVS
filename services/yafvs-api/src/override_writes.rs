@@ -14,12 +14,11 @@ use crate::{
     errors::ApiError,
     override_payloads::OverrideAssetItem,
     override_write_db::{
-        ensure_override_live_uuid_available, ensure_override_nvt_exists,
-        ensure_override_owner_matches_operator, ensure_override_task_result_match,
-        load_override_result_scope, load_override_trash_state, load_override_write_state,
-        map_override_write_db_error, require_override_write_operator,
-        resolve_override_result_scope, resolve_override_task_scope,
-        resolve_override_write_operator_owner,
+        ensure_override_is_human_owned, ensure_override_live_uuid_available,
+        ensure_override_nvt_exists, ensure_override_task_result_match, load_override_result_scope,
+        load_override_trash_state, load_override_write_state, map_override_write_db_error,
+        require_override_write_operator, resolve_override_result_scope,
+        resolve_override_task_scope, resolve_override_write_operator_owner,
     },
     override_write_transactions::{
         execute_override_clone_transaction, execute_override_create_transaction,
@@ -53,13 +52,11 @@ pub(crate) async fn create_override(
     .map_err(|error| map_override_write_db_error(error, "lock override tables for create"))?;
     ensure_override_nvt_exists(&tx, &request.nvt_id).await?;
     let task_id = match request.task_id.as_deref() {
-        Some(task_uuid) => resolve_override_task_scope(&tx, task_uuid, operator_owner_id).await?,
+        Some(task_uuid) => resolve_override_task_scope(&tx, task_uuid).await?,
         None => 0,
     };
     let result = match request.result_id.as_deref() {
-        Some(result_uuid) => {
-            Some(resolve_override_result_scope(&tx, result_uuid, operator_owner_id).await?)
-        }
+        Some(result_uuid) => Some(resolve_override_result_scope(&tx, result_uuid).await?),
         None => None,
     };
     ensure_override_task_result_match(task_id, result.as_ref())?;
@@ -84,14 +81,14 @@ pub(crate) async fn restore_override(
     let tx = client.transaction().await.map_err(|error| {
         map_override_write_db_error(error, "begin restore override transaction")
     })?;
-    let operator_owner_id = resolve_override_write_operator_owner(&tx, &operator).await?;
+    resolve_override_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE overrides, overrides_trash, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_override_write_db_error(error, "lock override tables for restore"))?;
     let trash = load_override_trash_state(&tx, &override_id).await?;
-    ensure_override_owner_matches_operator(trash.write_state.owner_id, operator_owner_id)?;
+    ensure_override_is_human_owned(trash.write_state.owner_id)?;
     ensure_override_live_uuid_available(&tx, &trash.uuid).await?;
     let record = execute_override_restore_transaction(&tx, &trash.write_state).await?;
     tx.commit().await.map_err(|error| {
@@ -111,7 +108,7 @@ pub(crate) async fn hard_delete_override(
     let tx = client.transaction().await.map_err(|error| {
         map_override_write_db_error(error, "begin hard-delete override transaction")
     })?;
-    let operator_owner_id = resolve_override_write_operator_owner(&tx, &operator).await?;
+    resolve_override_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE overrides_trash, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
@@ -120,7 +117,7 @@ pub(crate) async fn hard_delete_override(
         map_override_write_db_error(error, "lock override tables for hard delete")
     })?;
     let trash = load_override_trash_state(&tx, &override_id).await?;
-    ensure_override_owner_matches_operator(trash.write_state.owner_id, operator_owner_id)?;
+    ensure_override_is_human_owned(trash.write_state.owner_id)?;
     execute_override_hard_delete_transaction(&tx, trash.write_state.internal_id).await?;
     tx.commit().await.map_err(|error| {
         map_override_write_db_error(error, "commit hard-delete override transaction")
@@ -147,7 +144,7 @@ pub(crate) async fn clone_override(
     .await
     .map_err(|error| map_override_write_db_error(error, "lock override tables for clone"))?;
     let source = load_override_write_state(&tx, &override_id).await?;
-    ensure_override_owner_matches_operator(source.owner_id, operator_owner_id)?;
+    ensure_override_is_human_owned(source.owner_id)?;
     let record = execute_override_clone_transaction(&tx, &source, operator_owner_id).await?;
     tx.commit()
         .await
@@ -169,32 +166,28 @@ pub(crate) async fn patch_override(
         .transaction()
         .await
         .map_err(|error| map_override_write_db_error(error, "begin patch override transaction"))?;
-    let operator_owner_id = resolve_override_write_operator_owner(&tx, &operator).await?;
+    resolve_override_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE overrides, overrides_trash, tag_resources IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_override_write_db_error(error, "lock override tables for patch"))?;
     let current = load_override_write_state(&tx, &override_id).await?;
-    ensure_override_owner_matches_operator(current.owner_id, operator_owner_id)?;
+    ensure_override_is_human_owned(current.owner_id)?;
     if let Some(nvt_id) = request.nvt_id.as_deref() {
         ensure_override_nvt_exists(&tx, nvt_id).await?;
     }
     let final_task_id = match &request.task_id {
         PatchField::Missing => current.task_id,
         PatchField::Null => 0,
-        PatchField::Value(task_uuid) => {
-            resolve_override_task_scope(&tx, task_uuid, operator_owner_id).await?
-        }
+        PatchField::Value(task_uuid) => resolve_override_task_scope(&tx, task_uuid).await?,
     };
     let result = match &request.result_id {
         PatchField::Missing if current.result_id == 0 => None,
-        PatchField::Missing => {
-            Some(load_override_result_scope(&tx, current.result_id, operator_owner_id).await?)
-        }
+        PatchField::Missing => Some(load_override_result_scope(&tx, current.result_id).await?),
         PatchField::Null => None,
         PatchField::Value(result_uuid) => {
-            Some(resolve_override_result_scope(&tx, result_uuid, operator_owner_id).await?)
+            Some(resolve_override_result_scope(&tx, result_uuid).await?)
         }
     };
     ensure_override_task_result_match(final_task_id, result.as_ref())?;
@@ -220,14 +213,14 @@ pub(crate) async fn delete_override(
         .transaction()
         .await
         .map_err(|error| map_override_write_db_error(error, "begin delete override transaction"))?;
-    let operator_owner_id = resolve_override_write_operator_owner(&tx, &operator).await?;
+    resolve_override_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE overrides, overrides_trash, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
     )
     .await
     .map_err(|error| map_override_write_db_error(error, "lock override tables for delete"))?;
     let override_state = load_override_write_state(&tx, &override_id).await?;
-    ensure_override_owner_matches_operator(override_state.owner_id, operator_owner_id)?;
+    ensure_override_is_human_owned(override_state.owner_id)?;
     execute_override_trash_transaction(&tx, &override_state).await?;
     tx.commit().await.map_err(|error| {
         map_override_write_db_error(error, "commit delete override transaction")

@@ -43,7 +43,7 @@ pub(crate) async fn execute_override_create_transaction(
     .await?;
     let state = OverrideWriteState {
         internal_id: record.internal_id,
-        owner_id,
+        owner_id: Some(owner_id),
         nvt: request.nvt_id.clone(),
         task_id,
         result_id,
@@ -209,7 +209,7 @@ pub(crate) async fn execute_override_clone_transaction(
     .await?;
     let state = OverrideWriteState {
         internal_id: record.internal_id,
-        owner_id,
+        owner_id: Some(owner_id),
         nvt: source.nvt.clone(),
         task_id: source.task_id,
         result_id: source.result_id,

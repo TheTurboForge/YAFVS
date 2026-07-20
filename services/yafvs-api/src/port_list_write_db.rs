@@ -89,13 +89,13 @@ pub(crate) struct PortListTrashWriteState {
     pub(crate) internal_id: i32,
     pub(crate) uuid: String,
     pub(crate) name: String,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PortListWriteState {
     pub(crate) internal_id: i32,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
     pub(crate) predefined: bool,
 }
 
@@ -103,7 +103,7 @@ pub(crate) struct PortListWriteState {
 pub(crate) struct PortListRangeWriteState {
     pub(crate) internal_id: i32,
     pub(crate) port_list_internal_id: i32,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
     pub(crate) predefined: bool,
 }
 
@@ -175,18 +175,22 @@ pub(crate) async fn load_port_list_range_write_state(
     .ok_or(ApiError::NotFound)
 }
 
-pub(crate) fn ensure_port_list_owner_matches_operator(
-    port_list_owner_id: i32,
-    operator_owner_id: i32,
+pub(crate) fn ensure_port_list_is_human_owned(
+    port_list_owner_id: Option<i32>,
+) -> Result<i32, ApiError> {
+    port_list_owner_id.ok_or_else(|| {
+        tracing::warn!("direct API port list write rejected an ownerless port list");
+        ApiError::Forbidden
+    })
+}
+
+pub(crate) fn ensure_port_list_clone_source_allowed(
+    state: &PortListWriteState,
 ) -> Result<(), ApiError> {
-    if port_list_owner_id == operator_owner_id {
+    if state.predefined || state.owner_id.is_some() {
         Ok(())
     } else {
-        tracing::warn!(
-            port_list_owner_id,
-            operator_owner_id,
-            "direct API port list write owner mismatch"
-        );
+        tracing::warn!("direct API port list clone rejected an ownerless custom source");
         Err(ApiError::Forbidden)
     }
 }

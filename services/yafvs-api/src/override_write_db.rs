@@ -12,7 +12,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct OverrideWriteState {
     pub(crate) internal_id: i32,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
     pub(crate) nvt: String,
     pub(crate) task_id: i32,
     pub(crate) result_id: i32,
@@ -102,7 +102,6 @@ pub(crate) async fn ensure_override_nvt_exists(
 pub(crate) async fn resolve_override_task_scope(
     tx: &Transaction<'_>,
     task_uuid: &str,
-    operator_owner_id: i32,
 ) -> Result<i32, ApiError> {
     let row = tx
         .query_opt(override_task_scope_sql(), &[&task_uuid])
@@ -110,23 +109,22 @@ pub(crate) async fn resolve_override_task_scope(
         .map_err(|error| map_override_write_db_error(error, "resolve override task scope"))?
         .ok_or_else(|| ApiError::BadRequest("task_id was not found".to_string()))?;
     let task_id: i32 = row.get(0);
-    let owner_id: i32 = row.get(1);
-    ensure_override_owner_matches_operator(owner_id, operator_owner_id)?;
+    let owner_id: Option<i32> = row.get(1);
+    ensure_override_is_human_owned(owner_id)?;
     Ok(task_id)
 }
 
 pub(crate) async fn resolve_override_result_scope(
     tx: &Transaction<'_>,
     result_uuid: &str,
-    operator_owner_id: i32,
 ) -> Result<OverrideResultScope, ApiError> {
     let row = tx
         .query_opt(override_result_scope_sql(), &[&result_uuid])
         .await
         .map_err(|error| map_override_write_db_error(error, "resolve override result scope"))?
         .ok_or_else(|| ApiError::BadRequest("result_id was not found".to_string()))?;
-    let owner_id: i32 = row.get(2);
-    ensure_override_owner_matches_operator(owner_id, operator_owner_id)?;
+    let owner_id: Option<i32> = row.get(2);
+    ensure_override_is_human_owned(owner_id)?;
     Ok(OverrideResultScope {
         internal_id: row.get(0),
         task_id: row.get(1),
@@ -136,15 +134,14 @@ pub(crate) async fn resolve_override_result_scope(
 pub(crate) async fn load_override_result_scope(
     tx: &Transaction<'_>,
     result_id: i32,
-    operator_owner_id: i32,
 ) -> Result<OverrideResultScope, ApiError> {
     let row = tx
         .query_opt(override_result_scope_by_internal_id_sql(), &[&result_id])
         .await
         .map_err(|error| map_override_write_db_error(error, "load override result scope"))?
         .ok_or_else(|| ApiError::Conflict("the override result no longer exists".to_string()))?;
-    let owner_id: i32 = row.get(2);
-    ensure_override_owner_matches_operator(owner_id, operator_owner_id)?;
+    let owner_id: Option<i32> = row.get(2);
+    ensure_override_is_human_owned(owner_id)?;
     Ok(OverrideResultScope {
         internal_id: row.get(0),
         task_id: row.get(1),
@@ -229,20 +226,13 @@ pub(crate) async fn load_override_write_state(
         .ok_or(ApiError::NotFound)
 }
 
-pub(crate) fn ensure_override_owner_matches_operator(
-    override_owner_id: i32,
-    operator_owner_id: i32,
-) -> Result<(), ApiError> {
-    if override_owner_id == operator_owner_id {
-        Ok(())
-    } else {
-        tracing::warn!(
-            override_owner_id,
-            operator_owner_id,
-            "direct API override write owner mismatch"
-        );
-        Err(ApiError::Forbidden)
-    }
+pub(crate) fn ensure_override_is_human_owned(
+    override_owner_id: Option<i32>,
+) -> Result<i32, ApiError> {
+    override_owner_id.ok_or_else(|| {
+        tracing::warn!("direct API override write rejected an ownerless override or scope");
+        ApiError::Forbidden
+    })
 }
 
 pub(crate) async fn load_override_affected_reports(

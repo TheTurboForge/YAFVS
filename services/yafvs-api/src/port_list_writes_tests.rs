@@ -46,6 +46,34 @@ fn inherited_openvas_default_tcp_ranges() -> Vec<(i32, i32)> {
 }
 
 #[test]
+fn port_list_clone_accepts_human_owned_or_predefined_sources_only() {
+    assert!(
+        ensure_port_list_clone_source_allowed(&PortListWriteState {
+            internal_id: 1,
+            owner_id: Some(7),
+            predefined: false,
+        })
+        .is_ok()
+    );
+    assert!(
+        ensure_port_list_clone_source_allowed(&PortListWriteState {
+            internal_id: 2,
+            owner_id: None,
+            predefined: true,
+        })
+        .is_ok()
+    );
+    assert!(
+        ensure_port_list_clone_source_allowed(&PortListWriteState {
+            internal_id: 3,
+            owner_id: None,
+            predefined: false,
+        })
+        .is_err()
+    );
+}
+
+#[test]
 fn port_list_range_create_sql_is_bounded_and_overlap_checked() {
     assert_eq!(
         port_list_range_count_sql(),
@@ -83,7 +111,7 @@ fn port_list_range_create_handler_checks_parent_and_overlap_before_insert() {
         .expect("delete_port_list_range should follow create handler")
         .0;
     let owner = handler
-        .find("ensure_port_list_owner_matches_operator")
+        .find("ensure_port_list_is_human_owned")
         .expect("handler must check owner");
     let predefined = handler
         .find("state.predefined")
@@ -153,10 +181,11 @@ fn create_request(name: &str, ranges: Vec<PortListCreateRangeRequest>) -> PortLi
 }
 
 #[test]
-fn port_list_write_rejects_operator_owner_mismatch() {
-    assert!(ensure_port_list_owner_matches_operator(7, 7).is_ok());
+fn port_list_write_accepts_any_human_owner_and_rejects_ownerless_rows() {
+    assert_eq!(ensure_port_list_is_human_owned(Some(7)).unwrap(), 7);
+    assert_eq!(ensure_port_list_is_human_owned(Some(8)).unwrap(), 8);
     assert!(matches!(
-        ensure_port_list_owner_matches_operator(7, 8),
+        ensure_port_list_is_human_owned(None),
         Err(ApiError::Forbidden)
     ));
 }
@@ -208,7 +237,7 @@ fn port_list_mutating_handlers_enforce_owner_and_safety_before_side_effects() {
             "patch",
             "pub(crate) async fn patch_port_list",
             "pub(crate) async fn delete_port_list",
-            "ensure_port_list_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "ensure_port_list_is_human_owned(state.owner_id)?;",
             "if state.predefined",
             "execute_port_list_patch_transaction",
         ),
@@ -216,7 +245,7 @@ fn port_list_mutating_handlers_enforce_owner_and_safety_before_side_effects() {
             "delete",
             "pub(crate) async fn delete_port_list",
             "pub(crate) async fn hard_delete_port_list",
-            "ensure_port_list_owner_matches_operator(state.owner_id, operator_owner_id)?;",
+            "ensure_port_list_is_human_owned(state.owner_id)?;",
             "ensure_port_list_not_in_use_by_live_targets",
             "execute_port_list_trash_transaction",
         ),
@@ -224,7 +253,7 @@ fn port_list_mutating_handlers_enforce_owner_and_safety_before_side_effects() {
             "hard delete",
             "pub(crate) async fn hard_delete_port_list",
             "pub(crate) async fn restore_port_list",
-            "ensure_port_list_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_port_list_is_human_owned(trash.owner_id)?;",
             "ensure_port_list_not_in_use_by_trash_targets",
             "execute_port_list_hard_delete_transaction",
         ),
@@ -232,7 +261,7 @@ fn port_list_mutating_handlers_enforce_owner_and_safety_before_side_effects() {
             "restore",
             "pub(crate) async fn restore_port_list",
             "#[cfg(test)]",
-            "ensure_port_list_owner_matches_operator(trash.owner_id, operator_owner_id)?;",
+            "ensure_port_list_is_human_owned(trash.owner_id)?;",
             "ensure_port_list_uuid_not_live",
             "execute_port_list_restore_transaction",
         ),
@@ -855,7 +884,7 @@ fn port_list_range_delete_handler_checks_parent_safety_before_delete() {
         .find("load_port_list_range_write_state")
         .expect("handler must load parent/range state");
     let owner = handler
-        .find("ensure_port_list_owner_matches_operator")
+        .find("ensure_port_list_is_human_owned")
         .expect("handler must check owner");
     let predefined = handler
         .find("state.predefined")

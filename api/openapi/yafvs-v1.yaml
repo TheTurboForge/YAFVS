@@ -3047,6 +3047,7 @@ paths:
       x-yafvs-replaces: override-create
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Create an override
@@ -3122,10 +3123,11 @@ paths:
       x-yafvs-replaces: override-trash-move
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Move one override to trash
-      description: Direct write-control endpoint for moving one operator-owned live override to trash. The transaction preserves override metadata, relocates tag links, and clears overridden count-cache rows for the exact reports affected by the override. It never hard-deletes; permanent deletion is exposed at the trash subresource.
+      description: Direct write-control endpoint for moving one human-owned live override to trash. Any authenticated stack operator may continue this work; the override's existing owner remains attribution. The transaction preserves override metadata, relocates tag links, and clears overridden count-cache rows for the exact reports affected by the override. It never hard-deletes; permanent deletion is exposed at the trash subresource.
       parameters:
         - $ref: '#/components/parameters/OverrideId'
       responses:
@@ -3155,10 +3157,11 @@ paths:
       x-yafvs-replaces: override-metadata-modify
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Patch override metadata
-      description: Direct write-control endpoint for patching one operator-owned override. At least one field is required; nullable scope fields clear their existing values and activation updates the tagged active, inactive, or time-bounded state.
+      description: Direct write-control endpoint for patching one human-owned override. Any authenticated stack operator may continue this work; the override's existing owner remains attribution. At least one field is required; nullable scope fields clear their existing values and activation updates the tagged active, inactive, or time-bounded state.
       parameters:
         - $ref: '#/components/parameters/OverrideId'
       requestBody:
@@ -3233,10 +3236,11 @@ paths:
       x-yafvs-replaces: override-clone
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Clone an override
-      description: Direct write-control endpoint for cloning an operator-owned live override. The empty request object copies the source override metadata into a new override owned by the direct API operator.
+      description: Direct write-control endpoint for cloning any human-owned live override. The empty request object copies the source override metadata into a new override owned by the direct API operator.
       parameters:
         - $ref: '#/components/parameters/OverrideId'
       requestBody:
@@ -3279,10 +3283,11 @@ paths:
       x-yafvs-replaces: override-restore
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Restore an override from trash
-      description: Direct write-control endpoint for restoring one operator-owned override from trash. Restore preserves the override UUID and owner and returns the restored native JSON metadata.
+      description: Direct write-control endpoint for restoring one human-owned override from trash. Any authenticated stack operator may continue this work; restore preserves the override UUID and owner and returns the restored native JSON metadata.
       parameters:
         - $ref: '#/components/parameters/OverrideId'
       responses:
@@ -3319,10 +3324,11 @@ paths:
       x-yafvs-replaces: override-hard-delete
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Permanently delete a trashed override
-      description: Direct write-control endpoint for permanently deleting one operator-owned override already in trash, including its retained metadata and trash-side tag links.
+      description: Direct write-control endpoint for permanently deleting one human-owned override already in trash, including its retained metadata and trash-side tag links. Any authenticated stack operator may perform this explicit trash action.
       parameters:
         - $ref: '#/components/parameters/OverrideId'
       responses:
@@ -3392,6 +3398,7 @@ paths:
       x-yafvs-replaces: port-list-create
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Create a typed port list
@@ -3434,6 +3441,7 @@ paths:
       x-yafvs-replaces: port-list-import
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Import a port list from exported XML
@@ -3506,6 +3514,7 @@ paths:
       x-yafvs-replaces: port-list-metadata-and-range-modify
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-and-range-write
       summary: Patch port-list metadata or ranges
@@ -3551,6 +3560,7 @@ paths:
       x-yafvs-replaces: port-list-trash-move
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Move a port list to trash
@@ -3585,10 +3595,11 @@ paths:
       x-yafvs-replaces: port-list-range-create
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Create one port-list range
-      description: Direct write-control endpoint for atomically adding one non-overlapping TCP or UDP range to a non-predefined operator-owned port list. Creation is rejected while the list is referenced by live targets or trash targets pointing at the live list.
+      description: Direct write-control endpoint for atomically adding one non-overlapping TCP or UDP range to any human-owned non-predefined port list. Any authenticated stack operator may continue this work; the port list's existing owner remains attribution. Creation is rejected while the list is referenced by live targets or trash targets pointing at the live list.
       parameters:
         - $ref: '#/components/parameters/PortListId'
       requestBody:
@@ -3631,10 +3642,11 @@ paths:
       x-yafvs-replaces: port-list-range-delete
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Delete one port-list range
-      description: Direct write-control endpoint for deleting one range row from a non-predefined operator-owned port list. Unlike inherited GMP delete_port_range, this native contract rejects deletion while the parent port list is referenced by live targets or trash targets pointing at the live list.
+      description: Direct write-control endpoint for deleting one range row from any human-owned non-predefined port list. Any authenticated stack operator may continue this work; the port list's existing owner remains attribution. Unlike inherited GMP delete_port_range, this native contract rejects deletion while the parent port list is referenced by live targets or trash targets pointing at the live list.
       parameters:
         - $ref: '#/components/parameters/PortListId'
         - $ref: '#/components/parameters/PortRangeId'
@@ -3700,10 +3712,11 @@ paths:
       x-yafvs-replaces: port-list-clone
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Clone a port list
-      description: Direct write-control endpoint for copying an existing live port list into a new non-predefined port list owned by the direct API operator. The clone copies comment, port ranges, and active-table tag links; optional name/comment fields override copied metadata.
+      description: Direct write-control endpoint for copying any human-owned or predefined live port list into a new non-predefined port list owned by the direct API operator. The clone copies comment, port ranges, and active-table tag links; optional name/comment fields override copied metadata.
       parameters:
         - $ref: '#/components/parameters/PortListId'
       requestBody:
@@ -3746,6 +3759,7 @@ paths:
       x-yafvs-replaces: port-list-restore
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Restore a trashed port list
@@ -3786,6 +3800,7 @@ paths:
       x-yafvs-replaces: port-list-hard-delete
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Permanently delete trashed port list

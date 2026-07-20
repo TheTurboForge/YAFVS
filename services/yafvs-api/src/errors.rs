@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use std::fmt::Display;
+
 use axum::{
     Json,
     http::StatusCode,
@@ -12,6 +14,14 @@ use serde::Serialize;
 #[derive(Debug, Serialize)]
 struct ErrorBody {
     error: ErrorPayload,
+}
+
+pub(crate) fn mutation_committed_response_unavailable(
+    error: impl Display,
+    operation: &'static str,
+) -> ApiError {
+    tracing::warn!(%error, operation, "mutation committed but response completion failed");
+    ApiError::MutationCommittedResponseUnavailable
 }
 
 #[derive(Debug, Serialize)]

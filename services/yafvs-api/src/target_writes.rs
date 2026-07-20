@@ -11,7 +11,7 @@ use axum::{
 use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
-    errors::ApiError,
+    errors::{ApiError, mutation_committed_response_unavailable},
     target_handlers::load_target_detail,
     target_write_db::*,
     target_write_transactions::*,
@@ -61,8 +61,16 @@ pub(crate) async fn create_target(
 
     Ok((
         StatusCode::CREATED,
-        target_write_location_headers(&record.uuid)?,
-        Json(load_target_detail(&client, &record.uuid).await?),
+        target_write_location_headers(&record.uuid).map_err(|error| {
+            mutation_committed_response_unavailable(error, "create target response header")
+        })?,
+        Json(
+            load_target_detail(&client, &record.uuid)
+                .await
+                .map_err(|error| {
+                    mutation_committed_response_unavailable(error, "create target response reload")
+                })?,
+        ),
     ))
 }
 
@@ -100,8 +108,16 @@ pub(crate) async fn clone_target(
 
     Ok((
         StatusCode::CREATED,
-        target_write_location_headers(&record.uuid)?,
-        Json(load_target_detail(&client, &record.uuid).await?),
+        target_write_location_headers(&record.uuid).map_err(|error| {
+            mutation_committed_response_unavailable(error, "clone target response header")
+        })?,
+        Json(
+            load_target_detail(&client, &record.uuid)
+                .await
+                .map_err(|error| {
+                    mutation_committed_response_unavailable(error, "clone target response reload")
+                })?,
+        ),
     ))
 }
 
@@ -188,7 +204,13 @@ pub(crate) async fn restore_target(
         .await
         .map_err(|error| map_target_write_db_error(error, "commit restore target transaction"))?;
 
-    Ok(Json(load_target_detail(&client, &record.uuid).await?))
+    Ok(Json(
+        load_target_detail(&client, &record.uuid)
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(error, "restore target response reload")
+            })?,
+    ))
 }
 
 pub(crate) async fn patch_target(
@@ -252,7 +274,13 @@ pub(crate) async fn patch_target(
         .await
         .map_err(|error| map_target_write_db_error(error, "commit patch target transaction"))?;
 
-    Ok(Json(load_target_detail(&client, &record.uuid).await?))
+    Ok(Json(
+        load_target_detail(&client, &record.uuid)
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(error, "patch target response reload")
+            })?,
+    ))
 }
 
 fn target_write_location_headers(target_id: &str) -> Result<HeaderMap, ApiError> {

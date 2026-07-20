@@ -11,7 +11,7 @@ use axum::{
 use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
-    errors::ApiError,
+    errors::{ApiError, mutation_committed_response_unavailable},
     scope_payload_rows::ScopeItem,
     scope_payloads::load_scope_detail,
     scope_write_db::*,
@@ -41,10 +41,16 @@ pub(crate) async fn create_scope(
         .await
         .map_err(|error| map_scope_write_db_error(error, "commit create scope transaction"))?;
 
-    let scope = load_scope_detail(&client, &record.uuid).await?;
+    let scope = load_scope_detail(&client, &record.uuid)
+        .await
+        .map_err(|error| {
+            mutation_committed_response_unavailable(error, "create scope response reload")
+        })?;
     Ok((
         StatusCode::CREATED,
-        scope_write_location_headers(&record.uuid)?,
+        scope_write_location_headers(&record.uuid).map_err(|error| {
+            mutation_committed_response_unavailable(error, "create scope response header")
+        })?,
         Json(scope),
     ))
 }
@@ -76,7 +82,13 @@ pub(crate) async fn patch_scope(
         .await
         .map_err(|error| map_scope_write_db_error(error, "commit patch scope transaction"))?;
 
-    Ok(Json(load_scope_detail(&client, &record.uuid).await?))
+    Ok(Json(
+        load_scope_detail(&client, &record.uuid)
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(error, "patch scope response reload")
+            })?,
+    ))
 }
 
 pub(crate) async fn delete_scope(

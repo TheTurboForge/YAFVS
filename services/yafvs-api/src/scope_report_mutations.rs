@@ -12,7 +12,7 @@ use tokio_postgres::Transaction;
 use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
-    errors::ApiError,
+    errors::{ApiError, mutation_committed_response_unavailable},
     path_ids::parse_uuid,
     scope_report_generation_sql::*,
     scope_reports::scope_report_detail,
@@ -59,12 +59,22 @@ pub(crate) async fn generate_scope_report(
     })?;
     drop(client);
 
-    let Json(detail) = scope_report_detail(State(state), Path(scope_report_id.clone())).await?;
+    let Json(detail) = scope_report_detail(State(state), Path(scope_report_id.clone()))
+        .await
+        .map_err(|error| {
+            mutation_committed_response_unavailable(error, "generate scope-report response reload")
+        })?;
     let mut headers = HeaderMap::new();
     headers.insert(
         LOCATION,
-        HeaderValue::from_str(&format!("/api/v1/scope-reports/{scope_report_id}"))
-            .map_err(|_| ApiError::Database)?,
+        HeaderValue::from_str(&format!("/api/v1/scope-reports/{scope_report_id}")).map_err(
+            |error| {
+                mutation_committed_response_unavailable(
+                    error,
+                    "generate scope-report response header",
+                )
+            },
+        )?,
     );
     Ok((StatusCode::CREATED, headers, Json(detail)))
 }

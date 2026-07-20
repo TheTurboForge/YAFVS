@@ -15,7 +15,7 @@ use tokio_postgres::{Row, Transaction};
 use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
-    errors::ApiError,
+    errors::{ApiError, mutation_committed_response_unavailable},
     path_ids::{parse_uuid, validate_nvt_oid, validate_scan_config_family},
     scan_config_write_db::{
         ScanConfigPreferenceDefinition, ensure_scan_config_family_nvt_change_oids_exist,
@@ -292,8 +292,19 @@ pub(crate) async fn import_scan_config(
 
     Ok((
         StatusCode::CREATED,
-        scan_config_backup_location_headers(&record.uuid)?,
-        Json(load_scan_config_asset_detail(&client, &record.uuid).await?),
+        scan_config_backup_location_headers(&record.uuid).map_err(|error| {
+            mutation_committed_response_unavailable(error, "import scan-config response header")
+        })?,
+        Json(
+            load_scan_config_asset_detail(&client, &record.uuid)
+                .await
+                .map_err(|error| {
+                    mutation_committed_response_unavailable(
+                        error,
+                        "import scan-config response reload",
+                    )
+                })?,
+        ),
     ))
 }
 

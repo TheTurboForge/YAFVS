@@ -11,7 +11,7 @@ use axum::{
 use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
-    errors::ApiError,
+    errors::{ApiError, mutation_committed_response_unavailable},
     filter_payloads::FilterAssetItem,
     filter_write_db::*,
     filter_write_transactions::*,
@@ -46,7 +46,13 @@ pub(crate) async fn create_filter(
         .map_err(|error| map_filter_write_db_error(error, "commit create filter transaction"))?;
     Ok((
         StatusCode::CREATED,
-        Json(load_filter_asset_detail(&client, &record.uuid).await?),
+        Json(
+            load_filter_asset_detail(&client, &record.uuid)
+                .await
+                .map_err(|error| {
+                    mutation_committed_response_unavailable(error, "create filter response reload")
+                })?,
+        ),
     ))
 }
 
@@ -110,7 +116,13 @@ pub(crate) async fn clone_filter(
         .map_err(|error| map_filter_write_db_error(error, "commit clone filter transaction"))?;
     Ok((
         StatusCode::CREATED,
-        Json(load_filter_asset_detail(&client, &record.uuid).await?),
+        Json(
+            load_filter_asset_detail(&client, &record.uuid)
+                .await
+                .map_err(|error| {
+                    mutation_committed_response_unavailable(error, "clone filter response reload")
+                })?,
+        ),
     ))
 }
 
@@ -140,7 +152,13 @@ pub(crate) async fn restore_filter(
         .await
         .map_err(|error| map_filter_write_db_error(error, "commit restore filter transaction"))?;
 
-    Ok(Json(load_filter_asset_detail(&client, &record.uuid).await?))
+    Ok(Json(
+        load_filter_asset_detail(&client, &record.uuid)
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(error, "restore filter response reload")
+            })?,
+    ))
 }
 
 pub(crate) async fn hard_delete_filter(
@@ -199,7 +217,13 @@ pub(crate) async fn patch_filter(
     tx.commit()
         .await
         .map_err(|error| map_filter_write_db_error(error, "commit patch filter transaction"))?;
-    Ok(Json(load_filter_asset_detail(&client, &record.uuid).await?))
+    Ok(Json(
+        load_filter_asset_detail(&client, &record.uuid)
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(error, "patch filter response reload")
+            })?,
+    ))
 }
 
 #[cfg(test)]

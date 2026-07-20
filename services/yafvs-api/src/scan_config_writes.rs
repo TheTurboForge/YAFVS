@@ -12,7 +12,7 @@ use serde::Serialize;
 use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
-    errors::ApiError,
+    errors::{ApiError, mutation_committed_response_unavailable},
     gvmd_control::{
         ScrubbedControlFrame, gvmd_control_secret, gvmd_control_socket_path,
         map_control_socket_error, request_gvmd_control_response_bytes,
@@ -250,8 +250,19 @@ pub(crate) async fn create_scan_config(
 
     Ok((
         StatusCode::CREATED,
-        scan_config_write_location_headers(&record.uuid)?,
-        Json(load_scan_config_asset_detail(&client, &record.uuid).await?),
+        scan_config_write_location_headers(&record.uuid).map_err(|error| {
+            mutation_committed_response_unavailable(error, "create scan-config response header")
+        })?,
+        Json(
+            load_scan_config_asset_detail(&client, &record.uuid)
+                .await
+                .map_err(|error| {
+                    mutation_committed_response_unavailable(
+                        error,
+                        "create scan-config response reload",
+                    )
+                })?,
+        ),
     ))
 }
 
@@ -291,8 +302,19 @@ pub(crate) async fn clone_scan_config(
 
     Ok((
         StatusCode::CREATED,
-        scan_config_write_location_headers(&record.uuid)?,
-        Json(load_scan_config_asset_detail(&client, &record.uuid).await?),
+        scan_config_write_location_headers(&record.uuid).map_err(|error| {
+            mutation_committed_response_unavailable(error, "clone scan-config response header")
+        })?,
+        Json(
+            load_scan_config_asset_detail(&client, &record.uuid)
+                .await
+                .map_err(|error| {
+                    mutation_committed_response_unavailable(
+                        error,
+                        "clone scan-config response reload",
+                    )
+                })?,
+        ),
     ))
 }
 
@@ -380,7 +402,14 @@ pub(crate) async fn restore_scan_config(
     })?;
 
     Ok(Json(
-        load_scan_config_asset_detail(&client, &record.uuid).await?,
+        load_scan_config_asset_detail(&client, &record.uuid)
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(
+                    error,
+                    "restore scan-config response reload",
+                )
+            })?,
     ))
 }
 
@@ -460,7 +489,11 @@ pub(crate) async fn patch_scan_config(
         map_scan_config_write_db_error(error, "commit patch scan-config transaction")
     })?;
     Ok(Json(
-        load_scan_config_asset_detail(&client, &record.uuid).await?,
+        load_scan_config_asset_detail(&client, &record.uuid)
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(error, "patch scan-config response reload")
+            })?,
     ))
 }
 

@@ -21,7 +21,7 @@ use crate::{
         validate_credential_create_request, validate_credential_patch_request,
     },
     credentials::load_credential_asset_detail,
-    errors::ApiError,
+    errors::{ApiError, mutation_committed_response_unavailable},
     gvmd_control::{
         ScrubbedControlFrame, gvmd_control_secret, gvmd_control_socket_path,
         map_control_socket_error, request_gvmd_control_response_bytes,
@@ -171,6 +171,10 @@ pub(crate) async fn patch_credential(
     })?;
 
     Ok(Json(
-        load_credential_asset_detail(&client, &record.uuid).await?,
+        load_credential_asset_detail(&client, &record.uuid)
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(error, "patch credential response reload")
+            })?,
     ))
 }

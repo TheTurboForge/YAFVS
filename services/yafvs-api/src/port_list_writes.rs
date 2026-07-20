@@ -11,7 +11,7 @@ use axum::{
 use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
-    errors::ApiError,
+    errors::{ApiError, mutation_committed_response_unavailable},
     port_list_payloads::PortListAssetDetail,
     port_list_write_db::*,
     port_list_write_transactions::*,
@@ -52,7 +52,16 @@ pub(crate) async fn create_port_list(
     })?;
     Ok((
         StatusCode::CREATED,
-        Json(load_port_list_asset_detail(&client, &record.uuid).await?),
+        Json(
+            load_port_list_asset_detail(&client, &record.uuid)
+                .await
+                .map_err(|error| {
+                    mutation_committed_response_unavailable(
+                        error,
+                        "create port list response reload",
+                    )
+                })?,
+        ),
     ))
 }
 
@@ -87,7 +96,16 @@ pub(crate) async fn import_port_list(
     })?;
     Ok((
         StatusCode::CREATED,
-        Json(load_port_list_asset_detail(&client, &record.uuid).await?),
+        Json(
+            load_port_list_asset_detail(&client, &record.uuid)
+                .await
+                .map_err(|error| {
+                    mutation_committed_response_unavailable(
+                        error,
+                        "import port list response reload",
+                    )
+                })?,
+        ),
     ))
 }
 
@@ -121,7 +139,16 @@ pub(crate) async fn clone_port_list(
     })?;
     Ok((
         StatusCode::CREATED,
-        Json(load_port_list_asset_detail(&client, &record.uuid).await?),
+        Json(
+            load_port_list_asset_detail(&client, &record.uuid)
+                .await
+                .map_err(|error| {
+                    mutation_committed_response_unavailable(
+                        error,
+                        "clone port list response reload",
+                    )
+                })?,
+        ),
     ))
 }
 
@@ -162,7 +189,11 @@ pub(crate) async fn patch_port_list(
         map_port_list_write_db_error(error, "commit patch port list transaction")
     })?;
     Ok(Json(
-        load_port_list_asset_detail(&client, &record.uuid).await?,
+        load_port_list_asset_detail(&client, &record.uuid)
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(error, "patch port list response reload")
+            })?,
     ))
 }
 
@@ -320,7 +351,11 @@ pub(crate) async fn restore_port_list(
     })?;
 
     Ok(Json(
-        load_port_list_asset_detail(&client, &record.uuid).await?,
+        load_port_list_asset_detail(&client, &record.uuid)
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(error, "restore port list response reload")
+            })?,
     ))
 }
 

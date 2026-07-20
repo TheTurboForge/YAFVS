@@ -11,7 +11,7 @@ use axum::{
 use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
-    errors::ApiError,
+    errors::{ApiError, mutation_committed_response_unavailable},
     host_asset_payloads::HostAssetDetail,
     host_assets::host_asset_detail,
     host_write_db::*,
@@ -49,7 +49,11 @@ pub(crate) async fn create_host(
         .map_err(|error| map_host_write_db_error(error, "commit create host transaction"))?;
     Ok((
         StatusCode::CREATED,
-        host_asset_detail(State(state), Path(record.uuid)).await?,
+        host_asset_detail(State(state), Path(record.uuid))
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(error, "create host response reload")
+            })?,
     ))
 }
 
@@ -76,7 +80,11 @@ pub(crate) async fn patch_host(
     tx.commit()
         .await
         .map_err(|error| map_host_write_db_error(error, "commit patch host transaction"))?;
-    host_asset_detail(State(state), Path(record.uuid)).await
+    host_asset_detail(State(state), Path(record.uuid))
+        .await
+        .map_err(|error| {
+            mutation_committed_response_unavailable(error, "patch host response reload")
+        })
 }
 
 pub(crate) async fn delete_host(

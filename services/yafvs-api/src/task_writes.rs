@@ -11,7 +11,7 @@ use axum::{
 use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
-    errors::ApiError,
+    errors::{ApiError, mutation_committed_response_unavailable},
     gvmd_control::{gvmd_control_secret, gvmd_control_socket_path},
     task_clone_control::request_task_clone,
     task_handlers::{load_task_detail, load_task_detail_for_operator},
@@ -113,8 +113,16 @@ pub(crate) async fn create_task(
 
     Ok((
         StatusCode::CREATED,
-        task_write_location_headers(&record.uuid)?,
-        Json(load_task_detail(&client, &record.uuid).await?),
+        task_write_location_headers(&record.uuid).map_err(|error| {
+            mutation_committed_response_unavailable(error, "create task response header")
+        })?,
+        Json(
+            load_task_detail(&client, &record.uuid)
+                .await
+                .map_err(|error| {
+                    mutation_committed_response_unavailable(error, "create task response reload")
+                })?,
+        ),
     ))
 }
 
@@ -145,7 +153,13 @@ pub(crate) async fn patch_task(
         .await
         .map_err(|error| map_task_write_db_error(error, "commit patch task transaction"))?;
 
-    Ok(Json(load_task_detail(&client, &record.uuid).await?))
+    Ok(Json(
+        load_task_detail(&client, &record.uuid)
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(error, "patch task response reload")
+            })?,
+    ))
 }
 
 pub(crate) async fn replace_task(
@@ -212,7 +226,13 @@ pub(crate) async fn replace_task(
         .await
         .map_err(|error| map_task_write_db_error(error, "commit replace task transaction"))?;
 
-    Ok(Json(load_task_detail(&client, &record.uuid).await?))
+    Ok(Json(
+        load_task_detail(&client, &record.uuid)
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(error, "replace task response reload")
+            })?,
+    ))
 }
 
 pub(crate) async fn delete_task(

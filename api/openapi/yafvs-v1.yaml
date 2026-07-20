@@ -844,6 +844,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /hosts/{host_id}:
     get:
       operationId: getHostsByHostId
@@ -919,6 +921,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
     delete:
       operationId: deleteHostsByHostId
       x-yafvs-direct: true
@@ -1294,6 +1298,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /scanners/{scanner_id}:
     get:
       operationId: getScannersByScannerId
@@ -1371,6 +1377,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /scanners/{scanner_id}/replace-configuration:
     post:
       operationId: postScannersByScannerIdReplaceConfiguration
@@ -1417,6 +1425,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /scanners/{scanner_id}/verify:
     post:
       operationId: postScannersByScannerIdVerify
@@ -1649,6 +1659,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /credentials/{credential_id}/export:
     get:
       operationId: getCredentialsByCredentialIdExport
@@ -1757,6 +1769,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /filters/{filter_id}:
     get:
       operationId: getFiltersByFilterId
@@ -1835,6 +1849,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
     delete:
       operationId: deleteFiltersByFilterId
       x-yafvs-direct: true
@@ -1947,6 +1963,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /filters/{filter_id}/restore:
     post:
       operationId: postFiltersByFilterIdRestore
@@ -1988,6 +2006,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /filters/{filter_id}/trash:
     delete:
       operationId: deleteFiltersByFilterIdTrash
@@ -2212,6 +2232,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
     delete:
       operationId: deleteAlertsByAlertId
       x-yafvs-direct: true
@@ -2378,6 +2400,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /alerts/{alert_id}/test:
     post:
       operationId: postAlertsByAlertIdTest
@@ -3373,6 +3397,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /port-list-imports:
     post:
       operationId: postPortListImports
@@ -3413,6 +3439,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /port-lists/{port_list_id}:
     get:
       operationId: getPortListsByPortListId
@@ -3487,6 +3515,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
     delete:
       operationId: deletePortListsByPortListId
       x-yafvs-direct: true
@@ -3679,6 +3709,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /port-lists/{port_list_id}/restore:
     post:
       operationId: postPortListsByPortListIdRestore
@@ -3717,6 +3749,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /port-lists/{port_list_id}/trash:
     delete:
       operationId: deletePortListsByPortListIdTrash
@@ -3984,6 +4018,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /schedules/{schedule_id}/restore:
     post:
       operationId: postSchedulesByScheduleIdRestore
@@ -4022,6 +4058,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /schedules/{schedule_id}/trash:
     delete:
       operationId: deleteSchedulesByScheduleIdTrash
@@ -4798,6 +4836,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /scan-configs/{scan_config_id}:
     get:
       operationId: getScanConfigsByScanConfigId
@@ -4873,6 +4913,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
     delete:
       operationId: deleteScanConfigsByScanConfigId
       x-yafvs-direct: true
@@ -5005,6 +5047,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /scan-configs/{scan_config_id}/restore:
     post:
       operationId: postScanConfigsByScanConfigIdRestore
@@ -5043,6 +5087,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /scan-configs/{scan_config_id}/trash:
     delete:
       operationId: deleteScanConfigsByScanConfigIdTrash
@@ -5311,6 +5357,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /timezones:
     get:
       operationId: getTimezones
@@ -6121,6 +6169,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /scopes/{scope_id}:
     get:
       operationId: getScopesByScopeId
@@ -6194,6 +6244,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
     delete:
       operationId: deleteScopesByScopeId
       x-yafvs-direct: true
@@ -6271,6 +6323,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /targets:
     get:
       operationId: getTargets
@@ -6353,6 +6407,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /targets/{target_id}:
     get:
       operationId: getTargetsByTargetId
@@ -6429,6 +6485,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
     delete:
       operationId: deleteTargetsByTargetId
       x-yafvs-direct: true
@@ -6549,6 +6607,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /targets/{target_id}/restore:
     post:
       operationId: postTargetsByTargetIdRestore
@@ -6590,6 +6650,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /targets/{target_id}/trash:
     delete:
       operationId: deleteTargetsByTargetIdTrash
@@ -6709,6 +6771,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /tasks/{task_id}:
     get:
       operationId: getTasksByTaskId
@@ -6784,6 +6848,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
     delete:
       operationId: deleteTasksByTaskId
       x-yafvs-direct: true
@@ -6960,6 +7026,8 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
   /tasks/{task_id}/start:
     post:
       operationId: postTasksByTaskIdStart

@@ -388,7 +388,7 @@ fn task_create_handler_requires_operator_references_and_uniqueness_before_insert
         "load_assignable_task_alert(&tx, alert_id, operator_owner_id).await?;",
         "execute_task_create_transaction",
         "StatusCode::CREATED",
-        "task_write_location_headers(&record.uuid)?",
+        "mutation_committed_response_unavailable(error, \"create task response header\")",
     ] {
         assert!(
             handler.contains(required),

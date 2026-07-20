@@ -26,7 +26,7 @@ use crate::{
     alerts::load_alert_asset_detail,
     app_state::AppState,
     auth::DirectApiOperator,
-    errors::ApiError,
+    errors::{ApiError, mutation_committed_response_unavailable},
     gvmd_control::{
         ScrubbedControlFrame, gvmd_control_secret, gvmd_control_socket_path,
         map_control_socket_error, request_gvmd_control_response_bytes,
@@ -481,7 +481,13 @@ pub(crate) async fn clone_alert(
 
     Ok((
         StatusCode::CREATED,
-        Json(load_alert_asset_detail(&client, &record.uuid).await?),
+        Json(
+            load_alert_asset_detail(&client, &record.uuid)
+                .await
+                .map_err(|error| {
+                    mutation_committed_response_unavailable(error, "clone alert response reload")
+                })?,
+        ),
     ))
 }
 
@@ -540,5 +546,11 @@ pub(crate) async fn patch_alert(
         .await
         .map_err(|error| map_alert_write_db_error(error, "commit patch alert transaction"))?;
 
-    Ok(Json(load_alert_asset_detail(&client, &record.uuid).await?))
+    Ok(Json(
+        load_alert_asset_detail(&client, &record.uuid)
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(error, "patch alert response reload")
+            })?,
+    ))
 }

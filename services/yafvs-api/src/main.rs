@@ -38,6 +38,8 @@ mod cert_advisories;
 mod cert_advisory_feed;
 mod cert_advisory_payloads;
 mod collections;
+#[cfg(test)]
+mod committed_mutation_response_contract_tests;
 mod cpe_catalog;
 mod cpe_catalog_payloads;
 mod credential_payloads;

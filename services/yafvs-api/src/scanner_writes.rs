@@ -11,7 +11,7 @@ use axum::{
 use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
-    errors::ApiError,
+    errors::{ApiError, mutation_committed_response_unavailable},
     scanner_asset_payloads::ScannerAssetDetail,
     scanner_assets::scanner_asset_detail,
     scanner_write_db::*,
@@ -48,11 +48,17 @@ pub(crate) async fn create_scanner(
     tx.commit()
         .await
         .map_err(|error| map_scanner_write_db_error(error, "commit create scanner transaction"))?;
-    let detail = scanner_asset_detail(State(state), Path(record.uuid.clone())).await?;
+    let detail = scanner_asset_detail(State(state), Path(record.uuid.clone()))
+        .await
+        .map_err(|error| {
+            mutation_committed_response_unavailable(error, "create scanner response reload")
+        })?;
 
     Ok((
         StatusCode::CREATED,
-        scanner_write_location_headers(&record.uuid)?,
+        scanner_write_location_headers(&record.uuid).map_err(|error| {
+            mutation_committed_response_unavailable(error, "create scanner response header")
+        })?,
         detail,
     ))
 }
@@ -90,7 +96,11 @@ pub(crate) async fn replace_scanner_configuration(
         .await
         .map_err(|error| map_scanner_write_db_error(error, "commit replace scanner transaction"))?;
 
-    scanner_asset_detail(State(state), Path(record.uuid)).await
+    scanner_asset_detail(State(state), Path(record.uuid))
+        .await
+        .map_err(|error| {
+            mutation_committed_response_unavailable(error, "replace scanner response reload")
+        })
 }
 
 pub(crate) async fn patch_scanner(
@@ -121,7 +131,11 @@ pub(crate) async fn patch_scanner(
         .await
         .map_err(|error| map_scanner_write_db_error(error, "commit patch scanner transaction"))?;
 
-    scanner_asset_detail(State(state), Path(record.uuid)).await
+    scanner_asset_detail(State(state), Path(record.uuid))
+        .await
+        .map_err(|error| {
+            mutation_committed_response_unavailable(error, "patch scanner response reload")
+        })
 }
 
 async fn resolve_scanner_credential(

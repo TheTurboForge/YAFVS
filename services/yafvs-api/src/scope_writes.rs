@@ -68,9 +68,9 @@ pub(crate) async fn patch_scope(
         .transaction()
         .await
         .map_err(|error| map_scope_write_db_error(error, "begin patch scope transaction"))?;
-    let operator_owner_id = resolve_scope_write_operator_owner(&tx, &operator).await?;
+    resolve_scope_write_operator_owner(&tx, &operator).await?;
     let state = load_mutable_scope_write_state(&tx, &scope_id).await?;
-    ensure_scope_owner_matches_operator(state.owner_id, operator_owner_id)?;
+    ensure_scope_is_human_owned(state.owner_id)?;
     verify_scope_write_references_visible(
         &tx,
         request.target_ids.as_deref().unwrap_or(&[]),
@@ -102,9 +102,9 @@ pub(crate) async fn delete_scope(
         .transaction()
         .await
         .map_err(|error| map_scope_write_db_error(error, "begin delete scope transaction"))?;
-    let operator_owner_id = resolve_scope_write_operator_owner(&tx, &operator).await?;
+    resolve_scope_write_operator_owner(&tx, &operator).await?;
     let state = load_mutable_scope_write_state(&tx, &scope_id).await?;
-    ensure_scope_owner_matches_operator(state.owner_id, operator_owner_id)?;
+    ensure_scope_is_human_owned(state.owner_id)?;
     ensure_scope_has_no_report_history(&tx, &state.uuid).await?;
     execute_scope_delete_transaction(&tx, state.internal_id).await?;
     tx.commit()

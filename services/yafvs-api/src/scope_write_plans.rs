@@ -15,7 +15,7 @@ pub(crate) enum ScopeWriteOperation {
 pub(crate) enum ScopeWriteStep {
     ResolveOperatorOwner,
     VerifyScopeMutable,
-    VerifyOwnerMatch,
+    VerifyHumanOwner,
     VerifyReferenceVisibility,
     InsertScope,
     UpdateScopeMetadata,
@@ -56,7 +56,7 @@ pub(crate) fn scope_patch_transaction_plan(
     let mut steps = vec![
         ScopeWriteStep::ResolveOperatorOwner,
         ScopeWriteStep::VerifyScopeMutable,
-        ScopeWriteStep::VerifyOwnerMatch,
+        ScopeWriteStep::VerifyHumanOwner,
     ];
     if request.target_ids.is_some() || request.host_ids.is_some() {
         steps.push(ScopeWriteStep::VerifyReferenceVisibility);
@@ -85,7 +85,7 @@ pub(crate) fn scope_delete_transaction_plan() -> ScopeWriteTransactionPlan {
         steps: vec![
             ScopeWriteStep::ResolveOperatorOwner,
             ScopeWriteStep::VerifyScopeMutable,
-            ScopeWriteStep::VerifyOwnerMatch,
+            ScopeWriteStep::VerifyHumanOwner,
             ScopeWriteStep::VerifyNoScopeReportHistory,
             ScopeWriteStep::DeleteScopeMembership,
             ScopeWriteStep::DeleteScope,

@@ -122,7 +122,7 @@ fn scope_report_generation_snapshots_explicit_scope_members_before_sources() {
 }
 
 #[test]
-fn scope_report_generation_handler_checks_owner_before_snapshot_insert() {
+fn scope_report_generation_handler_checks_human_owner_before_snapshot_insert() {
     let source = include_str!("scope_report_mutations.rs");
     let body = source
         .split_once("pub(crate) async fn generate_scope_report")
@@ -135,7 +135,7 @@ fn scope_report_generation_handler_checks_owner_before_snapshot_insert() {
         "require_scope_write_operator",
         "resolve_scope_write_operator_owner",
         "load_scope_report_generation_state",
-        "ensure_scope_owner_matches_operator",
+        "ensure_scope_is_human_owned",
         "execute_scope_report_generation_transaction",
         "tx.commit()",
         "scope_report_detail",
@@ -146,7 +146,7 @@ fn scope_report_generation_handler_checks_owner_before_snapshot_insert() {
         );
     }
     assert!(
-        body.find("ensure_scope_owner_matches_operator").unwrap()
+        body.find("ensure_scope_is_human_owned").unwrap()
             < body
                 .find("execute_scope_report_generation_transaction")
                 .unwrap()
@@ -188,7 +188,7 @@ fn scope_report_delete_sql_removes_only_snapshot_tables() {
 }
 
 #[test]
-fn scope_report_delete_handler_checks_owner_before_delete_sql() {
+fn scope_report_delete_handler_checks_human_owner_before_delete_sql() {
     let source = include_str!("scope_report_mutations.rs");
     let body = source
         .split_once("pub(crate) async fn delete_scope_report")
@@ -200,10 +200,10 @@ fn scope_report_delete_handler_checks_owner_before_delete_sql() {
     assert!(body.contains("require_scope_write_operator"));
     assert!(body.contains("resolve_scope_write_operator_owner"));
     assert!(body.contains("load_scope_report_delete_state"));
-    assert!(body.contains("ensure_scope_owner_matches_operator"));
+    assert!(body.contains("ensure_scope_is_human_owned"));
     assert!(body.contains("execute_scope_report_delete_transaction"));
     assert!(
-        body.find("ensure_scope_owner_matches_operator").unwrap()
+        body.find("ensure_scope_is_human_owned").unwrap()
             < body
                 .find("execute_scope_report_delete_transaction")
                 .unwrap()

@@ -17,15 +17,15 @@ use crate::{
     scope_report_generation_sql::*,
     scope_reports::scope_report_detail,
     scope_write_db::{
-        ensure_scope_owner_matches_operator, map_scope_write_db_error,
-        require_scope_write_operator, resolve_scope_write_operator_owner,
+        ensure_scope_is_human_owned, map_scope_write_db_error, require_scope_write_operator,
+        resolve_scope_write_operator_owner,
     },
 };
 
 #[derive(Debug)]
 struct ScopeReportGenerationState {
     internal_id: i32,
-    owner_id: i32,
+    owner_id: Option<i32>,
     is_global: bool,
     uuid: String,
     name: String,
@@ -51,7 +51,7 @@ pub(crate) async fn generate_scope_report(
     })?;
     let operator_owner_id = resolve_scope_write_operator_owner(&tx, &operator).await?;
     let scope = load_scope_report_generation_state(&tx, &scope_id).await?;
-    ensure_scope_owner_matches_operator(scope.owner_id, operator_owner_id)?;
+    ensure_scope_is_human_owned(scope.owner_id)?;
     let scope_report_id =
         execute_scope_report_generation_transaction(&tx, &scope, operator_owner_id).await?;
     tx.commit().await.map_err(|error| {
@@ -207,7 +207,7 @@ async fn execute_scope_report_generation_sql(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ScopeReportDeleteState {
     internal_id: i32,
-    scope_owner_id: i32,
+    scope_owner_id: Option<i32>,
 }
 
 pub(crate) async fn delete_scope_report(
@@ -220,9 +220,9 @@ pub(crate) async fn delete_scope_report(
     let tx = client.transaction().await.map_err(|error| {
         map_scope_write_db_error(error, "begin delete scope-report transaction")
     })?;
-    let operator_owner_id = resolve_scope_write_operator_owner(&tx, &operator).await?;
+    resolve_scope_write_operator_owner(&tx, &operator).await?;
     let delete_state = load_scope_report_delete_state(&tx, &scope_report_id).await?;
-    ensure_scope_owner_matches_operator(delete_state.scope_owner_id, operator_owner_id)?;
+    ensure_scope_is_human_owned(delete_state.scope_owner_id)?;
     execute_scope_report_delete_transaction(&tx, delete_state.internal_id).await?;
     tx.commit().await.map_err(|error| {
         map_scope_write_db_error(error, "commit delete scope-report transaction")

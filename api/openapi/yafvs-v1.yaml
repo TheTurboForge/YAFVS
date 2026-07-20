@@ -6194,6 +6194,7 @@ paths:
       x-yafvs-replaces: scope-metadata-membership-write
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Create a scope
@@ -6270,9 +6271,11 @@ paths:
       x-yafvs-replaces: scope-metadata-membership-write
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Update mutable scope metadata and membership
+      description: Updates any human-owned, non-global, non-predefined scope. Any authenticated stack operator may continue this work; the scope's existing owner remains attribution. Ownerless scopes remain protected, references must resolve to existing targets or hosts, and immutable Organization semantics remain unchanged.
       parameters:
         - $ref: '#/components/parameters/ScopeId'
       requestBody:
@@ -6314,9 +6317,11 @@ paths:
       x-yafvs-replaces: scope-metadata-membership-write
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
-      x-yafvs-side-effect: metadata-write
+      x-yafvs-side-effect: metadata-delete
       summary: Delete a mutable scope
+      description: Deletes any human-owned, non-global, non-predefined scope after proving that it has no scope-report history. Any authenticated stack operator may continue this work; ownerless scopes remain protected. Existing report history, global Organization semantics, and predefined scopes remain deletion barriers.
       parameters:
         - $ref: '#/components/parameters/ScopeId'
       responses:
@@ -6347,10 +6352,11 @@ paths:
       x-yafvs-replaces: scope-report-generation
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: report-generation
       summary: Generate a scope report snapshot
-      description: Creates one persisted scope-report provenance and metric snapshot for the exact operator-owned scope. The transaction selects the latest completed scan report per selected target, records source provenance, rebuilds counts and persisted metrics, and never starts scans or mutates raw report evidence. Evidence collections continue to read the retained raw source reports rather than copying archival evidence. Global Organization scopes remain generatable.
+      description: Creates one persisted, acting-operator-owned scope-report provenance and metric snapshot for any human-owned scope. Any authenticated stack operator may generate a teammate's scope report; the scope's existing owner remains attribution and ownerless scopes remain protected. The transaction selects the latest completed scan report per selected target, records source provenance, rebuilds counts and persisted metrics, and never starts scans or mutates raw report evidence. Evidence collections continue to read the retained raw source reports rather than copying archival evidence. Global Organization scopes remain generatable.
       parameters:
         - $ref: '#/components/parameters/ScopeId'
       responses:
@@ -7298,10 +7304,11 @@ paths:
       x-yafvs-replaces: scope-report-delete
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Delete one generated scope report snapshot
-      description: Removes the generated scope-report snapshot and its source-link rows only. Raw reports, raw results, report hosts, and scan evidence are preserved.
+      description: Removes a generated scope-report snapshot and its source-link rows when its source scope is human-owned. Any authenticated stack operator may perform the deletion; ownerless source scopes remain protected. Raw reports, raw results, report hosts, and scan evidence are preserved.
       parameters:
         - $ref: '#/components/parameters/ScopeReportId'
       responses:

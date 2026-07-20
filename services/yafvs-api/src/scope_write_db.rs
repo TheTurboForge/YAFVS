@@ -19,7 +19,7 @@ pub(crate) struct ScopeWriteRecord {
 pub(crate) struct ScopeWriteState {
     pub(crate) internal_id: i32,
     pub(crate) uuid: String,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
 }
 
 pub(crate) fn require_scope_write_operator(
@@ -40,20 +40,12 @@ pub(crate) fn ensure_scope_is_mutable(is_global: bool, predefined: bool) -> Resu
     }
 }
 
-pub(crate) fn ensure_scope_owner_matches_operator(
-    scope_owner_id: i32,
-    operator_owner_id: i32,
-) -> Result<(), ApiError> {
-    if scope_owner_id == operator_owner_id {
-        Ok(())
-    } else {
-        tracing::warn!(
-            scope_owner_id,
-            operator_owner_id,
-            "direct API scope write owner mismatch"
-        );
-        Err(ApiError::Forbidden)
+pub(crate) fn ensure_scope_is_human_owned(scope_owner_id: Option<i32>) -> Result<(), ApiError> {
+    if scope_owner_id.is_some() {
+        return Ok(());
     }
+    tracing::warn!("direct API scope write rejected an ownerless scope");
+    Err(ApiError::Forbidden)
 }
 
 pub(crate) fn ensure_scope_write_references_visible(

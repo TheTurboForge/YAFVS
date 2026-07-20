@@ -4,8 +4,7 @@
 
 use super::*;
 use crate::scope_write_db::{
-    ensure_scope_is_mutable, ensure_scope_owner_matches_operator,
-    ensure_scope_write_references_visible,
+    ensure_scope_is_human_owned, ensure_scope_is_mutable, ensure_scope_write_references_visible,
 };
 use crate::scope_write_plans::*;
 use crate::scope_write_sql::*;
@@ -47,10 +46,11 @@ fn scope_create_request_normalizes_defaults_and_membership_ids() {
 }
 
 #[test]
-fn scope_write_rejects_operator_owner_mismatch() {
-    assert!(ensure_scope_owner_matches_operator(7, 7).is_ok());
+fn scope_write_accepts_any_human_owner_and_rejects_ownerless_scopes() {
+    assert!(ensure_scope_is_human_owned(Some(7)).is_ok());
+    assert!(ensure_scope_is_human_owned(Some(8)).is_ok());
     assert!(matches!(
-        ensure_scope_owner_matches_operator(7, 8),
+        ensure_scope_is_human_owned(None),
         Err(ApiError::Forbidden)
     ));
 }
@@ -214,7 +214,7 @@ fn scope_write_transaction_plans_keep_validation_before_mutations() {
             steps: vec![
                 ScopeWriteStep::ResolveOperatorOwner,
                 ScopeWriteStep::VerifyScopeMutable,
-                ScopeWriteStep::VerifyOwnerMatch,
+                ScopeWriteStep::VerifyHumanOwner,
                 ScopeWriteStep::VerifyReferenceVisibility,
                 ScopeWriteStep::UpdateScopeMetadata,
                 ScopeWriteStep::ReplaceTargetMembership,
@@ -229,7 +229,7 @@ fn scope_write_transaction_plans_keep_validation_before_mutations() {
             steps: vec![
                 ScopeWriteStep::ResolveOperatorOwner,
                 ScopeWriteStep::VerifyScopeMutable,
-                ScopeWriteStep::VerifyOwnerMatch,
+                ScopeWriteStep::VerifyHumanOwner,
                 ScopeWriteStep::VerifyNoScopeReportHistory,
                 ScopeWriteStep::DeleteScopeMembership,
                 ScopeWriteStep::DeleteScope,
@@ -419,9 +419,9 @@ fn scope_write_handlers_require_operator_transactions_and_payload_reload() {
     }
     assert!(create_body.contains("verify_scope_write_references_visible"));
     assert!(patch_body.contains("load_mutable_scope_write_state"));
-    assert!(patch_body.contains("ensure_scope_owner_matches_operator"));
+    assert!(patch_body.contains("ensure_scope_is_human_owned"));
     assert!(patch_body.contains("verify_scope_write_references_visible"));
-    assert!(delete_body.contains("ensure_scope_owner_matches_operator"));
+    assert!(delete_body.contains("ensure_scope_is_human_owned"));
     assert!(delete_body.contains("ensure_scope_has_no_report_history"));
     assert!(
         delete_body

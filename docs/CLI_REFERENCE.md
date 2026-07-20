@@ -101,6 +101,7 @@ runtime-init
 runtime-manager-init
 runtime-scanner-redis-init
 runtime-scanner-register
+runtime-app-build
 down
 runtime-app-down
 runtime-app-up

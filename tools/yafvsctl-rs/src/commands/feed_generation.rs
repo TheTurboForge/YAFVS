@@ -5,6 +5,7 @@
 //! activation-journal validation and detached-signature provenance checks.
 
 mod activation;
+mod app_build;
 mod app_up;
 mod adapter;
 mod artifact_identity;
@@ -58,6 +59,7 @@ pub(crate) fn run_pinned_gvmd(
     manager_init::run_gvmd(&runtime, command, std::time::Duration::from_secs(300))
 }
 
+pub use app_build::command_runtime_app_build;
 pub use app_up::command_runtime_app_up;
 
 use super::common::{compact_finding, metadata, runtime_dir};

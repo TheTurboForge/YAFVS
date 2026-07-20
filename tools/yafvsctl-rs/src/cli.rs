@@ -454,6 +454,8 @@ pub enum CliCommand {
     RuntimeScannerRedisInit,
     /// Register the prepared OpenVAS scanner with gvmd.
     RuntimeScannerRegister,
+    /// Build and attest application images without starting the deployment.
+    RuntimeAppBuild,
     /// Stop and remove the development runtime infrastructure and application containers.
     Down,
     /// Stop and remove experimental application runtime containers.
@@ -696,6 +698,7 @@ impl CliCommand {
             Self::RuntimeManagerInit => "runtime-manager-init",
             Self::RuntimeScannerRedisInit => "runtime-scanner-redis-init",
             Self::RuntimeScannerRegister => "runtime-scanner-register",
+            Self::RuntimeAppBuild => "runtime-app-build",
             Self::Down => "down",
             Self::RuntimeAppDown => "runtime-app-down",
             Self::RuntimeAppUp => "runtime-app-up",

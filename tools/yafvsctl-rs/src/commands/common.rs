@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::ffi::OsString;
 use std::os::unix::fs::PermissionsExt;
+use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -26,6 +27,57 @@ pub(crate) fn run_git(
     runner
         .run("git", &git_args)
         .and_then(|output| output.success.then(|| output.stdout.trim().to_string()))
+}
+
+pub(crate) fn ensure_real_directory_tree(root: &Path, relative: &Path) -> std::io::Result<PathBuf> {
+    let root_metadata = std::fs::symlink_metadata(root)?;
+    if !root_metadata.file_type().is_dir() || root_metadata.file_type().is_symlink() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("directory root is not a real directory: {}", root.display()),
+        ));
+    }
+    let mut current = root.to_path_buf();
+    for component in relative.components() {
+        let Component::Normal(component) = component else {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "directory descendant is not a safe relative path: {}",
+                    relative.display()
+                ),
+            ));
+        };
+        current.push(component);
+        match std::fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => {
+            }
+            Ok(_) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!(
+                        "directory descendant is not a real directory: {}",
+                        current.display()
+                    ),
+                ));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                std::fs::create_dir(&current)?;
+                let metadata = std::fs::symlink_metadata(&current)?;
+                if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!(
+                            "created directory descendant is unsafe: {}",
+                            current.display()
+                        ),
+                    ));
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(current)
 }
 
 pub(crate) fn executable_path(program: &str) -> Option<PathBuf> {

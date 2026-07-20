@@ -47,6 +47,7 @@ services:
         rm -f /run/redis-openvas/redis.sock &&
         exec redis-server
         --port 0
+        --databases 128
         --unixsocket /run/redis-openvas/redis.sock
         --unixsocketperm 770
         --dir /data

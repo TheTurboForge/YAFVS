@@ -623,6 +623,30 @@ class TestOspdOpenvas(TestCase):
             daemon.handle_result_admission_failure(kbdb, 'scan-1')
         )
 
+    @patch('ospd_openvas.daemon.PreferenceHandler')
+    @patch('ospd_openvas.daemon.Openvas.start_scan')
+    def test_exec_scan_rejects_exhausted_redis_database_capacity(
+        self, mock_start_scan, mock_preference_handler
+    ):
+        daemon = DummyDaemon()
+        kbdb = MagicMock()
+        self.configure_exec_scan(daemon, kbdb)
+        daemon.main_db.get_new_kb_database.return_value = None
+
+        daemon.exec_scan('scan-1')
+
+        mock_preference_handler.assert_not_called()
+        mock_start_scan.assert_not_called()
+        daemon.add_scan_error.assert_called_once_with(
+            'scan-1',
+            name='',
+            host='',
+            value=(
+                'No Redis knowledge-base database is available. '
+                'Scan was not launched.'
+            ),
+        )
+
     def test_non_result_notus_messages_are_acknowledged(self):
         daemon = DummyDaemon()
         daemon.scan_collection = MagicMock()

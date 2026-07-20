@@ -2204,6 +2204,14 @@ class OSPDopenvas(OSPDaemon):
 
         do_not_launch = False
         kbdb = self.main_db.get_new_kb_database()
+        if kbdb is None:
+            error = (
+                'No Redis knowledge-base database is available. '
+                'Scan was not launched.'
+            )
+            self.add_scan_error(scan_id, name='', host='', value=error)
+            logger.error('%s: %s', scan_id, error)
+            return
         scan_prefs = PreferenceHandler(
             scan_id, kbdb, self.scan_collection, self.nvti, self.notus.exists
         )

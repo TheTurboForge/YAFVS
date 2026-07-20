@@ -543,7 +543,7 @@ mod tests {
         std::fs::create_dir_all(root.join("compose")).unwrap();
         std::fs::write(
             root.join("compose/dev.yaml"),
-            "services:\n  redis-openvas:\n    command: --port 0 --unixsocket /run/redis-openvas/redis.sock\n  ospd-openvas:\n    depends_on:\n      redis-openvas:\n",
+            "services:\n  redis-openvas:\n    command: --port 0 --databases 128 --unixsocket /run/redis-openvas/redis.sock\n  ospd-openvas:\n    depends_on:\n      redis-openvas:\n",
         )
         .unwrap();
         let result = boundaries(&root);

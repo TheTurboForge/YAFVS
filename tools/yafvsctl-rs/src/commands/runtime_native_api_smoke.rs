@@ -36,7 +36,39 @@ struct CollectionProbe {
     path: &'static str,
     description: &'static str,
     invalid_sort: Option<(&'static str, &'static str)>,
+    detail: Option<DetailProbe>,
 }
+
+#[derive(Clone, Copy)]
+enum DetailObject {
+    Root,
+    Nested(&'static str),
+}
+
+#[derive(Clone, Copy)]
+struct DetailProbe {
+    detail_key: &'static str,
+    check: &'static str,
+    path_prefix: &'static str,
+    description: &'static str,
+    missing_id_message: Option<&'static str>,
+    empty_message: &'static str,
+    object: DetailObject,
+    required_array: Option<&'static str>,
+}
+
+const SCOPE_REPORT_DETAIL: DetailProbe = DetailProbe {
+    detail_key: "scope_report_detail",
+    check: "native-api.scope-report-detail",
+    path_prefix: "/api/v1/scope-reports",
+    description: "scope-report detail",
+    missing_id_message: Some(
+        "Scope Reports list did not include a scope report id for the detail probe.",
+    ),
+    empty_message: "No scope reports exist yet, so the scope-report detail probe was skipped.",
+    object: DetailObject::Root,
+    required_array: Some("sources"),
+};
 
 const COLLECTION_PROBES: [CollectionProbe; 15] = [
     CollectionProbe {
@@ -45,6 +77,18 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
         path: "/api/v1/scopes?page_size=1&sort=name",
         description: "scope list",
         invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "scope_detail",
+            check: "native-api.scope-detail",
+            path_prefix: "/api/v1/scopes",
+            description: "scope detail",
+            missing_id_message: Some(
+                "Scope list did not include a scope id for the detail probe.",
+            ),
+            empty_message: "No scopes exist yet, so the scope detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
     },
     CollectionProbe {
         detail_key: "targets",
@@ -55,6 +99,18 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
             "native-api.targets.invalid-sort",
             "/api/v1/targets?page_size=1&sort=not_a_target_sort",
         )),
+        detail: Some(DetailProbe {
+            detail_key: "target_detail",
+            check: "native-api.target-detail",
+            path_prefix: "/api/v1/targets",
+            description: "target detail",
+            missing_id_message: Some(
+                "Target list did not include a target id for the detail probe.",
+            ),
+            empty_message: "No targets exist yet, so the target detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
     },
     CollectionProbe {
         detail_key: "tasks",
@@ -62,6 +118,18 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
         path: "/api/v1/tasks?page_size=1&sort=name",
         description: "task list",
         invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "task_detail",
+            check: "native-api.task-detail",
+            path_prefix: "/api/v1/tasks",
+            description: "task detail",
+            missing_id_message: Some(
+                "Task list did not include a task id for the detail probe.",
+            ),
+            empty_message: "No tasks exist yet, so the task detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
     },
     CollectionProbe {
         detail_key: "raw_reports",
@@ -69,6 +137,7 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
         path: "/api/v1/reports?page_size=1&sort=-creation_time",
         description: "raw-report list",
         invalid_sort: None,
+        detail: None,
     },
     CollectionProbe {
         detail_key: "vulnerabilities",
@@ -79,6 +148,7 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
             "native-api.vulnerabilities.invalid-sort",
             "/api/v1/vulnerabilities?page_size=1&sort=not_a_vulnerability_sort",
         )),
+        detail: None,
     },
     CollectionProbe {
         detail_key: "cves",
@@ -86,6 +156,18 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
         path: "/api/v1/cves?page_size=1&sort=-severity",
         description: "Security Information CVE catalog",
         invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "cve_detail",
+            check: "native-api.cve-detail",
+            path_prefix: "/api/v1/cves",
+            description: "Security Information CVE detail",
+            missing_id_message: Some(
+                "CVE catalog list did not include a CVE id for the detail probe.",
+            ),
+            empty_message: "No CVEs exist yet, so the CVE detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
     },
     CollectionProbe {
         detail_key: "cpes",
@@ -93,6 +175,18 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
         path: "/api/v1/cpes?page_size=1&sort=-modified",
         description: "Security Information CPE catalog",
         invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "cpe_detail",
+            check: "native-api.cpe-detail",
+            path_prefix: "/api/v1/cpes",
+            description: "Security Information CPE detail",
+            missing_id_message: Some(
+                "CPE catalog list did not include a CPE id for the detail probe.",
+            ),
+            empty_message: "No CPEs exist yet, so the CPE detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
     },
     CollectionProbe {
         detail_key: "nvts",
@@ -100,6 +194,18 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
         path: "/api/v1/nvts?page_size=1&sort=-created",
         description: "Security Information NVT catalog",
         invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "nvt_detail",
+            check: "native-api.nvt-detail",
+            path_prefix: "/api/v1/nvts",
+            description: "Security Information NVT catalog-detail",
+            missing_id_message: Some(
+                "NVT catalog list did not include an NVT id for the detail probe.",
+            ),
+            empty_message: "No NVTs exist yet, so the detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
     },
     CollectionProbe {
         detail_key: "dfn_cert_advisories",
@@ -107,6 +213,18 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
         path: "/api/v1/dfn-cert-advisories?page_size=1&sort=-created",
         description: "Security Information DFN-CERT advisory list",
         invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "dfn_cert_advisory_detail",
+            check: "native-api.dfn-cert-advisory-detail",
+            path_prefix: "/api/v1/dfn-cert-advisories",
+            description: "Security Information DFN-CERT advisory catalog-detail",
+            missing_id_message: Some(
+                "DFN-CERT advisory list did not include an advisory id for the detail probe.",
+            ),
+            empty_message: "No DFN-CERT advisories exist yet, so the detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
     },
     CollectionProbe {
         detail_key: "cert_bund_advisories",
@@ -114,41 +232,111 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
         path: "/api/v1/cert-bund-advisories?page_size=1&sort=-created",
         description: "Security Information CERT-Bund advisory list",
         invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "cert_bund_advisory_detail",
+            check: "native-api.cert-bund-advisory-detail",
+            path_prefix: "/api/v1/cert-bund-advisories",
+            description: "Security Information CERT-Bund advisory catalog-detail",
+            missing_id_message: Some(
+                "CERT-Bund advisory list did not include an advisory id for the detail probe.",
+            ),
+            empty_message: "No CERT-Bund advisories exist yet, so the detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
     },
     CollectionProbe {
         detail_key: "operating_systems",
         check: "native-api.operating-systems",
         path: "/api/v1/operating-systems?page_size=1&sort=-latest_severity",
-        description: "Operating Systems list",
+        description: "top-level Operating Systems",
         invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "operating_system_detail",
+            check: "native-api.operating-system-detail",
+            path_prefix: "/api/v1/operating-systems",
+            description: "top-level Operating System detail",
+            missing_id_message: Some(
+                "Operating Systems list did not include an operating-system id for the detail probe.",
+            ),
+            empty_message: "No Operating Systems exist yet, so the detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
     },
     CollectionProbe {
         detail_key: "hosts",
         check: "native-api.hosts",
         path: "/api/v1/hosts?page_size=1&sort=-severity",
-        description: "Hosts list",
+        description: "top-level Hosts",
         invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "host_detail",
+            check: "native-api.host-detail",
+            path_prefix: "/api/v1/hosts",
+            description: "top-level Host detail",
+            missing_id_message: Some(
+                "Hosts list did not include a host id for the detail probe.",
+            ),
+            empty_message: "No Hosts exist yet, so the detail probe was skipped.",
+            object: DetailObject::Nested("asset"),
+            required_array: None,
+        }),
     },
     CollectionProbe {
         detail_key: "tls_certificates",
         check: "native-api.tls-certificates",
         path: "/api/v1/tls-certificates?page_size=1&sort=-last_seen",
-        description: "TLS Certificates list",
+        description: "top-level TLS Certificates",
         invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "tls_certificate_detail",
+            check: "native-api.tls-certificate-detail",
+            path_prefix: "/api/v1/tls-certificates",
+            description: "top-level TLS Certificate detail",
+            missing_id_message: Some(
+                "TLS Certificates list did not include a certificate id for the detail probe.",
+            ),
+            empty_message: "No TLS Certificates exist yet, so the detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
     },
     CollectionProbe {
         detail_key: "scanners",
         check: "native-api.scanners",
         path: "/api/v1/scanners?page_size=1&sort=name",
-        description: "scanner list",
+        description: "top-level Scanners",
         invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "scanner_detail",
+            check: "native-api.scanner-detail",
+            path_prefix: "/api/v1/scanners",
+            description: "top-level Scanner detail",
+            missing_id_message: Some(
+                "Scanners list did not include a scanner id for the detail probe.",
+            ),
+            empty_message: "No Scanners exist yet, so the detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
     },
     CollectionProbe {
         detail_key: "filters",
         check: "native-api.filters",
         path: "/api/v1/filters?page_size=1&sort=name",
-        description: "filter list",
+        description: "top-level Filters",
         invalid_sort: None,
+        detail: Some(DetailProbe {
+            detail_key: "filter_detail",
+            check: "native-api.filter-detail",
+            path_prefix: "/api/v1/filters",
+            description: "filter detail",
+            missing_id_message: None,
+            empty_message: "No filters exist yet, so the filter detail probe was skipped.",
+            object: DetailObject::Root,
+            required_array: None,
+        }),
     },
 ];
 
@@ -358,6 +546,14 @@ pub(crate) fn command_runtime_native_api_smoke_with_runner(
             filter_length,
         ));
     }
+    probe_detail(
+        repo_root,
+        &reports,
+        &SCOPE_REPORT_DETAIL,
+        runner,
+        &mut findings,
+        &mut details,
+    );
 
     for probe in &COLLECTION_PROBES {
         let response = native_api_get_json(repo_root, probe.path, runner);
@@ -383,6 +579,16 @@ pub(crate) fn command_runtime_native_api_smoke_with_runner(
             let response = native_api_get_json_with_http_status(repo_root, path, runner);
             findings.push(expected_bad_request_finding(check, path, &response, None));
         }
+        if let Some(detail) = probe.detail {
+            probe_detail(
+                repo_root,
+                &response,
+                &detail,
+                runner,
+                &mut findings,
+                &mut details,
+            );
+        }
     }
 
     finish(
@@ -394,6 +600,70 @@ pub(crate) fn command_runtime_native_api_smoke_with_runner(
         artifact_path,
         status_only,
     )
+}
+
+fn probe_detail(
+    repo_root: &Path,
+    collection: &NativeJsonResponse,
+    probe: &DetailProbe,
+    runner: &dyn CommandRunner,
+    findings: &mut Vec<Finding>,
+    details: &mut Map<String, Value>,
+) {
+    let items = collection
+        .object()
+        .and_then(|object| object.get("items"))
+        .and_then(Value::as_array);
+    let Some(first) = items.and_then(|items| items.first()) else {
+        findings.push(Finding::new(
+            "warn",
+            probe.check,
+            probe.empty_message.into(),
+        ));
+        return;
+    };
+    let id = first
+        .as_object()
+        .and_then(|item| item.get("id"))
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty());
+    let Some(id) = id else {
+        if let Some(message) = probe.missing_id_message {
+            findings.push(Finding::new("fail", probe.check, message.into()));
+        }
+        return;
+    };
+    let path = format!("{}/{}", probe.path_prefix, percent_encode_component(id));
+    let response = native_api_get_json(repo_root, &path, runner);
+    let selected = response.object().and_then(|object| match probe.object {
+        DetailObject::Root => Some(object),
+        DetailObject::Nested(key) => object.get(key).and_then(Value::as_object),
+    });
+    details.insert(
+        probe.detail_key.into(),
+        selected.map_or_else(|| json!({"parsed": false}), response_object_summary),
+    );
+    let ok = response.usable_object()
+        && selected
+            .and_then(|object| object.get("id"))
+            .and_then(Value::as_str)
+            == Some(id)
+        && probe.required_array.is_none_or(|key| {
+            selected
+                .and_then(|object| object.get(key))
+                .is_some_and(Value::is_array)
+        });
+    findings.push(native_probe_finding(
+        if ok { "pass" } else { "fail" },
+        probe.check,
+        &format!(
+            "Native API {} probe exit code {}.",
+            probe.description,
+            exit_code(&response.output)
+        ),
+        &response,
+        &format!("{}/...", probe.path_prefix),
+    ));
 }
 
 struct NativeStatusJsonResponse {
@@ -787,6 +1057,10 @@ fn response_summary(response: &NativeJsonResponse) -> Value {
     let Some(object) = response.object() else {
         return json!({"parsed": false});
     };
+    response_object_summary(object)
+}
+
+fn response_object_summary(object: &Map<String, Value>) -> Value {
     let mut summary = Map::from_iter([("parsed".into(), Value::Bool(true))]);
     for key in ["status", "database", "id"] {
         if let Some(value) = object.get(key) {
@@ -1042,16 +1316,40 @@ mod tests {
             ),
         )
     }
+    const TEST_DETAIL_ID: &str = "entity/id with space";
+
+    fn detail_output(probe: &DetailProbe) -> ProcessOutput {
+        if matches!(probe.object, DetailObject::Nested("asset")) {
+            output(true, &format!(r#"{{"asset":{{"id":"{TEST_DETAIL_ID}"}}}}"#))
+        } else {
+            output(true, &format!(r#"{{"id":"{TEST_DETAIL_ID}"}}"#))
+        }
+    }
+
     fn successful_scope_tail() -> Vec<ProcessOutput> {
         let mut outputs = vec![output(
             true,
-            r#"{"items":[{"id":"scope-report"}],"page":{"total":1}}"#,
+            &format!(r#"{{"items":[{{"id":"{TEST_DETAIL_ID}"}}],"page":{{"total":1}}}}"#),
         )];
         outputs.extend((0..5).map(|_| bad_request_output()));
+        outputs.push(output(
+            true,
+            &format!(r#"{{"id":"{TEST_DETAIL_ID}","sources":[]}}"#),
+        ));
         for probe in &COLLECTION_PROBES {
-            outputs.push(output(true, r#"{"items":[],"page":{"total":0}}"#));
+            outputs.push(if probe.detail.is_some() {
+                output(
+                    true,
+                    &format!(r#"{{"items":[{{"id":"{TEST_DETAIL_ID}"}}],"page":{{"total":1}}}}"#),
+                )
+            } else {
+                output(true, r#"{"items":[],"page":{"total":0}}"#)
+            });
             if probe.invalid_sort.is_some() {
                 outputs.push(bad_request_output());
+            }
+            if let Some(detail) = probe.detail {
+                outputs.push(detail_output(&detail));
             }
         }
         outputs
@@ -1062,6 +1360,14 @@ mod tests {
             .iter()
             .find(|finding| finding.check == check)
             .unwrap()
+    }
+
+    fn parsed_response(value: Value) -> NativeJsonResponse {
+        NativeJsonResponse {
+            output: output(true, ""),
+            parsed: Some(value),
+            error: None,
+        }
     }
 
     #[test]
@@ -1115,6 +1421,7 @@ mod tests {
             "native-api.scope-reports.malformed-page",
             "native-api.scope-reports.oversized-page-size",
             "native-api.scope-reports.oversized-filter",
+            "native-api.scope-report-detail",
         ] {
             assert_eq!(finding(&result, check).status, "pass", "{check}");
         }
@@ -1159,10 +1466,27 @@ mod tests {
                 .into_iter()
                 .map(|(_, path, _, _)| format!("http://127.0.0.1:9080{path}")),
         );
+        let encoded_id = percent_encode_component(TEST_DETAIL_ID);
+        expected_urls.push(format!(
+            "http://127.0.0.1:9080{}/{encoded_id}",
+            SCOPE_REPORT_DETAIL.path_prefix
+        ));
         for probe in &COLLECTION_PROBES {
             expected_urls.push(format!("http://127.0.0.1:9080{}", probe.path));
             if let Some((_, path)) = probe.invalid_sort {
                 expected_urls.push(format!("http://127.0.0.1:9080{path}"));
+            }
+            if let Some(detail) = probe.detail {
+                expected_urls.push(format!(
+                    "http://127.0.0.1:9080{}/{encoded_id}",
+                    detail.path_prefix
+                ));
+                assert_eq!(
+                    finding(&result, detail.check).status,
+                    "pass",
+                    "{}",
+                    detail.check
+                );
             }
         }
         assert_eq!(observed_urls, expected_urls);
@@ -1281,6 +1605,75 @@ mod tests {
             assert_eq!(finding(&result, "native-api.scope-reports").status, "fail");
             finish_test(&repo);
         }
+    }
+
+    #[test]
+    fn detail_probe_preserves_empty_missing_id_and_shape_contracts() {
+        let repo = repo("");
+        let mut findings = Vec::new();
+        let mut details = Map::new();
+        let runner = FakeRunner::new(Vec::new());
+
+        probe_detail(
+            &repo,
+            &parsed_response(json!({"items": []})),
+            &SCOPE_REPORT_DETAIL,
+            &runner,
+            &mut findings,
+            &mut details,
+        );
+        assert_eq!(findings[0].status, "warn");
+        assert!(runner.calls().is_empty());
+
+        findings.clear();
+        probe_detail(
+            &repo,
+            &parsed_response(json!({"items": [{}]})),
+            &SCOPE_REPORT_DETAIL,
+            &runner,
+            &mut findings,
+            &mut details,
+        );
+        assert_eq!(findings[0].status, "fail");
+        assert!(runner.calls().is_empty());
+
+        findings.clear();
+        let filter = COLLECTION_PROBES
+            .iter()
+            .find_map(|probe| {
+                (probe.check == "native-api.filters")
+                    .then_some(probe.detail)
+                    .flatten()
+            })
+            .unwrap();
+        probe_detail(
+            &repo,
+            &parsed_response(json!({"items": [{}]})),
+            &filter,
+            &runner,
+            &mut findings,
+            &mut details,
+        );
+        assert!(findings.is_empty());
+
+        let runner = FakeRunner::new(vec![output(
+            true,
+            &format!(r#"{{"id":"{TEST_DETAIL_ID}"}}"#),
+        )]);
+        probe_detail(
+            &repo,
+            &parsed_response(json!({"items": [{"id": TEST_DETAIL_ID}]})),
+            &SCOPE_REPORT_DETAIL,
+            &runner,
+            &mut findings,
+            &mut details,
+        );
+        assert_eq!(findings[0].status, "fail");
+        assert!(findings[0].details.as_ref().unwrap()["command"]
+            .as_str()
+            .unwrap()
+            .contains("/api/v1/scope-reports/..."));
+        finish_test(&repo);
     }
 
     #[test]

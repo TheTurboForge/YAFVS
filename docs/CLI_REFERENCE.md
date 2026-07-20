@@ -37,6 +37,16 @@ subcommands. Commands in this mechanically checked block have a native Rust
 implementation; the normal `just` recipes remain the stable front door while
 each recipe cutover follows parity validation:
 
+The remaining Python command surface is intentional orchestration rather than
+a compatibility target. It covers source-policy and migration reports
+(`native-tooling-state`, the native API migration/client/dashboard reports,
+and `closeout-readiness`), browser smoke/regression automation,
+mixed-language `quality-gate` coordination, and the development-only direct
+write-control smoke. New operator and process-control commands remain
+Rust-first. The direct write smoke should move only when its evolving write
+contracts and zero-residue cleanup can use a stable typed Rust client instead
+of duplicating a large raw-JSON fixture harness.
+
 ```sh
 just yafvsctl-rust status --json
 just yafvsctl-rust inventory --json

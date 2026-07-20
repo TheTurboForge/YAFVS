@@ -56,10 +56,11 @@ download feeds, start containers, run a scan, or pretend to be a production
 installation.
 
 Prerequisites are Git, Rust/Cargo, Python 3.11 or newer, and `just`. The
-golden-path repository and inventory checks run through the Rust CLI, while
-remaining commands continue through the Python compatibility entrypoint.
-Docker, compiler, Node, and component dependencies are reported by `doctor`
-and are needed for deeper build/runtime work.
+golden-path repository and operator commands run through the Rust CLI. Python
+is retained intentionally for browser automation, source-policy inspection,
+mixed-language quality-gate coordination, and the development-only direct
+write-control smoke. Docker, compiler, Node, and component dependencies are
+reported by `doctor` and are needed for deeper build/runtime work.
 
 ```sh
 git clone https://github.com/TheTurboForge/YAFVS.git

@@ -12,7 +12,7 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TlsCertificateWriteState {
     pub(crate) internal_id: i32,
-    pub(crate) owner_id: i32,
+    pub(crate) owner_id: Option<i32>,
 }
 
 pub(crate) fn require_tls_certificate_write_operator(
@@ -64,16 +64,14 @@ pub(crate) async fn load_tls_certificate_write_state(
         .ok_or(ApiError::NotFound)
 }
 
-pub(crate) fn ensure_tls_certificate_owner_matches_operator(
-    certificate_owner_id: i32,
-    operator_owner_id: i32,
+pub(crate) fn ensure_tls_certificate_is_human_owned(
+    certificate_owner_id: Option<i32>,
 ) -> Result<(), ApiError> {
-    if certificate_owner_id == operator_owner_id {
-        Ok(())
-    } else {
-        tracing::warn!("direct API TLS certificate write operator does not own certificate");
-        Err(ApiError::Forbidden)
+    if certificate_owner_id.is_some() {
+        return Ok(());
     }
+    tracing::warn!("direct API TLS certificate write rejected an ownerless certificate");
+    Err(ApiError::Forbidden)
 }
 
 pub(crate) async fn execute_tls_certificate_write_sql(

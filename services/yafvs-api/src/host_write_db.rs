@@ -100,20 +100,12 @@ pub(crate) async fn load_host_operating_system_write_state(
     .ok_or(ApiError::NotFound)
 }
 
-pub(crate) fn ensure_host_owner_matches_operator(
-    host_owner_id: Option<i32>,
-    operator_owner_id: i32,
-) -> Result<(), ApiError> {
-    if host_owner_id == Some(operator_owner_id) {
-        Ok(())
-    } else {
-        tracing::warn!(
-            ?host_owner_id,
-            operator_owner_id,
-            "direct API host write owner mismatch"
-        );
-        Err(ApiError::Forbidden)
+pub(crate) fn ensure_host_is_human_owned(host_owner_id: Option<i32>) -> Result<(), ApiError> {
+    if host_owner_id.is_some() {
+        return Ok(());
     }
+    tracing::warn!("direct API host write rejected an ownerless host");
+    Err(ApiError::Forbidden)
 }
 
 pub(crate) async fn query_host_create_record(

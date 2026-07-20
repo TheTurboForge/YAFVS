@@ -7,7 +7,7 @@ use axum::extract::Extension;
 use crate::{
     auth::DirectApiOperator,
     errors::ApiError,
-    host_write_db::{ensure_host_owner_matches_operator, require_host_write_operator},
+    host_write_db::{ensure_host_is_human_owned, require_host_write_operator},
     host_write_sql::{
         host_create_ip_identifier_sql, host_create_sql, host_delete_identifier_sql,
         host_delete_operating_system_link_sql, host_identifier_write_state_sql,
@@ -66,7 +66,7 @@ fn host_patch_request_normalizes_printable_comment() {
 }
 
 #[test]
-fn host_write_requires_operator_and_owner_match() {
+fn host_write_requires_operator_and_human_owned_resource() {
     let operator = DirectApiOperator::new("12345678-1234-1234-1234-123456789abc", None)
         .expect("valid operator");
     assert_eq!(
@@ -77,13 +77,10 @@ fn host_write_requires_operator_and_owner_match() {
         require_host_write_operator(None),
         Err(ApiError::Forbidden)
     ));
-    assert!(ensure_host_owner_matches_operator(Some(1), 1).is_ok());
+    assert!(ensure_host_is_human_owned(Some(1)).is_ok());
+    assert!(ensure_host_is_human_owned(Some(2)).is_ok());
     assert!(matches!(
-        ensure_host_owner_matches_operator(Some(1), 2),
-        Err(ApiError::Forbidden)
-    ));
-    assert!(matches!(
-        ensure_host_owner_matches_operator(None, 1),
+        ensure_host_is_human_owned(None),
         Err(ApiError::Forbidden)
     ));
 }
@@ -115,7 +112,7 @@ fn host_patch_sql_updates_comment_only() {
 }
 
 #[test]
-fn host_handlers_preserve_ordered_owner_checks_and_transactions() {
+fn host_handlers_preserve_ordered_human_owner_checks_and_transactions() {
     let source = include_str!("host_writes.rs");
     let create_body = source
         .split_once("pub(crate) async fn create_host")
@@ -140,12 +137,12 @@ fn host_handlers_preserve_ordered_owner_checks_and_transactions() {
     assert!(
         patch_body.find("load_host_write_state").unwrap()
             < patch_body
-                .find("ensure_host_owner_matches_operator")
+                .find("ensure_host_is_human_owned")
                 .unwrap()
     );
     assert!(
         patch_body
-            .find("ensure_host_owner_matches_operator")
+            .find("ensure_host_is_human_owned")
             .unwrap()
             < patch_body.find("execute_host_patch_transaction").unwrap()
     );
@@ -160,12 +157,12 @@ fn host_handlers_preserve_ordered_owner_checks_and_transactions() {
     assert!(
         delete_body.find("load_host_write_state").unwrap()
             < delete_body
-                .find("ensure_host_owner_matches_operator")
+                .find("ensure_host_is_human_owned")
                 .unwrap()
     );
     assert!(
         delete_body
-            .find("ensure_host_owner_matches_operator")
+            .find("ensure_host_is_human_owned")
             .unwrap()
             < delete_body.find("execute_host_delete_transaction").unwrap()
     );
@@ -182,12 +179,12 @@ fn host_handlers_preserve_ordered_owner_checks_and_transactions() {
             .find("load_host_identifier_write_state")
             .unwrap()
             < identifier_delete_body
-                .find("ensure_host_owner_matches_operator")
+                .find("ensure_host_is_human_owned")
                 .unwrap()
     );
     assert!(
         identifier_delete_body
-            .find("ensure_host_owner_matches_operator")
+            .find("ensure_host_is_human_owned")
             .unwrap()
             < identifier_delete_body
                 .find("execute_host_identifier_delete_transaction")
@@ -203,12 +200,12 @@ fn host_handlers_preserve_ordered_owner_checks_and_transactions() {
             .find("load_host_operating_system_write_state")
             .unwrap()
             < host_operating_system_delete_body
-                .find("ensure_host_owner_matches_operator")
+                .find("ensure_host_is_human_owned")
                 .unwrap()
     );
     assert!(
         host_operating_system_delete_body
-            .find("ensure_host_owner_matches_operator")
+            .find("ensure_host_is_human_owned")
             .unwrap()
             < host_operating_system_delete_body
                 .find("execute_host_operating_system_delete_transaction")

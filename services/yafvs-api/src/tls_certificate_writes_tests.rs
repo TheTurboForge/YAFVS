@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::{
+    errors::ApiError,
+    tls_certificate_write_db::ensure_tls_certificate_is_human_owned,
     tls_certificate_write_sql::{
         tls_certificate_delete_certificate_sql, tls_certificate_delete_orphan_locations_sql,
         tls_certificate_delete_orphan_origins_sql, tls_certificate_delete_permissions_sql,
@@ -11,6 +13,16 @@ use crate::{
     },
     tls_certificate_write_transactions::execute_tls_certificate_delete_transaction,
 };
+
+#[test]
+fn tls_certificate_delete_accepts_any_human_owner_and_rejects_ownerless_assets() {
+    assert!(ensure_tls_certificate_is_human_owned(Some(1)).is_ok());
+    assert!(ensure_tls_certificate_is_human_owned(Some(2)).is_ok());
+    assert!(matches!(
+        ensure_tls_certificate_is_human_owned(None),
+        Err(ApiError::Forbidden)
+    ));
+}
 
 #[test]
 fn tls_certificate_delete_sql_matches_inherited_delete_shape() {
@@ -61,7 +73,7 @@ fn tls_certificate_delete_sql_matches_inherited_delete_shape() {
 }
 
 #[test]
-fn tls_certificate_delete_handler_preserves_owner_check_order() {
+fn tls_certificate_delete_handler_preserves_human_owner_check_order() {
     let source = include_str!("tls_certificate_writes.rs");
     let body = source
         .split_once("pub(crate) async fn delete_tls_certificate")
@@ -75,11 +87,11 @@ fn tls_certificate_delete_handler_preserves_owner_check_order() {
     assert!(
         body.find("load_tls_certificate_write_state").unwrap()
             < body
-                .find("ensure_tls_certificate_owner_matches_operator")
+                .find("ensure_tls_certificate_is_human_owned")
                 .unwrap()
     );
     assert!(
-        body.find("ensure_tls_certificate_owner_matches_operator")
+        body.find("ensure_tls_certificate_is_human_owned")
             .unwrap()
             < body
                 .find("execute_tls_certificate_delete_transaction")

@@ -813,6 +813,7 @@ paths:
       x-yafvs-replaces: host-manual-create
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Create a manual host asset
@@ -886,10 +887,11 @@ paths:
       x-yafvs-replaces: host-comment-modify
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Update host comment
-      description: Direct write-control endpoint for updating an operator-owned host asset comment only. Host name, OS catalog/detail/severity evidence, target creation, tag writes/actions, XML export, and report-derived asset behavior remain inherited.
+      description: Direct write-control endpoint for updating any human-owned host asset comment only. Any authenticated stack operator may continue this work; the host's existing owner remains attribution. Ownerless hosts remain protected. Host name, OS catalog/detail/severity evidence, target creation, tag writes/actions, XML export, and report-derived asset behavior remain inherited.
       parameters:
         - $ref: '#/components/parameters/HostId'
       requestBody:
@@ -931,10 +933,11 @@ paths:
       x-yafvs-replaces: host-hard-delete
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Delete host
-      description: Direct write-control endpoint for hard-deleting an operator-owned host asset and its host-owned identifiers, operating-system links, severity state, host details, and active tag resource links. It intentionally excludes operating-system catalog deletion, XML export, target creation, scanner/feed control, and report/result/port/application history.
+      description: Direct write-control endpoint for hard-deleting any human-owned host asset and its host-owned identifiers, operating-system links, severity state, host details, and active tag resource links. Any authenticated stack operator may continue this work; ownerless hosts remain protected. It intentionally excludes operating-system catalog deletion, XML export, target creation, scanner/feed control, and report/result/port/application history.
       parameters:
         - $ref: '#/components/parameters/HostId'
       responses:
@@ -965,10 +968,11 @@ paths:
       x-yafvs-replaces: host-identifier-delete
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Delete host identifier
-      description: Direct write-control endpoint for deleting one identifier row that belongs to an operator-owned host. It intentionally excludes host hard-delete, host operating-system link deletion, operating-system catalog deletion, XML export, target creation, scanner/feed control, and report/result/port/application history.
+      description: Direct write-control endpoint for deleting one identifier row that belongs to any human-owned host. Any authenticated stack operator may continue this work; ownerless hosts remain protected. It intentionally excludes host hard-delete, host operating-system link deletion, operating-system catalog deletion, XML export, target creation, scanner/feed control, and report/result/port/application history.
       parameters:
         - $ref: '#/components/parameters/IdentifierId'
       responses:
@@ -999,10 +1003,11 @@ paths:
       x-yafvs-replaces: host-operating-system-delete
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Delete host operating-system link
-      description: Direct write-control endpoint for deleting one host-to-operating-system link row that belongs to an operator-owned host. It intentionally excludes host hard-delete, operating-system catalog deletion, XML export, target creation, scanner/feed control, and report/result/port/application history.
+      description: Direct write-control endpoint for deleting one host-to-operating-system link row that belongs to any human-owned host. Any authenticated stack operator may continue this work; ownerless hosts remain protected. It intentionally excludes host hard-delete, operating-system catalog deletion, XML export, target creation, scanner/feed control, and report/result/port/application history.
       parameters:
         - $ref: '#/components/parameters/HostOperatingSystemId'
       responses:
@@ -1129,10 +1134,11 @@ paths:
       x-yafvs-replaces: tls-certificate-delete
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Delete TLS certificate asset
-      description: Direct write-control endpoint for deleting one operator-owned TLS certificate asset, its permission rows, active tag-resource links, source rows, and orphaned source location/origin rows. TLS certificates do not use Trashcan semantics in inherited gvmd; this route preserves the hard-delete behavior while excluding certificate creation/import, scanner/feed control, credential secrets, and report evidence/history reads.
+      description: Direct write-control endpoint for deleting any human-owned TLS certificate asset, its permission rows, active tag-resource links, source rows, and orphaned source location/origin rows. Any authenticated stack operator may continue this work; ownerless certificates remain protected. TLS certificates do not use Trashcan semantics in inherited gvmd; this route preserves the hard-delete behavior while excluding certificate creation/import, scanner/feed control, credential secrets, and report evidence/history reads.
       parameters:
         - $ref: '#/components/parameters/CertificateId'
       responses:

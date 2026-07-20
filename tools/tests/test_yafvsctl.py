@@ -1154,6 +1154,114 @@ class YAFVSCtlTests(unittest.TestCase):
                 self.assertIn(f"{wrapper} *args:", justfile)
                 self.assertIn(f"tools/yafvsctl {wrapper} \"$@\"", justfile)
 
+    def test_runtime_app_smoke_incomplete_state_fails_without_active_probes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "repo"
+            root.mkdir()
+            runtime = Path(tmp) / "runtime"
+            secret = runtime / "secrets" / "admin-password"
+            keyring = runtime / "state" / "feed-gnupg"
+            gmp = unittest.mock.Mock()
+            capability = unittest.mock.Mock()
+            process_check = unittest.mock.Mock()
+            nmap = unittest.mock.Mock()
+            native_api = unittest.mock.Mock()
+            run_command = unittest.mock.Mock()
+
+            with unittest.mock.patch.multiple(
+                yafvsctl,
+                runtime_lock_status=unittest.mock.Mock(
+                    return_value={"active": True, "path": "manager.lock"}
+                ),
+                rust_feed_state_result=unittest.mock.Mock(
+                    return_value={
+                        "findings": [
+                            yafvsctl.finding(
+                                "warn",
+                                "feed.current",
+                                "No active feed generation.",
+                            )
+                        ]
+                    }
+                ),
+                cert_file_findings=unittest.mock.Mock(
+                    return_value=[
+                        yafvsctl.finding(
+                            "warn",
+                            "runtime.cert.ca-cert",
+                            "Certificate is missing.",
+                        )
+                    ]
+                ),
+                certs_complete=unittest.mock.Mock(return_value=False),
+                pg_gvm_extension_status=unittest.mock.Mock(
+                    return_value=yafvsctl.finding(
+                        "warn",
+                        "postgres.pg-gvm",
+                        "pg-gvm extension is missing.",
+                    )
+                ),
+                runtime_secret_path=unittest.mock.Mock(return_value=secret),
+                feed_gnupg_home=unittest.mock.Mock(return_value=keyring),
+                container_running=unittest.mock.Mock(return_value=False),
+                service_log_tail=unittest.mock.Mock(return_value=["stopped"]),
+                gvmd_socket_path=unittest.mock.Mock(
+                    return_value=runtime / "run" / "gvmd.sock"
+                ),
+                ospd_socket_path=unittest.mock.Mock(
+                    return_value=runtime / "run" / "ospd.sock"
+                ),
+                socket_readiness_finding=unittest.mock.Mock(
+                    side_effect=lambda check, label, path: yafvsctl.finding(
+                        "warn",
+                        check,
+                        f"{label} socket is not ready.",
+                        str(path),
+                    )
+                ),
+                gsad_base_urls=unittest.mock.Mock(return_value=[]),
+                runtime_dir=unittest.mock.Mock(return_value=runtime),
+                command_runtime_gmp_smoke=gmp,
+                command_runtime_scanner_capability_check=capability,
+                command_runtime_scanner_process_check=process_check,
+                command_runtime_nmap_capability_check=nmap,
+                command_runtime_native_api_smoke=native_api,
+                run_command=run_command,
+            ):
+                result = yafvsctl.command_runtime_app_smoke(root)
+
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(
+            [item["check"] for item in result["findings"]],
+            [
+                "runtime.manager-lock",
+                "feed.current",
+                "runtime.cert.ca-cert",
+                "runtime.cert.complete",
+                "postgres.pg-gvm",
+                "runtime.admin-secret",
+                "feed-keyring.fingerprint",
+                "runtime.app.running",
+                "runtime.app.running",
+                "runtime.app.running",
+                "runtime.app.running",
+                "runtime.app.running",
+                "gvmd.socket",
+                "ospd.socket",
+            ],
+        )
+        self.assertEqual(
+            [item["details"]["service"] for item in result["findings"][7:12]],
+            list(yafvsctl.APP_SERVICES),
+        )
+        self.assertEqual(result["artifacts"], [str(runtime)])
+        gmp.assert_not_called()
+        capability.assert_not_called()
+        process_check.assert_not_called()
+        nmap.assert_not_called()
+        native_api.assert_not_called()
+        run_command.assert_not_called()
+
 
     def test_native_scope_report_finding_counts_exclude_scanner_errors(self):
         source = (Path(__file__).resolve().parents[2] / "services" / "yafvs-api" / "src" / "scope_reports.rs").read_text(encoding="utf-8")

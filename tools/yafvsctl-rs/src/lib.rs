@@ -12,7 +12,9 @@ use std::path::{Path, PathBuf};
 
 pub use cli::{Cli, CliCommand, parse_cli};
 pub use commands::{
-    command_branding_state, command_c_hardening_check, command_c_hardening_manifest_write,
+    command_branding_state, command_build, command_build_baseline, command_build_c_services,
+    command_build_core_c, command_build_python, command_build_ui, command_c_hardening_check,
+    command_c_hardening_manifest_write, command_configure,
     command_deps, command_doctor, command_down, command_feed_copy_to_runtime,
     command_feed_generation_activate, command_feed_generation_rollback,
     command_feed_cache_sync, command_feed_generation_runtime_guard, command_feed_generation_stage,

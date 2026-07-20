@@ -4,6 +4,7 @@
 mod artifact;
 mod audit;
 mod branding;
+mod build;
 mod c_hardening;
 mod common;
 mod compose;
@@ -71,6 +72,10 @@ pub use audit::{
     command_osv_lockfile_audit,
 };
 pub use branding::command_branding_state;
+pub use build::{
+    command_build, command_build_baseline, command_build_c_services, command_build_core_c,
+    command_build_python, command_build_ui, command_configure,
+};
 pub use c_hardening::{command_c_hardening_check, command_c_hardening_manifest_write};
 pub use db_introspect::command_runtime_db_introspect;
 pub use deps::command_deps;

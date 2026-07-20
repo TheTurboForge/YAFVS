@@ -9,16 +9,21 @@ use std::env;
 use std::path::Path;
 
 #[derive(Clone, Copy)]
-struct BuildMeta {
-    name: &'static str,
-    build_system: &'static str,
-    order: u16,
-    pkg_config: &'static [&'static str],
-    programs: &'static [&'static str],
-    package_hints: &'static [&'static str],
+pub(crate) struct BuildMeta {
+    pub(crate) name: &'static str,
+    pub(crate) build_system: &'static str,
+    pub(crate) order: u16,
+    pub(crate) pkg_config: &'static [&'static str],
+    pub(crate) programs: &'static [&'static str],
+    pub(crate) package_hints: &'static [&'static str],
+    pub(crate) cmake_args: &'static [&'static str],
+    pub(crate) install_for_dependents: bool,
+    pub(crate) node_scripts: &'static [&'static str],
+    pub(crate) python_imports: &'static [&'static str],
+    pub(crate) python_local_deps: &'static [&'static str],
 }
 
-const BUILD_META: &[BuildMeta] = &[
+pub(crate) const BUILD_META: &[BuildMeta] = &[
     BuildMeta {
         name: "gvm-libs",
         build_system: "cmake",
@@ -61,6 +66,11 @@ const BUILD_META: &[BuildMeta] = &[
             "libxml2-dev",
             "uuid-dev",
         ],
+        cmake_args: &["-DBUILD_TESTS=OFF"],
+        install_for_dependents: true,
+        node_scripts: &[],
+        python_imports: &[],
+        python_local_deps: &[],
     },
     BuildMeta {
         name: "openvas-smb",
@@ -83,6 +93,11 @@ const BUILD_META: &[BuildMeta] = &[
             "libunistring-dev",
             "xmltoman",
         ],
+        cmake_args: &[],
+        install_for_dependents: true,
+        node_scripts: &[],
+        python_imports: &[],
+        python_local_deps: &[],
     },
     BuildMeta {
         name: "openvas-scanner",
@@ -128,6 +143,11 @@ const BUILD_META: &[BuildMeta] = &[
             "pnscan",
             "python3-impacket",
         ],
+        cmake_args: &["-DCMAKE_C_FLAGS=-isystem /usr/include/mit-krb5"],
+        install_for_dependents: false,
+        node_scripts: &[],
+        python_imports: &[],
+        python_local_deps: &[],
     },
     BuildMeta {
         name: "pg-gvm",
@@ -141,6 +161,11 @@ const BUILD_META: &[BuildMeta] = &[
             "libical-dev",
             "libglib2.0-dev",
         ],
+        cmake_args: &[],
+        install_for_dependents: true,
+        node_scripts: &[],
+        python_imports: &[],
+        python_local_deps: &[],
     },
     BuildMeta {
         name: "gvmd",
@@ -175,6 +200,16 @@ const BUILD_META: &[BuildMeta] = &[
             "xsltproc",
             "xmltoman",
         ],
+        cmake_args: &[
+            "-DENABLE_AGENTS=0",
+            "-DENABLE_JWT_AUTH=0",
+            "-DENABLE_OPENVASD=0",
+            "-DWITH_LIBTHEIA=0",
+        ],
+        install_for_dependents: true,
+        node_scripts: &[],
+        python_imports: &[],
+        python_local_deps: &[],
     },
     BuildMeta {
         name: "gsad",
@@ -201,6 +236,11 @@ const BUILD_META: &[BuildMeta] = &[
             "xmlmantohtml",
         ],
         package_hints: &["libmicrohttpd-dev", "libbrotli-dev", "xmltoman"],
+        cmake_args: &[],
+        install_for_dependents: true,
+        node_scripts: &[],
+        python_imports: &[],
+        python_local_deps: &[],
     },
     BuildMeta {
         name: "gsa",
@@ -209,6 +249,11 @@ const BUILD_META: &[BuildMeta] = &[
         pkg_config: &[],
         programs: &["node", "npm"],
         package_hints: &["Node.js 22 official binary install", "npm 11"],
+        cmake_args: &[],
+        install_for_dependents: false,
+        node_scripts: &["build"],
+        python_imports: &[],
+        python_local_deps: &[],
     },
     BuildMeta {
         name: "greenbone-feed-sync",
@@ -217,6 +262,11 @@ const BUILD_META: &[BuildMeta] = &[
         pkg_config: &[],
         programs: &["python3", "uv"],
         package_hints: &["uv"],
+        cmake_args: &[],
+        install_for_dependents: false,
+        node_scripts: &[],
+        python_imports: &["greenbone.feed.sync"],
+        python_local_deps: &[],
     },
     BuildMeta {
         name: "ospd-openvas",
@@ -225,6 +275,11 @@ const BUILD_META: &[BuildMeta] = &[
         pkg_config: &[],
         programs: &["python3", "uv"],
         package_hints: &["uv", "poetry-core"],
+        cmake_args: &[],
+        install_for_dependents: false,
+        node_scripts: &[],
+        python_imports: &["ospd", "ospd_openvas"],
+        python_local_deps: &[],
     },
     BuildMeta {
         name: "notus-scanner",
@@ -233,8 +288,40 @@ const BUILD_META: &[BuildMeta] = &[
         pkg_config: &[],
         programs: &["python3", "uv"],
         package_hints: &["uv", "poetry-core"],
+        cmake_args: &[],
+        install_for_dependents: false,
+        node_scripts: &[],
+        python_imports: &["notus.scanner"],
+        python_local_deps: &[],
     },
 ];
+
+pub(crate) const CORE_C_CHAIN: &[&str] = &["gvm-libs", "openvas-smb", "openvas-scanner"];
+pub(crate) const C_SERVICES_CHAIN: &[&str] = &[
+    "gvm-libs",
+    "openvas-smb",
+    "openvas-scanner",
+    "pg-gvm",
+    "gvmd",
+    "gsad",
+];
+pub(crate) const PYTHON_CHAIN: &[&str] = &["greenbone-feed-sync", "ospd-openvas", "notus-scanner"];
+pub(crate) const BASELINE_CHAIN: &[&str] = &[
+    "gvm-libs",
+    "openvas-smb",
+    "openvas-scanner",
+    "pg-gvm",
+    "gvmd",
+    "gsad",
+    "gsa",
+    "greenbone-feed-sync",
+    "ospd-openvas",
+    "notus-scanner",
+];
+
+pub(crate) fn build_meta(name: &str) -> Option<&'static BuildMeta> {
+    BUILD_META.iter().find(|meta| meta.name == name)
+}
 
 pub fn command_deps(repo_root: &Path, component: Option<&str>) -> ResultEnvelope {
     command_deps_with_runner(repo_root, component, &SystemCommandRunner)
@@ -435,5 +522,52 @@ mod tests {
         assert_eq!(version_tuple("v22.14.0"), vec![22, 14, 0]);
         assert_eq!(version_tuple("11.2.0-beta"), vec![11, 2, 0]);
         assert!(version_tuple("v22.1") >= vec![22, 0]);
+    }
+
+    #[test]
+    fn build_only_metadata_matches_the_characterized_contract() {
+        assert_eq!(
+            build_meta("gvm-libs").expect("gvm-libs").cmake_args,
+            ["-DBUILD_TESTS=OFF"]
+        );
+        assert!(
+            build_meta("gvm-libs")
+                .expect("gvm-libs")
+                .install_for_dependents
+        );
+        assert_eq!(
+            build_meta("openvas-scanner")
+                .expect("openvas-scanner")
+                .cmake_args,
+            ["-DCMAKE_C_FLAGS=-isystem /usr/include/mit-krb5"]
+        );
+        assert_eq!(
+            build_meta("gvmd").expect("gvmd").cmake_args,
+            [
+                "-DENABLE_AGENTS=0",
+                "-DENABLE_JWT_AUTH=0",
+                "-DENABLE_OPENVASD=0",
+                "-DWITH_LIBTHEIA=0",
+            ]
+        );
+        assert_eq!(build_meta("gsa").expect("gsa").node_scripts, ["build"]);
+        assert_eq!(
+            build_meta("ospd-openvas")
+                .expect("ospd-openvas")
+                .python_imports,
+            ["ospd", "ospd_openvas"]
+        );
+        assert!(
+            BUILD_META
+                .iter()
+                .all(|meta| meta.python_local_deps.is_empty())
+        );
+    }
+
+    #[test]
+    fn build_chains_preserve_dependency_order() {
+        assert_eq!(CORE_C_CHAIN, ["gvm-libs", "openvas-smb", "openvas-scanner"]);
+        assert_eq!(&BASELINE_CHAIN[..C_SERVICES_CHAIN.len()], C_SERVICES_CHAIN);
+        assert_eq!(&BASELINE_CHAIN[7..], PYTHON_CHAIN);
     }
 }

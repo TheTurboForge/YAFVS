@@ -200,15 +200,6 @@ CREDENTIAL_SMOKE_SPEC.loader.exec_module(runtime_credential_smoke)
 
 
 class YAFVSCtlTests(unittest.TestCase):
-    def test_component_registry_has_expected_components(self):
-        names = [component.name for component in yafvsctl.COMPONENTS]
-        self.assertEqual(len(names), 10)
-        self.assertEqual(len(set(names)), 10)
-        self.assertIn("openvas-scanner", names)
-        self.assertIn("pg-gvm", names)
-        self.assertNotIn("python-gvm", names)
-        self.assertNotIn("gvm-tools", names)
-
     def test_rust_runtime_data_state_bridge_accepts_valid_envelopes(self):
         for status, returncode in (("pass", 0), ("warn", 0), ("fail", 1)):
             payload = {
@@ -7158,21 +7149,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn('/api/v1/scanners/{scanner_id}/export', native_tooling)
         self.assertIn('native-api.scanner-detail', rust_smoke)
 
-    def test_retained_json_artifacts_write_latest_history_and_prune(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            artifact_dir = Path(tmp)
-            latest, first = yafvsctl.retained_json_artifact_paths(artifact_dir, "quality-gate", "quality-gate.json")
-            yafvsctl.write_retained_json_artifact(latest, first, {"status": "pass", "summary": "first", "metadata": {"generated_at": "one"}}, "quality-gate", 1)
-            latest, second = yafvsctl.retained_json_artifact_paths(artifact_dir, "quality-gate", "quality-gate.json")
-            yafvsctl.write_retained_json_artifact(latest, second, {"status": "fail", "summary": "second", "metadata": {"generated_at": "two"}}, "quality-gate", 1)
-
-            self.assertTrue((artifact_dir / "quality-gate.json").is_file())
-            history = yafvsctl.json_artifact_history(artifact_dir, "quality-gate")
-            self.assertEqual(len(history), 1)
-            self.assertEqual(history[0]["status"], "fail")
-            self.assertFalse(first.exists())
-            self.assertTrue(second.exists())
-
     def test_quality_gate_systemd_templates_are_present(self):
         root = Path(__file__).resolve().parents[2]
         service = root / "ops" / "systemd" / "yafvs-quality-gate.service.in"
@@ -7944,9 +7920,6 @@ class YAFVSCtlTests(unittest.TestCase):
             root.mkdir()
             self.assertEqual(yafvsctl.runtime_dir(root), Path(tmp) / "YAFVS-runtime")
 
-    def test_runtime_services_include_scanner_redis(self):
-        self.assertEqual(yafvsctl.RUNTIME_SERVICES, ("postgres", "redis-openvas", "mosquitto"))
-
     def test_app_services_are_experimental_profile_services(self):
         self.assertEqual(yafvsctl.APP_SERVICES, ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "yafvs-api"))
 
@@ -7960,8 +7933,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(yafvsctl.DEFAULT_GSAD_HOST, "127.0.0.1")
         self.assertEqual(yafvsctl.GSAD_HOST_ENV, "YAFVS_GSAD_HOST")
         self.assertEqual(yafvsctl.GSAD_HOSTS_ENV, "YAFVS_GSAD_HOSTS")
-        self.assertEqual(yafvsctl.APP_PORTS["gsad"], "${YAFVS_GSAD_HOST:-127.0.0.1}:19392:9392")
-        self.assertNotIn("yafvs-api", yafvsctl.APP_PORTS)
         self.assertEqual(yafvsctl.YAFVS_API_CONTAINER_PORT, "9080")
         self.assertEqual(yafvsctl.YAFVS_API_DIRECT_CONTAINER_PORT, "9081")
         self.assertEqual(yafvsctl.YAFVS_API_DIRECT_DEFAULT_HOST, "127.0.0.1")
@@ -8033,38 +8004,6 @@ class YAFVSCtlTests(unittest.TestCase):
         stale = [finding for finding in findings if finding["check"] == "gsad.runtime-freshness"]
         self.assertEqual(stale[0]["status"], "warn")
         self.assertEqual(stale[0]["details"]["latest_gsad_build_path"], "build/gsad/src/gsad")
-
-    def test_runtime_secret_helper_accepts_default_value(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            secret, created = yafvsctl.read_or_create_runtime_secret(root, "example", "admin")
-            self.assertTrue(created)
-            self.assertEqual(secret, "admin")
-            secret_path = yafvsctl.runtime_secret_path(root, "example")
-            self.assertEqual(secret_path.read_text(encoding="utf-8").strip(), "admin")
-            metadata = yafvsctl.runtime_secret_file_metadata(secret_path)
-            self.assertEqual(metadata["mode"], "0600")
-            self.assertTrue(metadata["permission_ok"])
-            self.assertEqual(secret_path.parent.stat().st_mode & 0o777, 0o700)
-
-    def test_runtime_secret_reader_rejects_symlink(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            target = Path(tmp) / "target"
-            target.write_text("outside\n", encoding="utf-8")
-            target.chmod(0o600)
-            secret_path = yafvsctl.runtime_secret_path(root, "example")
-            secret_path.parent.mkdir(parents=True)
-            secret_path.parent.chmod(0o700)
-            secret_path.symlink_to(target)
-
-            metadata = yafvsctl.runtime_secret_file_metadata(secret_path)
-            self.assertTrue(metadata["symlink"])
-            self.assertFalse(metadata["permission_ok"])
-            with self.assertRaises(OSError):
-                yafvsctl.read_or_create_runtime_secret(root, "example")
 
     def test_runtime_secret_reader_rejects_crlf_and_multiline_values(self):
         for content in ("secret\r\n", "first\nsecond\n", "\n"):
@@ -8345,14 +8284,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertFalse(new_exists)
         running.assert_not_called()
 
-    def test_cert_files_live_under_runtime_dir(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            files = yafvsctl.cert_files(root)
-            self.assertEqual(files["ca_cert"], Path(tmp) / "YAFVS-runtime" / "certs" / "CA" / "cacert.pem")
-            self.assertEqual(files["client_key"], Path(tmp) / "YAFVS-runtime" / "certs" / "private" / "CA" / "clientkey.pem")
-
     def test_compose_command_uses_dev_compose_file(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -8539,15 +8470,6 @@ class YAFVSCtlTests(unittest.TestCase):
         ):
             with self.subTest(token=token):
                 self.assertFalse(yafvsctl.direct_api_bearer_token_is_acceptable(token))
-
-    def test_env_values_have_nonempty_key_rejects_empty_compose_values(self):
-        self.assertFalse(yafvsctl.env_values_have_nonempty_key([], "TOKEN"))
-        self.assertFalse(yafvsctl.env_values_have_nonempty_key(["TOKEN"], "TOKEN"))
-        self.assertFalse(yafvsctl.env_values_have_nonempty_key(["TOKEN="], "TOKEN"))
-        self.assertFalse(yafvsctl.env_values_have_nonempty_key(["TOKEN=   "], "TOKEN"))
-        self.assertFalse(yafvsctl.env_values_have_nonempty_key(["OTHER=value"], "TOKEN"))
-        self.assertTrue(yafvsctl.env_values_have_nonempty_key(["TOKEN=secret"], "TOKEN"))
-
 
     def test_native_api_create_cleanup_state_marks_malformed_201_and_committed_502_uncertain(self):
         malformed_201 = yafvsctl.subprocess.CompletedProcess([], 0, '{"name":"unexpected"}\n201', "")
@@ -9854,208 +9776,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("resource_location = 0", body)
         self.assertIn("resource_location = 1", body)
 
-    def test_direct_native_api_posture_keeps_default_internal_mode_passing(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_has_key", return_value=False):
-                findings = yafvsctl.direct_native_api_posture_findings(root, {})
-
-        by_check = {item["check"]: item for item in findings}
-        self.assertEqual(by_check["production.native-api-direct.configured-binding"]["status"], "pass")
-        self.assertEqual(by_check["production.native-api-direct.running-binding"]["status"], "pass")
-        self.assertEqual(by_check["production.native-api-direct.auth-boundary"]["status"], "pass")
-
-    def test_direct_native_api_posture_fails_broad_config_without_auth_boundary(self):
-        env = {
-            yafvsctl.YAFVS_API_DIRECT_ENV: "1",
-            yafvsctl.YAFVS_API_DIRECT_HOST_ENV: "0.0.0.0",
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_has_key", return_value=False), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
-                findings = yafvsctl.direct_native_api_posture_findings(root, env)
-
-        by_check = {item["check"]: item for item in findings}
-        self.assertEqual(by_check["production.native-api-direct.configured-binding"]["status"], "fail")
-        self.assertEqual(by_check["production.native-api-direct.auth-boundary"]["status"], "fail")
-        self.assertIn("B-130 auth boundary", by_check["production.native-api-direct.auth-boundary"]["message"])
-
-    def test_direct_native_api_posture_fails_weak_configured_token_without_leaking_value(self):
-        env = {
-            yafvsctl.YAFVS_API_DIRECT_ENV: "1",
-            yafvsctl.YAFVS_API_BEARER_TOKEN_ENV: "short-token",
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_has_key", return_value=False):
-                findings = yafvsctl.direct_native_api_posture_findings(root, env)
-
-        auth = {item["check"]: item for item in findings}["production.native-api-direct.auth-boundary"]
-        rendered = json.dumps(findings, sort_keys=True)
-        self.assertEqual(auth["status"], "fail")
-        self.assertFalse(auth["details"]["configured_environment_token_ok"])
-        self.assertEqual(auth["details"]["minimum_token_length"], 32)
-        self.assertEqual(auth["details"]["maximum_token_length"], 1024)
-        self.assertNotIn("short-token", rendered)
-
-    def test_direct_native_api_posture_fails_configured_non_loopback_even_with_auth_boundary(self):
-        env = {
-            yafvsctl.YAFVS_API_DIRECT_ENV: "1",
-            yafvsctl.YAFVS_API_DIRECT_HOST_ENV: "192.0.2.10",
-            yafvsctl.YAFVS_API_BEARER_TOKEN_ENV: "A" * yafvsctl.YAFVS_API_BEARER_TOKEN_MIN_LENGTH,
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_has_key", return_value=False), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
-                findings = yafvsctl.direct_native_api_posture_findings(root, env)
-
-        by_check = {item["check"]: item for item in findings}
-        self.assertEqual(by_check["production.native-api-direct.configured-binding"]["status"], "fail")
-        self.assertIn("production TLS/bootstrap/host-binding", by_check["production.native-api-direct.configured-binding"]["message"])
-        self.assertEqual(by_check["production.native-api-direct.auth-boundary"]["status"], "fail")
-        self.assertTrue(by_check["production.native-api-direct.auth-boundary"]["details"]["environment_token_used"])
-
-    def test_direct_native_api_posture_does_not_treat_secret_file_as_live_auth_boundary(self):
-        env = {yafvsctl.YAFVS_API_DIRECT_ENV: "1"}
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            secret_path = yafvsctl.runtime_secret_path(root, yafvsctl.YAFVS_API_BEARER_TOKEN_SECRET)
-            secret_path.parent.mkdir(parents=True)
-            secret_path.write_text("stored-secret\n", encoding="utf-8")
-            with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_has_key", return_value=False), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
-                findings = yafvsctl.direct_native_api_posture_findings(root, env)
-
-        auth = {item["check"]: item for item in findings}["production.native-api-direct.auth-boundary"]
-        self.assertEqual(auth["status"], "fail")
-        self.assertEqual(auth["details"]["token_sources"], [])
-        self.assertTrue(auth["details"]["runtime_secret_present"])
-
-    def test_direct_native_api_posture_fails_broad_runtime_secret_permissions(self):
-        env = {
-            yafvsctl.YAFVS_API_DIRECT_ENV: "1",
-            yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV: yafvsctl.YAFVS_API_BEARER_TOKEN_CONTAINER_FILE,
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            secret_path = yafvsctl.write_runtime_secret(
-                root,
-                yafvsctl.YAFVS_API_BEARER_TOKEN_SECRET,
-                "0123456789abcdef0123456789abcdef",
-            )
-            secret_path.chmod(0o664)
-            with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_has_key", return_value=False), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
-                findings = yafvsctl.direct_native_api_posture_findings(root, env)
-
-        auth = {item["check"]: item for item in findings}["production.native-api-direct.auth-boundary"]
-        self.assertEqual(auth["status"], "fail")
-        self.assertEqual(auth["details"]["runtime_secret_mode"], "0664")
-        self.assertFalse(auth["details"]["runtime_secret_permission_ok"])
-
-    def test_direct_native_api_posture_fails_broad_configured_token_file_permissions(self):
-        env = {yafvsctl.YAFVS_API_DIRECT_ENV: "1"}
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            token_file = Path(tmp) / "custom-token"
-            token_file.write_text("0123456789abcdef0123456789abcdef", encoding="utf-8")
-            token_file.chmod(0o664)
-            env[yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV] = str(token_file)
-            with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
-                findings = yafvsctl.direct_native_api_posture_findings(root, env)
-
-        auth = {item["check"]: item for item in findings}["production.native-api-direct.auth-boundary"]
-        self.assertEqual(auth["status"], "fail")
-        self.assertEqual(auth["details"]["token_file_configured_value"], str(token_file))
-        self.assertEqual(auth["details"]["token_file_host_path"], str(token_file))
-        self.assertTrue(auth["details"]["token_file_host_metadata_available"])
-        self.assertEqual(auth["details"]["runtime_secret_mode"], "0664")
-        self.assertFalse(auth["details"]["runtime_secret_permission_ok"])
-
-    def test_direct_native_api_posture_accepts_secure_configured_token_file_permissions(self):
-        env = {yafvsctl.YAFVS_API_DIRECT_ENV: "1"}
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            token_file = Path(tmp) / "custom-token"
-            token_file.write_text("0123456789abcdef0123456789abcdef", encoding="utf-8")
-            token_file.chmod(0o600)
-            env[yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV] = str(token_file)
-            with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_value", return_value=None):
-                findings = yafvsctl.direct_native_api_posture_findings(root, env)
-
-        auth = {item["check"]: item for item in findings}["production.native-api-direct.auth-boundary"]
-        self.assertEqual(auth["status"], "pass")
-        self.assertEqual(auth["details"]["token_sources"], ["configured-token-file"])
-        self.assertEqual(auth["details"]["token_file_host_path"], str(token_file))
-        self.assertEqual(auth["details"]["runtime_secret_mode"], "0600")
-
-    def test_direct_native_api_posture_fails_for_running_non_loopback_binding(self):
-        running = ({"host": "192.0.2.10", "host_port": "19080", "container_port": "9081"},)
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            yafvsctl.write_runtime_secret(
-                root,
-                yafvsctl.YAFVS_API_BEARER_TOKEN_SECRET,
-                "0123456789abcdef0123456789abcdef",
-            )
-            def running_env_value(_root, _service, key):
-                if key == yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV:
-                    return yafvsctl.YAFVS_API_BEARER_TOKEN_CONTAINER_FILE
-                return None
-
-            with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=running), unittest.mock.patch.object(yafvsctl, "running_service_env_value", side_effect=running_env_value):
-                findings = yafvsctl.direct_native_api_posture_findings(root, {})
-
-        by_check = {item["check"]: item for item in findings}
-        self.assertEqual(by_check["production.native-api-direct.running-binding"]["status"], "fail")
-        self.assertIn("production TLS/bootstrap/host-binding", by_check["production.native-api-direct.running-binding"]["message"])
-        self.assertEqual(by_check["production.native-api-direct.auth-boundary"]["status"], "pass")
-        self.assertEqual(by_check["production.native-api-direct.auth-boundary"]["details"]["token_sources"], ["running-container-token-file"])
-
-    def test_direct_native_api_posture_warns_for_uninspectable_running_token_file_path(self):
-        running = ({"host": "127.0.0.1", "host_port": "19080", "container_port": "9081"},)
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-
-            def running_env_value(_root, _service, key):
-                if key == yafvsctl.YAFVS_API_BEARER_TOKEN_FILE_ENV:
-                    return "/container-only/custom-token"
-                return None
-
-            with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=running), unittest.mock.patch.object(yafvsctl, "running_service_env_value", side_effect=running_env_value):
-                findings = yafvsctl.direct_native_api_posture_findings(root, {})
-
-        auth = {item["check"]: item for item in findings}["production.native-api-direct.auth-boundary"]
-        self.assertEqual(auth["status"], "warn")
-        self.assertFalse(auth["details"]["token_file_host_metadata_available"])
-        self.assertIsNone(auth["details"]["token_file_host_path"])
-
-    def test_direct_native_api_posture_never_reports_bearer_token_value(self):
-        env = {
-            yafvsctl.YAFVS_API_DIRECT_ENV: "1",
-            yafvsctl.YAFVS_API_BEARER_TOKEN_ENV: "super-secret-token-0123456789abcdef",
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            with unittest.mock.patch.object(yafvsctl, "current_native_api_direct_published_bindings", return_value=()), unittest.mock.patch.object(yafvsctl, "running_service_env_has_key", return_value=False):
-                findings = yafvsctl.direct_native_api_posture_findings(root, env)
-
-        rendered = json.dumps(findings, sort_keys=True)
-        auth = {item["check"]: item for item in findings}["production.native-api-direct.auth-boundary"]
-        self.assertEqual(auth["status"], "fail")
-        self.assertTrue(auth["details"]["environment_token_used"])
-        self.assertIn("environment", rendered)
-        self.assertNotIn("super-secret-token-0123456789abcdef", rendered)
-
     def test_direct_native_api_display_command_redacts_token(self):
         env = {
             yafvsctl.YAFVS_API_DIRECT_HOST_ENV: "127.0.0.1",
@@ -10194,16 +9914,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("must-not-be-in-argv", rendered)
         self.assertEqual(captured["input_text"], secret_body)
 
-    def test_validate_direct_api_request_id_rejects_unsafe_values(self):
-        self.assertEqual(
-            yafvsctl.validate_direct_api_request_id("client-123_abc.4:5"),
-            "client-123_abc.4:5",
-        )
-        for value in ("", "contains space", "../bad", "a" * 129):
-            with self.subTest(value=value):
-                with self.assertRaises(ValueError):
-                    yafvsctl.validate_direct_api_request_id(value)
-
     def test_direct_native_api_http_status_parser_keeps_json_error_body(self):
         completed = yafvsctl.subprocess.CompletedProcess([], 0, '{"error":{"code":"unauthorized"}}\n401', "")
         parsed, status = yafvsctl.parse_json_output_with_http_status(completed)
@@ -10250,92 +9960,6 @@ class YAFVSCtlTests(unittest.TestCase):
             root = Path(tmp) / "TurboVAS"
             root.mkdir()
             self.assertEqual(yafvsctl.openvas_runtime_config_path(root), Path(tmp) / "YAFVS-runtime" / "state" / "ospd" / "openvas.conf")
-
-    def test_feed_paths_live_under_runtime_dir(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            self.assertEqual(yafvsctl.feed_cache_var_lib(root), Path(tmp) / "YAFVS-runtime" / "feed-cache" / "community" / "22.04" / "var-lib")
-            self.assertEqual(yafvsctl.feed_runtime_root(root), Path(tmp) / "YAFVS-runtime" / "feed-store" / "current")
-            self.assertEqual(yafvsctl.feed_sync_log_dir(root), Path(tmp) / "YAFVS-runtime" / "logs" / "feed-sync")
-
-
-
-
-
-
-
-
-    def test_mqtt_health_probe_uses_file_backed_credentials(self):
-        self.assertEqual(
-            yafvsctl.mqtt_health_probe_command(),
-            ["mosquitto_pub", "-o", "/tmp/yafvs-mqtt-health.options"],
-        )
-
-
-
-    def test_feed_activation_state_is_private_atomic_and_validated(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            payload = {
-                "status": "active",
-                "current_generation_id": "a" * 64,
-                "target_generation_id": None,
-                "previous_generation_id": None,
-                "rollback_generation_id": "b" * 64,
-                "app_image_ids": {
-                    service: "sha256:" + f"{index + 1:x}" * 64
-                    for index, service in enumerate(yafvsctl.APP_SERVICES)
-                },
-                "completed_at": "2026-07-13T00:00:00+00:00",
-            }
-            path = yafvsctl.feed_activation_state_path(root)
-            original_fsync = os.fsync
-            fsynced_paths = []
-
-            def record_fsync(descriptor):
-                try:
-                    fsynced_paths.append(os.readlink(f"/proc/self/fd/{descriptor}"))
-                except OSError:
-                    pass
-                original_fsync(descriptor)
-
-            with unittest.mock.patch.object(
-                yafvsctl.os, "fsync", side_effect=record_fsync
-            ):
-                yafvsctl.write_feed_activation_state(root, payload)
-
-            self.assertIn(str(path.parent.parent), fsynced_paths)
-            self.assertEqual(stat.S_IMODE(path.parent.stat().st_mode), 0o700)
-            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
-            self.assertEqual(
-                yafvsctl.read_feed_activation_state(root)["current_generation_id"],
-                "a" * 64,
-            )
-            with self.assertRaisesRegex(ValueError, "identifiers are invalid"):
-                yafvsctl.write_feed_activation_state(
-                    root,
-                    {**payload, "current_generation_id": "../escape"},
-                )
-            with self.assertRaisesRegex(ValueError, "image identities are incomplete"):
-                yafvsctl.write_feed_activation_state(
-                    root,
-                    {**payload, "app_image_ids": {"gvmd": "sha256:" + "a" * 64}},
-                )
-            self.assertEqual(
-                yafvsctl.read_feed_activation_state(root)["current_generation_id"],
-                "a" * 64,
-            )
-
-    def test_missing_feed_activation_state_read_does_not_create_directory(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            path = yafvsctl.feed_activation_state_path(root)
-
-            self.assertIsNone(yafvsctl.read_feed_activation_state(root))
-            self.assertFalse(path.parent.exists())
 
     def test_rust_feed_generation_runtime_guard_bridge_accepts_valid_envelopes(self):
         for selector_only, status, returncode in (
@@ -10530,28 +10154,6 @@ class YAFVSCtlTests(unittest.TestCase):
                 yafvsctl.MAX_RUNTIME_SECRET_BYTES,
             )
             self.assertNotIn("legacy-environment-secret", stored)
-
-    def test_feed_image_snapshot_rejects_partial_running_deployment(self):
-        running = {
-            yafvsctl.APP_SERVICES[0]: "sha256:" + "a" * 64,
-        }
-        with unittest.mock.patch.object(
-            yafvsctl,
-            "container_image_id",
-            side_effect=lambda _root, service: running.get(service),
-        ), unittest.mock.patch.object(
-            yafvsctl,
-            "configured_app_service_image_refs",
-        ) as configured:
-            image_ids, error = yafvsctl.resolve_app_service_image_ids(
-                Path("/tmp"),
-                prefer_running=True,
-                app_env={},
-            )
-
-        self.assertEqual(image_ids, {})
-        self.assertIn("partial", error)
-        configured.assert_not_called()
 
     def test_runtime_artifact_manifest_is_deterministic_and_content_bound(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -10824,44 +10426,6 @@ class YAFVSCtlTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(OSError, "escapes"):
                     yafvsctl.app_runtime_artifact_manifest(root)
-
-    def test_transitioning_feed_state_requires_complete_deployment_identity(self):
-        image_ids = {
-            service: "sha256:" + f"{index + 1:x}" * 64
-            for index, service in enumerate(yafvsctl.APP_SERVICES)
-        }
-        payload = {
-            "schema_version": 1,
-            "status": "transitioning",
-            "action": "activate",
-            "current_generation_id": None,
-            "target_generation_id": "a" * 64,
-            "previous_generation_id": "b" * 64,
-            "rollback_generation_id": "c" * 64,
-            "app_image_ids": image_ids,
-        }
-        with self.assertRaisesRegex(ValueError, "lacks deployment identity"):
-            yafvsctl.validate_feed_activation_state(payload)
-
-    def test_feed_activation_state_validates_restore_gsad_hosts(self):
-        payload = {
-            "schema_version": 1,
-            "status": "active",
-            "current_generation_id": "a" * 64,
-            "target_generation_id": None,
-            "previous_generation_id": None,
-            "rollback_generation_id": None,
-            "restore_gsad_hosts": ["192.168.178.42", "100.80.139.13"],
-        }
-        self.assertEqual(
-            yafvsctl.validate_feed_activation_state(dict(payload))[
-                "restore_gsad_hosts"
-            ],
-            payload["restore_gsad_hosts"],
-        )
-        payload["restore_gsad_hosts"] = ["not-an-ip"]
-        with self.assertRaisesRegex(ValueError, "restore_gsad_hosts"):
-            yafvsctl.validate_feed_activation_state(payload)
 
     def test_runtime_containment_compose_and_broker_policy(self):
         root = Path(__file__).resolve().parents[2]
@@ -11181,7 +10745,6 @@ class YAFVSCtlTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unspecified or multicast"):
             runtime_full_test_scan.parse_full_test_target("ff02::1/128")
         self.assertEqual(runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID, yafvsctl.FULL_AND_FAST_SCAN_CONFIG_ID)
-        self.assertEqual(runtime_full_test_scan.IANA_TCP_UDP_PORT_LIST_ID, yafvsctl.IANA_TCP_UDP_PORT_LIST_ID)
 
     def test_full_test_scan_detects_active_duplicate_task(self):
         rows = [

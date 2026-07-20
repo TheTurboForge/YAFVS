@@ -8,12 +8,10 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import ctypes
-import csv
 import errno
 import fcntl
 import hashlib
 import hmac
-import ipaddress
 import io
 import json
 import os
@@ -28,10 +26,9 @@ import sys
 import tempfile
 import time
 import urllib.parse
-import xml.etree.ElementTree as ET
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 
@@ -43,12 +40,9 @@ sys.path.insert(0, str(TOOLS_MODULE_DIR))
 STATUSES = ("pass", "warn", "fail")
 SHORT_SECRET_BOUNDARY_CHARS = r"A-Za-z0-9_./-"
 LONG_SECRET_MIN_LENGTH = 12
-NATIVE_RUST_SERVICES = ("yafvs-api",)
 YAFVSCTL_RUST_CRATE = Path("tools/yafvsctl-rs")
 YAFVSCTL_RUST_BRIDGE_MAX_OUTPUT_BYTES = 1024 * 1024
-RUNTIME_SERVICES = ("postgres", "redis-openvas", "mosquitto")
 APP_SERVICES = ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "yafvs-api")
-FEED_CONTROL_SERVICES = ("gvmd", "gsad", "yafvs-api")
 APP_RUNTIME_ARTIFACT_ROOTS = (
     Path("build/prefix"),
     Path("build/venvs/ospd-openvas"),
@@ -128,16 +122,11 @@ PRIVATE_RUNTIME_DIRS = frozenset(
     }
 )
 MAX_RUNTIME_SECRET_BYTES = 4096
-RUNTIME_PORTS = {
-    "postgres": "127.0.0.1:15432:5432",
-    "mosquitto": "127.0.0.1:1883:1883",
-}
 DEFAULT_GSAD_HOST = "127.0.0.1"
 GSAD_HOST_ENV = "YAFVS_GSAD_HOST"
 GSAD_HOSTS_ENV = "YAFVS_GSAD_HOSTS"
 GSAD_PORT = "19392"
 GSAD_CONTAINER_PORT = "9392"
-APP_PORTS = {"gsad": f"${{{GSAD_HOST_ENV}:-{DEFAULT_GSAD_HOST}}}:{GSAD_PORT}:9392"}
 YAFVS_API_CONTAINER_PORT = "9080"
 YAFVS_API_DIRECT_CONTAINER_PORT = "9081"
 YAFVS_API_DIRECT_DEFAULT_HOST = "127.0.0.1"
@@ -161,35 +150,11 @@ YAFVS_MQTT_OPENVAS_PASSWORD_ENV = "YAFVS_MQTT_OPENVAS_PASSWORD"
 YAFVS_MQTT_NOTUS_PASSWORD_ENV = "YAFVS_MQTT_NOTUS_PASSWORD"
 YAFVS_MQTT_OSPD_PASSWORD_ENV = "YAFVS_MQTT_OSPD_PASSWORD"
 YAFVS_MQTT_HEALTH_PASSWORD_ENV = "YAFVS_MQTT_HEALTH_PASSWORD"
-YAFVS_MQTT_OSPD_PASSWORD_SECRET = "mqtt-ospd-password"
-YAFVS_MQTT_OSPD_PASSWORD_CONTAINER_FILE = (
-    "/run/secrets/yafvs-mqtt-ospd-password"
-)
-YAFVS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE = (
-    "/run/secrets/yafvs-mqtt-notus-password"
-)
-YAFVS_MQTT_OPENVAS_PASSWORD_CONTAINER_FILE = (
-    "/run/secrets/yafvs-mqtt-openvas-password"
-)
-YAFVS_MQTT_HEALTH_PASSWORD_CONTAINER_FILE = (
-    "/run/secrets/yafvs-mqtt-health-password"
-)
 YAFVS_MQTT_RUNTIME_SECRETS = (
     (YAFVS_MQTT_OPENVAS_PASSWORD_ENV, "mqtt-openvas-password"),
     (YAFVS_MQTT_NOTUS_PASSWORD_ENV, "mqtt-notus-password"),
     (YAFVS_MQTT_OSPD_PASSWORD_ENV, "mqtt-ospd-password"),
     (YAFVS_MQTT_HEALTH_PASSWORD_ENV, "mqtt-health-password"),
-)
-YAFVS_MQTT_CONTAINER_SECRET_FILES = {
-    "mqtt-openvas-password": YAFVS_MQTT_OPENVAS_PASSWORD_CONTAINER_FILE,
-    "mqtt-notus-password": YAFVS_MQTT_NOTUS_PASSWORD_CONTAINER_FILE,
-    "mqtt-ospd-password": YAFVS_MQTT_OSPD_PASSWORD_CONTAINER_FILE,
-    "mqtt-health-password": YAFVS_MQTT_HEALTH_PASSWORD_CONTAINER_FILE,
-}
-YAFVS_MQTT_ENVIRONMENT_SERVICES = (
-    "mosquitto",
-    "ospd-openvas",
-    "notus-scanner",
 )
 YAFVS_API_BEARER_TOKEN_MIN_LENGTH = 32
 YAFVS_API_BEARER_TOKEN_MAX_LENGTH = 1024
@@ -197,14 +162,6 @@ UUID_VALUE_RE = re.compile(
     r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 DIRECT_API_REQUEST_ID_HEADER = "X-Request-Id"
-MAX_DIRECT_API_REQUEST_ID_LENGTH = 128
-DIRECT_API_EXPECTED_RESPONSE_HEADERS = {
-    "cache-control": "no-store",
-    "pragma": "no-cache",
-    "x-content-type-options": "nosniff",
-    "referrer-policy": "no-referrer",
-    "x-frame-options": "DENY",
-}
 POSTGRES_DEFAULTS = {
     "user": "yafvs",
     "password": "yafvs-dev",
@@ -213,18 +170,8 @@ POSTGRES_DEFAULTS = {
 DEV_ADMIN_USER = "admin"
 DEV_ADMIN_PASSWORD = "admin"
 DEV_ADMIN_SECRET = "gvmd-admin-password"
-FEED_IMPORT_OWNER_SETTING = "78eceaec-3385-11ea-b237-28d24461215b"
 UUID_PATTERN = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
-FEED_RELEASE = "22.04"
-FEED_DB_ATTESTATION_META_NAME = "yafvs_feed_generation_attestation"
-FEED_DB_ATTESTATION_IMPORT_CONTRACT = "gvmd-nvt+gvmd-data-all+scap/v1"
-FEED_DB_ATTESTATION_MAX_BYTES = 4096
 FULL_AND_FAST_SCAN_CONFIG_ID = "daba56c8-73ec-11df-a475-002264764cea"
-IANA_TCP_UDP_PORT_LIST_ID = "4a4717fe-57d2-11e1-9a26-406186ea4fc5"
-NATIVE_TARGET_HOST_LIST_DEFAULT_ALIVE_TEST = "Scan Config Default"
-NATIVE_TASK_BATCH_PAGE_SIZE = 500
-# Persisted gvmd task_status_t values that can still own scanner/control work.
-FEED_TRANSITION_BLOCKING_TASK_STATUS_IDS = (0, 3, 4, 10, 11, 14, 16, 17, 18, 19)
 RETAINED_QUALITY_GATE_ARTIFACTS = 30
 GSA_OPERATION_LOCK = "gsa-quality"
 FEED_ACTIVATION_LOCK = "feed-generation-activation"
@@ -268,7 +215,6 @@ NATIVE_TOOLING_MARKERS = (
 NATIVE_TOOLING_MARKER_EXCLUSIONS = {
     "tools/yafvsctl-rs/src/commands/c_hardening.rs": frozenset({"gmp."}),
 }
-NATIVE_TOOLING_PRODUCT_GVM_TOOLS_SCRIPTS = frozenset()
 NATIVE_TOOLING_GVM_TOOLS_REMOVAL_BUCKETS = {
     "compatibility_probe": set(),
     "credential_or_account": {
@@ -2101,7 +2047,6 @@ ALERT_FORBIDDEN_PAYLOAD_KEYS = frozenset(
         "sha256_fingerprint",
     }
 )
-QUALITY_GATE_SERVICE_NAME = "yafvs-quality-gate.service"
 GSA_FRESHNESS_SOURCE_PATHS = (
     "components/gsa/src",
     "components/gsa/public",
@@ -2129,39 +2074,6 @@ GSA_FRESHNESS_SKIP_FILE_SUFFIXES = (
 GSAD_FRESHNESS_SOURCE_PATHS = ("components/gsad/src/gsad_native_api.c",)
 GSAD_FRESHNESS_BUILD_PATHS = ("build/gsad/src/gsad", "build/prefix/sbin/gsad")
 
-
-@dataclass(frozen=True)
-class Component:
-    name: str
-    path: str
-    role: str
-    licenses: tuple[str, ...]
-    markers: tuple[str, ...]
-
-COMPONENTS: tuple[Component, ...] = (
-    Component("openvas-scanner", "components/openvas-scanner", "scanner engine and NASL runtime", ("COPYING", "license-details.md"), ("README.md", "CMakeLists.txt", "rust/Cargo.toml")),
-    Component("gvm-libs", "components/gvm-libs", "shared Greenbone/OpenVAS libraries", ("COPYING",), ("README.md", "CMakeLists.txt")),
-    Component("pg-gvm", "components/pg-gvm", "PostgreSQL extension for gvmd helper functions", ("LICENSE",), ("README.md", "CMakeLists.txt")),
-    Component("gvmd", "components/gvmd", "manager daemon and GMP API", ("COPYING",), ("README.md", "CMakeLists.txt")),
-    Component("ospd-openvas", "components/ospd-openvas", "scanner adapter service", ("COPYING",), ("README.md", "pyproject.toml")),
-    Component("gsad", "components/gsad", "web service daemon", ("LICENSE",), ("README.md", "CMakeLists.txt")),
-    Component("gsa", "components/gsa", "web user interface", ("LICENSE",), ("README.md", "package.json")),
-    Component("openvas-smb", "components/openvas-smb", "SMB support library", ("COPYING",), ("README.md", "CMakeLists.txt")),
-    Component("notus-scanner", "components/notus-scanner", "Notus local security check scanner", ("LICENSE",), ("README.md", "pyproject.toml")),
-    Component("greenbone-feed-sync", "components/greenbone-feed-sync", "feed synchronization tooling", ("LICENSE",), ("README.md", "pyproject.toml")),
-)
-COMPONENT_BY_NAME = {component.name: component for component in COMPONENTS}
-FEED_SIGNED_MANIFESTS: dict[str, tuple[tuple[str, str], ...]] = {
-    "nasl": (("sha256sums", "sha256sums.asc"),),
-    "notus": (
-        ("advisories/sha256sums", "advisories/sha256sums.asc"),
-        ("products/sha256sums", "products/sha256sums.asc"),
-    ),
-    "cert": (("sha256sums", "sha256sums.asc"),),
-}
-FEED_UNSIGNED_METADATA: dict[str, tuple[str, ...]] = {
-    "notus": ("LICENSE", "LICENSE.GPLv2", "LICENSE.ODbLv1", "timestamp"),
-}
 
 def run_git(repo_root: Path, args: list[str]) -> str | None:
     try:
@@ -2775,24 +2687,8 @@ def parse_json_output_with_headers_and_http_status(result: subprocess.CompletedP
     return (parsed if isinstance(parsed, dict) else None), status_code, headers
 
 
-def feed_cache_root(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "feed-cache", "community", FEED_RELEASE)
-
-
-def feed_cache_var_lib(repo_root: Path) -> Path:
-    return feed_cache_root(repo_root) / "var-lib"
-
-
-def feed_runtime_root(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "feed-store", "current")
-
-
 def feed_activation_state_path(repo_root: Path) -> Path:
     return runtime_path(repo_root, "state", "feed-generation", "activation.json")
-
-
-def feed_generation_id_valid(value: Any) -> bool:
-    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
 
 def validate_app_service_image_ids(value: Any) -> dict[str, str]:
@@ -2848,78 +2744,6 @@ def validate_app_compose_contract(value: Any) -> dict[str, Any]:
     ):
         raise ValueError("application Compose execution contract is invalid")
     return value
-
-
-def validate_feed_activation_state(payload: Any) -> dict[str, Any]:
-    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
-        raise ValueError("feed activation state schema is invalid")
-    status = payload.get("status")
-    if status not in {"active", "transitioning"}:
-        raise ValueError("feed activation state status is invalid")
-    current_id = payload.get("current_generation_id")
-    target_id = payload.get("target_generation_id")
-    previous_id = payload.get("previous_generation_id")
-    rollback_id = payload.get("rollback_generation_id")
-    if status == "active":
-        if not feed_generation_id_valid(current_id) or target_id is not None or previous_id is not None:
-            raise ValueError("active feed activation state identifiers are invalid")
-    else:
-        if payload.get("action") not in {"activate", "rollback"} or not feed_generation_id_valid(target_id):
-            raise ValueError("transitioning feed activation state is invalid")
-        if current_id is not None:
-            raise ValueError("transitioning feed activation state must not claim an active generation")
-    for name, value in (("previous_generation_id", previous_id), ("rollback_generation_id", rollback_id)):
-        if value is not None and not feed_generation_id_valid(value):
-            raise ValueError(f"feed activation state {name} is invalid")
-    restore_gsad_hosts = payload.get("restore_gsad_hosts")
-    if restore_gsad_hosts is not None:
-        if (
-            not isinstance(restore_gsad_hosts, list)
-            or not restore_gsad_hosts
-            or len(restore_gsad_hosts) > 16
-        ):
-            raise ValueError("feed activation state restore_gsad_hosts is invalid")
-        seen_hosts: set[str] = set()
-        for host in restore_gsad_hosts:
-            if not isinstance(host, str) or host in seen_hosts:
-                raise ValueError("feed activation state restore_gsad_hosts is invalid")
-            try:
-                if str(ipaddress.ip_address(host)) != host:
-                    raise ValueError
-            except ValueError as error:
-                raise ValueError(
-                    "feed activation state restore_gsad_hosts is invalid"
-                ) from error
-            seen_hosts.add(host)
-    app_image_ids = payload.get("app_image_ids")
-    app_artifacts = payload.get("app_runtime_artifacts")
-    app_compose_contract = payload.get("app_compose_contract")
-    if status == "transitioning" and (
-        app_image_ids is None
-        or app_artifacts is None
-        or app_compose_contract is None
-    ):
-        raise ValueError("transitioning feed activation state lacks deployment identity")
-    if app_image_ids is not None:
-        validate_app_service_image_ids(app_image_ids)
-    if app_artifacts is not None:
-        validate_app_runtime_artifact_manifest(app_artifacts)
-    if app_compose_contract is not None:
-        validate_app_compose_contract(app_compose_contract)
-    return payload
-
-
-def read_feed_activation_state(repo_root: Path) -> dict[str, Any] | None:
-    path = feed_activation_state_path(repo_root)
-    try:
-        path.lstat()
-    except FileNotFoundError:
-        return None
-    try:
-        payload = json.loads(read_private_text(path, 16 * 1024))
-    except json.JSONDecodeError as error:
-        raise ValueError(f"feed activation state is not valid JSON: {error}") from error
-    return validate_feed_activation_state(payload)
 
 
 def ensure_feed_activation_state_directory(repo_root: Path) -> None:
@@ -2981,48 +2805,6 @@ def ensure_feed_activation_state_directory(repo_root: Path) -> None:
         os.close(current_fd)
 
 
-def write_feed_activation_state(repo_root: Path, payload: dict[str, Any]) -> None:
-    candidate = validate_feed_activation_state({"schema_version": 1, **payload})
-    path = feed_activation_state_path(repo_root)
-    text = json.dumps(candidate, indent=2, sort_keys=True) + "\n"
-    ensure_feed_activation_state_directory(repo_root)
-    write_private_text(path, text)
-
-
-def validate_feed_generation_db_attestation(value: Any) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != {
-        "schema_version",
-        "generation_id",
-        "feed_release",
-        "manifest_schema_version",
-        "import_contract",
-        "completed_at",
-    }:
-        raise ValueError("feed generation database attestation is invalid")
-    if (
-        type(value.get("schema_version")) is not int
-        or value.get("schema_version") != 1
-        or not feed_generation_id_valid(value.get("generation_id"))
-        or value.get("feed_release") != FEED_RELEASE
-        or type(value.get("manifest_schema_version")) is not int
-        or value.get("manifest_schema_version") != 1
-        or value.get("import_contract") != FEED_DB_ATTESTATION_IMPORT_CONTRACT
-    ):
-        raise ValueError("feed generation database attestation is invalid")
-    completed_at = value.get("completed_at")
-    if not isinstance(completed_at, str):
-        raise ValueError("feed generation database attestation timestamp is invalid")
-    try:
-        parsed = datetime.fromisoformat(completed_at.replace("Z", "+00:00"))
-    except ValueError as error:
-        raise ValueError(
-            "feed generation database attestation timestamp is invalid"
-        ) from error
-    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
-        raise ValueError("feed generation database attestation timestamp is invalid")
-    return value
-
-
 def reject_duplicate_json_object_keys(
     pairs: list[tuple[str, Any]],
 ) -> dict[str, Any]:
@@ -3032,85 +2814,6 @@ def reject_duplicate_json_object_keys(
             raise ValueError(f"duplicate JSON object key: {key}")
         value[key] = item
     return value
-
-
-def feed_generation_db_attestation_payload(
-    generation_id: str, completed_at: str
-) -> dict[str, Any]:
-    return validate_feed_generation_db_attestation(
-        {
-            "schema_version": 1,
-            "generation_id": generation_id,
-            "feed_release": FEED_RELEASE,
-            "manifest_schema_version": 1,
-            "import_contract": FEED_DB_ATTESTATION_IMPORT_CONTRACT,
-            "completed_at": completed_at,
-        }
-    )
-
-
-def read_feed_generation_db_attestation(repo_root: Path) -> dict[str, Any] | None:
-    result = psql(
-        repo_root,
-        "SELECT CASE "
-        f"WHEN octet_length(value) > {FEED_DB_ATTESTATION_MAX_BYTES} THEN '__OVERSIZED__' "
-        "ELSE COALESCE(encode(convert_to(value, 'UTF8'), 'hex'), '') END "
-        "FROM public.meta "
-        f"WHERE name = {sql_literal(FEED_DB_ATTESTATION_META_NAME)};",
-    )
-    if result.returncode != 0:
-        raise OSError(
-            "feed generation database attestation query failed: "
-            + "; ".join(output_tail(result.stdout, 20))
-        )
-    raw_hex = psql_value(result)
-    if not raw_hex:
-        return None
-    if raw_hex == "__OVERSIZED__":
-        raise ValueError("feed generation database attestation is oversized")
-    if (
-        len(raw_hex) > FEED_DB_ATTESTATION_MAX_BYTES * 2
-        or len(raw_hex) % 2
-        or re.fullmatch(r"[0-9a-f]+", raw_hex) is None
-    ):
-        raise ValueError("feed generation database attestation encoding is invalid")
-    try:
-        raw = bytes.fromhex(raw_hex).decode("utf-8")
-    except (ValueError, UnicodeDecodeError) as error:
-        raise ValueError(
-            "feed generation database attestation encoding is invalid"
-        ) from error
-    try:
-        payload = json.loads(raw, object_pairs_hook=reject_duplicate_json_object_keys)
-    except json.JSONDecodeError as error:
-        raise ValueError(
-            f"feed generation database attestation is not valid JSON: {error}"
-        ) from error
-    return validate_feed_generation_db_attestation(payload)
-
-
-def write_feed_generation_db_attestation(
-    repo_root: Path, generation_id: str, completed_at: str
-) -> dict[str, Any]:
-    payload = feed_generation_db_attestation_payload(generation_id, completed_at)
-    encoded = json.dumps(
-        payload, ensure_ascii=True, separators=(",", ":"), sort_keys=True
-    )
-    result = psql(
-        repo_root,
-        "INSERT INTO public.meta (name, value) VALUES "
-        f"({sql_literal(FEED_DB_ATTESTATION_META_NAME)}, {sql_literal(encoded)}) "
-        "ON CONFLICT (name) DO UPDATE SET value = EXCLUDED.value;",
-    )
-    if result.returncode != 0:
-        raise OSError(
-            "feed generation database attestation write failed: "
-            + "; ".join(output_tail(result.stdout, 20))
-        )
-    observed = read_feed_generation_db_attestation(repo_root)
-    if observed != payload:
-        raise OSError("feed generation database attestation readback mismatch")
-    return payload
 
 
 def active_feed_generation_finding(repo_root: Path) -> dict[str, Any]:
@@ -3172,18 +2875,6 @@ def rust_feed_generation_runtime_guard_finding(
         "Rust feed generation runtime guard failed closed because its result was unavailable or invalid.",
         str(feed_activation_state_path(repo_root)),
     )
-
-
-def feed_sync_log_dir(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "logs", "feed-sync")
-
-
-
-
-
-
-def gsa_build_dir(repo_root: Path) -> Path:
-    return repo_root / "components" / "gsa" / "build"
 
 
 def gsad_static_dir(repo_root: Path) -> Path:
@@ -3418,20 +3109,8 @@ def native_api_direct_bearer_token(repo_root: Path, env: dict[str, str]) -> str:
     return runtime_secret_path(repo_root, YAFVS_API_BEARER_TOKEN_SECRET).read_text(encoding="utf-8").strip()
 
 
-def gsad_host(repo_root: Path) -> str:
-    return gsad_hosts(repo_root)[0]
-
-
-def gsad_base_url(repo_root: Path) -> str:
-    return f"https://{gsad_host(repo_root)}:{GSAD_PORT}"
-
-
 def gsad_base_urls(repo_root: Path) -> tuple[str, ...]:
     return tuple(f"https://{host}:{GSAD_PORT}" for host in gsad_hosts(repo_root))
-
-
-def gsad_port_bindings(repo_root: Path) -> tuple[str, ...]:
-    return tuple(f"{host}:{GSAD_PORT}:{GSAD_CONTAINER_PORT}" for host in gsad_hosts(repo_root))
 
 
 def host_is_wildcard(host: str) -> bool:
@@ -3502,57 +3181,6 @@ def native_api_direct_env_host_from_published_binding(host: str) -> str:
     return host
 
 
-def running_service_env_has_key(repo_root: Path, service: str, key: str) -> bool:
-    cid = container_id(repo_root, service)
-    if not cid:
-        return False
-    result = run_command(["docker", "inspect", "-f", "{{json .Config.Env}}", cid], repo_root, env=runtime_env(repo_root))
-    if result.returncode != 0 or not result.stdout.strip():
-        return False
-    try:
-        values = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return False
-    if not isinstance(values, list):
-        return False
-    return env_values_have_nonempty_key(values, key)
-
-
-def env_values_have_nonempty_key(values: Iterable[Any], key: str) -> bool:
-    prefix = f"{key}="
-    return any(isinstance(value, str) and value.startswith(prefix) and bool(value[len(prefix) :].strip()) for value in values)
-
-
-def running_service_env_value(repo_root: Path, service: str, key: str) -> str | None:
-    cid = container_id(repo_root, service)
-    if not cid:
-        return None
-    result = run_command(["docker", "inspect", "-f", "{{json .Config.Env}}", cid], repo_root, env=runtime_env(repo_root))
-    if result.returncode != 0 or not result.stdout.strip():
-        return None
-    try:
-        values = json.loads(result.stdout)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(values, list):
-        return None
-    prefix = f"{key}="
-    for value in values:
-        if isinstance(value, str) and value.startswith(prefix) and value[len(prefix) :].strip():
-            return value[len(prefix) :]
-    return None
-
-
-
-
-
-
-
-
-
-
-
-
 def native_tooling_residue(relative_path: str, category: str) -> tuple[str, str] | None:
     if category != "product_workflow":
         return None
@@ -3618,255 +3246,6 @@ def native_tooling_removal_review(paths: list[str]) -> dict[str, Any]:
         "blocked_or_review_count": len(paths) - buckets["native_read_replaced"]["count"],
         "buckets": {bucket: data for bucket, data in buckets.items() if data["count"] > 0},
     }
-
-
-def native_api_direct_token_sources(repo_root: Path, env: dict[str, str]) -> tuple[tuple[str, ...], Path, bool]:
-    sources: list[str] = []
-    if env.get(YAFVS_API_BEARER_TOKEN_ENV):
-        sources.append("environment")
-    if env.get(YAFVS_API_BEARER_TOKEN_FILE_ENV):
-        sources.append("configured-token-file")
-    secret_path = runtime_secret_path(repo_root, YAFVS_API_BEARER_TOKEN_SECRET)
-    secret_present = False
-    try:
-        secret_present = secret_path.is_file() and bool(secret_path.read_text(encoding="utf-8").strip())
-    except OSError:
-        pass
-    if running_service_env_value(repo_root, "yafvs-api", YAFVS_API_BEARER_TOKEN_ENV):
-        sources.append("running-container-env")
-    running_token_file = running_service_env_value(repo_root, "yafvs-api", YAFVS_API_BEARER_TOKEN_FILE_ENV)
-    if running_token_file:
-        sources.append("running-container-token-file")
-    return tuple(sources), secret_path, secret_present
-
-
-def native_api_direct_host_token_file_path(repo_root: Path, token_file: str) -> Path:
-    if token_file == YAFVS_API_BEARER_TOKEN_CONTAINER_FILE:
-        return runtime_secret_path(repo_root, YAFVS_API_BEARER_TOKEN_SECRET)
-    return Path(token_file).expanduser()
-
-
-def native_api_direct_token_file_metadata(repo_root: Path, env: dict[str, str]) -> dict[str, Any]:
-    configured_token_file = env.get(YAFVS_API_BEARER_TOKEN_FILE_ENV, "").strip()
-    if configured_token_file:
-        host_path = native_api_direct_host_token_file_path(repo_root, configured_token_file)
-        metadata = runtime_secret_file_metadata(host_path)
-        source = "runtime-secret-file" if configured_token_file == YAFVS_API_BEARER_TOKEN_CONTAINER_FILE else "configured-token-file"
-        return {
-            **metadata,
-            "source": source,
-            "configured_value": configured_token_file,
-            "host_path": str(host_path),
-            "host_metadata_available": True,
-        }
-
-    running_token_file = running_service_env_value(repo_root, "yafvs-api", YAFVS_API_BEARER_TOKEN_FILE_ENV)
-    if running_token_file:
-        if running_token_file == YAFVS_API_BEARER_TOKEN_CONTAINER_FILE:
-            host_path = runtime_secret_path(repo_root, YAFVS_API_BEARER_TOKEN_SECRET)
-            metadata = runtime_secret_file_metadata(host_path)
-            return {
-                **metadata,
-                "source": "running-container-token-file",
-                "configured_value": running_token_file,
-                "host_path": str(host_path),
-                "host_metadata_available": True,
-            }
-        return {
-            "exists": None,
-            "mode": None,
-            "permission_ok": None,
-            "group_or_world_accessible": None,
-            "source": "running-container-token-file",
-            "configured_value": running_token_file,
-            "host_path": None,
-            "host_metadata_available": False,
-        }
-
-    host_path = runtime_secret_path(repo_root, YAFVS_API_BEARER_TOKEN_SECRET)
-    metadata = runtime_secret_file_metadata(host_path)
-    return {
-        **metadata,
-        "source": "runtime-secret-default",
-        "configured_value": None,
-        "host_path": str(host_path),
-        "host_metadata_available": True,
-    }
-
-
-def direct_native_api_posture_findings(repo_root: Path, env: dict[str, str] | None = None) -> list[dict[str, Any]]:
-    env = runtime_env(repo_root) if env is None else env
-    findings: list[dict[str, Any]] = []
-    configured = native_api_direct_requested(env)
-    direct_env_names = (
-        YAFVS_API_DIRECT_ENV,
-        YAFVS_API_DIRECT_HOST_ENV,
-        YAFVS_API_DIRECT_PORT_ENV,
-        YAFVS_API_DIRECT_BIND_ENV,
-        YAFVS_API_OPERATOR_UUID_ENV,
-        YAFVS_API_OPERATOR_NAME_ENV,
-        YAFVS_API_DIRECT_WRITE_CONTROL_ENV,
-    )
-    configured_env = [name for name in direct_env_names if env.get(name)]
-    running_bindings = current_native_api_direct_published_bindings(repo_root)
-
-    if configured:
-        findings.append(native_api_direct_config_shape_finding(env, check="production.native-api-direct.config-shape"))
-
-    if configured:
-        config_errors = native_api_direct_config_errors(env)
-        configured_host = native_api_direct_host(env)
-        if config_errors:
-            configured_status = "fail"
-            configured_message = "Direct native API host publication has malformed host, port, or bind settings."
-        elif host_is_wildcard(configured_host):
-            configured_status = "fail"
-            configured_message = "Direct native API host publication is configured for a broad wildcard binding."
-        elif not host_is_loopback(configured_host):
-            configured_status = "fail"
-            configured_message = "Direct native API host publication is configured for explicit non-loopback access before production TLS/bootstrap/host-binding hardening is complete."
-        else:
-            configured_status = "pass"
-            configured_message = "Direct native API host publication is configured for loopback access."
-        findings.append(
-            finding(
-                configured_status,
-                "production.native-api-direct.configured-binding",
-                configured_message,
-                details={
-                    "enabled": True,
-                    "host": configured_host,
-                    "host_port": native_api_direct_port(env),
-                    "host_binding": native_api_direct_port_binding(env),
-                    "container_bind": env.get(YAFVS_API_DIRECT_BIND_ENV),
-                    "configured_env": configured_env,
-                },
-            )
-        )
-    else:
-        findings.append(
-            finding(
-                "pass",
-                "production.native-api-direct.configured-binding",
-                "Direct native API host publication is not configured; internal-only native API remains the default.",
-                details={"enabled": False, "configured_env": configured_env},
-            )
-        )
-
-    broad_running = [binding for binding in running_bindings if host_is_wildcard(binding.get("host", ""))]
-    external_running = [binding for binding in running_bindings if not host_is_wildcard(binding.get("host", "")) and not host_is_loopback(binding.get("host", ""))]
-    if broad_running:
-        running_status = "fail"
-        running_message = "A running direct native API listener is published on a broad wildcard host binding."
-    elif external_running:
-        running_status = "fail"
-        running_message = "A running direct native API listener is published on explicit non-loopback host binding before production TLS/bootstrap/host-binding hardening is complete."
-    elif running_bindings:
-        running_status = "pass"
-        running_message = "Any running direct native API listener is published only on loopback host binding."
-    else:
-        running_status = "pass"
-        running_message = "No running direct native API host publication was detected."
-    findings.append(
-        finding(
-            running_status,
-            "production.native-api-direct.running-binding",
-            running_message,
-            details={"published_bindings": list(running_bindings)},
-        )
-    )
-
-    token_sources, secret_path, secret_present = native_api_direct_token_sources(repo_root, env)
-    configured_token = env.get(YAFVS_API_BEARER_TOKEN_ENV, "")
-    configured_token_ok = direct_api_bearer_token_is_acceptable(configured_token) if configured_token else None
-    secret_metadata = native_api_direct_token_file_metadata(repo_root, env)
-    secret_file_used = "configured-token-file" in token_sources or "running-container-token-file" in token_sources
-    environment_token_used = "environment" in token_sources or "running-container-env" in token_sources
-    exposure_enabled = configured or bool(running_bindings)
-    auth_details = {
-        "exposure_enabled": exposure_enabled,
-        "token_sources": list(token_sources),
-        "environment_token_used": environment_token_used,
-        "secret_file_used": secret_file_used,
-        "bearer_token_env": YAFVS_API_BEARER_TOKEN_ENV,
-        "bearer_token_file_env": YAFVS_API_BEARER_TOKEN_FILE_ENV,
-        "minimum_token_length": YAFVS_API_BEARER_TOKEN_MIN_LENGTH,
-        "maximum_token_length": YAFVS_API_BEARER_TOKEN_MAX_LENGTH,
-        "configured_environment_token_ok": configured_token_ok,
-        "runtime_secret": str(secret_path),
-        "runtime_secret_present": secret_present,
-        "token_file_source": secret_metadata["source"],
-        "token_file_configured_value": secret_metadata["configured_value"],
-        "token_file_host_path": secret_metadata["host_path"],
-        "token_file_host_metadata_available": secret_metadata["host_metadata_available"],
-        "runtime_secret_mode": secret_metadata["mode"],
-        "runtime_secret_permission_ok": secret_metadata["permission_ok"],
-        "runtime_secret_group_or_world_accessible": secret_metadata["group_or_world_accessible"],
-    }
-    if not exposure_enabled:
-        findings.append(
-            finding(
-                "pass",
-                "production.native-api-direct.auth-boundary",
-                "Direct native API host exposure is disabled; no direct bearer boundary is needed for the internal-only default.",
-                details=auth_details,
-            )
-        )
-    elif configured_token_ok is False:
-        findings.append(
-            finding(
-                "fail",
-                "production.native-api-direct.auth-boundary",
-                "Direct native API exposure is configured with a bearer token that is too short or contains unsafe characters.",
-                details=auth_details,
-            )
-        )
-    elif environment_token_used:
-        findings.append(
-            finding(
-                "fail",
-                "production.native-api-direct.auth-boundary",
-                "Direct native API exposure uses a bearer token from environment variables; use the ignored runtime secret file boundary instead of publishing auth material through process/container environment.",
-                details=auth_details,
-            )
-        )
-    elif secret_file_used and secret_metadata["host_metadata_available"] and not secret_metadata["permission_ok"]:
-        findings.append(
-            finding(
-                "fail",
-                "production.native-api-direct.auth-boundary",
-                "Direct native API exposure uses a bearer-token file that is missing or group/world accessible on the host.",
-                details=auth_details,
-            )
-        )
-    elif secret_file_used and not secret_metadata["host_metadata_available"]:
-        findings.append(
-            finding(
-                "warn",
-                "production.native-api-direct.auth-boundary",
-                "Direct native API exposure uses a running container bearer-token file path that the host posture helper cannot inspect.",
-                details=auth_details,
-            )
-        )
-    elif token_sources:
-        findings.append(
-            finding(
-                "pass",
-                "production.native-api-direct.auth-boundary",
-                "Direct native API exposure has an explicit bearer-token auth boundary configured.",
-                details=auth_details,
-            )
-        )
-    else:
-        findings.append(
-            finding(
-                "fail",
-                "production.native-api-direct.auth-boundary",
-                "Direct native API exposure appears enabled without a bearer-token environment value or token-file boundary in the requested environment or running container; do not expose /api/v1 without the explicit B-130 auth boundary.",
-                details=auth_details,
-            )
-        )
-    return findings
 
 
 def gsad_ports_override_file(repo_root: Path) -> Path:
@@ -4038,80 +3417,8 @@ def runtime_gsa_freshness_findings(repo_root: Path) -> list[dict[str, Any]]:
     return findings
 
 
-def cert_public_dir(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "certs", "CA")
-
-
-def cert_private_dir(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "certs", "private", "CA")
-
-
-def cert_files(repo_root: Path) -> dict[str, Path]:
-    public = cert_public_dir(repo_root)
-    private = cert_private_dir(repo_root)
-    return {
-        "ca_key": private / "cakey.pem",
-        "ca_cert": public / "cacert.pem",
-        "server_key": private / "serverkey.pem",
-        "server_cert": public / "servercert.pem",
-        "client_key": private / "clientkey.pem",
-        "client_cert": public / "clientcert.pem",
-    }
-
-
-
-
-def certs_complete(repo_root: Path) -> bool:
-    return all(path.is_file() and path.stat().st_size > 0 for path in cert_files(repo_root).values())
-
-
-def certs_partial(repo_root: Path) -> bool:
-    existing = [path for path in cert_files(repo_root).values() if path.exists()]
-    return bool(existing) and not certs_complete(repo_root)
-
-
-def gvm_cert_env(repo_root: Path) -> dict[str, str]:
-    env = build_env(repo_root)
-    env.update(
-        {
-            "GVM_KEY_LOCATION": str(cert_private_dir(repo_root)),
-            "GVM_CERT_LOCATION": str(cert_public_dir(repo_root)),
-            "GVM_CERTIFICATE_HOSTNAME": "localhost",
-            "GVM_CERTIFICATE_SAN_DNS": "localhost",
-            "GVM_CERTIFICATE_SAN_IP_ADDRESS": "127.0.0.1",
-        }
-    )
-    return env
-
-
 def runtime_secret_path(repo_root: Path, name: str) -> Path:
     return runtime_path(repo_root, "secrets", name)
-
-
-def runtime_secret_file_metadata(path: Path) -> dict[str, Any]:
-    try:
-        metadata = path.lstat()
-    except FileNotFoundError:
-        return {
-            "exists": False,
-            "mode": None,
-            "permission_ok": False,
-            "group_or_world_accessible": False,
-            "regular_file": False,
-            "symlink": False,
-        }
-    mode = stat.S_IMODE(metadata.st_mode)
-    regular_file = stat.S_ISREG(metadata.st_mode)
-    symlink = stat.S_ISLNK(metadata.st_mode)
-    group_or_world_accessible = bool(mode & 0o077)
-    return {
-        "exists": True,
-        "mode": f"{mode:04o}",
-        "permission_ok": regular_file and not group_or_world_accessible,
-        "group_or_world_accessible": group_or_world_accessible,
-        "regular_file": regular_file,
-        "symlink": symlink,
-    }
 
 
 def open_private_directory(path: Path) -> int:
@@ -4285,16 +3592,6 @@ def write_private_text(path: Path, text: str) -> None:
                     pass
 
 
-def write_runtime_secret(repo_root: Path, name: str, secret: str) -> Path:
-    path = runtime_secret_path(repo_root, name)
-    write_private_text(path, secret + "\n")
-    return path
-
-
-def rotate_runtime_secret(repo_root: Path, name: str) -> Path:
-    return write_runtime_secret(repo_root, name, secrets.token_urlsafe(32))
-
-
 def gvmd_db_args(repo_root: Path) -> list[str]:
     return [
         f"--database={postgres_database(repo_root)}",
@@ -4399,10 +3696,6 @@ def runtime_browser_regression_probe_path(repo_root: Path) -> Path:
     return repo_root / "tools" / "runtime_browser_regression.py"
 
 
-def metrics_artifact_dir(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "artifacts", "metrics")
-
-
 def browser_smoke_artifact_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "artifacts", "browser-smoke")
 
@@ -4483,35 +3776,6 @@ def write_retained_json_artifact(latest_path: Path, timestamped_path: Path, payl
     timestamped_path.write_text(text, encoding="utf-8")
     prune_retained_json_artifacts(latest_path.parent, stem, keep)
     return str(latest_path), str(timestamped_path)
-
-
-def read_json_artifact(path: Path) -> dict[str, Any] | None:
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    return data if isinstance(data, dict) else None
-
-
-def json_artifact_history(artifact_dir: Path, stem: str) -> list[dict[str, Any]]:
-    history: list[dict[str, Any]] = []
-    for path in sorted(artifact_dir.glob(f"{stem}-*.json"), key=lambda candidate: candidate.name, reverse=True):
-        payload = read_json_artifact(path) or {}
-        try:
-            mtime = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).replace(microsecond=0).isoformat()
-        except OSError:
-            mtime = None
-        history.append(
-            {
-                "path": str(path),
-                "name": path.name,
-                "mtime": mtime,
-                "generated_at": payload.get("metadata", {}).get("generated_at"),
-                "status": payload.get("status", "unknown"),
-                "summary": payload.get("summary", ""),
-            }
-        )
-    return history
 
 
 def unix_socket_status(path: Path, *, timeout_seconds: float = 1.0) -> dict[str, Any]:
@@ -5151,54 +4415,6 @@ def refresh_app_deployment_receipt_after_image_build(
     return refreshed, None
 
 
-def container_image_id(repo_root: Path, service: str) -> str | None:
-    cid = container_id(repo_root, service)
-    if not cid:
-        return None
-    result = run_command(
-        ["docker", "inspect", "--format", "{{.Image}}", cid],
-        repo_root,
-        env=runtime_env(repo_root),
-        timeout=120,
-    )
-    value = result.stdout.strip().splitlines()[-1] if result.returncode == 0 and result.stdout.strip() else ""
-    return value if re.fullmatch(r"sha256:[0-9a-f]{64}", value) else None
-
-
-def resolve_app_service_image_ids(
-    repo_root: Path,
-    *,
-    prefer_running: bool,
-    app_env: dict[str, str] | None = None,
-) -> tuple[dict[str, str], str | None]:
-    if prefer_running:
-        running_ids = {
-            service: container_image_id(repo_root, service)
-            for service in APP_SERVICES
-        }
-        present = [service for service, image_id in running_ids.items() if image_id is not None]
-        if len(present) == len(APP_SERVICES):
-            normalized = validate_app_service_image_ids(running_ids)
-            availability_error = app_service_image_availability_error(repo_root, normalized)
-            return ({}, availability_error) if availability_error else (normalized, None)
-        if present:
-            return {}, (
-                "Application deployment is partial; feed activation refuses to mix "
-                f"running and newly built images ({', '.join(sorted(present))} are present)"
-            )
-    refs, error = configured_app_service_image_refs(repo_root, app_env)
-    if error is not None:
-        return {}, error
-    image_ids: dict[str, str] = {}
-    for service in APP_SERVICES:
-        image_id = docker_image_id(repo_root, refs[service])
-        if image_id is None:
-            return {}, f"No built image identity is available for {service}; run runtime-app-build first"
-        image_ids[service] = image_id
-    availability_error = app_service_image_availability_error(repo_root, image_ids)
-    return ({}, availability_error) if availability_error else (image_ids, None)
-
-
 def path_is_within(path: Path, parent: Path) -> bool:
     try:
         path.relative_to(parent)
@@ -5566,29 +4782,6 @@ def container_running(repo_root: Path, service: str) -> bool:
     return result.returncode == 0 and result.stdout.strip() == "true"
 
 
-def running_app_services(repo_root: Path) -> tuple[str, ...]:
-    return tuple(service for service in APP_SERVICES if container_running(repo_root, service))
-
-
-def live_app_build_guard(repo_root: Path, command: str) -> dict[str, Any] | None:
-    running = running_app_services(repo_root)
-    if not running:
-        return None
-    return make_result(
-        command,
-        repo_root,
-        "Build refused because running application services consume bind-mounted build artifacts.",
-        [
-            finding(
-                "fail",
-                "runtime.app-services-stopped",
-                "Stop the application deployment with runtime-app-down before changing runtime build artifacts.",
-                details={"running_services": list(running)},
-            )
-        ],
-    )
-
-
 def exec_in_service(repo_root: Path, service: str, command: list[str]) -> subprocess.CompletedProcess[str]:
     return run_command(compose_command(repo_root, "exec", "-T", service, *command), repo_root, env=runtime_env(repo_root))
 
@@ -5619,11 +4812,6 @@ def process_step_finding(status: str, check: str, message: str, result: subproce
     if command is not None:
         details["command"] = " ".join(shlex.quote(part) for part in command)
     return finding(status, check, message, details=details)
-
-
-def mqtt_health_probe_command() -> list[str]:
-    """Return the broker's file-backed authenticated health probe."""
-    return ["mosquitto_pub", "-o", "/tmp/yafvs-mqtt-health.options"]
 
 
 def docker_container_state(repo_root: Path, service: str) -> dict[str, Any] | None:
@@ -11759,29 +10947,6 @@ def json_int(value: Any) -> int:
         return 0
 
 
-def json_float(value: Any) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def native_result_threat(score: float) -> str:
-    if score >= 9.0:
-        return "Critical"
-    if score >= 7.0:
-        return "High"
-    if score >= 4.0:
-        return "Medium"
-    if score > 0.0:
-        return "Low"
-    if score == 0.0:
-        return "Log"
-    if score == -1.0:
-        return "False Positive"
-    return "Unknown"
-
-
 def latest_organization_scope_report_native(repo_root: Path) -> tuple[subprocess.CompletedProcess[str], dict[str, Any] | None, dict[str, Any]]:
     list_path = "/api/v1/scope-reports?page_size=1&sort=-creation_time&filter=Organization"
     listing = native_api_curl(repo_root, list_path)
@@ -16163,36 +15328,6 @@ def native_api_curl(
     )
 
 
-def native_api_curl_with_http_status(repo_root: Path, path: str) -> subprocess.CompletedProcess[str]:
-    command = compose_command(
-        repo_root,
-        "exec",
-        "-T",
-        "yafvs-api",
-        "curl",
-        "-sS",
-        "--max-time",
-        "10",
-        "-w",
-        "\n%{http_code}",
-    )
-    command.append(f"http://127.0.0.1:{YAFVS_API_CONTAINER_PORT}{path}")
-    return run_command(
-        command,
-        repo_root,
-        env=runtime_env(repo_root),
-        timeout=30,
-    )
-
-def validate_direct_api_request_id(request_id: str) -> str:
-    if request_id == "":
-        raise ValueError("request ID must not be empty")
-    if len(request_id) > MAX_DIRECT_API_REQUEST_ID_LENGTH:
-        raise ValueError(f"request ID must be at most {MAX_DIRECT_API_REQUEST_ID_LENGTH} characters")
-    if not all(char.isascii() and (char.isalnum() or char in "-_.:") for char in request_id):
-        raise ValueError("request ID may contain only ASCII letters, digits, '-', '_', '.', and ':'")
-    return request_id
-
 NATIVE_EMPTY_TRASH_PREVIEW_PATH = "/api/v1/trashcan/empty-preview"
 NATIVE_EMPTY_TRASH_PATH = "/api/v1/trashcan/empty"
 NATIVE_EMPTY_TRASH_SCOPE = "operator"
@@ -16300,22 +15435,6 @@ def command_native_bulk_modify_schedules(
     return rust_result_envelope(repo_root, "native-bulk-modify-schedules", arguments)
 
 
-def native_target_host_list_target_body(host: str, port_list_id: str, timestamp: str) -> dict[str, Any]:
-    return {
-        "name": f"Target for {host}",
-        "comment": f"Created: {timestamp}",
-        "port_list_id": port_list_id,
-        "hosts": [host],
-        "exclude_hosts": [],
-        "alive_tests": [NATIVE_TARGET_HOST_LIST_DEFAULT_ALIVE_TEST],
-        "allow_simultaneous_ips": False,
-        "reverse_lookup_only": False,
-        "reverse_lookup_unify": False,
-    }
-
-
-NATIVE_SCHEDULE_CSV_MAX_TIMEZONE_LENGTH = 256
-NATIVE_SCHEDULE_CSV_MAX_ICALENDAR_LENGTH = 32768
 
 
 def parse_json_output(result: subprocess.CompletedProcess[str]) -> dict[str, Any] | None:

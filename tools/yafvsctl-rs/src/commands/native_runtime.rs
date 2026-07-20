@@ -350,7 +350,7 @@ fn native_api_get_arguments(repo_root: &Path, path: &str) -> Vec<String> {
     )
 }
 
-fn validate_api_path(path: &str) -> Result<(), String> {
+pub(crate) fn validate_api_path(path: &str) -> Result<(), String> {
     if path != "/healthz" && !path.starts_with("/api/v1/") {
         return Err("native API path must be /healthz or start with /api/v1/".into());
     }

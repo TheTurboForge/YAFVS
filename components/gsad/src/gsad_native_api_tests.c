@@ -22,6 +22,9 @@ gsad_native_api_test_pdf_download_target (const gchar *path,
                                           const gchar *report_format_id,
                                           gchar **target);
 extern gboolean
+gsad_native_api_test_request_target (const gchar *path, params_t *params,
+                                     gchar **target);
+extern gboolean
 gsad_native_api_test_parse_pdf_response (const guint8 *data, gsize length,
                                          guint *status_code, GBytes **body,
                                          gchar **content_disposition);
@@ -75,6 +78,20 @@ static guint session_replace_count;
 static const gchar *updated_password;
 static const gchar *revoked_session_keep_id;
 static const gchar *revoked_session_uuid;
+
+Ensure (gsad_native_api, should_forward_typed_task_filter_for_collection_reads)
+{
+  gchar *target = NULL;
+
+  assert_that (gsad_native_api_test_request_target (
+                 "/api/v1/reports", (params_t *) GINT_TO_POINTER (5), &target),
+               is_true);
+  assert_that (
+    target,
+    is_equal_to_string (
+      "/api/v1/reports?page=2&task_id=12345678-1234-1234-1234-123456789abc"));
+  g_free (target);
+}
 
 /* Handler dependencies are not part of this parser-focused unit target. */
 gsad_user_t *
@@ -784,8 +801,13 @@ Ensure (gsad_native_api, should_only_allow_exact_user_management_paths)
 const gchar *
 params_value (params_t *params, const gchar *name)
 {
-  (void) params;
-  (void) name;
+  if (params == (params_t *) GINT_TO_POINTER (5))
+    {
+      if (g_strcmp0 (name, "page") == 0)
+        return "2";
+      if (g_strcmp0 (name, "task_id") == 0)
+        return "12345678-1234-1234-1234-123456789abc";
+    }
   return NULL;
 }
 
@@ -941,6 +963,9 @@ main (int argc, char **argv)
 
   add_test_with_context (suite, gsad_native_api,
                          should_only_forward_the_canonical_pdf_format);
+  add_test_with_context (
+    suite, gsad_native_api,
+    should_forward_typed_task_filter_for_collection_reads);
   add_test_with_context (suite, gsad_native_api,
                          should_require_a_session_user_for_browser_reads);
   add_test_with_context (

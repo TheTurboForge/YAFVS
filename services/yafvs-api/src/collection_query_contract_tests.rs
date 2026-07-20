@@ -117,7 +117,7 @@ fn collection_handlers_use_api_query_contract_extractor() {
     assert_eq!(
         source.matches(api_query).count(),
         43,
-        "every checked collection contract should use ApiQuery"
+        "shared collection contracts should use ApiQuery"
     );
 }
 

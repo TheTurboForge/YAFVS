@@ -16,12 +16,25 @@ use crate::{
     formatters::unix_ts_to_rfc3339,
     path_ids::parse_uuid,
     query::{
-        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe,
+        ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe_params,
         normalize_collection_query, sort_clause,
     },
     report_evidence_payloads::ReportSeverityCounts,
     user_tags::ReportUserTag,
 };
+
+pub(crate) fn normalize_report_task_id(task_id: Option<&str>) -> Result<String, ApiError> {
+    let Some(task_id) = task_id else {
+        return Ok(String::new());
+    };
+    let task_id = task_id.trim();
+    if task_id.is_empty() {
+        return Err(ApiError::BadRequest("task_id must be a UUID".to_string()));
+    }
+    parse_uuid(task_id)
+        .map(|task_id| task_id.to_string())
+        .map_err(|_| ApiError::BadRequest("task_id must be a UUID".to_string()))
+}
 
 #[derive(Debug, Serialize)]
 pub(crate) struct ReportReference {
@@ -227,29 +240,42 @@ pub(crate) async fn reports(
     State(state): State<AppState>,
     ApiQuery(query): ApiQuery<CollectionQuery>,
 ) -> Result<Json<Collection<ReportItem>>, ApiError> {
+    let task_id = normalize_report_task_id(query.task_id.as_deref())?;
     let params = normalize_collection_query(query, REPORT_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, REPORT_SORT_FIELDS)?;
     let sql = raw_report_sql(
-        "($1 = ''\n\
-            OR lower(uuid) = lower($1)\n\
-            OR lower(name) LIKE '%' || lower($1) || '%'\n\
-            OR lower(status) LIKE '%' || lower($1) || '%'\n\
-            OR lower(coalesce(task_name, '')) LIKE '%' || lower($1) || '%'\n\
-            OR lower(coalesce(target_name, '')) LIKE '%' || lower($1) || '%')",
+        "($1 = '' OR lower(coalesce(task_uuid, '')) = lower($1))\n\
+         AND ($2 = ''\n\
+            OR lower(uuid) = lower($2)\n\
+            OR lower(name) LIKE '%' || lower($2) || '%'\n\
+            OR lower(status) LIKE '%' || lower($2) || '%'\n\
+            OR lower(coalesce(task_name, '')) LIKE '%' || lower($2) || '%'\n\
+            OR lower(coalesce(target_name, '')) LIKE '%' || lower($2) || '%')",
         &sort_sql,
-        "LIMIT $2 OFFSET $3",
+        "LIMIT $3 OFFSET $4",
     );
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let rows = client
-        .query(&sql, &[&params.filter, &params.page_size, &params.offset])
+        .query(
+            &sql,
+            &[&task_id, &params.filter, &params.page_size, &params.offset],
+        )
         .await
         .map_err(|error| {
             tracing::warn!(%error, "raw report list query failed");
             ApiError::Database
         })?;
-    let total =
-        collection_total_with_empty_page_probe(&client, &rows, &sql, &params, "raw report list")
-            .await?;
+    let probe_page_size = 1_i64;
+    let probe_offset = 0_i64;
+    let total = collection_total_with_empty_page_probe_params(
+        &client,
+        &rows,
+        &sql,
+        &params,
+        &[&task_id, &params.filter, &probe_page_size, &probe_offset],
+        "raw report list",
+    )
+    .await?;
     let items = rows.iter().map(report_from_row).collect();
     Ok(Json(Collection {
         page: params.page_info(total),

@@ -104,6 +104,7 @@ impl UserManagementCollectionQuery {
             scope_id: None,
             text: self.text.clone(),
             task_name: self.task_name.clone(),
+            task_id: None,
             value: self.value.clone(),
         }
     }

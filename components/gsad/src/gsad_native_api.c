@@ -2051,6 +2051,7 @@ native_api_request_target (const gchar *path, params_t *params)
   append_query_param (target, params, "page_size");
   append_query_param (target, params, "sort");
   append_query_param (target, params, "filter");
+  append_query_param (target, params, "task_id");
 
   return g_string_free (target, FALSE);
 }
@@ -2941,6 +2942,14 @@ gsad_http_handle_native_api_delete (gsad_http_handler_t *handler_next,
 }
 
 #ifdef GSAD_NATIVE_API_TEST
+gboolean
+gsad_native_api_test_request_target (const gchar *path, params_t *params,
+                                     gchar **target)
+{
+  *target = native_api_request_target (path, params);
+  return *target != NULL;
+}
+
 gboolean
 gsad_native_api_test_get_path_is_allowed (const gchar *path)
 {

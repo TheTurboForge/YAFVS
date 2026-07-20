@@ -9,7 +9,9 @@ import Filter from 'gmp/models/filter';
 import {
   nativeReportToModel,
   nativeReportErrorsQueryFromFilter,
+  nativeReportQueryFromFilter,
   nativeReportTlsCertificatesQueryFromFilter,
+  fetchNativeReports,
   fetchNativeReportPdf,
 } from 'gmp/native-api/reports';
 
@@ -19,6 +21,44 @@ const createNativeHttp = () => ({
 });
 
 describe('report native API query builders', () => {
+  test('should preserve a task filter in the native report-list request', async () => {
+    const taskId = '12345678-1234-1234-1234-123456789abc';
+    const filter = Filter.fromString(
+      `task_id=${taskId} sort-reverse=date rows=25 first=1`,
+    );
+    const query = nativeReportQueryFromFilter(filter);
+
+    expect(query).toEqual({
+      page: 1,
+      pageSize: 25,
+      sort: '-creation_time',
+      filter: '',
+      taskId,
+    });
+
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        page: {page: 1, page_size: 25, total: 0},
+        items: [],
+      }),
+      ok: true,
+      status: 200,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const gmp = createNativeHttp();
+
+    await fetchNativeReports(gmp, query);
+
+    expect(gmp.buildUrl).toHaveBeenCalledWith('api/v1/reports', {
+      token: 'test-token',
+      page: 1,
+      page_size: 25,
+      sort: '-creation_time',
+      filter: '',
+      task_id: taskId,
+    });
+  });
+
   test('should download the native evidence PDF through the same-origin API', async () => {
     const data = new ArrayBuffer(8);
     const fetchMock = testing.fn().mockResolvedValue({

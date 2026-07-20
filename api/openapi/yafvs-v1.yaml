@@ -5586,6 +5586,7 @@ paths:
         - $ref: '#/components/parameters/PageSize'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Filter'
+        - $ref: '#/components/parameters/ReportTaskId'
       responses:
         '200':
           description: Raw report collection
@@ -7664,6 +7665,14 @@ components:
       schema:
         type: string
         maxLength: 4096
+    ReportTaskId:
+      name: task_id
+      in: query
+      required: false
+      description: Return only raw reports owned by the specified scan task.
+      schema:
+        type: string
+        format: uuid
     FilterType:
       name: filter_type
       in: query

@@ -15,8 +15,7 @@ interface NativeApiSession {
   readonly token?: string;
 }
 
-const NATIVE_PDF_REPORT_FORMAT_ID =
-  'c402cc3e-b531-11e1-9163-406186ea4fc5';
+const NATIVE_PDF_REPORT_FORMAT_ID = 'c402cc3e-b531-11e1-9163-406186ea4fc5';
 
 interface NativeReportApplicationPayload {
   name: string;
@@ -273,6 +272,7 @@ export interface NativeReportQuery {
   pageSize: number;
   sort: string;
   filter: string;
+  taskId?: string;
 }
 
 export interface NativeReportsResponse {
@@ -781,11 +781,13 @@ export const nativeReportQueryFromFilter = (
 ): NativeReportQuery => {
   const pageSize = Math.max(1, integerValue(filter?.get('rows'), 25));
   const first = Math.max(1, integerValue(filter?.get('first'), 1));
+  const taskId = stringValue(filter?.get('task_id')).trim();
   return {
     page: Math.floor((first - 1) / pageSize) + 1,
     pageSize,
     sort: nativeSortFromFilter(filter),
     filter: nativeSearchFromFilter(filter),
+    ...(taskId === '' ? {} : {taskId}),
   };
 };
 
@@ -1225,6 +1227,7 @@ export const fetchNativeReports = async (
       page_size: query.pageSize,
       sort: query.sort,
       filter: query.filter,
+      ...(query.taskId === undefined ? {} : {task_id: query.taskId}),
     },
   );
   const page = {

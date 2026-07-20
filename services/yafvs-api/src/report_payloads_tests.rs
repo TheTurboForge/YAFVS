@@ -2,15 +2,19 @@
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use axum::http::Method;
+use axum::{
+    extract::Query,
+    http::{Method, Uri},
+};
 
 use crate::{
     direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed},
+    query::CollectionQuery,
     report_cve_query_sql::report_cves_sql,
     report_error_query_sql::report_errors_sql,
     report_host_query_sql::report_hosts_sql,
     report_operating_system_query_sql::report_operating_systems_sql,
-    report_payloads::raw_report_sql,
+    report_payloads::{normalize_report_task_id, raw_report_sql},
     report_port_query_sql::report_ports_sql,
     report_raw_result_query_sql::report_raw_results_sql,
     report_tls_certificate_query_sql::report_tls_certificates_sql,
@@ -35,6 +39,37 @@ fn openapi_path_block(path: &str) -> String {
             }
         })
         .unwrap_or_else(|| tail.to_string())
+}
+
+#[test]
+fn raw_report_task_filter_is_typed_parameterized_and_documented() {
+    let task_id = "12345678-1234-1234-1234-123456789abc";
+    let uri: Uri = format!(
+        "/api/v1/reports?page=1&page_size=10&sort=-creation_time&filter=&task_id={task_id}"
+    )
+    .parse()
+    .unwrap();
+    let Query(parsed) = Query::<CollectionQuery>::try_from_uri(&uri).unwrap();
+    assert_eq!(parsed.task_id.as_deref(), Some(task_id));
+
+    assert_eq!(normalize_report_task_id(None).unwrap(), "");
+    assert!(normalize_report_task_id(Some("")).is_err());
+    assert!(normalize_report_task_id(Some("   ")).is_err());
+    assert_eq!(normalize_report_task_id(Some(task_id)).unwrap(), task_id);
+    assert!(normalize_report_task_id(Some("not-a-uuid")).is_err());
+
+    let sql = raw_report_sql(
+        "($1 = '' OR lower(coalesce(task_uuid, '')) = lower($1)) AND ($2 = '' OR lower(uuid) = lower($2))",
+        "creation_time DESC",
+        "LIMIT $3 OFFSET $4",
+    );
+    assert!(sql.contains("lower(coalesce(task_uuid, '')) = lower($1)"));
+    assert!(sql.contains("lower(uuid) = lower($2)"));
+    assert!(sql.contains("LIMIT $3 OFFSET $4"));
+
+    let reports = openapi_path_block("/reports");
+    assert!(reports.contains("#/components/parameters/ReportTaskId"));
+    assert!(OPENAPI.contains("name: task_id\n      in: query"));
 }
 
 #[test]

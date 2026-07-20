@@ -560,12 +560,13 @@ pub(crate) fn run_retained_native_api_smoke(
 ) -> Result<SmokeOutcome, String> {
     let program = repo_root.join("tools/yafvsctl");
     let output = runner
-        .run_with(
+        .run_with_output_limit(
             &program.display().to_string(),
             &["runtime-native-api-smoke", "--status-only", "--json"],
             Some(repo_root),
             Some(environment),
             Some(SMOKE_TIMEOUT),
+            MAX_SMOKE_OUTPUT,
         )
         .ok_or_else(|| "Native API smoke command could not be started".to_owned())?;
     parse_smoke_output(&output)

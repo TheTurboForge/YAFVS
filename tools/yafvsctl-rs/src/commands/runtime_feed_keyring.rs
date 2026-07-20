@@ -17,6 +17,7 @@ const COMMAND: &str = "runtime-feed-keyring-init";
 const KEY_URL: &str = "https://www.greenbone.net/GBCommunitySigningKey.asc";
 const MAX_KEY_BYTES: u64 = 64 * 1024;
 const MAX_SIGNATURE_INPUT_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_FINGERPRINT_OUTPUT_BYTES: usize = 64 * 1024;
 
 pub fn command_runtime_feed_keyring_init(repo_root: &Path) -> ResultEnvelope {
     let gpg = executable_path("gpg");
@@ -66,12 +67,13 @@ fn feed_keyring_fingerprint_finding_with(
         "--fingerprint",
         FPR,
     ];
-    let output = runner.run_with(
+    let output = runner.run_with_output_limit(
         &gpg.display().to_string(),
         &args,
         Some(repo_root),
         None,
         Some(Duration::from_secs(60)),
+        MAX_FINGERPRINT_OUTPUT_BYTES,
     );
     let ok = output.as_ref().is_some_and(|output| {
         output.success

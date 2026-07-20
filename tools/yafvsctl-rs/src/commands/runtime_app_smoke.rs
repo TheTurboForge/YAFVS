@@ -38,6 +38,8 @@ const APP_SERVICES: [&str; 5] = ["gvmd", "ospd-openvas", "notus-scanner", "gsad"
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(120);
 const HTTPS_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_FILE_LOG_BYTES: u64 = 1024 * 1024;
+const MAX_COMPOSE_LOG_OUTPUT_BYTES: usize = 1024 * 1024;
+const MAX_HTTPS_OUTPUT_BYTES: usize = 64 * 1024;
 
 #[derive(Clone)]
 struct NestedCheck {
@@ -285,12 +287,13 @@ impl AppSmokeContext for SystemContext<'_> {
     }
 
     fn https_headers(&mut self, url: &str) -> Option<ProcessOutput> {
-        self.runner.run_with(
+        self.runner.run_with_output_limit(
             "curl",
             &["-kIsS", "--max-time", "10", url],
             Some(self.repo_root),
             Some(&self.environment),
             Some(HTTPS_TIMEOUT),
+            MAX_HTTPS_OUTPUT_BYTES,
         )
     }
 
@@ -592,12 +595,13 @@ fn run_compose(
 ) -> Option<ProcessOutput> {
     let command = compose_command(repo_root, arguments);
     let arguments = command.iter().map(String::as_str).collect::<Vec<_>>();
-    runner.run_with(
+    runner.run_with_output_limit(
         "docker",
         &arguments,
         Some(repo_root),
         Some(environment),
         Some(timeout),
+        MAX_COMPOSE_LOG_OUTPUT_BYTES,
     )
 }
 

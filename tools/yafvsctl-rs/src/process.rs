@@ -8,8 +8,14 @@ use std::os::fd::RawFd;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::{
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+    Arc,
+};
 use std::thread;
 use std::time::{Duration, Instant};
+
+const OUTPUT_LIMIT_EXCEEDED_MESSAGE: &str = "Process output exceeded configured limit.";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcessOutput {
@@ -31,6 +37,22 @@ pub trait CommandRunner {
         _timeout: Option<Duration>,
     ) -> Option<ProcessOutput> {
         self.run(program, args)
+    }
+
+    fn run_with_output_limit(
+        &self,
+        program: &str,
+        args: &[&str],
+        cwd: Option<&Path>,
+        env: Option<&BTreeMap<OsString, OsString>>,
+        timeout: Option<Duration>,
+        limit_bytes: usize,
+    ) -> Option<ProcessOutput> {
+        let output = self.run_with(program, args, cwd, env, timeout)?;
+        if output.stdout.len().saturating_add(output.stderr.len()) > limit_bytes {
+            return Some(output_limit_failure());
+        }
+        Some(output)
     }
 
     fn run_with_input(
@@ -94,6 +116,18 @@ impl CommandRunner for SystemCommandRunner {
         run_system(program, args, cwd, env, timeout)
     }
 
+    fn run_with_output_limit(
+        &self,
+        program: &str,
+        args: &[&str],
+        cwd: Option<&Path>,
+        env: Option<&BTreeMap<OsString, OsString>>,
+        timeout: Option<Duration>,
+        limit_bytes: usize,
+    ) -> Option<ProcessOutput> {
+        run_system_with_output_limit(program, args, cwd, env, timeout, limit_bytes)
+    }
+
     fn run_with_input(
         &self,
         program: &str,
@@ -141,6 +175,7 @@ impl CommandRunner for SystemCommandRunner {
             input,
             inherited_fds,
             file_size_limit,
+            None,
         )
     }
 }
@@ -155,6 +190,27 @@ fn run_system(
     run_system_with_input(program, args, cwd, env, timeout, None, None)
 }
 
+fn run_system_with_output_limit(
+    program: &str,
+    args: &[&str],
+    cwd: Option<&Path>,
+    env: Option<&BTreeMap<OsString, OsString>>,
+    timeout: Option<Duration>,
+    limit_bytes: usize,
+) -> Option<ProcessOutput> {
+    run_system_with_input_and_fds(
+        program,
+        args,
+        cwd,
+        env,
+        timeout,
+        None,
+        &[],
+        None,
+        Some(limit_bytes),
+    )
+}
+
 fn run_system_with_input(
     program: &str,
     args: &[&str],
@@ -165,7 +221,26 @@ fn run_system_with_input(
     inherited_fd: Option<RawFd>,
 ) -> Option<ProcessOutput> {
     let inherited_fds = inherited_fd.as_slice();
-    run_system_with_input_and_fds(program, args, cwd, env, timeout, input, inherited_fds, None)
+    run_system_with_input_and_fds(
+        program,
+        args,
+        cwd,
+        env,
+        timeout,
+        input,
+        inherited_fds,
+        None,
+        None,
+    )
+}
+
+fn output_limit_failure() -> ProcessOutput {
+    ProcessOutput {
+        success: false,
+        exit_code: Some(125),
+        stdout: OUTPUT_LIMIT_EXCEEDED_MESSAGE.into(),
+        stderr: String::new(),
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -178,6 +253,7 @@ fn run_system_with_input_and_fds(
     input: Option<&[u8]>,
     inherited_fds: &[RawFd],
     file_size_limit: Option<u64>,
+    output_limit: Option<usize>,
 ) -> Option<ProcessOutput> {
     let mut command = Command::new(program);
     command
@@ -237,29 +313,53 @@ fn run_system_with_input_and_fds(
     let stdin_writer = thread::spawn(move || stdin.write_all(&input).is_ok());
     let stdout = child.stdout.take()?;
     let stderr = child.stderr.take()?;
-    let stdout_reader = thread::spawn(move || read_all(stdout));
-    let stderr_reader = thread::spawn(move || read_all(stderr));
+    let bytes_read = Arc::new(AtomicUsize::new(0));
+    let output_limit_exceeded = Arc::new(AtomicBool::new(false));
+    let stdout_limit = output_limit.map(|limit| {
+        (
+            limit,
+            Arc::clone(&bytes_read),
+            Arc::clone(&output_limit_exceeded),
+        )
+    });
+    let stderr_limit = output_limit.map(|limit| {
+        (
+            limit,
+            Arc::clone(&bytes_read),
+            Arc::clone(&output_limit_exceeded),
+        )
+    });
+    let stdout_reader = thread::spawn(move || read_output(stdout, stdout_limit));
+    let stderr_reader = thread::spawn(move || read_output(stderr, stderr_limit));
 
     let deadline = timeout.map(|duration| Instant::now() + duration);
+    let mut child_status = None;
     let (status, timed_out) = loop {
-        if let Some(status) = child.try_wait().ok()? {
-            break (status, false);
+        if output_limit.is_some() && output_limit_exceeded.load(Ordering::Acquire) {
+            kill_process_group(&mut child);
+            break (child_status.or_else(|| child.wait().ok())?, false);
+        }
+        if child_status.is_none() {
+            child_status = child.try_wait().ok()?;
+        }
+        if child_status.is_some()
+            && (output_limit.is_none()
+                || (stdout_reader.is_finished() && stderr_reader.is_finished()))
+        {
+            break (child_status?, false);
         }
         if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
-            // SAFETY: the child was placed into a new process group whose ID is
-            // its PID. Killing that group prevents descendants from retaining
-            // the captured pipes after a timeout.
-            let group_killed = unsafe { libc::killpg(child.id() as i32, libc::SIGKILL) } == 0;
-            if !group_killed {
-                let _ = child.kill();
-            }
-            break (child.wait().ok()?, true);
+            kill_process_group(&mut child);
+            break (child_status.or_else(|| child.wait().ok())?, true);
         }
         thread::sleep(Duration::from_millis(10));
     };
     let stdout_bytes = stdout_reader.join().ok()??;
     let stderr_bytes = stderr_reader.join().ok()??;
     let _ = stdin_writer.join();
+    if output_limit_exceeded.load(Ordering::Acquire) {
+        return Some(output_limit_failure());
+    }
     let stderr_text = String::from_utf8_lossy(&stderr_bytes).into_owned();
     let mut stdout_text = String::from_utf8_lossy(&stdout_bytes).into_owned();
     stdout_text.push_str(&stderr_text);
@@ -277,10 +377,62 @@ fn run_system_with_input_and_fds(
     })
 }
 
+fn kill_process_group(child: &mut std::process::Child) {
+    // SAFETY: every child is placed into a new process group whose ID is its
+    // PID. Killing that group prevents descendants from retaining captured
+    // pipes after a timeout or output-limit failure.
+    let group_killed = unsafe { libc::killpg(child.id() as i32, libc::SIGKILL) } == 0;
+    if !group_killed {
+        let _ = child.kill();
+    }
+}
+
 fn read_all(mut pipe: impl Read) -> Option<Vec<u8>> {
     let mut bytes = Vec::new();
     pipe.read_to_end(&mut bytes).ok()?;
     Some(bytes)
+}
+
+type OutputLimitState = (usize, Arc<AtomicUsize>, Arc<AtomicBool>);
+
+fn read_output(pipe: impl Read, limit: Option<OutputLimitState>) -> Option<Vec<u8>> {
+    match limit {
+        Some((limit_bytes, bytes_read, exceeded)) => {
+            read_to_limit(pipe, limit_bytes, bytes_read, exceeded)
+        }
+        None => read_all(pipe),
+    }
+}
+
+fn read_to_limit(
+    mut pipe: impl Read,
+    limit_bytes: usize,
+    bytes_read: Arc<AtomicUsize>,
+    output_limit_exceeded: Arc<AtomicBool>,
+) -> Option<Vec<u8>> {
+    let mut retained = Vec::new();
+    let mut chunk = [0_u8; 8192];
+    loop {
+        if output_limit_exceeded.load(Ordering::Acquire) {
+            return Some(retained);
+        }
+        let count = pipe.read(&mut chunk).ok()?;
+        if count == 0 {
+            return Some(retained);
+        }
+        let previous = bytes_read
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |used| {
+                Some(used.saturating_add(count))
+            })
+            .ok()?;
+        let remaining = limit_bytes.saturating_sub(previous);
+        let retained_count = count.min(remaining);
+        retained.extend_from_slice(&chunk[..retained_count]);
+        if retained_count != count {
+            output_limit_exceeded.store(true, Ordering::Release);
+            return Some(retained);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -290,6 +442,7 @@ mod tests {
     use std::fs::File;
     use std::io::{Seek, SeekFrom};
     use std::os::fd::{AsRawFd, FromRawFd};
+    use std::time::Instant;
 
     #[test]
     fn captures_combined_process_output() {
@@ -332,6 +485,108 @@ mod tests {
             .unwrap();
         assert!(output.success);
         assert_eq!(output.stdout, "done");
+    }
+
+    #[test]
+    fn output_limit_allows_under_and_exact_caps() {
+        let under = SystemCommandRunner
+            .run_with_output_limit(
+                "sh",
+                &["-c", "printf abc"],
+                None,
+                None,
+                Some(Duration::from_secs(1)),
+                4,
+            )
+            .unwrap();
+        assert!(under.success);
+        assert_eq!(under.stdout, "abc");
+
+        let exact = SystemCommandRunner
+            .run_with_output_limit(
+                "sh",
+                &["-c", "printf abc; printf de >&2"],
+                None,
+                None,
+                Some(Duration::from_secs(1)),
+                5,
+            )
+            .unwrap();
+        assert!(exact.success);
+        assert_eq!(exact.stdout, "abcde");
+        assert_eq!(exact.stderr, "de");
+    }
+
+    #[test]
+    fn output_limit_rejects_one_byte_over_with_stable_output() {
+        let output = SystemCommandRunner
+            .run_with_output_limit(
+                "sh",
+                &["-c", "printf abcde"],
+                None,
+                None,
+                Some(Duration::from_secs(1)),
+                4,
+            )
+            .unwrap();
+        assert_eq!(output, output_limit_failure());
+    }
+
+    #[test]
+    fn output_limit_counts_stdout_and_stderr_together() {
+        let output = SystemCommandRunner
+            .run_with_output_limit(
+                "sh",
+                &["-c", "printf abc; printf def >&2"],
+                None,
+                None,
+                Some(Duration::from_secs(1)),
+                5,
+            )
+            .unwrap();
+        assert_eq!(output, output_limit_failure());
+    }
+
+    #[test]
+    fn output_limit_kills_emitting_descendants_promptly() {
+        let started = Instant::now();
+        let output = SystemCommandRunner
+            .run_with_output_limit(
+                "sh",
+                &["-c", "(while :; do printf x; done) &"],
+                None,
+                None,
+                Some(Duration::from_secs(5)),
+                1024,
+            )
+            .unwrap();
+        assert_eq!(output, output_limit_failure());
+        assert!(started.elapsed() < Duration::from_secs(2));
+    }
+
+    #[test]
+    fn default_output_limit_preserves_mock_runner_compatibility() {
+        struct MockRunner;
+
+        impl CommandRunner for MockRunner {
+            fn run(&self, _program: &str, _args: &[&str]) -> Option<ProcessOutput> {
+                Some(ProcessOutput {
+                    success: true,
+                    exit_code: Some(0),
+                    stdout: "abc".into(),
+                    stderr: "de".into(),
+                })
+            }
+        }
+
+        let exact = MockRunner
+            .run_with_output_limit("mock", &[], None, None, None, 5)
+            .unwrap();
+        assert!(exact.success);
+        let over = MockRunner
+            .run_with_output_limit("mock", &[], None, None, None, 4)
+            .unwrap();
+        assert_eq!(over, output_limit_failure());
     }
 
     #[test]

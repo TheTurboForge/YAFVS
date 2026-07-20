@@ -227,6 +227,7 @@ class ResultSpool:
             'count_total',
             'count_excluded',
             'incomplete_reason',
+            'notus_incomplete_reason',
             'notus_manifest_mode',
             'notus_manifest_json',
             'notus_manifest_digest',
@@ -269,6 +270,7 @@ class ResultSpool:
         count_total INTEGER,
         count_excluded INTEGER,
         incomplete_reason TEXT,
+        notus_incomplete_reason TEXT,
         notus_manifest_mode TEXT CHECK(notus_manifest_mode IN (
             'mqtt', 'none'
         )),
@@ -409,10 +411,19 @@ class ResultSpool:
                     scan_columns.add('incomplete_reason')
                 connection.execute('PRAGMA user_version = 3')
                 user_version = 3
-            elif user_version not in (3, 4, 5):
+            elif user_version not in (3, 4, 5, 6):
                 raise ResultSpoolCorruptionError(
                     f'unsupported result spool schema version {user_version}'
                 )
+            if (
+                user_version in (3, 4, 5)
+                and 'notus_incomplete_reason' not in scan_columns
+            ):
+                connection.execute(
+                    'ALTER TABLE scans ADD COLUMN '
+                    'notus_incomplete_reason TEXT'
+                )
+                scan_columns.add('notus_incomplete_reason')
             notus_columns = {
                 row['name']
                 for row in connection.execute(
@@ -455,8 +466,13 @@ class ResultSpool:
                     )
                     connection.execute(
                         'UPDATE scans SET incomplete_reason = '
-                        'COALESCE(incomplete_reason, ?) WHERE scan_id = ?',
+                        'COALESCE(incomplete_reason, ?), '
+                        'notus_incomplete_reason = '
+                        'COALESCE(notus_incomplete_reason, ?) '
+                        'WHERE scan_id = ?',
                         (
+                            'Legacy Notus evidence has no terminal '
+                            'completion fence.',
                             'Legacy Notus evidence has no terminal '
                             'completion fence.',
                             legacy['scan_id'],
@@ -483,15 +499,23 @@ class ResultSpool:
                         scan_columns.add(name)
                 connection.execute(
                     'UPDATE scans SET incomplete_reason = '
-                    'COALESCE(incomplete_reason, ?) '
+                    'COALESCE(incomplete_reason, ?), '
+                    'notus_incomplete_reason = '
+                    'COALESCE(notus_incomplete_reason, ?) '
                     'WHERE EXISTS (SELECT 1 FROM notus_runs '
                     'WHERE notus_runs.scan_id = scans.scan_id)',
                     (
                         'Legacy Notus evidence has no sealed expectation '
                         'manifest.',
+                        'Legacy Notus evidence has no sealed expectation '
+                        'manifest.',
                     ),
                 )
                 connection.execute('PRAGMA user_version = 5')
+                user_version = 5
+            if user_version == 5:
+                connection.execute('PRAGMA user_version = 6')
+                user_version = 6
             claim_columns = {
                 row['name']
                 for row in connection.execute('PRAGMA table_info(claims)')
@@ -824,7 +848,7 @@ class ResultSpool:
         try:
             connection = self._open_connection()
             scan = connection.execute(
-                'SELECT incomplete_reason, notus_manifest_mode, '
+                'SELECT notus_incomplete_reason, notus_manifest_mode, '
                 'notus_manifest_json, notus_manifest_digest '
                 'FROM scans WHERE scan_id = ?',
                 (scan_id,),
@@ -833,8 +857,8 @@ class ResultSpool:
                 raise ResultSpoolStateError(
                     'Notus completion scan is not durably registered'
                 )
-            if scan['incomplete_reason']:
-                return scan['incomplete_reason']
+            if scan['notus_incomplete_reason']:
+                return scan['notus_incomplete_reason']
             manifest = self._notus_manifest_from_row(scan)
             if manifest is None:
                 return 'The Notus expectation manifest is not sealed.'
@@ -1285,7 +1309,9 @@ class ResultSpool:
             reason = (
                 'A Notus result exceeded the durable per-result byte limit.'
             )
-            self.mark_scan_incomplete(scan_id, reason)
+            with self._transaction() as connection:
+                self._require_registered_scan(connection, scan_id)
+                self._mark_scans_incomplete(connection, reason, scan_id)
             raise ResultSpoolCapacityError(reason)
 
         failure = None
@@ -1308,11 +1334,8 @@ class ResultSpool:
                     'A Notus message identity was reused with conflicting '
                     'data.',
                 )
-                connection.execute(
-                    'UPDATE scans SET incomplete_reason = '
-                    'COALESCE(incomplete_reason, ?) '
-                    'WHERE scan_id IN (?, ?)',
-                    (failure[1], scan_id, existing['scan_id']),
+                self._mark_scans_incomplete(
+                    connection, failure[1], scan_id, existing['scan_id']
                 )
             else:
                 capacity_reason = self._notus_capacity_reason(
@@ -1320,10 +1343,8 @@ class ResultSpool:
                 )
                 if capacity_reason is not None:
                     failure = (ResultSpoolCapacityError, capacity_reason)
-                    connection.execute(
-                        'UPDATE scans SET incomplete_reason = '
-                        'COALESCE(incomplete_reason, ?) WHERE scan_id = ?',
-                        (capacity_reason, scan_id),
+                    self._mark_scans_incomplete(
+                        connection, capacity_reason, scan_id
                     )
                 else:
                     run = connection.execute(
@@ -1535,11 +1556,10 @@ class ResultSpool:
             self._check_capacity(
                 connection, scan_id, len(normalized_rows), payload_bytes
             )
-            connection.execute(
-                'UPDATE scans SET incomplete_reason = '
-                'COALESCE(incomplete_reason, ?) WHERE scan_id = ?',
-                (incomplete_reason, scan_id),
-            )
+            if incomplete_reason is not None:
+                self._mark_scans_incomplete(
+                    connection, incomplete_reason, scan_id
+                )
             osp_batch_id = str(uuid.uuid4())
             connection.execute(
                 'INSERT INTO claims '
@@ -2861,9 +2881,11 @@ class ResultSpool:
         placeholders = ','.join('?' for _ in unique_scan_ids)
         connection.execute(
             'UPDATE scans SET incomplete_reason = '
-            'COALESCE(incomplete_reason, ?) '
+            'COALESCE(incomplete_reason, ?), '
+            'notus_incomplete_reason = '
+            'COALESCE(notus_incomplete_reason, ?) '
             f'WHERE scan_id IN ({placeholders})',
-            (reason, *unique_scan_ids),
+            (reason, reason, *unique_scan_ids),
         )
 
     def _decode_rows(self, payload_json: str) -> List[Dict[str, Any]]:

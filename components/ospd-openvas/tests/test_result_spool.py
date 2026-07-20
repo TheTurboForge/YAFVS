@@ -86,7 +86,7 @@ class ResultSpoolTestCase(unittest.TestCase):
 
     def create_historical_schema(self, version):
         """Create the exact result-spool tables retained by one release."""
-        if version not in range(5):
+        if version not in range(6):
             raise ValueError(f'unsupported historical schema version {version}')
 
         self.root.mkdir(mode=0o700)
@@ -106,6 +106,15 @@ class ResultSpoolTestCase(unittest.TestCase):
             claim_columns.append(
                 "source_kind TEXT NOT NULL DEFAULT 'redis' "
                 "CHECK(source_kind IN ('redis', 'notus'))"
+            )
+        if version >= 5:
+            scan_columns.extend(
+                [
+                    "notus_manifest_mode TEXT CHECK(notus_manifest_mode IN ("
+                    "'mqtt', 'none'))",
+                    'notus_manifest_json TEXT',
+                    'notus_manifest_digest TEXT',
+                ]
             )
         claim_columns.extend(
             [
@@ -277,7 +286,7 @@ class ResultSpoolTestCase(unittest.TestCase):
             )
 
     def assert_historical_claim_preserved(self, spool, owner_token):
-        self.assertEqual(spool.health()['user_version'], 5)
+        self.assertEqual(spool.health()['user_version'], 6)
         claim = spool.expose_next('legacy-redis-scan')
         self.assertEqual(claim.source_kind, SourceKind.REDIS)
         self.assertEqual(claim.owner_token, owner_token)
@@ -839,6 +848,17 @@ class ResultSpoolTestCase(unittest.TestCase):
             )
             self.assertFalse(spool.notus_completion_ready('missed-scan'))
 
+    def test_general_incomplete_evidence_does_not_block_notus_completion(self):
+        reason = 'Malformed scanner result rows were discarded.'
+        with self.spool() as spool:
+            spool.register_scan('scan-1')
+            spool.mark_scan_incomplete('scan-1', reason)
+            spool.seal_notus_manifest('scan-1', 'none', [])
+
+            self.assertEqual(spool.scan_incomplete_reason('scan-1'), reason)
+            self.assertIsNone(spool.notus_completion_issue('scan-1'))
+            self.assertTrue(spool.notus_completion_ready('scan-1'))
+
     def test_notus_manifest_rejects_removed_openvasd_transport(self):
         with self.spool() as spool:
             spool.register_scan('scan-1')
@@ -861,6 +881,9 @@ class ResultSpoolTestCase(unittest.TestCase):
                 )
             self.assertIn(
                 'does not match', spool.scan_incomplete_reason('scan-1')
+            )
+            self.assertIn(
+                'does not match', spool.notus_completion_issue('scan-1')
             )
 
     def test_notus_duplicate_is_idempotent_and_conflict_fails_closed(self):
@@ -1053,7 +1076,7 @@ class ResultSpoolTestCase(unittest.TestCase):
             self.assertEqual(health['journal_mode'], 'wal')
             self.assertEqual(health['synchronous'], 2)
             self.assertEqual(health['foreign_keys'], 1)
-            self.assertEqual(health['user_version'], 5)
+            self.assertEqual(health['user_version'], 6)
             for candidate in (self.root, self.path):
                 self.assertEqual(
                     stat.S_IMODE(candidate.stat().st_mode) & 0o077, 0
@@ -1145,6 +1168,28 @@ class ResultSpoolTestCase(unittest.TestCase):
                     'SELECT admitted_result_count FROM notus_runs'
                 ).fetchone()[0],
                 1,
+            )
+
+    def test_version_five_general_failure_does_not_become_notus_failure(self):
+        self.create_historical_schema(5)
+        reason = 'Malformed scanner result rows were discarded.'
+        with sqlite3.connect(self.path) as connection:
+            connection.execute(
+                'UPDATE scans SET incomplete_reason = ? '
+                "WHERE scan_id = 'legacy-redis-scan'",
+                (reason,),
+            )
+
+        with self.spool() as migrated:
+            migrated.seal_notus_manifest('legacy-redis-scan', 'none', [])
+            self.assertEqual(
+                migrated.scan_incomplete_reason('legacy-redis-scan'), reason
+            )
+            self.assertIsNone(
+                migrated.notus_completion_issue('legacy-redis-scan')
+            )
+            self.assertTrue(
+                migrated.notus_completion_ready('legacy-redis-scan')
             )
 
     def test_version_four_notus_rows_migrate_with_manifest_marker(self):

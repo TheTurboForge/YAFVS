@@ -87,6 +87,14 @@ struct CollectionProbe {
     detail: Option<DetailProbe>,
 }
 
+struct ReportCollectionProbe {
+    detail_key: &'static str,
+    check: &'static str,
+    suffix: &'static str,
+    description: &'static str,
+    require_source_report_id: bool,
+}
+
 #[derive(Clone, Copy)]
 enum DetailObject {
     Root,
@@ -385,6 +393,75 @@ const COLLECTION_PROBES: [CollectionProbe; 15] = [
             object: DetailObject::Root,
             required_array: None,
         }),
+    },
+];
+
+const RAW_REPORT_HEAD_PROBES: [ReportCollectionProbe; 2] = [
+    ReportCollectionProbe {
+        detail_key: "raw_report_results",
+        check: "native-api.raw-report-results",
+        suffix: "results?page_size=5&sort=-severity",
+        description: "raw-report Results",
+        require_source_report_id: false,
+    },
+    ReportCollectionProbe {
+        detail_key: "raw_report_lossless_results",
+        check: "native-api.raw-report-lossless-results",
+        suffix: "raw-results?page_size=5&sort=id",
+        description: "raw-report lossless Results",
+        require_source_report_id: true,
+    },
+];
+
+const RAW_REPORT_COLLECTION_PROBES: [ReportCollectionProbe; 7] = [
+    ReportCollectionProbe {
+        detail_key: "raw_report_hosts",
+        check: "native-api.raw-report-hosts",
+        suffix: "hosts?page_size=5&sort=host",
+        description: "raw-report Hosts",
+        require_source_report_id: false,
+    },
+    ReportCollectionProbe {
+        detail_key: "raw_report_ports",
+        check: "native-api.raw-report-ports",
+        suffix: "ports?page_size=5&sort=port",
+        description: "raw-report Ports",
+        require_source_report_id: false,
+    },
+    ReportCollectionProbe {
+        detail_key: "raw_report_applications",
+        check: "native-api.raw-report-applications",
+        suffix: "applications?page_size=5&sort=name",
+        description: "raw-report Applications",
+        require_source_report_id: false,
+    },
+    ReportCollectionProbe {
+        detail_key: "raw_report_operating_systems",
+        check: "native-api.raw-report-operating-systems",
+        suffix: "operating-systems?page_size=5&sort=name",
+        description: "raw-report Operating Systems",
+        require_source_report_id: false,
+    },
+    ReportCollectionProbe {
+        detail_key: "raw_report_cves",
+        check: "native-api.raw-report-cves",
+        suffix: "cves?page_size=5&sort=-max_severity",
+        description: "raw-report CVEs",
+        require_source_report_id: false,
+    },
+    ReportCollectionProbe {
+        detail_key: "raw_report_tls_certificates",
+        check: "native-api.raw-report-tls-certificates",
+        suffix: "tls-certificates?page_size=5&sort=-not_after",
+        description: "raw-report TLS Certificates",
+        require_source_report_id: false,
+    },
+    ReportCollectionProbe {
+        detail_key: "raw_report_errors",
+        check: "native-api.raw-report-errors",
+        suffix: "errors?page_size=5&sort=-created_at",
+        description: "raw-report Error Messages",
+        require_source_report_id: false,
     },
 ];
 
@@ -748,8 +825,12 @@ pub(crate) fn command_runtime_native_api_smoke_with_runner(
         &mut details,
     );
 
+    let mut raw_reports = None;
     for probe in &COLLECTION_PROBES {
         let response = probe_collection(repo_root, probe, runner, &mut findings, &mut details);
+        if probe.check == "native-api.raw-reports" {
+            raw_reports = Some(response.clone());
+        }
         if let Some(detail) = probe.detail {
             probe_detail(
                 repo_root,
@@ -782,6 +863,10 @@ pub(crate) fn command_runtime_native_api_smoke_with_runner(
         }
     }
 
+    if let Some(raw_reports) = raw_reports.as_ref() {
+        probe_raw_report_graph(repo_root, raw_reports, runner, &mut findings, &mut details);
+    }
+
     finish(
         repo_root,
         runner,
@@ -791,6 +876,107 @@ pub(crate) fn command_runtime_native_api_smoke_with_runner(
         artifact_path,
         status_only,
     )
+}
+
+fn probe_raw_report_graph(
+    repo_root: &Path,
+    collection: &NativeJsonResponse,
+    runner: &dyn CommandRunner,
+    findings: &mut Vec<Finding>,
+    details: &mut Map<String, Value>,
+) {
+    let items = collection
+        .object()
+        .and_then(|object| object.get("items"))
+        .and_then(Value::as_array);
+    let Some(first) = items.and_then(|items| items.first()) else {
+        findings.push(Finding::new(
+            "warn",
+            "native-api.raw-report-detail",
+            "No raw reports exist yet, so the raw-report detail probe was skipped.".into(),
+        ));
+        return;
+    };
+    let Some(id) = first
+        .as_object()
+        .and_then(|item| item.get("id"))
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())
+    else {
+        findings.push(Finding::new(
+            "fail",
+            "native-api.raw-report-detail",
+            "Raw-report list did not include a raw report id for the detail probe.".into(),
+        ));
+        return;
+    };
+    let encoded_id = percent_encode_component(id);
+    let detail_path = format!("/api/v1/reports/{encoded_id}");
+    let detail = native_api_get_json(repo_root, &detail_path, runner);
+    details.insert("raw_report_detail".into(), response_summary(&detail));
+    let detail_ok = detail.usable_object()
+        && detail
+            .object()
+            .and_then(|object| object.get("id"))
+            .and_then(Value::as_str)
+            == Some(id);
+    findings.push(native_probe_finding(
+        if detail_ok { "pass" } else { "fail" },
+        "native-api.raw-report-detail",
+        &format!(
+            "Native API raw-report detail probe exit code {}.",
+            exit_code(&detail.output)
+        ),
+        &detail,
+        "/api/v1/reports/...",
+    ));
+
+    for probe in RAW_REPORT_HEAD_PROBES
+        .iter()
+        .chain(&RAW_REPORT_COLLECTION_PROBES)
+    {
+        probe_report_collection(repo_root, id, &encoded_id, probe, runner, findings, details);
+    }
+}
+
+fn probe_report_collection(
+    repo_root: &Path,
+    report_id: &str,
+    encoded_report_id: &str,
+    probe: &ReportCollectionProbe,
+    runner: &dyn CommandRunner,
+    findings: &mut Vec<Finding>,
+    details: &mut Map<String, Value>,
+) -> NativeJsonResponse {
+    let path = format!("/api/v1/reports/{encoded_report_id}/{}", probe.suffix);
+    let response = native_api_get_json(repo_root, &path, runner);
+    details.insert(probe.detail_key.into(), response_summary(&response));
+    let items = response
+        .object()
+        .and_then(|object| object.get("items"))
+        .and_then(Value::as_array);
+    let ok = response.usable_object()
+        && items.is_some()
+        && (!probe.require_source_report_id
+            || items.into_iter().flatten().all(|item| {
+                item.as_object()
+                    .and_then(|item| item.get("source_report_id"))
+                    .and_then(Value::as_str)
+                    == Some(report_id)
+            }));
+    let display_suffix = probe.suffix.split('&').next().unwrap_or(probe.suffix);
+    findings.push(native_probe_finding(
+        if ok { "pass" } else { "fail" },
+        probe.check,
+        &format!(
+            "Native API {} probe exit code {}.",
+            probe.description,
+            exit_code(&response.output)
+        ),
+        &response,
+        &format!("/api/v1/reports/.../{display_suffix}"),
+    ));
+    response
 }
 
 fn probe_tags(
@@ -1651,6 +1837,60 @@ fn response_object_summary(object: &Map<String, Value>) -> Value {
     }
     if let Some(items) = object.get("items").and_then(Value::as_array) {
         summary.insert("item_count_in_response".into(), Value::from(items.len()));
+        summary.insert(
+            "items_sample".into(),
+            Value::Array(items.iter().take(3).map(native_item_summary).collect()),
+        );
+    }
+    Value::Object(summary)
+}
+
+fn native_item_summary(value: &Value) -> Value {
+    let Some(item) = value.as_object() else {
+        return json!({"type": match value {
+            Value::Null => "NoneType",
+            Value::Bool(_) => "bool",
+            Value::Number(number) if number.is_i64() || number.is_u64() => "int",
+            Value::Number(_) => "float",
+            Value::String(_) => "str",
+            Value::Array(_) => "list",
+            Value::Object(_) => unreachable!(),
+        }});
+    };
+    let mut summary = Map::new();
+    for key in [
+        "id",
+        "name",
+        "type",
+        "version",
+        "status",
+        "sync_status",
+        "host",
+        "port",
+        "nvt_oid",
+        "severity",
+        "max_severity",
+        "result_count",
+        "vulnerability_count",
+        "affected_system_count",
+        "source_report_count",
+        "created_at",
+        "creation_time",
+    ] {
+        if let Some(value) = item.get(key) {
+            summary.insert(key.into(), value.clone());
+        }
+    }
+    if let Some(scope) = item.get("scope").and_then(Value::as_object) {
+        summary.insert(
+            "scope".into(),
+            Value::Object(
+                ["id", "name"]
+                    .into_iter()
+                    .filter_map(|key| scope.get(key).map(|value| (key.into(), value.clone())))
+                    .collect(),
+            ),
+        );
     }
     Value::Object(summary)
 }
@@ -1902,14 +2142,18 @@ mod tests {
             &format!(r#"{{"id":"{TEST_DETAIL_ID}","sources":[]}}"#),
         ));
         for probe in &COLLECTION_PROBES {
-            outputs.push(if probe.detail.is_some() {
-                output(
-                    true,
-                    &format!(r#"{{"items":[{{"id":"{TEST_DETAIL_ID}"}}],"page":{{"total":1}}}}"#),
-                )
-            } else {
-                output(true, r#"{"items":[],"page":{"total":0}}"#)
-            });
+            outputs.push(
+                if probe.detail.is_some() || probe.check == "native-api.raw-reports" {
+                    output(
+                        true,
+                        &format!(
+                            r#"{{"items":[{{"id":"{TEST_DETAIL_ID}"}}],"page":{{"total":1}}}}"#
+                        ),
+                    )
+                } else {
+                    output(true, r#"{"items":[],"page":{"total":0}}"#)
+                },
+            );
             if probe.invalid_sort.is_some() {
                 outputs.push(bad_request_output());
             }
@@ -1941,6 +2185,22 @@ mod tests {
                     &format!(r#"{{"scan_config_id":"{TEST_DETAIL_ID}","families":[]}}"#),
                 ));
             }
+        }
+        outputs.push(output(true, &format!(r#"{{"id":"{TEST_DETAIL_ID}"}}"#)));
+        for probe in RAW_REPORT_HEAD_PROBES
+            .iter()
+            .chain(&RAW_REPORT_COLLECTION_PROBES)
+        {
+            outputs.push(if probe.require_source_report_id {
+                output(
+                    true,
+                    &format!(
+                        r#"{{"items":[{{"id":"lossless","source_report_id":"{TEST_DETAIL_ID}"}}],"page":{{"total":1}}}}"#
+                    ),
+                )
+            } else {
+                output(true, r#"{"items":[],"page":{"total":0}}"#)
+            });
         }
         outputs
     }
@@ -2130,6 +2390,26 @@ mod tests {
                 );
             }
         }
+        expected_urls.push(format!("http://127.0.0.1:9080/api/v1/reports/{encoded_id}"));
+        assert_eq!(
+            finding(&result, "native-api.raw-report-detail").status,
+            "pass"
+        );
+        for probe in RAW_REPORT_HEAD_PROBES
+            .iter()
+            .chain(&RAW_REPORT_COLLECTION_PROBES)
+        {
+            expected_urls.push(format!(
+                "http://127.0.0.1:9080/api/v1/reports/{encoded_id}/{}",
+                probe.suffix
+            ));
+            assert_eq!(
+                finding(&result, probe.check).status,
+                "pass",
+                "{}",
+                probe.check
+            );
+        }
         assert_eq!(observed_urls, expected_urls);
         let artifact = fs::read_to_string(
             repo.parent()
@@ -2138,6 +2418,72 @@ mod tests {
         )
         .unwrap();
         assert!(!artifact.contains(&"x".repeat(64)));
+        finish_test(&repo);
+    }
+
+    #[test]
+    fn raw_report_graph_rejects_missing_ids_and_wrong_lossless_provenance() {
+        let repo = repo("");
+        let mut findings = Vec::new();
+        let mut details = Map::new();
+        let runner = FakeRunner::new(Vec::new());
+        probe_raw_report_graph(
+            &repo,
+            &parsed_response(json!({"items": []})),
+            &runner,
+            &mut findings,
+            &mut details,
+        );
+        assert_eq!(findings[0].status, "warn");
+        assert!(runner.calls().is_empty());
+
+        findings.clear();
+        probe_raw_report_graph(
+            &repo,
+            &parsed_response(json!({"items": [{}]})),
+            &runner,
+            &mut findings,
+            &mut details,
+        );
+        assert_eq!(findings[0].status, "fail");
+        assert!(runner.calls().is_empty());
+
+        let mut outputs = vec![output(true, &format!(r#"{{"id":"{TEST_DETAIL_ID}"}}"#))];
+        for probe in RAW_REPORT_HEAD_PROBES
+            .iter()
+            .chain(&RAW_REPORT_COLLECTION_PROBES)
+        {
+            outputs.push(if probe.require_source_report_id {
+                output(
+                    true,
+                    r#"{"items":[{"id":"lossless","source_report_id":"wrong"}]}"#,
+                )
+            } else {
+                output(true, r#"{"items":[]}"#)
+            });
+        }
+        let runner = FakeRunner::new(outputs);
+        findings.clear();
+        probe_raw_report_graph(
+            &repo,
+            &parsed_response(json!({"items": [{"id": TEST_DETAIL_ID}]})),
+            &runner,
+            &mut findings,
+            &mut details,
+        );
+        assert_eq!(
+            finding_by_check(&findings, "native-api.raw-report-lossless-results").status,
+            "fail"
+        );
+        assert!(
+            finding_by_check(&findings, "native-api.raw-report-lossless-results")
+                .details
+                .as_ref()
+                .unwrap()["command"]
+                .as_str()
+                .unwrap()
+                .contains("/api/v1/reports/.../raw-results?page_size=5")
+        );
         finish_test(&repo);
     }
 

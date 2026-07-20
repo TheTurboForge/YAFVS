@@ -1107,7 +1107,7 @@ class YAFVSCtlTests(unittest.TestCase):
                     env.pop("YAFVS_ENABLE_QUALITY_GATE_SCHEDULE", None)
                 if arguments[0] in {"runtime-status", "runtime-smoke", "gvmd-smoke", "runtime-redis-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-report-summary", "runtime-report-export", "runtime-report-metrics", "runtime-scope-report-summary", "runtime-scope-report-metrics"}:
                     env["COMPOSE_PROJECT_NAME"] = "yafvsctl-parity-no-runtime"
-                if arguments[0] in {"up", "runtime-init", "runtime-manager-init", "runtime-scanner-redis-init", "runtime-scanner-register", "runtime-app-up"}:
+                if arguments[0] in {"up", "runtime-init", "runtime-manager-init", "runtime-scanner-redis-init", "runtime-scanner-register", "runtime-app-build", "runtime-app-up"}:
                     blocked_runtime = Path(parity_runtime) / arguments[0]
                     blocked_runtime.write_text(
                         "force runtime setup to fail before Docker\n",
@@ -1227,6 +1227,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-manager-init", "--json"], 1, "fail"),
                 (["runtime-scanner-redis-init", "--json"], 1, "fail"),
                 (["runtime-scanner-register", "--json"], 1, "fail"),
+                (["runtime-app-build", "--json"], 1, "fail"),
                 (["runtime-app-up", "--json"], 1, "fail"),
                 (["runtime-app-up", "--status-only", "--json"], 1, "fail"),
                 (["native-api-request", "--path", "/not-api", "--json"], 1, "fail"),
@@ -2362,7 +2363,7 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_technical_foundation_commands_are_registered(self):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
-        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-nvt-diagnostic-scan", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-delete-overrides-by-filter", "native-bulk-modify-schedules", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "runtime-feed-keyring-init", "security-policy-check", "feed-state", "feed-cache-sync", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
+        rust_only_commands = {"status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-nvt-diagnostic-scan", "native-stop-task", "native-start-tasks-from-csv", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-update-task-target", "native-targets-from-host-list", "native-targets-from-csv", "native-tags-from-csv", "native-targets-from-xml", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-tasks-from-csv", "native-delete-overrides-by-filter", "native-bulk-modify-schedules", "native-empty-trash", "native-verify-scanners", "native-api-cargo-audit", "gsa-npm-audit", "native-api-semgrep-audit", "osv-lockfile-audit", "path-coupling-state", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "runtime-feed-keyring-init", "runtime-app-build", "security-policy-check", "feed-state", "feed-cache-sync", "quality-gate-state", "quality-gate-schedule", "production-posture-check"}
         for command in ("native-tooling-state", "native-api-request", "native-start-task", "native-scan-new-system", "native-scan-with-delivery", "native-nvt-diagnostic-scan", "native-stop-task", "native-update-task-target", "native-stop-tasks-from-csv", "native-stop-all-tasks", "native-start-tasks-from-csv", "native-tasks-from-csv", "native-verify-scanners", "native-targets-from-host-list", "native-targets-from-csv", "native-targets-from-xml", "native-tags-from-csv", "native-schedules-from-csv", "native-schedules-from-xml", "native-credentials-from-csv", "native-alerts-from-csv", "native-api-migration-matrix", "native-api-client-contract", "native-api-replacement-dashboard", "closeout-readiness", "native-api-cargo-audit", "native-api-semgrep-audit", "gsa-npm-audit", "osv-lockfile-audit", "rust-migration-state", "branding-state", "production-posture-check", "runtime-log-review", "runtime-data-state", "runtime-db-introspect", "runtime-performance-snapshot", "security-policy-check", "path-coupling-state", "runtime-app-build", "runtime-native-api-smoke", "runtime-native-api-direct-smoke", "runtime-native-api-direct-write-smoke", "runtime-native-api-rebuild", "quality-gate", "quality-gate-state", "quality-gate-schedule"):
             if command in rust_only_commands:
                 continue
@@ -2483,7 +2484,7 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         direct_recipe = 'cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml --'
-        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "feed-state", "feed-cache-sync", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "native-api-request", "native-start-task", "native-stop-task", "native-update-task-target", "native-tasks-from-csv", "native-empty-trash", "native-verify-scanners"):
+        for command in ("status", "inventory", "branding-state", "rust-migration-state", "deps", "runtime-plan", "logs", "runtime-log-review", "runtime-scope-smoke", "runtime-certs-init", "feed-state", "feed-cache-sync", "quality-gate-state", "doctor", "quality-gate-schedule", "runtime-native-api-direct-token", "runtime-native-api-direct-bootstrap", "production-posture-check", "license-report", "runtime-app-build", "native-api-request", "native-start-task", "native-stop-task", "native-update-task-target", "native-tasks-from-csv", "native-empty-trash", "native-verify-scanners"):
             with self.subTest(command=command):
                 self.assertNotIn(f'subparsers.add_parser("{command}"', source)
                 self.assertNotRegex(
@@ -7684,6 +7685,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "runtime-log-review",
             "runtime-app-down",
             "runtime-scanner-register",
+            "runtime-app-build",
             "runtime-credential-smoke",
             "runtime-full-test-scan-preflight",
             "runtime-full-test-scan-start",
@@ -7834,6 +7836,37 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("def command_runtime_manager_init", python_source)
         self.assertIn("cargo run --quiet --locked", recipe)
         self.assertIn('-- runtime-manager-init "$@"', recipe)
+        self.assertNotIn("tools/yafvsctl ", recipe)
+
+    def test_runtime_app_build_is_owned_directly_by_rust(self):
+        root = Path(__file__).resolve().parents[2]
+        python_source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        rust_source = (
+            root
+            / "tools"
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "feed_generation"
+            / "app_build.rs"
+        ).read_text(encoding="utf-8")
+        justfile = (root / "justfile").read_text(encoding="utf-8")
+        recipe = justfile.split("runtime-app-build *args:\n", 1)[1].split(
+            "\n\n", 1
+        )[0]
+        for surface in (
+            'add_parser("runtime-app-build"',
+            'args.command == "runtime-app-build"',
+            "def command_runtime_app_build",
+            "def _command_runtime_app_build_unlocked",
+            "def stage_gsa_static",
+        ):
+            self.assertNotIn(surface, python_source)
+        self.assertIn("command_runtime_app_build", rust_source)
+        self.assertIn("RuntimeOperationLock::acquire", rust_source)
+        self.assertIn("FEED_ACTIVATION_LOCK", rust_source)
+        self.assertIn("cargo run --quiet --locked", recipe)
+        self.assertIn('-- runtime-app-build "$@"', recipe)
         self.assertNotIn("tools/yafvsctl ", recipe)
 
     def test_gsa_web_fast_script_is_one_shot(self):
@@ -10550,27 +10583,6 @@ class YAFVSCtlTests(unittest.TestCase):
 
 
 
-    def test_gsa_static_staging_writes_browser_relative_config(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            build = root / "components" / "gsa" / "build"
-            (build / "assets").mkdir(parents=True)
-            (build / "index.html").write_text('<script src="/assets/index.js"></script><div id="app"></div>', encoding="utf-8")
-            (build / "assets" / "index.js").write_text("console.log('ok');\n", encoding="utf-8")
-            original = yafvsctl.os.environ.get(yafvsctl.GSAD_HOSTS_ENV)
-            try:
-                yafvsctl.os.environ[yafvsctl.GSAD_HOSTS_ENV] = "192.168.178.42,100.80.139.13"
-                findings = yafvsctl.stage_gsa_static(root)
-            finally:
-                if original is None:
-                    yafvsctl.os.environ.pop(yafvsctl.GSAD_HOSTS_ENV, None)
-                else:
-                    yafvsctl.os.environ[yafvsctl.GSAD_HOSTS_ENV] = original
-            self.assertEqual(yafvsctl.aggregate_status(findings), "pass")
-            config = yafvsctl.gsad_static_dir(root) / "config.js"
-            config_text = config.read_text(encoding="utf-8")
-            self.assertIn("apiServer: window.location.host || '192.168.178.42:19392'", config_text)
-            self.assertIn("apiProtocol: (window.location.protocol || 'https:').replace(':', '')", config_text)
     def test_feed_activation_state_is_private_atomic_and_validated(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "TurboVAS"
@@ -11067,18 +11079,6 @@ class YAFVSCtlTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 2)
         self.assertIn("missing prepared receipt", result.stderr)
-        run_command.assert_not_called()
-
-    def test_runtime_app_build_refuses_running_bind_mount_consumers(self):
-        with unittest.mock.patch.object(
-            yafvsctl, "running_app_services", return_value=("gvmd", "gsad")
-        ), unittest.mock.patch.object(yafvsctl, "run_command") as run_command:
-            result = yafvsctl._command_runtime_app_build_unlocked(Path("/tmp"))
-
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(
-            result["findings"][0]["details"]["running_services"], ["gvmd", "gsad"]
-        )
         run_command.assert_not_called()
 
     def test_component_build_refuses_running_bind_mount_consumers(self):

@@ -4095,32 +4095,6 @@ def ensure_native_api_direct_ports_override(repo_root: Path, env: dict[str, str]
     return path
 
 
-def stage_gsa_static(repo_root: Path) -> list[dict[str, Any]]:
-    findings: list[dict[str, Any]] = []
-    source = gsa_build_dir(repo_root)
-    destination = gsad_static_dir(repo_root)
-    index = source / "index.html"
-    findings.append(finding("pass" if index.is_file() else "fail", "gsa.build.index", "GSA production build index.html exists." if index.is_file() else "GSA production build is missing index.html; run just build-ui.", str(index)))
-    if aggregate_status(findings) == "fail":
-        return findings
-    if destination.exists():
-        shutil.rmtree(destination)
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(source, destination)
-    config_js = destination / "config.js"
-    fallback_api_server = f"{gsad_host(repo_root)}:{GSAD_PORT}"
-    config_js.write_text(
-        "config = {\n"
-        "  apiProtocol: (window.location.protocol || 'https:').replace(':', ''),\n"
-        f"  apiServer: window.location.host || '{fallback_api_server}',\n"
-        "};\n",
-        encoding="utf-8",
-    )
-    findings.append(finding("pass", "gsa.static-stage", "GSA production build is staged for gsad.", str(destination)))
-    findings.append(finding("pass", "gsa.config-js", "GSA config.js uses the browser host with a fallback gsad endpoint.", str(config_js), {"api_protocol": "browser", "api_server_fallback": fallback_api_server, "hosts": list(gsad_hosts(repo_root))}))
-    return findings
-
-
 def gsa_freshness_should_skip_source_file(path: Path) -> bool:
     parts = set(path.parts)
     if "__tests__" in parts or "__mocks__" in parts:
@@ -12689,93 +12663,6 @@ def latest_completed_full_test_report_id(repo_root: Path) -> tuple[str | None, s
     return report_id, None, result
 
 
-def _command_runtime_app_build_unlocked(repo_root: Path) -> dict[str, Any]:
-    guard = live_app_build_guard(repo_root, "runtime-app-build")
-    if guard is not None:
-        return guard
-    findings = ensure_runtime_dirs(repo_root)
-    app_env = deployed_app_env(repo_root)
-    config_command = compose_command(repo_root, "--profile", "app", "config", "--quiet", env=app_env)
-    config = run_command(config_command, repo_root, env=app_env, timeout=120)
-    findings.append(
-        process_step_finding(
-            "pass" if config.returncode == 0 else "fail",
-            "compose.config",
-            f"Compose app config validation exit code {config.returncode}.",
-            config,
-            config_command,
-        )
-    )
-    if config.returncode != 0:
-        return make_result("runtime-app-build", repo_root, "Application image build stopped at Compose validation.", findings, [str(compose_file(repo_root))])
-    build_command = compose_command(repo_root, "--profile", "app", "build", *APP_SERVICES, env=app_env)
-    built = run_command(build_command, repo_root, env=app_env, timeout=1800)
-    findings.append(
-        process_step_finding(
-            "pass" if built.returncode == 0 else "fail",
-            "compose.app-build",
-            f"Build explicit application images exit code {built.returncode}.",
-            built,
-            build_command,
-        )
-    )
-    if built.returncode != 0:
-        return make_result("runtime-app-build", repo_root, "Application image build failed.", findings, [str(compose_file(repo_root))])
-    findings.extend(stage_gsa_static(repo_root))
-    image_ids, image_error = resolve_app_service_image_ids(repo_root, prefer_running=False, app_env=app_env)
-    findings.append(
-        finding(
-            "pass" if image_error is None else "fail",
-            "compose.app-images",
-            "All application image identities were resolved after the explicit build."
-            if image_error is None
-            else image_error,
-            details={"image_ids": image_ids},
-        )
-    )
-    if image_error is None and aggregate_status(findings) != "fail":
-        try:
-            runtime_artifacts = app_runtime_artifact_manifest(repo_root)
-            receipt = write_app_deployment_receipt(
-                repo_root, image_ids, runtime_artifacts, app_env=app_env
-            )
-        except (OSError, ValueError) as error:
-            findings.append(finding("fail", "runtime.app-deployment-receipt", f"Prepared application deployment receipt could not be written: {error}"))
-        else:
-            findings.append(
-                finding(
-                    "pass",
-                    "runtime.app-deployment-receipt",
-                    "Prepared application images and bind-mounted runtime artifacts were recorded for explicit deployment.",
-                    str(app_deployment_receipt_path(repo_root)),
-                    receipt,
-                )
-            )
-    return make_result(
-        "runtime-app-build",
-        repo_root,
-        "Application deployment was built and recorded explicitly."
-        if aggregate_status(findings) != "fail"
-        else "Application deployment preparation failed.",
-        findings,
-        [str(compose_file(repo_root))],
-    )
-
-
-def command_runtime_app_build(repo_root: Path) -> dict[str, Any]:
-    try:
-        with acquire_runtime_lock(repo_root, FEED_ACTIVATION_LOCK, "runtime-app-build"):
-            return _command_runtime_app_build_unlocked(repo_root)
-    except RuntimeLockTimeout as error:
-        return make_result(
-            "runtime-app-build",
-            repo_root,
-            "Application image build stopped while waiting for the feed lifecycle lock.",
-            [runtime_lock_timeout_finding(error, "feed-generation.activation-lock")],
-            [str(runtime_lock_dir(repo_root))],
-        )
-
-
 def _command_runtime_native_api_rebuild_unlocked(repo_root: Path) -> dict[str, Any]:
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
@@ -20596,7 +20483,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("build-ui", parents=[common], help="build the web UI")
     subparsers.add_parser("build-python", parents=[common], help="build/import-check Python components")
     subparsers.add_parser("build-baseline", parents=[common], help="build the inherited stack baseline")
-    subparsers.add_parser("runtime-app-build", parents=[common], help="build application images explicitly without starting or changing feed state")
     subparsers.add_parser("runtime-app-smoke", parents=[common], help="run experimental application service smoke checks")
     native_api_smoke = subparsers.add_parser("runtime-native-api-smoke", parents=[common], help="verify the internal YAFVS native API sidecar")
     native_api_smoke.add_argument("--status-only", action="store_true", help="emit compact native API smoke status and only non-pass findings for chat-safe validation")
@@ -20648,8 +20534,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_build_python_chain(repo_root)
     elif args.command == "build-baseline":
         result = command_build_baseline(repo_root)
-    elif args.command == "runtime-app-build":
-        result = command_runtime_app_build(repo_root)
     elif args.command == "runtime-app-smoke":
         result = command_runtime_app_smoke(repo_root)
     elif args.command == "runtime-native-api-smoke":

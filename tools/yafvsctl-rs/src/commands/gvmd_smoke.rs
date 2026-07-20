@@ -192,22 +192,23 @@ fn command_gvmd_smoke_unlocked(
         "gvmd",
     ]
     .map(str::to_owned);
-    let up_command = match pinned_app_compose_command(repo_root, &image_ids, &up_arguments) {
-        Ok(command) => command,
-        Err(error) => {
-            findings.push(Finding::new(
-                "fail",
-                "gvmd.up",
-                format!("Pinned gvmd Compose command could not be prepared: {error}"),
-            ));
-            return result(
-                repo_root,
-                runner,
-                "gvmd smoke stopped at container startup.",
-                findings,
-            );
-        }
-    };
+    let up_command =
+        match pinned_app_compose_command(repo_root, &environment, &image_ids, &up_arguments) {
+            Ok(command) => command,
+            Err(error) => {
+                findings.push(Finding::new(
+                    "fail",
+                    "gvmd.up",
+                    format!("Pinned gvmd Compose command could not be prepared: {error}"),
+                ));
+                return result(
+                    repo_root,
+                    runner,
+                    "gvmd smoke stopped at container startup.",
+                    findings,
+                );
+            }
+        };
     let up = run_docker(
         runner,
         repo_root,

@@ -300,7 +300,7 @@ pub(crate) fn command_unlocked(
         "-s",
     ]
     .map(str::to_owned);
-    let command = match pinned_app_compose_command(repo_root, image_ids, &operation) {
+    let command = match pinned_app_compose_command(repo_root, &environment, image_ids, &operation) {
         Ok(command) => command,
         Err(error) => {
             findings.push(Finding::new(

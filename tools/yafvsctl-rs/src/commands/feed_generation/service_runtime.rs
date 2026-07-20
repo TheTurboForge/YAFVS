@@ -393,7 +393,8 @@ impl<'a> ServiceRuntime<'a> {
         timeout: Duration,
         environment: &BTreeMap<OsString, OsString>,
     ) -> Result<ProcessOutput, String> {
-        let command = pinned_compose_command(self.repo_root, self.image_ids, arguments)?;
+        let command =
+            pinned_compose_command(self.repo_root, environment, self.image_ids, arguments)?;
         self.run_docker_with_environment(command, timeout, environment)
     }
 

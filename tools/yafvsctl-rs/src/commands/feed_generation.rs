@@ -150,10 +150,11 @@ pub(crate) fn require_current_app_deployment_snapshot(
 
 pub(crate) fn pinned_app_compose_command(
     repo_root: &Path,
+    environment: &BTreeMap<std::ffi::OsString, std::ffi::OsString>,
     image_ids: &BTreeMap<String, String>,
     arguments: &[String],
 ) -> Result<Vec<String>, String> {
-    compose_identity::pinned_compose_command(repo_root, image_ids, arguments)
+    compose_identity::pinned_compose_command(repo_root, environment, image_ids, arguments)
 }
 
 #[derive(Clone)]

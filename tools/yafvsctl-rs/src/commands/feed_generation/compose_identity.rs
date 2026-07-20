@@ -6,7 +6,7 @@
 use super::canonical_json::to_ascii_compact;
 use super::deployment::{APP_SERVICES, validate_app_compose_contract};
 use crate::commands::common::runtime_dir;
-use crate::commands::compose::compose_command_with_files;
+use crate::commands::compose::compose_command_with_environment_and_files;
 use crate::commands::secret::write_private_text;
 use crate::process::CommandRunner;
 use serde_json::{Map, Value, json};
@@ -43,15 +43,13 @@ pub(super) fn write_image_override(
 
 pub(super) fn pinned_compose_command(
     repo_root: &Path,
+    environment: &BTreeMap<OsString, OsString>,
     image_ids: &BTreeMap<String, String>,
     arguments: &[String],
 ) -> Result<Vec<String>, String> {
     let override_path = write_image_override(repo_root, image_ids)?;
-    Ok(compose_command_with_files(
-        repo_root,
-        &[&override_path],
-        arguments,
-    ))
+    compose_command_with_environment_and_files(repo_root, environment, &[&override_path], arguments)
+        .map_err(|error| format!("runtime Compose override generation failed: {error}"))
 }
 
 pub(super) fn unavailable_images(
@@ -92,6 +90,7 @@ pub(super) fn compose_contract_manifest(
 ) -> Result<Value, String> {
     let command = pinned_compose_command(
         repo_root,
+        environment,
         image_ids,
         &[
             "--profile".to_owned(),

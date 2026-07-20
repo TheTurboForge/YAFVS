@@ -5,9 +5,9 @@
 //! activation-journal validation and detached-signature provenance checks.
 
 mod activation;
+mod adapter;
 mod app_build;
 mod app_up;
-mod adapter;
 mod artifact_identity;
 mod canonical_json;
 mod compose_identity;
@@ -35,12 +35,7 @@ pub(crate) fn initialize_manager_with_images(
     environment: &BTreeMap<std::ffi::OsString, std::ffi::OsString>,
     image_ids: &BTreeMap<String, String>,
 ) -> (bool, Vec<Finding>, Vec<String>) {
-    let runtime = service_runtime::ServiceRuntime::new(
-        repo_root,
-        runner,
-        environment,
-        image_ids,
-    );
+    let runtime = service_runtime::ServiceRuntime::new(repo_root, runner, environment, image_ids);
     let outcome = manager_init::initialize_manager(repo_root, runner, &runtime);
     (
         outcome.status != transition::StepStatus::Fail,
@@ -61,9 +56,13 @@ pub(crate) fn run_pinned_gvmd(
 }
 
 pub use app_build::command_runtime_app_build;
+pub(crate) use app_build::run_compose;
 pub use app_up::command_runtime_app_up;
 pub use native_api_rebuild::command_runtime_native_api_rebuild;
-pub(crate) use native_api_rebuild::run_retained_native_api_smoke;
+pub(crate) use native_api_rebuild::{
+    deployed_app_environment, native_api_up_arguments, refresh_deployment,
+    run_retained_native_api_smoke,
+};
 
 use super::common::{compact_finding, metadata, runtime_dir};
 use super::runtime_lock::{
@@ -201,7 +200,11 @@ pub fn command_feed_generation_runtime_guard(
     repo_root: &Path,
     selector_only: bool,
 ) -> ResultEnvelope {
-    command_feed_generation_runtime_guard_with_runner(repo_root, selector_only, &SystemCommandRunner)
+    command_feed_generation_runtime_guard_with_runner(
+        repo_root,
+        selector_only,
+        &SystemCommandRunner,
+    )
 }
 
 pub(crate) fn command_feed_generation_runtime_guard_with_runner(
@@ -243,11 +246,7 @@ pub(crate) fn command_feed_generation_runtime_guard_with_runner(
         )
     };
     make_result(
-        metadata(
-            repo_root,
-            "feed-generation-runtime-guard",
-            runner,
-        ),
+        metadata(repo_root, "feed-generation-runtime-guard", runner),
         "Active feed generation runtime guard completed.".into(),
         vec![finding],
     )

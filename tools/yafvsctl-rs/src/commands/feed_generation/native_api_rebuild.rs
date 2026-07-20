@@ -262,7 +262,7 @@ fn command_unlocked(repo_root: &Path, runner: &dyn CommandRunner) -> ResultEnvel
     )
 }
 
-fn refresh_deployment(
+pub(crate) fn refresh_deployment(
     repo_root: &Path,
     runner: &dyn CommandRunner,
     environment: &BTreeMap<OsString, OsString>,
@@ -383,7 +383,7 @@ fn valid_image_id(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn deployed_app_environment(
+pub(crate) fn deployed_app_environment(
     repo_root: &Path,
     runner: &dyn CommandRunner,
 ) -> Result<BTreeMap<OsString, OsString>, String> {
@@ -572,7 +572,7 @@ pub(crate) fn run_retained_native_api_smoke(
     })
 }
 
-fn native_api_up_arguments() -> Vec<String> {
+pub(crate) fn native_api_up_arguments() -> Vec<String> {
     [
         "--profile",
         "app",

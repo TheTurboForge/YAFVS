@@ -21,7 +21,7 @@ use std::path::Path;
 use std::time::Duration;
 
 pub(crate) const MAX_REQUEST_BODY_BYTES: usize = 1024 * 1024;
-const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
+pub(crate) const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_REQUEST_PATH_BYTES: usize = 64 * 1024;
 const REQUEST_ID_MAX: usize = 128;
 const TIMEOUT: Duration = Duration::from_secs(30);
@@ -406,7 +406,7 @@ pub(crate) fn guarded_direct_api_call(
     })
 }
 
-fn direct_token(
+pub(crate) fn direct_token(
     repo_root: &Path,
     env: &std::collections::BTreeMap<OsString, OsString>,
 ) -> std::io::Result<String> {
@@ -434,40 +434,106 @@ fn direct_curl(
     env: &std::collections::BTreeMap<OsString, OsString>,
     runner: &dyn CommandRunner,
 ) -> ProcessOutput {
-    (|| {
-        let header = authorization_header(token).ok()?;
-        let header_fd = header.as_raw_fd();
-        let mut args = vec![
-            "--disable".into(),
-            "-sS".into(),
-            "--noproxy".into(),
-            "*".into(),
-            "--max-filesize".into(),
-            MAX_RESPONSE_BYTES.to_string(),
-            "--max-time".into(),
-            "10".into(),
-            "-w".into(),
-            "\n%{http_code}".into(),
-            "-H".into(),
-            format!("@/proc/self/fd/{header_fd}"),
-        ];
-        add_request_arguments(&mut args, method, request_id, body.is_some());
-        args.push(format!("{}{}", direct_base_url(env), path));
-        let curl_env = direct_curl_environment(env);
-        runner.run_with_input_and_fd(
-            "curl",
-            &args.iter().map(String::as_str).collect::<Vec<_>>(),
-            Some(repo_root),
-            Some(&curl_env),
-            Some(TIMEOUT),
-            body.map(str::as_bytes),
-            header_fd,
-        )
-    })()
-    .unwrap_or_else(failed)
+    let content_type = [("Content-Type", "application/json")];
+    raw_direct_api_request(
+        repo_root,
+        env,
+        DirectRawRequest {
+            path,
+            method,
+            request_id,
+            body,
+            token: Some(token),
+            headers: if body.is_some() { &content_type } else { &[] },
+            include_response_headers: false,
+        },
+        runner,
+    )
 }
 
-fn authorization_header(token: &str) -> std::io::Result<File> {
+pub(crate) struct DirectRawRequest<'a> {
+    pub(crate) path: &'a str,
+    pub(crate) method: &'a str,
+    pub(crate) request_id: Option<&'a str>,
+    pub(crate) body: Option<&'a str>,
+    pub(crate) token: Option<&'a str>,
+    pub(crate) headers: &'a [(&'a str, &'a str)],
+    pub(crate) include_response_headers: bool,
+}
+
+pub(crate) fn raw_direct_api_request(
+    repo_root: &Path,
+    environment: &BTreeMap<OsString, OsString>,
+    request: DirectRawRequest<'_>,
+    runner: &dyn CommandRunner,
+) -> ProcessOutput {
+    let authorization = match request.token {
+        Some(token) => match authorization_header(token) {
+            Ok(header) => Some(header),
+            Err(_) => return failed(),
+        },
+        None => None,
+    };
+    let mut args = vec![
+        "--disable".into(),
+        "-sS".into(),
+        "--noproxy".into(),
+        "*".into(),
+        "--max-filesize".into(),
+        MAX_RESPONSE_BYTES.to_string(),
+        "--max-time".into(),
+        "10".into(),
+        "-w".into(),
+        "\n%{http_code}".into(),
+    ];
+    if request.include_response_headers {
+        args.extend(["-D".into(), "-".into()]);
+    }
+    if let Some(header) = authorization.as_ref() {
+        args.extend([
+            "-H".into(),
+            format!("@/proc/self/fd/{}", header.as_raw_fd()),
+        ]);
+    }
+    if request.method != "GET" || request.body.is_some() {
+        args.extend(["-X".into(), request.method.into()]);
+    }
+    if let Some(id) = request.request_id {
+        args.extend(["-H".into(), format!("X-Request-Id: {id}")]);
+    }
+    for (name, value) in request.headers {
+        args.extend(["-H".into(), format!("{name}: {value}")]);
+    }
+    if request.body.is_some() {
+        args.extend(["--data-binary".into(), "@-".into()]);
+    }
+    args.push(format!("{}{}", direct_base_url(environment), request.path));
+    let curl_environment = direct_curl_environment(environment);
+    let arg_refs = args.iter().map(String::as_str).collect::<Vec<_>>();
+    let output = if let Some(header) = authorization.as_ref() {
+        runner.run_with_input_and_fd(
+            "curl",
+            &arg_refs,
+            Some(repo_root),
+            Some(&curl_environment),
+            Some(TIMEOUT),
+            request.body.map(str::as_bytes),
+            header.as_raw_fd(),
+        )
+    } else {
+        runner.run_with_input(
+            "curl",
+            &arg_refs,
+            Some(repo_root),
+            Some(&curl_environment),
+            Some(TIMEOUT),
+            request.body.map(str::as_bytes),
+        )
+    };
+    output.unwrap_or_else(failed)
+}
+
+pub(crate) fn authorization_header(token: &str) -> std::io::Result<File> {
     let name = CString::new("yafvsctl-auth")
         .expect("the fixed anonymous authorization file name contains no NUL");
     // SAFETY: name is a valid C string and memfd_create returns a new owned
@@ -483,7 +549,9 @@ fn authorization_header(token: &str) -> std::io::Result<File> {
     Ok(file)
 }
 
-fn direct_curl_environment(env: &BTreeMap<OsString, OsString>) -> BTreeMap<OsString, OsString> {
+pub(crate) fn direct_curl_environment(
+    env: &BTreeMap<OsString, OsString>,
+) -> BTreeMap<OsString, OsString> {
     ["PATH", "LANG", "LC_ALL"]
         .into_iter()
         .filter_map(|name| {

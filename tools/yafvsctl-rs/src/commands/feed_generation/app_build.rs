@@ -367,7 +367,7 @@ fn command_unlocked(
     result(repo_root, runner, summary, findings)
 }
 
-pub(super) fn run_compose(
+pub(crate) fn run_compose(
     repo_root: &Path,
     runner: &dyn CommandRunner,
     environment: &BTreeMap<OsString, OsString>,

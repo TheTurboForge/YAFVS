@@ -217,6 +217,129 @@ class ResultQueueRedisIntegrationTestCase(TestCase):
                 previous_address
             )
 
+    def test_pre_rename_owner_graph_migrates_atomically_and_idempotently(self):
+        scan_id = 'scan-recovery'
+        parent_token = str(uuid.uuid4())
+        child_token = str(uuid.uuid4())
+        self.ctx.hset(
+            DBINDEX_NAME,
+            mapping={1: '1', 2: '1', 3: parent_token, 4: child_token},
+        )
+        self.redis_db(1).rpush('notuscache', 'cache-evidence')
+        self.redis_db(2).rpush('nvticache', 'cache-evidence')
+        parent = self.redis_db(3)
+        child = self.redis_db(4)
+        parent.rpush('internal/turbovas.owner-token', parent_token)
+        parent.rpush('internal/turbovas.db-kind', 'parent')
+        parent.rpush('internal/scanid', scan_id)
+        parent.rpush('internal/dbindex', f'4:{child_token}')
+        child.rpush('internal/turbovas.owner-token', child_token)
+        child.rpush('internal/turbovas.db-kind', 'child')
+        child.rpush('internal/scan_id', scan_id)
+        child.set('retained-evidence', 'result')
+        previous_address = (
+            OpenvasDB._db_address
+        )  # pylint: disable=protected-access
+        OpenvasDB._db_address = (
+            self.redis_url
+        )  # pylint: disable=protected-access
+        try:
+            main = MainDB(self.ctx)
+            self.assertEqual(main.migrate_verified_legacy_reservations(), 2)
+            self.assertEqual(main.migrate_verified_legacy_reservations(), 0)
+            for database, owner_token, kind in (
+                (parent, parent_token, 'parent'),
+                (child, child_token, 'child'),
+            ):
+                self.assertEqual(
+                    database.lindex('internal/yafvs.owner-token', 0),
+                    owner_token,
+                )
+                self.assertEqual(
+                    database.lindex('internal/yafvs.db-kind', 0), kind
+                )
+                self.assertEqual(
+                    database.type('internal/turbovas.owner-token'), 'none'
+                )
+                self.assertEqual(
+                    database.type('internal/turbovas.db-kind'), 'none'
+                )
+            self.assertEqual(child.get('retained-evidence'), 'result')
+            self.assertEqual(
+                self.redis_db(1).lindex('notuscache', 0), 'cache-evidence'
+            )
+            self.assertEqual(
+                self.redis_db(2).lindex('nvticache', 0), 'cache-evidence'
+            )
+            discovered = list(main.reserved_parent_databases())
+            self.assertEqual(
+                [
+                    (found_scan, database.index)
+                    for found_scan, database in discovered
+                ],
+                [(scan_id, 3)],
+            )
+        finally:
+            OpenvasDB._db_address = (  # pylint: disable=protected-access
+                previous_address
+            )
+
+    def test_pre_rename_owner_migration_rejects_conflicting_namespaces(self):
+        owner_token = str(uuid.uuid4())
+        previous_address = (
+            OpenvasDB._db_address
+        )  # pylint: disable=protected-access
+        OpenvasDB._db_address = (
+            self.redis_url
+        )  # pylint: disable=protected-access
+        invalid_namespaces = (
+            (
+                'legacy owner with pre-rename key',
+                '1',
+                lambda database: (
+                    database.rpush('internal/scanid', 'scan-recovery'),
+                    database.rpush('internal/turbovas.owner-token', '1'),
+                ),
+            ),
+            (
+                'pre-rename owner with cache marker',
+                owner_token,
+                lambda database: (
+                    database.rpush(
+                        'internal/turbovas.owner-token', owner_token
+                    ),
+                    database.rpush('internal/turbovas.db-kind', 'parent'),
+                    database.rpush('internal/scanid', 'scan-recovery'),
+                    database.rpush('nvticache', 'cache-evidence'),
+                ),
+            ),
+        )
+        try:
+            for label, reservation, configure in invalid_namespaces:
+                with self.subTest(label=label):
+                    for index in range(16):
+                        self.redis_db(index).flushdb()
+                    self.ctx.hset(DBINDEX_NAME, 3, reservation)
+                    database = self.redis_db(3)
+                    configure(database)
+                    before = {
+                        key: self.redis_db_raw(3).dump(key)
+                        for key in self.redis_db_raw(3).scan_iter()
+                    }
+                    with self.assertRaises(OspdOpenvasError):
+                        MainDB(self.ctx).migrate_verified_legacy_reservations()
+                    self.assertEqual(
+                        {
+                            key: self.redis_db_raw(3).dump(key)
+                            for key in self.redis_db_raw(3).scan_iter()
+                        },
+                        before,
+                    )
+        finally:
+            OpenvasDB._db_address = (  # pylint: disable=protected-access
+                previous_address
+            )
+
     def test_legacy_migration_preserves_concurrent_reference_change(self):
         self.ctx.hset(DBINDEX_NAME, mapping={3: '1', 4: '1'})
         parent = self.redis_db(3)

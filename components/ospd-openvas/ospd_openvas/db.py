@@ -432,9 +432,23 @@ DATABASE_RELEASE_RETRIES = 8
 MAX_OWNER_TOKEN_LENGTH = 128
 LEGACY_OWNER_TOKEN = '1'
 PERMANENT_CACHE_MARKERS = ('nvticache', 'notuscache')
+OWNER_TOKEN_KEY = 'internal/yafvs.owner-token'
+DATABASE_KIND_KEY = 'internal/yafvs.db-kind'
+PRE_RENAME_OWNER_TOKEN_KEY = 'internal/turbovas.owner-token'
+PRE_RENAME_DATABASE_KIND_KEY = 'internal/turbovas.db-kind'
 LEGACY_MIGRATION_IDENTITY_KEYS = (
-    'internal/yafvs.owner-token',
-    'internal/yafvs.db-kind',
+    OWNER_TOKEN_KEY,
+    DATABASE_KIND_KEY,
+    'internal/scanid',
+    'internal/scan_id',
+    'internal/dbindex',
+    *PERMANENT_CACHE_MARKERS,
+)
+PRE_RENAME_MIGRATION_IDENTITY_KEYS = (
+    PRE_RENAME_OWNER_TOKEN_KEY,
+    PRE_RENAME_DATABASE_KIND_KEY,
+    OWNER_TOKEN_KEY,
+    DATABASE_KIND_KEY,
     'internal/scanid',
     'internal/scan_id',
     'internal/dbindex',
@@ -1337,9 +1351,7 @@ class KbDB(BaseKbDB):
             raise OspdOpenvasError(
                 'Refusing to initialize a scan in an unowned Redis database.'
             )
-        self._set_single_item(
-            'internal/yafvs.owner-token', [self.owner_token]
-        )
+        self._set_single_item('internal/yafvs.owner-token', [self.owner_token])
         self._set_single_item('internal/yafvs.db-kind', ['parent'])
         self._add_single_item(f'internal/{scan_id}', ['new'])
         self._add_single_item('internal/scanid', [scan_id])
@@ -1349,8 +1361,8 @@ class KbDB(BaseKbDB):
     ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         """Return the owner, kind, and scan identity stored in this namespace."""
         return (
-            self._get_single_item('internal/yafvs.owner-token'),
-            self._get_single_item('internal/yafvs.db-kind'),
+            self._get_single_item(OWNER_TOKEN_KEY),
+            self._get_single_item(DATABASE_KIND_KEY),
             self._get_single_item('internal/scanid'),
         )
 
@@ -1597,6 +1609,12 @@ class MainDB(BaseDB):
             database_kind = self._strict_optional_list_value(
                 ctx, index, 'internal/yafvs.db-kind'
             )
+            pre_rename_owner = self._strict_optional_list_value(
+                ctx, index, PRE_RENAME_OWNER_TOKEN_KEY
+            )
+            pre_rename_kind = self._strict_optional_list_value(
+                ctx, index, PRE_RENAME_DATABASE_KIND_KEY
+            )
             parent_scan_id = self._strict_optional_list_value(
                 ctx, index, 'internal/scanid'
             )
@@ -1613,6 +1631,10 @@ class MainDB(BaseDB):
                     f'Redis database {index} has invalid child references.'
                 )
 
+            if pre_rename_owner is not None or pre_rename_kind is not None:
+                raise OspdOpenvasError(
+                    f'Redis database {index} mixes legacy and pre-rename owner metadata.'
+                )
             if database.has_permanent_cache_marker():
                 if any(
                     (
@@ -1705,8 +1727,163 @@ class MainDB(BaseDB):
             'tokens': tokens,
         }
 
+    def _pre_rename_reservation_migration_plan(
+        self, reservations: dict
+    ) -> dict:
+        parents = {}
+        children = {}
+        for index, owner_token in reservations.items():
+            if owner_token == LEGACY_OWNER_TOKEN:
+                continue
+            ctx = OpenvasDB.create_context(index)
+            old_owner = self._strict_optional_list_value(
+                ctx, index, PRE_RENAME_OWNER_TOKEN_KEY
+            )
+            old_kind = self._strict_optional_list_value(
+                ctx, index, PRE_RENAME_DATABASE_KIND_KEY
+            )
+            current_owner = self._strict_optional_list_value(
+                ctx, index, OWNER_TOKEN_KEY
+            )
+            current_kind = self._strict_optional_list_value(
+                ctx, index, DATABASE_KIND_KEY
+            )
+            if (old_owner is not None or old_kind is not None) and any(
+                ctx.exists(marker) for marker in PERMANENT_CACHE_MARKERS
+            ):
+                raise OspdOpenvasError(
+                    f'Redis database {index} has conflicting pre-rename cache identity.'
+                )
+            if old_owner is None and old_kind is None:
+                continue
+            if (
+                old_owner is None
+                or old_kind is None
+                or current_owner is not None
+                or current_kind is not None
+            ):
+                raise OspdOpenvasError(
+                    f'Redis database {index} has mixed pre-rename ownership state.'
+                )
+            if old_owner != owner_token or old_kind not in ('parent', 'child'):
+                raise OspdOpenvasError(
+                    f'Redis database {index} has invalid pre-rename ownership state.'
+                )
+            scan_id = self._strict_optional_list_value(
+                ctx, index, 'internal/scanid'
+            )
+            child_scan_id = self._strict_optional_list_value(
+                ctx, index, 'internal/scan_id'
+            )
+            refs_type = ctx.type('internal/dbindex')
+            if refs_type == 'none':
+                references = []
+            elif refs_type == 'list':
+                references = ctx.lrange('internal/dbindex', 0, -1)
+            else:
+                raise OspdOpenvasError(
+                    f'Redis database {index} has invalid pre-rename child references.'
+                )
+            if old_kind == 'parent':
+                if child_scan_id is not None:
+                    raise OspdOpenvasError(
+                        f'Redis database {index} has conflicting pre-rename parent identity.'
+                    )
+                parents[index] = (
+                    self._validate_recovery_scan_id(scan_id),
+                    references,
+                )
+                continue
+            if scan_id is not None or references:
+                raise OspdOpenvasError(
+                    f'Redis database {index} has conflicting pre-rename child identity.'
+                )
+            children[index] = self._validate_recovery_scan_id(child_scan_id)
+
+        referenced_children = set()
+        for parent_index, (scan_id, references) in parents.items():
+            for reference in references:
+                if not isinstance(reference, str) or reference.count(':') != 1:
+                    raise OspdOpenvasError(
+                        f'Redis database {parent_index} has invalid pre-rename child reference.'
+                    )
+                raw_index, referenced_owner = reference.split(':', 1)
+                if not raw_index.isdigit():
+                    raise OspdOpenvasError(
+                        f'Redis database {parent_index} has invalid pre-rename child reference.'
+                    )
+                child_index = int(raw_index)
+                if (
+                    child_index not in children
+                    or reservations.get(child_index) != referenced_owner
+                    or children[child_index] != scan_id
+                    or child_index in referenced_children
+                ):
+                    raise OspdOpenvasError(
+                        f'Redis database {parent_index} has inconsistent pre-rename child ownership.'
+                    )
+                referenced_children.add(child_index)
+        if set(children) != referenced_children:
+            raise OspdOpenvasError(
+                'Pre-rename Redis child database has no verified parent.'
+            )
+        return {'parents': parents, 'children': children}
+
+    def _migrate_verified_pre_rename_reservations(self) -> int:
+        for _ in range(DATABASE_RELEASE_RETRIES):
+            reservations = self._reservation_snapshot()
+            watched_indexes = [
+                index
+                for index, owner_token in sorted(reservations.items())
+                if owner_token != LEGACY_OWNER_TOKEN
+            ]
+            if not watched_indexes:
+                return 0
+            try:
+                with self.ctx.pipeline() as pipe:
+                    pipe.watch(DBINDEX_NAME)
+                    for index in watched_indexes:
+                        pipe.immediate_execute_command('SELECT', index)
+                        pipe.watch(*PRE_RENAME_MIGRATION_IDENTITY_KEYS)
+                    pipe.immediate_execute_command('SELECT', self.DEFAULT_INDEX)
+                    if pipe.hlen(DBINDEX_NAME) != len(reservations) or any(
+                        pipe.hget(DBINDEX_NAME, index) != owner_token
+                        for index, owner_token in reservations.items()
+                    ):
+                        pipe.unwatch()
+                        continue
+                    plan = self._pre_rename_reservation_migration_plan(
+                        reservations
+                    )
+                    indexes = sorted(
+                        set(plan['parents']) | set(plan['children'])
+                    )
+                    if not indexes:
+                        pipe.unwatch()
+                        return 0
+                    pipe.multi()
+                    for index in indexes:
+                        pipe.execute_command('SELECT', index)
+                        pipe.rename(PRE_RENAME_OWNER_TOKEN_KEY, OWNER_TOKEN_KEY)
+                        pipe.rename(
+                            PRE_RENAME_DATABASE_KIND_KEY, DATABASE_KIND_KEY
+                        )
+                    pipe.execute_command('SELECT', self.DEFAULT_INDEX)
+                    pipe.execute()
+                    return len(indexes)
+            except WatchError:
+                continue
+            except redis.RedisError as error:
+                raise OspdOpenvasError(
+                    'Redis pre-rename owner migration failed.'
+                ) from error
+        raise OspdOpenvasError(
+            'Redis pre-rename owner migration contention did not settle.'
+        )
+
     def migrate_verified_legacy_reservations(self) -> int:
         """Atomically convert one fully verified legacy reservation graph."""
+        migrated_pre_rename = self._migrate_verified_pre_rename_reservations()
         for _ in range(DATABASE_RELEASE_RETRIES):
             reservations = self._reservation_snapshot()
             try:
@@ -1715,9 +1892,9 @@ class MainDB(BaseDB):
                     for index, owner_token in sorted(reservations.items()):
                         if owner_token != LEGACY_OWNER_TOKEN:
                             continue
-                        pipe.execute_command('SELECT', index)
+                        pipe.immediate_execute_command('SELECT', index)
                         pipe.watch(*LEGACY_MIGRATION_IDENTITY_KEYS)
-                    pipe.execute_command('SELECT', self.DEFAULT_INDEX)
+                    pipe.immediate_execute_command('SELECT', self.DEFAULT_INDEX)
                     if pipe.hlen(DBINDEX_NAME) != len(reservations) or any(
                         pipe.hget(DBINDEX_NAME, index) != owner_token
                         for index, owner_token in reservations.items()
@@ -1728,15 +1905,13 @@ class MainDB(BaseDB):
                     tokens = plan['tokens']
                     if not tokens:
                         pipe.unwatch()
-                        return 0
+                        return migrated_pre_rename
                     pipe.multi()
                     for index, (_, child_indexes) in sorted(
                         plan['parents'].items()
                     ):
                         pipe.execute_command('SELECT', index)
-                        pipe.rpush(
-                            'internal/yafvs.owner-token', tokens[index]
-                        )
+                        pipe.rpush('internal/yafvs.owner-token', tokens[index])
                         pipe.rpush('internal/yafvs.db-kind', 'parent')
                         pipe.delete('internal/dbindex')
                         if child_indexes:
@@ -1749,14 +1924,12 @@ class MainDB(BaseDB):
                             )
                     for index in sorted(plan['children']):
                         pipe.execute_command('SELECT', index)
-                        pipe.rpush(
-                            'internal/yafvs.owner-token', tokens[index]
-                        )
+                        pipe.rpush('internal/yafvs.owner-token', tokens[index])
                         pipe.rpush('internal/yafvs.db-kind', 'child')
                     pipe.execute_command('SELECT', self.DEFAULT_INDEX)
                     pipe.hset(DBINDEX_NAME, mapping=tokens)
                     pipe.execute()
-                    return len(tokens)
+                    return migrated_pre_rename + len(tokens)
             except WatchError:
                 continue
             except redis.RedisError as error:

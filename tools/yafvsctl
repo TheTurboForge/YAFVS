@@ -212,7 +212,6 @@ POSTGRES_DEFAULTS = {
     "password": "yafvs-dev",
     "database": "yafvs",
 }
-PG_GVM_EXTENSION = "pg-gvm"
 DEV_ADMIN_USER = "admin"
 DEV_ADMIN_PASSWORD = "admin"
 DEV_ADMIN_SECRET = "gvmd-admin-password"
@@ -222,7 +221,6 @@ FEED_RELEASE = "22.04"
 FEED_DB_ATTESTATION_META_NAME = "yafvs_feed_generation_attestation"
 FEED_DB_ATTESTATION_IMPORT_CONTRACT = "gvmd-nvt+gvmd-data-all+scap/v1"
 FEED_DB_ATTESTATION_MAX_BYTES = 4096
-GREENBONE_COMMUNITY_KEY_FPR = "8AE4BE429B60A59B311C2E739823FAA60ED1E580"
 FULL_AND_FAST_SCAN_CONFIG_ID = "daba56c8-73ec-11df-a475-002264764cea"
 IANA_TCP_UDP_PORT_LIST_ID = "4a4717fe-57d2-11e1-9a26-406186ea4fc5"
 NATIVE_TARGET_HOST_LIST_DEFAULT_ALIVE_TEST = "Scan Config Default"
@@ -231,7 +229,6 @@ NATIVE_TASK_BATCH_PAGE_SIZE = 500
 FEED_TRANSITION_BLOCKING_TASK_STATUS_IDS = (0, 3, 4, 10, 11, 14, 16, 17, 18, 19)
 RETAINED_QUALITY_GATE_ARTIFACTS = 30
 GSA_OPERATION_LOCK = "gsa-quality"
-RUNTIME_MANAGER_LOCK = "runtime-manager"
 FEED_ACTIVATION_LOCK = "feed-generation-activation"
 DEFAULT_RUNTIME_LOCK_TIMEOUT_SECONDS = 1800
 NATIVE_TOOLING_CATEGORIES = (
@@ -2316,8 +2313,6 @@ def rust_production_posture_result(repo_root: Path, status_only: bool = False) -
     return rust_result_envelope(repo_root, "production-posture-check", arguments)
 
 
-def rust_feed_state_result(repo_root: Path) -> dict[str, Any]:
-    return rust_result_envelope(repo_root, "feed-state", ["feed-state"])
 
 
 def rust_doctor_result(repo_root: Path, status_only: bool = False) -> dict[str, Any]:
@@ -2527,30 +2522,6 @@ def read_runtime_lock_metadata(repo_root: Path, name: str) -> dict[str, Any] | N
     return data if isinstance(data, dict) else None
 
 
-def runtime_lock_status(repo_root: Path, name: str) -> dict[str, Any]:
-    lock_path, metadata_path = runtime_lock_paths(repo_root, name)
-    metadata = read_runtime_lock_metadata(repo_root, name)
-    lock_path.parent.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+", encoding="utf-8") as handle:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return {
-                "name": name,
-                "active": True,
-                "path": str(lock_path),
-                "metadata_path": str(metadata_path),
-                "metadata": metadata or {},
-            }
-        else:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-            return {
-                "name": name,
-                "active": False,
-                "path": str(lock_path),
-                "metadata_path": str(metadata_path),
-                "metadata": metadata or {},
-            }
 
 
 def acquire_runtime_lock(
@@ -3213,12 +3184,8 @@ def feed_sync_log_dir(repo_root: Path) -> Path:
     return runtime_path(repo_root, "logs", "feed-sync")
 
 
-def feed_gnupg_home(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "state", "feed-gnupg")
 
 
-def gpg_command(repo_root: Path, *args: str) -> list[str]:
-    return ["gpg", "--batch", "--homedir", str(feed_gnupg_home(repo_root)), *args]
 
 
 def gsa_build_dir(repo_root: Path) -> Path:
@@ -4098,11 +4065,6 @@ def cert_files(repo_root: Path) -> dict[str, Path]:
     }
 
 
-def cert_file_findings(repo_root: Path) -> list[dict[str, Any]]:
-    findings: list[dict[str, Any]] = []
-    for name, path in cert_files(repo_root).items():
-        findings.append(finding("pass" if path.is_file() and path.stat().st_size > 0 else "warn", "runtime.cert", f"{name} {'exists' if path.is_file() else 'is missing'}.", str(path)))
-    return findings
 
 
 def certs_complete(repo_root: Path) -> bool:
@@ -4418,36 +4380,10 @@ def service_log_tail(repo_root: Path, service: str, lines: int = 80) -> list[str
     return result.stdout.splitlines()[-lines:]
 
 
-def runtime_file_tail(path: Path, lines: int = 80) -> list[str]:
-    try:
-        return path.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:]
-    except OSError:
-        return []
 
 
-def feed_signature_log_errors(lines: Iterable[str]) -> list[str]:
-    errors: list[str] = []
-    marker_words = ("gpg", "signature", "sha256", "advisories", "notus")
-    error_words = ("error", "failed", "failure", "invalid", "not loaded")
-    for line in lines:
-        lower = line.lower()
-        if any(marker in lower for marker in marker_words) and any(word in lower for word in error_words):
-            errors.append(line)
-    return errors
 
 
-def ospd_vt_load_status_from_logs(lines: Iterable[str]) -> tuple[str, list[str]]:
-    relevant: list[str] = []
-    for line in lines:
-        if "Finished loading VTs" in line or "VTs were up to date" in line:
-            relevant.append(line)
-            return "pass", relevant
-        if "Updating VTs failed" in line or "failed to load VTs" in line or "OpenVAS Scanner failed to load VTs" in line:
-            relevant.append(line)
-            return "fail", relevant
-        if "Loading VTs" in line:
-            relevant.append(line)
-    return "wait", relevant
 
 
 
@@ -4455,8 +4391,6 @@ def gvmd_socket_path(repo_root: Path) -> Path:
     return runtime_path(repo_root, "run", "gvmd-gmp", "gvmd.sock")
 
 
-def ospd_socket_path(repo_root: Path) -> Path:
-    return runtime_path(repo_root, "run", "ospd", "ospd-openvas.sock")
 
 
 def openvas_runtime_config_path(repo_root: Path) -> Path:
@@ -5778,29 +5712,10 @@ def psql_value(result: subprocess.CompletedProcess[str]) -> str:
     return ""
 
 
-def pg_gvm_extension_status(repo_root: Path) -> dict[str, Any]:
-    if not container_running(repo_root, "postgres"):
-        return finding("warn", "postgres.pg-gvm", "Postgres is not running; pg-gvm extension status is unavailable.")
-    result = psql(repo_root, f"SELECT COALESCE((SELECT extversion FROM pg_extension WHERE extname = '{PG_GVM_EXTENSION}'), 'missing');")
-    if result.returncode != 0:
-        return finding("fail", "postgres.pg-gvm", f"pg-gvm extension status query exit code {result.returncode}.", details={"output_tail": result.stdout.splitlines()[-40:]})
-    version = psql_value(result)
-    return finding("pass" if version and version != "missing" else "warn", "postgres.pg-gvm", f"pg-gvm extension is {version}.", details={"version": version})
 
 
-def parse_named_uuid(output: str, name: str) -> str | None:
-    for line in output.splitlines():
-        if name in line:
-            match = UUID_PATTERN.search(line)
-            if match:
-                return match.group(0).lower()
-    return None
 
 
-def scanner_registration_status(repo_root: Path) -> dict[str, Any]:
-    scanners = run_gvmd_oneoff(repo_root, ["--get-scanners"], no_deps=False)
-    scanner_uuid = parse_named_uuid(scanners.stdout, "OpenVAS Default") if scanners.returncode == 0 else None
-    return finding("pass" if scanner_uuid else "warn", "gvmd.scanner.openvas-default", "OpenVAS Default scanner is registered." if scanner_uuid else "OpenVAS Default scanner is not registered.", details={"scanner_uuid": scanner_uuid, "output_tail": output_tail(scanners.stdout, 80)})
 
 
 def native_tooling_markers(path: Path, relative_path: str) -> list[str]:
@@ -11842,28 +11757,10 @@ def browser_gmp_readiness_finding(repo_root: Path, *, check: str) -> dict[str, A
     )
 
 
-def command_runtime_scanner_capability_check(repo_root: Path) -> dict[str, Any]:
-    return rust_result_envelope(
-        repo_root,
-        "runtime-scanner-capability-check",
-        ["runtime-scanner-capability-check"],
-    )
 
 
-def command_runtime_scanner_process_check(repo_root: Path) -> dict[str, Any]:
-    return rust_result_envelope(
-        repo_root,
-        "runtime-scanner-process-check",
-        ["runtime-scanner-process-check"],
-    )
 
 
-def command_runtime_nmap_capability_check(repo_root: Path) -> dict[str, Any]:
-    return rust_result_envelope(
-        repo_root,
-        "runtime-nmap-capability-check",
-        ["runtime-nmap-capability-check"],
-    )
 
 
 def json_int(value: Any) -> int:
@@ -17123,87 +17020,6 @@ def command_runtime_native_api_direct_smoke(repo_root: Path, status_only: bool =
         return direct_smoke_status_only_result(result) if status_only else result
 
 
-def command_runtime_app_smoke(repo_root: Path) -> dict[str, Any]:
-    findings: list[dict[str, Any]] = []
-    manager_lock = runtime_lock_status(repo_root, RUNTIME_MANAGER_LOCK)
-    if manager_lock["active"]:
-        findings.append(finding("fail", "runtime.manager-lock", "A manager initialization or manager operation is active; app smoke would race transient state.", details={"lock": manager_lock}))
-    findings.extend(rust_feed_state_result(repo_root)["findings"])
-    findings.extend(cert_file_findings(repo_root))
-    if not certs_complete(repo_root):
-        findings.append(finding("fail", "runtime.cert.complete", "Runtime certificates are incomplete; run just runtime-certs-init."))
-    findings.append(pg_gvm_extension_status(repo_root))
-    secret_path = runtime_secret_path(repo_root, DEV_ADMIN_SECRET)
-    findings.append(finding("pass" if secret_path.is_file() else "warn", "runtime.admin-secret", "Development admin secret exists." if secret_path.is_file() else "Development admin secret is missing; run just runtime-manager-init.", str(secret_path)))
-
-    password = secret_path.read_text(encoding="utf-8").strip() if secret_path.is_file() else ""
-    if feed_gnupg_home(repo_root).is_dir() and shutil.which("gpg"):
-        fingerprint = run_command(gpg_command(repo_root, "--with-colons", "--fingerprint", GREENBONE_COMMUNITY_KEY_FPR), repo_root, timeout=60)
-        fingerprint_ok = fingerprint.returncode == 0 and GREENBONE_COMMUNITY_KEY_FPR in fingerprint.stdout.replace(" ", "").upper()
-        findings.append(finding("pass" if fingerprint_ok else "fail", "feed-keyring.fingerprint", "Shared feed signature keyring contains the Greenbone Community signing key." if fingerprint_ok else "Shared feed signature keyring is missing the Greenbone Community signing key.", str(feed_gnupg_home(repo_root)), {"fingerprint": GREENBONE_COMMUNITY_KEY_FPR, "output_tail": output_tail(fingerprint.stdout, 60)}))
-    else:
-        findings.append(finding("fail", "feed-keyring.fingerprint", "Shared feed signature keyring is not initialized; run just runtime-feed-keyring-init.", str(feed_gnupg_home(repo_root))))
-    for service in APP_SERVICES:
-        running = container_running(repo_root, service)
-        findings.append(finding("pass" if running else "warn", "runtime.app.running", f"{service} container is {'running' if running else 'not running'}.", details={"service": service, "logs_tail": [] if running else service_log_tail(repo_root, service)}))
-
-    gvmd_socket = gvmd_socket_path(repo_root)
-    gvmd_socket_finding = socket_readiness_finding("gvmd.socket", "gvmd", gvmd_socket)
-    findings.append(gvmd_socket_finding)
-    gvmd_ready = gvmd_socket_finding["status"] == "pass"
-    if gvmd_ready and password:
-        gmp = command_runtime_gmp_smoke(repo_root)
-        findings.append(finding(gmp["status"], "gvmd.gmp", gmp["summary"], details={"status": gmp["status"]}))
-
-    ospd_socket = ospd_socket_path(repo_root)
-    ospd_socket_finding = socket_readiness_finding("ospd.socket", "ospd-openvas", ospd_socket)
-    findings.append(ospd_socket_finding)
-    ospd_ready = ospd_socket_finding["status"] == "pass"
-    if container_running(repo_root, "ospd-openvas"):
-        capability = command_runtime_scanner_capability_check(repo_root)
-        findings.append(finding(capability["status"], "ospd.capability-check", capability["summary"], details={"status": capability["status"], "findings": capability["findings"]}))
-        process_check = command_runtime_scanner_process_check(repo_root)
-        findings.append(finding(process_check["status"], "ospd.process-check", process_check["summary"], details={"status": process_check["status"], "findings": process_check["findings"]}))
-        nmap_capability = command_runtime_nmap_capability_check(repo_root)
-        findings.append(finding(nmap_capability["status"], "nmap.capability-check", nmap_capability["summary"], details={"status": nmap_capability["status"], "findings": nmap_capability["findings"]}))
-        ospd_logs = service_log_tail(repo_root, "ospd-openvas", lines=120)
-        ospd_errors = [line for line in ospd_logs if "ERROR" in line]
-        ospd_feed_errors = feed_signature_log_errors(ospd_logs)
-        known_feed_gap = any("failed to load VTs" in line or "Updating VTs failed" in line for line in ospd_errors)
-        if ospd_errors:
-            message = "ospd-openvas logs contain errors; current known blocker is missing feed/plugin cache." if known_feed_gap else "ospd-openvas logs contain errors that require investigation."
-            findings.append(finding("warn", "ospd.logs", message, details={"known_deferred_feed_state": known_feed_gap, "error_tail": ospd_errors[-20:]}))
-        else:
-            findings.append(finding("pass", "ospd.logs", "ospd-openvas logs contain no ERROR lines in the inspected tail."))
-        findings.append(finding("fail" if ospd_feed_errors else "pass", "ospd.feed-signature-logs", "ospd-openvas logs contain feed signature or Notus advisory load errors." if ospd_feed_errors else "ospd-openvas logs contain no feed signature or Notus advisory load errors in the inspected tail.", details={"error_tail": ospd_feed_errors[-20:]}))
-        vt_status, vt_lines = ospd_vt_load_status_from_logs(ospd_logs)
-        findings.append(
-            finding(
-                {"pass": "pass", "fail": "fail", "wait": "warn"}[vt_status],
-                "ospd.vt-load",
-                "ospd-openvas reports VTs are loaded." if vt_status == "pass" else "ospd-openvas VT loading failed." if vt_status == "fail" else "ospd-openvas is still loading VTs.",
-                details={"status": vt_status, "log_lines": vt_lines[-20:]},
-            )
-        )
-    if container_running(repo_root, "notus-scanner"):
-        notus_logs = service_log_tail(repo_root, "notus-scanner", lines=120)
-        notus_file_logs = runtime_file_tail(runtime_path(repo_root, "logs", "notus", "notus-scanner.log"), lines=120)
-        notus_errors = [line for line in [*notus_logs, *notus_file_logs] if "ERROR" in line or "CRITICAL" in line]
-        notus_feed_errors = feed_signature_log_errors([*notus_logs, *notus_file_logs])
-        findings.append(finding("fail" if notus_errors else "pass", "notus.logs", "notus-scanner logs contain ERROR/CRITICAL lines." if notus_errors else "notus-scanner logs contain no ERROR/CRITICAL lines in the inspected tail.", details={"error_tail": notus_errors[-20:]}))
-        findings.append(finding("fail" if notus_feed_errors else "pass", "notus.feed-signature-logs", "notus-scanner logs contain GPG, signature, or advisory-load errors." if notus_feed_errors else "notus-scanner logs contain no GPG, signature, or advisory-load errors in the inspected tail.", details={"error_tail": notus_feed_errors[-20:]}))
-    if ospd_ready:
-        scanners = run_gvmd_oneoff(repo_root, ["--get-scanners"], no_deps=False)
-        findings.append(finding("pass" if scanners.returncode == 0 else "warn", "gvmd.scanners", f"gvmd --get-scanners exit code {scanners.returncode}.", details={"output_tail": output_tail(scanners.stdout, 80, [password])}))
-        findings.append(scanner_registration_status(repo_root))
-
-    for base_url in gsad_base_urls(repo_root):
-        gsad_http = run_command(["curl", "-kIsS", "--max-time", "10", f"{base_url}/"], repo_root, env=runtime_env(repo_root))
-        findings.append(finding("pass" if gsad_http.returncode == 0 else "warn", "gsad.https", f"Configured HTTPS header probe exit code {gsad_http.returncode}.", details={"url": f"{base_url}/", "output_tail": output_tail(gsad_http.stdout, 80, [password])}))
-    if container_running(repo_root, "yafvs-api"):
-        native_api = command_runtime_native_api_smoke(repo_root)
-        findings.append(finding(native_api["status"], "native-api.smoke", native_api["summary"], details={"status": native_api["status"], "findings": native_api["findings"]}))
-    return make_result("runtime-app-smoke", repo_root, "Application runtime smoke checks completed.", findings, [str(runtime_dir(repo_root))])
 
 
 
@@ -19718,7 +19534,6 @@ def build_parser() -> argparse.ArgumentParser:
     native_api_replacement_dashboard.add_argument("--status-only", action="store_true", help="emit compact dashboard details and only non-pass findings")
     closeout_readiness = subparsers.add_parser("closeout-readiness", parents=[common], help="summarize commit closeout readiness signals without running broad gates")
     closeout_readiness.add_argument("--status-only", action="store_true", help="emit compact closeout readiness details and only non-pass findings")
-    subparsers.add_parser("runtime-app-smoke", parents=[common], help="run experimental application service smoke checks")
     native_api_smoke = subparsers.add_parser("runtime-native-api-smoke", parents=[common], help="verify the internal YAFVS native API sidecar")
     native_api_smoke.add_argument("--status-only", action="store_true", help="emit compact native API smoke status and only non-pass findings for chat-safe validation")
     native_api_direct_smoke = subparsers.add_parser("runtime-native-api-direct-smoke", parents=[common], help="verify the opt-in direct bearer-auth native API listener")
@@ -19754,8 +19569,6 @@ def main(argv: list[str] | None = None) -> int:
         result = command_native_api_replacement_dashboard(repo_root, status_only=args.status_only)
     elif args.command == "closeout-readiness":
         result = command_closeout_readiness(repo_root, status_only=args.status_only)
-    elif args.command == "runtime-app-smoke":
-        result = command_runtime_app_smoke(repo_root)
     elif args.command == "runtime-native-api-smoke":
         result = command_runtime_native_api_smoke(repo_root, status_only=args.status_only)
     elif args.command == "runtime-native-api-direct-smoke":

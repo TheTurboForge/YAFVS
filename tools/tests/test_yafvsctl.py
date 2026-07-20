@@ -963,6 +963,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["runtime-scanner-redis-init", "--json"], 1, "fail"),
                 (["runtime-scanner-register", "--json"], 1, "fail"),
                 (["runtime-app-build", "--json"], 1, "fail"),
+                (["runtime-app-smoke", "--status-only", "--json"], 1, "fail"),
                 (["runtime-native-api-rebuild", "--json"], 1, "fail"),
                 (["runtime-app-up", "--json"], 1, "fail"),
                 (["runtime-app-up", "--status-only", "--json"], 1, "fail"),
@@ -1145,7 +1146,6 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_runtime_just_wrappers_forward_args(self):
         justfile = (Path(__file__).resolve().parents[2] / "justfile").read_text(encoding="utf-8")
         wrappers = [
-            "runtime-app-smoke",
             "runtime-browser-smoke",
             "runtime-browser-regression",
         ]
@@ -1153,114 +1153,10 @@ class YAFVSCtlTests(unittest.TestCase):
             with self.subTest(wrapper=wrapper):
                 self.assertIn(f"{wrapper} *args:", justfile)
                 self.assertIn(f"tools/yafvsctl {wrapper} \"$@\"", justfile)
+        self.assertIn("runtime-app-smoke *args:", justfile)
+        self.assertIn("-- runtime-app-smoke \"$@\"", justfile)
+        self.assertNotIn("tools/yafvsctl runtime-app-smoke \"$@\"", justfile)
 
-    def test_runtime_app_smoke_incomplete_state_fails_without_active_probes(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "repo"
-            root.mkdir()
-            runtime = Path(tmp) / "runtime"
-            secret = runtime / "secrets" / "admin-password"
-            keyring = runtime / "state" / "feed-gnupg"
-            gmp = unittest.mock.Mock()
-            capability = unittest.mock.Mock()
-            process_check = unittest.mock.Mock()
-            nmap = unittest.mock.Mock()
-            native_api = unittest.mock.Mock()
-            run_command = unittest.mock.Mock()
-
-            with unittest.mock.patch.multiple(
-                yafvsctl,
-                runtime_lock_status=unittest.mock.Mock(
-                    return_value={"active": True, "path": "manager.lock"}
-                ),
-                rust_feed_state_result=unittest.mock.Mock(
-                    return_value={
-                        "findings": [
-                            yafvsctl.finding(
-                                "warn",
-                                "feed.current",
-                                "No active feed generation.",
-                            )
-                        ]
-                    }
-                ),
-                cert_file_findings=unittest.mock.Mock(
-                    return_value=[
-                        yafvsctl.finding(
-                            "warn",
-                            "runtime.cert.ca-cert",
-                            "Certificate is missing.",
-                        )
-                    ]
-                ),
-                certs_complete=unittest.mock.Mock(return_value=False),
-                pg_gvm_extension_status=unittest.mock.Mock(
-                    return_value=yafvsctl.finding(
-                        "warn",
-                        "postgres.pg-gvm",
-                        "pg-gvm extension is missing.",
-                    )
-                ),
-                runtime_secret_path=unittest.mock.Mock(return_value=secret),
-                feed_gnupg_home=unittest.mock.Mock(return_value=keyring),
-                container_running=unittest.mock.Mock(return_value=False),
-                service_log_tail=unittest.mock.Mock(return_value=["stopped"]),
-                gvmd_socket_path=unittest.mock.Mock(
-                    return_value=runtime / "run" / "gvmd.sock"
-                ),
-                ospd_socket_path=unittest.mock.Mock(
-                    return_value=runtime / "run" / "ospd.sock"
-                ),
-                socket_readiness_finding=unittest.mock.Mock(
-                    side_effect=lambda check, label, path: yafvsctl.finding(
-                        "warn",
-                        check,
-                        f"{label} socket is not ready.",
-                        str(path),
-                    )
-                ),
-                gsad_base_urls=unittest.mock.Mock(return_value=[]),
-                runtime_dir=unittest.mock.Mock(return_value=runtime),
-                command_runtime_gmp_smoke=gmp,
-                command_runtime_scanner_capability_check=capability,
-                command_runtime_scanner_process_check=process_check,
-                command_runtime_nmap_capability_check=nmap,
-                command_runtime_native_api_smoke=native_api,
-                run_command=run_command,
-            ):
-                result = yafvsctl.command_runtime_app_smoke(root)
-
-        self.assertEqual(result["status"], "fail")
-        self.assertEqual(
-            [item["check"] for item in result["findings"]],
-            [
-                "runtime.manager-lock",
-                "feed.current",
-                "runtime.cert.ca-cert",
-                "runtime.cert.complete",
-                "postgres.pg-gvm",
-                "runtime.admin-secret",
-                "feed-keyring.fingerprint",
-                "runtime.app.running",
-                "runtime.app.running",
-                "runtime.app.running",
-                "runtime.app.running",
-                "runtime.app.running",
-                "gvmd.socket",
-                "ospd.socket",
-            ],
-        )
-        self.assertEqual(
-            [item["details"]["service"] for item in result["findings"][7:12]],
-            list(yafvsctl.APP_SERVICES),
-        )
-        self.assertEqual(result["artifacts"], [str(runtime)])
-        gmp.assert_not_called()
-        capability.assert_not_called()
-        process_check.assert_not_called()
-        nmap.assert_not_called()
-        native_api.assert_not_called()
-        run_command.assert_not_called()
 
 
     def test_native_scope_report_finding_counts_exclude_scanner_errors(self):
@@ -2464,37 +2360,6 @@ class YAFVSCtlTests(unittest.TestCase):
             ["quality-gate-state", "--json"],
         )
 
-    def test_rust_feed_state_bridge_and_runtime_smoke_consumer(self):
-        envelope = json.dumps(
-            {
-                "status": "warn",
-                "summary": "Feed cache and runtime copy state collected.",
-                "findings": [
-                    {
-                        "status": "warn",
-                        "check": "feed.cache.root",
-                        "message": "cache feed root is missing.",
-                    }
-                ],
-                "artifacts": [],
-                "metadata": {"command": "feed-state"},
-            }
-        )
-        root = Path("/tmp/repo")
-        with unittest.mock.patch.object(
-            yafvsctl,
-            "run_command",
-            return_value=subprocess.CompletedProcess(["unit"], 0, envelope, ""),
-        ) as run_command:
-            result = yafvsctl.rust_feed_state_result(root)
-
-        self.assertEqual(result["status"], "warn")
-        self.assertEqual(
-            run_command.call_args.args[0][-2:],
-            ["feed-state", "--json"],
-        )
-        source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
-        self.assertIn('findings.extend(rust_feed_state_result(repo_root)["findings"])', source)
 
     def test_rust_doctor_bridge_forwards_status_only(self):
         envelope = json.dumps(
@@ -2563,18 +2428,6 @@ class YAFVSCtlTests(unittest.TestCase):
                 "runtime-gmp-smoke",
                 yafvsctl.command_runtime_gmp_smoke,
             ),
-            (
-                "runtime-scanner-capability-check",
-                yafvsctl.command_runtime_scanner_capability_check,
-            ),
-            (
-                "runtime-nmap-capability-check",
-                yafvsctl.command_runtime_nmap_capability_check,
-            ),
-            (
-                "runtime-scanner-process-check",
-                yafvsctl.command_runtime_scanner_process_check,
-            ),
         ]:
             envelope = json.dumps(
                 {
@@ -2617,6 +2470,12 @@ class YAFVSCtlTests(unittest.TestCase):
             self.assertNotIn(f'subparsers.add_parser("{command}"', source)
             self.assertNotIn(f'args.command == "{command}"', source)
             self.assertIn(f'{direct_recipe} {command} "$@"', justfile)
+        for helper in (
+            "command_runtime_scanner_capability_check",
+            "command_runtime_scanner_process_check",
+            "command_runtime_nmap_capability_check",
+        ):
+            self.assertNotIn(f"def {helper}", source)
         for helper in (
             "parse_proc_status",
             "cap_hex_has",
@@ -7696,7 +7555,7 @@ class YAFVSCtlTests(unittest.TestCase):
             / "runtime_manager_init.rs"
         ).read_text(encoding="utf-8")
         self.assertIn("GSA_OPERATION_LOCK", source)
-        self.assertIn("RUNTIME_MANAGER_LOCK", source)
+        self.assertNotIn("RUNTIME_MANAGER_LOCK", source)
         self.assertIn("def acquire_runtime_lock", source)
         self.assertIn("quality-gate GSA checks", source)
         self.assertIn("GSA_OPERATION_LOCK", build_source)
@@ -7719,6 +7578,36 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("def command_runtime_manager_init", python_source)
         self.assertIn("cargo run --quiet --locked", recipe)
         self.assertIn('-- runtime-manager-init "$@"', recipe)
+        self.assertNotIn("tools/yafvsctl ", recipe)
+
+    def test_runtime_app_smoke_is_owned_directly_by_rust(self):
+        root = Path(__file__).resolve().parents[2]
+        python_source = (root / "tools" / "yafvsctl").read_text(encoding="utf-8")
+        rust_source = (
+            root
+            / "tools"
+            / "yafvsctl-rs"
+            / "src"
+            / "commands"
+            / "runtime_app_smoke.rs"
+        ).read_text(encoding="utf-8")
+        justfile = (root / "justfile").read_text(encoding="utf-8")
+        recipe = justfile.split("runtime-app-smoke *args:\n", 1)[1].split(
+            "\n\n", 1
+        )[0]
+        for surface in (
+            'add_parser("runtime-app-smoke"',
+            'args.command == "runtime-app-smoke"',
+            "def command_runtime_app_smoke",
+            "def command_runtime_scanner_capability_check",
+            "def command_runtime_scanner_process_check",
+            "def command_runtime_nmap_capability_check",
+        ):
+            self.assertNotIn(surface, python_source)
+        self.assertIn("pub fn command_runtime_app_smoke", rust_source)
+        self.assertIn("MAX_COMPOSE_LOG_OUTPUT_BYTES", rust_source)
+        self.assertIn("cargo run --quiet --locked", recipe)
+        self.assertIn('-- runtime-app-smoke "$@"', recipe)
         self.assertNotIn("tools/yafvsctl ", recipe)
 
     def test_runtime_app_build_is_owned_directly_by_rust(self):
@@ -7792,13 +7681,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("vitest run", script)
         self.assertNotRegex(script, r"^vitest\s+--")
 
-    def test_runtime_lock_status_reports_inactive_lock(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            status = yafvsctl.runtime_lock_status(root, "unit-test")
-            self.assertFalse(status["active"])
-            self.assertTrue(status["path"].endswith("unit-test.lock"))
 
     def test_unix_socket_status_classifies_missing_regular_ready_and_stale(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -10464,14 +10346,7 @@ class YAFVSCtlTests(unittest.TestCase):
             self.assertEqual(yafvsctl.feed_runtime_root(root), Path(tmp) / "YAFVS-runtime" / "feed-store" / "current")
             self.assertEqual(yafvsctl.feed_sync_log_dir(root), Path(tmp) / "YAFVS-runtime" / "logs" / "feed-sync")
 
-    def test_feed_keyring_paths_live_under_runtime_dir(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp) / "TurboVAS"
-            root.mkdir()
-            self.assertEqual(yafvsctl.feed_gnupg_home(root), Path(tmp) / "YAFVS-runtime" / "state" / "feed-gnupg")
 
-    def test_feed_keyring_constants_match_greenbone_community_key(self):
-        self.assertEqual(yafvsctl.GREENBONE_COMMUNITY_KEY_FPR, "8AE4BE429B60A59B311C2E739823FAA60ED1E580")
 
 
 
@@ -10709,19 +10584,6 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("runtime-feed-import-init", docs)
         self.assertNotIn("feed-copy-to-runtime", docs)
 
-    def test_ospd_vt_load_status_from_logs(self):
-        self.assertEqual(
-            yafvsctl.ospd_vt_load_status_from_logs(["OSPD: Loading VTs. Scans will be queued"])[0],
-            "wait",
-        )
-        self.assertEqual(
-            yafvsctl.ospd_vt_load_status_from_logs(["OSPD: VTs were up to date. Feed version is 202605221736."])[0],
-            "pass",
-        )
-        self.assertEqual(
-            yafvsctl.ospd_vt_load_status_from_logs(["OSPD: OpenVAS Scanner failed to load VTs."])[0],
-            "fail",
-        )
 
     def test_runtime_app_env_keeps_mqtt_secrets_out_of_child_environment(self):
         with tempfile.TemporaryDirectory() as tmp:

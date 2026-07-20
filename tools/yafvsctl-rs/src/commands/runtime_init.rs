@@ -9,10 +9,11 @@ use super::runtime_setup::ensure_runtime_setup;
 use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
 use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{CString, OsString};
 use std::fs::{self, File, OpenOptions};
-use std::io;
+use std::io::{self, Read};
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
@@ -745,18 +746,46 @@ fn copy_artifact(
     environment: &BTreeMap<OsString, OsString>,
     artifact: &OpenArtifact,
 ) -> Option<ProcessOutput> {
-    let source = format!("/proc/self/fd/{}", artifact.file.as_raw_fd());
-    let destination = format!("postgres:{}", artifact.destination);
-    let command = compose_command(repo_root, &["cp".into(), source, destination]);
+    let mut contents = Vec::new();
+    let mut source = &artifact.file;
+    source.read_to_end(&mut contents).ok()?;
+    let expected_sha256 = format!("{:x}", Sha256::digest(&contents));
+    let command = compose_command(
+        repo_root,
+        &[
+            "exec".into(),
+            "-T".into(),
+            "--user".into(),
+            "0".into(),
+            "postgres".into(),
+            "sh".into(),
+            "-ceu".into(),
+            concat!(
+                "destination=$1; expected_sha256=$2; ",
+                "temporary=\"${destination}.yafvsctl.$$\"; ",
+                "trap 'rm -f -- \"$temporary\"' EXIT HUP INT TERM; ",
+                "umask 022; cat > \"$temporary\"; ",
+                "actual_sha256=$(sha256sum \"$temporary\"); ",
+                "actual_sha256=${actual_sha256%% *}; ",
+                "test \"$actual_sha256\" = \"$expected_sha256\"; ",
+                "chmod 0644 \"$temporary\"; ",
+                "mv -fT -- \"$temporary\" \"$destination\"; ",
+                "trap - EXIT HUP INT TERM"
+            )
+            .into(),
+            "sh".into(),
+            artifact.destination.clone(),
+            expected_sha256,
+        ],
+    );
     let arguments = command.iter().map(String::as_str).collect::<Vec<_>>();
-    runner.run_with_input_and_fd(
+    runner.run_with_input(
         "docker",
         &arguments,
         Some(repo_root),
         Some(environment),
         None,
-        None,
-        artifact.file.as_raw_fd(),
+        Some(&contents),
     )
 }
 
@@ -893,6 +922,7 @@ mod tests {
         args: Vec<String>,
         environment: BTreeMap<OsString, OsString>,
         inherited_fd: bool,
+        input_bytes: usize,
     }
 
     struct Runner {
@@ -934,6 +964,7 @@ mod tests {
             args: &[&str],
             environment: Option<&BTreeMap<OsString, OsString>>,
             inherited_fd: bool,
+            input_bytes: usize,
         ) -> ProcessOutput {
             self.calls.lock().unwrap().push(Call {
                 args: args
@@ -942,6 +973,7 @@ mod tests {
                     .collect(),
                 environment: environment.cloned().unwrap_or_default(),
                 inherited_fd,
+                input_bytes,
             });
             self.docker_output(args)
         }
@@ -960,20 +992,20 @@ mod tests {
             environment: Option<&BTreeMap<OsString, OsString>>,
             _: Option<Duration>,
         ) -> Option<ProcessOutput> {
-            (program == "docker").then(|| self.record(args, environment, false))
+            (program == "docker").then(|| self.record(args, environment, false, 0))
         }
 
-        fn run_with_input_and_fd(
+        fn run_with_input(
             &self,
             program: &str,
             args: &[&str],
             _: Option<&Path>,
             environment: Option<&BTreeMap<OsString, OsString>>,
             _: Option<Duration>,
-            _: Option<&[u8]>,
-            _: RawFd,
+            input: Option<&[u8]>,
         ) -> Option<ProcessOutput> {
-            (program == "docker").then(|| self.record(args, environment, true))
+            (program == "docker")
+                .then(|| self.record(args, environment, false, input.map_or(0, <[u8]>::len)))
         }
     }
 
@@ -1019,18 +1051,36 @@ mod tests {
             .unwrap();
         let copy = joined
             .iter()
-            .position(|call| call.contains(" cp /proc/self/fd/"))
+            .position(|call| call.contains(" exec -T --user 0 postgres sh -ceu "))
             .unwrap();
         let role = joined
             .iter()
             .position(|call| call.contains("CREATE ROLE dba"))
             .unwrap();
         assert!(config < up && up < ready && ready < copy && copy < role);
+        let streamed_copies = calls
+            .iter()
+            .filter(|call| {
+                call.args
+                    .iter()
+                    .any(|arg| arg.contains("cat > \"$temporary\""))
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(streamed_copies.len(), 3);
+        assert!(
+            streamed_copies
+                .iter()
+                .all(|call| !call.inherited_fd && call.input_bytes > 0)
+        );
+        assert!(streamed_copies.iter().all(|call| {
+            call.args.last().is_some_and(|digest| {
+                digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+            })
+        }));
         assert!(
             calls
                 .iter()
-                .filter(|call| call.args.iter().any(|arg| arg == "cp"))
-                .all(|call| call.inherited_fd)
+                .all(|call| call.args.iter().all(|arg| !arg.contains("/proc/self/fd/")))
         );
         for call in calls
             .iter()

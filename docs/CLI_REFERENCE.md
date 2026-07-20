@@ -108,6 +108,13 @@ runtime-app-down
 runtime-app-up
 feed-copy-to-runtime
 deps
+configure
+build
+build-core-c
+build-c-services
+build-ui
+build-python
+build-baseline
 runtime-feed-import-init
 runtime-performance-snapshot
 runtime-report-summary

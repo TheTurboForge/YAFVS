@@ -453,6 +453,29 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         CliCommand::RuntimeAppUp => command_runtime_app_up(&repo_root, cli.status_only),
         CliCommand::FeedCopyToRuntime => command_feed_copy_to_runtime(&repo_root),
         CliCommand::Deps { component } => command_deps(&repo_root, component.as_deref()),
+        CliCommand::Configure { component, profile } => {
+            command_configure(&repo_root, component, profile.as_deref())
+        }
+        CliCommand::Build {
+            component,
+            install,
+            profile,
+        } => command_build(
+            &repo_root,
+            component,
+            *install,
+            true,
+            profile.as_deref(),
+        ),
+        CliCommand::BuildCoreC { profile } => {
+            command_build_core_c(&repo_root, profile.as_deref())
+        }
+        CliCommand::BuildCServices { profile } => {
+            command_build_c_services(&repo_root, profile.as_deref())
+        }
+        CliCommand::BuildUi => command_build_ui(&repo_root),
+        CliCommand::BuildPython => command_build_python(&repo_root),
+        CliCommand::BuildBaseline => command_build_baseline(&repo_root),
         CliCommand::RuntimeFeedImportInit => command_runtime_feed_import_init(&repo_root),
         CliCommand::RuntimePerformanceSnapshot => command_runtime_performance_snapshot(&repo_root),
         CliCommand::RuntimeReportSummary {

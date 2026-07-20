@@ -159,28 +159,28 @@ deps *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- deps "$@"
 
 configure *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl configure "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- configure "$@"
 
 build *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl build "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- build "$@"
 
 build-core-c *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl build-core-c "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- build-core-c "$@"
 
 build-c-services *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl build-c-services "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- build-c-services "$@"
 
 c-hardening-check *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- c-hardening-check "$@"
 
 build-ui *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl build-ui "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- build-ui "$@"
 
 build-python *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl build-python "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- build-python "$@"
 
 build-baseline *args:
-    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; tools/yafvsctl build-baseline "$@"
+    @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- build-baseline "$@"
 
 runtime-plan *args:
     @set -- {{args}}; if [ "${1:-}" = "--" ]; then shift; fi; cargo run --quiet --locked --target-dir build/yafvsctl-rs --manifest-path tools/yafvsctl-rs/Cargo.toml -- runtime-plan "$@"

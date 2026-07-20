@@ -471,6 +471,43 @@ pub enum CliCommand {
         /// Component name to check.
         component: Option<String>,
     },
+    /// Configure one supported CMake component.
+    Configure {
+        /// Component name to configure.
+        component: String,
+        /// Isolated C build profile.
+        #[arg(long, value_parser = ["hardened"])]
+        profile: Option<String>,
+    },
+    /// Configure and build one supported component.
+    Build {
+        /// Component name to build.
+        component: String,
+        /// Install into the selected build prefix after a successful build.
+        #[arg(long)]
+        install: bool,
+        /// Isolated C build profile.
+        #[arg(long, value_parser = ["hardened"])]
+        profile: Option<String>,
+    },
+    /// Build gvm-libs, openvas-smb, and openvas-scanner.
+    BuildCoreC {
+        /// Isolated C build profile.
+        #[arg(long, value_parser = ["hardened"])]
+        profile: Option<String>,
+    },
+    /// Build the current C service baseline.
+    BuildCServices {
+        /// Isolated C build profile.
+        #[arg(long, value_parser = ["hardened"])]
+        profile: Option<String>,
+    },
+    /// Build the GSA web UI without staging or restarting the runtime.
+    BuildUi,
+    /// Build and import-check retained Python runtime components.
+    BuildPython,
+    /// Build the retained inherited stack baseline.
+    BuildBaseline,
     /// Refuse standalone feed import outside guarded generation activation.
     RuntimeFeedImportInit,
     /// Capture a runtime performance snapshot for diagnostics.
@@ -707,6 +744,13 @@ impl CliCommand {
             Self::RuntimeAppUp => "runtime-app-up",
             Self::FeedCopyToRuntime => "feed-copy-to-runtime",
             Self::Deps { .. } => "deps",
+            Self::Configure { .. } => "configure",
+            Self::Build { .. } => "build",
+            Self::BuildCoreC { .. } => "build-core-c",
+            Self::BuildCServices { .. } => "build-c-services",
+            Self::BuildUi => "build-ui",
+            Self::BuildPython => "build-python",
+            Self::BuildBaseline => "build-baseline",
             Self::RuntimeFeedImportInit => "runtime-feed-import-init",
             Self::RuntimePerformanceSnapshot => "runtime-performance-snapshot",
             Self::RuntimeReportSummary { .. } => "runtime-report-summary",
@@ -1958,6 +2002,50 @@ mod tests {
     }
 
     #[test]
+    fn parses_component_build_commands_and_rejects_unknown_profiles() {
+        assert_eq!(
+            parse_cli(["configure", "gvmd", "--profile", "hardened"])
+                .unwrap()
+                .command,
+            CliCommand::Configure {
+                component: "gvmd".into(),
+                profile: Some("hardened".into()),
+            }
+        );
+        assert_eq!(
+            parse_cli(["build", "gsa", "--install"]).unwrap().command,
+            CliCommand::Build {
+                component: "gsa".into(),
+                install: true,
+                profile: None,
+            }
+        );
+        assert_eq!(
+            parse_cli(["build-core-c"]).unwrap().command,
+            CliCommand::BuildCoreC { profile: None }
+        );
+        assert_eq!(
+            parse_cli(["build-c-services", "--profile", "hardened"])
+                .unwrap()
+                .command,
+            CliCommand::BuildCServices {
+                profile: Some("hardened".into()),
+            }
+        );
+        for (argument, expected) in [
+            ("build-ui", CliCommand::BuildUi),
+            ("build-python", CliCommand::BuildPython),
+            ("build-baseline", CliCommand::BuildBaseline),
+        ] {
+            let command = parse_cli([argument]).unwrap().command;
+            assert_eq!(command, expected);
+            assert_eq!(command.name(), argument);
+        }
+        assert!(parse_cli(["configure", "gvmd", "--profile", "ordinary"]).is_err());
+        assert!(parse_cli(["build"]).is_err());
+    }
+
+    #[test]
     fn public_docs_track_the_complete_rust_command_surface() {
         let command_names = Cli::command()
             .get_subcommands()
@@ -2047,6 +2135,13 @@ mod tests {
             "runtime-native-api-direct-token",
             "runtime-native-api-direct-bootstrap",
             "production-posture-check",
+            "configure",
+            "build",
+            "build-core-c",
+            "build-c-services",
+            "build-ui",
+            "build-python",
+            "build-baseline",
         ] {
             let recipe = justfile
                 .split_once(&format!("{command} *args:\n"))

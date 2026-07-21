@@ -8469,29 +8469,29 @@ components:
       description: Target credential reference patch. Each present field sets that credential use to an existing credential reference; null clears that credential use. Secret material is never accepted or returned. Credential-link changes are rejected while the target is referenced by a live task.
       properties:
         ssh:
-          nullable: true
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/TargetSshCredentialLinkPatchRequest'
+            - type: 'null'
         ssh_elevate:
-          nullable: true
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+            - type: 'null'
         smb:
-          nullable: true
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+            - type: 'null'
         esxi:
-          nullable: true
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+            - type: 'null'
         snmp:
-          nullable: true
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+            - type: 'null'
         krb5:
-          nullable: true
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/TargetCredentialLinkPatchRequest'
+            - type: 'null'
     TargetCloneRequest:
       type: object
       additionalProperties: false
@@ -8610,9 +8610,8 @@ components:
           type: string
           format: uuid
         schedule_id:
-          type: string
+          type: [string, 'null']
           format: uuid
-          nullable: true
           description: Operator-owned schedule, or null to remove the schedule.
         alert_ids:
           type: array
@@ -9004,8 +9003,7 @@ components:
           type: string
           description: Non-secret relationship kind, such as target login-data type or scanner.
         port:
-          type: integer
-          nullable: true
+          type: [integer, 'null']
           description: Non-secret credential-use port where the relationship records one.
     CredentialAsset:
       type: object
@@ -9019,9 +9017,8 @@ components:
         comment:
           type: string
         owner_id:
-          type: string
+          type: [string, 'null']
           format: uuid
-          nullable: true
           description: Owner identity used for exact operator-ownership preflight.
         owner:
           type: string
@@ -9221,13 +9218,11 @@ components:
           type: string
           enum: [password, ldap, radius]
         created_at:
-          type: string
+          type: [string, 'null']
           format: date-time
-          nullable: true
         modified_at:
-          type: string
+          type: [string, 'null']
           format: date-time
-          nullable: true
     UserManagementMutationRequest:
       type: object
       additionalProperties: false
@@ -9721,30 +9716,25 @@ components:
           type: string
           maxLength: 8192
         hosts:
-          type: string
+          type: [string, 'null']
           maxLength: 4096
-          nullable: true
         port:
-          type: string
+          type: [string, 'null']
           maxLength: 512
-          nullable: true
         severity:
-          type: number
+          type: [number, 'null']
           minimum: 0
           maximum: 10
-          nullable: true
         new_severity:
           type: number
           minimum: -1
           maximum: 10
         task_id:
-          type: string
+          type: [string, 'null']
           format: uuid
-          nullable: true
         result_id:
-          type: string
+          type: [string, 'null']
           format: uuid
-          nullable: true
         activation:
           $ref: '#/components/schemas/OverrideActivation'
     OverridePatchRequest:
@@ -9760,31 +9750,25 @@ components:
           type: string
           maxLength: 8192
         hosts:
-          type: string
+          type: [string, 'null']
           maxLength: 4096
-          nullable: true
         port:
-          type: string
+          type: [string, 'null']
           maxLength: 512
-          nullable: true
         severity:
-          type: number
+          type: [number, 'null']
           minimum: 0
           maximum: 10
-          nullable: true
         new_severity:
-          type: number
+          type: [number, 'null']
           minimum: -1
           maximum: 10
-          nullable: true
         task_id:
-          type: string
+          type: [string, 'null']
           format: uuid
-          nullable: true
         result_id:
-          type: string
+          type: [string, 'null']
           format: uuid
-          nullable: true
         activation:
           $ref: '#/components/schemas/OverrideActivation'
     OverrideCloneRequest:
@@ -10026,14 +10010,12 @@ components:
           type: integer
           enum: [2, 5, 6, 8]
         ca_pub:
-          type: string
-          nullable: true
+          type: [string, 'null']
           maxLength: 65536
           description: Optional bounded PEM CA certificate bundle containing one or more CERTIFICATE blocks. Stored as null for Unix socket scanners.
         credential_id:
-          type: string
+          type: [string, 'null']
           format: uuid
-          nullable: true
           description: Optional operator-owned certificate credential of type cc. Stored as null for Unix socket scanners.
     SchedulePatchRequest:
       type: object
@@ -10399,14 +10381,11 @@ components:
         name:
           type: string
         comment:
-          type: string
-          nullable: true
+          type: [string, 'null']
         creation_time:
-          type: integer
-          nullable: true
+          type: [integer, 'null']
         modification_time:
-          type: integer
-          nullable: true
+          type: [integer, 'null']
     CveCollection:
       type: object
       required: [page, items]
@@ -10822,8 +10801,7 @@ components:
           type: string
           description: Internal credential kind, such as up, usk, snmp, or krb5.
         port:
-          type: integer
-          nullable: true
+          type: [integer, 'null']
           description: Credential-use port where relevant, currently mainly SSH.
         host_key_pins:
           type: array
@@ -10853,9 +10831,8 @@ components:
           type: string
           format: uuid
         owner_id:
-          type: string
+          type: [string, 'null']
           format: uuid
-          nullable: true
           description: UUID of the owning operator, exposed as nonsecret metadata for safe script reconciliation.
         name:
           type: string
@@ -10906,9 +10883,8 @@ components:
           type: string
           format: uuid
         owner_id:
-          type: string
+          type: [string, 'null']
           format: uuid
-          nullable: true
           description: UUID of the owning operator, exposed as nonsecret metadata for safe script reconciliation.
         name:
           type: string
@@ -10930,29 +10906,24 @@ components:
         scanner:
           $ref: '#/components/schemas/ResourceReference'
         scanner_type:
-          type: integer
-          nullable: true
+          type: [integer, 'null']
           description: Inherited scanner type identifier used only for read-only UI metadata.
         schedule:
           $ref: '#/components/schemas/ResourceReference'
         start_time:
-          type: string
+          type: [string, 'null']
           format: date-time
-          nullable: true
           description: Current task execution start time from PostgreSQL task state, when present.
         end_time:
-          type: string
+          type: [string, 'null']
           format: date-time
-          nullable: true
           description: Current task execution end time from PostgreSQL task state, when present.
         schedule_next_time:
-          type: string
+          type: [string, 'null']
           format: date-time
-          nullable: true
           description: Next scheduled task start time computed and persisted by gvmd, when present.
         schedule_periods:
-          type: integer
-          nullable: true
+          type: [integer, 'null']
           description: Remaining scheduled periods from inherited task schedule state, when present.
         alerts:
           type: array
@@ -10976,8 +10947,7 @@ components:
           type: string
           enum: [random, sequential, reverse]
         alterable:
-          type: boolean
-          nullable: true
+          type: [boolean, 'null']
           description: Inherited task mutability flag as persisted by gvmd.
         report_count:
           type: object
@@ -11135,53 +11105,38 @@ components:
           type: string
           format: uuid
         task_id:
-          type: string
+          type: [string, 'null']
           format: uuid
-          nullable: true
         owner_id:
-          type: string
+          type: [string, 'null']
           format: uuid
-          nullable: true
         host:
-          type: string
-          nullable: true
+          type: [string, 'null']
         hostname:
-          type: string
-          nullable: true
+          type: [string, 'null']
         port:
-          type: string
-          nullable: true
+          type: [string, 'null']
         nvt_oid:
-          type: string
-          nullable: true
+          type: [string, 'null']
         result_type:
-          type: string
-          nullable: true
+          type: [string, 'null']
         description:
-          type: string
-          nullable: true
+          type: [string, 'null']
         scan_nvt_version:
-          type: string
-          nullable: true
+          type: [string, 'null']
         severity:
-          type: number
-          nullable: true
+          type: [number, 'null']
         qod:
-          type: integer
-          nullable: true
+          type: [integer, 'null']
         qod_type:
-          type: string
-          nullable: true
+          type: [string, 'null']
         created_at:
-          type: string
+          type: [string, 'null']
           format: date-time
-          nullable: true
         path:
-          type: string
-          nullable: true
+          type: [string, 'null']
         hash_value:
-          type: string
-          nullable: true
+          type: [string, 'null']
     ResultOverride:
       type: object
       required: [id, nvt, text, text_excerpt, hosts, port, active]
@@ -11291,14 +11246,11 @@ components:
         title:
           type: string
         latest_severity:
-          type: number
-          nullable: true
+          type: [number, 'null']
         highest_severity:
-          type: number
-          nullable: true
+          type: [number, 'null']
         average_severity:
-          type: number
-          nullable: true
+          type: [number, 'null']
         hosts:
           type: integer
           description: Hosts where this operating system is the current best OS.
@@ -11786,9 +11738,8 @@ components:
           type: string
           format: uuid
         owner_id:
-          type: string
+          type: [string, 'null']
           format: uuid
-          nullable: true
           description: UUID of the owning operator, exposed as nonsecret metadata for safe script preflight and reconciliation.
         name:
           type: string
@@ -12462,8 +12413,7 @@ components:
         active:
           type: boolean
         value:
-          type: string
-          nullable: true
+          type: [string, 'null']
         writable:
           type: boolean
         in_use:
@@ -12536,11 +12486,9 @@ components:
         port:
           type: string
         severity:
-          type: number
-          nullable: true
+          type: [number, 'null']
         new_severity:
-          type: number
-          nullable: true
+          type: [number, 'null']
         writable:
           type: boolean
         in_use:
@@ -12550,9 +12498,8 @@ components:
         active:
           type: boolean
         end_time:
-          type: string
+          type: [string, 'null']
           format: date-time
-          nullable: true
         task:
           $ref: '#/components/schemas/OverrideTaskReference'
         result:
@@ -12640,7 +12587,7 @@ components:
             user_tags:
               type: array
               items:
-                $ref: '#/components/schemas/UserTag'
+                $ref: '#/components/schemas/ReportUserTag'
     ScheduleTaskReference:
       type: object
       required: [id, name, usage_type]
@@ -12668,8 +12615,7 @@ components:
         timezone:
           type: string
         timezone_abbrev:
-          type: string
-          nullable: true
+          type: [string, 'null']
         task_count:
           type: integer
         tasks:
@@ -12727,11 +12673,9 @@ components:
         default:
           type: string
         min:
-          type: integer
-          nullable: true
+          type: [integer, 'null']
         max:
-          type: integer
-          nullable: true
+          type: [integer, 'null']
         options:
           type: array
           items:
@@ -12759,9 +12703,8 @@ components:
           type: string
           enum: [yes, no, unknown]
         trust_time:
-          type: string
+          type: [string, 'null']
           format: date-time
-          nullable: true
         active:
           type: boolean
         predefined:
@@ -12990,7 +12933,7 @@ components:
             user_tags:
               type: array
               items:
-                $ref: '#/components/schemas/UserTag'
+                $ref: '#/components/schemas/ReportUserTag'
     CatalogCpeCve:
       type: object
       required: [id, severity]
@@ -13020,8 +12963,7 @@ components:
         deprecated_by:
           type: string
         severity:
-          type: number
-          nullable: true
+          type: [number, 'null']
         cve_refs:
           type: integer
         cves:
@@ -13056,7 +12998,7 @@ components:
             user_tags:
               type: array
               items:
-                $ref: '#/components/schemas/UserTag'
+                $ref: '#/components/schemas/ReportUserTag'
     DfnCertAdvisory:
       type: object
       required: [id, name, cve_refs]
@@ -13099,7 +13041,7 @@ components:
             user_tags:
               type: array
               items:
-                $ref: '#/components/schemas/UserTag'
+                $ref: '#/components/schemas/ReportUserTag'
     DfnCertAdvisoryRichDetail:
       type: object
       properties:
@@ -13156,7 +13098,7 @@ components:
             user_tags:
               type: array
               items:
-                $ref: '#/components/schemas/UserTag'
+                $ref: '#/components/schemas/ReportUserTag'
     CertBundAdvisoryRichDetail:
       type: object
       properties:
@@ -13295,7 +13237,7 @@ components:
             user_tags:
               type: array
               items:
-                $ref: '#/components/schemas/UserTag'
+                $ref: '#/components/schemas/ReportUserTag'
     NvtCatalogPreference:
       type: object
       required: [id, name, hr_name, type, value, default]

@@ -14,6 +14,9 @@
   },
   "author": "Robert Pelfrey <Robert@Pelfrey.de>",
   "license": "AGPL-3.0+",
+  "overrides": {
+    "js-yaml": "4.3.0"
+  },
   "type": "module",
   "scripts": {
     "check:openapi": "node scripts/check-openapi.mjs",
@@ -80,6 +83,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@pandatix/js-cvss": "^0.4.4",
+    "@redocly/cli": "2.39.0",
     "@tanstack/eslint-plugin-query": "^5.100.10",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -108,6 +112,8 @@
     "globals": "^17.6.0",
     "i18next-cli": "^1.50.3",
     "jsdom": "^26.1.0",
+    "openapi-fetch": "0.17.0",
+    "openapi-typescript": "7.13.0",
     "prettier": "^3.8.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.59.3",

@@ -541,7 +541,6 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "raw-report-generation-non-pdf-export-retention-and-mutations",
         "report-format-file-import-export-verify-param-writes-and-deletes",
         "retention-mutations",
-        "saved-filter-alert-linkage",
         "schedule-calendar-edit-and-task-recalculation",
         "remote-scanner-tls-relay-verification",
         "target-file-input-task-control-and-credential-secret-workflows",
@@ -944,7 +943,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-yafvs-side-effect": "metadata-write",
     },
     ("patch", "/filters/{filter_id}"): {
-        "x-yafvs-inherited-still-owns": "saved-filter-alert-linkage",
         "x-yafvs-maturity": "live-write",
         "x-yafvs-operator-identity": "direct-token-operator",
         "x-yafvs-owner-semantics": "preserve-existing-owner",
@@ -953,7 +951,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-yafvs-side-effect": "metadata-write",
     },
     ("delete", "/filters/{filter_id}"): {
-        "x-yafvs-inherited-still-owns": "saved-filter-alert-linkage",
         "x-yafvs-maturity": "live-write",
         "x-yafvs-operator-identity": "direct-token-operator",
         "x-yafvs-owner-semantics": "preserve-existing-owner",
@@ -970,7 +967,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-yafvs-side-effect": "metadata-write",
     },
     ("post", "/filters/{filter_id}/restore"): {
-        "x-yafvs-inherited-still-owns": "saved-filter-alert-linkage",
         "x-yafvs-maturity": "live-write",
         "x-yafvs-operator-identity": "direct-token-operator",
         "x-yafvs-owner-semantics": "preserve-existing-owner",
@@ -979,7 +975,6 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-yafvs-side-effect": "metadata-write",
     },
     ("delete", "/filters/{filter_id}/trash"): {
-        "x-yafvs-inherited-still-owns": "saved-filter-alert-linkage",
         "x-yafvs-maturity": "live-write",
         "x-yafvs-operator-identity": "direct-token-operator",
         "x-yafvs-owner-semantics": "preserve-existing-owner",

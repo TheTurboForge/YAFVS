@@ -78,68 +78,6 @@ valid_subtype (const char* type)
 }
 
 /**
- * @brief Return DB name of type.
- *
- * @param[in]  type  Database or pretty name.
- *
- * @return Database name of type if possible, else NULL.
- */
-const char *
-type_db_name (const char* type)
-{
-  if (type == NULL)
-    return NULL;
-
-  if (valid_type (type))
-    return type;
-
-
-  if (strcasecmp (type, "Alert") == 0)
-    return "alert";
-  if (strcasecmp (type, "Asset") == 0)
-    return "asset";
-  if (strcasecmp (type, "Config") == 0)
-    return "config";
-  if (strcasecmp (type, "Credential") == 0)
-    return "credential";
-  if (strcasecmp (type, "Filter") == 0)
-    return "filter";
-  if (strcasecmp (type, "Override") == 0)
-    return "override";
-  if (strcasecmp (type, "Permission") == 0)
-    return "permission";
-  if (strcasecmp (type, "Port List") == 0)
-    return "port_list";
-  if (strcasecmp (type, "Report") == 0)
-    return "report";
-  if (strcasecmp (type, "Report Format") == 0)
-    return "report_format";
-  if (strcasecmp (type, "Scope") == 0)
-    return "scope";
-  if (strcasecmp (type, "Scope Report") == 0)
-    return "scope_report";
-  if (strcasecmp (type, "Result") == 0)
-    return "result";
-  if (strcasecmp (type, "Role") == 0)
-    return "role";
-  if (strcasecmp (type, "Scanner") == 0)
-    return "scanner";
-  if (strcasecmp (type, "Schedule") == 0)
-    return "schedule";
-  if (strcasecmp (type, "Tag") == 0)
-    return "tag";
-  if (strcasecmp (type, "Target") == 0)
-    return "target";
-  if (strcasecmp (type, "Task") == 0)
-    return "task";
-  if (strcasecmp (type, "TLS Certificate") == 0)
-    return "tls_certificate";
-  if (strcasecmp (type, "SecInfo") == 0)
-    return "info";
-  return NULL;
-}
-
-/**
  * @brief Check whether a resource type is an asset subtype.
  *
  * @param[in]  type  Type of resource.

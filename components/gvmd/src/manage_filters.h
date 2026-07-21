@@ -58,16 +58,6 @@ char *
 trash_filter_name (filter_t);
 
 int
-create_filter (const char *, const char *, const char *, const char *,
-               filter_t *);
-
-int
-copy_filter (const char *, const char *, const char *, filter_t *);
-
-int
-delete_filter (const char *, int);
-
-int
 trash_filter_in_use (filter_t);
 
 int
@@ -102,9 +92,5 @@ filter_alert_iterator_uuid (iterator_t *);
 
 int
 filter_alert_iterator_readable (iterator_t *);
-
-int
-modify_filter (const char *, const char *, const char *, const char *,
-               const char *);
 
 #endif /* not _GVMD_MANAGE_FILTERS_H */

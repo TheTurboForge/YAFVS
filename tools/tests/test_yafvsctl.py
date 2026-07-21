@@ -1541,6 +1541,61 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("pub(crate) async fn patch_scope", native_write_source)
         self.assertIn("pub(crate) async fn delete_scope", native_write_source)
 
+    def test_legacy_filter_mutation_commands_are_removed_full_stack(self):
+        root = Path(__file__).resolve().parents[2]
+        retired_sources = {
+            "gsa capabilities": root / "components" / "gsa" / "src" / "gmp" / "capabilities" / "capabilities.ts",
+            "gsad dispatch": root / "components" / "gsad" / "src" / "gsad_gmp.c",
+            "gsad declarations": root / "components" / "gsad" / "src" / "gsad_gmp.h",
+            "gsad validation": root / "components" / "gsad" / "src" / "gsad_validator.c",
+            "gvmd parser": root / "components" / "gvmd" / "src" / "gmp.c",
+            "gvmd filter SQL": root / "components" / "gvmd" / "src" / "manage_sql_filters.c",
+            "gvmd filter declarations": root / "components" / "gvmd" / "src" / "manage_filters.h",
+            "GMP schema": root / "components" / "gvmd" / "src" / "schema_formats" / "XML" / "GMP.xml.in",
+        }
+        retired_markers = (
+            "create_filter_gmp",
+            "delete_filter_gmp",
+            "save_filter_gmp",
+            "ELSE (create_filter)",
+            "ELSE (delete_filter)",
+            "ELSE (save_filter)",
+            "CLIENT_CREATE_FILTER",
+            "CLIENT_DELETE_FILTER",
+            "CLIENT_MODIFY_FILTER",
+            "create_filter (",
+            "copy_filter (",
+            "delete_filter (",
+            "modify_filter (",
+            "'create_filter'",
+            "'delete_filter'",
+            "'modify_filter'",
+            "<name>create_filter</name>",
+            "<name>delete_filter</name>",
+            "<name>modify_filter</name>",
+        )
+
+        for label, path in retired_sources.items():
+            source = path.read_text(encoding="utf-8")
+            for marker in retired_markers:
+                self.assertNotIn(marker, source, f"{label} still exposes {marker}")
+
+        gsad_source = retired_sources["gsad dispatch"].read_text(encoding="utf-8")
+        gvmd_source = retired_sources["gvmd parser"].read_text(encoding="utf-8")
+        filter_sql_source = retired_sources["gvmd filter SQL"].read_text(encoding="utf-8")
+        native_write_source = (root / "services" / "yafvs-api" / "src" / "filter_writes.rs").read_text(encoding="utf-8")
+        self.assertIn("get_filter_gmp", gsad_source)
+        self.assertIn("get_filters_gmp", gsad_source)
+        self.assertIn("CLIENT_GET_FILTERS", gvmd_source)
+        self.assertIn("filter_in_use", filter_sql_source)
+        self.assertIn("trash_filter_in_use", filter_sql_source)
+        self.assertIn("pub(crate) async fn create_filter", native_write_source)
+        self.assertIn("pub(crate) async fn patch_filter", native_write_source)
+        self.assertIn("pub(crate) async fn delete_filter", native_write_source)
+        self.assertIn("pub(crate) async fn clone_filter", native_write_source)
+        self.assertIn("pub(crate) async fn restore_filter", native_write_source)
+        self.assertIn("pub(crate) async fn hard_delete_filter", native_write_source)
+
     def test_full_test_scan_load_state_uses_native_api_when_repo_root_is_available(self):
         root = Path("/tmp/yafvs-test")
         payloads = {
@@ -4509,7 +4564,6 @@ class YAFVSCtlTests(unittest.TestCase):
          'remote-scanner-tls-relay-verification',
          'report-format-file-import-export-verify-param-writes-and-deletes',
          'retention-mutations',
-         'saved-filter-alert-linkage',
          'schedule-calendar-edit-and-task-recalculation',
          'target-credential-secrets-create-delete-restore-export',
          'target-credential-secrets-writes-and-deletes',

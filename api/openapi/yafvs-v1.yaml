@@ -1936,7 +1936,6 @@ paths:
       x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: saved-filter-metadata-modify
-      x-yafvs-inherited-still-owns: saved-filter-alert-linkage
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-team-authority: authenticated-stack-operator
@@ -1986,7 +1985,6 @@ paths:
       x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: saved-filter-trash-move
-      x-yafvs-inherited-still-owns: saved-filter-alert-linkage
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-team-authority: authenticated-stack-operator
@@ -2024,7 +2022,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: saved-filter-metadata-export-read
       summary: Export saved-filter metadata
-      description: Read-only metadata export for one live saved filter, backed by the same PostgreSQL loader as saved-filter detail, including alert backlinks. This endpoint returns the native JSON metadata payload used by GSA downloads; browser bulk download composes native JSON metadata exports from this endpoint when native API is available. Alert-linkage mutation semantics remain compatibility paths beyond this native JSON contract.
+      description: Read-only metadata export for one live saved filter, backed by the same PostgreSQL loader as saved-filter detail, including alert backlinks. This endpoint returns the native JSON metadata payload used by GSA downloads; browser bulk download composes native JSON metadata exports from this endpoint when native API is available. Alert-linkage mutation belongs to alert-resource control and is outside this saved-filter metadata export contract.
       parameters:
         - $ref: '#/components/parameters/FilterId'
       responses:
@@ -2106,7 +2104,6 @@ paths:
       x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: saved-filter-restore
-      x-yafvs-inherited-still-owns: saved-filter-alert-linkage
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-team-authority: authenticated-stack-operator
@@ -2151,7 +2148,6 @@ paths:
       x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: saved-filter-hard-delete
-      x-yafvs-inherited-still-owns: saved-filter-alert-linkage
       x-yafvs-operator-identity: direct-token-operator
       x-yafvs-owner-semantics: preserve-existing-owner
       x-yafvs-team-authority: authenticated-stack-operator

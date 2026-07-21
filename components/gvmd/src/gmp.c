@@ -510,35 +510,6 @@ create_credential_data_reset (create_credential_data_t *data)
 }
 
 /**
- * @brief Command data for the create_filter command.
- */
-typedef struct
-{
-  char *comment;                 ///< Comment.
-  char *copy;                    ///< UUID of resource to copy.
-  char *name;                    ///< Name of new filter.
-  char *term;                    ///< Filter term.
-  char *type;                    ///< Type of new filter.
-} create_filter_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-create_filter_data_reset (create_filter_data_t *data)
-{
-  free (data->comment);
-  free (data->copy);
-  free (data->name);
-  free (data->term);
-  free (data->type);
-
-  memset (data, 0, sizeof (create_filter_data_t));
-}
-
-/**
  * @brief Command data for the create_override command.
  */
 typedef struct
@@ -935,28 +906,6 @@ delete_credential_data_reset (delete_credential_data_t *data)
   free (data->credential_id);
 
   memset (data, 0, sizeof (delete_credential_data_t));
-}
-
-/**
- * @brief Command data for the delete_filter command.
- */
-typedef struct
-{
-  char *filter_id;   ///< ID of filter to delete.
-  int ultimate;      ///< Boolean.  Whether to remove entirely or to trashcan.
-} delete_filter_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-delete_filter_data_reset (delete_filter_data_t *data)
-{
-  free (data->filter_id);
-
-  memset (data, 0, sizeof (delete_filter_data_t));
 }
 
 /**
@@ -1894,35 +1843,6 @@ modify_credential_data_reset (modify_credential_data_t *data)
 }
 
 /**
- * @brief Command data for the modify_filter command.
- */
-typedef struct
-{
-  char *comment;                 ///< Comment.
-  char *name;                    ///< Name of filter.
-  char *filter_id;               ///< Filter UUID.
-  char *term;                    ///< Term for filter.
-  char *type;                    ///< Type of filter.
-} modify_filter_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-modify_filter_data_reset (modify_filter_data_t *data)
-{
-  free (data->comment);
-  free (data->name);
-  free (data->filter_id);
-  free (data->term);
-  free (data->type);
-
-  memset (data, 0, sizeof (modify_filter_data_t));
-}
-
-/**
  * @brief Command data for the modify_override command.
  */
 typedef struct
@@ -2472,7 +2392,6 @@ typedef union
 {
   create_asset_data_t create_asset;                   ///< create_asset
   create_credential_data_t create_credential;         ///< create_credential
-  create_filter_data_t create_filter;                 ///< create_filter
   create_override_data_t create_override;             ///< create_override
   create_port_range_data_t create_port_range;         ///< create_port_range
   create_scanner_data_t create_scanner;               ///< create_scanner
@@ -2484,7 +2403,6 @@ typedef union
   delete_credential_data_t delete_credential;         ///< delete_credential
   delete_config_data_t delete_config;                 ///< delete_config
   delete_alert_data_t delete_alert;                   ///< delete_alert
-  delete_filter_data_t delete_filter;                 ///< delete_filter
   delete_override_data_t delete_override;             ///< delete_override
   delete_port_list_data_t delete_port_list;           ///< delete_port_list
   delete_port_range_data_t delete_port_range;         ///< delete_port_range
@@ -2525,7 +2443,6 @@ typedef union
   modify_asset_data_t modify_asset;                   ///< modify_asset
   modify_config_data_t modify_config;                 ///< modify_config
   modify_credential_data_t modify_credential;         ///< modify_credential
-  modify_filter_data_t modify_filter;                 ///< modify_filter
   modify_port_list_data_t modify_port_list;           ///< modify_port_list
   modify_scanner_data_t modify_scanner;               ///< modify_scanner
   modify_setting_data_t modify_setting;               ///< modify_setting
@@ -2572,12 +2489,6 @@ static create_asset_data_t *create_asset_data
  */
 static create_credential_data_t *create_credential_data
  = (create_credential_data_t*) &(command_data.create_credential);
-
-/**
- * @brief Parser callback data for CREATE_FILTER.
- */
-static create_filter_data_t *create_filter_data
- = (create_filter_data_t*) &(command_data.create_filter);
 
 /**
  * @brief Parser callback data for CREATE_OVERRIDE.
@@ -2644,12 +2555,6 @@ static delete_alert_data_t *delete_alert_data
  */
 static delete_credential_data_t *delete_credential_data
  = (delete_credential_data_t*) &(command_data.delete_credential);
-
-/**
- * @brief Parser callback data for DELETE_FILTER.
- */
-static delete_filter_data_t *delete_filter_data
- = (delete_filter_data_t*) &(command_data.delete_filter);
 
 /**
  * @brief Parser callback data for DELETE_OVERRIDE.
@@ -2887,12 +2792,6 @@ static modify_credential_data_t *modify_credential_data
  = &(command_data.modify_credential);
 
 /**
- * @brief Parser callback data for MODIFY_FILTER.
- */
-static modify_filter_data_t *modify_filter_data
- = &(command_data.modify_filter);
-
-/**
  * @brief Parser callback data for MODIFY_OVERRIDE.
  */
 static modify_override_data_t *modify_override_data
@@ -3049,12 +2948,6 @@ typedef enum
   CLIENT_CREATE_CREDENTIAL_PRIVACY_PASSWORD,
   CLIENT_CREATE_CREDENTIAL_REALM,
   CLIENT_CREATE_CREDENTIAL_TYPE,
-  CLIENT_CREATE_FILTER,
-  CLIENT_CREATE_FILTER_COMMENT,
-  CLIENT_CREATE_FILTER_COPY,
-  CLIENT_CREATE_FILTER_NAME,
-  CLIENT_CREATE_FILTER_TERM,
-  CLIENT_CREATE_FILTER_TYPE,
   CLIENT_CREATE_OVERRIDE,
   CLIENT_CREATE_OVERRIDE_ACTIVE,
   CLIENT_CREATE_OVERRIDE_COPY,
@@ -3148,7 +3041,6 @@ typedef enum
   CLIENT_DELETE_ASSET,
   CLIENT_DELETE_CONFIG,
   CLIENT_DELETE_CREDENTIAL,
-  CLIENT_DELETE_FILTER,
   CLIENT_DELETE_OVERRIDE,
   CLIENT_DELETE_PORT_LIST,
   CLIENT_DELETE_PORT_RANGE,
@@ -3221,11 +3113,6 @@ typedef enum
   CLIENT_MODIFY_CREDENTIAL_PRIVACY_ALGORITHM,
   CLIENT_MODIFY_CREDENTIAL_PRIVACY_PASSWORD,
   CLIENT_MODIFY_CREDENTIAL_REALM,
-  CLIENT_MODIFY_FILTER,
-  CLIENT_MODIFY_FILTER_COMMENT,
-  CLIENT_MODIFY_FILTER_NAME,
-  CLIENT_MODIFY_FILTER_TERM,
-  CLIENT_MODIFY_FILTER_TYPE,
   CLIENT_MODIFY_INTEGRATION_CONFIG,
   CLIENT_MODIFY_LICENSE,
   CLIENT_MODIFY_OVERRIDE,
@@ -3502,12 +3389,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             gvm_append_string (&create_credential_data->name, "");
             set_client_state (CLIENT_CREATE_CREDENTIAL);
           }
-        else if (strcasecmp ("CREATE_FILTER", element_name) == 0)
-          {
-            gvm_append_string (&create_filter_data->comment, "");
-            gvm_append_string (&create_filter_data->term, "");
-            set_client_state (CLIENT_CREATE_FILTER);
-          }
         else if (strcasecmp ("CREATE_OVERRIDE", element_name) == 0)
           set_client_state (CLIENT_CREATE_OVERRIDE);
         else if (strcasecmp ("CREATE_PORT_LIST", element_name) == 0)
@@ -3592,18 +3473,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             else
               delete_credential_data->ultimate = 0;
             set_client_state (CLIENT_DELETE_CREDENTIAL);
-          }
-        else if (strcasecmp ("DELETE_FILTER", element_name) == 0)
-          {
-            const gchar* attribute;
-            append_attribute (attribute_names, attribute_values, "filter_id",
-                              &delete_filter_data->filter_id);
-            if (find_attribute (attribute_names, attribute_values,
-                                "ultimate", &attribute))
-              delete_filter_data->ultimate = strcmp (attribute, "0");
-            else
-              delete_filter_data->ultimate = 0;
-            set_client_state (CLIENT_DELETE_FILTER);
           }
         else if (strcasecmp ("DELETE_OVERRIDE", element_name) == 0)
           {
@@ -4343,12 +4212,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &modify_credential_data->credential_id);
             set_client_state (CLIENT_MODIFY_CREDENTIAL);
           }
-        else if (strcasecmp ("MODIFY_FILTER", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "filter_id",
-                              &modify_filter_data->filter_id);
-            set_client_state (CLIENT_MODIFY_FILTER);
-          }
         else if (strcasecmp ("MODIFY_PORT_LIST", element_name) == 0)
           {
             append_attribute (attribute_names, attribute_values,
@@ -4991,42 +4854,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           }
         ELSE_READ_OVER;
 
-
-      case CLIENT_CREATE_FILTER:
-        if (strcasecmp ("COMMENT", element_name) == 0)
-          set_client_state (CLIENT_CREATE_FILTER_COMMENT);
-        else if (strcasecmp ("COPY", element_name) == 0)
-          set_client_state (CLIENT_CREATE_FILTER_COPY);
-        else if (strcasecmp ("NAME", element_name) == 0)
-          set_client_state (CLIENT_CREATE_FILTER_NAME);
-        else if (strcasecmp ("TERM", element_name) == 0)
-          set_client_state (CLIENT_CREATE_FILTER_TERM);
-        else if (strcasecmp ("TYPE", element_name) == 0)
-          set_client_state (CLIENT_CREATE_FILTER_TYPE);
-        ELSE_READ_OVER;
-
-      case CLIENT_MODIFY_FILTER:
-        if (strcasecmp ("COMMENT", element_name) == 0)
-          {
-            gvm_append_string (&modify_filter_data->comment, "");
-            set_client_state (CLIENT_MODIFY_FILTER_COMMENT);
-          }
-        else if (strcasecmp ("NAME", element_name) == 0)
-          {
-            gvm_append_string (&modify_filter_data->name, "");
-            set_client_state (CLIENT_MODIFY_FILTER_NAME);
-          }
-        else if (strcasecmp ("TERM", element_name) == 0)
-          {
-            gvm_append_string (&modify_filter_data->term, "");
-            set_client_state (CLIENT_MODIFY_FILTER_TERM);
-          }
-        else if (strcasecmp ("TYPE", element_name) == 0)
-          {
-            gvm_append_string (&modify_filter_data->type, "");
-            set_client_state (CLIENT_MODIFY_FILTER_TYPE);
-          }
-        ELSE_READ_OVER;
 
       case CLIENT_MODIFY_USER:
         if (strcasecmp ("COMMENT", element_name) == 0)
@@ -15459,7 +15286,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
       CASE_DELETE (CONFIG, config, "Config");
       CASE_DELETE (CREDENTIAL, credential, "Credential");
-      CASE_DELETE (FILTER, filter, "Filter");
       CASE_DELETE (OVERRIDE, override, "Override");
       CASE_DELETE (PORT_LIST, port_list, "Port list");
       CASE_DELETE (PORT_RANGE, port_range, "Port range");
@@ -16413,117 +16239,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_CREATE_CREDENTIAL_PRIVACY, PASSWORD);
       CLOSE (CLIENT_CREATE_CREDENTIAL, REALM);
       CLOSE (CLIENT_CREATE_CREDENTIAL, TYPE);
-
-      case CLIENT_CREATE_FILTER:
-        {
-          filter_t new_filter;
-
-          assert (create_filter_data->term != NULL);
-
-          if (create_filter_data->copy)
-            switch (copy_filter (create_filter_data->name,
-                                 create_filter_data->comment,
-                                 create_filter_data->copy,
-                                 &new_filter))
-              {
-                case 0:
-                  {
-                    char *uuid;
-                    uuid = filter_uuid (new_filter);
-                    SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_filter"),
-                                             uuid);
-                    log_event ("filter", "Filter", uuid, "created");
-                    free (uuid);
-                    break;
-                  }
-                case 1:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_filter",
-                                      "Filter exists already"));
-                  log_event_fail ("filter", "Filter", NULL, "created");
-                  break;
-                case 2:
-                  if (send_find_error_to_client ("create_filter", "filter",
-                                                 create_filter_data->copy,
-                                                 gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  log_event_fail ("filter", "Filter", NULL, "created");
-                  break;
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_filter",
-                                      "Permission denied"));
-                  log_event_fail ("filter", "Filter", NULL, "created");
-                  break;
-                case -1:
-                default:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_INTERNAL_ERROR ("create_filter"));
-                  log_event_fail ("filter", "Filter", NULL, "created");
-                  break;
-              }
-          else if (create_filter_data->name == NULL)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_filter",
-                                "A NAME is required"));
-          else if (strlen (create_filter_data->name) == 0)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_filter",
-                                "Name must be at"
-                                " least one character long"));
-          else switch (create_filter
-                        (create_filter_data->name,
-                         create_filter_data->comment,
-                         create_filter_data->type,
-                         create_filter_data->term,
-                         &new_filter))
-            {
-              case 0:
-                {
-                  char *uuid = filter_uuid (new_filter);
-                  SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_filter"),
-                                           uuid);
-                  log_event ("filter", "Filter", uuid, "created");
-                  free (uuid);
-                  break;
-                }
-              case 1:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_filter",
-                                    "Filter exists already"));
-                log_event_fail ("filter", "Filter", NULL, "created");
-                break;
-              case 2:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_filter",
-                                    "Type must be a valid GMP type"));
-                log_event_fail ("filter", "Filter", NULL, "created");
-                break;
-              case 99:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("create_filter",
-                                    "Permission denied"));
-                log_event_fail ("filter", "Filter", NULL, "created");
-                break;
-              default:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_INTERNAL_ERROR ("create_filter"));
-                log_event_fail ("filter", "Filter", NULL, "created");
-                break;
-            }
-
-          create_filter_data_reset (create_filter_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          break;
-        }
-      CLOSE (CLIENT_CREATE_FILTER, COMMENT);
-      CLOSE (CLIENT_CREATE_FILTER, COPY);
-      CLOSE (CLIENT_CREATE_FILTER, NAME);
-      CLOSE (CLIENT_CREATE_FILTER, TERM);
-      CLOSE (CLIENT_CREATE_FILTER, TYPE);
 
 
       case CLIENT_CREATE_OVERRIDE:
@@ -18117,92 +17832,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_MODIFY_CREDENTIAL_PRIVACY, PASSWORD);
       CLOSE (CLIENT_MODIFY_CREDENTIAL, REALM);
 
-
-      case CLIENT_MODIFY_FILTER:
-        {
-          switch (modify_filter
-                   (modify_filter_data->filter_id,
-                    modify_filter_data->name,
-                    modify_filter_data->comment,
-                    modify_filter_data->term,
-                    modify_filter_data->type))
-            {
-              case 0:
-                SENDF_TO_CLIENT_OR_FAIL (XML_OK ("modify_filter"));
-                log_event ("filter", "Filter", modify_filter_data->filter_id,
-                           "modified");
-                break;
-              case 1:
-                if (send_find_error_to_client ("modify_filter", "filter",
-                                               modify_filter_data->filter_id,
-                                               gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                log_event_fail ("filter", "Filter",
-                                modify_filter_data->filter_id, "modified");
-                break;
-              case 2:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_filter",
-                                    "Filter with new name exists already"));
-                log_event_fail ("filter", "Filter",
-                                modify_filter_data->filter_id, "modified");
-                break;
-              case 3:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_filter",
-                                    "Error in type name"));
-                log_event_fail ("filter", "Filter",
-                                modify_filter_data->filter_id, "modified");
-                break;
-              case 4:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_filter",
-                                    "A filter_id is required"));
-                log_event_fail ("filter", "Filter",
-                                modify_filter_data->filter_id, "modified");
-                break;
-              case 5:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_filter",
-                                    "Filter is used by an alert so type must be"
-                                    " 'result' if specified"));
-                log_event_fail ("filter", "Filter",
-                                modify_filter_data->filter_id, "modified");
-                break;
-              case 6:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_filter",
-                                    "Filter is used by an alert so type must be"
-                                    " 'info' if specified"));
-                log_event_fail ("filter", "Filter",
-                                modify_filter_data->filter_id, "modified");
-                break;
-              case 99:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_filter",
-                                    "Permission denied"));
-                log_event_fail ("filter", "Filter",
-                                modify_filter_data->filter_id, "modified");
-                break;
-              default:
-              case -1:
-                SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("modify_filter"));
-                log_event_fail ("filter", "Filter",
-                                modify_filter_data->filter_id, "modified");
-                break;
-            }
-
-          modify_filter_data_reset (modify_filter_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          break;
-        }
-      CLOSE (CLIENT_MODIFY_FILTER, COMMENT);
-      CLOSE (CLIENT_MODIFY_FILTER, NAME);
-      CLOSE (CLIENT_MODIFY_FILTER, TYPE);
-      CLOSE (CLIENT_MODIFY_FILTER, TERM);
 
 
 
@@ -20132,21 +19761,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
         break;
 
 
-      APPEND (CLIENT_CREATE_FILTER_COMMENT,
-              &create_filter_data->comment);
-
-      APPEND (CLIENT_CREATE_FILTER_COPY,
-              &create_filter_data->copy);
-
-      APPEND (CLIENT_CREATE_FILTER_NAME,
-              &create_filter_data->name);
-
-      APPEND (CLIENT_CREATE_FILTER_TERM,
-              &create_filter_data->term);
-
-      APPEND (CLIENT_CREATE_FILTER_TYPE,
-              &create_filter_data->type);
-
 
 
 
@@ -20367,18 +19981,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
       APPEND (CLIENT_MODIFY_ASSET_COMMENT,
               &modify_asset_data->comment);
 
-
-      APPEND (CLIENT_MODIFY_FILTER_COMMENT,
-              &modify_filter_data->comment);
-
-      APPEND (CLIENT_MODIFY_FILTER_NAME,
-              &modify_filter_data->name);
-
-      APPEND (CLIENT_MODIFY_FILTER_TERM,
-              &modify_filter_data->term);
-
-      APPEND (CLIENT_MODIFY_FILTER_TYPE,
-              &modify_filter_data->type);
 
 
 

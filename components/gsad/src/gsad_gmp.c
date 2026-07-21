@@ -8687,179 +8687,6 @@ get_filters_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
                    response_data);
 }
 
-/**
- * @brief Create a filter, get all filters, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-create_filter_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  gchar *html;
-  const char *name, *comment, *term, *type;
-  entity_t entity;
-
-  name = params_value (params, "name");
-  comment = params_value (params, "comment");
-  term = params_value (params, "term");
-  type = params_value (params, "resource_type");
-
-  CHECK_VARIABLE_INVALID (name, "Create Filter");
-  CHECK_VARIABLE_INVALID (comment, "Create Filter");
-  CHECK_VARIABLE_INVALID (term, "Create Filter");
-  CHECK_VARIABLE_INVALID (type, "Create Filter");
-
-  switch (gmpf (connection, credentials, NULL, &entity, response_data,
-                "<create_filter>"
-                "<name>%s</name>"
-                "<comment>%s</comment>"
-                "<term>%s</term>"
-                "<type>%s</type>"
-                "</create_filter>",
-                name, comment, term, type))
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new alert. "
-        "No new alert was created. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new alert. "
-        "It is unclear whether the alert has been created or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a new alert. "
-        "It is unclear whether the alert has been created or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Create Filter", response_data);
-  free_entity (entity);
-  return html;
-}
-
-/**
- * @brief Delete a filter, get all filters, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-delete_filter_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  return move_resource_to_trash (connection, "filter", credentials, params,
-                                 response_data);
-}
-
-/**
- * @brief Modify a filter, get all filters, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-save_filter_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                 params_t *params, gsad_command_response_data_t *response_data)
-{
-  entity_t entity;
-  gchar *html;
-  const char *filter_id, *name, *comment, *term, *type;
-
-  filter_id = params_value (params, "filter_id");
-  name = params_value (params, "name");
-  comment = params_value (params, "comment");
-  term = params_value (params, "term");
-  type = params_value (params, "resource_type");
-
-  CHECK_VARIABLE_INVALID (filter_id, "Save Filter");
-  CHECK_VARIABLE_INVALID (name, "Save Filter");
-  CHECK_VARIABLE_INVALID (comment, "Save Filter");
-  CHECK_VARIABLE_INVALID (term, "Save Filter");
-  CHECK_VARIABLE_INVALID (type, "Save Filter");
-
-  {
-    int ret;
-
-    /* Modify the filter. */
-
-    ret = gvm_connection_sendf_xml (connection,
-                                    "<modify_filter filter_id=\"%s\">"
-                                    "<name>%s</name>"
-                                    "<comment>%s</comment>"
-                                    "<term>%s</term>"
-                                    "<type>%s</type>"
-                                    "</modify_filter>",
-                                    filter_id, name, comment, term, type);
-
-    if (ret == -1)
-      {
-        gsad_command_response_data_set_status_code (
-          response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-        return gsad_http_create_gsad_message (
-          credentials,
-          "An internal error occurred while modifying a filter. "
-          "The filter was not modified. "
-          "Diagnostics: Failure to send command to manager daemon.",
-          response_data);
-      }
-
-    entity = NULL;
-    if (read_entity_c (connection, &entity))
-      {
-        gsad_command_response_data_set_status_code (
-          response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-        return gsad_http_create_gsad_message (
-          credentials,
-          "An internal error occurred while modifying a filter. "
-          "It is unclear whether the filter has been modified or not. "
-          "Diagnostics: Failure to receive response from manager daemon.",
-          response_data);
-      }
-  }
-
-  /* Pass response to handler of following page. */
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Save Filter", response_data);
-
-  free_entity (entity);
-  return html;
-}
-
 /* Schedules. */
 
 /**
@@ -11583,7 +11410,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (clone)
   ELSE (create_asset)
   ELSE (create_credential)
-  ELSE (create_filter)
   ELSE (create_host)
   ELSE (create_override)
   ELSE (create_port_list)
@@ -11598,7 +11424,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_alert)
   ELSE (delete_config)
   ELSE (delete_credential)
-  ELSE (delete_filter)
   ELSE (delete_from_trash)
   ELSE (delete_override)
   ELSE (delete_port_list)
@@ -11621,7 +11446,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (save_config_family)
   ELSE (save_config_nvt)
   ELSE (save_credential)
-  ELSE (save_filter)
   ELSE (save_license)
   ELSE (save_override)
   ELSE (save_port_list)

@@ -1,4 +1,5 @@
 /* Copyright (C) 2025 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -25,9 +26,6 @@ valid_type (const char*);
 
 int
 valid_subtype (const char*);
-
-const char *
-type_db_name (const char*);
 
 int
 type_is_asset_subtype (const char *);

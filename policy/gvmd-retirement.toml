@@ -319,10 +319,10 @@ notes = "Keep only while it independently characterizes a still-live compatibili
 [[callers]]
 id = "runtime-full-test-scan"
 kind = "tooling"
-status = "inventoried"
-evidence = ["tools/runtime_full_test_scan.py::class RawGmpClient"]
+status = "retired"
+evidence = ["tools/tests/test_yafvsctl.py::test_full_test_scan_uses_only_native_api_lifecycle"]
 replacement = ["scan-queue-admission", "scan-dispatch-osp-lifecycle", "scan-result-ingestion"]
-notes = "Remove raw GMP provisioning, start, and state reads after the native lifecycle path is complete."
+notes = "Raw GMP provisioning, task start, and state reads are removed; the guarded full-test workflow uses only the native lifecycle."
 
 [[callers]]
 id = "runtime-rbac-smoke"

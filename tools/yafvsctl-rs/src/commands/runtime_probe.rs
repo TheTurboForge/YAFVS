@@ -392,17 +392,9 @@ where
         }
     }
 
-    let secret_path = runtime_secret_path(repo_root, ADMIN_SECRET);
-    let socket_path = gvmd_socket_path(repo_root);
     let probe = repo_root.join("tools/runtime_full_test_scan.py");
     let artifact_dir = runtime_dir(repo_root).join("artifacts/full-test-scan");
-    let mut findings = vec![simple_socket_prerequisite(&socket_path)];
-    let password = append_secret_prerequisite(
-        repo_root,
-        &secret_path,
-        "Development admin secret is missing.",
-        &mut findings,
-    );
+    let mut findings = Vec::new();
     findings.push(file_prerequisite(
         repo_root,
         &probe,
@@ -442,18 +434,12 @@ where
 
     let ospd_log = runtime_dir(repo_root).join("logs/ospd/ospd-openvas.log");
     let repo_root_text = repo_root.display().to_string();
-    let socket_text = socket_path.display().to_string();
-    let secret_text = secret_path.display().to_string();
     let artifact_text = artifact_dir.display().to_string();
     let ospd_log_text = ospd_log.display().to_string();
     let mut arguments = vec![
         action.as_str(),
-        "--socket",
-        &socket_text,
-        "--username",
+        "--operator-name",
         ADMIN_USER,
-        "--password-file",
-        &secret_text,
         "--artifact-dir",
         &artifact_text,
         "--target-cidr",
@@ -468,18 +454,15 @@ where
         // original confirmed text and independently canonicalizes it again.
         arguments.extend(["--confirm-authorized-target", confirmation]);
     }
-    let output = run_probe(
+    let output = run_probe_with_env(
         repo_root,
         runner,
         &probe,
         &arguments,
         Duration::from_secs(120),
+        runtime_environment(repo_root),
     );
-    let redactions = password.into_iter().collect::<Vec<_>>();
-    let mut parsed = parse_bounded_helper_output(&output);
-    if let Some(value) = parsed.as_mut() {
-        redact_json_value(value, &redactions);
-    }
+    let parsed = parse_bounded_helper_output(&output);
     let helper_status = parsed
         .as_ref()
         .and_then(|value| value.get("status"))
@@ -505,7 +488,7 @@ where
         )
         .with_details(json!({
             "helper": parsed,
-            "output_tail": output_tail(&redact_text(&output.stdout, &redactions), 120),
+            "output_tail": output_tail(&output.stdout, 120),
         })),
     );
     let artifacts = parsed_artifacts(parsed.as_ref())
@@ -1965,10 +1948,6 @@ mod tests {
     #[test]
     fn full_test_preflight_stops_on_injected_capability_failure() {
         let (root, repo) = fixture("full-test-capability");
-        let socket = gvmd_socket_path(&repo);
-        fs::create_dir_all(socket.parent().unwrap()).unwrap();
-        let _listener = UnixListener::bind(&socket).unwrap();
-        prepare_secret(&repo, "full-test-secret");
         fs::write(repo.join("tools/runtime_full_test_scan.py"), "# helper\n").unwrap();
         let result = command_runtime_full_test_scan_with(
             &repo,
@@ -1999,16 +1978,12 @@ mod tests {
     #[test]
     fn full_test_status_preserves_helper_result_without_capability_checks() {
         let (root, repo) = fixture("full-test-status");
-        let socket = gvmd_socket_path(&repo);
-        fs::create_dir_all(socket.parent().unwrap()).unwrap();
-        let _listener = UnixListener::bind(&socket).unwrap();
-        prepare_secret(&repo, "full-test-secret");
         fs::write(repo.join("tools/runtime_full_test_scan.py"), "# helper\n").unwrap();
         let runner = ProbeRunner {
             output: Some(ProcessOutput {
                 success: true,
                 exit_code: Some(0),
-                stdout: "{\"status\":\"pass\",\"summary\":\"status collected\",\"artifacts\":[\"status.json\"],\"details\":{\"secret\":\"full-test-secret\"}}".into(),
+                stdout: "{\"status\":\"pass\",\"summary\":\"status collected\",\"artifacts\":[\"status.json\"],\"details\":{\"transport\":\"native\"}}".into(),
                 stderr: String::new(),
             }),
         };
@@ -2028,8 +2003,7 @@ mod tests {
             "full-test-scan.status"
         );
         let serialized = serde_json::to_string(&result).unwrap();
-        assert!(!serialized.contains("full-test-secret"));
-        assert!(serialized.contains("[redacted]"));
+        assert!(serialized.contains("native"));
         fs::remove_dir_all(root).unwrap();
     }
 }

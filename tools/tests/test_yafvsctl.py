@@ -1503,7 +1503,7 @@ class YAFVSCtlTests(unittest.TestCase):
         }
 
         with unittest.mock.patch.object(runtime_full_test_scan, "native_api_json", side_effect=lambda _root, path: payloads[path]):
-            state = runtime_full_test_scan.load_state(object(), root)
+            state = runtime_full_test_scan.load_state(root)
 
         self.assertEqual(state["scan_configs"][0]["id"], runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID)
         self.assertEqual(state["port_lists"][0]["id"], runtime_full_test_scan.IANA_TCP_UDP_PORT_LIST_ID)
@@ -1522,10 +1522,9 @@ class YAFVSCtlTests(unittest.TestCase):
             return_value={"id": "target-1", "name": TEST_FULL_TEST_TARGET.target_name},
         ) as native_create:
             target_id, error = runtime_full_test_scan.ensure_target(
-                object(),
+                root,
                 state,
                 TEST_FULL_TEST_TARGET,
-                repo_root=root,
                 operator_name="admin",
             )
 
@@ -1610,12 +1609,11 @@ class YAFVSCtlTests(unittest.TestCase):
             return_value={"id": "task-1", "name": TEST_FULL_TEST_TARGET.task_name},
         ) as native_create:
             task_id, error = runtime_full_test_scan.ensure_task(
-                object(),
+                root,
                 state,
                 TEST_FULL_TEST_TARGET,
                 "target-1",
                 "scanner-1",
-                repo_root=root,
                 operator_name="admin",
             )
 
@@ -1652,7 +1650,7 @@ class YAFVSCtlTests(unittest.TestCase):
         }
 
         with unittest.mock.patch.object(runtime_full_test_scan, "native_api_json", return_value=payload) as native_json:
-            reports, error = runtime_full_test_scan.reports_for_task(object(), "task-1", repo_root=root)
+            reports, error = runtime_full_test_scan.reports_for_task(root, "task-1")
 
         self.assertIsNone(error)
         self.assertEqual(len(reports), 1)
@@ -10836,31 +10834,22 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("rust_result_envelope", gmp_smoke_wrapper)
         self.assertIn('"runtime-gmp-smoke"', gmp_smoke_wrapper)
 
-    def test_full_test_scan_no_longer_imports_python_gvm_runtime_client(self):
+    def test_full_test_scan_uses_only_native_api_lifecycle(self):
         source = FULL_TEST_SCAN_PATH.read_text(encoding="utf-8")
         self.assertNotIn("from gvm", source)
         self.assertNotIn("UnixSocketConnection", source)
         self.assertNotIn("GMP(", source)
         self.assertNotIn("gmp.", source)
-        self.assertIn("RawGmpClient", source)
+        self.assertNotIn("RawGmpClient", source)
+        self.assertNotIn("connect_raw_gmp_client", source)
+        self.assertNotIn("socket.AF_UNIX", source)
+        self.assertNotIn("xml.etree", source)
+        self.assertNotIn('"--socket"', source)
+        self.assertNotIn('"--password-file"', source)
+        self.assertIn('parser.add_argument("--repo-root", required=True', source)
+        self.assertIn('parser.add_argument("--operator-name", required=True', source)
 
-    def test_full_test_scan_raw_start_client_quotes_task_id_attribute(self):
-        client = runtime_full_test_scan.RawGmpClient(Path("/tmp/gvmd.sock"), "admin", "secret", 10)
-        client.connection = object()
-        commands = []
-
-        def fake_send(_connection, command):
-            commands.append(command)
-            return b"<start_task_response status='202'><report_id>report-1</report_id></start_task_response>"
-
-        with unittest.mock.patch.object(runtime_full_test_scan, "send_gmp_xml_command", side_effect=fake_send):
-            response = client.start_task('task"&<>')
-
-        self.assertEqual(response, b"<start_task_response status='202'><report_id>report-1</report_id></start_task_response>")
-        self.assertEqual(len(commands), 1)
-        self.assertEqual(ET.fromstring(commands[0]).get("task_id"), 'task"&<>')
-
-    def test_full_test_scan_main_handles_preflight_failure_without_empty_password_redaction(self):
+    def test_full_test_scan_main_reports_native_preflight_failure(self):
         with tempfile.TemporaryDirectory() as tmp:
             stdout = io.StringIO()
             with unittest.mock.patch.object(runtime_full_test_scan, "native_api_json", side_effect=RuntimeError("native API boom")):
@@ -10868,12 +10857,8 @@ class YAFVSCtlTests(unittest.TestCase):
                     exit_code = runtime_full_test_scan.main(
                         [
                             "preflight",
-                            "--socket",
-                            str(Path(tmp) / "gvmd.sock"),
-                            "--username",
+                            "--operator-name",
                             "admin",
-                            "--password-file",
-                            str(Path(tmp) / "password"),
                             "--artifact-dir",
                             str(Path(tmp) / "artifacts"),
                             "--target-cidr",
@@ -11115,10 +11100,10 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_full_test_scan_start_requires_exact_target_confirmation(self):
         with tempfile.TemporaryDirectory() as tmp:
             payload = runtime_full_test_scan.command_start(
-                object(),
                 Path(tmp),
                 TEST_FULL_TEST_TARGET,
-                confirm_authorized_target=None,
+                None,
+                Path(tmp),
             )
             self.assertEqual(payload["status"], "fail")
             self.assertIn("--confirm-authorized-target", payload["summary"])
@@ -11126,10 +11111,10 @@ class YAFVSCtlTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             payload = runtime_full_test_scan.command_start(
-                object(),
                 Path(tmp),
                 TEST_FULL_TEST_TARGET,
-                confirm_authorized_target="192.0.2.1/32",
+                "192.0.2.1/32",
+                Path(tmp),
             )
         self.assertEqual(payload["status"], "fail")
         self.assertIn("does not match", payload["summary"])
@@ -11144,78 +11129,17 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("def validated_full_test_target_cidr", python_source)
         self.assertIn("command_runtime_full_test_scan_with", rust_source)
         self.assertIn("validated_full_test_target_cidr", rust_source)
-
-    def test_full_test_scan_start_records_broken_pipe_during_poll(self):
-        class FakeGMP:
-            broken = False
-
-            def _raise_if_broken(self):
-                if self.broken:
-                    raise BrokenPipeError(32, "Broken pipe")
-
-            def get_scan_configs(self):
-                self._raise_if_broken()
-                return (
-                    "<get_configs_response>"
-                    f"<config id=\"{runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID}\"><name>Full and fast</name></config>"
-                    "</get_configs_response>"
-                )
-
-            def get_port_lists(self):
-                self._raise_if_broken()
-                return (
-                    "<get_port_lists_response>"
-                    f"<port_list id=\"{runtime_full_test_scan.IANA_TCP_UDP_PORT_LIST_ID}\"><name>All IANA assigned TCP and UDP</name></port_list>"
-                    "</get_port_lists_response>"
-                )
-
-            def get_scanners(self, details=True):
-                self._raise_if_broken()
-                return (
-                    "<get_scanners_response>"
-                    f"<scanner id=\"scanner-1\"><name>{runtime_full_test_scan.OPENVAS_SCANNER_NAME}</name></scanner>"
-                    "</get_scanners_response>"
-                )
-
-            def get_targets(self, tasks=True):
-                self._raise_if_broken()
-                return (
-                    "<get_targets_response>"
-                    f"<target id=\"target-1\"><name>{TEST_FULL_TEST_TARGET.target_name}</name></target>"
-                    "</get_targets_response>"
-                )
-
-            def get_tasks(self, details=True, ignore_pagination=True):
-                self._raise_if_broken()
-                return (
-                    "<get_tasks_response>"
-                    f"<task id=\"task-1\"><name>{TEST_FULL_TEST_TARGET.task_name}</name><status>Done</status></task>"
-                    "</get_tasks_response>"
-                )
-
-            def get_reports(self, filter_string=None, details=True, ignore_pagination=True):
-                self._raise_if_broken()
-                return "<get_reports_response/>"
-
-            def start_task(self, task_id):
-                self.broken = True
-                raise BrokenPipeError(32, "Broken pipe")
-
-        with tempfile.TemporaryDirectory() as tmp:
-            payload = runtime_full_test_scan.command_start(
-                FakeGMP(),
-                Path(tmp),
-                TEST_FULL_TEST_TARGET,
-                confirm_authorized_target=TEST_FULL_TEST_TARGET.cidr,
-                poll_seconds=1,
-                poll_interval=0,
-            )
-            artifact_exists = (Path(tmp) / "start-failed.json").is_file()
-        self.assertEqual(payload["status"], "fail")
-        self.assertIn("no accepted start or new report", payload["summary"])
-        self.assertIn("BrokenPipeError", payload["details"]["start_error"])
-        self.assertIn("BrokenPipeError", payload["details"]["observed_state"]["poll_error"])
-        self.assertTrue(artifact_exists)
+        wrapper = rust_source.split("fn command_runtime_full_test_scan_with", 1)[1].split(
+            "fn system_full_test_capability_findings", 1
+        )[0]
+        self.assertNotIn("gvmd_socket_path", wrapper)
+        self.assertNotIn("append_secret_prerequisite", wrapper)
+        self.assertNotIn('"--socket"', wrapper)
+        self.assertNotIn('"--password-file"', wrapper)
+        self.assertIn('"--operator-name"', wrapper)
+        self.assertIn('"--repo-root"', wrapper)
+        self.assertIn("run_probe_with_env(", wrapper)
+        self.assertIn("runtime_environment(repo_root)", wrapper)
 
     def test_full_test_scan_failed_start_rejects_stale_task_and_ospd_evidence(self):
         state = {
@@ -11269,11 +11193,10 @@ class YAFVSCtlTests(unittest.TestCase):
                             return_value=stale_snapshot,
                         ):
                             payload = runtime_full_test_scan.command_start(
-                                object(),
                                 Path(tmp),
                                 TEST_FULL_TEST_TARGET,
-                                confirm_authorized_target=TEST_FULL_TEST_TARGET.cidr,
-                                repo_root=Path(tmp),
+                                TEST_FULL_TEST_TARGET.cidr,
+                                Path(tmp),
                                 poll_seconds=1,
                                 poll_interval=0,
                             )
@@ -11284,88 +11207,81 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIsNone(payload["details"]["observed_report"])
         self.assertIn("no accepted start or new report", payload["summary"])
 
-    def test_full_test_scan_start_reconnects_after_closed_start_response(self):
-        class BaseFakeGMP:
-            def get_scan_configs(self):
-                return (
-                    "<get_configs_response>"
-                    f"<config id=\"{runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID}\"><name>Full and fast</name></config>"
-                    "</get_configs_response>"
-                )
-
-            def get_port_lists(self):
-                return (
-                    "<get_port_lists_response>"
-                    f"<port_list id=\"{runtime_full_test_scan.IANA_TCP_UDP_PORT_LIST_ID}\"><name>All IANA assigned TCP and UDP</name></port_list>"
-                    "</get_port_lists_response>"
-                )
-
-            def get_scanners(self, details=True):
-                return (
-                    "<get_scanners_response>"
-                    f"<scanner id=\"scanner-1\"><name>{runtime_full_test_scan.OPENVAS_SCANNER_NAME}</name></scanner>"
-                    "</get_scanners_response>"
-                )
-
-            def get_targets(self, tasks=True):
-                return (
-                    "<get_targets_response>"
-                    f"<target id=\"target-1\"><name>{TEST_FULL_TEST_TARGET.target_name}</name></target>"
-                    "</get_targets_response>"
-                )
-
-            def get_reports(self, filter_string=None, details=True, ignore_pagination=True):
-                return "<get_reports_response/>"
-
-        class InitialGMP(BaseFakeGMP):
-            def get_tasks(self, details=True, ignore_pagination=True):
-                return (
-                    "<get_tasks_response>"
-                    f"<task id=\"task-1\"><name>{TEST_FULL_TEST_TARGET.task_name}</name><status>Done</status></task>"
-                    "</get_tasks_response>"
-                )
-
-            def start_task(self, task_id):
-                raise RuntimeError("Remote closed the connection")
-
-        class ReconnectedGMP(BaseFakeGMP):
-            def get_tasks(self, details=True, ignore_pagination=True):
-                return (
-                    "<get_tasks_response>"
-                    f"<task id=\"task-1\"><name>{TEST_FULL_TEST_TARGET.task_name}</name><status>Queued</status><progress>0</progress></task>"
-                    "</get_tasks_response>"
-                )
-
-            def get_reports(self, filter_string=None, details=True, ignore_pagination=True):
-                return (
-                    "<get_reports_response>"
-                    "<report id=\"report-new\"><task id=\"task-1\"/>"
-                    "<report id=\"report-new\"><scan_run_status>Queued</scan_run_status></report>"
-                    "</report>"
-                    "</get_reports_response>"
-                )
-
-        reconnect_count = 0
-
-        def reconnect():
-            nonlocal reconnect_count
-            reconnect_count += 1
-            return ReconnectedGMP()
-
+    def test_full_test_scan_native_start_observes_new_report_handoff(self):
+        state = {
+            "scan_configs": [
+                {"id": runtime_full_test_scan.FULL_AND_FAST_SCAN_CONFIG_ID}
+            ],
+            "port_lists": [
+                {"id": runtime_full_test_scan.IANA_TCP_UDP_PORT_LIST_ID}
+            ],
+            "scanners": [
+                {"id": "scanner-1", "name": runtime_full_test_scan.OPENVAS_SCANNER_NAME}
+            ],
+            "targets": [
+                {"id": "target-1", "name": TEST_FULL_TEST_TARGET.target_name}
+            ],
+            "tasks": [
+                {
+                    "id": "task-1",
+                    "name": TEST_FULL_TEST_TARGET.task_name,
+                    "status": "Done",
+                }
+            ],
+        }
+        old_report = {
+            "id": "report-old",
+            "task_id": "task-1",
+            "scan_run_status": "Done",
+        }
+        new_report = {
+            "id": "report-new",
+            "task_id": "task-1",
+            "scan_run_status": "Queued",
+        }
         with tempfile.TemporaryDirectory() as tmp:
-            payload = runtime_full_test_scan.command_start(
-                InitialGMP(),
-                Path(tmp),
-                TEST_FULL_TEST_TARGET,
-                confirm_authorized_target=TEST_FULL_TEST_TARGET.cidr,
-                poll_seconds=1,
-                poll_interval=0,
-                reconnect_client=reconnect,
-            )
+            with unittest.mock.patch.object(
+                runtime_full_test_scan, "load_state", return_value=state
+            ):
+                with unittest.mock.patch.object(
+                    runtime_full_test_scan,
+                    "reports_for_task",
+                    side_effect=[
+                        ([old_report], None),
+                        ([new_report], None),
+                        ([new_report], None),
+                    ],
+                ):
+                    with unittest.mock.patch.object(
+                        runtime_full_test_scan,
+                        "current_full_test_task",
+                        side_effect=[
+                            RuntimeError("transient native API failure"),
+                            (state["tasks"][0], None),
+                        ],
+                    ):
+                        with unittest.mock.patch.object(
+                            runtime_full_test_scan,
+                            "native_api_browser_proxy_json",
+                            return_value={"report_id": "report-new"},
+                        ) as native_start:
+                            payload = runtime_full_test_scan.command_start(
+                                Path(tmp),
+                                TEST_FULL_TEST_TARGET,
+                                TEST_FULL_TEST_TARGET.cidr,
+                                Path(tmp),
+                                poll_seconds=1,
+                                poll_interval=0,
+                            )
         self.assertEqual(payload["status"], "pass")
-        self.assertIn("Remote closed", payload["details"]["start_error"])
+        self.assertEqual(payload["details"]["report_id"], "report-new")
+        self.assertTrue(payload["details"]["observed_new_report"])
         self.assertEqual(payload["details"]["observed_report"]["id"], "report-new")
-        self.assertEqual(reconnect_count, 1)
+        self.assertEqual(len(payload["details"]["poll_errors"]), 1)
+        self.assertEqual(
+            native_start.call_args.args[1], "/api/v1/tasks/task-1/start"
+        )
+        self.assertEqual(native_start.call_args.kwargs["expected_statuses"], {"202"})
 
     def test_full_test_scan_preflight_parses_required_objects(self):
         state = {
@@ -11379,58 +11295,12 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(payload["status"], "pass")
         self.assertEqual(payload["details"]["scanner"]["id"], "scanner-1")
 
-    def test_full_test_scan_object_rows_include_progress_and_report(self):
-        response = (
-            "<get_tasks_response>"
-            "<task id=\"task-1\">"
-            "<name>scan</name><status>Running</status><progress>42</progress>"
-            "<report id=\"report-1\"/>"
-            "</task>"
-            "</get_tasks_response>"
-        )
-        row = runtime_full_test_scan.object_rows(response, "task")[0]
-        self.assertEqual(row["progress"], "42")
-        self.assertEqual(row["report_id"], "report-1")
-
-    def test_full_test_scan_response_id_reads_start_task_report_id(self):
-        response = "<start_task_response status=\"202\"><report_id>report-1</report_id></start_task_response>"
-        self.assertEqual(runtime_full_test_scan.response_id(response), "report-1")
-
     def test_full_test_scan_report_handoff_excludes_requested_only(self):
         self.assertFalse(runtime_full_test_scan.report_handoff_observed({"scan_run_status": "Requested"}))
         self.assertTrue(runtime_full_test_scan.report_handoff_observed({"scan_run_status": "Queued"}))
         self.assertTrue(runtime_full_test_scan.report_handoff_observed({"scan_run_status": "Running"}))
         self.assertFalse(runtime_full_test_scan.report_handoff_observed({"scan_run_status": "Done"}))
         self.assertTrue(runtime_full_test_scan.report_handoff_observed({"scan_run_status": "Done", "scan_start": "2026-06-06T20:05:00Z"}))
-
-    def test_full_test_scan_report_rows_parse_inner_report_summary(self):
-        response = (
-            "<get_reports_response>"
-            "<report id=\"report-1\">"
-            "<name>2026-06-02T15:59:28Z</name>"
-            "<task id=\"task-1\"/>"
-            "<report id=\"report-1\">"
-            "<scan_run_status>Done</scan_run_status>"
-            "<scan_start>2026-06-02T15:59:50Z</scan_start>"
-            "<scan_end>2026-06-02T16:02:15Z</scan_end>"
-            "<hosts><count>4</count></hosts>"
-            "<vulns><count>6</count></vulns>"
-            "<cves><count>3</count></cves>"
-            "<os><count>2</count></os>"
-            "<result_count><full>23</full></result_count>"
-            "</report>"
-            "</report>"
-            "</get_reports_response>"
-        )
-        row = runtime_full_test_scan.report_rows(response)[0]
-        self.assertEqual(row["id"], "report-1")
-        self.assertEqual(row["task_id"], "task-1")
-        self.assertEqual(row["scan_run_status"], "Done")
-        self.assertEqual(row["scan_start"], "2026-06-02T15:59:50Z")
-        self.assertEqual(row["scan_end"], "2026-06-02T16:02:15Z")
-        self.assertEqual(row["result_count"], "23")
-        self.assertEqual(row["hosts_count"], "4")
-        self.assertEqual(row["vulns_count"], "6")
 
     def test_full_test_scan_detects_interrupted_report_before_handoff(self):
         report = {
@@ -11449,97 +11319,91 @@ class YAFVSCtlTests(unittest.TestCase):
         report["scan_start"] = "2026-06-04T17:00:00Z"
         self.assertFalse(runtime_full_test_scan.interrupted_before_scanner_handoff(report))
 
-    def test_full_test_scan_status_includes_latest_report(self):
-        class FakeGMP:
-            def get_scan_configs(self):
-                return "<get_configs_response/>"
-
-            def get_port_lists(self):
-                return "<get_port_lists_response/>"
-
-            def get_scanners(self, details=True):
-                return "<get_scanners_response/>"
-
-            def get_targets(self, tasks=True):
-                return "<get_targets_response/>"
-
-            def get_tasks(self, details=True, ignore_pagination=True):
-                return (
-                    "<get_tasks_response>"
-                    "<task id=\"task-1\">"
-                    f"<name>{TEST_FULL_TEST_TARGET.task_name}</name>"
-                    "<status>Done</status>"
-                    "</task>"
-                    "</get_tasks_response>"
-                )
-
-            def get_reports(self, filter_string=None, details=True, ignore_pagination=True):
-                self.filter_string = filter_string
-                return (
-                    "<get_reports_response>"
-                    "<report id=\"report-1\">"
-                    "<task id=\"task-1\"/>"
-                    "<report id=\"report-1\">"
-                    "<scan_run_status>Done</scan_run_status>"
-                    "<scan_start>2026-06-06T19:25:56Z</scan_start>"
-                    "<result_count><full>23</full></result_count>"
-                    "</report>"
-                    "</report>"
-                    "</get_reports_response>"
-                )
-
-        fake = FakeGMP()
+    def test_full_test_scan_status_includes_native_report_evidence(self):
+        state = {
+            "scan_configs": [],
+            "port_lists": [],
+            "scanners": [],
+            "targets": [],
+            "tasks": [
+                {
+                    "id": "task-1",
+                    "name": TEST_FULL_TEST_TARGET.task_name,
+                    "status": "Done",
+                }
+            ],
+        }
+        reports = [
+            {
+                "id": "report-1",
+                "task_id": "task-1",
+                "scan_run_status": "Done",
+                "scan_start": "2026-06-06T19:25:56Z",
+                "result_count": "23",
+            }
+        ]
         with tempfile.TemporaryDirectory() as tmp:
-            payload = runtime_full_test_scan.command_status(fake, Path(tmp), TEST_FULL_TEST_TARGET)
+            with unittest.mock.patch.object(
+                runtime_full_test_scan, "load_state", return_value=state
+            ):
+                with unittest.mock.patch.object(
+                    runtime_full_test_scan,
+                    "reports_for_task",
+                    return_value=(reports, None),
+                ) as report_lookup:
+                    payload = runtime_full_test_scan.command_status(
+                        Path(tmp), Path(tmp), TEST_FULL_TEST_TARGET
+                    )
         self.assertEqual(payload["status"], "pass")
         self.assertEqual(payload["details"]["latest_report"]["id"], "report-1")
         self.assertEqual(payload["details"]["latest_report"]["result_count"], "23")
-        self.assertIn("task_id=task-1", fake.filter_string)
+        report_lookup.assert_called_once_with(Path(tmp), "task-1")
 
     def test_full_test_scan_status_separates_no_start_completed_report(self):
-        class FakeGMP:
-            def get_scan_configs(self):
-                return "<get_configs_response/>"
-
-            def get_port_lists(self):
-                return "<get_port_lists_response/>"
-
-            def get_scanners(self, details=True):
-                return "<get_scanners_response/>"
-
-            def get_targets(self, tasks=True):
-                return "<get_targets_response/>"
-
-            def get_tasks(self, details=True, ignore_pagination=True):
-                return (
-                    "<get_tasks_response>"
-                    "<task id=\"task-1\">"
-                    f"<name>{TEST_FULL_TEST_TARGET.task_name}</name>"
-                    "<status>Done</status>"
-                    "</task>"
-                    "</get_tasks_response>"
-                )
-
-            def get_reports(self, filter_string=None, details=True, ignore_pagination=True):
-                return (
-                    "<get_reports_response>"
-                    "<report id=\"report-bad\"><task id=\"task-1\"/>"
-                    "<report id=\"report-bad\"><scan_run_status>Done</scan_run_status>"
-                    "<result_count><full>0</full></result_count></report></report>"
-                    "<report id=\"report-good\"><task id=\"task-1\"/>"
-                    "<report id=\"report-good\"><scan_run_status>Done</scan_run_status>"
-                    "<scan_start>2026-06-06T19:25:56Z</scan_start>"
-                    "<result_count><full>42</full></result_count></report></report>"
-                    "</get_reports_response>"
-                )
-
+        state = {
+            "scan_configs": [],
+            "port_lists": [],
+            "scanners": [],
+            "targets": [],
+            "tasks": [
+                {
+                    "id": "task-1",
+                    "name": TEST_FULL_TEST_TARGET.task_name,
+                    "status": "Done",
+                }
+            ],
+        }
+        reports = [
+            {
+                "id": "report-bad",
+                "task_id": "task-1",
+                "scan_run_status": "Done",
+                "scan_start": None,
+                "result_count": "0",
+            },
+            {
+                "id": "report-good",
+                "task_id": "task-1",
+                "scan_run_status": "Done",
+                "scan_start": "2026-06-06T19:25:56Z",
+                "result_count": "42",
+            },
+        ]
         with tempfile.TemporaryDirectory() as tmp:
-            payload = runtime_full_test_scan.command_status(FakeGMP(), Path(tmp), TEST_FULL_TEST_TARGET)
+            with unittest.mock.patch.object(
+                runtime_full_test_scan, "load_state", return_value=state
+            ):
+                with unittest.mock.patch.object(
+                    runtime_full_test_scan,
+                    "reports_for_task",
+                    return_value=(reports, None),
+                ):
+                    payload = runtime_full_test_scan.command_status(
+                        Path(tmp), Path(tmp), TEST_FULL_TEST_TARGET
+                    )
         self.assertEqual(payload["details"]["latest_report"]["id"], "report-bad")
         self.assertEqual(payload["details"]["latest_completed_report"]["id"], "report-good")
         self.assertEqual(payload["details"]["latest_no_start_completed_report"]["id"], "report-bad")
-
-
 
     def test_runtime_report_paths_live_under_runtime_dir(self):
         root = Path(__file__).resolve().parents[2]

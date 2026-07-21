@@ -9,6 +9,7 @@ import argparse
 import http.cookiejar
 import json
 import secrets
+import socket
 import ssl
 import urllib.error
 import urllib.parse
@@ -19,7 +20,7 @@ from pathlib import Path
 from typing import Any, Callable
 from xml.sax.saxutils import escape, quoteattr
 
-import runtime_full_test_scan
+from runtime_gmp_smoke import gmp_authenticate_xml, send_gmp_xml_command
 
 SECONDARY_USER = "yafvs-rbac-smoke"
 TEMP_FILTER_PREFIX = "YAFVS RBAC smoke filter"
@@ -66,7 +67,162 @@ def require_ok_response(response: Any, action: str) -> Any:
     return response
 
 
-class RbacGmpClient(runtime_full_test_scan.RawGmpClient):
+def local_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
+
+
+def child_text(element: Any, child_name: str) -> str | None:
+    for child in list(element):
+        if local_name(str(child.tag)) == child_name:
+            return child.text
+    return None
+
+
+def child_id(element: Any, child_name: str) -> str | None:
+    for child in list(element):
+        if local_name(str(child.tag)) == child_name:
+            return child.get("id")
+    return None
+
+
+def child_element(element: Any, child_name: str) -> Any | None:
+    for child in list(element):
+        if local_name(str(child.tag)) == child_name:
+            return child
+    return None
+
+
+def descendant_text(element: Any, child_name: str) -> str | None:
+    for child in element.iter():
+        if local_name(str(child.tag)) == child_name and child.text:
+            return child.text
+    return None
+
+
+def child_path_text(element: Any, child_names: tuple[str, ...]) -> str | None:
+    current = element
+    for child_name in child_names:
+        current = child_element(current, child_name)
+        if current is None:
+            return None
+    return current.text
+
+
+def object_rows(response: Any, object_tag: str) -> list[dict[str, str | None]]:
+    root = response_root(response)
+    if root is None or not hasattr(root, "iter"):
+        return []
+    rows: list[dict[str, str | None]] = []
+    for element in root.iter():
+        if local_name(str(element.tag)) != object_tag:
+            continue
+        rows.append(
+            {
+                "id": element.get("id"),
+                "name": child_text(element, "name"),
+                "status": child_text(element, "status"),
+                "progress": child_text(element, "progress"),
+                "target_id": child_id(element, "target"),
+                "scanner_id": child_id(element, "scanner"),
+                "config_id": child_id(element, "config"),
+                "report_id": child_id(element, "report"),
+            }
+        )
+    return rows
+
+
+def report_rows(response: Any) -> list[dict[str, str | None]]:
+    root = response_root(response)
+    if root is None or not hasattr(root, "iter"):
+        return []
+    rows: list[dict[str, str | None]] = []
+    for element in list(root):
+        if local_name(str(element.tag)) != "report":
+            continue
+        detail = child_element(element, "report")
+        if detail is None:
+            detail = element
+        rows.append(
+            {
+                "id": element.get("id"),
+                "task_id": child_id(element, "task") or child_id(detail, "task"),
+                "name": child_text(element, "name"),
+                "scan_run_status": descendant_text(detail, "scan_run_status"),
+                "scan_start": descendant_text(detail, "scan_start"),
+                "scan_end": descendant_text(detail, "scan_end"),
+                "result_count": child_path_text(detail, ("result_count", "full")),
+                "hosts_count": child_path_text(detail, ("hosts", "count")),
+                "vulns_count": child_path_text(detail, ("vulns", "count")),
+                "cves_count": child_path_text(detail, ("cves", "count")),
+                "os_count": child_path_text(detail, ("os", "count")),
+            }
+        )
+    return rows
+
+
+def latest_report_for_task(
+    client: Any, task_id: str
+) -> tuple[dict[str, str | None] | None, str | None]:
+    try:
+        response = client.get_reports(
+            filter_string=f"task_id={task_id} rows=10 sort-reverse=date",
+            details=True,
+            ignore_pagination=True,
+        )
+    except Exception as error:  # pylint: disable=broad-except
+        return None, f"{type(error).__name__}: {error}"
+    reports = [row for row in report_rows(response) if row.get("task_id") == task_id]
+    return (reports[0] if reports else None), None
+
+
+def response_id(response: Any) -> str | None:
+    root = response_root(response)
+    if root is None:
+        return None
+    if root.get("id"):
+        return root.get("id")
+    report_id = child_text(root, "report_id")
+    if report_id:
+        return report_id
+    for child in root.iter():
+        if child.get("id"):
+            return child.get("id")
+    return None
+
+
+class RawGmpClient:
+    """Minimal raw GMP connection retained only for RBAC characterization."""
+
+    def __init__(self, socket_path: Path, username: str, password: str, timeout: int) -> None:
+        self.socket_path = socket_path
+        self.username = username
+        self.password = password
+        self.timeout = timeout
+        self.connection: socket.socket | None = None
+
+    def connect(self) -> None:
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(self.timeout)
+            connection.connect(str(self.socket_path))
+            send_gmp_xml_command(connection, gmp_authenticate_xml(self.username, self.password))
+        except Exception:
+            connection.close()
+            raise
+        self.connection = connection
+
+    def send_xml(self, command: str) -> bytes:
+        if self.connection is None:
+            raise RuntimeError("GMP socket is not connected")
+        return send_gmp_xml_command(self.connection, command)
+
+    def disconnect(self) -> None:
+        if self.connection is not None:
+            self.connection.close()
+            self.connection = None
+
+
+class RbacGmpClient(RawGmpClient):
     """Tiny raw GMP subset for the operator-account runtime smoke."""
 
     def get_tasks(
@@ -285,7 +441,7 @@ def ensure_secondary_user(admin_client: NativeBrowserClient, password: str) -> d
 
 
 def verify_full_test_visibility(client: Any) -> dict[str, Any]:
-    task_rows = runtime_full_test_scan.object_rows(client.get_tasks(details=True, ignore_pagination=True), "task")
+    task_rows = object_rows(client.get_tasks(details=True, ignore_pagination=True), "task")
     candidates = sorted(
         (
             task
@@ -304,9 +460,7 @@ def verify_full_test_visibility(client: Any) -> dict[str, Any]:
         }
     report_errors = []
     for task in candidates:
-        latest_report, report_error = runtime_full_test_scan.latest_report_for_task(
-            client, task["id"]
-        )
+        latest_report, report_error = latest_report_for_task(client, task["id"])
         if latest_report is not None and report_error is None:
             return {
                 "status": "pass",
@@ -341,7 +495,7 @@ def verify_cross_user_filter_admin(admin_client: Any, secondary_client: Any) -> 
             ),
             "create temporary filter",
         )
-        filter_id = runtime_full_test_scan.response_id(response)
+        filter_id = response_id(response)
         if not filter_id:
             raise RuntimeError("Could not parse created filter id")
         require_ok_response(

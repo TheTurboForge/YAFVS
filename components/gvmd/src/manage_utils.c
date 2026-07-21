@@ -1286,6 +1286,13 @@ clean_hosts (const char *given_hosts, int *max)
       point += 1;
     }
 
+  if (clean_array->len == 0)
+    {
+      g_strfreev (split);
+      g_ptr_array_free (clean_array, TRUE);
+      return g_strdup ("");
+    }
+
   clean = g_string_new ("");
 
   host = (gchar*) g_ptr_array_index (clean_array, 0);

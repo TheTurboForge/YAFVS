@@ -1185,7 +1185,12 @@ severity_data_index (double severity)
 {
   int ret;
   if (severity >= 0.0)
-    ret = (int)(round (severity * SEVERITY_SUBDIVISIONS)) + ZERO_SEVERITY_INDEX;
+    {
+      if (severity > SEVERITY_MAX)
+        severity = SEVERITY_MAX;
+      ret = (int)(round (severity * SEVERITY_SUBDIVISIONS))
+            + ZERO_SEVERITY_INDEX;
+    }
   else if (severity == SEVERITY_FP || severity == SEVERITY_ERROR)
     ret = (int)(round (severity)) + ZERO_SEVERITY_INDEX;
   else
@@ -4363,18 +4368,20 @@ manage_process_report_imports ()
 
   while (next (&reports))
     {
+      gchar *lockfile_name, *lockfile_path;
+
       report = iterator_int64 (&reports, 0);
 
-      gchar *lockfile_path =
-        g_build_filename (GVMD_STATE_DIR,
-                          g_strdup_printf ("gvm-process-report-%llu", report),
-                          NULL);
+      lockfile_name = g_strdup_printf ("gvm-process-report-%llu", report);
+      lockfile_path = g_build_filename (GVMD_STATE_DIR, lockfile_name, NULL);
+      g_free (lockfile_name);
       ret = lockfile_lock_path_nb (&lockfile, lockfile_path);
       if (ret > 0)
         {
           g_debug ("%s: Report %llu is already being processed",
                    __func__,
                    report);
+          g_free (lockfile_path);
           continue;
         }
       if (ret < 0)
@@ -4383,6 +4390,7 @@ manage_process_report_imports ()
                       __func__,
                       report);
           cleanup_iterator (&reports);
+          g_free (lockfile_path);
           return;
         }
 
@@ -4470,6 +4478,8 @@ manage_process_report_imports ()
           default:
             /* Parent. */
             g_debug ("%s: %i forked %i", __func__, getpid (), pid);
+            lockfile_unlock (&lockfile);
+            g_free (lockfile_path);
             continue;
           }
     }
@@ -4602,6 +4612,7 @@ manage_rebuild_gvmd_data_from_feed (const char *types,
       if (error_msg)
         *error_msg = g_strdup ("Error setting up log config or"
                                " database connection.");
+      feed_lockfile_unlock (&lockfile);
       return -1;
     }
 

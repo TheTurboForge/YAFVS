@@ -102,10 +102,17 @@ manage_send_report_hosts (report_t report,
   ctx.report = report;
   ctx.tsk_usage_type = g_strdup (usage_type);
 
+  /* Host summary counts must include all filtered results. */
+  get_data_t get_ignore_pagination;
+
+  memcpy (&get_ignore_pagination, get, sizeof (get_ignore_pagination));
+  get_ignore_pagination.ignore_pagination = 1;
+  get_ignore_pagination.ignore_max_rows_per_page = 1;
+
   /* Derive filter controls, including whether only hosts with results
    * should be included.
    */
-  ret = manage_report_filter_controls_from_get (get,
+  ret = manage_report_filter_controls_from_get (&get_ignore_pagination,
                                                 &term,
                                                 NULL,
                                                 NULL,
@@ -138,10 +145,10 @@ manage_send_report_hosts (report_t report,
 
   xml_dir_created = TRUE;
 
-  if (get->details && result_hosts_only)
+  if (get_ignore_pagination.details)
     {
       ret = fill_filtered_result_hosts (&result_hosts,
-                                        get,
+                                        &get_ignore_pagination,
                                         report,
                                         &results,
                                         include_result_hostname,
@@ -168,7 +175,7 @@ manage_send_report_hosts (report_t report,
   ret = print_report_hosts_xml (&ctx,
                                 stream,
                                 report,
-                                get,
+                                &get_ignore_pagination,
                                 usage_type,
                                 lean,
                                 include_result_hostname,

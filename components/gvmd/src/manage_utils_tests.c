@@ -163,6 +163,15 @@ Ensure (manage_utils, clean_hosts_simple_host)
   g_free (clean_str);
 }
 
+Ensure (manage_utils, clean_hosts_only_separators)
+{
+  gchar *clean_str;
+
+  clean_str = clean_hosts (",,", NULL);
+  assert_that (clean_str, is_equal_to_string (""));
+  g_free (clean_str);
+}
+
 Ensure (manage_utils, clean_hosts_removes_duplicates)
 {
   gchar *clean_str;
@@ -399,6 +408,7 @@ main (int argc, char **argv)
   add_test_with_context (suite, manage_utils, clean_hosts_converts_newlines_to_commas);
   add_test_with_context (suite, manage_utils, clean_hosts_handles_whitespace);
   add_test_with_context (suite, manage_utils, clean_hosts_empty_string);
+  add_test_with_context (suite, manage_utils, clean_hosts_only_separators);
   add_test_with_context (suite, manage_utils, clean_hosts_single_host);
   add_test_with_context (suite, manage_utils, clean_hosts_all_duplicates);
 

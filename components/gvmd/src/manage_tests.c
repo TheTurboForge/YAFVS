@@ -375,6 +375,19 @@ Ensure (manage, truncate_text_truncates)
   g_free (given);
 }
 
+Ensure (manage, severity_data_index_clamps_above_maximum)
+{
+  assert_that (severity_data_index (SEVERITY_MAX + 0.1),
+               is_equal_to (severity_data_index (SEVERITY_MAX)));
+  assert_that (severity_data_index (INFINITY),
+               is_equal_to (severity_data_index (SEVERITY_MAX)));
+}
+
+Ensure (manage, severity_data_index_rejects_nan)
+{
+  assert_that (severity_data_index (NAN), is_equal_to (0));
+}
+
 Ensure (manage, truncate_text_does_not_truncate)
 {
   const gchar *original;
@@ -484,6 +497,9 @@ main (int argc, char **argv)
   add_test_with_context (suite, manage, truncate_text_appends_suffix);
   add_test_with_context (suite, manage, truncate_text_skips_suffix);
   add_test_with_context (suite, manage, truncate_text_preserves_xml);
+  add_test_with_context (suite, manage,
+                         severity_data_index_clamps_above_maximum);
+  add_test_with_context (suite, manage, severity_data_index_rejects_nan);
 
   if (argc > 1)
     ret = run_single_test (suite, argv[1], create_text_reporter ());

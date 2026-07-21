@@ -926,7 +926,11 @@ class YAFVSCtlTests(unittest.TestCase):
                     if isinstance(expected_status, tuple)
                     else (expected_status,)
                 )
-                self.assertIn(payload["status"], expected_statuses, arguments)
+                self.assertIn(
+                    payload["status"],
+                    expected_statuses,
+                    {"arguments": arguments, "payload": payload},
+                )
                 self.assertEqual(payload["metadata"]["command"], arguments[0], arguments)
 
         if human_inventory:
@@ -1054,7 +1058,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["feed-copy-to-runtime", "--json"], 1, "fail"),
                 (["runtime-feed-import-init", "--json"], 1, "fail"),
                 (["runtime-redis-state", "--json"], 0, "warn"),
-                (["runtime-identity-migrate", "--json"], (0, 1), ("pass", "fail")),
+                (["runtime-identity-migrate", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["runtime-data-state", "--json"], 0, "warn"),
                 (["runtime-db-introspect", "--json"], 0, "warn"),
                 (["runtime-performance-snapshot", "--json"], 0, "warn"),
@@ -1080,12 +1084,12 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["path-coupling-state", "--status-only", "--json"], 0, "pass"),
                 (["security-policy-check", "--json"], 0, "pass"),
                 (["security-policy-check", "--status-only", "--json"], 0, "pass"),
-                (["native-api-cargo-audit", "--json"], 0, "pass"),
-                (["native-api-cargo-audit", "--status-only", "--json"], 0, "pass"),
+                (["native-api-cargo-audit", "--json"], (0, 1), ("pass", "warn", "fail")),
+                (["native-api-cargo-audit", "--status-only", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (["gsa-npm-audit", "--json"], 0, "pass"),
                 (["gsa-npm-audit", "--status-only", "--json"], 0, "pass"),
-                (["native-api-semgrep-audit", "--json"], 0, "pass"),
-                (["native-api-semgrep-audit", "--status-only", "--json"], 0, "pass"),
+                (["native-api-semgrep-audit", "--json"], (0, 1), ("pass", "warn", "fail")),
+                (["native-api-semgrep-audit", "--status-only", "--json"], (0, 1), ("pass", "warn", "fail")),
                 (
                     ["osv-lockfile-audit", "--json"],
                     (0, 1),

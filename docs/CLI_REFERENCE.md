@@ -278,7 +278,9 @@ them with direct database or protocol mutations.
   development operator.
 - `just runtime-scanner-redis-init`: initialize scanner Redis/config state.
 - `just runtime-gmp-smoke`: run the retained authenticated GMP smoke.
-- `just runtime-scanner-register`: create or verify scanner registration.
+- `just runtime-scanner-register`: atomically ensure the fixed built-in
+  OpenVAS scanner through the Rust manager path, then confirm and verify it
+  through the native API.
 - `just runtime-scanner-capability-check`: verify OpenVAS raw-socket
   capabilities.
 - `just runtime-scanner-process-check`: check scanner process hygiene.

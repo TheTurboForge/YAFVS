@@ -74,17 +74,6 @@ pub(crate) fn command_feed_generation_startup_guard_with_runner(
     )
 }
 
-pub(crate) fn run_pinned_gvmd(
-    repo_root: &Path,
-    runner: &dyn CommandRunner,
-    environment: &BTreeMap<std::ffi::OsString, std::ffi::OsString>,
-    image_ids: &BTreeMap<String, String>,
-    command: &[&str],
-) -> Result<crate::process::ProcessOutput, ()> {
-    let runtime = service_runtime::ServiceRuntime::new(repo_root, runner, environment, image_ids);
-    manager_init::run_gvmd(&runtime, command, std::time::Duration::from_secs(300))
-}
-
 pub use app_build::command_runtime_app_build;
 pub(crate) use app_build::run_compose;
 pub use app_up::command_runtime_app_up;

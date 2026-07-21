@@ -6,10 +6,8 @@
 use super::common::{metadata, output_tail, runtime_dir};
 use super::compose::{compose_command, runtime_app_environment, runtime_environment};
 use super::feed::command_feed_state;
-use super::feed_generation::{
-    query_ospd_vts_version_once, require_current_app_deployment, run_pinned_gvmd,
-    run_retained_native_api_smoke,
-};
+use super::feed_generation::{query_ospd_vts_version_once, run_retained_native_api_smoke};
+use super::native_runtime::native_api_get_json;
 use super::runtime_certs::{runtime_certificate_findings, runtime_certificates_complete};
 use super::runtime_feed_keyring::feed_keyring_fingerprint_finding;
 use super::runtime_health::{container_running, pg_gvm_extension_finding};
@@ -21,7 +19,9 @@ use super::runtime_scanner_capability::{
     command_runtime_nmap_capability_check_with, command_runtime_scanner_capability_check_with,
 };
 use super::runtime_scanner_process::command_runtime_scanner_process_check_with;
-use super::runtime_scanner_register::scanner_registration_finding;
+use super::runtime_scanner_register::{
+    SCANNER_ID as OPENVAS_DEFAULT_SCANNER_ID, default_scanner_api_object_is_exact,
+};
 use super::secret::{read_existing_runtime_secret, runtime_secret_path};
 use crate::process::{CommandRunner, ProcessOutput, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
@@ -80,7 +80,7 @@ trait AppSmokeContext {
     fn scanner_process(&mut self) -> NestedCheck;
     fn nmap_capability(&mut self) -> NestedCheck;
     fn notus_file_logs(&mut self, lines: usize, secret: &str) -> Vec<String>;
-    fn scanner_listing(&mut self) -> Option<ProcessOutput>;
+    fn scanner_listing(&mut self) -> Result<Value, String>;
     fn gsad_urls(&mut self) -> Vec<String>;
     fn https_headers(&mut self, url: &str) -> Option<ProcessOutput>;
     fn native_api_smoke(&mut self) -> Result<NestedCheck, String>;
@@ -269,27 +269,20 @@ impl AppSmokeContext for SystemContext<'_> {
         .unwrap_or_default()
     }
 
-    fn scanner_listing(&mut self) -> Option<ProcessOutput> {
-        let images =
-            match require_current_app_deployment(self.repo_root, self.runner, &self.environment) {
-                Ok(images) => images,
-                Err(_) => {
-                    return Some(ProcessOutput {
-                        success: false,
-                        exit_code: Some(2),
-                        stdout: String::new(),
-                        stderr: String::new(),
-                    });
-                }
-            };
-        run_pinned_gvmd(
+    fn scanner_listing(&mut self) -> Result<Value, String> {
+        let response = native_api_get_json(
             self.repo_root,
+            "/api/v1/scanners?page=1&page_size=500&sort=name",
             self.runner,
-            &self.environment,
-            &images,
-            &["--get-scanners"],
-        )
-        .ok()
+        );
+        if !response.usable_object() {
+            return Err(response
+                .error
+                .unwrap_or_else(|| "native scanner collection request failed".into()));
+        }
+        response
+            .parsed
+            .ok_or_else(|| "native scanner collection response was unavailable".into())
     }
 
     fn gsad_urls(&mut self) -> Vec<String> {
@@ -387,7 +380,7 @@ fn command_with_context(
         append_notus_findings(context, &password, &mut findings);
     }
     if ospd_ready {
-        append_scanner_findings(context, &password, &mut findings);
+        append_scanner_findings(context, &mut findings);
     }
     for base_url in context.gsad_urls() {
         let url = format!("{}/", base_url.trim_end_matches('/'));
@@ -561,35 +554,51 @@ fn append_notus_findings(
     );
 }
 
-fn append_scanner_findings(
-    context: &mut dyn AppSmokeContext,
-    password: &str,
-    findings: &mut Vec<Finding>,
-) {
-    let first = context
-        .scanner_listing()
-        .map(|output| redact_process(output, password));
-    let exit_code = first
+fn append_scanner_findings(context: &mut dyn AppSmokeContext, findings: &mut Vec<Finding>) {
+    let listing = context.scanner_listing();
+    let items = listing
         .as_ref()
-        .and_then(|output| output.exit_code)
-        .unwrap_or(1);
+        .ok()
+        .and_then(Value::as_object)
+        .and_then(|object| object.get("items"))
+        .and_then(Value::as_array);
     findings.push(
         Finding::new(
-            if exit_code == 0 { "pass" } else { "warn" },
-            "gvmd.scanners",
-            format!("gvmd --get-scanners exit code {exit_code}."),
+            if items.is_some() { "pass" } else { "warn" },
+            "native.scanners",
+            if items.is_some() {
+                "Native scanner collection is readable."
+            } else {
+                "Native scanner collection is unavailable or malformed."
+            }
+            .into(),
         )
         .with_details(json!({
-            "output_tail": first
-                .as_ref()
-                .map(|output| output_tail(&output.stdout, 80))
-                .unwrap_or_default(),
+            "item_count": items.map(Vec::len),
+            "error": listing.as_ref().err(),
         })),
     );
-    let second = context
-        .scanner_listing()
-        .map(|output| redact_process(output, password));
-    findings.push(scanner_registration_finding(second.as_ref()));
+    let scanner = items
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_object)
+        .find(|object| {
+            object.get("id").and_then(Value::as_str) == Some(OPENVAS_DEFAULT_SCANNER_ID)
+        });
+    let exact = scanner.is_some_and(default_scanner_api_object_is_exact);
+    findings.push(
+        Finding::new(
+            if exact { "pass" } else { "warn" },
+            "native.scanner.openvas-default",
+            if exact {
+                "OpenVAS Default scanner has the supported fixed native configuration."
+            } else {
+                "OpenVAS Default scanner is absent or its supported native configuration has drifted."
+            }
+            .into(),
+        )
+        .with_details(json!({"scanner_id": scanner.and_then(|object| object.get("id"))})),
+    );
 }
 
 fn summarized(result: NestedCheck, check: &str) -> Finding {
@@ -626,6 +635,7 @@ fn run_compose(
     )
 }
 
+#[cfg(test)]
 fn redact_process(mut output: ProcessOutput, secret: &str) -> ProcessOutput {
     if !secret.is_empty() {
         output.stdout = output.stdout.replace(secret, "[REDACTED]");
@@ -741,7 +751,7 @@ fn tail_values(values: &[String], maximum: usize) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::{BTreeMap, VecDeque};
+    use std::collections::BTreeMap;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -766,7 +776,7 @@ mod tests {
         ospd_logs: Vec<String>,
         notus_logs: Vec<String>,
         notus_file_logs: Vec<String>,
-        scanner_listings: VecDeque<ProcessOutput>,
+        scanner_listing: Result<Value, String>,
         gsad_urls: Vec<String>,
         native_running_result: Result<NestedCheck, String>,
         calls: Vec<String>,
@@ -785,7 +795,7 @@ mod tests {
                 ospd_logs: Vec::new(),
                 notus_logs: Vec::new(),
                 notus_file_logs: Vec::new(),
-                scanner_listings: VecDeque::new(),
+                scanner_listing: Err("unavailable".into()),
                 gsad_urls: Vec::new(),
                 native_running_result: Ok(nested("pass", "native API passed")),
                 calls: Vec::new(),
@@ -910,9 +920,9 @@ mod tests {
             self.notus_file_logs.clone()
         }
 
-        fn scanner_listing(&mut self) -> Option<ProcessOutput> {
+        fn scanner_listing(&mut self) -> Result<Value, String> {
             self.calls.push("scanner-listing".into());
-            self.scanner_listings.pop_front()
+            self.scanner_listing.clone()
         }
 
         fn gsad_urls(&mut self) -> Vec<String> {
@@ -1025,7 +1035,6 @@ mod tests {
     #[test]
     fn full_path_preserves_nested_order_and_registration_identity() {
         let repo = repo();
-        let scanner = "9f0f8fd7-7d07-4f71-98fd-78a4f6412d88 OpenVAS Default\n";
         let mut context = MockContext {
             certs_complete: true,
             secret: "sensitive-password".into(),
@@ -1037,7 +1046,19 @@ mod tests {
             ospd_socket_status: "pass",
             ospd_vt_version: Ok("202607200000".into()),
             ospd_logs: vec!["Loading VTs".into(), "Finished loading VTs".into()],
-            scanner_listings: VecDeque::from([process(true, scanner), process(true, scanner)]),
+            scanner_listing: Ok(json!({
+                "items": [{
+                    "id": OPENVAS_DEFAULT_SCANNER_ID,
+                    "name": "OpenVAS Default",
+                    "comment": "",
+                    "host": "/runtime/run/ospd/ospd-openvas.sock",
+                    "port": 0,
+                    "scanner_type": 2,
+                    "relay_host": null,
+                    "relay_port": 0
+                }],
+                "page": {"total": 1}
+            })),
             gsad_urls: vec!["https://127.0.0.1:19392".into()],
             ..Default::default()
         };
@@ -1066,8 +1087,8 @@ mod tests {
                 "ospd.vt-load",
                 "notus.logs",
                 "notus.feed-signature-logs",
-                "gvmd.scanners",
-                "gvmd.scanner.openvas-default",
+                "native.scanners",
+                "native.scanner.openvas-default",
                 "gsad.https",
                 "native-api.smoke",
             ]
@@ -1075,12 +1096,12 @@ mod tests {
         let registration = result
             .findings
             .iter()
-            .find(|finding| finding.check == "gvmd.scanner.openvas-default")
+            .find(|finding| finding.check == "native.scanner.openvas-default")
             .unwrap();
         assert_eq!(registration.status, "pass");
         assert_eq!(
-            registration.details.as_ref().unwrap()["scanner_uuid"],
-            "9f0f8fd7-7d07-4f71-98fd-78a4f6412d88"
+            registration.details.as_ref().unwrap()["scanner_id"],
+            OPENVAS_DEFAULT_SCANNER_ID
         );
         let vt = result
             .findings

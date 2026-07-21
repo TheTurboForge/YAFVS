@@ -343,10 +343,14 @@ notes = "The optional GMP cleanup fallback is deleted; native cleanup failure re
 [[callers]]
 id = "runtime-scanner-register-gvmd-cli"
 kind = "tooling"
-status = "inventoried"
-evidence = ["tools/yafvsctl-rs/src/commands/runtime_scanner_register.rs::run_pinned_gvmd"]
+status = "retired"
+evidence = [
+  "tools/yafvsctl-rs/src/commands/runtime_scanner_register.rs::const ENSURE_DEFAULT_SCANNER_SQL",
+  "tools/yafvsctl-rs/src/commands/runtime_scanner_register.rs::fixed_manager_operation_and_native_confirmation_pass",
+  "tools/yafvsctl-rs/src/commands/runtime_app_smoke.rs::native_api_get_json",
+]
 replacement = ["scanner-registry-capability"]
-notes = "Replace gvmd CLI create/modify/verify/get calls with the native scanner ownership contract."
+notes = "Rust now atomically ensures the fixed ownerless built-in scanner row, confirms it through the native API, and uses the bounded native verification route. Application smoke reads the same native collection; the gvmd CLI helper and GMP prerequisite are deleted."
 
 [[callers]]
 id = "compose-gvmd-service-socket-dependencies"

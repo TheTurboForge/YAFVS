@@ -12316,9 +12316,12 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
     findings = ensure_runtime_dirs(repo_root)
     findings.extend(ensure_build_runtime_dirs(repo_root))
     findings.append(active_feed_generation_finding(repo_root))
-    base_env = native_api_direct_runtime_env(repo_root)
+    deployed_env = deployed_app_env(repo_root)
+    base_env = ensure_native_api_direct_runtime_env_defaults(
+        repo_root, dict(deployed_env)
+    )
     receipt, receipt_error = require_app_deployment_receipt(
-        repo_root, app_env=base_env
+        repo_root, app_env=deployed_env
     )
     findings.append(
         finding(

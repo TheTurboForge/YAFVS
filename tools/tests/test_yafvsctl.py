@@ -465,6 +465,31 @@ class YAFVSCtlTests(unittest.TestCase):
         )
         deployed_env.assert_called_once_with(Path("/tmp"))
 
+    def test_direct_write_smoke_validates_receipt_before_enabling_direct_api(self):
+        source = Path(yafvsctl.__file__).read_text(encoding="utf-8")
+        start = source.index(
+            "def _command_runtime_native_api_direct_write_smoke_unlocked"
+        )
+        body = source[
+            start : source.index(
+                "\ndef command_runtime_native_api_direct_write_smoke", start
+            )
+        ]
+
+        deployed_index = body.index("deployed_env = deployed_app_env(repo_root)")
+        target_index = body.index(
+            "base_env = ensure_native_api_direct_runtime_env_defaults("
+        )
+        receipt_index = body.index(
+            "require_app_deployment_receipt(\n        repo_root, app_env=deployed_env"
+        )
+        self.assertLess(deployed_index, target_index)
+        self.assertLess(target_index, receipt_index)
+        self.assertNotIn(
+            "require_app_deployment_receipt(\n        repo_root, app_env=base_env",
+            body,
+        )
+
     def test_gsad_ports_override_uses_passed_deployment_environment(self):
         env = {
             yafvsctl.GSAD_HOSTS_ENV: "192.0.2.10,198.51.100.20",

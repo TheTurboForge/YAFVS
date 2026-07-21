@@ -316,7 +316,7 @@ fn command_unlocked(
     findings.extend(
         command_feed_generation_runtime_guard_with_runner(repo_root, false, runner).findings,
     );
-    let mut environment = match deployed_app_environment(repo_root, runner) {
+    let deployed_environment = match deployed_app_environment(repo_root, runner) {
         Ok(environment) => environment,
         Err(error) => {
             findings.push(Finding::new("fail", "runtime.app-environment", error));
@@ -331,15 +331,11 @@ fn command_unlocked(
             );
         }
     };
-    if let Err(error) = ensure_direct_environment_defaults(repo_root, &mut environment) {
-        findings.push(Finding::new(
-            "fail",
-            "native-api-direct.config-shape",
-            format!("Direct native API runtime defaults could not be prepared: {error}"),
-        ));
-    }
-    let deployment = match require_current_app_deployment_snapshot(repo_root, runner, &environment)
-    {
+    let deployment = match require_current_app_deployment_snapshot(
+        repo_root,
+        runner,
+        &deployed_environment,
+    ) {
         Ok(deployment) => {
             findings.push(Finding::new("pass", "runtime.app-deployment-receipt", "Prepared application deployment receipt is valid before the direct native API smoke.".into()).with_path(&receipt_path(repo_root)));
             Some(deployment)
@@ -350,6 +346,17 @@ fn command_unlocked(
                     .with_path(&receipt_path(repo_root)),
             );
             None
+        }
+    };
+    let environment = match direct_target_environment(repo_root, &deployed_environment) {
+        Ok(environment) => environment,
+        Err(error) => {
+            findings.push(Finding::new(
+                "fail",
+                "native-api-direct.config-shape",
+                format!("Direct native API runtime defaults could not be prepared: {error}"),
+            ));
+            deployed_environment
         }
     };
     findings.push(direct_config_shape_finding(
@@ -522,6 +529,15 @@ fn command_unlocked(
         Some((&environment, token_source)),
         artifacts,
     )
+}
+
+fn direct_target_environment(
+    repo_root: &Path,
+    deployed_environment: &BTreeMap<OsString, OsString>,
+) -> std::io::Result<BTreeMap<OsString, OsString>> {
+    let mut environment = deployed_environment.clone();
+    ensure_direct_environment_defaults(repo_root, &mut environment)?;
+    Ok(environment)
 }
 
 fn run_auth_and_header_probes(
@@ -1323,5 +1339,33 @@ mod tests {
             )]);
             assert_eq!(host_binding_finding(&environment).status, "pass", "{host}");
         }
+    }
+
+    #[test]
+    fn direct_target_environment_does_not_mutate_deployed_receipt_environment() {
+        let deployed = BTreeMap::from([
+            (
+                OsString::from(super::super::direct_api::DIRECT_ENV),
+                OsString::from("0"),
+            ),
+            (
+                OsString::from(BEARER_TOKEN_ENV),
+                OsString::from("0123456789abcdef0123456789abcdef"),
+            ),
+        ]);
+        let target = direct_target_environment(Path::new("/unused"), &deployed).unwrap();
+
+        assert_eq!(
+            environment_value(&deployed, super::super::direct_api::DIRECT_ENV).as_deref(),
+            Some("0")
+        );
+        assert_eq!(
+            environment_value(&target, super::super::direct_api::DIRECT_ENV).as_deref(),
+            Some("1")
+        );
+        assert_eq!(
+            environment_value(&target, super::super::direct_api::DIRECT_HOST_ENV).as_deref(),
+            Some("127.0.0.1")
+        );
     }
 }

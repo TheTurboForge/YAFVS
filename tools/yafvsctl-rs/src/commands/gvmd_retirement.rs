@@ -330,7 +330,7 @@ fn validate_program(
         ));
     }
     if program.progress_percent > 100
-        || program.progress_percent % 5 != 0
+        || !program.progress_percent.is_multiple_of(5)
         || program.next_update_percent > 100
         || (program.progress_percent < 100
             && program.next_update_percent != program.progress_percent + 5)

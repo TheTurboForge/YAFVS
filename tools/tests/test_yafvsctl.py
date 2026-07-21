@@ -10958,6 +10958,10 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn('"user-management/users"', source)
         self.assertIn("verify_native_cross_user_filter_admin", source)
         self.assertIn("verify_native_cross_user_target_task_admin", source)
+        self.assertNotIn("verify_cross_user_filter_admin", source)
+        self.assertNotIn("def create_filter", source)
+        self.assertNotIn("def modify_filter", source)
+        self.assertNotIn("def delete_filter", source)
         self.assertIn(
             'FULL_TEST_TASK_PREFIXES = ("YAFVS full test scan ", "TurboVAS full test scan ")',
             source,
@@ -10997,7 +11001,7 @@ class YAFVSCtlTests(unittest.TestCase):
             ],
         )
 
-    def test_runtime_rbac_raw_client_emits_expected_xml_subset(self):
+    def test_runtime_rbac_raw_client_emits_only_retained_xml_subset(self):
         client = runtime_rbac_smoke.RbacGmpClient(Path("/tmp/gvmd.sock"), "admin", "secret", 10)
         sent = []
 
@@ -11009,17 +11013,11 @@ class YAFVSCtlTests(unittest.TestCase):
 
         client.get_tasks(details=True, ignore_pagination=True)
         client.get_reports(filter_string="task_id=task-1 rows=10 sort-reverse=date", details=True, ignore_pagination=True)
-        client.create_filter("filter", filter_type="task", term="rows=1", comment="comment")
-        client.modify_filter("filter-id", name="filter two", term="rows=2", filter_type="task", comment="changed")
-        client.delete_filter("filter-id", ultimate=True)
         client.delete_task("task-id", ultimate=True)
 
         self.assertEqual(sent[0], '<get_tasks usage_type="scan" details="1" ignore_pagination="1"/>')
         self.assertEqual(sent[1], '<get_reports usage_type="scan" report_filter="task_id=task-1 rows=10 sort-reverse=date" details="1" ignore_pagination="1"/>')
-        self.assertEqual(sent[2], '<create_filter><name>filter</name><comment>comment</comment><term>rows=1</term><type>task</type></create_filter>')
-        self.assertEqual(sent[3], '<modify_filter filter_id="filter-id"><comment>changed</comment><name>filter two</name><term>rows=2</term><type>task</type></modify_filter>')
-        self.assertEqual(sent[4], '<delete_filter filter_id="filter-id" ultimate="1"/>')
-        self.assertEqual(sent[5], '<delete_task task_id="task-id" ultimate="1"/>')
+        self.assertEqual(sent[2], '<delete_task task_id="task-id" ultimate="1"/>')
 
     def test_runtime_rbac_native_target_task_check_uses_secondary_without_starting_scan(self):
         calls = []
@@ -11070,10 +11068,10 @@ class YAFVSCtlTests(unittest.TestCase):
             ],
         )
 
-    def test_runtime_rbac_raw_mutation_failures_raise(self):
-        response = b'<modify_filter_response status="400" status_text="bad filter"/>'
-        with self.assertRaisesRegex(RuntimeError, "modify temporary filter failed"):
-            runtime_rbac_smoke.require_ok_response(response, "modify temporary filter")
+    def test_runtime_rbac_retained_raw_task_delete_failures_raise(self):
+        response = b'<delete_task_response status="400" status_text="bad task"/>'
+        with self.assertRaisesRegex(RuntimeError, "delete temporary task failed"):
+            runtime_rbac_smoke.require_ok_response(response, "delete temporary task")
 
     def test_feed_activation_commits_journal_before_restarting_services(self):
         transition_source = (

@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
-from xml.sax.saxutils import escape, quoteattr
+from xml.sax.saxutils import quoteattr
 
 from runtime_gmp_smoke import gmp_authenticate_xml, send_gmp_xml_command
 
@@ -46,10 +46,6 @@ def response_root(response: Any) -> Any | None:
         except ET.ParseError:
             return None
     return response
-
-
-def xml_text_element(name: str, value: str) -> str:
-    return f"<{name}>{escape(value)}</{name}>"
 
 
 def xml_bool(value: bool | None) -> str:
@@ -175,21 +171,6 @@ def latest_report_for_task(
     return (reports[0] if reports else None), None
 
 
-def response_id(response: Any) -> str | None:
-    root = response_root(response)
-    if root is None:
-        return None
-    if root.get("id"):
-        return root.get("id")
-    report_id = child_text(root, "report_id")
-    if report_id:
-        return report_id
-    for child in root.iter():
-        if child.get("id"):
-            return child.get("id")
-    return None
-
-
 class RawGmpClient:
     """Minimal raw GMP connection retained only for RBAC characterization."""
 
@@ -253,48 +234,6 @@ class RbacGmpClient(RawGmpClient):
         if ignore_pagination is not None:
             attributes += f" ignore_pagination={quoteattr(xml_bool(ignore_pagination))}"
         return self.send_xml(f"<get_reports{attributes}/>")
-
-    def create_filter(
-        self,
-        name: str,
-        *,
-        filter_type: str | None = None,
-        term: str | None = None,
-        comment: str | None = None,
-    ) -> bytes:
-        body = xml_text_element("name", name)
-        if comment:
-            body += xml_text_element("comment", comment)
-        if term:
-            body += xml_text_element("term", term)
-        if filter_type:
-            body += xml_text_element("type", filter_type)
-        return self.send_xml(f"<create_filter>{body}</create_filter>")
-
-    def modify_filter(
-        self,
-        filter_id: str,
-        *,
-        name: str | None = None,
-        term: str | None = None,
-        filter_type: str | None = None,
-        comment: str | None = None,
-    ) -> bytes:
-        body = ""
-        if comment:
-            body += xml_text_element("comment", comment)
-        if name:
-            body += xml_text_element("name", name)
-        if term:
-            body += xml_text_element("term", term)
-        if filter_type:
-            body += xml_text_element("type", filter_type)
-        return self.send_xml(f"<modify_filter filter_id={quoteattr(filter_id)}>{body}</modify_filter>")
-
-    def delete_filter(self, filter_id: str, *, ultimate: bool | None = False) -> bytes:
-        return self.send_xml(
-            f"<delete_filter filter_id={quoteattr(filter_id)} ultimate={quoteattr(xml_bool(ultimate))}/>"
-        )
 
     def delete_task(self, task_id: str, *, ultimate: bool | None = False) -> bytes:
         return self.send_xml(
@@ -477,64 +416,6 @@ def verify_full_test_visibility(client: Any) -> dict[str, Any]:
         "latest_report": None,
         "report_error": "; ".join(report_errors),
     }
-
-
-def verify_cross_user_filter_admin(admin_client: Any, secondary_client: Any) -> dict[str, Any]:
-    filter_name = f"{TEMP_FILTER_PREFIX} {secrets.token_hex(4)}"
-    modified_name = filter_name + " modified"
-    filter_id: str | None = None
-    deleted_by_secondary = False
-    admin_cleanup = None
-    try:
-        response = require_ok_response(
-            admin_client.create_filter(
-                filter_name,
-                filter_type="task",
-                term="rows=1",
-                comment="Temporary filter created by runtime-rbac-smoke.",
-            ),
-            "create temporary filter",
-        )
-        filter_id = response_id(response)
-        if not filter_id:
-            raise RuntimeError("Could not parse created filter id")
-        require_ok_response(
-            secondary_client.modify_filter(
-                filter_id,
-                name=modified_name,
-                term="rows=2",
-                filter_type="task",
-                comment="Modified by the secondary runtime-rbac-smoke account.",
-            ),
-            "modify temporary filter as secondary user",
-        )
-        require_ok_response(secondary_client.delete_filter(filter_id, ultimate=True), "delete temporary filter as secondary user")
-        deleted_by_secondary = True
-        return {
-            "status": "pass",
-            "filter_id": filter_id,
-            "created_by": "admin",
-            "modified_by": SECONDARY_USER,
-            "deleted_by_secondary": deleted_by_secondary,
-            "admin_cleanup": admin_cleanup,
-        }
-    except Exception as error:  # pylint: disable=broad-except
-        if filter_id and not deleted_by_secondary:
-            try:
-                require_ok_response(admin_client.delete_filter(filter_id, ultimate=True), "admin cleanup temporary filter")
-                admin_cleanup = "deleted"
-            except Exception as cleanup_error:  # pylint: disable=broad-except
-                admin_cleanup = f"failed: {type(cleanup_error).__name__}: {cleanup_error}"
-        return {
-            "status": "fail",
-            "filter_id": filter_id,
-            "created_by": "admin" if filter_id else None,
-            "modified_by": SECONDARY_USER if filter_id else None,
-            "deleted_by_secondary": deleted_by_secondary,
-            "admin_cleanup": admin_cleanup,
-            "error_type": type(error).__name__,
-            "error": str(error),
-        }
 
 
 def verify_native_cross_user_filter_admin(
@@ -788,7 +669,6 @@ def main(argv: list[str] | None = None) -> int:
         admin_client = connect_with_password(socket_path, args.username, admin_password, args.timeout)
         secondary_client = connect_with_password(socket_path, SECONDARY_USER, secondary_password, args.timeout)
         visibility = verify_full_test_visibility(secondary_client)
-        filter_admin = verify_cross_user_filter_admin(admin_client, secondary_client)
         native_filter_admin = verify_native_cross_user_filter_admin(
             native_admin, native_secondary
         )
@@ -797,7 +677,6 @@ def main(argv: list[str] | None = None) -> int:
         )
         checks = (
             visibility,
-            filter_admin,
             native_filter_admin,
             native_target_task_admin,
         )
@@ -807,7 +686,6 @@ def main(argv: list[str] | None = None) -> int:
             "Runtime RBAC smoke passed for the operator-account model." if status == "pass" else "Runtime RBAC smoke failed for the operator-account model.",
             secondary_user=secondary_user,
             full_test_visibility=visibility,
-            cross_user_filter_admin=filter_admin,
             native_cross_user_filter_admin=native_filter_admin,
             native_cross_user_target_task_admin=native_target_task_admin,
             scans_started=0,

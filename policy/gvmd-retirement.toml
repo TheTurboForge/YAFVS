@@ -330,7 +330,7 @@ kind = "characterization"
 status = "inventoried"
 evidence = ["tools/runtime_rbac_smoke.py::class RbacGmpClient"]
 replacement = ["team-authority-permissions", "crud-query-api-surface"]
-notes = "Retain only independent semantic characterization; migrate product assertions and cleanup to native endpoints."
+notes = "GMP remains only for independent full-test visibility and temporary-task hard-delete cleanup. Filter team-authority assertions and cleanup are native-only."
 
 [[callers]]
 id = "runtime-browser-smoke-cleanup-fallback"

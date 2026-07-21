@@ -13,6 +13,8 @@ use std::path::Path;
 const IMPORT_BASELINE_COMMIT: &str = "def84d156dd45c27cad0a75bc2302ce151585d3c";
 const HISTORICAL_TURBOVAS_MODIFICATION_NOTICE: &str =
     "TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.";
+const YAFVS_MODIFICATION_NOTICE: &str =
+    "YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.";
 const COMMENT_NOTICE_SUFFIXES: &[&str] = &[
     "c", "h", "js", "jsx", "ts", "tsx", "py", "cmake", "rs", "sh", "sql", "xml", "in", "md", "txt",
     "toml", "yml", "yaml",
@@ -402,10 +404,10 @@ fn modified_imported_license_findings(
             if missing.is_empty() { "pass" } else { "fail" },
             "license.modified-imported-notices",
             if missing.is_empty() {
-                "Modified imported files have the required historical TurboVAS modification notices."
+                "Modified imported files have the required YAFVS or historical TurboVAS modification notices."
                     .to_string()
             } else {
-                "Modified imported files are missing required historical TurboVAS modification notices."
+                "Modified imported files are missing required YAFVS or historical TurboVAS modification notices."
                     .to_string()
             },
         )
@@ -469,7 +471,9 @@ fn modified_notice_gaps(
             path.is_file().then(|| file_head(&path, 5_000))
         };
         let Some(text) = text else { continue };
-        if text.contains(HISTORICAL_TURBOVAS_MODIFICATION_NOTICE) {
+        if text.contains(YAFVS_MODIFICATION_NOTICE)
+            || text.contains(HISTORICAL_TURBOVAS_MODIFICATION_NOTICE)
+        {
             continue;
         }
         if comment_notice_supported(&row.path) {
@@ -963,7 +967,7 @@ mod tests {
         let relative = "components/gvmd/src/example.c";
         fixture.write(
             relative,
-            "/* TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. */\n",
+            "/* YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. */\n",
         );
         let runner = FakeRunner {
             worktree: format!("M\t{relative}\n"),
@@ -1028,6 +1032,28 @@ mod tests {
                 vec!["-C", &root, "rev-parse", "--short", "HEAD"],
             ]
         );
+    }
+
+    #[test]
+    fn historical_turbovas_notice_remains_accepted() {
+        let fixture = Fixture::new();
+        let relative = "components/gvmd/src/example.c";
+        fixture.write(
+            relative,
+            "/* TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. */\n",
+        );
+        let rows = parse_name_status(&format!("M\t{relative}\n"));
+
+        let (missing, review) = modified_notice_gaps(
+            &fixture.root,
+            &rows,
+            "worktree",
+            &BTreeSet::new(),
+            &FakeRunner::default(),
+        );
+
+        assert!(missing.is_empty());
+        assert!(review.is_empty());
     }
 
     #[test]

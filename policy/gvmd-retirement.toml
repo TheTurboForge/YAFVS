@@ -1,0 +1,365 @@
+# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+schema_version = 1
+
+[program]
+baseline_head = "aa06efd1"
+progress_percent = 5
+next_update_percent = 10
+
+[[exit_criteria]]
+id = "zero-required-gmp-calls"
+status = "open"
+evidence = []
+notes = "No product, runtime, operator-tool, or automation workflow requires GMP/XML."
+
+[[exit_criteria]]
+id = "zero-gvmd-database-writes"
+status = "open"
+evidence = []
+notes = "No retained resource or lifecycle has gvmd as a database writer."
+
+[[exit_criteria]]
+id = "no-gvmd-runtime-process"
+status = "open"
+evidence = []
+notes = "The complete supported stack starts and operates without a gvmd process."
+
+[[exit_criteria]]
+id = "native-schema-and-semantics-ownership"
+status = "open"
+evidence = ["services/yafvs-api/src/task_status.rs::enum TaskStatus"]
+notes = "Rust owns migrations, schema evolution, and every retained manager-coded value."
+
+[[exit_criteria]]
+id = "lifecycle-behavior-proven"
+status = "open"
+evidence = []
+notes = "Independent tests prove retained scan, feed, schedule, alert, and report lifecycles."
+
+[[exit_criteria]]
+id = "gvmd-gmp-source-and-wiring-deleted"
+status = "open"
+evidence = []
+notes = "GMP clients, sockets, runtime/build wiring, compatibility tests, and gvmd source are absent."
+
+[[responsibilities]]
+id = "daemon-bootstrap-process-control"
+target_owner = "delete"
+status = "inventoried"
+weight = 2
+evidence = ["components/gvmd/src/gvmd.c::serve_and_schedule"]
+independent_authority = ["components/gvmd/src/gvmd.c::gvmd ("]
+dependencies = []
+notes = "Delete daemon bootstrap, fork-per-connection control, locks, pidfiles, and main-loop ownership after retained work moves."
+
+[[responsibilities]]
+id = "tcp-unix-manager-listener"
+target_owner = "delete"
+status = "inventoried"
+weight = 1
+evidence = ["components/gvmd/src/gvmd.c::manager_listen"]
+independent_authority = ["components/gvmd/src/gvmd.c::accept_and_maybe_fork"]
+dependencies = ["gmp-protocol-serving"]
+notes = "Delete the manager TCP/Unix listener and its connection workers."
+
+[[responsibilities]]
+id = "gmp-protocol-serving"
+target_owner = "delete"
+status = "inventoried"
+weight = 2
+evidence = ["components/gvmd/src/gmpd.c::serve_gmp"]
+independent_authority = ["components/gvmd/src/gmp.c::process_gmp_client_input"]
+dependencies = ["login-session-account-auth", "crud-query-api-surface"]
+notes = "Delete GMP/XML parsing, dispatch, authentication, and response transport after all callers migrate."
+
+[[responsibilities]]
+id = "login-session-account-auth"
+target_owner = "api"
+status = "inventoried"
+weight = 4
+evidence = ["components/gsad/src/gsad_gmp.c::login ("]
+independent_authority = ["components/gvmd/src/gmp.c::switch (authenticate ("]
+dependencies = ["team-authority-permissions"]
+notes = "Replace manager-backed login and logout with a native authenticated session boundary; do not weaken password or session handling."
+
+[[responsibilities]]
+id = "crud-query-api-surface"
+target_owner = "api"
+status = "characterized"
+weight = 5
+evidence = ["services/yafvs-api/src/read_api_routes.rs::native_api_router"]
+independent_authority = ["api/openapi/yafvs-v1.yaml::x-yafvs-inherited-still-owns"]
+dependencies = ["login-session-account-auth", "team-authority-permissions"]
+notes = "Finish retained resource operations and remove their inherited owner tails without recreating unwanted compatibility behavior."
+
+[[responsibilities]]
+id = "team-authority-permissions"
+target_owner = "api"
+status = "characterized"
+weight = 3
+evidence = ["services/yafvs-api/src/auth.rs::struct DirectApiOperator"]
+independent_authority = ["api/openapi/yafvs-v1.yaml::x-yafvs-team-authority"]
+dependencies = []
+notes = "Preserve trusted-team authority and attribution semantics at the native boundary."
+
+[[responsibilities]]
+id = "schema-migrations"
+target_owner = "manager-worker"
+status = "inventoried"
+weight = 5
+evidence = ["components/gvmd/src/manage_migrators.c::manage_migrate"]
+independent_authority = ["components/gvmd/src/manage_migrators.c::database_migrators"]
+dependencies = []
+notes = "Move schema-version ownership and ordered transactional migrations into a native Rust migration component."
+
+[[responsibilities]]
+id = "database-bootstrap-functions"
+target_owner = "manager-worker"
+status = "inventoried"
+weight = 4
+evidence = ["components/gvmd/src/manage_sql.c::init_manage"]
+independent_authority = ["components/gvmd/src/manage_pg.c::manage_create_sql_functions"]
+dependencies = ["schema-migrations"]
+notes = "Own database compatibility checks, session setup, bootstrap functions, and safe startup repair natively."
+
+[[responsibilities]]
+id = "manager-coded-semantics"
+target_owner = "manager-worker"
+status = "characterized"
+weight = 4
+evidence = ["services/yafvs-api/src/task_status.rs::enum TaskStatus"]
+independent_authority = ["components/gvmd/src/manage.h::TASK_STATUS_DONE = 1"]
+dependencies = ["schema-migrations"]
+notes = "Centralize task/report states, scanner and credential types, special rows, trash markers, alert states, and predefined/feed flags in typed Rust contracts."
+
+[[responsibilities]]
+id = "schedule-execution"
+target_owner = "manager-worker"
+status = "inventoried"
+weight = 4
+evidence = ["components/gvmd/src/gvmd.c::run_schedule"]
+independent_authority = ["components/gvmd/src/manage_schedules.c::manage_schedule"]
+dependencies = ["manager-coded-semantics", "scan-queue-admission"]
+notes = "Move due-time calculation, recurrence, task launch, and recovery to a native background worker."
+
+[[responsibilities]]
+id = "scan-queue-admission"
+target_owner = "manager-worker"
+status = "inventoried"
+weight = 5
+evidence = ["components/gvmd/src/manage_scan_queue.c::manage_handle_scan_queue"]
+independent_authority = ["components/gvmd/src/manage_scan_queue.c::set_max_active_scan_handlers"]
+dependencies = ["manager-coded-semantics"]
+notes = "Own admission, queue ordering, concurrency, cancellation, stale-handler recovery, and durable state transitions in Rust."
+
+[[responsibilities]]
+id = "scan-dispatch-osp-lifecycle"
+target_owner = "scanner"
+status = "inventoried"
+weight = 6
+evidence = ["components/gvmd/src/manage_osp.c::handle_osp_scan_start"]
+independent_authority = ["components/gvmd/src/manage_osp.c::handle_osp_scan"]
+dependencies = ["scan-queue-admission", "scanner-registry-capability"]
+notes = "Define a direct scanner-service contract for start, stop, status, result acknowledgement, deletion, retries, and failure handling."
+
+[[responsibilities]]
+id = "scan-result-ingestion"
+target_owner = "manager-worker"
+status = "inventoried"
+weight = 6
+evidence = ["components/gvmd/src/manage_osp.c::get_osp_scan_report"]
+independent_authority = ["components/gvmd/src/manage_osp.c::ack_osp_scan_results"]
+dependencies = ["scan-dispatch-osp-lifecycle"]
+notes = "Ingest results idempotently with bounded retries and independently proven database semantics."
+
+[[responsibilities]]
+id = "report-finalization-projections"
+target_owner = "manager-worker"
+status = "inventoried"
+weight = 6
+evidence = ["components/gvmd/src/manage_osp.c::handle_osp_scan_end"]
+independent_authority = ["components/gvmd/src/manage_osp.c::hosts_set_identifiers"]
+dependencies = ["scan-result-ingestion", "asset-snapshot-stale-cleanup"]
+notes = "Own report completion, host/detail/severity projections, timestamps, asset snapshots, and terminal task/report states."
+
+[[responsibilities]]
+id = "report-generation-downloads"
+target_owner = "api"
+status = "characterized"
+weight = 3
+evidence = ["services/yafvs-api/src/report_pdf.rs::report_pdf_download"]
+independent_authority = ["services/yafvs-api/src/report_export_characterization_tests.rs::native_pdf_contract_replaces_the_inherited_script_characterization"]
+dependencies = ["report-finalization-projections"]
+notes = "Retain bounded native report views and exports; classify or delete inherited report-generation formats individually."
+
+[[responsibilities]]
+id = "report-export-scheduler"
+target_owner = "manager-worker"
+status = "inventoried"
+weight = 3
+evidence = ["components/gvmd/src/manage_report_export_scheduler.c::manage_report_export_scheduler"]
+independent_authority = ["components/gvmd/src/manage_report_export_scheduler.c::reset_stale_report_exports"]
+dependencies = ["report-finalization-projections", "alert-event-delivery"]
+notes = "Move due export processing, retry state, and recovery only if retained product behavior needs it."
+
+[[responsibilities]]
+id = "alert-event-delivery"
+target_owner = "manager-worker"
+status = "inventoried"
+weight = 5
+evidence = ["components/gvmd/src/manage_events.c::event ("]
+independent_authority = ["components/gvmd/src/manage_alerts.c::manage_alert"]
+dependencies = ["manager-coded-semantics", "report-finalization-projections"]
+notes = "Move retained event evaluation and delivery methods behind an explicit asynchronous Rust boundary."
+
+[[responsibilities]]
+id = "scanner-registry-capability"
+target_owner = "scanner"
+status = "characterized"
+weight = 3
+evidence = ["services/yafvs-api/src/scanner_writes.rs::create_scanner"]
+independent_authority = ["components/gvmd/src/manage.h::SCANNER_TYPE_OPENVAS = 2"]
+dependencies = ["manager-coded-semantics"]
+notes = "Move registry, verification, capability, connection, and retained scanner configuration away from gvmd CLI/control paths."
+
+[[responsibilities]]
+id = "feed-sync-generation"
+target_owner = "feed-intelligence"
+status = "characterized"
+weight = 5
+evidence = ["tools/yafvsctl-rs/src/commands/feed_generation.rs::command_feed_generation_state"]
+independent_authority = ["components/gvmd/src/gvmd.c::run_feed_sync"]
+dependencies = ["feed-security-intelligence-database"]
+notes = "Move synchronization, import, generation, activation, rollback, and ownership out of gvmd while preserving provenance and reproducibility."
+
+[[responsibilities]]
+id = "feed-security-intelligence-database"
+target_owner = "feed-intelligence"
+status = "inventoried"
+weight = 5
+evidence = ["components/gvmd/src/manage_sql_secinfo.c::manage_sync_scap"]
+independent_authority = ["components/gvmd/src/manage.c::manage_sync_scap"]
+dependencies = ["schema-migrations"]
+notes = "Give the feed/intelligence service native schema and write ownership, with supported read-only consumption by scan stacks."
+
+[[responsibilities]]
+id = "asset-snapshot-stale-cleanup"
+target_owner = "manager-worker"
+status = "inventoried"
+weight = 3
+evidence = ["components/gvmd/src/gvmd.c::run_asset_snapshot_delete_stale"]
+independent_authority = ["components/gvmd/src/manage_sql_assets.c::asset_snapshots_target"]
+dependencies = ["report-finalization-projections"]
+notes = "Move retained snapshot creation, stable correlation, and stale cleanup into native lifecycle ownership."
+
+[[responsibilities]]
+id = "report-import-processing"
+target_owner = "manager-worker"
+status = "inventoried"
+weight = 3
+evidence = ["components/gvmd/src/manage.c::manage_process_report_imports"]
+independent_authority = ["components/gvmd/src/manage.c::init_report_awaiting_processing_iterator"]
+dependencies = ["report-finalization-projections"]
+notes = "Retain only imports with a supported product use case, then move asynchronous processing and cleanup to Rust."
+
+[[responsibilities]]
+id = "system-report-bridge"
+target_owner = "delete"
+status = "inventoried"
+weight = 1
+evidence = ["components/gsad/src/gsad_http_handler_functions.c::gsad_http_handle_system_report"]
+independent_authority = ["components/gsad/src/gsad_http_handler_functions.c::get_system_report_gmp_from_url"]
+dependencies = []
+notes = "Delete the inherited manager system-report bridge unless a concrete retained operator need is demonstrated."
+
+[[responsibilities]]
+id = "runtime-initialization-health"
+target_owner = "manager-worker"
+status = "characterized"
+weight = 3
+evidence = ["tools/yafvsctl-rs/src/commands/runtime_manager_init.rs::command_runtime_manager_init"]
+independent_authority = ["components/gvmd/src/manage_sql.c::check_db_versions"]
+dependencies = ["schema-migrations", "database-bootstrap-functions"]
+notes = "Replace pinned gvmd migration/init probes with native startup, migration, recovery, and health contracts."
+
+[[callers]]
+id = "gsa-legacy-command-transport"
+kind = "product"
+status = "inventoried"
+evidence = ["components/gsa/src/gmp/gmp.ts::class Gmp"]
+replacement = ["crud-query-api-surface", "login-session-account-auth"]
+notes = "Separate harmless internal module names from command methods that still issue legacy requests."
+
+[[callers]]
+id = "gsad-gmp-route"
+kind = "product"
+status = "inventoried"
+evidence = ["components/gsad/src/gsad_http_handler_functions.c::gsad_http_handle_gmp_get"]
+replacement = ["crud-query-api-surface"]
+notes = "Remove the live /gmp GET/POST bridge after GSA has no legacy request path."
+
+[[callers]]
+id = "gsad-manager-socket-auth"
+kind = "product"
+status = "inventoried"
+evidence = ["components/gsad/src/gsad_manager.c::gsad_manager_connect_with_username_password"]
+replacement = ["login-session-account-auth"]
+notes = "Replace manager socket authentication and logout/session coupling with the native auth boundary."
+
+[[callers]]
+id = "runtime-gmp-smoke"
+kind = "characterization"
+status = "characterized"
+evidence = ["tools/runtime_gmp_smoke.py::raw_gmp_get_version"]
+replacement = ["runtime-initialization-health"]
+notes = "Keep only while it independently characterizes a still-live compatibility boundary."
+
+[[callers]]
+id = "runtime-full-test-scan"
+kind = "tooling"
+status = "inventoried"
+evidence = ["tools/runtime_full_test_scan.py::class RawGmpClient"]
+replacement = ["scan-queue-admission", "scan-dispatch-osp-lifecycle", "scan-result-ingestion"]
+notes = "Remove raw GMP provisioning, start, and state reads after the native lifecycle path is complete."
+
+[[callers]]
+id = "runtime-rbac-smoke"
+kind = "characterization"
+status = "inventoried"
+evidence = ["tools/runtime_rbac_smoke.py::class RbacGmpClient"]
+replacement = ["team-authority-permissions", "crud-query-api-surface"]
+notes = "Retain only independent semantic characterization; migrate product assertions and cleanup to native endpoints."
+
+[[callers]]
+id = "runtime-browser-smoke-cleanup-fallback"
+kind = "tooling"
+status = "inventoried"
+evidence = ["tools/runtime_browser_smoke.py::cleanup_gmp_socket"]
+replacement = ["crud-query-api-surface"]
+notes = "Delete the optional GMP cleanup fallback; native cleanup must fail visibly instead of hiding a regression."
+
+[[callers]]
+id = "runtime-scanner-register-gvmd-cli"
+kind = "tooling"
+status = "inventoried"
+evidence = ["tools/yafvsctl-rs/src/commands/runtime_scanner_register.rs::run_pinned_gvmd"]
+replacement = ["scanner-registry-capability"]
+notes = "Replace gvmd CLI create/modify/verify/get calls with the native scanner ownership contract."
+
+[[callers]]
+id = "compose-gvmd-service-socket-dependencies"
+kind = "runtime"
+status = "inventoried"
+evidence = ["compose/dev.yaml::  gvmd:"]
+replacement = ["daemon-bootstrap-process-control", "runtime-initialization-health"]
+notes = "Remove the gvmd service, health checks, control/GMP sockets, dependencies, and volumes only after retained writers are gone."
+
+[[callers]]
+id = "justfile-runtime-gmp-surface"
+kind = "tooling"
+status = "inventoried"
+evidence = ["justfile::runtime-gmp-smoke"]
+replacement = ["runtime-initialization-health"]
+notes = "Retire legacy smoke and manager command recipes as their native replacements become authoritative."

@@ -19,9 +19,10 @@ pub use commands::{
     command_down, command_feed_cache_sync, command_feed_copy_to_runtime,
     command_feed_generation_activate, command_feed_generation_rollback,
     command_feed_generation_runtime_guard, command_feed_generation_stage,
-    command_feed_generation_state, command_feed_state, command_gsa_npm_audit, command_gvmd_smoke,
-    command_inventory, command_license_report, command_logs, command_native_alerts_from_csv,
-    command_native_api_cargo_audit, command_native_api_request, command_native_api_semgrep_audit,
+    command_feed_generation_state, command_feed_state, command_gsa_npm_audit,
+    command_gvmd_retirement_state, command_gvmd_smoke, command_inventory, command_license_report,
+    command_logs, command_native_alerts_from_csv, command_native_api_cargo_audit,
+    command_native_api_request, command_native_api_semgrep_audit,
     command_native_bulk_modify_schedules, command_native_credentials_from_csv,
     command_native_delete_overrides_by_filter, command_native_empty_trash,
     command_native_export_report_bundle, command_native_export_report_csv,
@@ -391,6 +392,9 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
             cli.status_only,
         ),
         CliCommand::Status => command_status(&repo_root),
+        CliCommand::GvmdRetirementState => {
+            command_gvmd_retirement_state(&repo_root, cli.status_only)
+        }
         CliCommand::Inventory { scope } => command_inventory(&repo_root, scope.as_deref()),
         CliCommand::BrandingState => command_branding_state(&repo_root),
         CliCommand::PathCouplingState => command_path_coupling_state(&repo_root, cli.status_only),

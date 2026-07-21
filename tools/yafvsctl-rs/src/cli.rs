@@ -55,6 +55,8 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand, PartialEq)]
 pub enum CliCommand {
+    /// Validate and report the machine-readable gvmd retirement registry.
+    GvmdRetirementState,
     /// Export one complete versioned native report evidence bundle.
     NativeExportReportBundle {
         #[arg(long)]
@@ -793,6 +795,7 @@ impl CliCommand {
             Self::RuntimeNativeApiDirectToken { .. } => "runtime-native-api-direct-token",
             Self::RuntimeNativeApiDirectBootstrap => "runtime-native-api-direct-bootstrap",
             Self::ProductionPostureCheck => "production-posture-check",
+            Self::GvmdRetirementState => "gvmd-retirement-state",
         }
     }
 }

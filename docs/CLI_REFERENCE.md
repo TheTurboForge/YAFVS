@@ -31,8 +31,12 @@ not use a failure exit code; `fail` exits non-zero.
 - `just security-policy-check`: validate the security-sensitive path policy.
 - `just rust-migration-state`: inspect C-to-Rust tooling and the current proof
   candidate.
+- `just gvmd-retirement-state --status-only --json`: validate the public,
+  machine-readable gvmd/GMP responsibility and caller registry and report its
+  rough progress checkpoint. This is an inventory aid, not a claim that gvmd
+  is already retired.
 
-The incremental Rust command spine currently implements 103 parity-tested
+The incremental Rust command spine currently implements 104 parity-tested
 subcommands. Commands in this mechanically checked block have a native Rust
 implementation; the normal `just` recipes remain the stable front door while
 each recipe cutover follows parity validation:
@@ -55,6 +59,7 @@ just yafvsctl-rust-test
 
 <!-- rust-cli-commands:start -->
 ```text
+gvmd-retirement-state
 native-export-report-bundle
 native-export-report-csv
 native-export-report-pdf

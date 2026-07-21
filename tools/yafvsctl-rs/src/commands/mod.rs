@@ -19,6 +19,7 @@ mod doctor;
 mod feed;
 mod feed_cache_sync;
 mod feed_generation;
+mod gvmd_retirement;
 mod gvmd_smoke;
 mod license;
 mod native_api_request;
@@ -98,6 +99,7 @@ pub use feed_generation::{
     command_feed_generation_state, command_runtime_app_build, command_runtime_app_up,
     command_runtime_native_api_rebuild,
 };
+pub use gvmd_retirement::command_gvmd_retirement_state;
 pub use gvmd_smoke::command_gvmd_smoke;
 pub use license::command_license_report;
 pub use native_api_request::command_native_api_request;

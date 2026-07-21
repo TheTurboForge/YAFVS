@@ -164,6 +164,7 @@ const ScanConfigComponent = ({
   const [familyName, setFamilyName] = useState();
   const [familyNvts, setFamilyNvts] = useState();
   const [familySelectedNvts, setFamilySelectedNvts] = useState();
+  const [familySelectionUpdate, setFamilySelectionUpdate] = useState();
   const [hasSelection, setHasSelection] = useState(false);
 
   const [nvt, setNvt] = useState();
@@ -455,6 +456,16 @@ const ScanConfigComponent = ({
         nvts: familyNvts,
         selected,
       })
+      .then(() => {
+        const currentNvts = familyNvts ?? [];
+        const allSelected =
+          currentNvts.length > 0 &&
+          currentNvts.every(nvt => selected?.[nvt.oid] === YES_VALUE);
+        setFamilySelectionUpdate({
+          familyName: familyNameValue,
+          select: allSelected ? YES_VALUE : NO_VALUE,
+        });
+      })
       .then(() => loadEditScanConfigSettings(configId, true))
       .then(() => {
         closeEditConfigFamilyDialog();
@@ -552,6 +563,7 @@ const ScanConfigComponent = ({
                   editNvtFamiliesTitle={_('Edit Scan Config Family')}
                   error={editScanConfigDialogError}
                   families={families}
+                  familySelectionUpdate={familySelectionUpdate}
                   isLoadingConfig={isLoadingConfig}
                   isLoadingFamilies={isLoadingFamilies}
                   isLoadingScanners={isLoadingScanners}

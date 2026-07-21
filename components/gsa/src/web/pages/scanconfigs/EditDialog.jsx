@@ -156,6 +156,7 @@ const EditScanConfigDialog = ({
   editNvtFamiliesTitle,
   error,
   families = [],
+  familySelectionUpdate,
   isLoadingConfig = true,
   isLoadingFamilies = true,
   isLoadingScanners = true,
@@ -202,6 +203,19 @@ const EditScanConfigDialog = ({
   useEffect(() => {
     setFilteredNvtPreferences(nvtPreferences);
   }, [nvtPreferences]);
+
+  useEffect(() => {
+    if (!isDefined(familySelectionUpdate)) {
+      return;
+    }
+
+    const {familyName, select} = familySelectionUpdate;
+    setSelectValues(currentSelect =>
+      isDefined(currentSelect)
+        ? {...currentSelect, [familyName]: select}
+        : currentSelect,
+    );
+  }, [familySelectionUpdate]);
 
   // trend and select are created only once and only after the whole config is loaded
   if (!isDefined(trendValues) && !isDefined(selectValues) && !isLoadingConfig) {
@@ -353,6 +367,10 @@ EditScanConfigDialog.propTypes = {
   editNvtDetailsTitle: PropTypes.string.isRequired,
   editNvtFamiliesTitle: PropTypes.string.isRequired,
   error: PropTypes.any,
+  familySelectionUpdate: PropTypes.shape({
+    familyName: PropTypes.string.isRequired,
+    select: PropTypes.yesno.isRequired,
+  }),
   families: PropTypes.arrayOf(
     PropTypes.shape({
       name: PropTypes.string.isRequired,

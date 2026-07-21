@@ -268,6 +268,7 @@ const createGmp = (overrides: Record<string, unknown> = {}): GmpFactory => {
       ok: true,
       status: 200,
     });
+
   });
   testing.stubGlobal('fetch', fetchNativeScanners);
 
@@ -494,6 +495,45 @@ describe('ScanConfigComponent', () => {
         expect(
           screen.queryByText('Edit Scan Config Test Config'),
         ).not.toBeInTheDocument();
+      });
+    });
+
+    test('should keep a family edit when the parent config is saved', async () => {
+      const {gmp, mocks} = createGmp();
+      const childFn = renderComponent(gmp);
+
+      const props = childFn.mock.calls[0]?.[0] as Record<
+        string,
+        (arg: typeof config) => void
+      >;
+      props.edit(config);
+
+      await screen.findByText('Edit Scan Config Test Config');
+      fireEvent.click(screen.getAllByTitle('Edit Scan Config Family')[0]);
+      await screen.findByText('Edit Scan Config Family family1');
+
+      const nvtCheckbox = screen.getByName('nvt-2') as HTMLInputElement;
+      expect(nvtCheckbox).toBeChecked();
+      fireEvent.click(nvtCheckbox);
+      expect(nvtCheckbox).not.toBeChecked();
+
+      const saveButtons = screen.getAllByTestId('dialog-save-button');
+      fireEvent.click(saveButtons[saveButtons.length - 1]);
+
+      await waitFor(() => {
+        expect(
+          screen.queryByText('Edit Scan Config Family family1'),
+        ).not.toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTestId('dialog-save-button'));
+
+      await waitFor(() => {
+        expect(mocks.saveScanConfig).toHaveBeenCalledWith(
+          expect.objectContaining({
+            select: expect.objectContaining({family1: NO_VALUE}),
+          }),
+        );
       });
     });
   });

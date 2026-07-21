@@ -136,14 +136,10 @@ fn host_handlers_preserve_ordered_human_owner_checks_and_transactions() {
         .0;
     assert!(
         patch_body.find("load_host_write_state").unwrap()
-            < patch_body
-                .find("ensure_host_is_human_owned")
-                .unwrap()
+            < patch_body.find("ensure_host_is_human_owned").unwrap()
     );
     assert!(
-        patch_body
-            .find("ensure_host_is_human_owned")
-            .unwrap()
+        patch_body.find("ensure_host_is_human_owned").unwrap()
             < patch_body.find("execute_host_patch_transaction").unwrap()
     );
 
@@ -156,14 +152,10 @@ fn host_handlers_preserve_ordered_human_owner_checks_and_transactions() {
         .0;
     assert!(
         delete_body.find("load_host_write_state").unwrap()
-            < delete_body
-                .find("ensure_host_is_human_owned")
-                .unwrap()
+            < delete_body.find("ensure_host_is_human_owned").unwrap()
     );
     assert!(
-        delete_body
-            .find("ensure_host_is_human_owned")
-            .unwrap()
+        delete_body.find("ensure_host_is_human_owned").unwrap()
             < delete_body.find("execute_host_delete_transaction").unwrap()
     );
 

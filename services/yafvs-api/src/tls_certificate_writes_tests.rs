@@ -86,13 +86,10 @@ fn tls_certificate_delete_handler_preserves_human_owner_check_order() {
     );
     assert!(
         body.find("load_tls_certificate_write_state").unwrap()
-            < body
-                .find("ensure_tls_certificate_is_human_owned")
-                .unwrap()
+            < body.find("ensure_tls_certificate_is_human_owned").unwrap()
     );
     assert!(
-        body.find("ensure_tls_certificate_is_human_owned")
-            .unwrap()
+        body.find("ensure_tls_certificate_is_human_owned").unwrap()
             < body
                 .find("execute_tls_certificate_delete_transaction")
                 .unwrap()

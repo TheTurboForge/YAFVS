@@ -9921,6 +9921,7 @@ results_extra_where (int trash, report_t report, const gchar* host,
 
   compliance_levels_clause = where_compliance_levels (compliance_levels);
 
+  g_free (compliance_levels);
   g_free (levels);
   g_free (new_severity_sql);
   g_free (scope_report_id);
@@ -13297,7 +13298,6 @@ print_report_xml_start (report_t report, task_t task,
                                  NULL))
         {
           g_free (term);
-          g_hash_table_destroy (ctx.f_host_ports);
           goto fail;
         }
     }

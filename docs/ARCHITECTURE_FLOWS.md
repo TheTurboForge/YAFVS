@@ -23,8 +23,8 @@ tests, and public docs agree.
 
 ## Native API Direction
 
-YAFVS is moving toward typed HTTP/JSON product APIs for DB-backed report,
-scope, metric, and evidence reads:
+YAFVS is moving toward typed HTTP/JSON product APIs for DB-backed reads,
+writes, and bounded control operations:
 
 ```text
 runtime helper -> yafvs-api /api/v1 JSON contract -> YAFVS product query layer -> gvmd/PostgreSQL
@@ -38,11 +38,15 @@ until each product workflow has a proven native replacement with tests and
 browser/runtime coverage. See `docs/API_CONTRACT.md`,
 `docs/GMP_XML_STRANGLER.md`, and `api/openapi/yafvs-v1.yaml`.
 
-Browser-facing native reads use the authenticated same-origin `gsad` proxy while
-GSA migrates from GMP/XML. Direct scriptable API work is also active now: the
-first direct mode is a separate opt-in bearer-auth development listener for
-read-only `/api/v1` paths. Production exposure still requires its own TLS,
-host-binding, audit, rate-limit, and authorization hardening.
+Browser-facing native operations use the authenticated same-origin `gsad` proxy
+while GSA migrates from GMP/XML. Direct scriptable API work uses a separate
+opt-in bearer-authenticated development listener: classified reads are
+allowlisted, while reviewed writes additionally require verified operator
+identity and explicit write-control. Admission limits, request bounds,
+correlation, and outcome audit logging are present; production TLS, non-loopback
+deployment, per-operator rate policy, and production authorization remain
+separate hardening work. `docs/NATIVE_API_OPERATION_REGISTRY.md`, generated from
+OpenAPI operation profiles, is the exact current surface and migration map.
 
 ## Scan Flow
 

@@ -20,6 +20,7 @@
   "type": "module",
   "scripts": {
     "check:openapi": "node scripts/check-openapi.mjs",
+    "generate:openapi-registry": "node scripts/check-openapi.mjs --write-operation-registry",
     "test": "vitest",
     "test:web-fast": "vitest run --pool=vmForks --project web --project store",
     "test:coverage": "vitest run --coverage",

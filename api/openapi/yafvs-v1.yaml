@@ -13,12 +13,76 @@ servers:
 security:
   - operatorSession: []
   - bearerAuth: []
+x-yafvs-operation-profiles:
+  shared-read:
+    exposure: direct-read
+    surfaces: [internal, browser-proxy, direct]
+    principals: [authenticated-human-operator, bearer-authenticated-automation-client]
+    authentication:
+      internal: private-service-secret-with-optional-operator-context
+      browser-proxy: authenticated-gsad-session-and-private-proxy-context
+      direct: bearer-token
+    team-authority: shared-stack-operator-visibility
+    write-gate: not-applicable-read-only
+    schema-compatibility: best-effort-read-schema
+    request-limits: listener-bounds-and-openapi-parameter-schema
+    destructive-classification: read-only
+    confirmation: none
+    idempotency: safe-and-idempotent
+    audit-event: surface-request-outcome
+  shared-write:
+    exposure: direct-write
+    surfaces: [internal, browser-proxy, direct]
+    principals: [authenticated-human-operator, configured-automation-operator]
+    authentication:
+      internal: private-service-secret-and-operator-context
+      browser-proxy: authenticated-gsad-session-and-private-proxy-context
+      direct: bearer-token-and-configured-operator
+    team-authority: authenticated-stack-operator
+    write-gate: exact-database-schema-and-surface-write-control
+    schema-compatibility: exact-characterized-write-schema
+    request-limits: listener-bounds-and-openapi-body-query-schema
+    destructive-classification: derived-from-method-and-operation-side-effect
+    confirmation: client-required-for-destructive-operations
+    idempotency: derived-from-http-method
+    audit-event: surface-request-outcome
+  direct-write:
+    exposure: direct-write
+    surfaces: [internal, direct]
+    principals: [configured-automation-operator]
+    authentication:
+      internal: private-service-secret-and-operator-context
+      direct: bearer-token-and-configured-operator
+    team-authority: authenticated-stack-operator
+    write-gate: exact-database-schema-and-explicit-direct-write-control
+    schema-compatibility: exact-characterized-write-schema
+    request-limits: listener-bounds-and-openapi-body-query-schema
+    destructive-classification: derived-from-method-and-operation-side-effect
+    confirmation: operation-specific
+    idempotency: derived-from-http-method
+    audit-event: direct-request-outcome
+  browser-write:
+    exposure: browser-write
+    surfaces: [internal, browser-proxy]
+    principals: [authenticated-human-operator]
+    authentication:
+      internal: private-service-secret-and-operator-context
+      browser-proxy: authenticated-gsad-session-and-private-proxy-context
+    team-authority: authenticated-stack-operator
+    write-gate: exact-database-schema-and-authenticated-browser-proxy
+    schema-compatibility: exact-characterized-write-schema
+    request-limits: listener-bounds-and-openapi-body-query-schema
+    destructive-classification: derived-from-method-and-operation-side-effect
+    confirmation: client-required-for-destructive-operations
+    idempotency: derived-from-http-method
+    audit-event: browser-proxy-request-outcome
 paths:
   /results:
     get:
       operationId: getResults
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: result-list-and-effective-overrides-read
       summary: List top-level scan results
@@ -54,6 +118,7 @@ paths:
       operationId: getResultsByResultId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: result-detail-metadata-tags-and-overrides-read
       summary: Read one scan result metadata row
@@ -86,6 +151,7 @@ paths:
       operationId: getResultsByResultIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: result-metadata-export-read
       summary: Export one scan result metadata row
@@ -118,6 +184,7 @@ paths:
       operationId: getVulnerabilities
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: vulnerability-list-read
       summary: List top-level vulnerabilities from scan results
@@ -151,6 +218,7 @@ paths:
       operationId: getVulnerabilitiesByVulnerabilityId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: vulnerability-detail-read
       summary: Get vulnerability metadata
@@ -188,6 +256,7 @@ paths:
       operationId: getVulnerabilitiesByVulnerabilityIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: vulnerability-metadata-export-read
       summary: Export vulnerability metadata
@@ -225,6 +294,7 @@ paths:
       operationId: getCves
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: cve-catalog-list-read
       summary: List Security Information CVEs
@@ -258,6 +328,7 @@ paths:
       operationId: getCvesByCveId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: cve-catalog-detail-epss-reference-configuration-read
       summary: Read one Security Information CVE
@@ -290,6 +361,7 @@ paths:
       operationId: getCvesByCveIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: cve-catalog-metadata-export-read
       summary: Export one Security Information CVE as native JSON metadata
@@ -322,6 +394,7 @@ paths:
       operationId: getCpes
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: cpe-catalog-list-read
       summary: List Security Information CPEs
@@ -355,6 +428,7 @@ paths:
       operationId: getCpesByCpeId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: cpe-catalog-detail-read
       summary: Read one Security Information CPE
@@ -387,6 +461,7 @@ paths:
       operationId: getCertBundAdvisories
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: cert-bund-advisory-list-read
       summary: List Security Information CERT-Bund advisories
@@ -420,6 +495,7 @@ paths:
       operationId: getCertBundAdvisoriesByCertBundAdvisoryId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: cert-bund-advisory-catalog-detail-read
       summary: Read one Security Information CERT-Bund advisory catalog entry
@@ -452,6 +528,7 @@ paths:
       operationId: getCertBundAdvisoriesByCertBundAdvisoryIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: cert-bund-advisory-metadata-export-read
       summary: Export one CERT-Bund advisory metadata record
@@ -484,6 +561,7 @@ paths:
       operationId: getDfnCertAdvisories
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: dfn-cert-advisory-list-read
       summary: List Security Information DFN-CERT advisories
@@ -517,6 +595,7 @@ paths:
       operationId: getDfnCertAdvisoriesByDfnCertAdvisoryId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: dfn-cert-advisory-catalog-detail-read
       summary: Read one Security Information DFN-CERT advisory catalog entry
@@ -549,6 +628,7 @@ paths:
       operationId: getDfnCertAdvisoriesByDfnCertAdvisoryIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: dfn-cert-advisory-metadata-export-read
       summary: Export one DFN-CERT advisory metadata record
@@ -581,6 +661,7 @@ paths:
       operationId: getNvts
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: nvt-catalog-list-read
       summary: List Security Information NVTs
@@ -614,6 +695,7 @@ paths:
       operationId: getNvtsByNvtId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: nvt-catalog-detail-read
       summary: Read one Security Information NVT catalog entry
@@ -646,6 +728,7 @@ paths:
       operationId: getNvtsByNvtIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: nvt-catalog-metadata-export-read
       summary: Export one Security Information NVT as native JSON metadata
@@ -678,6 +761,7 @@ paths:
       operationId: getOperatingSystems
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: operating-system-asset-list-read
       summary: List top-level operating-system assets
@@ -712,6 +796,7 @@ paths:
       operationId: getOperatingSystemsByOsId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: operating-system-asset-detail-info-read
       summary: Read one top-level operating-system asset
@@ -744,6 +829,7 @@ paths:
       operationId: getOperatingSystemsByOsIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: operating-system-asset-metadata-export-read
       summary: Export operating-system metadata JSON
@@ -776,6 +862,7 @@ paths:
       operationId: getHosts
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: host-asset-list-read
       summary: List top-level host assets
@@ -809,6 +896,7 @@ paths:
       operationId: postHosts
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: host-manual-create
       x-yafvs-operator-identity: direct-token-operator
@@ -852,6 +940,7 @@ paths:
       operationId: getHostsByHostId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: host-asset-detail-info-read
       summary: Read one top-level host asset
@@ -883,6 +972,7 @@ paths:
       operationId: patchHostsByHostId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: host-comment-modify
       x-yafvs-operator-identity: direct-token-operator
@@ -929,6 +1019,7 @@ paths:
       operationId: deleteHostsByHostId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: host-hard-delete
       x-yafvs-operator-identity: direct-token-operator
@@ -964,6 +1055,7 @@ paths:
       operationId: deleteHostIdentifiersByIdentifierId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: host-identifier-delete
       x-yafvs-operator-identity: direct-token-operator
@@ -999,6 +1091,7 @@ paths:
       operationId: deleteHostOperatingSystemsByHostOperatingSystemId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: host-operating-system-delete
       x-yafvs-operator-identity: direct-token-operator
@@ -1034,6 +1127,7 @@ paths:
       operationId: getHostsByHostIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: host-asset-metadata-export-read
       summary: Export host metadata JSON
@@ -1066,6 +1160,7 @@ paths:
       operationId: getTlsCertificates
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tls-certificate-asset-list-read
       summary: List top-level TLS certificate assets
@@ -1099,6 +1194,7 @@ paths:
       operationId: getTlsCertificatesByCertificateId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tls-certificate-asset-detail-info-read
       summary: Read one TLS certificate asset detail
@@ -1130,6 +1226,7 @@ paths:
       operationId: deleteTlsCertificatesByCertificateId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: tls-certificate-delete
       x-yafvs-operator-identity: direct-token-operator
@@ -1165,6 +1262,7 @@ paths:
       operationId: getTlsCertificatesByCertificateIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tls-certificate-asset-metadata-export-read
       summary: Export TLS certificate metadata JSON
@@ -1197,6 +1295,7 @@ paths:
       operationId: getTlsCertificatesByCertificateIdCertificate
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tls-certificate-pem-download-read
       summary: Read TLS certificate PEM source data
@@ -1229,6 +1328,7 @@ paths:
       operationId: getScanners
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scanner-metadata-list-read
       summary: List scanner metadata
@@ -1261,6 +1361,7 @@ paths:
       operationId: postScanners
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scanner-create
       x-yafvs-operator-identity: direct-token-operator
@@ -1312,6 +1413,7 @@ paths:
       operationId: getScannersByScannerId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scanner-metadata-detail-info-tags-and-task-backlink-read
       summary: Read one scanner metadata record with safe backlinks
@@ -1343,6 +1445,7 @@ paths:
       operationId: patchScannersByScannerId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scanner-metadata-modify
       x-yafvs-operator-identity: direct-token-operator
@@ -1392,6 +1495,7 @@ paths:
       operationId: postScannersByScannerIdReplaceConfiguration
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scanner-complete-retained-editor-configuration-modify
       x-yafvs-operator-identity: direct-token-operator
@@ -1441,6 +1545,7 @@ paths:
       operationId: postScannersByScannerIdVerify
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-inherited-still-owns: remote-scanner-tls-relay-verification
       x-yafvs-maturity: live-control
       x-yafvs-replaces: scanner-verify
@@ -1482,6 +1587,7 @@ paths:
       operationId: getScannersByScannerIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scanner-metadata-export-read
       summary: Export scanner metadata JSON
@@ -1514,6 +1620,7 @@ paths:
       operationId: getCredentials
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: credential-redacted-metadata-list-read
       x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
@@ -1553,6 +1660,7 @@ paths:
       operationId: postCredentials
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: credential-up-usk-create
       x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
@@ -1597,6 +1705,7 @@ paths:
       operationId: getCredentialsByCredentialId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: credential-redacted-metadata-detail-read
       x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
@@ -1629,6 +1738,7 @@ paths:
       operationId: patchCredentialsByCredentialId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: credential-metadata-modify
       x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
@@ -1677,6 +1787,7 @@ paths:
       operationId: getCredentialsByCredentialIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: credential-redacted-metadata-export-read
       x-yafvs-inherited-still-owns: credential-secret-updates-non-up-usk-types-and-deletes
@@ -1710,6 +1821,7 @@ paths:
       operationId: getFilters
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: saved-filter-metadata-list-read
       summary: List saved filters
@@ -1743,6 +1855,7 @@ paths:
       operationId: postFilters
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: saved-filter-create
       x-yafvs-operator-identity: direct-token-operator
@@ -1788,6 +1901,7 @@ paths:
       operationId: getFiltersByFilterId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: saved-filter-metadata-detail-read
       summary: Read one saved filter
@@ -1819,6 +1933,7 @@ paths:
       operationId: patchFiltersByFilterId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: saved-filter-metadata-modify
       x-yafvs-inherited-still-owns: saved-filter-alert-linkage
@@ -1868,6 +1983,7 @@ paths:
       operationId: deleteFiltersByFilterId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: saved-filter-trash-move
       x-yafvs-inherited-still-owns: saved-filter-alert-linkage
@@ -1904,6 +2020,7 @@ paths:
       operationId: getFiltersByFilterIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: saved-filter-metadata-export-read
       summary: Export saved-filter metadata
@@ -1936,6 +2053,7 @@ paths:
       operationId: postFiltersByFilterIdClone
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: saved-filter-clone
       x-yafvs-operator-identity: direct-token-operator
@@ -1985,6 +2103,7 @@ paths:
       operationId: postFiltersByFilterIdRestore
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: saved-filter-restore
       x-yafvs-inherited-still-owns: saved-filter-alert-linkage
@@ -2029,6 +2148,7 @@ paths:
       operationId: deleteFiltersByFilterIdTrash
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: saved-filter-hard-delete
       x-yafvs-inherited-still-owns: saved-filter-alert-linkage
@@ -2067,6 +2187,7 @@ paths:
       description: Read-only runtime feed inventory and sync-status metadata from fixed allowlisted runtime feed files. This allowlisted direct-listener endpoint does not sync, import, update, download, mirror, bundle, redistribute, or mutate feed content, and it does not control scanner services.
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: feed-status-read
       x-yafvs-inherited-still-owns: feed-sync-import-control
@@ -2094,6 +2215,7 @@ paths:
       operationId: getAlerts
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: alert-metadata-list-read
       summary: List redacted alert metadata
@@ -2126,6 +2248,7 @@ paths:
       operationId: postAlerts
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: alert-email-smb-syslog-snmp-scp-start-task-create
       x-yafvs-inherited-still-owns: delivery-payload-mutations
@@ -2180,6 +2303,7 @@ paths:
       operationId: getAlertsByAlertId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: alert-metadata-detail-read
       summary: Read one redacted alert metadata row
@@ -2211,6 +2335,7 @@ paths:
       operationId: patchAlertsByAlertId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: alert-metadata-modify
       x-yafvs-operator-identity: direct-token-operator
@@ -2257,6 +2382,7 @@ paths:
       operationId: deleteAlertsByAlertId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: alert-trash-move
       x-yafvs-operator-identity: direct-token-operator
@@ -2292,6 +2418,7 @@ paths:
       operationId: getAlertsByAlertIdDefinition
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: alert-retained-definition-read
       x-yafvs-operator-identity: resolved-request-operator
@@ -2330,6 +2457,7 @@ paths:
       operationId: putAlertsByAlertIdDefinition
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: alert-retained-definition-modify
       x-yafvs-operator-identity: resolved-request-operator
@@ -2383,6 +2511,7 @@ paths:
       operationId: postAlertsByAlertIdClone
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: alert-clone
       x-yafvs-operator-identity: direct-token-operator
@@ -2430,6 +2559,7 @@ paths:
       operationId: postAlertsByAlertIdTest
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: alert-test-actions
       x-yafvs-operator-identity: direct-token-operator
@@ -2471,6 +2601,7 @@ paths:
       operationId: postAlertsByAlertIdDeliverReport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: alert-deliver-report
       x-yafvs-operator-identity: direct-token-operator
@@ -2518,6 +2649,7 @@ paths:
       operationId: getAlertsByAlertIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: alert-metadata-export-read
       summary: Export redacted alert metadata
@@ -2550,6 +2682,7 @@ paths:
       operationId: getTags
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tag-metadata-read
       summary: List tags
@@ -2582,6 +2715,7 @@ paths:
       operationId: postTags
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: tag-metadata-explicit-and-filter-resource-assignment-write
       x-yafvs-operator-identity: direct-token-operator
@@ -2632,6 +2766,7 @@ paths:
       description: Read-only resource-name lookup for the Tag dialog across retained taggable resource types. Alerts and credentials expose only redacted id/name metadata; alert delivery, credential secrets, report/result actions, and all other control payloads are excluded.
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tag-resource-name-read
       parameters:
@@ -2671,6 +2806,7 @@ paths:
       operationId: getTagsByTagId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tag-metadata-read
       summary: Read one tag
@@ -2701,6 +2837,7 @@ paths:
       operationId: patchTagsByTagId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: tag-metadata-resource-type-and-atomic-assignment-write
       x-yafvs-operator-identity: direct-token-operator
@@ -2747,6 +2884,7 @@ paths:
       operationId: deleteTagsByTagId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: tag-trash-move
       x-yafvs-operator-identity: direct-token-operator
@@ -2782,6 +2920,7 @@ paths:
       operationId: getTagsByTagIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tag-metadata-export-read
       summary: Export tag metadata
@@ -2814,6 +2953,7 @@ paths:
       operationId: postTagsByTagIdClone
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: tag-clone
       x-yafvs-operator-identity: direct-token-operator
@@ -2862,6 +3002,7 @@ paths:
       operationId: postTagsByTagIdRestore
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: tag-restore
       x-yafvs-operator-identity: direct-token-operator
@@ -2901,6 +3042,7 @@ paths:
       operationId: deleteTagsByTagIdTrash
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: tag-hard-delete
       x-yafvs-operator-identity: direct-token-operator
@@ -2934,6 +3076,7 @@ paths:
       operationId: getTagsByTagIdResources
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tag-resource-reference-read
       summary: List assigned tag resource references
@@ -2969,6 +3112,7 @@ paths:
       operationId: postTagsByTagIdResources
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: tag-active-resource-assignment-write
       x-yafvs-operator-identity: direct-token-operator
@@ -3016,6 +3160,7 @@ paths:
       operationId: getOverrides
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: override-metadata-list-read
       summary: List overrides
@@ -3049,6 +3194,7 @@ paths:
       operationId: postOverrides
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: override-create
       x-yafvs-operator-identity: direct-token-operator
@@ -3094,6 +3240,7 @@ paths:
       operationId: getOverridesByOverrideId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: override-metadata-detail-read
       summary: Read one override
@@ -3125,6 +3272,7 @@ paths:
       operationId: deleteOverridesByOverrideId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: override-trash-move
       x-yafvs-operator-identity: direct-token-operator
@@ -3159,6 +3307,7 @@ paths:
       operationId: patchOverridesByOverrideId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: override-metadata-modify
       x-yafvs-operator-identity: direct-token-operator
@@ -3206,6 +3355,7 @@ paths:
       operationId: getOverridesByOverrideIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: override-metadata-export-read
       summary: Export one override as native JSON metadata
@@ -3238,6 +3388,7 @@ paths:
       operationId: postOverridesByOverrideIdClone
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: override-clone
       x-yafvs-operator-identity: direct-token-operator
@@ -3285,6 +3436,7 @@ paths:
       operationId: postOverridesByOverrideIdRestore
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: override-restore
       x-yafvs-operator-identity: direct-token-operator
@@ -3326,6 +3478,7 @@ paths:
       operationId: deleteOverridesByOverrideIdTrash
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: override-hard-delete
       x-yafvs-operator-identity: direct-token-operator
@@ -3361,6 +3514,7 @@ paths:
       operationId: getPortLists
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: port-list-metadata-list-read
       summary: List port lists
@@ -3400,6 +3554,7 @@ paths:
       operationId: postPortLists
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: port-list-create
       x-yafvs-operator-identity: direct-token-operator
@@ -3443,6 +3598,7 @@ paths:
       operationId: postPortListImports
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: port-list-import
       x-yafvs-operator-identity: direct-token-operator
@@ -3486,6 +3642,7 @@ paths:
       operationId: getPortListsByPortListId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: port-list-metadata-detail-read
       summary: Read one port list
@@ -3516,6 +3673,7 @@ paths:
       operationId: patchPortListsByPortListId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: port-list-metadata-and-range-modify
       x-yafvs-operator-identity: direct-token-operator
@@ -3562,6 +3720,7 @@ paths:
       operationId: deletePortListsByPortListId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: port-list-trash-move
       x-yafvs-operator-identity: direct-token-operator
@@ -3597,6 +3756,7 @@ paths:
       operationId: postPortListsByPortListIdRanges
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: port-list-range-create
       x-yafvs-operator-identity: direct-token-operator
@@ -3644,6 +3804,7 @@ paths:
       operationId: deletePortListsByPortListIdRangesByPortRangeId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: port-list-range-delete
       x-yafvs-operator-identity: direct-token-operator
@@ -3682,6 +3843,7 @@ paths:
       operationId: getPortListsByPortListIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: port-list-metadata-export-read
       summary: Export port-list metadata
@@ -3714,6 +3876,7 @@ paths:
       operationId: postPortListsByPortListIdClone
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: port-list-clone
       x-yafvs-operator-identity: direct-token-operator
@@ -3761,6 +3924,7 @@ paths:
       operationId: postPortListsByPortListIdRestore
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: port-list-restore
       x-yafvs-operator-identity: direct-token-operator
@@ -3802,6 +3966,7 @@ paths:
       operationId: deletePortListsByPortListIdTrash
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: port-list-hard-delete
       x-yafvs-operator-identity: direct-token-operator
@@ -3839,6 +4004,7 @@ paths:
       operationId: getSchedules
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: schedule-metadata-list-read
       summary: List schedules
@@ -3871,6 +4037,7 @@ paths:
       operationId: postSchedules
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: schedule-create
       x-yafvs-operator-identity: direct-token-operator
@@ -3914,6 +4081,7 @@ paths:
       operationId: getSchedulesByScheduleId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: schedule-metadata-detail-read
       summary: Read one schedule
@@ -3944,6 +4112,7 @@ paths:
       operationId: patchSchedulesByScheduleId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: schedule-metadata-modify
       x-yafvs-operator-identity: direct-token-operator
@@ -3994,6 +4163,7 @@ paths:
       operationId: deleteSchedulesByScheduleId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: schedule-trash-move
       x-yafvs-operator-identity: direct-token-operator
@@ -4029,6 +4199,7 @@ paths:
       operationId: postSchedulesByScheduleIdClone
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: schedule-clone
       x-yafvs-operator-identity: direct-token-operator
@@ -4076,6 +4247,7 @@ paths:
       operationId: postSchedulesByScheduleIdRestore
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: schedule-restore
       x-yafvs-operator-identity: direct-token-operator
@@ -4117,6 +4289,7 @@ paths:
       operationId: deleteSchedulesByScheduleIdTrash
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: schedule-hard-delete
       x-yafvs-operator-identity: direct-token-operator
@@ -4152,6 +4325,7 @@ paths:
       operationId: getSchedulesByScheduleIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: schedule-metadata-export-read
       summary: Export schedule metadata
@@ -4184,6 +4358,7 @@ paths:
       operationId: getUsers
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: user-redacted-list-read
       summary: List redacted user account metadata
@@ -4217,6 +4392,7 @@ paths:
       operationId: getAuthenticationSettings
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: authentication-provider-settings-read
       x-yafvs-operator-identity: resolved-request-operator
@@ -4253,6 +4429,7 @@ paths:
       operationId: putAuthenticationSettingsLdap
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: ldap-authentication-provider-settings-write
       x-yafvs-operator-identity: direct-token-operator
@@ -4293,6 +4470,7 @@ paths:
       operationId: putAuthenticationSettingsRadius
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: radius-authentication-provider-settings-write
       x-yafvs-operator-identity: direct-token-operator
@@ -4333,6 +4511,7 @@ paths:
       operationId: getUserManagementUsers
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: user-management-list-read
       summary: List operator accounts for administration
@@ -4367,6 +4546,7 @@ paths:
       operationId: postUserManagementUsers
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: user-account-create
       x-yafvs-operator-identity: direct-token-operator
@@ -4413,6 +4593,7 @@ paths:
       operationId: getUserManagementUsersByUserId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: user-management-detail-read
       summary: Read one operator account for administration
@@ -4444,6 +4625,7 @@ paths:
     patch:
       operationId: patchUserManagementUsersByUserId
       x-yafvs-exposure: browser-write
+      x-yafvs-profile: browser-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: user-account-modify
       x-yafvs-operator-identity: proxied-session-operator
@@ -4494,6 +4676,7 @@ paths:
     delete:
       operationId: deleteUserManagementUsersByUserId
       x-yafvs-exposure: browser-write
+      x-yafvs-profile: browser-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: user-account-delete
       x-yafvs-operator-identity: proxied-session-operator
@@ -4543,6 +4726,7 @@ paths:
       operationId: postUserManagementUsersByUserIdClone
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: user-account-clone
       x-yafvs-operator-identity: direct-token-operator
@@ -4587,6 +4771,7 @@ paths:
       operationId: getUsersCurrentSettings
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: current-user-settings-read
       summary: List the current operator's resolved settings
@@ -4617,6 +4802,7 @@ paths:
       operationId: getUsersCurrentSettingsBySettingId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: current-user-setting-read
       parameters:
@@ -4649,6 +4835,7 @@ paths:
       operationId: putUsersCurrentSettingsBySettingId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: current-user-setting-write
       x-yafvs-operator-identity: direct-token-operator
@@ -4695,6 +4882,7 @@ paths:
       operationId: putUsersCurrentTimezone
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: current-user-timezone-write
       x-yafvs-operator-identity: direct-token-operator
@@ -4736,6 +4924,7 @@ paths:
     post:
       operationId: postUsersCurrentPassword
       x-yafvs-exposure: browser-write
+      x-yafvs-profile: browser-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: user-current-password-change
       x-yafvs-operator-identity: proxied-session-operator
@@ -4776,6 +4965,7 @@ paths:
       operationId: getUsersByUserId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: user-redacted-detail-read
       summary: Read one redacted user account metadata record
@@ -4808,6 +4998,7 @@ paths:
       operationId: getScanConfigs
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scan-config-metadata-list-read
       summary: List scan configs
@@ -4847,6 +5038,7 @@ paths:
       operationId: postScanConfigs
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scan-config-create-from-base
       x-yafvs-operator-identity: direct-token-operator
@@ -4897,6 +5089,7 @@ paths:
       operationId: getScanConfigsByScanConfigId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scan-config-detail-info-tags-task-backlinks-and-preferences-read
       summary: Read one scan config with effective preferences
@@ -4928,6 +5121,7 @@ paths:
       operationId: patchScanConfigsByScanConfigId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scan-config-family-mode-and-preference-mutation
       x-yafvs-operator-identity: direct-token-operator
@@ -4974,6 +5168,7 @@ paths:
       operationId: deleteScanConfigsByScanConfigId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scan-config-trash-move
       x-yafvs-operator-identity: direct-token-operator
@@ -5009,6 +5204,7 @@ paths:
       operationId: postScanConfigsByScanConfigIdDiagnosticNvtSelection
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: direct-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scan-config-diagnostic-nvt-selection
       x-yafvs-operator-identity: direct-token-operator
@@ -5059,6 +5255,7 @@ paths:
       operationId: postScanConfigsByScanConfigIdClone
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scan-config-clone
       x-yafvs-operator-identity: direct-token-operator
@@ -5111,6 +5308,7 @@ paths:
       operationId: postScanConfigsByScanConfigIdRestore
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scan-config-restore
       x-yafvs-operator-identity: direct-token-operator
@@ -5152,6 +5350,7 @@ paths:
       operationId: deleteScanConfigsByScanConfigIdTrash
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scan-config-hard-delete
       x-yafvs-operator-identity: direct-token-operator
@@ -5187,6 +5386,7 @@ paths:
       operationId: getScanConfigsByScanConfigIdFamilies
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scan-config-family-summary-read
       summary: Read scan config NVT family selection summary
@@ -5219,6 +5419,7 @@ paths:
       operationId: getScanConfigsByScanConfigIdFamiliesByFamilyNvts
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scan-config-family-nvt-selection-read
       summary: Read NVT selection for one scan config family
@@ -5251,6 +5452,7 @@ paths:
       operationId: patchScanConfigsByScanConfigIdFamiliesByFamilyNvts
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scan-config-family-nvt-selection-mutation
       x-yafvs-operator-identity: direct-token-operator
@@ -5295,6 +5497,7 @@ paths:
       operationId: getScanConfigsByScanConfigIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scan-config-metadata-export-read
       summary: Export scan-config metadata
@@ -5327,6 +5530,7 @@ paths:
       operationId: getScanConfigsByScanConfigIdBackup
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scan-config-versioned-json-backup
       summary: Download a portable scan-config JSON backup
@@ -5364,6 +5568,7 @@ paths:
       operationId: postScanConfigsImport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scan-config-versioned-json-import
       x-yafvs-operator-identity: direct-token-operator
@@ -5424,6 +5629,7 @@ paths:
       operationId: getTimezones
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: timezone-list-read
       summary: List supported timezones
@@ -5452,6 +5658,7 @@ paths:
       operationId: getReportFormats
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: report-format-metadata-list-read
       summary: List report formats
@@ -5486,6 +5693,7 @@ paths:
       operationId: getReportFormatsByReportFormatId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: report-format-metadata-detail-read
       summary: Read one report format
@@ -5517,6 +5725,7 @@ paths:
       operationId: getReportFormatsByReportFormatIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: report-format-metadata-export-read
       summary: Export report-format metadata JSON
@@ -5549,6 +5758,7 @@ paths:
       operationId: getTrashcanSummary
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: trashcan-count-summary-read
       x-yafvs-inherited-still-owns: trashcan-deep-row-data-and-mutations
@@ -5578,6 +5788,7 @@ paths:
       operationId: getTrashcanItems
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: trashcan-redacted-row-metadata-read
       x-yafvs-inherited-still-owns: trashcan-deep-row-data-and-mutations
@@ -5612,6 +5823,7 @@ paths:
       operationId: getTrashcanEmptyPreview
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: trashcan-owner-empty-preview
       x-yafvs-inherited-still-owns: trashcan-row-detail-restore-and-individual-hard-delete
@@ -5648,6 +5860,7 @@ paths:
       operationId: postTrashcanEmpty
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: trashcan-empty
       x-yafvs-inherited-still-owns: trashcan-row-detail-restore-and-individual-hard-delete
@@ -5700,6 +5913,7 @@ paths:
       operationId: getReports
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: raw-report-list-read
       x-yafvs-inherited-still-owns: raw-report-generation-non-pdf-export-retention-and-mutations
@@ -5735,6 +5949,7 @@ paths:
       operationId: getReportsByReportId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: raw-report-detail-summary-read
       x-yafvs-inherited-still-owns: raw-report-generation-non-pdf-export-retention-and-mutations
@@ -5768,6 +5983,7 @@ paths:
       operationId: getReportsByReportIdDownload
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: native-evidence-pdf-report-download
       x-yafvs-inherited-still-owns: non-pdf-custom-report-format-config-filter-and-script-rendering
@@ -5812,6 +6028,7 @@ paths:
       operationId: getReportsByReportIdResults
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: raw-report-result-evidence-read
       summary: List raw scan report results
@@ -5847,6 +6064,7 @@ paths:
       operationId: getReportsByReportIdRawResults
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: raw-report-lossless-result-evidence-read
       summary: List every raw result row retained for one scan report
@@ -5883,6 +6101,7 @@ paths:
       operationId: getReportsByReportIdHosts
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: raw-report-host-evidence-read
       summary: List raw scan report hosts
@@ -5918,6 +6137,7 @@ paths:
       operationId: getReportsByReportIdPorts
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: raw-report-port-evidence-read
       summary: List raw scan report ports
@@ -5953,6 +6173,7 @@ paths:
       operationId: getReportsByReportIdApplications
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: raw-report-application-evidence-read
       summary: List raw scan report applications
@@ -5988,6 +6209,7 @@ paths:
       operationId: getReportsByReportIdOperatingSystems
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: raw-report-operating-system-evidence-read
       summary: List raw scan report operating systems
@@ -6023,6 +6245,7 @@ paths:
       operationId: getReportsByReportIdCves
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: raw-report-cve-evidence-read
       summary: List raw scan report CVEs
@@ -6058,6 +6281,7 @@ paths:
       operationId: getReportsByReportIdTlsCertificates
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: raw-report-tls-certificate-evidence-read
       summary: List raw scan report TLS certificates
@@ -6093,6 +6317,7 @@ paths:
       operationId: getReportsByReportIdErrors
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: raw-report-error-message-evidence-read
       summary: List raw scan report Error Messages
@@ -6128,6 +6353,7 @@ paths:
       operationId: getReportsByReportIdMetrics
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: raw-report-metrics-read
       summary: Read raw report metrics
@@ -6159,6 +6385,7 @@ paths:
       operationId: getScopes
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scope-list-read
       summary: List scopes
@@ -6190,6 +6417,7 @@ paths:
       operationId: postScopes
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scope-metadata-membership-write
       x-yafvs-operator-identity: direct-token-operator
@@ -6237,6 +6465,7 @@ paths:
       operationId: getScopesByScopeId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scope-detail-membership-read
       summary: Read one scope
@@ -6267,6 +6496,7 @@ paths:
       operationId: patchScopesByScopeId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scope-metadata-membership-write
       x-yafvs-operator-identity: direct-token-operator
@@ -6313,6 +6543,7 @@ paths:
       operationId: deleteScopesByScopeId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scope-metadata-membership-write
       x-yafvs-operator-identity: direct-token-operator
@@ -6348,6 +6579,7 @@ paths:
       operationId: postScopesByScopeIdReports
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scope-report-generation
       x-yafvs-operator-identity: direct-token-operator
@@ -6396,6 +6628,7 @@ paths:
       operationId: getTargets
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: target-list-read
       summary: List scan targets
@@ -6428,6 +6661,7 @@ paths:
       operationId: postTargets
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: target-create-with-optional-credential-references
       x-yafvs-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows
@@ -6481,6 +6715,7 @@ paths:
       operationId: getTargetsByTargetId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: target-detail-summary-read
       summary: Read one scan target summary
@@ -6512,6 +6747,7 @@ paths:
       operationId: patchTargetsByTargetId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: target-metadata-simple-scan-inputs-and-credential-links-modify
       x-yafvs-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows
@@ -6559,6 +6795,7 @@ paths:
       operationId: deleteTargetsByTargetId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: target-trash-move
       x-yafvs-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows
@@ -6597,6 +6834,7 @@ paths:
       operationId: getTargetsByTargetIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: target-metadata-export-read
       summary: Export scan target metadata
@@ -6629,6 +6867,7 @@ paths:
       operationId: postTargetsByTargetIdClone
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: target-clone
       x-yafvs-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows
@@ -6684,6 +6923,7 @@ paths:
       operationId: postTargetsByTargetIdRestore
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: target-restore
       x-yafvs-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows
@@ -6728,6 +6968,7 @@ paths:
       operationId: deleteTargetsByTargetIdTrash
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: target-hard-delete
       x-yafvs-inherited-still-owns: target-file-input-task-control-and-credential-secret-workflows
@@ -6766,6 +7007,7 @@ paths:
       operationId: getTasks
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: task-list-read
       summary: List scan tasks
@@ -6803,6 +7045,7 @@ paths:
       operationId: postTasks
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: task-create-with-retained-editor-configuration
       x-yafvs-inherited-still-owns: task-resume-file-hard-delete-and-other-scanner-control
@@ -6851,6 +7094,7 @@ paths:
       operationId: getTasksByTaskId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: task-detail-summary-read
       summary: Read one scan task summary
@@ -6882,6 +7126,7 @@ paths:
       operationId: patchTasksByTaskId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: task-metadata-modify
       x-yafvs-operator-identity: direct-token-operator
@@ -6928,6 +7173,7 @@ paths:
       operationId: deleteTasksByTaskId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: task-trash-move
       x-yafvs-operator-identity: direct-token-operator
@@ -6965,6 +7211,7 @@ paths:
       operationId: postTasksByTaskIdClone
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: task-clone
       x-yafvs-operator-identity: direct-token-operator
@@ -7015,6 +7262,7 @@ paths:
       operationId: postTasksByTaskIdReplaceTarget
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: task-target-clone-rebind-delete
       x-yafvs-operator-identity: direct-token-operator
@@ -7062,6 +7310,7 @@ paths:
       operationId: postTasksByTaskIdReplaceConfiguration
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: task-retained-editor-configuration-modify
       x-yafvs-operator-identity: direct-token-operator
@@ -7111,6 +7360,7 @@ paths:
       operationId: postTasksByTaskIdStart
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-inherited-still-owns: task-resume-and-other-scanner-control
       x-yafvs-maturity: live-control
       x-yafvs-replaces: task-start
@@ -7153,6 +7403,7 @@ paths:
       operationId: postTasksByTaskIdStop
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-inherited-still-owns: task-resume-and-other-scanner-control
       x-yafvs-maturity: live-control
       x-yafvs-replaces: task-stop
@@ -7199,6 +7450,7 @@ paths:
       operationId: getTasksByTaskIdExport
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: task-metadata-export-read
       summary: Export scan task metadata
@@ -7231,6 +7483,7 @@ paths:
       operationId: getScopeReports
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scope-report-list-read
       summary: List generated scope reports
@@ -7270,6 +7523,7 @@ paths:
       operationId: getScopeReportsByScopeReportId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scope-report-detail-summary-read
       summary: Read one generated scope report
@@ -7300,6 +7554,7 @@ paths:
       operationId: deleteScopeReportsByScopeReportId
       x-yafvs-direct: true
       x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
       x-yafvs-maturity: live-write
       x-yafvs-replaces: scope-report-delete
       x-yafvs-operator-identity: direct-token-operator
@@ -7335,6 +7590,7 @@ paths:
       operationId: getScopeReportsByScopeReportIdResults
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scope-report-result-evidence-read
       summary: List deduplicated scope report results by scope report id
@@ -7370,6 +7626,7 @@ paths:
       operationId: getScopesByScopeIdReportsByScopeReportIdResults
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scope-report-result-evidence-read
       summary: List deduplicated scope report results
@@ -7406,6 +7663,7 @@ paths:
       operationId: getScopesByScopeIdReportsByScopeReportIdHosts
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scope-report-host-evidence-read
       summary: List scope report hosts
@@ -7442,6 +7700,7 @@ paths:
       operationId: getScopesByScopeIdReportsByScopeReportIdPorts
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scope-report-port-evidence-read
       summary: List scope report ports
@@ -7478,6 +7737,7 @@ paths:
       operationId: getScopesByScopeIdReportsByScopeReportIdApplications
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scope-report-application-evidence-read
       summary: List scope report applications
@@ -7514,6 +7774,7 @@ paths:
       operationId: getScopesByScopeIdReportsByScopeReportIdOperatingSystems
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scope-report-operating-system-evidence-read
       summary: List scope report operating systems
@@ -7550,6 +7811,7 @@ paths:
       operationId: getScopesByScopeIdReportsByScopeReportIdCves
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scope-report-cve-evidence-read
       summary: List scope report CVEs
@@ -7586,6 +7848,7 @@ paths:
       operationId: getScopesByScopeIdReportsByScopeReportIdTlsCertificates
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scope-report-tls-certificate-evidence-read
       summary: List scope report TLS certificates
@@ -7622,6 +7885,7 @@ paths:
       operationId: getScopesByScopeIdReportsByScopeReportIdErrors
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scope-report-error-message-evidence-read
       summary: List scope report Error Messages
@@ -7658,6 +7922,7 @@ paths:
       operationId: getScopesByScopeIdReportsByScopeReportIdMetrics
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scope-report-metrics-read
       summary: Read scope report metrics
@@ -7692,6 +7957,7 @@ paths:
       description: Read-only dry-run scaffold for future tiered raw-report detail retention. It does not compact, delete, or mutate report evidence.
       x-yafvs-direct: true
       x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
       x-yafvs-maturity: preview-read
       x-yafvs-replaces: none
       x-yafvs-inherited-still-owns: retention-mutations

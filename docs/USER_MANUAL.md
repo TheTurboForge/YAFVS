@@ -286,9 +286,14 @@ The native HTTP/JSON API is internal by default for browser/runtime migration.
 For development automation, `just runtime-native-api-direct-smoke --json`
 enables and validates an opt-in bearer-auth direct listener, defaulting to
 loopback. That direct mode is for approved `/api/v1` development proof work:
-broadly allowlisted reads plus explicitly gated write-control routes. It is not
-production deployment guidance and does not authorize scanner control,
-credential, feed, account, or destructive write endpoints.
+contract-classified reads plus explicitly reviewed write/control routes. Writes
+require a verified operator identity and explicit write-control; route-specific
+schemas and rejection behavior still apply. Some scanner, credential, account,
+authentication, import, and destructive operations are native now, so broad
+category statements are not an authority boundary. The generated
+`docs/NATIVE_API_OPERATION_REGISTRY.md` is the exact current method/path and
+surface inventory. This remains development access, not production deployment
+guidance.
 It also has a fixed in-flight development pressure guard; hitting the cap
 returns JSON `429 too_many_requests` rather than queueing unbounded work.
 The helper creates an ignored runtime bearer-token secret and mounts it into the
@@ -311,19 +316,14 @@ readability, `YAFVS_API_OPERATOR_NAME`. When an operator UUID is set,
 `yafvs-api` verifies that it exists in `users` before binding the direct
 listener. The direct write-control flag is
 `YAFVS_API_DIRECT_WRITE_CONTROL=1`; it is strict-boolean, requires
-`YAFVS_API_OPERATOR_UUID`, and currently enables only explicit contract-listed
-native write/control routes for scopes, tags, filters, port lists, report
-configs, scan configs, schedules, targets, selected alert metadata, credential
-name/comment metadata, scanner metadata, task metadata, guarded task start, and
-reviewed clone/
-restore/trash operations. UUID-backed
+`YAFVS_API_OPERATOR_UUID`, and enables only the direct-write operations listed
+in the generated operation registry and retained by the Rust positive allowlist.
+UUID-backed
 resources use UUIDs; catalog-backed security information resources use exact
-public IDs such as CPE URI, CVE name, NVT OID, or CERT/DFN advisory id. Alert
-delivery/control, filter/bulk actions, generic file import/export, and target
-credential-secret import,
-credential secrets/control paths, users, reports, and results remain on
-inherited compatibility paths. Direct mode otherwise accepts
-only classified read-only `GET` requests.
+public IDs such as CPE URI, CVE name, NVT OID, or CERT/DFN advisory id. A route
+not present as a direct surface in the generated registry is not authorized by
+the direct listener. With write-control disabled, direct mode accepts only
+contract-classified read operations.
 Use a request ID when a direct probe needs a visible correlation ID in
 responses/logs:
 

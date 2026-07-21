@@ -9,6 +9,11 @@ import {fileURLToPath} from 'node:url';
 
 import {parseDocument} from 'yaml';
 
+import {
+  normalizeOperationRegistry,
+  renderOperationRegistry,
+} from './openapi-operation-registry.mjs';
+
 const execFileAsync = promisify(execFile);
 const scriptDirectory = fileURLToPath(new URL('.', import.meta.url));
 const projectDirectory = resolve(scriptDirectory, '..');
@@ -16,7 +21,17 @@ const defaultContract = resolve(
   scriptDirectory,
   '../../../api/openapi/yafvs-v1.yaml',
 );
-const contractPath = resolve(process.argv[2] ?? defaultContract);
+const writeOperationRegistry = process.argv.includes(
+  '--write-operation-registry',
+);
+const contractArgument = process.argv
+  .slice(2)
+  .find(argument => !argument.startsWith('--'));
+const contractPath = resolve(contractArgument ?? defaultContract);
+const operationRegistryPath = resolve(
+  scriptDirectory,
+  '../../../docs/NATIVE_API_OPERATION_REGISTRY.md',
+);
 const binary = name => resolve(projectDirectory, 'node_modules/.bin', name);
 
 const decodeJsonPointerToken = token =>
@@ -49,11 +64,7 @@ const verifyInternalReferences = root => {
 
   while (pending.length > 0) {
     const value = pending.pop();
-    if (
-      value === null ||
-      typeof value !== 'object' ||
-      visited.has(value)
-    ) {
+    if (value === null || typeof value !== 'object' || visited.has(value)) {
       continue;
     }
     visited.add(value);
@@ -84,6 +95,11 @@ const run = async (name, args) => {
 
 let temporaryDirectory;
 try {
+  if (writeOperationRegistry && contractArgument !== undefined) {
+    throw new Error(
+      '--write-operation-registry may generate only from the canonical OpenAPI contract.',
+    );
+  }
   const source = await readFile(contractPath, 'utf8');
   const yamlDocument = parseDocument(source, {
     prettyErrors: true,
@@ -108,13 +124,15 @@ try {
   console.log('2/4 OpenAPI 3.1 semantic validation passed.');
 
   const referenceCount = verifyInternalReferences(contract);
+  const {rows: operationRows} = normalizeOperationRegistry(contract);
   console.log(
     `3/4 Resolved all ${referenceCount} internal OpenAPI references.`,
   );
-
-  temporaryDirectory = await mkdtemp(
-    join(projectDirectory, '.openapi-check-'),
+  console.log(
+    `Operation registry metadata is complete for ${operationRows.length} operations.`,
   );
+
+  temporaryDirectory = await mkdtemp(join(projectDirectory, '.openapi-check-'));
   const generatedTypes = join(temporaryDirectory, 'schema.d.ts');
   const disposableClient = join(temporaryDirectory, 'client.ts');
   await run('openapi-typescript', [contractPath, '--output', generatedTypes]);
@@ -141,6 +159,21 @@ try {
     generatedTypes,
   ]);
   console.log('4/4 Generated and compiled a disposable typed API client.');
+  const renderedRegistry = renderOperationRegistry(contract);
+  if (writeOperationRegistry) {
+    await writeFile(operationRegistryPath, renderedRegistry);
+    console.log(
+      `Updated generated operation registry: ${operationRegistryPath}`,
+    );
+  } else {
+    const trackedRegistry = await readFile(operationRegistryPath, 'utf8');
+    if (trackedRegistry !== renderedRegistry) {
+      throw new Error(
+        'Generated operation registry is stale; run npm run generate:openapi-registry.',
+      );
+    }
+    console.log('Generated operation registry documentation is synchronized.');
+  }
   console.log(`OpenAPI contract gate passed: ${contractPath}`);
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);

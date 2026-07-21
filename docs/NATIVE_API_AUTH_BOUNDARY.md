@@ -3,7 +3,8 @@
 
 # Native API Authentication Boundary
 
-YAFVS is adding DB-backed HTTP/JSON APIs for product reads. The API must be
+YAFVS is adding DB-backed HTTP/JSON APIs for product reads, writes, and bounded
+control operations. The API must be
 scriptable without making `gsad`, GMP/XML, `python-gvm`, or `gvm-tools` required
 automation interfaces, but it must also avoid becoming an accidental unauthenticated
 scanner-administration surface.
@@ -61,9 +62,10 @@ script/curl -> opt-in direct bearer listener -> yafvs-api -> PostgreSQL
   internal shared secret. gvmd binds the authenticated operator UUID to its own
   ACL/session before applying
   scanner and report state changes; the socket is not a host API and does not
-  carry GMP/XML. Credential secrets, alert delivery, other feed/scanner control,
-  account/auth control, file import/export, and unreviewed destructive behavior
-  remain inherited until separately designed.
+  carry GMP/XML. The generated operation registry states the exact native and
+  residual inherited ownership for credential, alert, feed/scanner,
+  account/authentication, import/export, and destructive behavior; no broad
+  resource-family statement grants exposure.
 - The direct listener applies a fixed in-flight cap to authenticated direct
   `GET` requests and returns JSON `429 too_many_requests` with `X-Request-Id`
   when the cap is reached. This is a coarse development pressure guard, not a
@@ -75,8 +77,11 @@ script/curl -> opt-in direct bearer listener -> yafvs-api -> PostgreSQL
   bearer token is valid.
 - Direct-read OpenAPI operations carry `x-yafvs-direct: true` and
   `just native-tooling-state --json` reports marker/inventory alignment through
-  `native-tooling.direct-api-contract`. Treat drift there as a contract bug
-  before expanding direct exposure.
+  `native-tooling.direct-api-contract`. Every operation also selects a reusable
+  security profile; the contract gate generates
+  `docs/NATIVE_API_OPERATION_REGISTRY.md` and rejects profile or documentation
+  drift. Treat any disagreement with the independent Rust/C positive allowlists
+  as a contract bug before expanding exposure.
 - Direct listener responses include `X-Request-Id`. A client may provide a
   bounded ASCII request ID for correlation; unsafe, empty, or oversized values
   are replaced with a generated `tv-...` ID. Auth failures and direct-listener
@@ -104,13 +109,12 @@ script/curl -> opt-in direct bearer listener -> yafvs-api -> PostgreSQL
   the ignored runtime `secrets/` directory and are mounted read-only into the
   direct API container for the opt-in helper. Do not pass generated runtime
   tokens through container environment variables.
-- Keep direct v1 write-control limited to explicitly reviewed routes. Scanner
-  runtime control, credential secrets, feed sync,
-  feed import/update/download/mirroring, account management, broad task control,
-  target host/exclude/port-list/alive-test/reverse-DNS/credential-link writes,
-  alert delivery, security-information tag assignment, filter/bulk tag actions,
-  file import/export, and unreviewed destructive mutations stay inherited until
-  native write/control designs are separately reviewed. Explicit tag add/remove
+- Keep direct v1 write-control limited to explicitly reviewed routes in the
+  generated operation registry and Rust positive allowlist. Scanner runtime
+  control, credential secrets, feed operations, account/authentication,
+  target configuration, alert delivery, tag actions, import/export, and
+  destructive mutations may be native only for the exact listed operation;
+  unlisted behavior remains inherited or unavailable. Explicit tag add/remove
   for UUID resources on the tag's existing native-safe active-table resource
   type is allowed only through the direct write-control route. Read-only feed
   inventory metadata at

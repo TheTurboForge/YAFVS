@@ -4157,6 +4157,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 "x-yafvs-maturity",
                 "x-yafvs-operator-identity",
                 "x-yafvs-owner-semantics",
+                "x-yafvs-profile",
                 "x-yafvs-replaces",
                 "x-yafvs-safety-contract",
                 "x-yafvs-side-effect",

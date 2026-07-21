@@ -4,20 +4,30 @@
 # YAFVS HTTP/JSON API Contract
 
 YAFVS is adding typed HTTP/JSON product APIs under `/api/v1` for DB-backed
-operator workflows. Several read-only endpoints are already live through the
-Rust sidecar, the authenticated `gsad` browser proxy, and an opt-in direct
+operator workflows. Native reads, writes, and bounded control operations are
+live through the Rust sidecar, the authenticated `gsad` browser proxy, and an opt-in direct
 bearer-token development listener. `python-gvm` and `gvm-tools` are removed;
 remaining inherited GSA, `gsad`, `gvmd`, and GMP/XML paths are explicit
 workflow-owner tails rather than required automation clients.
 
-The goal is not to wrap GMP/XML in REST. New YAFVS product reads should be
+The goal is not to wrap GMP/XML in REST. New YAFVS product operations should be
 sourced from gvmd/PostgreSQL-owned state and should keep GMP/XML contained as a
 compatibility and control protocol while native APIs replace product workflow
 needs over time.
 
-## Initial Boundary
+## Current Boundary
 
-The first API phase is read-only and report-focused:
+The API began with report-focused reads and now includes reviewed native writes
+and bounded control operations. The authoritative inventory is not a prose list:
+each OpenAPI operation selects a reusable `x-yafvs-operation-profiles` entry and
+records its exposure, maturity, replacement, and residual inherited owner. The
+generated `docs/NATIVE_API_OPERATION_REGISTRY.md` expands those profiles into
+the current method/path, surface, principal, authentication, team-authority,
+write-gate, schema, request-limit, destructive, confirmation, idempotency,
+audit, and migration matrix. The Quality Gate validates all operation metadata
+and rejects generated-document drift.
+
+The registry currently covers these representative workflow families:
 
 - raw report list, detail, result rows, hosts, ports, applications, operating
   systems, CVEs, TLS certificates, error messages, and metrics;
@@ -92,13 +102,12 @@ The first API phase is read-only and report-focused:
   scope references it. It never starts a scan.
 
 Task start, stop, clone, and strict target replacement are guarded native
-direct-write/browser-proxied controls and
-operator tooling requires explicit write-control consent. Resume and other
-task/scanner controls remain inherited. Credential secret management, feed
-import, account
-management, and other not-yet-contracted high-consequence operations remain
-inherited until separately designed and proven. Native target and scanner
-reads intentionally do not expose credential secret material.
+direct-write/browser-proxied controls and operator tooling requires explicit
+write-control consent. Other scanner, credential, import, account, and
+authentication operations have also migrated in reviewed slices. The operation
+registry—not a resource-family generalization—states exactly which operations
+are native and which inherited owner tails remain. Secret material is never
+implied by a metadata route and must be explicitly contracted.
 
 The browser integration remains same-origin and proxied through `gsad` while GSA
 reads migrate. Direct scriptable access is now a first-class development path:
@@ -110,6 +119,11 @@ host-binding posture tracked outside this development API.
 ## Common Contract Rules
 
 - Base path: `/api/v1`.
+- Registry: `api/openapi/yafvs-v1.yaml` is the authored machine-readable
+  operation registry; `docs/NATIVE_API_OPERATION_REGISTRY.md` is generated.
+  Independent Rust direct-listener and C browser-proxy positive allowlists stay
+  fail closed. Contract/route assertions detect disagreement; metadata never
+  silently registers a broader security surface.
 - Authentication: same-origin operator session through the existing `gsad` web
   boundary for browser reads, or bearer token through the opt-in direct native
   API listener. The development helper uses a read-only runtime token file by

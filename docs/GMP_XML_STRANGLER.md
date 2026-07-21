@@ -15,10 +15,24 @@ Remaining GMP/XML work is tracked by the native API owner-tail inventory.
 The end-state also includes scriptable access to YAFVS through typed
 HTTP/JSON and OpenAPI clients. The authenticated same-origin `gsad` proxy is a
 browser migration bridge, not the final API boundary and not a new reason to
-keep `gsad` in every automation path. Direct scriptable API work is now active:
-the first slice is an opt-in read-only bearer-auth development listener. TLS,
-production host binding, audit, rate limits, and write-safety controls remain
-separate hardening work before production exposure.
+keep `gsad` in every automation path. Direct scriptable API work is active
+through an opt-in bearer-authenticated
+development listener. It exposes a positive allowlist of native reads and,
+only with verified operator identity plus the explicit write-control gate,
+reviewed write/control operations. Request bounds, admission pressure, request
+correlation, and outcome audit logging are implemented. Production TLS,
+non-loopback deployment, per-operator rate policy, and production authorization
+hardening remain separate from this development boundary.
+
+The machine-readable operation profiles in `api/openapi/yafvs-v1.yaml` are the
+current exposure and migration inventory. The generated
+`docs/NATIVE_API_OPERATION_REGISTRY.md` records every method/path, surface,
+principal, authentication mechanism, write gate, compatibility requirement,
+request limit, destructive/confirmation/idempotency posture, audit event, and
+maturity state. The contract gate rejects incomplete metadata or generated-doc
+drift; independent Rust and C positive allowlists remain fail-closed enforcement
+boundaries and are checked against the contract rather than generated into a
+broader runtime surface.
 
 The first live proof is the Rust `yafvs-api` sidecar for
 raw report reads, scope-report collections, target/task reads, scanner metadata,
@@ -29,7 +43,8 @@ Scanners, Scan Configs, Filters, Tags, Overrides, Port Lists, and Schedules list
 Operating Systems, CVEs, TLS Certificates, Error Messages, scope-report Metrics,
 and raw report Metrics. It queries PostgreSQL
 directly. It is internal by default and has an opt-in bearer-auth direct
-development listener for read-only scriptable access. Browser migration now covers the raw `/reports` list,
+development listener for contract-classified reads and explicitly gated
+write/control operations. Browser migration now covers the raw `/reports` list,
 the `/targets` list, the `/tasks` list, raw-report Results/Hosts, raw-report
 and scope-report Metrics, plus all current scope-report evidence tabs through
 the authenticated same-origin `gsad` proxy defined in
@@ -41,7 +56,7 @@ the authenticated same-origin `gsad` proxy defined in
 | --- | --- | --- |
 | Ready for native API proof | Low-risk read workflows with DB-owned state and existing validation. | Raw report reads, scope metadata reads, and remaining helper/tooling replacement paths. |
 | Later after product semantics | Workflows needing stronger operator-model decisions first. | Exposure-duration views, owner/patchability/support status, non-operator delivery, BYO inventory. |
-| High-consequence control path | Keep inherited control path except for separately proven bounded slices. | Task start and stop are now guarded native direct-write/browser-proxied slices. Resume, credential secret/control paths, account/auth, feed import, scanner registration, and runtime feed state remain inherited. |
+| High-consequence control path | Keep an inherited owner only where no separately characterized and reviewed native slice exists. | The generated operation registry is authoritative for current native task, scanner, account/authentication, credential, import, and destructive operations; each operation's residual inherited owner is recorded there. Unlisted behavior remains inherited or unavailable. |
 | Compatibility-only | Retain only until no required YAFVS workflow depends on it. | Residual GSA/gsad/gvmd GMP owner tails and direct XML compatibility probes. |
 
 ## Initial Map

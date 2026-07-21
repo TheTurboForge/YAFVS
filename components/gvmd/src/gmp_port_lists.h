@@ -1,4 +1,5 @@
 /* Copyright (C) 2020-2022 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -23,9 +24,5 @@ create_port_list_element_end (gmp_parser_t *, GError **error, const gchar *);
 
 void
 create_port_list_element_text (const gchar *, gsize);
-
-void
-parse_port_list_entity (entity_t, const char **, char **, char **, array_t **,
-                        char **);
 
 #endif /* not _GVMD_GMP_PORT_LISTS_H */

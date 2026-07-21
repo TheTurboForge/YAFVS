@@ -1,4 +1,5 @@
 /* Copyright (C) 2020-2022 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -94,94 +95,6 @@ create_port_list_element_start (gmp_parser_t *gmp_parser, const gchar *name,
 {
   xml_handle_start_element (create_port_list_data.context, name, attribute_names,
                             attribute_values);
-}
-
-/**
- * @brief Get creation data from a port_list entity.
- *
- * @param[in]  port_list     Port list entity.
- * @param[out] port_list_id  Address for port list ID if required, else NULL.
- * @param[out] name          Address for name.
- * @param[out] comment       Address for comment.
- * @param[out] ranges        Address for port ranges.
- * @param[out] deprecated    Address for deprecation status.
- */
-void
-parse_port_list_entity (entity_t port_list, const char **port_list_id,
-                        char **name, char **comment, array_t **ranges,
-                        char **deprecated)
-{
-  entity_t entity, port_ranges;
-
-  *name = *comment = NULL;
-
-  if (port_list_id)
-    *port_list_id = entity_attribute (port_list, "id");
-
-  entity = entity_child (port_list, "name");
-  if (entity)
-    *name = entity_text (entity);
-
-  entity = entity_child (port_list, "comment");
-  if (entity)
-    *comment = entity_text (entity);
-
-  if (deprecated)
-    {
-      *deprecated = NULL;
-      entity = entity_child (port_list, "deprecated");
-      if (entity)
-        *deprecated = entity_text (entity);
-    }
-
-  /* Collect port ranges. */
-
-  *ranges = NULL;
-  port_ranges = entity_child (port_list, "port_ranges");
-  if (port_ranges)
-    {
-      entity_t port_range;
-      entities_t children;
-
-      *ranges = make_array ();
-
-      children = port_ranges->entities;
-      while ((port_range = first_entity (children)))
-        {
-          range_t *range;
-          entity_t range_comment, end, start, type;
-
-          range = g_malloc0 (sizeof (range_t));
-
-          range_comment = entity_child (port_range, "comment");
-          range->comment = range_comment ? entity_text (range_comment) : NULL;
-
-          end = entity_child (port_range, "end");
-          range->end = end ? atoi (entity_text (end)) : 0;
-
-          /* Nothing is going to modify ID.  Casting is simpler than dealing
-           * with an allocation because create_port_list may remove ranges from
-           * the array. */
-          range->id = (gchar *) entity_attribute (port_range, "id");
-
-          start = entity_child (port_range, "start");
-          range->start = start ? atoi (entity_text (start)) : 0;
-
-          type = entity_child (port_range, "type");
-          if (type && strcasecmp (entity_text (type), "TCP") == 0)
-            range->type = PORT_PROTOCOL_TCP;
-          else if (type && strcasecmp (entity_text (type), "UDP") == 0)
-            range->type = PORT_PROTOCOL_UDP;
-          else
-            range->type = PORT_PROTOCOL_OTHER;
-
-          range->exclude = 0;
-
-          array_add (*ranges, range);
-
-          children = next_entities (children);
-        }
-    }
 }
 
 /**

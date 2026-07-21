@@ -1,4 +1,5 @@
 /* Copyright (C) 2020-2022 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -12,6 +13,11 @@
 #include <glib.h>
 
 #include <gvm/base/array.h>
+#include <gvm/util/xmlutils.h>
+
+void
+parse_port_list_entity (entity_t, const char **, char **, char **, array_t **,
+                        char **);
 
 gboolean
 find_port_list (const char*, port_list_t*);

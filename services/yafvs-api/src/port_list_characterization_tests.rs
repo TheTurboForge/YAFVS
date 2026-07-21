@@ -7,6 +7,8 @@ use axum::http::Method;
 use crate::direct_api::direct_api_v1_method_is_allowed;
 
 const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
+const MANAGE_PORT_LISTS: &str =
+    include_str!("../../../components/gvmd/src/manage_port_lists.c");
 const MANAGE_SQL_PORT_LISTS: &str =
     include_str!("../../../components/gvmd/src/manage_sql_port_lists.c");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
@@ -21,6 +23,33 @@ fn inherited_function(source: &str, name: &str) -> String {
     let tail = &source[start..];
     let end = tail.find("\n/**").unwrap_or(tail.len());
     tail[..end].to_string()
+}
+
+#[test]
+fn feed_port_list_xml_parser_is_owned_outside_the_gmp_command_module() {
+    let parse = inherited_function(MANAGE_PORT_LISTS, "parse_port_list_entity");
+    for required in [
+        "entity_attribute (port_list, \"id\")",
+        "entity_child (port_list, \"name\")",
+        "entity_child (port_list, \"comment\")",
+        "entity_child (port_list, \"deprecated\")",
+        "entity_child (port_list, \"port_ranges\")",
+        "entity_attribute (port_range, \"id\")",
+        "PORT_PROTOCOL_TCP",
+        "PORT_PROTOCOL_UDP",
+        "PORT_PROTOCOL_OTHER",
+        "range->exclude = 0",
+    ] {
+        assert!(parse.contains(required), "feed XML parser missing {required}");
+    }
+    for caller in ["create_port_list_from_file", "update_port_list_from_file"] {
+        let function = inherited_function(MANAGE_PORT_LISTS, caller);
+        assert!(
+            function.contains("parse_port_list_entity"),
+            "{caller} must retain the shared feed XML parser"
+        );
+    }
+    assert!(!GMP_PORT_LISTS.contains("\nparse_port_list_entity ("));
 }
 
 #[test]

@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  * SPDX-FileCopyrightText: 2003 Jeremy Allison
  * SPDX-FileCopyrightText: 2002-2003 Andrew Bartlett <abartlet@samba.org>
  *
@@ -19,13 +20,28 @@
 
 #include "smb_signing.h"
 
-void
+int
 simple_packet_signature_ntlmssp (uint8_t *mac_key, const uchar *buf,
-                                 uint32 seq_number, unsigned char *calc_md5_mac)
+                                 size_t buf_len, uint32 seq_number,
+                                 unsigned char *calc_md5_mac)
 {
   const size_t offset_end_of_sig = (smb_ss_field + 8);
   unsigned char sequence_buf[8];
   struct MD5Context md5_ctx;
+  uint32 claimed_len;
+  size_t tail_len;
+
+  if (mac_key == NULL || buf == NULL || calc_md5_mac == NULL
+      || buf_len < offset_end_of_sig)
+    return -1;
+
+  claimed_len = smb_len (buf);
+  if (claimed_len < offset_end_of_sig - 4)
+    return -1;
+
+  tail_len = claimed_len - (offset_end_of_sig - 4);
+  if (tail_len > buf_len - offset_end_of_sig)
+    return -1;
 
   /*
    * Firstly put the sequence number into the first 4 bytes.
@@ -54,9 +70,9 @@ simple_packet_signature_ntlmssp (uint8_t *mac_key, const uchar *buf,
   MD5Update (&md5_ctx, sequence_buf, sizeof (sequence_buf));
 
   /* copy in the rest of the packet in, skipping the signature */
-  MD5Update (&md5_ctx, buf + offset_end_of_sig,
-             smb_len (buf) - (offset_end_of_sig - 4));
+  MD5Update (&md5_ctx, buf + offset_end_of_sig, tail_len);
 
   /* calculate the MD5 sig */
   MD5Final (calc_md5_mac, &md5_ctx);
+  return 0;
 }

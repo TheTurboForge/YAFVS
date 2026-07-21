@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -419,13 +420,16 @@ check_spwan_output (int fd, snmp_result_t result, int fd_flag)
   while (1)
     {
       char buf[4096];
-      size_t bytes;
+      ssize_t bytes;
 
-      bytes = read (fd, buf, sizeof (buf));
-      if (!bytes)
+      do
+        bytes = read (fd, buf, sizeof (buf));
+      while (bytes < 0 && errno == EINTR);
+
+      if (bytes == 0)
         break;
       else if (bytes > 0)
-        g_string_append_len (string, buf, bytes);
+        g_string_append_len (string, buf, (gssize) bytes);
       else
         {
           g_warning ("snmpget: %s", strerror (errno));
@@ -629,6 +633,27 @@ snmpv3_get (const snmpv3_request_t request, snmp_result_t result)
 
 #endif /* HAVE_NETSNMP */
 
+/**
+ * @brief Normalize and retain an OID independently of the result lifetime.
+ */
+static void
+remember_next_oid (snmp_result_t result, char **next_oid_str)
+{
+  if (result->oid_str == NULL)
+    return;
+
+  if (g_strstr_len (result->oid_str, 3, "iso"))
+    {
+      char *normalized = g_strdup (result->oid_str + 2);
+      normalized[0] = '1';
+      g_free (result->oid_str);
+      result->oid_str = normalized;
+    }
+
+  g_free (*next_oid_str);
+  *next_oid_str = g_strdup (result->oid_str);
+}
+
 static tree_cell *
 nasl_snmpv1v2c_get (lex_ctxt *lexic, int version, u_char action)
 {
@@ -681,14 +706,7 @@ nasl_snmpv1v2c_get (lex_ctxt *lexic, int version, u_char action)
   // Hack the OID string to adjust format. Replace 'iso.' with '.1.'
   // This Allows to call getnext without an oid, since the last oid
   // is stored.
-  if (result->oid_str != NULL && g_strstr_len (result->oid_str, 3, "iso"))
-    {
-      next_oid_str = result->oid_str + 2;
-      next_oid_str[0] = '1';
-      result->oid_str = g_strdup (next_oid_str);
-    }
-  else if (result->oid_str != NULL)
-    next_oid_str = result->oid_str;
+  remember_next_oid (result, &next_oid_str);
 
   /* Free request only, since members are pointers to the nasl lexic context
      which will be free()'d later */
@@ -810,14 +828,7 @@ nasl_snmpv3_get_action (lex_ctxt *lexic, u_char action)
   // Hack the OID string to adjust format. Replace 'iso.' with '.1.'
   // This Allows to call getnext without an oid, since the last oid
   // is stored.
-  if (result->oid_str != NULL && g_strstr_len (result->oid_str, 3, "iso"))
-    {
-      next_oid_str = result->oid_str + 2;
-      next_oid_str[0] = '1';
-      result->oid_str = g_strdup (next_oid_str);
-    }
-  else if (result->oid_str != NULL)
-    next_oid_str = result->oid_str;
+  remember_next_oid (result, &next_oid_str);
 
   /* Free request only, since members are pointers to the nasl lexic context
      which will be free()'d later */

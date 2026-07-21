@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -415,6 +416,12 @@ nasl_win_cmd_exec (lex_ctxt *lexic)
   else
     {
       delimiter = strchr (kdc, ',');
+      if (delimiter != NULL && (size_t) (delimiter - kdc) >= sizeof (first_kdc))
+        {
+          g_warning ("win_cmd_exec: KDC hostname exceeds %zu bytes",
+                     sizeof (first_kdc) - 1);
+          return NULL;
+        }
       if (delimiter != NULL)
         {
           strncpy (first_kdc, kdc, delimiter - kdc);
@@ -444,13 +451,16 @@ nasl_win_cmd_exec (lex_ctxt *lexic)
   while (1)
     {
       char buf[4096];
-      size_t bytes;
+      ssize_t bytes;
 
-      bytes = read (sout, buf, sizeof (buf));
-      if (!bytes)
+      do
+        bytes = read (sout, buf, sizeof (buf));
+      while (bytes < 0 && errno == EINTR);
+
+      if (bytes == 0)
         break;
       else if (bytes > 0)
-        g_string_append_len (string, buf, bytes);
+        g_string_append_len (string, buf, (gssize) bytes);
       else
         {
           g_warning ("win_cmd_exec: %s", strerror (errno));

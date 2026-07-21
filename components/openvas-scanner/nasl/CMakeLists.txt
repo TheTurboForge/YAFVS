@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2023 Greenbone AG
 # TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
+# YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -226,6 +227,19 @@ add_custom_target (tests-http2 DEPENDS nasl-http2-test)
 option (ENABLE_NASL_SECURITY_TESTS
         "Build focused sanitizer-backed NASL security regression tests" OFF)
 if (ENABLE_NASL_SECURITY_TESTS)
+  add_executable (nasl-smb-signing-test
+                  smb_signing_tests.c smb_signing.c md5.c)
+  add_test (nasl-smb-signing-test nasl-smb-signing-test)
+  target_compile_options (nasl-smb-signing-test PRIVATE
+                          -Wall -Wextra -Werror
+                          -fsanitize=address,undefined
+                          -fno-omit-frame-pointer)
+  target_link_options (nasl-smb-signing-test PRIVATE
+                       -fsanitize=address,undefined)
+  target_link_libraries (nasl-smb-signing-test ${GLIB_LDFLAGS})
+  set_tests_properties (nasl-smb-signing-test PROPERTIES
+    ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1;UBSAN_OPTIONS=halt_on_error=1:abort_on_error=1:print_stacktrace=1")
+
   add_executable (nasl-telnet-test nasl_telnet_tests.c)
   add_test (nasl-telnet-test nasl-telnet-test)
   target_compile_options (nasl-telnet-test PRIVATE

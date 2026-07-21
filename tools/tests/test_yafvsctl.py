@@ -7292,6 +7292,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "fetch-depth: 0",
             "python-version: \"3.12\"",
             "node-version: \"22\"",
+            "npm install --global npm@11.16.0",
             "rustup toolchain install stable --profile minimal",
             "cache-dependency-path: components/gsa/package-lock.json",
             "npm ci",

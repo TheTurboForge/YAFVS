@@ -39,6 +39,9 @@ jobs:
           cache: npm
           cache-dependency-path: components/gsa/package-lock.json
 
+      - name: Set up supported npm
+        run: npm install --global npm@11.16.0
+
       - name: Install source quality-gate tools
         run: |
           sudo apt-get update

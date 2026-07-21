@@ -40,6 +40,20 @@ separate feed-terms review.
 
 See `docs/SCOPE_BASED_REPORTING.md` for the public model.
 
+## Upstream Development Awareness
+
+YAFVS records the exact upstream revisions from which its imported components
+originated and periodically reviews subsequent changes in the relevant
+upstream repositories. Security, correctness, scanner-safety, and
+interoperability changes receive particular attention.
+
+This is an evidence and applicability process, not automatic synchronization.
+Every potentially relevant upstream change is evaluated against the current
+YAFVS architecture before it is adapted or independently implemented and
+verified. YAFVS may substantially modify, replace, or remove inherited
+components and behavior, so some upstream changes no longer apply and the
+project does not promise continuing source or product compatibility.
+
 ## Imported Components
 
 | Component | Path | Upstream repository | Imported commit | Role |

@@ -166,6 +166,12 @@ YAFVS is independent and is not affiliated with, sponsored by, or endorsed
 by Greenbone AG. Greenbone remains the upstream source for the imported
 components recorded in [UPSTREAMS.md](UPSTREAMS.md).
 
+YAFVS tracks relevant developments in the projects from which it was derived.
+Security-relevant changes receive priority, but every upstream change is
+evaluated against YAFVS's current architecture before being adapted or
+independently implemented. This is not automatic source synchronization or a
+promise of continuing upstream compatibility.
+
 YAFVS supports Community Feed workflows only. It does not support Greenbone
 Enterprise Feed subscription keys or Enterprise Feed synchronization.
 Organizations seeking official Greenbone products, Enterprise Feed access,

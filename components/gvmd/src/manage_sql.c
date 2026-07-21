@@ -2297,11 +2297,11 @@ current_encryption_key_uid (gboolean with_fallback)
   lsc_crypt_ctx_t ctx = lsc_crypt_new (OLD_ENCRYPTION_KEY_UID);
   if (lsc_crypt_enckey_exists (ctx))
     {
-      lsc_crypt_flush(ctx);
+      lsc_crypt_release (ctx);
       set_current_encryption_key_uid (OLD_ENCRYPTION_KEY_UID);
       return strdup (OLD_ENCRYPTION_KEY_UID);
     }
-  lsc_crypt_flush(ctx);
+  lsc_crypt_release (ctx);
 
   // Generate a new key UID
   time_t now = time(NULL);
@@ -8094,7 +8094,7 @@ make_report (task_t task, const char* uuid, task_status_t status)
  * @brief Create the current report for a task.
  *
  * @param[in]   task       The task.
- * @param[out]  report_id  Report ID.
+ * @param[out]  report_id  Freshly allocated report ID on success.
  * @param[in]   status     Run status of scan associated with report.
  *
  * @return 0 success, -1 global_current_report is already set, -2 failed to

@@ -1792,6 +1792,8 @@ check_cpe_match_rule (long long int node, gboolean *match, gboolean *vulnerable,
   iterator_t cpe_match_ranges;
 
   operator = sql_string ("SELECT operator FROM scap.cpe_match_nodes WHERE id = %llu", node);
+  if (operator == NULL)
+    return;
   init_cpe_match_node_childs_iterator (&cpe_match_node_childs, node);
   while (next (&cpe_match_node_childs))
     {
@@ -1799,9 +1801,9 @@ check_cpe_match_rule (long long int node, gboolean *match, gboolean *vulnerable,
       child_node = cpe_match_node_childs_iterator_id (&cpe_match_node_childs);
       check_cpe_match_rule (child_node, match, vulnerable, report_host, host_cpe);
       if (strcmp (operator, "AND") == 0 && !(*match))
-        return;
+        goto cleanup_node_childs;
       if (strcmp (operator, "OR") == 0 && (*match) && (*vulnerable))
-        return;
+        goto cleanup_node_childs;
     }
 
   init_cpe_match_string_iterator (&cpe_match_ranges, node);
@@ -1840,6 +1842,7 @@ check_cpe_match_rule (long long int node, gboolean *match, gboolean *vulnerable,
           cpe_struct_free (&source);
           cpe_struct_free (&target);
         }
+      cleanup_iterator (&cpe_host_details_products);
       if (*match && cpe_match_string_iterator_vulnerable (&cpe_match_ranges) == 1)
         {
           cpe_struct_t source, target;
@@ -1859,10 +1862,15 @@ check_cpe_match_rule (long long int node, gboolean *match, gboolean *vulnerable,
       g_free (vei);
       g_free (vee);
       if (strcmp (operator, "AND") == 0 && !(*match))
-        return;
+        goto cleanup_ranges;
       if (strcmp (operator, "OR") == 0 && (*match) && (*vulnerable))
-        return;
+        goto cleanup_ranges;
     }
+ cleanup_ranges:
+  cleanup_iterator (&cpe_match_ranges);
+ cleanup_node_childs:
+  cleanup_iterator (&cpe_match_node_childs);
+  g_free (operator);
 }
 
 /**
@@ -1905,7 +1913,8 @@ cve_scan_report_host_json (task_t task,
         {
           result_t root_node;
           gboolean match, vulnerable;
-          const char *app, *cve;
+          const char *app;
+          gchar *cve;
 
           vulnerable = FALSE;
           match = FALSE;
@@ -1914,7 +1923,7 @@ cve_scan_report_host_json (task_t task,
           if (match && vulnerable)
             {
               GString *locations;
-              gchar *desc;
+              gchar *desc, *description;
 
               if (*prognosis_report_host == 0)
                 *prognosis_report_host = manage_report_host_add (report,
@@ -1969,8 +1978,8 @@ cve_scan_report_host_json (task_t task,
                                              /* Detected by itself. */
                                              cve, NULL);
                 }
+              cleanup_iterator (&locations_iter);
 
-              const char *description;
               description = sql_string ("SELECT description FROM scap.cves, scap.cpe_match_nodes"
                                         " WHERE scap.cves.id = scap.cpe_match_nodes.cve_id"
                                         " AND scap.cpe_match_nodes.id = %llu;",
@@ -1990,10 +1999,13 @@ cve_scan_report_host_json (task_t task,
                                       locations->len ? ".\n" : "",
                                       description);
 
+              g_free (description);
+
               g_debug ("%s: making result with severity %1.1f desc [%s]",
                        __func__, severity, desc);
 
               result = make_cve_result (task, ip, cve, severity, desc);
+              g_free (cve);
               g_free (desc);
 
               g_array_append_val (results, result);
@@ -2002,6 +2014,7 @@ cve_scan_report_host_json (task_t task,
 
             }
         }
+      cleanup_iterator (&cpe_match_root_node);
       g_free (cpe_product);
     }
   cleanup_iterator (&host_details_cpe);
@@ -2027,16 +2040,22 @@ cve_scan_host (task_t task, report_t report, gvm_host_t *gvm_host,
                int matching_version)
 {
   report_host_t report_host;
-  gchar *ip, *host;
+  gchar *ip;
 
   assert (task);
   assert (report);
 
-  host = gvm_host_value_str (gvm_host);
+  {
+    gchar *host;
 
-  ip = report_host_ip (host);
-  if (ip == NULL)
-    ip = g_strdup (host);
+    host = gvm_host_value_str (gvm_host);
+
+    ip = report_host_ip (host);
+    if (ip == NULL)
+      ip = g_strdup (host);
+
+    g_free (host);
+  }
 
   g_debug ("%s: ip: %s", __func__, ip);
 
@@ -2138,6 +2157,7 @@ cve_scan_host (task_t task, report_t report, gvm_host_t *gvm_host,
                                                  /* Detected by itself. */
                                                  cve, NULL);
                     }
+                  cleanup_iterator (&locations_iter);
 
                   desc = g_strdup_printf ("The host carries the product: %s\n"
                                           "It is vulnerable according to: %s.\n"
@@ -2250,6 +2270,7 @@ fork_cve_scan_handler (task_t task, target_t target)
         break;
       case -1:
         /* Parent, failed to fork. */
+        g_free (report_id);
         g_warning ("%s: Failed to fork: %s",
                    __func__,
                    strerror (errno));
@@ -2263,6 +2284,7 @@ fork_cve_scan_handler (task_t task, target_t target)
         return -9;
       default:
         /* Parent, successfully forked. */
+        g_free (report_id);
         global_current_report = 0;
         current_scanner_task = 0;
         g_debug ("%s: %i forked %i", __func__, getpid (), pid);

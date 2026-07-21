@@ -239,6 +239,7 @@ create_the_key (lsc_crypt_ctx_t ctx)
 
   log_gpgme (G_LOG_LEVEL_INFO, 0, "starting key generation ...");
   err = gpgme_op_genkey (ctx->encctx, parms, NULL, NULL);
+  g_free (parms);
   if (err)
     {
       log_gpgme(G_LOG_LEVEL_WARNING, err, "error creating OpenPGP key '%s'",
@@ -591,6 +592,8 @@ lsc_crypt_release (lsc_crypt_ctx_t ctx)
   if (!ctx)
     return;
   lsc_crypt_flush (ctx);
+  if (ctx->enckey)
+    gpgme_key_unref (ctx->enckey);
   if (ctx->encctx) /* Check required for gpgme < 1.3.1 */
     gpgme_release (ctx->encctx);
   g_free (ctx->enckey_uid);
@@ -635,7 +638,12 @@ gboolean
 lsc_crypt_enckey_exists (lsc_crypt_ctx_t ctx)
 {
   gpgme_key_t key = find_the_key (ctx, TRUE);
-  return key != NULL;
+  if (key)
+    {
+      gpgme_key_unref (key);
+      return TRUE;
+    }
+  return FALSE;
 }
 
 /**

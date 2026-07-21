@@ -982,7 +982,7 @@ void
 manage_queued_task_actions ();
 
 void
-manage_process_report_imports ();
+manage_process_report_finalizations ();
 
 int
 qod_from_type (const char *);

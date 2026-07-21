@@ -8256,7 +8256,7 @@ check_report_discovery (report_t report)
  * @return 0 success, -1 error.
  */
 int
-process_report_import (report_t report)
+process_report_finalization (report_t report)
 {
   iterator_t hosts;
   task_t task;

@@ -179,10 +179,16 @@ id = "report-finalization-projections"
 target_owner = "manager-worker"
 status = "inventoried"
 weight = 6
-evidence = ["components/gvmd/src/manage_osp.c::handle_osp_scan_end"]
-independent_authority = ["components/gvmd/src/manage_osp.c::hosts_set_identifiers"]
+evidence = [
+  "components/gvmd/src/manage_osp.c::handle_osp_scan_end",
+  "components/gvmd/src/manage.c::manage_process_report_finalizations",
+]
+independent_authority = [
+  "components/gvmd/src/manage_scan_handler.c::report_set_processing_required (report, 1, in_assets_int)",
+  "components/gvmd/src/manage_sql.c::process_report_finalization",
+]
 dependencies = ["scan-result-ingestion", "asset-snapshot-stale-cleanup"]
-notes = "Own report completion, host/detail/severity projections, timestamps, asset snapshots, and terminal task/report states."
+notes = "Own report completion, host/detail/severity projections, timestamps, asset creation and snapshots, and terminal task/report states. The inherited report-import terminology also covered every successful ordinary scan and is not a separate product responsibility."
 
 [[responsibilities]]
 id = "report-generation-downloads"
@@ -253,16 +259,6 @@ evidence = ["components/gvmd/src/gvmd.c::run_asset_snapshot_delete_stale"]
 independent_authority = ["components/gvmd/src/manage_sql_assets.c::asset_snapshots_target"]
 dependencies = ["report-finalization-projections"]
 notes = "Move retained snapshot creation, stable correlation, and stale cleanup into native lifecycle ownership."
-
-[[responsibilities]]
-id = "report-import-processing"
-target_owner = "manager-worker"
-status = "inventoried"
-weight = 3
-evidence = ["components/gvmd/src/manage.c::manage_process_report_imports"]
-independent_authority = ["components/gvmd/src/manage.c::init_report_awaiting_processing_iterator"]
-dependencies = ["report-finalization-projections"]
-notes = "Retain only imports with a supported product use case, then move asynchronous processing and cleanup to Rust."
 
 [[responsibilities]]
 id = "system-report-bridge"

@@ -525,7 +525,7 @@ gboolean
 check_report_discovery (report_t);
 
 int
-process_report_import (report_t);
+process_report_finalization (report_t);
 
 int
 check_host_detail_exists (report_t, const char *, const char *, const char *,

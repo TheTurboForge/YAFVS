@@ -3734,19 +3734,19 @@ manage_queued_task_actions ()
   reinit_manage_process ();
   manage_session_init (current_credentials.uuid);
 
-  setproctitle ("Manage process report imports");
-  manage_process_report_imports ();
+  setproctitle ("Manage report finalization");
+  manage_process_report_finalizations ();
   setproctitle ("Manage scan queue");
   manage_handle_scan_queue ();
 }
 
 /**
- * @brief Perform any processing of imported reports that is due.
+ * @brief Perform queued report finalization that is due.
  *
  * In gvmd, periodically called from the main daemon loop.
  */
 void
-manage_process_report_imports ()
+manage_process_report_finalizations ()
 {
   lockfile_t lockfile;
   iterator_t reports;
@@ -3791,7 +3791,7 @@ manage_process_report_imports ()
             /* Child.   */
 
             init_sentry ();
-            setproctitle ("process report import");
+            setproctitle ("finalize report");
 
             if (semaphore_op (SEMAPHORE_REPORTS_PROCESSING, -1, 1))
               {
@@ -3821,7 +3821,7 @@ manage_process_report_imports ()
             init_sentry ();
             reinit_manage_process ();
 
-            if (process_report_import (report))
+            if (process_report_finalization (report))
               {
                 lockfile_unlock (&lockfile);
                 if (unlink (lockfile_path))
@@ -3831,7 +3831,7 @@ manage_process_report_imports ()
                             strerror (errno));
                 g_free (lockfile_path);
                 set_report_scan_run_status (report, TASK_STATUS_INTERRUPTED);
-                g_warning ("%s: failed to process imported report %llu",
+                g_warning ("%s: failed to finalize report %llu",
                            __func__,
                            report);
                 gvm_close_sentry ();

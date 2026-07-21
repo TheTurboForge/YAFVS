@@ -1321,6 +1321,23 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("gmp_get_system_reports", gvm_gmp)
         self.assertIn('name = "get_performance"', ospd)
 
+    def test_report_finalization_ownership_includes_ordinary_scans(self):
+        root = Path(__file__).resolve().parents[2]
+        scan_handler = (root / "components/gvmd/src/manage_scan_handler.c").read_text(encoding="utf-8")
+        manage = (root / "components/gvmd/src/manage.c").read_text(encoding="utf-8")
+        manage_sql = (root / "components/gvmd/src/manage_sql.c").read_text(encoding="utf-8")
+        registry = (root / "policy/gvmd-retirement.toml").read_text(encoding="utf-8")
+
+        self.assertIn("report_set_processing_required (report, 1, in_assets_int);", scan_handler)
+        self.assertIn("manage_process_report_finalizations ();", manage)
+        self.assertIn("process_report_finalization (report)", manage)
+        self.assertIn("process_report_finalization (report_t report)", manage_sql)
+        self.assertIn('id = "report-finalization-projections"', registry)
+        self.assertIn("manage_process_report_finalizations", registry)
+        self.assertNotIn('id = "report-import-processing"', registry)
+        self.assertNotIn("manage_process_report_imports", manage + registry)
+        self.assertNotIn("process_report_import", manage + manage_sql)
+
     def test_native_report_evidence_reads_have_no_legacy_command_surface(self):
         root = Path(__file__).resolve().parents[2]
         gvmd_commands = (root / "components" / "gvmd" / "src" / "manage_commands.c").read_text(encoding="utf-8")

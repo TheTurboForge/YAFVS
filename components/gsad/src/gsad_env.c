@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -8,6 +9,12 @@
 #include "gsad_utils.h" /* for str_equal */
 
 #include <stdio.h>
+
+#undef G_LOG_DOMAIN
+/**
+ * @brief GLib log domain.
+ */
+#define G_LOG_DOMAIN "gsad env"
 
 /**
  * @brief Get a boolean value from an environment variable.

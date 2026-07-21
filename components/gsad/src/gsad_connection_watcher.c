@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -7,6 +8,12 @@
 
 #include <pthread.h>
 #include <unistd.h> /* for sleep */
+
+#undef G_LOG_DOMAIN
+/**
+ * @brief GLib log domain.
+ */
+#define G_LOG_DOMAIN "gsad connection watcher"
 
 struct gsad_connection_watcher_data
 {

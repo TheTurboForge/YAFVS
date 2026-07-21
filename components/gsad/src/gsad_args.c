@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -16,6 +17,12 @@
   "License: AGPL-3.0-or-later\n"                                         \
   "This is free software: you are free to change and redistribute it.\n" \
   "There is NO WARRANTY, to the extent permitted by law.\n\n"
+
+#undef G_LOG_DOMAIN
+/**
+ * @brief GLib log domain.
+ */
+#define G_LOG_DOMAIN "gsad args"
 
 int
 gsad_args_parse (int argc, char **argv, gsad_args_t *args)

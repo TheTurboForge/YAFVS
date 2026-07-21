@@ -1,4 +1,5 @@
 /* Copyright (C) 2016-2022 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -45,7 +46,8 @@
  */
 #define G_LOG_DOMAIN "md manage"
 
-
+
+
 /* Sleep. */
 
 /**
@@ -92,7 +94,8 @@ gvm_sleep (unsigned int seconds)
   return gvm_usleep (seconds * 1000000);
 }
 
-
+
+
 /* Time. */
 
 /**
@@ -226,6 +229,7 @@ mktime_with_tz (struct tm *tm, const char *new_tz)
   else
     unsetenv ("TZ");
 
+  g_free (tz);
   return epoch_time;
 }
 
@@ -502,7 +506,8 @@ iso_if_time (time_t epoch_time)
   return empty;
 }
 
-
+
+
 /* Locks. */
 
 /**
@@ -733,7 +738,8 @@ lockfile_lock_with_retry (lockfile_t *lock, const gchar *name,
     }
 }
 
-
+
+
 /* UUIDs. */
 
 /**
@@ -750,7 +756,8 @@ is_uuid (const char *uuid)
   return 1;
 }
 
-
+
+
 /* Strings. */
 
 /**
@@ -817,7 +824,8 @@ strescape_without_utf8 (const char *str, const char *extra_exceptions)
   return escaped;
 }
 
-
+
+
 /* XML. */
 
 /**
@@ -864,7 +872,8 @@ parse_xml_file (const gchar *path, entity_t *config)
   return 0;
 }
 
-
+
+
 /* Signals. */
 
 /**
@@ -928,7 +937,8 @@ setup_signal_handler_info (int signal,
     }
 }
 
-
+
+
 /* Forking. */
 
 /**
@@ -1030,7 +1040,8 @@ phys_mem_total ()
   return sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
 }
 
-
+
+
 /* Arrays. */
 
 /**

@@ -1856,16 +1856,19 @@ asset_snapshots_insert_target (report_t report, task_t task, scanner_t scanner)
   g_hash_table_destroy (seen);
 
 cleanup:
-  /* Consume snapshot arrays: terminate then free. */
+  /* Consume snapshot arrays: free then NULL. */
   if (snapshot_identifiers)
     {
-      array_terminate (snapshot_identifiers);
+      guint index = 0;
+      while (index < snapshot_identifiers->len)
+        identifier_free (g_ptr_array_index (snapshot_identifiers, index++));
+      array_free (snapshot_identifiers);
       snapshot_identifiers = NULL;
     }
 
   if (snapshot_identifier_hosts)
     {
-      array_terminate (snapshot_identifier_hosts);
+      array_free (snapshot_identifier_hosts);
       snapshot_identifier_hosts = NULL;
     }
 }
@@ -1884,15 +1887,18 @@ asset_snapshots_target (report_t report, task_t task, gboolean discovery)
     {
       g_debug ("%s: Discovery scan assets will not stored for counting",
                __func__);
-      /* Terminate and free snapshot arrays. */
+      /* Free snapshot arrays. */
       if (snapshot_identifiers)
         {
-          array_terminate (snapshot_identifiers);
+          guint index = 0;
+          while (index < snapshot_identifiers->len)
+            identifier_free (g_ptr_array_index (snapshot_identifiers, index++));
+          array_free (snapshot_identifiers);
           snapshot_identifiers = NULL;
         }
       if (snapshot_identifier_hosts)
         {
-          array_terminate (snapshot_identifier_hosts);
+          array_free (snapshot_identifier_hosts);
           snapshot_identifier_hosts = NULL;
         }
       return;
@@ -3701,5 +3707,6 @@ add_assets_from_host_in_report (report_t report, const char *host_ip)
       return ret;
     }
 
+  g_free (report_id);
   return 0;
 }

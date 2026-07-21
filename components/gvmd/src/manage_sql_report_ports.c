@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -314,6 +315,7 @@ print_report_port_xml (print_report_context_t *ctx, report_t report, FILE *out,
                   last_item->severity_double = item->severity_double;
                 }
               g_array_remove_index (ports, index);
+              result_buffer_free (item);
               length = ports->len;
               index--;
             }

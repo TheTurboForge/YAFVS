@@ -32,13 +32,15 @@
  */
 #define G_LOG_DOMAIN "md manage"
 
-
+
+
 /* Static headers for internal non-SQL functions. */
 
 int
 sync_port_lists_with_feed (gboolean);
 
-
+
+
 /* Port list functions. */
 
 /**
@@ -1124,6 +1126,7 @@ create_port_list_unique (const char *name, const char *comment,
   ret = create_port_list_lock (NULL, quoted_name, comment, ranges, 0,
                                port_list);
 
+  g_free (quoted_name);
   array_free (ranges);
 
   return ret;
@@ -2493,7 +2496,8 @@ migrate_predefined_port_lists ()
        SETTING_UUID_FEED_IMPORT_OWNER);
 }
 
-
+
+
 /* Startup. */
 
 /**

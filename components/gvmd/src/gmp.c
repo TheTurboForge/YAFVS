@@ -6519,6 +6519,7 @@ buffer_results_xml (GString *buffer, iterator_t *results, task_t task,
                                 "</result>"
                                 "</detection>");
     }
+  g_free (detect_oid);
   g_free (detect_ref);
   g_free (detect_cpe);
   g_free (detect_loc);
@@ -14085,6 +14086,9 @@ get_task_schedule_xml (task_t task)
                      "%d"
                      "</schedule_periods>",
                      task_schedule_periods (task));
+
+  g_free (task_schedule_uuid);
+  g_free (task_schedule_name);
 
   return g_string_free (xml, FALSE);
 }

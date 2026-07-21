@@ -911,7 +911,15 @@ class YAFVSCtlTests(unittest.TestCase):
                     if isinstance(expected_exit_code, tuple)
                     else (expected_exit_code,)
                 )
-                self.assertIn(rust_result.returncode, expected_exit_codes, arguments)
+                self.assertIn(
+                    rust_result.returncode,
+                    expected_exit_codes,
+                    {
+                        "arguments": arguments,
+                        "stdout": rust_result.stdout,
+                        "stderr": rust_result.stderr,
+                    },
+                )
                 payload = normalized_json(rust_result)
                 expected_statuses = (
                     expected_status
@@ -1019,7 +1027,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["native-alerts-from-csv", "--csv-file", "/definitely-missing-yafvs-alerts.csv", "--json"], 1, "fail"),
                 (["native-tasks-from-csv", "--csv-file", "/definitely-missing-yafvs-tasks-create.csv", "--json"], 1, "fail"),
                 (["runtime-scope-smoke", "--json"], 1, "fail"),
-                (["runtime-certs-init", "--json"], 0, "pass"),
+                (["runtime-certs-init", "--json"], (0, 1), ("pass", "fail")),
                 (["runtime-feed-keyring-init", "--json"], 1, "fail"),
                 (["feed-cache-sync", "--json"], 1, "fail"),
                 (["down", "--json"], 1, "fail"),

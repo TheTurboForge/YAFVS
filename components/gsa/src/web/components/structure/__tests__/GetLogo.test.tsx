@@ -5,7 +5,7 @@
  */
 
 import {describe, test, expect} from '@gsa/testing';
-import {screen, render, waitFor} from 'web/testing';
+import {screen, render} from 'web/testing';
 import getLogo from 'web/components/structure/GetLogo';
 import {type ApplianceLogo} from 'web/utils/appliance-data';
 
@@ -31,11 +31,9 @@ describe('getLogo', () => {
     'defaultVendorLabel',
   ];
 
-  test.each(testCases)('returns YAFVS branding for %s', async logo => {
+  test.each(testCases)('returns YAFVS branding for %s', logo => {
     render(getLogo(logo as ApplianceLogo));
-    await waitFor(() => {
-      expect(screen.getByTestId('YAFVSLogo')).toBeInTheDocument();
-      expect(screen.getByText('YAFVS')).toBeInTheDocument();
-    });
+    expect(screen.getByTestId('YAFVSLogo')).toBeInTheDocument();
+    expect(screen.getByText('YAFVS')).toBeInTheDocument();
   });
 });

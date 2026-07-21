@@ -5,8 +5,10 @@
 use tokio_postgres::Transaction;
 
 use crate::{
-    errors::ApiError, path_ids::parse_uuid, task_target_replace_sql::*,
-    task_write_db::map_task_write_db_error,
+    errors::ApiError,
+    path_ids::parse_uuid,
+    task_target_replace_sql::*,
+    task_write_db::{TASK_STATUS_NEW, map_task_write_db_error},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,7 +75,7 @@ pub(crate) fn ensure_task_target_replace_state(
             "task target replacement is only available for a live scan task".to_string(),
         ));
     }
-    if task.run_status != 1 {
+    if task.run_status != TASK_STATUS_NEW {
         return Err(ApiError::Conflict(
             "task target replacement is only available while task status is New".to_string(),
         ));

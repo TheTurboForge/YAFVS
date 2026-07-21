@@ -61,7 +61,7 @@ pub(crate) fn task_create_metadata_sql() -> &'static str {
          schedule, schedule_next_time, schedule_periods, scanner, config_location,
          target_location, schedule_location, scanner_location, alterable,
          creation_time, modification_time, usage_type)
-     VALUES (make_uuid(), $1, $2, 0, coalesce($3, ''), 1, $4, $5,
+     VALUES (make_uuid(), $1, $2, 0, coalesce($3, ''), 2, $4, $5,
              $7, $8, $9, $6, 0, 0, 0, 0, 1, m_now(), m_now(), 'scan')
      RETURNING id::integer, uuid::text;"
 }

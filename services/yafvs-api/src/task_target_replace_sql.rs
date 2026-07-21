@@ -68,7 +68,7 @@ pub(crate) fn task_target_replace_task_rebind_sql() -> &'static str {
             modification_time = m_now()
       WHERE id = $1
         AND target = $3
-        AND coalesce(run_status, 1) = 1
+        AND coalesce(run_status, 1) = 2
         AND coalesce(target_location, 0) = 0
         AND coalesce(hidden, 0) = 0
         AND coalesce(usage_type, 'scan') = 'scan'

@@ -7,6 +7,8 @@ use tokio_postgres::{Transaction, types::ToSql};
 
 use crate::{auth::DirectApiOperator, errors::ApiError, path_ids::parse_uuid, task_write_sql::*};
 
+pub(crate) const TASK_STATUS_NEW: i32 = 2;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TaskWriteRecord {
     pub(crate) uuid: String,
@@ -263,7 +265,6 @@ pub(crate) fn ensure_task_configuration_mutable(
     run_status: i32,
     alterable: bool,
 ) -> Result<(), ApiError> {
-    const TASK_STATUS_NEW: i32 = 1;
     if run_status == TASK_STATUS_NEW || alterable {
         Ok(())
     } else {

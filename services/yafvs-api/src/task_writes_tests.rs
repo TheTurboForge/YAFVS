@@ -19,6 +19,7 @@ use crate::{
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 const GVMD_OSP: &str = include_str!("../../../components/gvmd/src/manage_osp.c");
 const GVMD_OPENVASD: &str = include_str!("../../../components/gvmd/src/manage_openvasd.c");
+const GVMD_MANAGE_H: &str = include_str!("../../../components/gvmd/src/manage.h");
 const VALID_TARGET_ID: &str = "11111111-1111-4111-8111-111111111111";
 const VALID_CONFIG_ID: &str = "22222222-2222-4222-8222-222222222222";
 const VALID_SCANNER_ID: &str = "33333333-3333-4333-8333-333333333333";
@@ -500,7 +501,7 @@ fn task_create_sql_writes_schedule_alerts_and_inherited_defaults() {
     let create = task_create_metadata_sql();
     assert!(create.contains("INSERT INTO tasks"));
     assert!(create.contains("run_status"));
-    assert!(create.contains("VALUES (make_uuid(), $1, $2, 0, coalesce($3, ''), 1, $4, $5"));
+    assert!(create.contains("VALUES (make_uuid(), $1, $2, 0, coalesce($3, ''), 2, $4, $5"));
     assert!(create.contains("$7, $8, $9, $6, 0, 0, 0, 0, 1"));
     assert!(create.contains("schedule_periods"));
     assert!(create.contains("schedule_location"));
@@ -555,10 +556,10 @@ fn task_create_transaction_attaches_alerts_after_task_insert() {
 
 #[test]
 fn task_replace_is_state_guarded_and_transactional() {
-    assert!(ensure_task_configuration_mutable(1, false).is_ok());
-    assert!(ensure_task_configuration_mutable(2, true).is_ok());
+    assert!(ensure_task_configuration_mutable(2, false).is_ok());
+    assert!(ensure_task_configuration_mutable(1, true).is_ok());
     assert!(matches!(
-        ensure_task_configuration_mutable(2, false),
+        ensure_task_configuration_mutable(1, false),
         Err(ApiError::Conflict(_))
     ));
 
@@ -606,6 +607,17 @@ fn task_replace_is_state_guarded_and_transactional() {
             "task replacement handler missing {required}"
         );
     }
+}
+
+#[test]
+fn native_task_status_numbers_match_the_inherited_database_contract() {
+    assert!(GVMD_MANAGE_H.contains("TASK_STATUS_DONE = 1"));
+    assert!(GVMD_MANAGE_H.contains("TASK_STATUS_NEW  = 2"));
+    assert_eq!(crate::task_write_db::TASK_STATUS_NEW, 2);
+    assert!(
+        task_create_metadata_sql()
+            .contains("VALUES (make_uuid(), $1, $2, 0, coalesce($3, ''), 2, $4, $5")
+    );
 }
 
 #[test]

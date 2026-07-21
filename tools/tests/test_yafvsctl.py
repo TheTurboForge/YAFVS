@@ -9156,8 +9156,22 @@ class YAFVSCtlTests(unittest.TestCase):
                     if payload["hosts"] == ["192.0.2.44"]:
                         self.assertEqual(payload["exclude_hosts"], [])
                         self.assertEqual(payload["alive_tests"], ["TCP-ACK Service Ping"])
-                        self.assertEqual(payload["credentials"], {"ssh": {"id": credential_uuid, "port": 2222}})
-                        return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_create_with_credential_uuid, "name": payload["name"], "comment": payload["comment"], "credentials": {"ssh": {"id": credential_uuid, "port": 2222}}}) + "\n201", "")
+                        self.assertEqual(
+                            payload["credentials"],
+                            {
+                                "ssh": {
+                                    "id": credential_uuid,
+                                    "port": 2222,
+                                    "host_key_pins": [
+                                        {
+                                            "host": "192.0.2.44",
+                                            "fingerprint": "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                                        }
+                                    ],
+                                }
+                            },
+                        )
+                        return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_create_with_credential_uuid, "name": payload["name"], "comment": payload["comment"], "credentials": payload["credentials"]}) + "\n201", "")
                     self.assertEqual(payload["hosts"], ["192.0.2.42"])
                     self.assertEqual(payload["exclude_hosts"], [])
                     self.assertEqual(payload["alive_tests"], ["TCP-ACK Service Ping"])
@@ -9192,9 +9206,22 @@ class YAFVSCtlTests(unittest.TestCase):
                         if payload["credentials"].get("ssh") is None:
                             target_credential_link_count["value"] = 0
                             return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_uuid, "credentials": {"ssh": None}}) + "\n200", "")
-                        self.assertEqual(payload["credentials"], {"ssh": {"id": credential_uuid}})
+                        self.assertEqual(
+                            payload["credentials"],
+                            {
+                                "ssh": {
+                                    "id": credential_uuid,
+                                    "host_key_pins": [
+                                        {
+                                            "host": "192.0.2.42",
+                                            "fingerprint": "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                                        }
+                                    ],
+                                }
+                            },
+                        )
                         target_credential_link_count["value"] = 1
-                        return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_uuid, "credentials": {"ssh": {"id": credential_uuid, "port": 22}}}) + "\n200", "")
+                        return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_uuid, "credentials": {"ssh": {"id": credential_uuid, "port": 22, "host_key_pins": payload["credentials"]["ssh"]["host_key_pins"]}}}) + "\n200", "")
                     self.assertEqual(payload["comment"], target_updated_comment)
                     return yafvsctl.subprocess.CompletedProcess([], 0, json.dumps({"id": target_uuid, "comment": payload["comment"]}) + "\n200", "")
                 if method == "POST" and path.startswith(f"/api/v1/targets/{target_uuid}/clone"):

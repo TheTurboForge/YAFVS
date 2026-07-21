@@ -14427,7 +14427,18 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                             "allow_simultaneous_ips": True,
                             "reverse_lookup_only": False,
                             "reverse_lookup_unify": False,
-                            "credentials": {"ssh": {"id": target_credential_id, "port": 2222}},
+                            "credentials": {
+                                "ssh": {
+                                    "id": target_credential_id,
+                                    "port": 2222,
+                                    "host_key_pins": [
+                                        {
+                                            "host": "192.0.2.44",
+                                            "fingerprint": "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                                        }
+                                    ],
+                                }
+                            },
                         },
                         separators=(",", ":"),
                     )
@@ -14440,7 +14451,22 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
                     target_create_with_credential_response_ssh = target_create_with_credential_response_credentials.get("ssh") if isinstance(target_create_with_credential_response_credentials, dict) else None
                     target_create_with_credential_ok = target_create_with_credential.returncode == 0 and target_create_with_credential_status == 201 and bool(target_create_with_credential_id) and isinstance(target_create_with_credential_response_ssh, dict) and target_create_with_credential_response_ssh.get("id") == target_credential_id and target_create_with_credential_response_ssh.get("port") == 2222 and target_create_with_credential_link_state == "1|2222" and target_credential_secret_before and target_credential_secret_before == target_credential_secret_after_create
                     findings.append(native_api_probe_finding("pass" if target_create_with_credential_ok else "fail", "native-api-direct.target-create-with-credential-link", "Direct write-control created a temporary target with an existing SSH credential reference without touching credential secret rows." if target_create_with_credential_ok else "Direct write-control failed to create a target with an existing SSH credential reference safely.", target_create_with_credential, direct_native_api_display_command("/api/v1/targets", token=token, env=env, method="POST", body=target_create_with_credential_body, extra_headers=content_type), target_create_with_credential_json, {"http_status": target_create_with_credential_status, "target_id": target_create_with_credential_id, "credential_id": target_credential_id, "link_state": target_create_with_credential_link_state, "secret_checksum_before": target_credential_secret_before, "secret_checksum_after": target_credential_secret_after_create, **summarize_native_api_response(target_create_with_credential_json)}))
-                    target_credential_patch_body = json.dumps({"credentials": {"ssh": {"id": target_credential_id}}}, separators=(",", ":"))
+                    target_credential_patch_body = json.dumps(
+                        {
+                            "credentials": {
+                                "ssh": {
+                                    "id": target_credential_id,
+                                    "host_key_pins": [
+                                        {
+                                            "host": "192.0.2.42",
+                                            "fingerprint": "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                                        }
+                                    ],
+                                }
+                            }
+                        },
+                        separators=(",", ":"),
+                    )
                     target_credential_patch = direct_native_api_curl(repo_root, f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_credential_patch_body, extra_headers=content_type)
                     target_credential_patch_json, target_credential_patch_status = parse_json_output_with_http_status(target_credential_patch)
                     target_credential_link_state = psql_value(psql(repo_root, "SELECT count(*)::text || '|' || coalesce(max(port)::text, '') FROM targets_login_data " f"WHERE target = (SELECT id FROM targets WHERE uuid = {sql_literal(target_id)}) AND credential = (SELECT id FROM credentials WHERE uuid = {sql_literal(target_credential_id)}) AND type = 'ssh';"))
@@ -14733,7 +14759,22 @@ def _command_runtime_native_api_direct_write_smoke_unlocked(repo_root: Path, sta
 
                     if target_credential_id:
                         target_credential_before_in_use_denial = psql_value(psql(repo_root, "SELECT count(*)::text FROM targets_login_data " f"WHERE target = (SELECT id FROM targets WHERE uuid = {sql_literal(target_id)}) AND type = 'ssh';"))
-                        target_credential_denied_body = json.dumps({"credentials": {"ssh": {"id": target_credential_id}}}, separators=(",", ":"))
+                        target_credential_denied_body = json.dumps(
+                            {
+                                "credentials": {
+                                    "ssh": {
+                                        "id": target_credential_id,
+                                        "host_key_pins": [
+                                            {
+                                                "host": "192.0.2.42",
+                                                "fingerprint": "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                                            }
+                                        ],
+                                    }
+                                }
+                            },
+                            separators=(",", ":"),
+                        )
                         target_credential_denied = direct_native_api_curl(repo_root, f"/api/v1/targets/{urllib.parse.quote(target_id)}", token=token, env=env, method="PATCH", body=target_credential_denied_body, extra_headers=content_type)
                         target_credential_denied_json, target_credential_denied_status = parse_json_output_with_http_status(target_credential_denied)
                         target_credential_after_in_use_denial = psql_value(psql(repo_root, "SELECT count(*)::text FROM targets_login_data " f"WHERE target = (SELECT id FROM targets WHERE uuid = {sql_literal(target_id)}) AND type = 'ssh';"))

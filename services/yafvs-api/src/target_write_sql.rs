@@ -51,8 +51,7 @@ pub(crate) fn target_in_use_sql() -> &'static str {
        FROM tasks
       WHERE target = $1
         AND target_location = 0
-        AND hidden = 0
-        AND run_status IN (0, 3, 4, 10, 11, 14, 16, 17, 18, 19);"
+        AND hidden = 0;"
 }
 
 pub(crate) fn target_scope_membership_count_sql() -> &'static str {

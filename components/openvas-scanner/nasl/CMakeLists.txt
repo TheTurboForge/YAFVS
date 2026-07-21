@@ -129,6 +129,7 @@ set (FILES arc4.c capture_packet.c charcnv.c exec.c genrand.c hmacmd5.c
      nasl_cert.c nasl_crypto.c nasl_debug.c nasl_func.c nasl_grammar.tab.c nasl_host.c
      nasl_http.c nasl_http2.c nasl_init.c nasl_lex_ctxt.c nasl_misc_funcs.c nasl_scanner_glue.c
      nasl_packet_forgery.c nasl_packet_forgery_v6.c nasl_signature.c nasl_smb.c
+     nasl_tcp_options.c
      nasl_socket.c nasl_socket_resources.c nasl_text_utils.c nasl_tree.c
      nasl_var.c nasl_wmi.c
      nasl_isotime.c ntlmssp.c smb_crypt.c smb_crypt2.c smb_signing.c time.c
@@ -227,6 +228,19 @@ add_custom_target (tests-http2 DEPENDS nasl-http2-test)
 option (ENABLE_NASL_SECURITY_TESTS
         "Build focused sanitizer-backed NASL security regression tests" OFF)
 if (ENABLE_NASL_SECURITY_TESTS)
+  add_executable (nasl-tcp-options-test
+                  nasl_tcp_options_tests.c nasl_tcp_options.c)
+  add_test (nasl-tcp-options-test nasl-tcp-options-test)
+  target_compile_options (nasl-tcp-options-test PRIVATE
+                          -Wall -Wextra -Werror
+                          -fsanitize=address,undefined
+                          -fno-omit-frame-pointer)
+  target_link_options (nasl-tcp-options-test PRIVATE
+                       -fsanitize=address,undefined)
+  target_link_libraries (nasl-tcp-options-test ${GLIB_LDFLAGS})
+  set_tests_properties (nasl-tcp-options-test PROPERTIES
+    ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1;UBSAN_OPTIONS=halt_on_error=1:abort_on_error=1:print_stacktrace=1")
+
   add_executable (nasl-smb-signing-test
                   smb_signing_tests.c smb_signing.c md5.c)
   add_test (nasl-smb-signing-test nasl-smb-signing-test)

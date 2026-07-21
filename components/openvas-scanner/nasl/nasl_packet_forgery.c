@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  * SPDX-FileCopyrightText: 2002-2004 Tenable Network Security
  *
  * SPDX-License-Identifier: GPL-2.0-only
@@ -18,6 +19,7 @@
 #include "nasl_packet_forgery_v6.h"
 #include "nasl_raw.h"
 #include "nasl_socket.h"
+#include "nasl_tcp_options.h"
 #include "nasl_tree.h"
 #include "nasl_var.h"
 
@@ -26,10 +28,10 @@
 #include <errno.h>     /* for errno */
 #include <pcap.h>      /* for PCAP_ERRBUF_SIZE */
 #include <stddef.h>
-#include <stdlib.h>    /* for rand */
-#include <string.h>    /* for bcopy */
-#include <sys/time.h>  /* for gettimeofday */
-#include <unistd.h>    /* for close */
+#include <stdlib.h>   /* for rand */
+#include <string.h>   /* for bcopy */
+#include <sys/time.h> /* for gettimeofday */
+#include <unistd.h>   /* for close */
 
 /** @todo: It still needs to be taken care
  * BSD_BYTE_ORDERING gets here if defined (e.g. by config.h) */
@@ -488,43 +490,6 @@ struct pseudohdr
   struct tcphdr tcpheader;
 } __attribute__ ((packed));
 
-// TCP options
-struct tcp_opt_mss
-{
-  uint8_t kind; // 2
-  uint8_t len;  // 4
-  uint16_t mss;
-} __attribute__ ((packed));
-
-struct tcp_opt_wscale
-{
-  uint8_t kind; // 3
-  uint8_t len;  // 3
-  uint8_t wscale;
-} __attribute__ ((packed));
-
-struct tcp_opt_sack_perm
-{
-  uint8_t kind; // 4
-  uint8_t len;  // 2
-} __attribute__ ((packed));
-
-struct tcp_opt_tstamp
-{
-  uint8_t kind; // 8
-  uint8_t len;  // 10
-  uint32_t tstamp;
-  uint32_t e_tstamp;
-} __attribute__ ((packed));
-
-struct tcp_options
-{
-  struct tcp_opt_mss mss;
-  struct tcp_opt_wscale wscale;
-  struct tcp_opt_sack_perm sack_perm;
-  struct tcp_opt_tstamp tstamp;
-} __attribute__ ((packed));
-
 /**
  * @brief Fills an IP datagram with TCP data. Note that the ip_p field is not
  updated. It returns the modified IP datagram. Its arguments are:
@@ -655,6 +620,9 @@ get_tcp_element (lex_ctxt *lexic)
   u_char *packet = (u_char *) get_str_var_by_name (lexic, "tcp");
   struct ip *ip;
   size_t ipsz;
+  size_t ip_header_len;
+  size_t packet_len;
+  size_t tcp_header_len;
   struct tcphdr *tcp;
   char *element;
   int ret;
@@ -668,15 +636,21 @@ get_tcp_element (lex_ctxt *lexic)
       return NULL;
     }
 
+  if (ipsz < sizeof (struct ip))
+    return NULL;
+
   ip = (struct ip *) packet;
+  ip_header_len = (size_t) ip->ip_hl * 4;
+  packet_len = UNFIX (ip->ip_len);
+  if (ip->ip_hl < 5 || ip_header_len > ipsz
+      || packet_len < ip_header_len + sizeof (struct tcphdr)
+      || packet_len > ipsz)
+    return NULL;
 
-  if (ip->ip_hl * 4 > ipsz)
-    return NULL; /* Invalid packet */
-
-  if (UNFIX (ip->ip_len) > ipsz)
-    return NULL; /* Invalid packet */
-
-  tcp = (struct tcphdr *) (packet + ip->ip_hl * 4);
+  tcp = (struct tcphdr *) (packet + ip_header_len);
+  tcp_header_len = (size_t) tcp->th_off * 4;
+  if (tcp->th_off < 5 || tcp_header_len > packet_len - ip_header_len)
+    return NULL;
 
   element = get_str_var_by_name (lexic, "element");
   if (!element)
@@ -708,9 +682,9 @@ get_tcp_element (lex_ctxt *lexic)
   else if (!strcmp (element, "data"))
     {
       retc = alloc_typed_cell (CONST_DATA);
-      retc->size = UNFIX (ip->ip_len) - (tcp->th_off + ip->ip_hl) * 4;
+      retc->size = (int) (packet_len - ip_header_len - tcp_header_len);
       retc->x.str_val = g_malloc0 (retc->size);
-      bcopy ((char *) tcp + tcp->th_off * 4, retc->x.str_val, retc->size);
+      bcopy ((char *) tcp + tcp_header_len, retc->x.str_val, retc->size);
       return retc;
     }
   else
@@ -722,66 +696,6 @@ get_tcp_element (lex_ctxt *lexic)
   retc = alloc_typed_cell (CONST_INT);
   retc->x.i_val = ret;
   return retc;
-}
-
-/**
- * @brief Extract all TCP option from an IP datagram.
- *
- * @param[in] options All options present in the TCP segment.
- * @param[out] tcp_all_options Container for the options to return.
- */
-static void
-get_tcp_options (char *options, struct tcp_options *tcp_all_options)
-{
-  uint8_t *opt_kind;
-  if (options == NULL)
-    return;
-
-  opt_kind = (uint8_t *) options;
-
-  while (*opt_kind != 0)
-    {
-      switch (*opt_kind)
-        {
-        case TCPOPT_MAXSEG:
-          tcp_all_options->mss.kind = *opt_kind;
-          tcp_all_options->mss.len = *(opt_kind + 1);
-          tcp_all_options->mss.mss = *((uint16_t *) (opt_kind + 2));
-          opt_kind = opt_kind + *(opt_kind + 1);
-          break;
-        case TCPOPT_WINDOW:
-          tcp_all_options->wscale.kind = *opt_kind;
-          tcp_all_options->wscale.len = *(opt_kind + 1);
-          tcp_all_options->wscale.wscale = (uint8_t) * (opt_kind + 2);
-          opt_kind = opt_kind + *(opt_kind + 1);
-          break;
-        case TCPOPT_SACK_PERMITTED:
-          tcp_all_options->sack_perm.kind = *opt_kind;
-          tcp_all_options->sack_perm.len = *(opt_kind + 1);
-          opt_kind = opt_kind + *(opt_kind + 1);
-          break;
-        case TCPOPT_TIMESTAMP:
-          tcp_all_options->tstamp.kind = *opt_kind;
-          tcp_all_options->tstamp.len = *(opt_kind + 1);
-          tcp_all_options->tstamp.tstamp = *((uint32_t *) (opt_kind + 2));
-          tcp_all_options->tstamp.e_tstamp = *((uint32_t *) (opt_kind + 6));
-          opt_kind = opt_kind + *(opt_kind + 1);
-          break;
-        case TCPOPT_EOL:
-        case TCPOPT_NOP:
-          opt_kind++;
-          break;
-        case TCPOPT_SACK: // Not supported
-          opt_kind = opt_kind + *(opt_kind + 1);
-          break;
-        default:
-          g_debug ("%s: Unsupported %u TCP option. "
-                   "Not all options are returned.",
-                   __func__, *opt_kind);
-          *opt_kind = 0;
-          break;
-        }
-    }
 }
 
 /**
@@ -804,9 +718,11 @@ get_tcp_option (lex_ctxt *lexic)
 {
   u_char *packet = (u_char *) get_str_var_by_name (lexic, "tcp");
   struct ip *ip;
-  int ipsz;
+  size_t ipsz;
+  size_t ip_header_len;
+  size_t packet_len;
+  size_t options_len;
   struct tcphdr *tcp;
-  char *options;
   int opt;
   tree_cell *retc;
   nasl_array *arr;
@@ -830,36 +746,35 @@ get_tcp_option (lex_ctxt *lexic)
       return NULL;
     }
 
-  ip = (struct ip *) packet;
-
   ipsz = get_var_size_by_name (lexic, "tcp");
-  if (ip->ip_hl * 4 > ipsz)
-    return NULL; /* Invalid packet */
+  if (ipsz < sizeof (struct ip))
+    return NULL;
 
-  if (UNFIX (ip->ip_len) > ipsz)
-    return NULL; /* Invalid packet */
+  ip = (struct ip *) packet;
+  ip_header_len = (size_t) ip->ip_hl * 4;
+  packet_len = UNFIX (ip->ip_len);
+  if (ip->ip_hl < 5 || ip_header_len > ipsz
+      || packet_len < ip_header_len + sizeof (struct tcphdr)
+      || packet_len > ipsz)
+    return NULL;
 
-  tcp = (struct tcphdr *) (packet + ip->ip_hl * 4);
+  tcp = (struct tcphdr *) (packet + ip_header_len);
 
   if (tcp->th_off <= 5)
     return NULL;
 
-  // Get options from the segment
-  options = (char *) g_malloc0 (sizeof (uint8_t) * 4 * (tcp->th_off - 5));
-  memcpy (options, (char *) tcp + 20, (tcp->th_off - 5) * 4);
+  options_len = (size_t) (tcp->th_off - 5) * 4;
+  if (options_len > packet_len - ip_header_len - sizeof (struct tcphdr))
+    return NULL;
 
   tcp_all_options = g_malloc0 (sizeof (struct tcp_options));
-  get_tcp_options (options, tcp_all_options);
-  if (tcp_all_options == NULL)
+  if (!nasl_parse_tcp_options ((const uint8_t *) tcp + sizeof (struct tcphdr),
+                               options_len, tcp_all_options))
     {
-      nasl_perror (lexic, "%s: No TCP options found in passed TCP packet.\n",
-                   __func__);
-
-      g_free (options);
+      g_free (tcp_all_options);
       return NULL;
     }
 
-  opt = get_int_var_by_name (lexic, "option", -1);
   retc = NULL;
   switch (opt)
     {
@@ -895,7 +810,6 @@ get_tcp_option (lex_ctxt *lexic)
     }
 
   g_free (tcp_all_options);
-  g_free (options);
   return retc;
 }
 
@@ -1309,12 +1223,35 @@ dump_tcp_packet (lex_ctxt *lexic)
   while ((pkt = (u_char *) get_str_var_by_num (lexic, i++)) != NULL)
     {
       int a = 0;
-      struct ip *ip = (struct ip *) pkt;
-      struct tcphdr *tcp = (struct tcphdr *) (pkt + ip->ip_hl * 4);
+      struct ip *ip;
+      struct tcphdr *tcp;
+      size_t ip_header_len;
+      size_t packet_len;
+      size_t tcp_header_len;
+      size_t options_len;
+      size_t data_len;
       unsigned int j;
       unsigned int limit;
       char *c;
       limit = get_var_size_by_num (lexic, i - 1);
+      if (limit < sizeof (struct ip))
+        continue;
+
+      ip = (struct ip *) pkt;
+      ip_header_len = (size_t) ip->ip_hl * 4;
+      packet_len = UNFIX (ip->ip_len);
+      if (ip->ip_hl < 5 || ip_header_len > limit
+          || packet_len < ip_header_len + sizeof (struct tcphdr)
+          || packet_len > limit)
+        continue;
+
+      tcp = (struct tcphdr *) (pkt + ip_header_len);
+      tcp_header_len = (size_t) tcp->th_off * 4;
+      if (tcp->th_off < 5 || tcp_header_len > packet_len - ip_header_len)
+        continue;
+      options_len = tcp_header_len - sizeof (struct tcphdr);
+      data_len = packet_len - ip_header_len - tcp_header_len;
+
       printf ("------\n");
       printf ("\tth_sport : %d\n", ntohs (tcp->th_sport));
       printf ("\tth_dport : %d\n", ntohs (tcp->th_dport));
@@ -1372,45 +1309,31 @@ dump_tcp_packet (lex_ctxt *lexic)
       printf ("\tth_sum   : 0x%x\n", ntohs (tcp->th_sum));
       printf ("\tth_urp   : %d\n", ntohs (tcp->th_urp));
 
-      if (tcp->th_off > 5) // Options present
+      if (options_len > 0)
         {
-          char *options;
-          struct tcp_options *tcp_all_options;
+          struct tcp_options tcp_all_options = {0};
 
-          options =
-            (char *) g_malloc0 (sizeof (uint8_t) * 4 * (tcp->th_off - 5));
-          memcpy (options, (char *) tcp + 20, (tcp->th_off - 5) * 4);
-
-          tcp_all_options = g_malloc0 (sizeof (struct tcp_options));
-          get_tcp_options (options, tcp_all_options);
-          if (tcp_all_options != NULL)
+          if (nasl_parse_tcp_options ((const uint8_t *) tcp
+                                        + sizeof (struct tcphdr),
+                                      options_len, &tcp_all_options))
             {
               printf ("\tTCP Options:\n");
               printf ("\t\tTCPOPT_MAXSEG: %u\n",
-                      ntohs ((uint16_t) tcp_all_options->mss.mss));
-              printf ("\t\tTCPOPT_WINDOW: %u\n",
-                      tcp_all_options->wscale.wscale);
+                      ntohs ((uint16_t) tcp_all_options.mss.mss));
+              printf ("\t\tTCPOPT_WINDOW: %u\n", tcp_all_options.wscale.wscale);
               printf ("\t\tTCPOPT_SACK_PERMITTED: %u\n",
-                      tcp_all_options->sack_perm.kind ? 1 : 0);
+                      tcp_all_options.sack_perm.kind ? 1 : 0);
               printf ("\t\tTCPOPT_TIMESTAMP TSval: %u\n",
-                      ntohl ((uint32_t) tcp_all_options->tstamp.tstamp));
+                      ntohl ((uint32_t) tcp_all_options.tstamp.tstamp));
               printf ("\t\tTCPOPT_TIMESTAMP TSecr: %u\n",
-                      ntohl ((uint32_t) tcp_all_options->tstamp.e_tstamp));
+                      ntohl ((uint32_t) tcp_all_options.tstamp.e_tstamp));
             }
-          g_free (options);
-          g_free (tcp_all_options);
         }
 
       printf ("\n\tData     : ");
-      c = (char *) ((char *) tcp + sizeof (struct tcphdr)
-                    + sizeof (uint8_t) * 4 * (tcp->th_off - 5));
-      if (UNFIX (ip->ip_len) > (sizeof (struct ip) + sizeof (struct tcphdr)))
-        for (j = 0; j < UNFIX (ip->ip_len) - sizeof (struct ip)
-                          - sizeof (struct tcphdr)
-                          - sizeof (uint8_t) * 4 * (tcp->th_off - 5)
-                    && j < limit;
-             j++)
-          printf ("%c", isprint (c[j]) ? c[j] : '.');
+      c = (char *) tcp + tcp_header_len;
+      for (j = 0; j < data_len; j++)
+        printf ("%c", isprint ((unsigned char) c[j]) ? c[j] : '.');
       printf ("\n");
 
       printf ("\n");

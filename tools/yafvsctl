@@ -15858,9 +15858,6 @@ def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = No
     findings.extend(runtime_gsa_freshness_findings(repo_root))
     findings.append(browser_native_api_readiness_finding(repo_root, check="browser-smoke.native-api-ready"))
     findings.append(browser_gmp_readiness_finding(repo_root, check="browser-smoke.gmp-ready"))
-    cleanup_socket = gvmd_socket_path(repo_root)
-    if write_filter_smoke:
-        findings.append(socket_readiness_finding("browser-smoke.cleanup-gvmd-socket", "gvmd", cleanup_socket, missing_status="warn"))
     if aggregate_status(findings) == "fail":
         result = make_result("runtime-browser-smoke", repo_root, "Runtime browser smoke stopped at prerequisites.", findings, [str(artifact_dir)])
         return runtime_browser_smoke_status_only_result(result) if status_only else result
@@ -15890,8 +15887,6 @@ def command_runtime_browser_smoke(repo_root: Path, routes: list[str] | None = No
     if write_filter_smoke:
         args.append("--write-filter-smoke")
         args.extend(["--repo-root", str(repo_root)])
-        if cleanup_socket.exists():
-            args.extend(["--cleanup-gmp-socket", str(cleanup_socket)])
     for route in routes or []:
         args.extend(["--route", route])
     for base_url in base_urls:

@@ -978,6 +978,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["inventory", "--scope", "definitely-invalid", "--json"], 0, "warn"),
                 (["branding-state", "--json"], 0, "pass"),
                 (["rust-migration-state", "--json"], (0, 1), ("pass", "fail")),
+                (["gvmd-retirement-state", "--json"], 0, "pass"),
                 (["deps", "--json"], (0, 1), ("pass", "fail")),
                 (["deps", "gsa", "--json"], 0, "pass"),
                 (["deps", "definitely-invalid", "--json"], 1, "fail"),
@@ -1814,6 +1815,8 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("browser_smoke_run_artifact_dir(repo_root, routes)", source)
         self.assertIn("browser_native_api_readiness_finding(repo_root, check=\"browser-smoke.native-api-ready\")", source)
         self.assertIn("browser_gmp_readiness_finding(repo_root, check=\"browser-smoke.gmp-ready\")", source)
+        self.assertNotIn("browser-smoke.cleanup-gvmd-socket", source)
+        self.assertNotIn("--cleanup-gmp-socket", source)
         self.assertIn("runtime_browser_smoke_probe_path", source)
         self.assertIn("runtime-browser-smoke", source)
         self.assertIn("raw-report.list-native-api", browser_smoke)
@@ -1851,19 +1854,18 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("filter.write-delete-${label}-native-api", browser_smoke)
         self.assertIn("filter.write-hard-delete-${label}-native-api", browser_smoke)
         self.assertIn("filter.write-cleanup", browser_smoke)
+        self.assertNotIn("cleanup_gmp_socket", browser_smoke)
+        self.assertNotIn("runtime_full_test_scan", browser_smoke)
         self.assertIn('args.extend(["--route", route])', source)
         self.assertIn("runtime-browser-smoke *args:", justfile)
         self.assertIn('tools/yafvsctl runtime-browser-smoke "$@"', justfile)
 
-    def test_browser_smoke_filter_write_cleanup_uses_native_api_before_gmp(self):
+    def test_browser_smoke_filter_write_cleanup_uses_native_api(self):
         filter_id = "11111111-1111-1111-1111-111111111111"
         args = unittest.mock.Mock(
             write_filter_smoke=True,
             repo_root="/repo",
             username="admin",
-            cleanup_gmp_socket=None,
-            password_file="/tmp/password",
-            timeout_ms=30000,
         )
         payload = {"status": "fail", "summary": "needs cleanup", "findings": [{"details": {"created_id": filter_id}}]}
 
@@ -1878,15 +1880,12 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(cleanup_finding["status"], "pass")
         self.assertEqual(cleanup_finding["details"], {"native_deleted_ids": [filter_id]})
 
-    def test_browser_smoke_filter_write_cleanup_reports_native_error_without_gmp(self):
+    def test_browser_smoke_filter_write_cleanup_reports_native_error_without_fallback(self):
         filter_id = "22222222-2222-2222-2222-222222222222"
         args = unittest.mock.Mock(
             write_filter_smoke=True,
             repo_root="/repo",
             username="admin",
-            cleanup_gmp_socket=None,
-            password_file="/tmp/password",
-            timeout_ms=30000,
         )
         payload = {"status": "fail", "summary": "needs cleanup", "findings": [{"details": {"created_id": filter_id}}]}
 
@@ -2921,7 +2920,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("tools/yafvsctl", details["by_category"]["compatibility_bridge"]["paths"])
         self.assertIn("tools/tests/test_yafvsctl.py", details["by_category"]["compatibility_bridge"]["paths"])
         self.assertNotIn("tools/runtime_browser_smoke.py", details["by_category"]["required_runtime"]["paths"])
-        self.assertIn("tools/runtime_browser_smoke.py", details["by_category"]["compatibility_bridge"]["paths"])
+        self.assertFalse(any("tools/runtime_browser_smoke.py" in category["paths"] for category in details["by_category"].values()))
         self.assertNotIn("tools/runtime_report.py", details["by_category"]["required_runtime"]["paths"])
         self.assertNotIn("components/gvm-tools/scripts/list-reports.gmp.py", details["by_category"]["product_workflow"]["paths"])
         self.assertNotIn("components/gvm-tools/scripts/list-scopes.gmp.py", details["by_category"]["product_workflow"]["paths"])

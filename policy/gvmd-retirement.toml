@@ -335,10 +335,10 @@ notes = "Retain only independent semantic characterization; migrate product asse
 [[callers]]
 id = "runtime-browser-smoke-cleanup-fallback"
 kind = "tooling"
-status = "inventoried"
-evidence = ["tools/runtime_browser_smoke.py::cleanup_gmp_socket"]
+status = "retired"
+evidence = ["tools/tests/test_yafvsctl.py::test_browser_smoke_filter_write_cleanup_reports_native_error_without_fallback"]
 replacement = ["crud-query-api-surface"]
-notes = "Delete the optional GMP cleanup fallback; native cleanup must fail visibly instead of hiding a regression."
+notes = "The optional GMP cleanup fallback is deleted; native cleanup failure remains visible and fail-closed."
 
 [[callers]]
 id = "runtime-scanner-register-gvmd-cli"

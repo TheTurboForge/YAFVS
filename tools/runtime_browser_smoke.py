@@ -1189,7 +1189,6 @@ def cleanup_filter_write_smoke(args: argparse.Namespace, payload: dict[str, Any]
             return
         append_finding(payload, "warn", "filter.write-cleanup", "No saved-filter write-smoke IDs were available for cleanup.")
         return
-    native_error: Exception | None = None
     repo_root_arg = getattr(args, "repo_root", None)
     if repo_root_arg:
         try:
@@ -1202,32 +1201,25 @@ def cleanup_filter_write_smoke(args: argparse.Namespace, payload: dict[str, Any]
             append_finding(payload, "pass", "filter.write-cleanup", "Temporary saved-filter write-smoke rows were deleted through native DELETE cleanup.", {"native_deleted_ids": native_deleted})
             return
         except Exception as error:  # pylint: disable=broad-except
-            native_error = error
-    if not args.cleanup_gmp_socket:
-        details: dict[str, Any] = {"filter_ids": ids}
-        if native_error is not None:
-            details.update({"native_error_type": type(native_error).__name__, "native_error": str(native_error)})
-        append_finding(payload, "fail", "filter.write-cleanup", "Saved-filter write smoke created filters but native cleanup failed and no cleanup GMP socket was provided.", details)
-        return
-    try:
-        import runtime_full_test_scan
-
-        gmp, _password = runtime_full_test_scan.connect_gmp(
-            Path(args.cleanup_gmp_socket),
-            args.username,
-            Path(args.password_file),
-            max(10, args.timeout_ms // 1000),
-        )
-        deleted: list[str] = []
-        for filter_id in ids:
-            gmp.delete_filter(filter_id, ultimate=True)
-            deleted.append(filter_id)
-        details = {"deleted_ids": deleted}
-        if native_error is not None:
-            details.update({"native_error_type": type(native_error).__name__, "native_error": str(native_error)})
-        append_finding(payload, "pass", "filter.write-cleanup", "Temporary saved-filter write-smoke rows were deleted through GMP fallback cleanup.", details)
-    except Exception as error:  # pylint: disable=broad-except
-        append_finding(payload, "fail", "filter.write-cleanup", "Saved-filter write-smoke cleanup failed.", {"filter_ids": ids, "error_type": type(error).__name__, "error": str(error)})
+            append_finding(
+                payload,
+                "fail",
+                "filter.write-cleanup",
+                "Saved-filter write smoke created filters but native cleanup failed.",
+                {
+                    "filter_ids": ids,
+                    "native_error_type": type(error).__name__,
+                    "native_error": str(error),
+                },
+            )
+            return
+    append_finding(
+        payload,
+        "fail",
+        "filter.write-cleanup",
+        "Saved-filter write smoke created filters but native cleanup was not configured.",
+        {"filter_ids": ids},
+    )
 
 
 def run_browser_smoke(args: argparse.Namespace) -> dict[str, Any]:
@@ -1312,7 +1304,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--expect-result-row", action="store_true", help="fail if the selected scope report has no visible Results row")
     parser.add_argument("--write-filter-smoke", action="store_true", help="create and clone a disposable saved filter through the browser native POST proxy")
     parser.add_argument("--repo-root", help="repository root used for native saved-filter cleanup")
-    parser.add_argument("--cleanup-gmp-socket", help="gvmd socket used to delete temporary saved-filter write-smoke rows")
     return parser
 
 

@@ -15,6 +15,7 @@ import {
   wait,
 } from 'web/testing';
 import Filter from 'gmp/models/filter';
+import Host from 'gmp/models/host';
 import PortList from 'gmp/models/port-list';
 import Tag from 'gmp/models/tag';
 import {createSession} from 'gmp/testing';
@@ -41,12 +42,12 @@ const currentSettingsResponse = {
   },
 };
 
-const setupTagBulk = gmp => {
+const setupTagBulk = (gmp, entity: Host | PortList = new PortList()) => {
   const {render} = rendererWith({gmp, store: true, router: true});
   const initialFilter = new Filter();
   render(
     <EntitiesContainer
-      entities={[new PortList()]}
+      entities={[entity]}
       filter={initialFilter}
       gmp={gmp}
       gmpName="portlist"
@@ -212,7 +213,7 @@ describe('EntitiesContainer', () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
         page: {page: 1, page_size: 25, total: 1, sort: 'name', filter: ''},
-        items: [{id: '1', name: 'Native tag', resource_type: 'port_list'}],
+        items: [{id: '1', name: 'Native tag', resource_type: 'host'}],
       }),
       ok: true,
       status: 200,
@@ -223,7 +224,7 @@ describe('EntitiesContainer', () => {
       getAllTags,
       session: {...createSession(), token: 'test-token'},
     });
-    const tagButton = setupTagBulk(gmp);
+    const tagButton = setupTagBulk(gmp, new Host());
 
     fireEvent.click(tagButton);
     await wait();
@@ -236,7 +237,7 @@ describe('EntitiesContainer', () => {
       sort: 'name',
       filter: '',
       active: '',
-      resource_type: 'port_list',
+      resource_type: 'host',
       value: '',
     });
     expect(fetchMock).toHaveBeenCalledWith(

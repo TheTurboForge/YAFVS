@@ -22,6 +22,7 @@ const override = Override.fromElement({
   _id: '6d00d22f-551b-4fbe-8215-d8615eff73ea',
   active: 1,
   creation_time: '2020-12-23T14:14:11Z',
+  end_time: '2021-01-05T14:14:11Z',
   hosts: '127.0.0.1',
   in_use: 0,
   modification_time: '2021-01-04T11:54:12Z',
@@ -129,8 +130,8 @@ describe('OverrideDetailsPage tests', () => {
     expect(screen.getByRole('row', {name: /^NVT OID/i})).toHaveTextContent(
       '123',
     );
-    expect(screen.getByRole('row', {name: /^Active/i})).toHaveTextContent(
-      'Yes',
+    expect(screen.getByText('Active').closest('tr')).toHaveTextContent(
+      'Yes until Tue, Jan 5, 2021 3:14 PM',
     );
 
     expect(

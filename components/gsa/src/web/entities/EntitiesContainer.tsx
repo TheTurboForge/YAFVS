@@ -27,9 +27,9 @@ import {
 import {map} from 'gmp/utils/array';
 import {
   getEntityType,
-  apiType,
   pluralizeType,
   type EntityType,
+  resourceType,
 } from 'gmp/utils/entity-type';
 import {isDefined} from 'gmp/utils/identity';
 import {
@@ -560,7 +560,8 @@ class EntitiesContainer<TModel extends Model> extends React.Component<
     const {entities} = this.state as {entities: TModel[]};
 
     if (entities.length > 0) {
-      const filter = 'resource_type=' + apiType(getEntityType(entities[0]));
+      const filter =
+        'resource_type=' + resourceType(getEntityType(entities[0]));
       if (canUseNativeApi(gmp)) {
         void fetchNativeTags(
           gmp,

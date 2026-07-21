@@ -42,7 +42,7 @@ import {formattedUserSettingLongDate} from 'web/utils/user-setting-time-date-for
 
 const Details = ({entity, ...props}) => {
   const [_] = useTranslation();
-  const timezone = useUserTimezone();
+  const [timezone] = useUserTimezone();
   const {nvt} = entity;
   return (
     <Layout flex="column">

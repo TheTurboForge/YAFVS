@@ -6,9 +6,10 @@ use crate::{
     errors::ApiError,
     task_control::{TaskStartState, ensure_task_is_startable},
     task_control_sql::*,
+    task_status::TaskStatus,
 };
 
-fn startable_task(run_status: i32) -> TaskStartState {
+fn startable_task(run_status: TaskStatus) -> TaskStartState {
     TaskStartState {
         internal_id: 41,
         owner_id: Some(7),
@@ -36,38 +37,43 @@ fn task_stop_browser_proxy_forwards_authenticated_operator_context() {
 
 #[test]
 fn task_start_state_validation_accepts_inactive_supported_scan_tasks() {
-    for status in [1, 2, 12, 13] {
+    for status in [
+        TaskStatus::Done,
+        TaskStatus::New,
+        TaskStatus::Stopped,
+        TaskStatus::Interrupted,
+    ] {
         assert!(
             ensure_task_is_startable(&startable_task(status)).is_ok(),
-            "status {status} should be startable"
+            "status {status:?} should be startable"
         );
     }
 }
 
 #[test]
 fn task_start_state_validation_rejects_missing_or_unsupported_resources() {
-    let mut task = startable_task(1);
+    let mut task = startable_task(TaskStatus::Done);
     task.target_id = None;
     assert!(matches!(
         ensure_task_is_startable(&task),
         Err(ApiError::BadRequest(message)) if message.contains("target")
     ));
 
-    let mut task = startable_task(1);
+    let mut task = startable_task(TaskStatus::Done);
     task.target_has_hosts = false;
     assert!(matches!(
         ensure_task_is_startable(&task),
         Err(ApiError::BadRequest(message)) if message.contains("host")
     ));
 
-    let mut task = startable_task(1);
+    let mut task = startable_task(TaskStatus::Done);
     task.config_id = None;
     assert!(matches!(
         ensure_task_is_startable(&task),
         Err(ApiError::BadRequest(message)) if message.contains("scan config")
     ));
 
-    let mut task = startable_task(1);
+    let mut task = startable_task(TaskStatus::Done);
     task.scanner_id = None;
     assert!(matches!(
         ensure_task_is_startable(&task),
@@ -75,7 +81,7 @@ fn task_start_state_validation_rejects_missing_or_unsupported_resources() {
     ));
 
     for scanner_type in [0, 1, 3, 4, 7, 9] {
-        let mut task = startable_task(1);
+        let mut task = startable_task(TaskStatus::Done);
         task.scanner_type = Some(scanner_type);
         assert!(matches!(
             ensure_task_is_startable(&task),
@@ -83,7 +89,7 @@ fn task_start_state_validation_rejects_missing_or_unsupported_resources() {
         ));
     }
     for scanner_type in [2, 5, 6, 8] {
-        let mut task = startable_task(1);
+        let mut task = startable_task(TaskStatus::Done);
         task.scanner_type = Some(scanner_type);
         assert!(ensure_task_is_startable(&task).is_ok());
     }
@@ -91,13 +97,24 @@ fn task_start_state_validation_rejects_missing_or_unsupported_resources() {
 
 #[test]
 fn task_start_state_validation_rejects_active_deleting_and_processing_statuses() {
-    for status in [0, 3, 4, 5, 10, 11, 14, 16, 17, 18, 19, 99] {
+    for status in [
+        TaskStatus::DeleteRequested,
+        TaskStatus::Requested,
+        TaskStatus::Running,
+        TaskStatus::StopRequested,
+        TaskStatus::StopWaiting,
+        TaskStatus::DeleteUltimateRequested,
+        TaskStatus::DeleteWaiting,
+        TaskStatus::DeleteUltimateWaiting,
+        TaskStatus::Queued,
+        TaskStatus::Processing,
+    ] {
         assert!(
             matches!(
                 ensure_task_is_startable(&startable_task(status)),
                 Err(ApiError::Conflict(_))
             ),
-            "status {status} must stay unavailable for native task start"
+            "status {status:?} must stay unavailable for native task start"
         );
     }
 }
@@ -125,7 +142,7 @@ fn task_start_sql_preserves_the_gvmd_scan_queue_handoff_contract() {
     let report = task_start_insert_report_sql();
     assert!(report.contains("INSERT INTO reports"));
     assert!(report.contains("make_uuid()"));
-    assert!(report.contains("m_now(), m_now(), '', 3, 0, 0"));
+    assert!(report.contains("m_now(), m_now(), '', $3, 0, 0"));
     assert!(report.contains("RETURNING id::integer, uuid::text"));
 
     let queue = task_start_insert_scan_queue_sql();
@@ -136,7 +153,7 @@ fn task_start_sql_preserves_the_gvmd_scan_queue_handoff_contract() {
 
     let update = task_start_mark_requested_sql();
     assert!(update.contains("UPDATE tasks"));
-    assert!(update.contains("SET run_status = 3"));
+    assert!(update.contains("SET run_status = $2"));
 }
 
 #[test]

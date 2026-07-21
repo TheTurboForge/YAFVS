@@ -13,6 +13,7 @@ use crate::{
     },
     target_write_sql::{target_clone_login_data_sql, target_clone_tags_sql},
     target_write_transactions::execute_target_trash_transaction,
+    task_status::TaskStatus,
     task_target_replace_db::task_target_replace_source_is_unreferenced,
     task_target_replace_sql::*,
     task_target_replace_validation::ValidatedTaskTargetReplace,
@@ -63,6 +64,8 @@ pub(crate) async fn execute_task_target_replace_transaction(
         "clone replacement target tags",
     )
     .await?;
+    let done_status = TaskStatus::Done.as_i32();
+    let new_status = TaskStatus::New.as_i32();
     query_task_write_record(
         tx,
         task_target_replace_task_rebind_sql(),
@@ -70,6 +73,8 @@ pub(crate) async fn execute_task_target_replace_transaction(
             &task_internal_id,
             &new_target.internal_id,
             &source_target_internal_id,
+            &done_status,
+            &new_status,
         ],
         "rebind task to replacement target",
     )

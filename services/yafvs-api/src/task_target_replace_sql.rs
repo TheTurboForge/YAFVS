@@ -6,7 +6,7 @@ pub(crate) fn task_target_replace_task_state_sql() -> &'static str {
     "SELECT id::integer,
             owner::integer,
             target::integer,
-            coalesce(run_status, 1)::integer,
+            run_status::integer,
             coalesce(target_location, 0)::integer,
             coalesce(hidden, 0)::integer,
             coalesce(usage_type, 'scan')
@@ -68,7 +68,7 @@ pub(crate) fn task_target_replace_task_rebind_sql() -> &'static str {
             modification_time = m_now()
       WHERE id = $1
         AND target = $3
-        AND coalesce(run_status, 1) = 2
+        AND coalesce(run_status, $4) = $5
         AND coalesce(target_location, 0) = 0
         AND coalesce(hidden, 0) = 0
         AND coalesce(usage_type, 'scan') = 'scan'

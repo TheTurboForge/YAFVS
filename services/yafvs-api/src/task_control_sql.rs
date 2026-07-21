@@ -5,7 +5,7 @@
 pub(crate) fn task_start_state_sql() -> &'static str {
     "SELECT tasks.id::integer,
             tasks.owner::integer,
-            coalesce(tasks.run_status, 1)::integer,
+            tasks.run_status::integer,
             targets.id::integer,
             (nullif(btrim(coalesce(targets.hosts, '')), '') IS NOT NULL)::boolean,
             configs.id::integer,
@@ -41,7 +41,7 @@ pub(crate) fn task_start_insert_report_sql() -> &'static str {
     "INSERT INTO reports
         (uuid, owner, task, creation_time, modification_time, comment,
          scan_run_status, slave_progress, flags)
-     VALUES (make_uuid(), $1, $2, m_now(), m_now(), '', 3, 0, 0)
+     VALUES (make_uuid(), $1, $2, m_now(), m_now(), '', $3, 0, 0)
      RETURNING id::integer, uuid::text;"
 }
 
@@ -59,6 +59,6 @@ pub(crate) fn task_start_insert_scan_queue_sql() -> &'static str {
 
 pub(crate) fn task_start_mark_requested_sql() -> &'static str {
     "UPDATE tasks
-        SET run_status = 3
+        SET run_status = $2
       WHERE id = $1;"
 }

@@ -36,8 +36,11 @@ use std::path::{Path, PathBuf};
 use time::OffsetDateTime;
 use time::format_description::well_known::Rfc3339;
 
-const ACTIVE_SCAN_SQL: &str =
-    "SELECT count(*) FROM tasks WHERE run_status IN (0, 3, 4, 10, 11, 14, 16, 17, 18, 19);";
+// gvmd's database function intentionally folds Delete Waiting into Delete
+// Requested, Ultimate Delete Waiting into Ultimate Delete Requested, and Stop
+// Waiting into Stop Requested. These names therefore cover the full inherited
+// task_in_use status set without reproducing its numeric values here.
+const ACTIVE_SCAN_SQL: &str = "SELECT count(*) FROM tasks WHERE run_status_name(run_status) IN ('Delete Requested', 'Ultimate Delete Requested', 'Requested', 'Running', 'Stop Requested', 'Queued', 'Processing');";
 const FULL_AND_FAST_SCAN_CONFIG_ID: &str = "daba56c8-73ec-11df-a475-002264764cea";
 const IANA_TCP_UDP_PORT_LIST_ID: &str = "4a4717fe-57d2-11e1-9a26-406186ea4fc5";
 

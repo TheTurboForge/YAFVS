@@ -71,7 +71,7 @@ const PDF_REPORT_SQL: &str = r#"
                t.name AS task_name,
                target.uuid AS target_id,
                target.name AS target_name,
-               run_status_name(coalesce(r.scan_run_status, 0)) AS status,
+               run_status_name(r.scan_run_status) AS status,
                coalesce(r.creation_time, 0)::bigint AS creation_time,
                coalesce(r.start_time, 0)::bigint AS scan_start,
                coalesce(r.end_time, 0)::bigint AS scan_end,

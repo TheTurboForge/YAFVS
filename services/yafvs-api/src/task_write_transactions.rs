@@ -6,6 +6,7 @@ use tokio_postgres::Transaction;
 
 use crate::{
     errors::ApiError,
+    task_status::TaskStatus,
     task_write_db::{
         TaskWriteRecord, TaskWriteRecordWithInternalId, execute_task_write_sql,
         query_task_write_record, query_task_write_record_with_internal_id,
@@ -26,6 +27,7 @@ pub(crate) async fn execute_task_create_transaction(
     tag_internal_id: Option<i32>,
     request: &ValidatedTaskCreate,
 ) -> Result<TaskWriteRecordWithInternalId, ApiError> {
+    let new_status = TaskStatus::New.as_i32();
     let record = query_task_write_record_with_internal_id(
         tx,
         task_create_metadata_sql(),
@@ -39,6 +41,7 @@ pub(crate) async fn execute_task_create_transaction(
             &schedule_internal_id,
             &schedule_next_time,
             &request.schedule_periods,
+            &new_status,
         ],
         "create task metadata",
     )

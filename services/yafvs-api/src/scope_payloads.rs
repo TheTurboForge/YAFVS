@@ -183,7 +183,7 @@ pub(crate) fn scope_candidate_hosts_sql() -> &'static str {
            JOIN reports r ON r.task = task.id\n\
           WHERE st.scope = $1\n\
             AND coalesce(task.usage_type, 'scan') = 'scan'\n\
-            AND run_status_name(coalesce(r.scan_run_status, 0)) = 'Done'\n\
+            AND run_status_name(r.scan_run_status) = 'Done'\n\
           ORDER BY t.id, coalesce(r.end_time, r.creation_time) DESC, r.id DESC\n\
      )\n\
      SELECT DISTINCT rh.host::text, st.target_uuid::text, coalesce(st.target_name, st.target_uuid)::text, nr.report_uuid::text\n\

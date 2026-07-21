@@ -239,6 +239,7 @@ mod task_control;
 mod task_control_sql;
 mod task_handlers;
 mod task_query_sql;
+mod task_status;
 mod task_stop;
 mod task_target_payloads;
 mod task_target_replace;

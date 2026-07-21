@@ -50,7 +50,7 @@ pub(crate) fn scope_report_generation_sources_sql() -> &'static str {
            JOIN tasks ON tasks.id = reports.task
           WHERE tasks.target = t.id
             AND coalesce(tasks.usage_type, 'scan') = 'scan'
-            AND reports.scan_run_status = 1
+            AND run_status_name(reports.scan_run_status) = 'Done'
           ORDER BY coalesce(reports.end_time, reports.creation_time) DESC,
                    reports.id DESC
           LIMIT 1

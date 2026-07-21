@@ -38,7 +38,7 @@ fn scope_report_generation_selects_latest_completed_scan_report_per_target() {
         "FROM scope_targets st",
         "JOIN LATERAL",
         "coalesce(tasks.usage_type, 'scan') = 'scan'",
-        "reports.scan_run_status = 1",
+        "run_status_name(reports.scan_run_status) = 'Done'",
         "ORDER BY coalesce(reports.end_time, reports.creation_time) DESC",
         "reports.id DESC",
         "LIMIT 1",

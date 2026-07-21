@@ -16,6 +16,7 @@ use crate::{
     errors::ApiError,
     path_ids::parse_uuid,
     task_control_sql::*,
+    task_status::TaskStatus,
     task_write_db::{
         ensure_task_is_human_owned, map_task_write_db_error, require_task_write_operator,
         resolve_task_write_operator_owner,
@@ -33,7 +34,7 @@ pub(crate) struct TaskStartResult {
 pub(crate) struct TaskStartState {
     pub(crate) internal_id: i32,
     pub(crate) owner_id: Option<i32>,
-    pub(crate) run_status: i32,
+    pub(crate) run_status: TaskStatus,
     pub(crate) target_id: Option<i32>,
     pub(crate) target_has_hosts: bool,
     pub(crate) config_id: Option<i32>,
@@ -80,20 +81,21 @@ async fn load_task_start_state(
     tx: &Transaction<'_>,
     task_id: &str,
 ) -> Result<TaskStartState, ApiError> {
-    tx.query_opt(task_start_state_sql(), &[&task_id])
+    let row = tx
+        .query_opt(task_start_state_sql(), &[&task_id])
         .await
         .map_err(|error| map_task_write_db_error(error, "load task start state"))?
-        .map(|row| TaskStartState {
-            internal_id: row.get(0),
-            owner_id: row.get(1),
-            run_status: row.get(2),
-            target_id: row.get(3),
-            target_has_hosts: row.get(4),
-            config_id: row.get(5),
-            scanner_id: row.get(6),
-            scanner_type: row.get(7),
-        })
-        .ok_or(ApiError::NotFound)
+        .ok_or(ApiError::NotFound)?;
+    Ok(TaskStartState {
+        internal_id: row.get(0),
+        owner_id: row.get(1),
+        run_status: TaskStatus::from_database(row.get(2))?,
+        target_id: row.get(3),
+        target_has_hosts: row.get(4),
+        config_id: row.get(5),
+        scanner_id: row.get(6),
+        scanner_type: row.get(7),
+    })
 }
 
 pub(crate) fn ensure_task_is_startable(task: &TaskStartState) -> Result<(), ApiError> {
@@ -124,14 +126,21 @@ pub(crate) fn ensure_task_is_startable(task: &TaskStartState) -> Result<(), ApiE
     }
 
     match task.run_status {
-        1 | 2 | 12 | 13 => Ok(()),
-        0 | 14 | 16 | 17 => Err(ApiError::Conflict(
+        status if status.is_startable() => Ok(()),
+        TaskStatus::DeleteRequested
+        | TaskStatus::DeleteUltimateRequested
+        | TaskStatus::DeleteWaiting
+        | TaskStatus::DeleteUltimateWaiting => Err(ApiError::Conflict(
             "task start is unavailable while deletion is pending".to_string(),
         )),
-        3 | 4 | 10 | 11 | 18 => Err(ApiError::Conflict(
+        TaskStatus::Requested
+        | TaskStatus::Running
+        | TaskStatus::StopRequested
+        | TaskStatus::StopWaiting
+        | TaskStatus::Queued => Err(ApiError::Conflict(
             "task start is unavailable while the task is active or queued".to_string(),
         )),
-        19 => Err(ApiError::Conflict(
+        TaskStatus::Processing => Err(ApiError::Conflict(
             "task start is unavailable while report processing is active".to_string(),
         )),
         _ => Err(ApiError::Conflict(
@@ -163,10 +172,11 @@ async fn insert_task_start_report(
     task: &TaskStartState,
     task_owner_id: i32,
 ) -> Result<(i32, String), ApiError> {
+    let requested = TaskStatus::Requested.as_i32();
     let row = tx
         .query_one(
             task_start_insert_report_sql(),
-            &[&task_owner_id, &task.internal_id],
+            &[&task_owner_id, &task.internal_id, &requested],
         )
         .await
         .map_err(|error| map_task_write_db_error(error, "create requested task report"))?;
@@ -187,8 +197,12 @@ async fn mark_task_start_requested(
     tx: &Transaction<'_>,
     task_internal_id: i32,
 ) -> Result<(), ApiError> {
-    tx.execute(task_start_mark_requested_sql(), &[&task_internal_id])
-        .await
-        .map_err(|error| map_task_write_db_error(error, "mark task start requested"))?;
+    let requested = TaskStatus::Requested.as_i32();
+    tx.execute(
+        task_start_mark_requested_sql(),
+        &[&task_internal_id, &requested],
+    )
+    .await
+    .map_err(|error| map_task_write_db_error(error, "mark task start requested"))?;
     Ok(())
 }

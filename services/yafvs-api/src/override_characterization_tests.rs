@@ -391,7 +391,7 @@ fn openapi_documents_override_native_contract() {
     for required in [
         "required: [nvt_id, text, new_severity]",
         "        hosts:",
-        "          nullable: true",
+        "          type: [string, 'null']",
         "        port:",
         "        severity:",
         "        task_id:",
@@ -415,7 +415,7 @@ fn openapi_documents_override_native_contract() {
     assert!(patch_schema.contains("        nvt_id:"));
     assert!(patch_schema.contains("        new_severity:"));
     assert!(patch_schema.contains("        activation:"));
-    assert!(patch_schema.matches("nullable: true").count() >= 5);
+    assert!(patch_schema.matches("'null'").count() >= 5);
     let clone_schema = OPENAPI
         .split_once("    OverrideCloneRequest:\n")
         .expect("override clone schema must exist")

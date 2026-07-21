@@ -18,7 +18,7 @@ pub(crate) fn latest_completed_full_test_report_id(
         ));
     }
     let query = format!(
-        "SELECT r.uuid FROM reports r JOIN tasks t ON t.id = r.task WHERE t.name LIKE '{}%' AND coalesce(r.scan_run_status, 0) = 1 AND coalesce(r.start_time, 0) > 0 ORDER BY coalesce(r.end_time, 0) DESC, coalesce(r.start_time, 0) DESC, r.id DESC LIMIT 1;",
+        "SELECT r.uuid FROM reports r JOIN tasks t ON t.id = r.task WHERE t.name LIKE '{}%' AND run_status_name(r.scan_run_status) = 'Done' AND coalesce(r.start_time, 0) > 0 ORDER BY coalesce(r.end_time, 0) DESC, coalesce(r.start_time, 0) DESC, r.id DESC LIMIT 1;",
         FULL_TEST_TASK_PREFIX.replace('\'', "''")
     );
     let output = psql(repo_root, &query, runner);

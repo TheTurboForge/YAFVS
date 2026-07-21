@@ -7,7 +7,7 @@ pub(crate) fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &
         r#"WITH report_rollup AS (
              SELECT r.task,
                     count(DISTINCT r.id)::bigint AS report_count_total,
-                    count(DISTINCT r.id) FILTER (WHERE run_status_name(coalesce(r.scan_run_status, 0)) = 'Done')::bigint AS report_count_finished,
+                    count(DISTINCT r.id) FILTER (WHERE run_status_name(r.scan_run_status) = 'Done')::bigint AS report_count_finished,
                     coalesce(max(res.severity) FILTER (WHERE coalesce(res.severity, 0) > 0), 0)::double precision AS max_severity
                FROM reports r
                LEFT JOIN results res ON res.report = r.id
@@ -25,9 +25,9 @@ pub(crate) fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &
                     count(*) FILTER (WHERE coalesce(res.severity, 0) >= 7.0 AND coalesce(res.severity, 0) < 9.0)::bigint AS high_count,
                     count(*) FILTER (WHERE coalesce(res.severity, 0) >= 4.0 AND coalesce(res.severity, 0) < 7.0)::bigint AS medium_count,
                     count(*) FILTER (WHERE coalesce(res.severity, 0) > 0 AND coalesce(res.severity, 0) < 4.0)::bigint AS low_count,
-                    run_status_name(coalesce(r.scan_run_status, 0)) AS status,
+                    run_status_name(r.scan_run_status) AS status,
                     row_number() OVER (PARTITION BY r.task ORDER BY coalesce(nullif(r.end_time, 0), nullif(r.start_time, 0), nullif(r.creation_time, 0), 0) DESC, r.id DESC) AS latest_rank,
-                    CASE WHEN run_status_name(coalesce(r.scan_run_status, 0)) = 'Done' THEN 1 ELSE 0 END AS is_finished
+                    CASE WHEN run_status_name(r.scan_run_status) = 'Done' THEN 1 ELSE 0 END AS is_finished
                FROM reports r
                LEFT JOIN results res ON res.report = r.id
               GROUP BY r.task, r.id, r.uuid, r.creation_time, r.start_time, r.end_time, r.scan_run_status
@@ -72,13 +72,13 @@ pub(crate) fn task_sql(filtered_predicate: &str, sort_sql: &str, limit_clause: &
                     task.name,
                     coalesce(task.comment, '') AS comment,
                     u.uuid AS owner_id,
-                    run_status_name(coalesce(task.run_status, 0)) AS status,
-                    CASE WHEN run_status_name(coalesce(task.run_status, 0)) = 'Done' THEN 100::bigint
+                    run_status_name(task.run_status) AS status,
+                    CASE WHEN run_status_name(task.run_status) = 'Done' THEN 100::bigint
                          WHEN latest_report.report_pk IS NOT NULL THEN coalesce(report_progress(latest_report.report_pk), 0)::bigint
                          ELSE 0::bigint END AS progress,
                     CASE
                       WHEN coalesce(report_rollup.report_count_finished, 0) <= 1 THEN ''
-                      WHEN run_status_name(coalesce(task.run_status, 0)) = 'Running' OR target.id IS NULL THEN ''
+                      WHEN run_status_name(task.run_status) = 'Running' OR target.id IS NULL THEN ''
                       WHEN latest_finished_report.severity > second_latest_finished_report.severity THEN 'up'
                       WHEN second_latest_finished_report.severity > latest_finished_report.severity THEN 'down'
                       WHEN (CASE WHEN latest_finished_report.critical_count > 0 THEN 5

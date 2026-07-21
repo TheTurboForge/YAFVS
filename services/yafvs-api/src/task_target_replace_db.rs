@@ -5,10 +5,8 @@
 use tokio_postgres::Transaction;
 
 use crate::{
-    errors::ApiError,
-    path_ids::parse_uuid,
-    task_target_replace_sql::*,
-    task_write_db::{TASK_STATUS_NEW, map_task_write_db_error},
+    errors::ApiError, path_ids::parse_uuid, task_status::TaskStatus, task_target_replace_sql::*,
+    task_write_db::map_task_write_db_error,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,7 +14,7 @@ pub(crate) struct TaskTargetReplaceTaskState {
     pub(crate) internal_id: i32,
     pub(crate) owner_id: Option<i32>,
     pub(crate) target_internal_id: Option<i32>,
-    pub(crate) run_status: i32,
+    pub(crate) run_status: TaskStatus,
     pub(crate) target_location: i32,
     pub(crate) hidden: i32,
     pub(crate) usage_type: String,
@@ -34,19 +32,20 @@ pub(crate) async fn load_task_target_replace_task_state(
     task_id: &str,
 ) -> Result<TaskTargetReplaceTaskState, ApiError> {
     let task_id = parse_uuid(task_id)?.to_string();
-    tx.query_opt(task_target_replace_task_state_sql(), &[&task_id])
+    let row = tx
+        .query_opt(task_target_replace_task_state_sql(), &[&task_id])
         .await
         .map_err(|error| map_task_write_db_error(error, "load task target replacement state"))?
-        .map(|row| TaskTargetReplaceTaskState {
-            internal_id: row.get(0),
-            owner_id: row.get(1),
-            target_internal_id: row.get(2),
-            run_status: row.get(3),
-            target_location: row.get(4),
-            hidden: row.get(5),
-            usage_type: row.get(6),
-        })
-        .ok_or(ApiError::NotFound)
+        .ok_or(ApiError::NotFound)?;
+    Ok(TaskTargetReplaceTaskState {
+        internal_id: row.get(0),
+        owner_id: row.get(1),
+        target_internal_id: row.get(2),
+        run_status: TaskStatus::from_database(row.get(3))?,
+        target_location: row.get(4),
+        hidden: row.get(5),
+        usage_type: row.get(6),
+    })
 }
 
 pub(crate) async fn load_task_target_replace_source_target_state(
@@ -75,7 +74,7 @@ pub(crate) fn ensure_task_target_replace_state(
             "task target replacement is only available for a live scan task".to_string(),
         ));
     }
-    if task.run_status != TASK_STATUS_NEW {
+    if task.run_status != TaskStatus::New {
         return Err(ApiError::Conflict(
             "task target replacement is only available while task status is New".to_string(),
         ));

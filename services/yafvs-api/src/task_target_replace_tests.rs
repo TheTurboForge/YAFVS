@@ -4,6 +4,7 @@
 
 use crate::{
     errors::ApiError,
+    task_status::TaskStatus,
     task_target_replace_db::{
         TaskTargetReplaceTaskState, ensure_task_target_replace_ownership,
         ensure_task_target_replace_state,
@@ -27,7 +28,7 @@ fn replaceable_task_state() -> TaskTargetReplaceTaskState {
         internal_id: 7,
         owner_id: Some(11),
         target_internal_id: Some(13),
-        run_status: 2,
+        run_status: TaskStatus::New,
         target_location: 0,
         hidden: 0,
         usage_type: "scan".to_string(),
@@ -70,7 +71,7 @@ fn task_target_replace_requires_exactly_new_live_scan_task_with_live_target() {
 
     for task in [
         TaskTargetReplaceTaskState {
-            run_status: 1,
+            run_status: TaskStatus::Done,
             ..replaceable_task_state()
         },
         TaskTargetReplaceTaskState {
@@ -137,7 +138,7 @@ fn task_target_replace_sql_preserves_source_settings_and_rebinds_only_the_task()
     assert!(rebind.contains("target = $3"));
     assert!(rebind.contains("target_location = 0"));
     assert!(rebind.contains("modification_time = m_now()"));
-    assert!(rebind.contains("coalesce(run_status, 1) = 2"));
+    assert!(rebind.contains("coalesce(run_status, $4) = $5"));
     assert!(task_target_replace_report_count_sql().contains("FROM reports WHERE task = $1"));
     assert!(task_target_replace_live_task_reference_count_sql().contains("hidden, 0) = 0"));
     assert!(task_target_replace_scope_reference_count_sql().contains("scope_targets"));

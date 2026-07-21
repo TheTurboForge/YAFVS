@@ -61,7 +61,7 @@ fn credential_openapi_documents_redacted_smb_preflight_proof() {
         "required: [id, name, owner_id, owner, credential_type, smb_compatible",
         "owner_id:",
         "format: uuid",
-        "nullable: true",
+        "type: [string, 'null']",
         "smb_compatible:",
         "The login and all other secret material remain write-only.",
     ] {

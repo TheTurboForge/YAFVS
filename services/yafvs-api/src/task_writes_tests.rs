@@ -4,6 +4,7 @@
 
 use crate::{
     errors::ApiError,
+    task_status::TaskStatus,
     task_write_db::{
         ensure_task_configuration_mutable, ensure_task_is_human_owned,
         ensure_task_not_in_use_for_native_trash,
@@ -19,7 +20,6 @@ use crate::{
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 const GVMD_OSP: &str = include_str!("../../../components/gvmd/src/manage_osp.c");
 const GVMD_OPENVASD: &str = include_str!("../../../components/gvmd/src/manage_openvasd.c");
-const GVMD_MANAGE_H: &str = include_str!("../../../components/gvmd/src/manage.h");
 const VALID_TARGET_ID: &str = "11111111-1111-4111-8111-111111111111";
 const VALID_CONFIG_ID: &str = "22222222-2222-4222-8222-222222222222";
 const VALID_SCANNER_ID: &str = "33333333-3333-4333-8333-333333333333";
@@ -334,7 +334,7 @@ fn task_replace_openapi_contract_is_complete_and_scanner_control_classified() {
     for required in [
         "required: [name, target_id, config_id, scanner_id",
         "schedule_id:",
-        "nullable: true",
+        "type: [string, 'null']",
         "alert_ids:",
         "hosts_ordering:",
         "schedule_periods:",
@@ -501,7 +501,7 @@ fn task_create_sql_writes_schedule_alerts_and_inherited_defaults() {
     let create = task_create_metadata_sql();
     assert!(create.contains("INSERT INTO tasks"));
     assert!(create.contains("run_status"));
-    assert!(create.contains("VALUES (make_uuid(), $1, $2, 0, coalesce($3, ''), 2, $4, $5"));
+    assert!(create.contains("VALUES (make_uuid(), $1, $2, 0, coalesce($3, ''), $10, $4, $5"));
     assert!(create.contains("$7, $8, $9, $6, 0, 0, 0, 0, 1"));
     assert!(create.contains("schedule_periods"));
     assert!(create.contains("schedule_location"));
@@ -556,10 +556,10 @@ fn task_create_transaction_attaches_alerts_after_task_insert() {
 
 #[test]
 fn task_replace_is_state_guarded_and_transactional() {
-    assert!(ensure_task_configuration_mutable(2, false).is_ok());
-    assert!(ensure_task_configuration_mutable(1, true).is_ok());
+    assert!(ensure_task_configuration_mutable(TaskStatus::New, false).is_ok());
+    assert!(ensure_task_configuration_mutable(TaskStatus::Done, true).is_ok());
     assert!(matches!(
-        ensure_task_configuration_mutable(1, false),
+        ensure_task_configuration_mutable(TaskStatus::Done, false),
         Err(ApiError::Conflict(_))
     ));
 
@@ -611,12 +611,11 @@ fn task_replace_is_state_guarded_and_transactional() {
 
 #[test]
 fn native_task_status_numbers_match_the_inherited_database_contract() {
-    assert!(GVMD_MANAGE_H.contains("TASK_STATUS_DONE = 1"));
-    assert!(GVMD_MANAGE_H.contains("TASK_STATUS_NEW  = 2"));
-    assert_eq!(crate::task_write_db::TASK_STATUS_NEW, 2);
+    assert_eq!(TaskStatus::Done.as_i32(), 1);
+    assert_eq!(TaskStatus::New.as_i32(), 2);
     assert!(
         task_create_metadata_sql()
-            .contains("VALUES (make_uuid(), $1, $2, 0, coalesce($3, ''), 2, $4, $5")
+            .contains("VALUES (make_uuid(), $1, $2, 0, coalesce($3, ''), $10, $4, $5")
     );
 }
 
@@ -637,19 +636,27 @@ fn task_host_ordering_preference_is_forwarded_to_both_scanner_transports() {
 
 #[test]
 fn task_delete_rejects_in_use_run_statuses_before_trash_move() {
-    for status in [0, 3, 4, 10, 11, 14, 16, 17, 18, 19] {
+    for status in TaskStatus::ALL
+        .iter()
+        .filter_map(|(_, status)| status.blocks_native_trash().then_some(*status))
+    {
         assert!(
             matches!(
                 ensure_task_not_in_use_for_native_trash(status),
                 Err(ApiError::Conflict(_))
             ),
-            "run status {status} must stay on inherited scanner-aware delete path"
+            "run status {status:?} must stay on inherited scanner-aware delete path"
         );
     }
-    for status in [1, 2, 12, 13, 99] {
+    for status in [
+        TaskStatus::Done,
+        TaskStatus::New,
+        TaskStatus::Stopped,
+        TaskStatus::Interrupted,
+    ] {
         assert!(
             ensure_task_not_in_use_for_native_trash(status).is_ok(),
-            "non-active run status {status} should be eligible for native trash move"
+            "non-active run status {status:?} should be eligible for native trash move"
         );
     }
 }
@@ -828,7 +835,7 @@ fn task_delete_handler_requires_operator_owner_and_in_use_check_before_trash_mov
 #[test]
 fn task_delete_sql_matches_inherited_safe_trash_subset() {
     let state = task_write_state_sql();
-    assert!(state.contains("coalesce(run_status, 1)::integer"));
+    assert!(state.contains("run_status::integer"));
     assert!(state.contains("coalesce(hidden, 0) = 0"));
     assert!(state.contains("coalesce(usage_type, 'scan') = 'scan'"));
 

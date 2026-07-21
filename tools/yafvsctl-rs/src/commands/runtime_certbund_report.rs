@@ -1097,7 +1097,7 @@ mod tests {
             .find(|arg| arg.contains("SELECT r.uuid FROM reports"))
             .unwrap();
         assert!(query.contains("t.name LIKE 'YAFVS full test scan %'"));
-        assert!(query.contains("coalesce(r.scan_run_status, 0) = 1"));
+        assert!(query.contains("run_status_name(r.scan_run_status) = 'Done'"));
         assert!(query.contains("ORDER BY coalesce(r.end_time, 0) DESC"));
         cleanup(&repo);
     }

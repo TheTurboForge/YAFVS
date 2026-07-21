@@ -93,7 +93,7 @@ pub(crate) fn scope_report_retention_sources_sql() -> &'static str {
            FROM reports\n\
            JOIN tasks task ON task.id = reports.task\n\
           WHERE coalesce(task.usage_type, 'scan') = 'scan'\n\
-            AND reports.scan_run_status = 1\n\
+            AND run_status_name(reports.scan_run_status) = 'Done'\n\
           ORDER BY task.target, coalesce(reports.end_time, reports.creation_time) DESC, reports.id DESC\n\
      ),\n\
      source_rows AS (\n\

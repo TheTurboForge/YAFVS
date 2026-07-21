@@ -5,9 +5,10 @@
 use axum::extract::Extension;
 use tokio_postgres::{Transaction, types::ToSql};
 
-use crate::{auth::DirectApiOperator, errors::ApiError, path_ids::parse_uuid, task_write_sql::*};
-
-pub(crate) const TASK_STATUS_NEW: i32 = 2;
+use crate::{
+    auth::DirectApiOperator, errors::ApiError, path_ids::parse_uuid, task_status::TaskStatus,
+    task_write_sql::*,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TaskWriteRecord {
@@ -24,7 +25,7 @@ pub(crate) struct TaskWriteRecordWithInternalId {
 pub(crate) struct TaskWriteState {
     pub(crate) internal_id: i32,
     pub(crate) owner_id: Option<i32>,
-    pub(crate) run_status: i32,
+    pub(crate) run_status: TaskStatus,
     pub(crate) alterable: bool,
 }
 
@@ -249,23 +250,24 @@ pub(crate) async fn load_task_write_state(
     task_id: &str,
 ) -> Result<TaskWriteState, ApiError> {
     let task_id = parse_uuid(task_id)?.to_string();
-    tx.query_opt(task_write_state_sql(), &[&task_id])
+    let row = tx
+        .query_opt(task_write_state_sql(), &[&task_id])
         .await
         .map_err(|error| map_task_write_db_error(error, "load task write state"))?
-        .map(|row| TaskWriteState {
-            internal_id: row.get(0),
-            owner_id: row.get(1),
-            run_status: row.get(2),
-            alterable: row.get(3),
-        })
-        .ok_or(ApiError::NotFound)
+        .ok_or(ApiError::NotFound)?;
+    Ok(TaskWriteState {
+        internal_id: row.get(0),
+        owner_id: row.get(1),
+        run_status: TaskStatus::from_database(row.get(2))?,
+        alterable: row.get(3),
+    })
 }
 
 pub(crate) fn ensure_task_configuration_mutable(
-    run_status: i32,
+    run_status: TaskStatus,
     alterable: bool,
 ) -> Result<(), ApiError> {
-    if run_status == TASK_STATUS_NEW || alterable {
+    if run_status == TaskStatus::New || alterable {
         Ok(())
     } else {
         Err(ApiError::Conflict(
@@ -275,32 +277,15 @@ pub(crate) fn ensure_task_configuration_mutable(
     }
 }
 
-pub(crate) fn ensure_task_not_in_use_for_native_trash(run_status: i32) -> Result<(), ApiError> {
-    const TASK_STATUS_DELETE_REQUESTED: i32 = 0;
-    const TASK_STATUS_REQUESTED: i32 = 3;
-    const TASK_STATUS_RUNNING: i32 = 4;
-    const TASK_STATUS_STOP_REQUESTED: i32 = 10;
-    const TASK_STATUS_STOP_WAITING: i32 = 11;
-    const TASK_STATUS_DELETE_ULTIMATE_REQUESTED: i32 = 14;
-    const TASK_STATUS_DELETE_WAITING: i32 = 16;
-    const TASK_STATUS_DELETE_ULTIMATE_WAITING: i32 = 17;
-    const TASK_STATUS_QUEUED: i32 = 18;
-    const TASK_STATUS_PROCESSING: i32 = 19;
-
-    match run_status {
-        TASK_STATUS_DELETE_REQUESTED
-        | TASK_STATUS_REQUESTED
-        | TASK_STATUS_RUNNING
-        | TASK_STATUS_STOP_REQUESTED
-        | TASK_STATUS_STOP_WAITING
-        | TASK_STATUS_DELETE_ULTIMATE_REQUESTED
-        | TASK_STATUS_DELETE_WAITING
-        | TASK_STATUS_DELETE_ULTIMATE_WAITING
-        | TASK_STATUS_QUEUED
-        | TASK_STATUS_PROCESSING => Err(ApiError::Conflict(
+pub(crate) fn ensure_task_not_in_use_for_native_trash(
+    run_status: TaskStatus,
+) -> Result<(), ApiError> {
+    if run_status.blocks_native_trash() {
+        Err(ApiError::Conflict(
             "native task trash move is only available for non-running tasks".to_string(),
-        )),
-        _ => Ok(()),
+        ))
+    } else {
+        Ok(())
     }
 }
 

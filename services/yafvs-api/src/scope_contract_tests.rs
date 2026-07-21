@@ -8,7 +8,7 @@ use crate::scope_payloads::{scope_candidate_hosts_sql, scope_sql};
 fn scope_candidate_hosts_sql_keeps_candidates_out_of_membership() {
     let sql = scope_candidate_hosts_sql();
     assert!(sql.contains("SELECT DISTINCT ON (t.id)"));
-    assert!(sql.contains("run_status_name(coalesce(r.scan_run_status, 0)) = 'Done'"));
+    assert!(sql.contains("run_status_name(r.scan_run_status) = 'Done'"));
     assert!(sql.contains("ORDER BY t.id, coalesce(r.end_time, r.creation_time) DESC, r.id DESC"));
     assert!(sql.contains("JOIN scope_targets st ON st.target = t.id"));
     assert!(sql.contains("JOIN report_hosts rh ON rh.report = nr.report"));

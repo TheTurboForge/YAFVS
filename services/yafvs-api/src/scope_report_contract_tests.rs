@@ -93,7 +93,7 @@ fn scope_report_retention_preview_marks_only_non_latest_sources() {
     assert!(sql.contains("WITH latest_completed AS"));
     assert!(sql.contains("SELECT DISTINCT ON (task.target)"));
     assert!(sql.contains("coalesce(task.usage_type, 'scan') = 'scan'"));
-    assert!(sql.contains("reports.scan_run_status = 1"));
+    assert!(sql.contains("run_status_name(reports.scan_run_status) = 'Done'"));
     assert!(sql.contains("ORDER BY task.target, coalesce(reports.end_time, reports.creation_time) DESC, reports.id DESC"));
     assert!(sql.contains("SELECT srs.source_report, srs.source_report_uuid, srs.target,"));
     assert!(sql.contains("FROM scope_report_sources srs"));

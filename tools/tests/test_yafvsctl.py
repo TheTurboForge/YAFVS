@@ -6654,6 +6654,10 @@ class YAFVSCtlTests(unittest.TestCase):
 
     def test_task_target_replace_runtime_cleanup_is_ordered_and_complete(self):
         source = inspect.getsource(yafvsctl.direct_task_target_replace_runtime_findings)
+        self.assertIn(
+            'task_precondition == f"2|0|{source_target_id}"',
+            source,
+        )
         self.assertNotIn("deleted_tasks AS", source)
         self.assertIn('"BEGIN; "', source)
         self.assertIn("DELETE FROM tag_resources_trash WHERE resource_type = 'task'", source)

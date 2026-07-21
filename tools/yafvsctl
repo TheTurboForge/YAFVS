@@ -11530,7 +11530,7 @@ def direct_task_target_replace_runtime_findings(
             f"WHERE t.uuid = {sql_literal(task_id)};"
         )
         task_precondition = psql_value(psql(repo_root, task_precondition_sql))
-        task_precondition_ok = task_precondition == f"1|0|{source_target_id}"
+        task_precondition_ok = task_precondition == f"2|0|{source_target_id}"
         findings.append(
             finding(
                 "pass" if task_precondition_ok else "fail",

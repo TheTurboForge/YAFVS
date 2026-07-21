@@ -1283,6 +1283,44 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("<name>get_scope_reports</name>", gmp_schema)
         self.assertNotIn("<name>get_scope_report_metrics</name>", gmp_schema)
 
+    def test_system_report_bridge_is_removed_but_scanner_performance_remains(self):
+        root = Path(__file__).resolve().parents[2]
+        for path in (
+            "components/gsa/src/gmp/commands/performance.ts",
+            "components/gsa/src/web/pages/performance/PerformancePage.tsx",
+            "components/gsa/src/web/pages/performance/PerformanceReport.tsx",
+        ):
+            with self.subTest(path=path):
+                self.assertFalse((root / path).exists())
+
+        routes = (root / "components/gsa/src/web/Routes.tsx").read_text(encoding="utf-8")
+        gsad = "\n".join(
+            (root / path).read_text(encoding="utf-8")
+            for path in (
+                "components/gsad/src/gsad_gmp.c",
+                "components/gsad/src/gsad_http_handle_request.c",
+                "components/gsad/src/gsad_http_handler_functions.c",
+            )
+        )
+        gvmd = "\n".join(
+            (root / path).read_text(encoding="utf-8")
+            for path in (
+                "components/gvmd/src/gmp.c",
+                "components/gvmd/src/manage.c",
+                "components/gvmd/src/manage_commands.c",
+                "components/gvmd/src/schema_formats/XML/GMP.xml.in",
+            )
+        )
+        gvm_gmp = (root / "components/gvm-libs/gmp/gmp.c").read_text(encoding="utf-8")
+        ospd = (root / "components/ospd-openvas/ospd/command/command.py").read_text(encoding="utf-8")
+
+        self.assertNotIn("path: 'performance'", routes)
+        self.assertNotIn("get_system_report", gsad)
+        self.assertNotIn("GET_SYSTEM_REPORTS", gvmd)
+        self.assertNotIn("get_system_reports", gvmd.lower())
+        self.assertNotIn("gmp_get_system_reports", gvm_gmp)
+        self.assertIn('name = "get_performance"', ospd)
+
     def test_native_report_evidence_reads_have_no_legacy_command_surface(self):
         root = Path(__file__).resolve().parents[2]
         gvmd_commands = (root / "components" / "gvmd" / "src" / "manage_commands.c").read_text(encoding="utf-8")

@@ -148,7 +148,6 @@ export const API_TYPES = [
   'scope',
   'scope_report',
   'schedule',
-  'system_reports',
   'tag',
   'target',
   'task',

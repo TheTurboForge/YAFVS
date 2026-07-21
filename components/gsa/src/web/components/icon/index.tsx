@@ -28,7 +28,6 @@ import {
   Fingerprint,
   Folder,
   FolderOpen,
-  Gauge,
   Glasses,
   HatGlasses,
   HelpCircle,
@@ -216,7 +215,6 @@ const getIcons = (): Record<string, IconComponent> => {
     LogOut: createIcon(LogOut, 'logout-icon', 'Logout Icon'),
     Settings: createIcon(Settings, 'my-settings-icon', 'My Settings Icon'),
     ChevronRight: createIcon(ChevronRight, 'next-icon', 'Next Icon'),
-    Gauge: createIcon(Gauge, 'performance-icon', 'Performance Icon'),
     UserCheck: createIcon(UserCheck, 'permission-icon', 'Permission Icon'),
     ChevronLeft: createIcon(ChevronLeft, 'previous-icon', 'Previous Icon'),
     RotateCcw: createIcon(RotateCcw, 'reset-icon', 'Reset Icon'),
@@ -435,7 +433,6 @@ export const FilterIcon = getIcons().Filter;
 export const FingerprintIcon = getIcons().Fingerprint;
 export const FoldIcon = getIcons().Folder;
 export const UnfoldIcon = getIcons().FolderOpen;
-export const PerformanceIcon = getIcons().Gauge;
 export const ViewOtherIcon = getIcons().Glasses;
 export const HatAndGlassesIcon = getIcons().HatAndGlasses;
 export const HelpIcon = getIcons().HelpCircle;

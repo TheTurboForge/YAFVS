@@ -1659,37 +1659,6 @@ get_settings_data_reset (get_settings_data_t *data)
 
   memset (data, 0, sizeof (get_settings_data_t));
 }
-
-/**
- * @brief Command data for the get_system_reports command.
- */
-typedef struct
-{
-  int brief;        ///< Boolean.  Whether respond in brief.
-  char *name;       ///< Name of single report to get.
-  char *duration;   ///< Duration into the past to report on.
-  char *end_time; ///< Time of the last data point to report on.
-  char *slave_id;   ///< Slave that reports apply to, 0 for local Manager.
-  char *start_time; ///< Time of the first data point to report on.
-} get_system_reports_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-get_system_reports_data_reset (get_system_reports_data_t *data)
-{
-  free (data->name);
-  free (data->duration);
-  free (data->end_time);
-  free (data->slave_id);
-  free (data->start_time);
-
-  memset (data, 0, sizeof (get_system_reports_data_t));
-}
-
 /**
  * @brief Command data for the get_tags command.
  */
@@ -2549,7 +2518,6 @@ typedef union
   get_schedules_data_t get_schedules;                 ///< get_schedules
   get_scanners_data_t get_scanners;                   ///< get_scanners
   get_settings_data_t get_settings;                   ///< get_settings
-  get_system_reports_data_t get_system_reports;       ///< get_system_reports
   get_tags_data_t get_tags;                           ///< get_tags
   get_targets_data_t get_targets;                     ///< get_targets
   get_tasks_data_t get_tasks;                         ///< get_tasks
@@ -2884,12 +2852,6 @@ static get_schedules_data_t *get_schedules_data
  */
 static get_settings_data_t *get_settings_data
  = &(command_data.get_settings);
-
-/**
- * @brief Parser callback data for GET_SYSTEM_REPORTS.
- */
-static get_system_reports_data_t *get_system_reports_data
- = &(command_data.get_system_reports);
 
 /**
  * @brief Parser callback data for GET_TAGS.
@@ -3248,7 +3210,6 @@ typedef enum
   CLIENT_GET_SCANNERS,
   CLIENT_GET_SCHEDULES,
   CLIENT_GET_SETTINGS,
-  CLIENT_GET_SYSTEM_REPORTS,
   CLIENT_GET_TAGS,
   CLIENT_GET_TARGETS,
   CLIENT_GET_TASKS,
@@ -4307,26 +4268,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
               get_tags_data->names_only = 0;
 
             set_client_state (CLIENT_GET_TAGS);
-          }
-        else if (strcasecmp ("GET_SYSTEM_REPORTS", element_name) == 0)
-          {
-            const gchar* attribute;
-            append_attribute (attribute_names, attribute_values, "name",
-                              &get_system_reports_data->name);
-            append_attribute (attribute_names, attribute_values, "duration",
-                              &get_system_reports_data->duration);
-            append_attribute (attribute_names, attribute_values, "end_time",
-                              &get_system_reports_data->end_time);
-            append_attribute (attribute_names, attribute_values, "slave_id",
-                              &get_system_reports_data->slave_id);
-            append_attribute (attribute_names, attribute_values, "start_time",
-                              &get_system_reports_data->start_time);
-            if (find_attribute (attribute_names, attribute_values,
-                                "brief", &attribute))
-              get_system_reports_data->brief = strcmp (attribute, "0");
-            else
-              get_system_reports_data->brief = 0;
-            set_client_state (CLIENT_GET_SYSTEM_REPORTS);
           }
         else if (strcasecmp ("GET_TARGETS", element_name) == 0)
           {
@@ -13184,139 +13125,6 @@ handle_get_settings (gmp_parser_t *gmp_parser, GError **error)
   get_settings_data_reset (get_settings_data);
   set_client_state (CLIENT_AUTHENTIC);
 }
-
-/**
- * @brief Handle end of GET_SYSTEM_REPORTS element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_system_reports (gmp_parser_t *gmp_parser, GError **error)
-{
-  int ret;
-  report_type_iterator_t types;
-
-  ret = init_system_report_type_iterator
-         (&types,
-          get_system_reports_data->name,
-          get_system_reports_data->slave_id);
-  switch (ret)
-    {
-      case 1:
-        if (send_find_error_to_client ("get_system_reports",
-                                       "system report",
-                                       get_system_reports_data->name,
-                                       gmp_parser))
-          {
-            error_send_to_client (error);
-            return;
-          }
-        break;
-      case 2:
-        if (send_find_error_to_client
-              ("get_system_reports", "slave",
-               get_system_reports_data->slave_id, gmp_parser))
-          {
-            error_send_to_client (error);
-            return;
-          }
-        break;
-      case 4:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_UNAVAILABLE ("get_system_reports",
-                                  "Could not connect to slave"));
-        break;
-      case 5:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_UNAVAILABLE ("get_system_reports",
-                                  "Authentication to slave failed"));
-        break;
-      case 6:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_UNAVAILABLE ("get_system_reports",
-                                  "Failed to get system report from slave"));
-        break;
-      case 99:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_SYNTAX ("get_system_reports",
-                             "Permission denied"));
-        break;
-      default:
-        assert (0);
-        /* fallthrough */
-      case -1:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_INTERNAL_ERROR ("get_system_reports"));
-        break;
-      case 0:
-      case 3:
-        {
-          int report_ret;
-          char *report;
-          SEND_TO_CLIENT_OR_FAIL ("<get_system_reports_response"
-                                  " status=\"" STATUS_OK "\""
-                                  " status_text=\"" STATUS_OK_TEXT "\">");
-          while (next_report_type (&types))
-            if (get_system_reports_data->brief
-                && (ret != 3))
-              SENDF_TO_CLIENT_OR_FAIL
-               ("<system_report>"
-                "<name>%s</name>"
-                "<title>%s</title>"
-                "</system_report>",
-                report_type_iterator_name (&types),
-                report_type_iterator_title (&types));
-            else if ((report_ret = manage_system_report
-                                     (report_type_iterator_name (&types),
-                                      get_system_reports_data->duration,
-                                      get_system_reports_data->start_time,
-                                      get_system_reports_data->end_time,
-                                      get_system_reports_data->slave_id,
-                                      &report))
-                      && (report_ret != 3))
-              {
-                cleanup_report_type_iterator (&types);
-                internal_error_send_to_client (error);
-                return;
-              }
-            else if (report)
-              {
-                SENDF_TO_CLIENT_OR_FAIL
-                 ("<system_report>"
-                  "<name>%s</name>"
-                  "<title>%s</title>"
-                  "<report format=\"%s\""
-                  " start_time=\"%s\" end_time=\"%s\""
-                  " duration=\"%s\">"
-                  "%s"
-                  "</report>"
-                  "</system_report>",
-                  report_type_iterator_name (&types),
-                  report_type_iterator_title (&types),
-                  (report_ret == 3 ? "txt" : "png"),
-                  get_system_reports_data->start_time
-                    ? get_system_reports_data->start_time : "",
-                  get_system_reports_data->end_time
-                    ? get_system_reports_data->end_time : "",
-                  get_system_reports_data->duration
-                    ? get_system_reports_data->duration
-                    : (get_system_reports_data->start_time
-                       && get_system_reports_data->end_time)
-                      ? ""
-                      : "86400",
-                  report);
-                free (report);
-              }
-          cleanup_report_type_iterator (&types);
-          SEND_TO_CLIENT_OR_FAIL ("</get_system_reports_response>");
-        }
-    }
-
-  get_system_reports_data_reset (get_system_reports_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
 /**
  * @brief Handle end of GET_TAGS element.
  *
@@ -16199,10 +16007,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
       case CLIENT_GET_SETTINGS:
         handle_get_settings (gmp_parser, error);
-        break;
-
-      case CLIENT_GET_SYSTEM_REPORTS:
-        handle_get_system_reports (gmp_parser, error);
         break;
 
       case CLIENT_GET_TAGS:

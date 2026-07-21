@@ -67,7 +67,6 @@ describe('Menu rendering', () => {
     'LDAP',
     'NVTs',
     'Overrides',
-    'Performance',
     'Port Lists',
     'RADIUS',
     'Report Formats',
@@ -97,6 +96,20 @@ describe('Menu rendering', () => {
 
     expect(screen.getByText(label)).toBeInTheDocument();
   });
+  test('does not render Performance even with every capability', async () => {
+    renderMenuWith({
+      capabilities: new EverythingCapabilities(),
+      gmpSettings: {
+        enableAssetManagement: false,
+        reloadInterval: 5000,
+        reloadIntervalActive: 5000,
+        reloadIntervalInactive: 5000,
+      },
+    });
+
+    expect(screen.queryByText('Performance')).not.toBeInTheDocument();
+  });
+
   test.each(['Configuration'])(
     'should not render %s when mayAccess returns false',
     async text => {

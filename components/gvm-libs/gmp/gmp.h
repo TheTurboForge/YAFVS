@@ -215,25 +215,6 @@ static const gmp_create_target_opts_t gmp_create_target_opts_defaults = {
   0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 0, 0};
 
 /**
- * @brief Struct holding options for gmp get_system_reports command.
- */
-typedef struct
-{
-  const char *name;       ///< Name of report.
-  const char *duration;   ///< Duration.
-  const char *start_time; ///< Time of first data point.
-  const char *end_time;   ///< Time of last data point.
-  const char *slave_id;   ///< ID of the slave to get report from.
-  int brief;              ///< Brief flag.
-} gmp_get_system_reports_opts_t;
-
-/**
- * @brief Sensible default values for gmp_get_report_opts_t.
- */
-static const gmp_get_system_reports_opts_t
-  gmp_get_system_reports_opts_defaults = {NULL, NULL, NULL, NULL, NULL, 0};
-
-/**
  * @brief Struct holding options for gmp create_lsc_credential command.
  */
 typedef struct
@@ -384,12 +365,5 @@ gmp_create_lsc_credential_key (gnutls_session_t *, const char *, const char *,
 int
 gmp_delete_lsc_credential_ext (gnutls_session_t *, const char *,
                                gmp_delete_opts_t);
-
-int
-gmp_get_system_reports (gnutls_session_t *, const char *, int, entity_t *);
-
-int
-gmp_get_system_reports_ext (gnutls_session_t *, gmp_get_system_reports_opts_t,
-                            entity_t *);
 
 #endif /* not _GVM_GMP_GMP_H */

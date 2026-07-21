@@ -123,8 +123,6 @@ gsad_init_validator ()
                      "|(get_scopes)"
                      "|(get_setting)"
                      "|(get_settings)"
-                     "|(get_system_reports)"
-                     "|(get_system_report)"
                      "|(get_tag)"
                      "|(get_tags)"
                      "|(get_target)"

@@ -90,7 +90,6 @@ command_t gmp_commands[]
     {"GET_SCANNERS", "Get all scanners."},
     {"GET_SCHEDULES", "Get all schedules."},
     {"GET_SETTINGS", "Get all settings."},
-    {"GET_SYSTEM_REPORTS", "Get all system reports."},
     {"GET_TAGS", "Get all tags."},
     {"GET_TARGETS", "Get all targets."},
     {"GET_TASKS", "Get all tasks."},

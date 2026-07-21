@@ -90,11 +90,15 @@ scanner workflow:
 - top-level Dashboards, Notes, Tickets, Policies, Audits, and Audit Reports;
 - main-menu Help/CVSS calculator;
 - diagram/dashboard strips on retained entity-list pages;
+- the inherited browser System Reports/Performance page and its GMP/gvmd
+  bridge;
 - task wizards, import tasks/report upload, task resume, and raw delta reports.
 
 These were full-stack removals, not Web UI hides. Database schema, backend
 handlers, GMP/API surfaces, clients, UI routes, tests, and documentation were
 removed or migrated where applicable.
+Operational runtime measurements remain available through the YAFVS-native
+`runtime-performance-snapshot` command; they are not modeled as scan reports.
 
 ## Retained Foundations
 

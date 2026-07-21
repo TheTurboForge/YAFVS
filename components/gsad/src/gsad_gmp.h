@@ -363,17 +363,6 @@ export_slaves_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
 
 char *
-get_system_reports_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                        gsad_command_response_data_t *);
-char *
-get_system_report_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                       gsad_command_response_data_t *);
-char *
-get_system_report_gmp_from_url (gvm_connection_t *, gsad_credentials_t *,
-                                const char *, params_t *,
-                                gsad_command_response_data_t *);
-
-char *
 get_report_format_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                        gsad_command_response_data_t *);
 char *

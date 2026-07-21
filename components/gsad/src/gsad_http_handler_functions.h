@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -41,11 +42,6 @@ gsad_http_handle_logout (gsad_http_handler_t *, void *,
 gsad_http_result_t
 gsad_http_handle_login (gsad_http_handler_t *, void *, gsad_http_connection_t *,
                         gsad_connection_info_t *, void *);
-
-gsad_http_result_t
-gsad_http_handle_system_report (gsad_http_handler_t *, void *,
-                                gsad_http_connection_t *,
-                                gsad_connection_info_t *, void *);
 
 gsad_http_result_t
 gsad_http_handle_index (gsad_http_handler_t *, void *, gsad_http_connection_t *,

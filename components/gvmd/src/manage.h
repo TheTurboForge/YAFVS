@@ -1866,39 +1866,6 @@ credential_encrypted_value (credential_t, const char*);
 
 
 
-/* System reports. */
-
-/**
- * @brief A system report type iterator.
- */
-typedef struct
-{
-  gchar **start;        ///< First type.
-  gchar **current;      ///< Current type.
-} report_type_iterator_t;
-
-int
-init_system_report_type_iterator (report_type_iterator_t*, const char*,
-                                  const char*);
-
-void
-cleanup_report_type_iterator (report_type_iterator_t*);
-
-gboolean
-next_report_type (report_type_iterator_t*);
-
-const char*
-report_type_iterator_name (report_type_iterator_t*);
-
-const char*
-report_type_iterator_title (report_type_iterator_t*);
-
-int
-manage_system_report (const char *, const char *, const char *, const char *,
-                      const char *, char **);
-
-
-
 /* Scanners. */
 
 /**

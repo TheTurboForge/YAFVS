@@ -9,7 +9,6 @@ import {isDefined} from 'gmp/utils/identity';
 import {
   AddToAssetsIcon,
   DownloadIcon,
-  PerformanceIcon,
   RemoveFromAssetsIcon,
   ResultIcon,
   TaskIcon,
@@ -94,25 +93,6 @@ const ToolBarIcons = ({
             >
               <TlsCertificateIcon />
             </Link>
-            {isDefined(task) && (
-              <Link
-                query={{
-                  start: isDefined(report.scan_start)
-                    ? report.scan_start
-                        .utc()
-                        .format('YYYY-MM-DDTHH:mm:ss.SSS[Z]')
-                    : undefined,
-                  end: isDefined(report.scan_end)
-                    ? report.scan_end.utc().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]')
-                    : undefined,
-                  ...(isDefined(report.slave) && {scanner: report.slave.id}),
-                }}
-                title={_('Corresponding Performance')}
-                to="performance"
-              >
-                <PerformanceIcon />
-              </Link>
-            )}
           </IconDivider>
           <IconDivider>
             <DownloadIcon

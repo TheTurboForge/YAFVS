@@ -74,7 +74,6 @@ const CAPABILITY_NAMES = [
   'get_scopes',
   'get_schedules',
   'get_settings',
-  'get_system_reports',
   'get_tags',
   'get_targets',
   'get_tasks',

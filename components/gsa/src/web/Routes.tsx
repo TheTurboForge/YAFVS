@@ -84,7 +84,6 @@ const loggedInRoutes = [
         }),
       },
 
-
       {
         path: 'cpes',
         lazy: async () => ({
@@ -272,15 +271,6 @@ const loggedInRoutes = [
         path: 'override/:id',
         lazy: async () => ({
           Component: (await import('web/pages/overrides/DetailsPage')).default,
-        }),
-      },
-
-      // Performance route
-      {
-        path: 'performance',
-        lazy: async () => ({
-          Component: (await import('web/pages/performance/PerformancePage'))
-            .default,
         }),
       },
 
@@ -478,7 +468,8 @@ const loggedInRoutes = [
       {
         path: 'scopes/:id',
         lazy: async () => ({
-          Component: (await import('web/pages/scopes/ScopeDetailsPage')).default,
+          Component: (await import('web/pages/scopes/ScopeDetailsPage'))
+            .default,
         }),
       },
       {
@@ -651,7 +642,11 @@ const loggedInRoutes = [
 
 const AuthRedirect = () => {
   const isLoggedIn = useUserIsLoggedIn();
-  return isLoggedIn ? <Navigate to="/tasks" /> : <Navigate replace to="/login" />;
+  return isLoggedIn ? (
+    <Navigate to="/tasks" />
+  ) : (
+    <Navigate replace to="/login" />
+  );
 };
 
 const router = createBrowserRouter([

@@ -143,7 +143,6 @@ const Menu = () => {
   const userMatch = useMatch('/user/*');
   const isUserActive = Boolean(usersMatch || userMatch);
 
-  const isPerformanceActive = Boolean(useMatch('/performance'));
   const isTrashcanActive = Boolean(useMatch('/trashcan'));
   const isFeedStatusActive = Boolean(useMatch('/feed-status'));
   const isLdapActive = Boolean(useMatch('/ldap'));
@@ -393,7 +392,6 @@ const Menu = () => {
         icon: SlidersHorizontal,
         defaultOpened: [
           isUserActive,
-          isPerformanceActive,
           isTrashcanActive,
           isFeedStatusActive,
           isLdapActive,
@@ -405,12 +403,6 @@ const Menu = () => {
             to: '/users',
             isPathMatch: Boolean(usersMatch),
             active: isUserActive,
-          },
-          capabilities.mayOp('get_system_reports') && {
-            label: _('Performance'),
-            to: '/performance',
-            isPathMatch: isPerformanceActive,
-            active: isPerformanceActive,
           },
           {
             label: _('Trashcan'),

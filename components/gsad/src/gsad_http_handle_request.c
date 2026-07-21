@@ -78,7 +78,6 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
   gsad_http_handler_t *native_api_patch_handler = NULL;
   gsad_http_handler_t *native_api_put_handler = NULL;
   gsad_http_handler_t *native_api_delete_handler = NULL;
-  gsad_http_handler_t *system_report_handler = NULL;
 
   gboolean is_jwt_requested = gsad_settings_is_jwt_requested (gsad_settings);
 
@@ -98,8 +97,6 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
       native_api_put_handler =
         gsad_http_handler_new (gsad_http_handle_setup_credentials);
       native_api_delete_handler =
-        gsad_http_handler_new (gsad_http_handle_setup_credentials);
-      system_report_handler =
         gsad_http_handler_new (gsad_http_handle_setup_credentials);
     }
   else
@@ -130,10 +127,6 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
       native_api_delete_handler =
         gsad_http_handler_new (gsad_http_handle_setup_user);
       gsad_http_handler_add_from_func (native_api_delete_handler,
-                                       gsad_http_handle_setup_credentials);
-      system_report_handler =
-        gsad_http_handler_new (gsad_http_handle_setup_user);
-      gsad_http_handler_add_from_func (system_report_handler,
                                        gsad_http_handle_setup_credentials);
     }
 
@@ -211,14 +204,6 @@ gsad_http_request_init_handlers (gsad_settings_t *gsad_settings)
     "^/login/?$",
     gsad_http_method_handler_new_post_from_func (gsad_http_handle_login));
   next = gsad_http_handler_add (next, login_handler);
-
-  // Create /system_report handler chain.
-  gsad_http_handler_add_from_func (system_report_handler,
-                                   gsad_http_handle_system_report);
-  gsad_http_handler_t *system_report_url_handler = gsad_http_url_handler_new (
-    "^/system_report/.+$",
-    gsad_http_method_handler_new_get (system_report_handler));
-  next = gsad_http_handler_add (next, system_report_url_handler);
 
   // Create /logout handler chain.
   gsad_http_handler_t *logout_handler =

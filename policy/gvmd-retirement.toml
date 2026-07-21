@@ -267,12 +267,16 @@ notes = "Retain only imports with a supported product use case, then move asynch
 [[responsibilities]]
 id = "system-report-bridge"
 target_owner = "delete"
-status = "inventoried"
+status = "retired"
 weight = 1
-evidence = ["components/gsad/src/gsad_http_handler_functions.c::gsad_http_handle_system_report"]
-independent_authority = ["components/gsad/src/gsad_http_handler_functions.c::get_system_report_gmp_from_url"]
+evidence = [
+  "tools/tests/test_yafvsctl.py::test_system_report_bridge_is_removed_but_scanner_performance_remains",
+  "components/gsa/src/web/components/menu/__tests__/Menu.test.tsx::does not render Performance even with every capability",
+  "components/gsa/src/web/pages/reports/details/__tests__/ToolbarIcons.test.jsx::Corresponding Performance",
+]
+independent_authority = ["components/ospd-openvas/ospd/command/command.py::name = \"get_performance\""]
 dependencies = []
-notes = "Delete the inherited manager system-report bridge unless a concrete retained operator need is demonstrated."
+notes = "The inherited GSA /performance, gsad /system_report, and gvmd GET_SYSTEM_REPORTS surfaces are deleted. OSPD get_performance remains as an adjacent scanner capability."
 
 [[responsibilities]]
 id = "runtime-initialization-health"

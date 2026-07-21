@@ -121,12 +121,9 @@ describe('Report Details ToolBarIcons tests', () => {
       '/tlscertificates?filter=report_id%3D1234',
     );
 
-    // Corresponding Performance Icon
-    expect(links[6]).toHaveAttribute(
-      'href',
-      '/performance?start=2019-06-03T11%3A00%3A22.000Z&end=2019-06-03T11%3A31%3A23.000Z',
-    );
-    expect(links[6]).toHaveAttribute('title', 'Corresponding Performance');
+    expect(
+      element.querySelector('a[title="Corresponding Performance"]'),
+    ).toBeNull();
 
     // Download Report Icon
     expect(buttons[2]).toHaveAttribute('title', 'Download Report as PDF');

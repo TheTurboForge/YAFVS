@@ -31,7 +31,6 @@ import LoginCommand from 'gmp/commands/login';
 import NvtCommand from 'gmp/commands/nvt';
 import NvtFamiliesCommand from 'gmp/commands/nvt-families';
 import NvtsCommand from 'gmp/commands/nvts';
-import PerformanceCommand from 'gmp/commands/performance';
 import ReportCommand from 'gmp/commands/report';
 import ReportFormatCommand from 'gmp/commands/report-format';
 import ReportFormatsCommand from 'gmp/commands/report-formats';
@@ -96,7 +95,6 @@ class Gmp {
   public readonly nvt: NvtCommand;
   public readonly nvtfamilies: NvtFamiliesCommand;
   public readonly nvts: NvtsCommand;
-  public readonly performance: PerformanceCommand;
   public readonly portlist: PortListCommand;
   public readonly portlists: PortListsCommand;
   public readonly report: ReportCommand;
@@ -167,7 +165,6 @@ class Gmp {
     this.nvt = new NvtCommand(this.http);
     this.nvtfamilies = new NvtFamiliesCommand(this.http);
     this.nvts = new NvtsCommand(this.http);
-    this.performance = new PerformanceCommand(this.http);
     this.portlist = new PortListCommand(this.http);
     this.portlists = new PortListsCommand(this.http);
     this.report = new ReportCommand(this.http);

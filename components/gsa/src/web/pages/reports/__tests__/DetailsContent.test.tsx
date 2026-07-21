@@ -686,7 +686,9 @@ describe('DetailsContent', () => {
       // Toolbar
       screen.getByTitle('Help: Reading Reports');
       screen.getByTitle('Reports List');
-      screen.getByTitle(/^Corresponding Performance/);
+      expect(
+        screen.queryByTitle(/^Corresponding Performance/),
+      ).not.toBeInTheDocument();
 
       // Tabs
       const tablist = screen.getByRole('tablist');

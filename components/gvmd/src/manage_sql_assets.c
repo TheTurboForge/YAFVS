@@ -523,7 +523,7 @@ add_host_identifier_to_arrays (array_t **ids, array_t **hosts,
   identifier->source_data = g_strdup (source_data);
 
   array_add (*ids, identifier);
-  array_add_new_string (*hosts, g_strdup (ip));
+  array_add_new_string (*hosts, ip);
 }
 
 /**
@@ -657,7 +657,7 @@ manage_report_host_details (report_t report, const char *ip,
                   identifier->source_data
                     = g_strdup (entity_text (source_name));
                   array_add (identifiers, identifier);
-                  array_add_new_string (identifier_hosts, g_strdup (ip));
+                  array_add_new_string (identifier_hosts, ip);
                 }
               if (strcmp (entity_text (name), "MAC") == 0)
                 {
@@ -672,7 +672,7 @@ manage_report_host_details (report_t report, const char *ip,
                   identifier->source_data
                     = g_strdup (entity_text (source_name));
                   array_add (identifiers, identifier);
-                  array_add_new_string (identifier_hosts, g_strdup (ip));
+                  array_add_new_string (identifier_hosts, ip);
                 }
               if (strcmp (entity_text (name), "OS") == 0
                   && g_str_has_prefix (entity_text (value), "cpe:"))
@@ -688,7 +688,7 @@ manage_report_host_details (report_t report, const char *ip,
                   identifier->source_data
                     = g_strdup (entity_text (source_name));
                   array_add (identifiers, identifier);
-                  array_add_new_string (identifier_hosts, g_strdup (ip));
+                  array_add_new_string (identifier_hosts, ip);
                 }
               if (strcmp (entity_text (name), "ssh-key") == 0)
                 {
@@ -703,7 +703,7 @@ manage_report_host_details (report_t report, const char *ip,
                   identifier->source_data
                     = g_strdup (entity_text (source_name));
                   array_add (identifiers, identifier);
-                  array_add_new_string (identifier_hosts, g_strdup (ip));
+                  array_add_new_string (identifier_hosts, ip);
                 }
             }
         }
@@ -938,7 +938,7 @@ create_asset_report (const char *report_id, const char *term)
                = g_strdup (report_host_details_iterator_source_name (&details));
 
               array_add (identifiers, identifier);
-              array_add_new_string (identifier_hosts, g_strdup (host));
+              array_add_new_string (identifier_hosts, host);
             }
         }
       cleanup_iterator (&details);

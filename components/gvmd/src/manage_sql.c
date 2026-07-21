@@ -673,7 +673,7 @@ static void
 column_array_free (column_t *columns)
 {
   column_t *point = columns;
-  while (point->filter)
+  while (point->select)
     {
       g_free (point->select);
       g_free (point->filter);
@@ -4496,15 +4496,17 @@ credentials_setup (credentials_t *credentials)
 static int
 auth_cache_find (const char *username, const char *password, int method)
 {
-  char *hash, *quoted_username;
+  char *hash;
   int ret;
 
-  quoted_username = sql_quote (username);
-  hash = sql_string ("SELECT hash FROM auth_cache WHERE username = '%s'"
-                     " AND method = %i AND creation_time >= m_now () - %d"
-                     " FOR UPDATE;",
-                     quoted_username, method, get_auth_timeout()*60);
-  g_free (quoted_username);
+  hash = sql_string_ps ("SELECT hash FROM auth_cache WHERE username = $1"
+                        " AND method = $2"
+                        " AND creation_time >= m_now () - $3"
+                        " FOR UPDATE;",
+                        SQL_STR_PARAM (username),
+                        SQL_INT_PARAM (method),
+                        SQL_INT_PARAM (get_auth_timeout () * 60),
+                        NULL);
   if (!hash)
     return -1;
 
@@ -4540,12 +4542,15 @@ auth_cache_find (const char *username, const char *password, int method)
 static void
 auth_cache_insert (const char *username, const char *password, int method)
 {
-  char *hash, *quoted_username;
+  char *hash;
 
-  quoted_username = sql_quote (username);
   hash = manage_authentication_hash (password);
-  sql ("INSERT INTO auth_cache (username, hash, method, creation_time)"
-       " VALUES ('%s', '%s', %i, m_now ());", quoted_username, hash, method);
+  sql_ps ("INSERT INTO auth_cache (username, hash, method, creation_time)"
+          " VALUES ($1, $2, $3, m_now ());",
+          SQL_STR_PARAM (username),
+          SQL_STR_PARAM (hash),
+          SQL_INT_PARAM (method),
+          NULL);
   /* Cleanup cache */
   sql ("DELETE FROM auth_cache WHERE creation_time < m_now () - %d",
        get_auth_timeout()*60);
@@ -4561,7 +4566,9 @@ auth_cache_insert (const char *username, const char *password, int method)
 static void
 auth_cache_delete (const char *username)
 {
-  sql ("DELETE from auth_cache WHERE username = '%s'", username);
+  sql_ps ("DELETE FROM auth_cache WHERE username = $1;",
+          SQL_STR_PARAM (username),
+          NULL);
 }
 
 /**
@@ -4573,8 +4580,9 @@ auth_cache_delete (const char *username)
 static void
 auth_cache_refresh (const char *username)
 {
-  sql ("UPDATE auth_cache SET creation_time = m_now() WHERE username = '%s'",
-       username);
+  sql_ps ("UPDATE auth_cache SET creation_time = m_now() WHERE username = $1;",
+          SQL_STR_PARAM (username),
+          NULL);
 }
 
 /**
@@ -11279,11 +11287,11 @@ scan_start_time_epoch (report_t report)
 char*
 scan_start_time_uuid (const char *uuid)
 {
-  char *time, *quoted_uuid;
-  quoted_uuid = sql_quote (uuid);
-  time = sql_string ("SELECT iso_time (start_time)"
-                     " FROM reports WHERE uuid = '%s';",
-                     quoted_uuid);
+  char *time;
+  time = sql_string_ps ("SELECT iso_time (start_time)"
+                        " FROM reports WHERE uuid = $1;",
+                        SQL_STR_PARAM (uuid),
+                        NULL);
   return time ? time : g_strdup ("");
 }
 
@@ -11340,11 +11348,11 @@ scan_end_time (report_t report)
 char*
 scan_end_time_uuid (const char *uuid)
 {
-  char *time, *quoted_uuid;
-  quoted_uuid = sql_quote (uuid);
-  time = sql_string ("SELECT iso_time (end_time)"
-                     " FROM reports WHERE uuid = '%s';",
-                     quoted_uuid);
+  char *time;
+  time = sql_string_ps ("SELECT iso_time (end_time)"
+                        " FROM reports WHERE uuid = $1;",
+                        SQL_STR_PARAM (uuid),
+                        NULL);
   return time ? time : g_strdup ("");
 }
 

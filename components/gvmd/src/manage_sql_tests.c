@@ -15,6 +15,18 @@ Describe (manage_sql);
 BeforeEach (manage_sql) {}
 AfterEach (manage_sql) {}
 
+Ensure (manage_sql, column_array_free_uses_select_sentinel)
+{
+  column_t *columns = g_malloc0 (sizeof (column_t) * 3);
+
+  columns[0].select = g_strdup ("first");
+  columns[0].filter = NULL;
+  columns[1].select = g_strdup ("second");
+  columns[1].filter = g_strdup ("filter");
+
+  column_array_free (columns);
+}
+
 /* truncate_text */
 
 #define PASS(port) assert_that (validate_results_port (port), is_equal_to (0))

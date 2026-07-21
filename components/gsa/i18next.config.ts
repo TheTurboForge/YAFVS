@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -19,8 +20,8 @@ export default defineConfig({
     disablePlurals: true,
     generateBasePluralForms: false,
     removeUnusedKeys: true,
-    defaultValue: (locale, namespace, key, defaultValue) =>
-      locale === 'en' ? key : '',
+    defaultValue: (key, namespace, locale, defaultValue) =>
+      locale && locale.includes('en') ? key : '',
     functions: ['_', '_l'],
     useTranslationNames: ['useTranslation'],
   },

@@ -11,6 +11,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 pub use cli::{Cli, CliCommand, parse_cli};
+use commands::runtime_dir_configuration_error;
 pub use commands::{
     command_branding_state, command_build, command_build_baseline, command_build_c_services,
     command_build_core_c, command_build_python, command_build_ui, command_c_hardening_check,
@@ -35,7 +36,8 @@ pub use commands::{
     command_path_coupling_state, command_production_posture_check, command_quality_gate_schedule,
     command_quality_gate_state, command_repository_unavailable, command_runtime_app_build,
     command_runtime_app_down, command_runtime_app_smoke, command_runtime_app_up,
-    command_runtime_certbund_report, command_runtime_certs_init, command_runtime_credential_smoke,
+    command_runtime_certbund_report, command_runtime_certs_init,
+    command_runtime_configuration_rejected, command_runtime_credential_smoke,
     command_runtime_data_state, command_runtime_db_introspect, command_runtime_feed_import_init,
     command_runtime_feed_keyring_init, command_runtime_full_test_scan_preflight,
     command_runtime_full_test_scan_start, command_runtime_full_test_scan_status,
@@ -62,6 +64,9 @@ pub fn run(cli: &Cli, cwd: &Path) -> ResultEnvelope {
         None if matches!(cli.command, CliCommand::Status) => return command_status(cwd),
         None => return command_repository_unavailable(cwd, cli.command.name()),
     };
+    if let Some(message) = runtime_dir_configuration_error(&repo_root) {
+        return command_runtime_configuration_rejected(&repo_root, cli.command.name(), message);
+    }
     match &cli.command {
         CliCommand::NativeBulkModifySchedules {
             filter,

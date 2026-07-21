@@ -2385,8 +2385,20 @@ def quality_gate_unit_env(repo_root: Path) -> dict[str, str]:
 def runtime_dir(repo_root: Path) -> Path:
     configured = os.environ.get("YAFVS_RUNTIME_DIR")
     if configured:
-        return Path(configured).expanduser().resolve()
-    return (repo_root.parent / "YAFVS-runtime").resolve()
+        configured_path = Path(configured).expanduser()
+        if not configured_path.is_absolute():
+            raise ValueError("YAFVS_RUNTIME_DIR must be an absolute path")
+        if ".." in configured_path.parts:
+            raise ValueError(
+                "YAFVS_RUNTIME_DIR must not contain parent-directory components"
+            )
+        runtime = configured_path.resolve()
+    else:
+        runtime = (repo_root.parent / "YAFVS-runtime").resolve()
+    repository = repo_root.resolve()
+    if runtime == repository or repository in runtime.parents:
+        raise ValueError("YAFVS_RUNTIME_DIR must be outside the repository")
+    return runtime
 
 
 def runtime_path(repo_root: Path, *parts: str) -> Path:
@@ -16191,6 +16203,16 @@ def main(argv: list[str] | None = None) -> int:
     repo_root = find_repo_root(cwd)
     if repo_root is None:
         result = command_repository_unavailable(cwd, args.command)
+        return emit(result, args.json)
+    try:
+        runtime_dir(repo_root)
+    except ValueError as error:
+        result = make_result(
+            args.command,
+            repo_root,
+            "Runtime configuration rejected before command execution.",
+            [finding("fail", "runtime.configuration", str(error))],
+        )
         return emit(result, args.json)
     if args.command == "native-tooling-state":
         result = command_native_tooling_state(repo_root, compact=args.compact, summary_only=args.summary, status_only=args.status_only)

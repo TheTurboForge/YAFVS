@@ -90,6 +90,18 @@ pub fn command_repository_unavailable(start: &Path, command: &str) -> ResultEnve
     command_repository_unavailable_with(start, command, &SystemCommandRunner)
 }
 
+pub fn command_runtime_configuration_rejected(
+    repo_root: &Path,
+    command: &str,
+    message: String,
+) -> ResultEnvelope {
+    make_result(
+        metadata(repo_root, command, &SystemCommandRunner),
+        "Runtime configuration rejected before command execution.".to_string(),
+        vec![Finding::new("fail", "runtime.configuration", message)],
+    )
+}
+
 pub fn command_status(repo_root: &Path) -> ResultEnvelope {
     command_status_with(repo_root, &SystemCommandRunner)
 }

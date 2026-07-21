@@ -71,6 +71,8 @@ mod task_control;
 mod task_target;
 mod up;
 
+pub(crate) use common::runtime_dir_configuration_error;
+
 pub use audit::{
     command_gsa_npm_audit, command_native_api_cargo_audit, command_native_api_semgrep_audit,
     command_osv_lockfile_audit,
@@ -122,7 +124,8 @@ pub use quality_gate::command_quality_gate_state;
 pub use quality_schedule::command_quality_gate_schedule;
 pub use redis::command_runtime_redis_state;
 pub use repository::{
-    command_inventory, command_repository_unavailable, command_status, find_repo_root,
+    command_inventory, command_repository_unavailable, command_runtime_configuration_rejected,
+    command_status, find_repo_root,
 };
 pub use resource_import::{
     command_native_alerts_from_csv, command_native_credentials_from_csv,

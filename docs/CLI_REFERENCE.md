@@ -301,7 +301,9 @@ them with direct database or protocol mutations.
 `tools/yafvsctl` supplies the current absolute checkout path to Compose.
 Direct `docker compose` use must set `YAFVS_REPO_MOUNT_PATH` explicitly.
 Runtime state defaults to the sibling `YAFVS-runtime` directory and can be
-relocated with `YAFVS_RUNTIME_DIR`.
+relocated with `YAFVS_RUNTIME_DIR`. An override must be an absolute path
+outside the implementation repository; invalid overrides are rejected before
+commands can create runtime directories or secrets.
 
 ## Feed Generation And Deployment
 

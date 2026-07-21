@@ -8057,6 +8057,48 @@ class YAFVSCtlTests(unittest.TestCase):
             root.mkdir()
             self.assertEqual(yafvsctl.runtime_dir(root), Path(tmp) / "YAFVS-runtime")
 
+    def test_runtime_dir_rejects_relative_and_repository_nested_overrides(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "YAFVS"
+            root.mkdir()
+            alias = Path(tmp) / "repo-alias"
+            alias.symlink_to(root, target_is_directory=True)
+            for configured, message in (
+                ("YAFVS-runtime", "must be an absolute path"),
+                (str(root / "YAFVS-runtime"), "must be outside the repository"),
+                (str(alias / "nested-runtime"), "must be outside the repository"),
+                (
+                    str(Path(tmp) / "missing" / ".." / "YAFVS" / "nested-runtime"),
+                    "must not contain parent-directory components",
+                ),
+            ):
+                with self.subTest(configured=configured), unittest.mock.patch.dict(
+                    os.environ,
+                    {"YAFVS_RUNTIME_DIR": configured},
+                ):
+                    with self.assertRaisesRegex(ValueError, message):
+                        yafvsctl.runtime_dir(root)
+            self.assertFalse((root / "YAFVS-runtime").exists())
+
+    def test_cli_rejects_invalid_runtime_override_before_dispatch(self):
+        repo_root = YAFVSCTL_PATH.parents[1]
+        environment = os.environ.copy()
+        environment["YAFVS_RUNTIME_DIR"] = "YAFVS-runtime"
+        completed = subprocess.run(
+            [sys.executable, str(YAFVSCTL_PATH), "native-tooling-state", "--json"],
+            cwd=repo_root,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=environment,
+        )
+        self.assertEqual(completed.returncode, 1)
+        payload = json.loads(completed.stdout)
+        self.assertEqual(payload["status"], "fail")
+        self.assertEqual(payload["findings"][0]["check"], "runtime.configuration")
+        self.assertFalse((repo_root / "YAFVS-runtime").exists())
+
     def test_app_services_are_experimental_profile_services(self):
         self.assertEqual(yafvsctl.APP_SERVICES, ("gvmd", "ospd-openvas", "notus-scanner", "gsad", "yafvs-api"))
 

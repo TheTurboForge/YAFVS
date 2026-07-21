@@ -6,7 +6,7 @@ use crate::result::{Finding, Metadata};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::env;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::os::unix::fs::PermissionsExt;
 use std::path::Component;
 use std::path::Path;
@@ -170,6 +170,53 @@ pub(crate) fn runtime_dir(repo_root: &Path) -> PathBuf {
     absolute.canonicalize().unwrap_or(absolute)
 }
 
+pub(crate) fn runtime_dir_configuration_error(repo_root: &Path) -> Option<String> {
+    let configured = env::var_os("YAFVS_RUNTIME_DIR")?;
+    validate_runtime_dir_configuration(repo_root, &configured).err()
+}
+
+fn validate_runtime_dir_configuration(repo_root: &Path, configured: &OsStr) -> Result<(), String> {
+    let configured = expand_home(PathBuf::from(configured));
+    if !configured.is_absolute() {
+        return Err("YAFVS_RUNTIME_DIR must be an absolute path".to_string());
+    }
+    if configured
+        .components()
+        .any(|component| matches!(component, Component::ParentDir))
+    {
+        return Err("YAFVS_RUNTIME_DIR must not contain parent-directory components".to_string());
+    }
+    let repository = repo_root
+        .canonicalize()
+        .unwrap_or_else(|_| repo_root.to_path_buf());
+    let runtime = resolve_boundary_path(&configured);
+    if runtime == repository || runtime.starts_with(&repository) {
+        return Err("YAFVS_RUNTIME_DIR must be outside the repository".to_string());
+    }
+    Ok(())
+}
+
+fn resolve_boundary_path(path: &Path) -> PathBuf {
+    let mut cursor = path;
+    let mut missing = Vec::new();
+    loop {
+        if let Ok(mut resolved) = cursor.canonicalize() {
+            for component in missing.iter().rev() {
+                resolved.push(component);
+            }
+            return resolved;
+        }
+        let Some(name) = cursor.file_name() else {
+            return path.to_path_buf();
+        };
+        missing.push(name.to_os_string());
+        let Some(parent) = cursor.parent() else {
+            return path.to_path_buf();
+        };
+        cursor = parent;
+    }
+}
+
 pub(crate) fn expand_home(path: PathBuf) -> PathBuf {
     let Some(text) = path.to_str() else {
         return path;
@@ -235,5 +282,55 @@ pub(crate) fn metadata(repo_root: &Path, command: &str, runner: &dyn CommandRunn
             .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string()),
         repo_root: repo_root.display().to_string(),
         head: run_git(runner, repo_root, &["rev-parse", "--short", "HEAD"]),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::os::unix::fs::symlink;
+
+    #[test]
+    fn runtime_override_requires_an_absolute_path_outside_the_repository() {
+        let fixture =
+            std::env::temp_dir().join(format!("yafvsctl-runtime-boundary-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&fixture);
+        let repo = fixture.join("YAFVS");
+        fs::create_dir_all(&repo).unwrap();
+
+        assert_eq!(
+            validate_runtime_dir_configuration(&repo, OsStr::new("YAFVS-runtime")),
+            Err("YAFVS_RUNTIME_DIR must be an absolute path".to_string())
+        );
+        assert_eq!(
+            validate_runtime_dir_configuration(&repo, repo.join("YAFVS-runtime").as_os_str()),
+            Err("YAFVS_RUNTIME_DIR must be outside the repository".to_string())
+        );
+        assert!(
+            validate_runtime_dir_configuration(&repo, fixture.join("YAFVS-runtime").as_os_str())
+                .is_ok()
+        );
+
+        let alias = fixture.join("repo-alias");
+        symlink(&repo, &alias).unwrap();
+        assert_eq!(
+            validate_runtime_dir_configuration(&repo, alias.join("nested-runtime").as_os_str()),
+            Err("YAFVS_RUNTIME_DIR must be outside the repository".to_string())
+        );
+        assert_eq!(
+            validate_runtime_dir_configuration(
+                &repo,
+                fixture
+                    .join("missing")
+                    .join("..")
+                    .join("YAFVS")
+                    .join("nested-runtime")
+                    .as_os_str(),
+            ),
+            Err("YAFVS_RUNTIME_DIR must not contain parent-directory components".to_string())
+        );
+
+        fs::remove_dir_all(&fixture).unwrap();
     }
 }

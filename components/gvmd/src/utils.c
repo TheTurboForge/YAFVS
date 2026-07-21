@@ -46,8 +46,7 @@
  */
 #define G_LOG_DOMAIN "md manage"
 
-
-
+
 /* Sleep. */
 
 /**
@@ -94,8 +93,7 @@ gvm_sleep (unsigned int seconds)
   return gvm_usleep (seconds * 1000000);
 }
 
-
-
+
 /* Time. */
 
 /**
@@ -506,8 +504,7 @@ iso_if_time (time_t epoch_time)
   return empty;
 }
 
-
-
+
 /* Locks. */
 
 /**
@@ -738,8 +735,7 @@ lockfile_lock_with_retry (lockfile_t *lock, const gchar *name,
     }
 }
 
-
-
+
 /* UUIDs. */
 
 /**
@@ -756,8 +752,7 @@ is_uuid (const char *uuid)
   return 1;
 }
 
-
-
+
 /* Strings. */
 
 /**
@@ -824,8 +819,7 @@ strescape_without_utf8 (const char *str, const char *extra_exceptions)
   return escaped;
 }
 
-
-
+
 /* XML. */
 
 /**
@@ -872,8 +866,7 @@ parse_xml_file (const gchar *path, entity_t *config)
   return 0;
 }
 
-
-
+
 /* Signals. */
 
 /**
@@ -937,8 +930,7 @@ setup_signal_handler_info (int signal,
     }
 }
 
-
-
+
 /* Forking. */
 
 /**
@@ -1040,8 +1032,7 @@ phys_mem_total ()
   return sysconf(_SC_PHYS_PAGES) * sysconf(_SC_PAGESIZE);
 }
 
-
-
+
 /* Arrays. */
 
 /**

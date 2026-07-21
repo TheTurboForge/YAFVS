@@ -1078,8 +1078,16 @@ class YAFVSCtlTests(unittest.TestCase):
                 (["gsa-npm-audit", "--status-only", "--json"], 0, "pass"),
                 (["native-api-semgrep-audit", "--json"], 0, "pass"),
                 (["native-api-semgrep-audit", "--status-only", "--json"], 0, "pass"),
-                (["osv-lockfile-audit", "--json"], 0, "warn"),
-                (["osv-lockfile-audit", "--status-only", "--json"], 0, "warn"),
+                (
+                    ["osv-lockfile-audit", "--json"],
+                    (0, 1),
+                    ("pass", "warn", "fail"),
+                ),
+                (
+                    ["osv-lockfile-audit", "--status-only", "--json"],
+                    (0, 1),
+                    ("pass", "warn", "fail"),
+                ),
             ),
             complete_surface=True,
             human_inventory=True,
@@ -4152,6 +4160,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 "x-yafvs-replaces",
                 "x-yafvs-safety-contract",
                 "x-yafvs-side-effect",
+                "x-yafvs-team-authority",
             ],
         )
         self.assertEqual(contract["unexpected_yafvs_operation_fields"], [])

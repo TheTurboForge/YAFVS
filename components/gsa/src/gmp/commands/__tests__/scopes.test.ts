@@ -5,12 +5,9 @@
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
+import {readFileSync} from 'node:fs';
 import {ScopeReportsCommand, ScopesCommand} from 'gmp/commands/scopes';
-import {
-  createActionResultResponse,
-  createHttp,
-  createResponse,
-} from 'gmp/commands/testing';
+import {createActionResultResponse, createHttp} from 'gmp/commands/testing';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -32,6 +29,20 @@ const createNativeHttp = () => {
 };
 
 describe('ScopesCommand tests', () => {
+  test('should not contain legacy scope command paths', () => {
+    const source = readFileSync(
+      new URL('../scopes.ts', import.meta.url),
+      'utf8',
+    );
+
+    expect(source).not.toContain('create_scope');
+    expect(source).not.toContain('modify_scope');
+    expect(source).not.toContain('delete_scope');
+    expect(source).not.toContain('get_scopes');
+    expect(source).not.toContain('canUseNativeApi');
+    expect(source).not.toContain('HttpCommand');
+  });
+
   test('should fetch scopes through native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

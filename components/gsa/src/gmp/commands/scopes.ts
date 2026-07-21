@@ -4,23 +4,14 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import HttpCommand from 'gmp/commands/http';
 import type {EntitiesMeta} from 'gmp/commands/entities';
 import {
-  canUseNativeApi,
   filterFromCommandParams,
   nativeCollectionMeta,
 } from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
-import Filter from 'gmp/models/filter';
-import {
-  createNativeScope,
-  deleteNativeScope,
-  fetchNativeScope,
-  fetchNativeScopes,
-  patchNativeScope,
-} from 'gmp/native-api/scopes';
+import type Filter from 'gmp/models/filter';
 import {
   deleteNativeScopeReport,
   fetchNativeScopeReport,
@@ -28,7 +19,13 @@ import {
   generateNativeScopeReport,
   nativeScopeReportQueryFromFilter,
 } from 'gmp/native-api/scope-reports';
-import {isDefined} from 'gmp/utils/identity';
+import {
+  createNativeScope,
+  deleteNativeScope,
+  fetchNativeScope,
+  fetchNativeScopes,
+  patchNativeScope,
+} from 'gmp/native-api/scopes';
 
 export type ProtectionRequirement = 'normal' | 'high' | 'very_high';
 
@@ -199,16 +196,11 @@ const isNativeScopeCreate = (
   );
 };
 
-const listPostParam = (values?: string[]) => {
-  if (!isDefined(values)) {
-    return undefined;
-  }
-  return values.join(' ');
-};
+export class ScopesCommand {
+  private readonly http: Http;
 
-export class ScopesCommand extends HttpCommand {
   constructor(http: Http) {
-    super(http, {cmd: 'get_scopes'});
+    this.http = http;
   }
 
   async get({id, details: _details}: {id?: string; details?: number} = {}) {
@@ -220,53 +212,27 @@ export class ScopesCommand extends HttpCommand {
   }
 
   async getOne(id: string) {
-    return new Response<Scope | undefined>(await fetchNativeScope(this.http, id));
+    return new Response<Scope | undefined>(
+      await fetchNativeScope(this.http, id),
+    );
   }
 
   create(params: ScopeWriteParams) {
-    if (canUseNativeApi(this.http)) {
-      if (isNativeScopeCreate(params)) {
-        return createNativeScope(this.http, params);
-      }
-      throw new Error('Native scope create received unsupported payload shape');
+    if (isNativeScopeCreate(params)) {
+      return createNativeScope(this.http, params);
     }
-
-    return this.httpPostWithTransform({
-      cmd: 'create_scope',
-      name: params.name,
-      comment: params.comment,
-      protection_requirement: params.protectionRequirement,
-      target_ids: listPostParam(params.targetIds),
-      host_ids: listPostParam(params.hostIds),
-    });
+    throw new Error('Native scope create received unsupported payload shape');
   }
 
   modify(params: ScopeWriteParams) {
-    if (canUseNativeApi(this.http)) {
-      if (isNativeScopeModify(params)) {
-        return patchNativeScope(this.http, params);
-      }
-      throw new Error('Native scope modify received unsupported payload shape');
+    if (isNativeScopeModify(params)) {
+      return patchNativeScope(this.http, params);
     }
-
-    return this.httpPostWithTransform({
-      cmd: 'modify_scope',
-      scope_id: params.id,
-      name: params.name,
-      comment: params.comment,
-      protection_requirement: params.protectionRequirement,
-      target_ids: listPostParam(params.targetIds),
-      host_ids: listPostParam(params.hostIds),
-    });
+    throw new Error('Native scope modify received unsupported payload shape');
   }
 
   async delete({id}: {id: string}) {
-    if (canUseNativeApi(this.http)) {
-      await deleteNativeScope(this.http, id);
-      return;
-    }
-
-    return this.httpPostWithTransform({cmd: 'delete_scope', scope_id: id});
+    await deleteNativeScope(this.http, id);
   }
 
   generateReport({id}: {id: string}) {

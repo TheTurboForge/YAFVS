@@ -29,17 +29,6 @@ int
 ensure_organization_scope (void);
 
 int
-create_scope (const char *, const char *, const char *, const char *,
-              const char *, char **);
-
-int
-modify_scope (const char *, const char *, const char *, const char *,
-              const char *, const char *);
-
-int
-delete_scope (const char *);
-
-int
 buffer_scopes_xml (GString *, const char *, int);
 
 int

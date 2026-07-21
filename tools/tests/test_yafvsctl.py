@@ -1492,6 +1492,55 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("str(scope_probe)", browser_smoke_command)
         self.assertNotIn("str(scope_probe)", browser_regression_command)
 
+    def test_legacy_scope_mutation_commands_are_removed_full_stack(self):
+        root = Path(__file__).resolve().parents[2]
+        retired_sources = {
+            "gsa capabilities": root / "components" / "gsa" / "src" / "gmp" / "capabilities" / "capabilities.ts",
+            "gsad dispatch": root / "components" / "gsad" / "src" / "gsad_gmp.c",
+            "gsad declarations": root / "components" / "gsad" / "src" / "gsad_gmp.h",
+            "gsad validation": root / "components" / "gsad" / "src" / "gsad_validator.c",
+            "gvmd parser": root / "components" / "gvmd" / "src" / "gmp.c",
+            "gvmd scope SQL": root / "components" / "gvmd" / "src" / "manage_sql_scopes.c",
+            "gvmd scope declarations": root / "components" / "gvmd" / "src" / "manage_sql_scopes.h",
+        }
+        retired_markers = (
+            "create_scope_gmp",
+            "modify_scope_gmp",
+            "delete_scope_gmp",
+            "ELSE (create_scope)",
+            "ELSE (modify_scope)",
+            "ELSE (delete_scope)",
+            "CLIENT_CREATE_SCOPE",
+            "CLIENT_MODIFY_SCOPE",
+            "CLIENT_DELETE_SCOPE",
+            "handle_create_scope",
+            "handle_modify_scope",
+            "handle_delete_scope",
+            "create_scope (",
+            "modify_scope (",
+            "delete_scope (",
+            "'create_scope'",
+            "'modify_scope'",
+            "'delete_scope'",
+        )
+
+        for label, path in retired_sources.items():
+            source = path.read_text(encoding="utf-8")
+            for marker in retired_markers:
+                self.assertNotIn(marker, source, f"{label} still exposes {marker}")
+
+        gsad_source = retired_sources["gsad dispatch"].read_text(encoding="utf-8")
+        gvmd_source = retired_sources["gvmd parser"].read_text(encoding="utf-8")
+        scope_sql_source = retired_sources["gvmd scope SQL"].read_text(encoding="utf-8")
+        native_write_source = (root / "services" / "yafvs-api" / "src" / "scope_writes.rs").read_text(encoding="utf-8")
+        self.assertIn("get_scope_gmp", gsad_source)
+        self.assertIn("handle_get_scopes_command", gvmd_source)
+        self.assertIn("ensure_organization_scope", scope_sql_source)
+        self.assertIn("buffer_scopes_xml", scope_sql_source)
+        self.assertIn("pub(crate) async fn create_scope", native_write_source)
+        self.assertIn("pub(crate) async fn patch_scope", native_write_source)
+        self.assertIn("pub(crate) async fn delete_scope", native_write_source)
+
     def test_full_test_scan_load_state_uses_native_api_when_repo_root_is_available(self):
         root = Path("/tmp/yafvs-test")
         payloads = {

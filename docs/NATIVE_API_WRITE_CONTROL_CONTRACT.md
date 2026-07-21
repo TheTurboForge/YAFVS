@@ -93,15 +93,18 @@ mutations for non-global, non-predefined scopes:
 - `DELETE /api/v1/scopes/{scope_id}` deletes only scopes with no generated
   scope-report history.
 
-Inherited behavior anchors:
+Characterized legacy semantics retained by the native contract:
 
-- `components/gvmd/src/manage_sql_scopes.c:create_scope` validates name,
-  protection requirement, target UUIDs, host UUIDs, sets owner from the current
-  user, inserts `predefined=0` and `is_global=0`, then replaces target and host
-  membership.
-- `modify_scope` updates metadata and replaces target or host membership only
-  for non-global scopes; inherited GMP also blocks renaming predefined scopes.
-- `delete_scope` deletes non-predefined scope membership and the scope row.
+- Create validates the name, protection requirement, target UUIDs, and host
+  UUIDs; assigns the authenticated human owner; inserts a non-predefined,
+  non-global scope; and replaces target and host membership.
+- Update changes mutable metadata and replaces target or host membership only
+  for non-global, non-predefined scopes.
+- Delete removes membership and the scope row only for a non-predefined scope
+  without generated scope-report history.
+- The retired C/GMP mutation entry points no longer own or expose these writes.
+  Rust validation, transaction, and SQL modules under `services/yafvs-api/src/`
+  are authoritative for the live implementation.
 - Native scope-report generation starts a transaction, creates `scope_reports`
   and `scope_report_sources`, and recomputes counts and metrics. It is report
   generation, not a metadata write.

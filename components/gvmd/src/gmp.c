@@ -2475,7 +2475,6 @@ typedef union
   create_filter_data_t create_filter;                 ///< create_filter
   create_override_data_t create_override;             ///< create_override
   create_port_range_data_t create_port_range;         ///< create_port_range
-  scope_command_data_t create_scope;                  ///< create_scope
   create_scanner_data_t create_scanner;               ///< create_scanner
   create_tag_data_t create_tag;                       ///< create_tag
   create_target_data_t create_target;                 ///< create_target
@@ -2490,7 +2489,6 @@ typedef union
   delete_port_list_data_t delete_port_list;           ///< delete_port_list
   delete_port_range_data_t delete_port_range;         ///< delete_port_range
   delete_report_data_t delete_report;                 ///< delete_report
-  scope_command_data_t delete_scope;                  ///< delete_scope
   delete_scanner_data_t delete_scanner;               ///< delete_scanner
   delete_schedule_data_t delete_schedule;             ///< delete_schedule
   delete_tag_data_t delete_tag;                       ///< delete_tag
@@ -2529,7 +2527,6 @@ typedef union
   modify_credential_data_t modify_credential;         ///< modify_credential
   modify_filter_data_t modify_filter;                 ///< modify_filter
   modify_port_list_data_t modify_port_list;           ///< modify_port_list
-  scope_command_data_t modify_scope;                  ///< modify_scope
   modify_scanner_data_t modify_scanner;               ///< modify_scanner
   modify_setting_data_t modify_setting;               ///< modify_setting
   modify_tag_data_t modify_tag;                       ///< modify_tag
@@ -2593,12 +2590,6 @@ static create_override_data_t *create_override_data
  */
 static create_port_range_data_t *create_port_range_data
  = (create_port_range_data_t*) &(command_data.create_port_range);
-
-/**
- * @brief Parser callback data for CREATE_SCOPE.
- */
-static scope_command_data_t *create_scope_data
- = &(command_data.create_scope);
 
 /**
  * @brief Parser callback data for CREATE_SCANNER.
@@ -2684,12 +2675,6 @@ static delete_port_range_data_t *delete_port_range_data
 static delete_report_data_t *delete_report_data
  = (delete_report_data_t*) &(command_data.delete_report);
 
-
-/**
- * @brief Parser callback data for DELETE_SCOPE.
- */
-static scope_command_data_t *delete_scope_data
- = &(command_data.delete_scope);
 
 /**
  * @brief Parser callback data for DELETE_SCANNER.
@@ -2921,12 +2906,6 @@ static modify_port_list_data_t *modify_port_list_data
 
 
 /**
- * @brief Parser callback data for MODIFY_SCOPE.
- */
-static scope_command_data_t *modify_scope_data
- = &(command_data.modify_scope);
-
-/**
  * @brief Parser callback data for MODIFY_SCANNER.
  */
 static modify_scanner_data_t *modify_scanner_data
@@ -3096,7 +3075,6 @@ typedef enum
   CLIENT_CREATE_PORT_RANGE_PORT_LIST,
   CLIENT_CREATE_PORT_RANGE_START,
   CLIENT_CREATE_PORT_RANGE_TYPE,
-  CLIENT_CREATE_SCOPE,
   CLIENT_CREATE_SCANNER,
   CLIENT_CREATE_SCANNER_COMMENT,
   CLIENT_CREATE_SCANNER_COPY,
@@ -3175,7 +3153,6 @@ typedef enum
   CLIENT_DELETE_PORT_LIST,
   CLIENT_DELETE_PORT_RANGE,
   CLIENT_DELETE_REPORT,
-  CLIENT_DELETE_SCOPE,
   CLIENT_DELETE_SCANNER,
   CLIENT_DELETE_SCHEDULE,
   CLIENT_DELETE_TAG,
@@ -3266,7 +3243,6 @@ typedef enum
   CLIENT_MODIFY_PORT_LIST,
   CLIENT_MODIFY_PORT_LIST_COMMENT,
   CLIENT_MODIFY_PORT_LIST_NAME,
-  CLIENT_MODIFY_SCOPE,
   CLIENT_MODIFY_SCANNER,
   CLIENT_MODIFY_SCANNER_COMMENT,
   CLIENT_MODIFY_SCANNER_NAME,
@@ -3542,12 +3518,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           }
         else if (strcasecmp ("CREATE_PORT_RANGE", element_name) == 0)
           set_client_state (CLIENT_CREATE_PORT_RANGE);
-        else if (strcasecmp ("CREATE_SCOPE", element_name) == 0)
-          {
-            scope_command_data_start (create_scope_data, attribute_names,
-                                      attribute_values, 0);
-            set_client_state (CLIENT_CREATE_SCOPE);
-          }
         else if (strcasecmp ("CREATE_SCANNER", element_name) == 0)
           set_client_state (CLIENT_CREATE_SCANNER);
         else if (strcasecmp ("CREATE_TAG", element_name) == 0)
@@ -3670,12 +3640,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             append_attribute (attribute_names, attribute_values, "report_id",
                               &delete_report_data->report_id);
             set_client_state (CLIENT_DELETE_REPORT);
-          }
-        else if (strcasecmp ("DELETE_SCOPE", element_name) == 0)
-          {
-            scope_command_data_start (delete_scope_data, attribute_names,
-                                      attribute_values, 0);
-            set_client_state (CLIENT_DELETE_SCOPE);
           }
         else if (strcasecmp ("DELETE_SCANNER", element_name) == 0)
           {
@@ -4412,12 +4376,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             append_attribute (attribute_names, attribute_values, "override_id",
                               &modify_override_data->override_id);
             set_client_state (CLIENT_MODIFY_OVERRIDE);
-          }
-        else if (strcasecmp ("MODIFY_SCOPE", element_name) == 0)
-          {
-            scope_command_data_start (modify_scope_data, attribute_names,
-                                      attribute_values, 0);
-            set_client_state (CLIENT_MODIFY_SCOPE);
           }
         else if (strcasecmp ("MODIFY_SCANNER", element_name) == 0)
           {
@@ -15226,141 +15184,6 @@ extern char client_address[];
  * @param[in]  error             Error parameter.
  */
 static void
-handle_create_scope (gmp_parser_t *gmp_parser, GError **error)
-{
-  char *scope_id = NULL;
-
-  switch (create_scope (create_scope_data->name,
-                        create_scope_data->comment,
-                        create_scope_data->protection_requirement,
-                        create_scope_data->target_ids,
-                        create_scope_data->host_ids,
-                        &scope_id))
-    {
-      case 0:
-        SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_scope"),
-                                 scope_id);
-        break;
-      case 1:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_SYNTAX ("create_scope", "A name attribute is required"));
-        break;
-      case 3:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_SYNTAX ("create_scope",
-                             "Invalid protection_requirement"));
-        break;
-      case 4:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_SYNTAX ("create_scope", "Invalid target_ids"));
-        break;
-      case 5:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_SYNTAX ("create_scope", "Invalid host_ids"));
-        break;
-      case 99:
-        SEND_TO_CLIENT_OR_FAIL
-          (XML_ERROR_SYNTAX ("create_scope", "Permission denied"));
-        break;
-      default:
-        SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("create_scope"));
-        break;
-    }
-
-  g_free (scope_id);
-  scope_command_data_reset (create_scope_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-static void
-handle_modify_scope (gmp_parser_t *gmp_parser, GError **error)
-{
-  if (modify_scope_data->scope_id == NULL)
-    SEND_TO_CLIENT_OR_FAIL
-      (XML_ERROR_SYNTAX ("modify_scope", "A scope_id attribute is required"));
-  else
-    switch (modify_scope (modify_scope_data->scope_id,
-                          modify_scope_data->name,
-                          modify_scope_data->comment,
-                          modify_scope_data->protection_requirement,
-                          modify_scope_data->target_ids,
-                          modify_scope_data->host_ids))
-      {
-        case 0:
-          SEND_TO_CLIENT_OR_FAIL (XML_OK ("modify_scope"));
-          break;
-        case 2:
-          if (send_find_error_to_client ("modify_scope", "scope",
-                                         modify_scope_data->scope_id,
-                                         gmp_parser))
-            {
-              error_send_to_client (error);
-              return;
-            }
-          break;
-        case 3:
-          SEND_TO_CLIENT_OR_FAIL
-            (XML_ERROR_SYNTAX ("modify_scope",
-                               "Invalid protection_requirement"));
-          break;
-        case 4:
-          SEND_TO_CLIENT_OR_FAIL
-            (XML_ERROR_SYNTAX ("modify_scope", "Invalid target_ids"));
-          break;
-        case 5:
-          SEND_TO_CLIENT_OR_FAIL
-            (XML_ERROR_SYNTAX ("modify_scope", "Invalid host_ids"));
-          break;
-        case 6:
-          SEND_TO_CLIENT_OR_FAIL
-            (XML_ERROR_SYNTAX ("modify_scope",
-                               "Attempt to rename a predefined scope"));
-          break;
-        default:
-          SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("modify_scope"));
-          break;
-      }
-
-  scope_command_data_reset (modify_scope_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-static void
-handle_delete_scope (gmp_parser_t *gmp_parser, GError **error)
-{
-  if (delete_scope_data->scope_id == NULL)
-    SEND_TO_CLIENT_OR_FAIL
-      (XML_ERROR_SYNTAX ("delete_scope", "A scope_id attribute is required"));
-  else
-    switch (delete_scope (delete_scope_data->scope_id))
-      {
-        case 0:
-          SEND_TO_CLIENT_OR_FAIL (XML_OK ("delete_scope"));
-          break;
-        case 2:
-          if (send_find_error_to_client ("delete_scope", "scope",
-                                         delete_scope_data->scope_id,
-                                         gmp_parser))
-            {
-              error_send_to_client (error);
-              return;
-            }
-          break;
-        case 3:
-          SEND_TO_CLIENT_OR_FAIL
-            (XML_ERROR_SYNTAX ("delete_scope",
-                               "Attempt to delete a predefined scope"));
-          break;
-        default:
-          SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("delete_scope"));
-          break;
-      }
-
-  scope_command_data_reset (delete_scope_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-static void
 handle_get_scopes_command (gmp_parser_t *gmp_parser, GError **error,
                            scope_command_data_t *data,
                            const char *response_name)
@@ -15714,9 +15537,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         break;
 
 
-      case CLIENT_DELETE_SCOPE:
-        handle_delete_scope (gmp_parser, error);
-        break;
 
       CASE_DELETE (SCANNER, scanner, "Scanner");
       CASE_DELETE (SCHEDULE, schedule, "Schedule");
@@ -16985,9 +16805,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_CREATE_PORT_RANGE, TYPE);
       CLOSE (CLIENT_CREATE_PORT_RANGE, PORT_LIST);
 
-      case CLIENT_CREATE_SCOPE:
-        handle_create_scope (gmp_parser, error);
-        break;
 
 
       case CLIENT_CREATE_SCANNER:
@@ -18641,9 +18458,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_MODIFY_PORT_LIST, NAME);
 
 
-      case CLIENT_MODIFY_SCOPE:
-        handle_modify_scope (gmp_parser, error);
-        break;
 
       case CLIENT_MODIFY_SCANNER:
         handle_modify_scanner (gmp_parser, error);

@@ -11625,7 +11625,7 @@ def direct_task_target_replace_runtime_findings(
             f"WHERE t.uuid = {sql_literal(task_id)};"
         )
         task_rebind_state = psql_value(psql(repo_root, task_rebind_sql))
-        task_rebind_ok = task_rebind_state == f"{new_target_id}|{FULL_AND_FAST_SCAN_CONFIG_ID}|{scanner_id}|1|0"
+        task_rebind_ok = task_rebind_state == f"{new_target_id}|{FULL_AND_FAST_SCAN_CONFIG_ID}|{scanner_id}|2|0"
         findings.append(
             finding(
                 "pass" if task_rebind_ok else "fail",

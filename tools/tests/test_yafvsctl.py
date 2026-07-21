@@ -6658,6 +6658,10 @@ class YAFVSCtlTests(unittest.TestCase):
             'task_precondition == f"2|0|{source_target_id}"',
             source,
         )
+        self.assertIn(
+            '|{scanner_id}|2|0"',
+            source,
+        )
         self.assertNotIn("deleted_tasks AS", source)
         self.assertIn('"BEGIN; "', source)
         self.assertIn("DELETE FROM tag_resources_trash WHERE resource_type = 'task'", source)

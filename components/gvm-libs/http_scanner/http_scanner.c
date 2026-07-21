@@ -550,6 +550,7 @@ http_scanner_create_scan (http_scanner_connector_t conn, gchar *data)
     {
       const gchar *error_ptr = cJSON_GetErrorPtr ();
       g_warning ("%s: Error parsing json string to get the scan ID", __func__);
+      g_free (response->body);
       if (error_ptr != NULL)
         {
           response->body = g_strdup_printf ("{\"error\": \"%s\"}", error_ptr);
@@ -566,9 +567,11 @@ http_scanner_create_scan (http_scanner_connector_t conn, gchar *data)
       return response;
     }
 
+  g_free (conn->scan_id);
   conn->scan_id = g_strdup (cJSON_GetStringValue (parser));
 
   cJSON_Delete (parser);
+  g_free (response->body);
   response->body = g_strdup (http_scanner_stream_str (conn));
   http_scanner_reset_stream (conn);
   return response;
@@ -615,6 +618,7 @@ http_scanner_start_scan (http_scanner_connector_t conn)
       return response;
     }
 
+  g_free (response->body);
   response->body = g_strdup (http_scanner_stream_str (conn));
   http_scanner_reset_stream (conn);
   return response;
@@ -654,7 +658,10 @@ http_scanner_stop_scan (http_scanner_connector_t conn)
   g_string_free (path, TRUE);
 
   if (response->code != RESP_CODE_ERR)
-    response->body = g_strdup (http_scanner_stream_str (conn));
+    {
+      g_free (response->body);
+      response->body = g_strdup (http_scanner_stream_str (conn));
+    }
 
   http_scanner_reset_stream (conn);
   return response;
@@ -700,7 +707,10 @@ http_scanner_get_scan_results (http_scanner_connector_t conn, long first,
   g_string_free (path, TRUE);
 
   if (response->code != RESP_CODE_ERR)
-    response->body = g_strdup (http_scanner_stream_str (conn));
+    {
+      g_free (response->body);
+      response->body = g_strdup (http_scanner_stream_str (conn));
+    }
   else
     {
       g_warning ("%s: Not possible to get scan results", __func__);
@@ -1013,7 +1023,10 @@ http_scanner_get_scan_status (http_scanner_connector_t conn)
   g_string_free (path, TRUE);
 
   if (response->code != RESP_CODE_ERR)
-    response->body = g_strdup (http_scanner_stream_str (conn));
+    {
+      g_free (response->body);
+      response->body = g_strdup (http_scanner_stream_str (conn));
+    }
   else
     {
       response->body =
@@ -1059,7 +1072,10 @@ http_scanner_delete_scan (http_scanner_connector_t conn)
   g_string_free (path, TRUE);
 
   if (response->code != RESP_CODE_ERR)
-    response->body = g_strdup (http_scanner_stream_str (conn));
+    {
+      g_free (response->body);
+      response->body = g_strdup (http_scanner_stream_str (conn));
+    }
   else
     {
       response->body =
@@ -1087,7 +1103,10 @@ http_scanner_get_health_alive (http_scanner_connector_t conn)
                                         NULL, NULL);
 
   if (response->code != RESP_CODE_ERR)
-    response->body = g_strdup (http_scanner_stream_str (conn));
+    {
+      g_free (response->body);
+      response->body = g_strdup (http_scanner_stream_str (conn));
+    }
   else
     {
       response->body =
@@ -1115,7 +1134,10 @@ http_scanner_get_health_ready (http_scanner_connector_t conn)
                                         NULL, "feed-version");
 
   if (response->code != RESP_CODE_ERR)
-    response->body = g_strdup (http_scanner_stream_str (conn));
+    {
+      g_free (response->body);
+      response->body = g_strdup (http_scanner_stream_str (conn));
+    }
   else
     {
       response->body =
@@ -1143,7 +1165,10 @@ http_scanner_get_health_started (http_scanner_connector_t conn)
                                         "/health/started", NULL, NULL);
 
   if (response->code != RESP_CODE_ERR)
-    response->body = g_strdup (http_scanner_stream_str (conn));
+    {
+      g_free (response->body);
+      response->body = g_strdup (http_scanner_stream_str (conn));
+    }
   else
     {
       response->body =
@@ -1394,6 +1419,7 @@ http_scanner_get_scan_preferences (http_scanner_connector_t conn)
 
   g_string_free (path, TRUE);
 
+  g_free (response->body);
   if (response->code != RESP_CODE_ERR)
     response->body = g_strdup (http_scanner_stream_str (conn));
   else

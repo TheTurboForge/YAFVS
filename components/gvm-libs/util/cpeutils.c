@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2009-2024 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -938,7 +939,7 @@ add_quoting (const char *component)
       if (*c == '*')
         {
           if ((c == tmp_component)
-              || (c == tmp_component + strlen (tmp_component - 1)))
+              || (c == tmp_component + strlen (tmp_component) - 1))
             {
               g_string_append_c (quoted_component, *c);
               c++;
@@ -954,7 +955,7 @@ add_quoting (const char *component)
       if (*c == '?')
         {
           if ((c == tmp_component)
-              || (c == tmp_component + strlen (tmp_component - 1))
+              || (c == tmp_component + strlen (tmp_component) - 1)
               || (!embedded && (c > tmp_component) && (*(c - 1) == '?'))
               || (embedded && *(c + 1) == '?'))
             {

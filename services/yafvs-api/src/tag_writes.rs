@@ -131,7 +131,7 @@ pub(crate) async fn patch_tag(
 ) -> Result<Json<TagAssetItem>, ApiError> {
     let operator = require_tag_write_operator(operator)?;
     let request = validate_tag_patch_request(request)?;
-    if request.resource_type.is_some() || request.resources.is_some() {
+    if tag_patch_requires_control(&request) {
         let control_secret = gvmd_control_secret()?;
         request_tag_modify(
             &gvmd_control_socket_path(),
@@ -148,17 +148,31 @@ pub(crate) async fn patch_tag(
         .transaction()
         .await
         .map_err(|error| map_tag_write_db_error(error, "begin patch tag transaction"))?;
+    tx.batch_execute("LOCK TABLE tags, tag_resources IN SHARE ROW EXCLUSIVE MODE;")
+        .await
+        .map_err(|error| map_tag_write_db_error(error, "lock tag tables for patch"))?;
     resolve_tag_write_operator_owner(&tx, &operator).await?;
     let state = load_tag_write_state(&tx, &tag_id).await?;
     ensure_tag_is_human_owned(state.owner_id)?;
-    ensure_tag_resource_direct_write_type_is_supported(&state.resource_type)?;
-    let record = execute_tag_patch_transaction(&tx, state.internal_id, &request).await?;
+    let effective_resource_type = request
+        .resource_type
+        .as_deref()
+        .unwrap_or(&state.resource_type);
+    ensure_tag_resource_direct_write_type_is_supported(effective_resource_type)?;
+    let record = execute_tag_patch_transaction(&tx, &state, &request).await?;
     let tag = load_tag_write_detail(&tx, &record.uuid).await?;
     tx.commit()
         .await
         .map_err(|error| map_tag_commit_error(error, "commit patch tag transaction"))?;
 
     Ok(Json(tag))
+}
+
+fn tag_patch_requires_control(request: &crate::tag_write_validation::ValidatedTagPatch) -> bool {
+    request
+        .resources
+        .as_ref()
+        .is_some_and(|resources| resources.resource_filter.is_some())
 }
 
 pub(crate) async fn clone_tag(

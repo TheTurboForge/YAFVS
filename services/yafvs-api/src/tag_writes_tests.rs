@@ -106,6 +106,29 @@ fn tag_create_handler_requires_operator_before_insert() {
 }
 
 #[test]
+fn tag_patch_resolves_explicit_resources_before_metadata_write() {
+    let source = include_str!("tag_write_transactions.rs");
+    let transaction = source
+        .split_once("pub(crate) async fn execute_tag_patch_transaction")
+        .expect("tag patch transaction must exist")
+        .1
+        .split_once("async fn resolve_tag_resource_write_record")
+        .expect("resource resolver must follow tag patch transaction")
+        .0;
+
+    let resolve = transaction
+        .find("resolve_tag_resource_update_records")
+        .expect("tag patch must resolve explicit resources");
+    let metadata_write = transaction
+        .find("query_tag_write_record")
+        .expect("tag patch must update metadata");
+    assert!(
+        resolve < metadata_write,
+        "tag patch must resolve and authorize all explicit resources before writing metadata"
+    );
+}
+
+#[test]
 fn tag_mutating_handlers_enforce_owner_and_type_guard_before_side_effects() {
     let source = include_str!("tag_writes.rs");
     for (label, start, end, owner_check, type_guard, side_effect) in [
@@ -130,7 +153,7 @@ fn tag_mutating_handlers_enforce_owner_and_type_guard_before_side_effects() {
             "pub(crate) async fn patch_tag",
             "pub(crate) async fn clone_tag",
             "ensure_tag_is_human_owned(state.owner_id)?;",
-            "ensure_tag_resource_direct_write_type_is_supported(&state.resource_type)?;",
+            "ensure_tag_resource_direct_write_type_is_supported(effective_resource_type)?;",
             "execute_tag_patch_transaction",
         ),
         (
@@ -353,6 +376,33 @@ fn tag_patch_request_supports_atomic_resource_selection_and_requires_a_field() {
 }
 
 #[test]
+fn tag_patch_uses_gvmd_control_only_for_filter_selection() {
+    let metadata = validate_tag_patch_request(
+        serde_json::from_str(r#"{"name":"renamed"}"#).expect("metadata patch"),
+    )
+    .expect("valid metadata patch");
+    assert!(!tag_patch_requires_control(&metadata));
+
+    let explicit_set = validate_tag_patch_request(
+        serde_json::from_str(
+            r#"{"resource_type":"target","resources":{"action":"set","resource_ids":["12345678-1234-1234-1234-123456789abc"]}}"#,
+        )
+        .expect("explicit resource patch"),
+    )
+    .expect("valid explicit resource patch");
+    assert!(!tag_patch_requires_control(&explicit_set));
+
+    let filtered = validate_tag_patch_request(
+        serde_json::from_str(
+            r#"{"resources":{"action":"add","resource_filter":"name~production"}}"#,
+        )
+        .expect("filtered resource patch"),
+    )
+    .expect("valid filtered resource patch");
+    assert!(tag_patch_requires_control(&filtered));
+}
+
+#[test]
 fn tag_resource_update_request_supports_explicit_ids_filters_and_empty_set() {
     let request: TagResourceUpdateRequest = serde_json::from_str(
         r#"{"action":"add","resource_ids":["12345678-1234-1234-1234-123456789abc","12345678-1234-1234-1234-123456789abc","cpe:/a:example:product:1"]}"#,
@@ -494,7 +544,7 @@ fn tag_resource_direct_write_support_is_narrower_than_read_support() {
 }
 
 #[test]
-fn tag_write_plans_are_metadata_only() {
+fn tag_write_plans_keep_mutation_steps_explicit() {
     let create = ValidatedTagCreate {
         name: "owner:x".to_string(),
         resource_type: "task".to_string(),
@@ -555,7 +605,39 @@ fn tag_write_plans_are_metadata_only() {
                 TagWriteStep::ResolveOperatorOwner,
                 TagWriteStep::VerifyTagExists,
                 TagWriteStep::VerifyOwnerMatch,
+                TagWriteStep::VerifyResourceTypeSupported,
                 TagWriteStep::UpdateMetadata,
+            ],
+        }
+    );
+
+    let patch_with_resources = ValidatedTagPatch {
+        name: Some("owner:z".to_string()),
+        comment: None,
+        value: None,
+        active: None,
+        resource_type: Some("target".to_string()),
+        resources: Some(ValidatedTagResourceUpdate {
+            action: TagResourceUpdateAction::Set,
+            resource_ids: vec!["12345678-1234-1234-1234-123456789abc".to_string()],
+            resource_filter: None,
+        }),
+    };
+    assert_eq!(
+        tag_patch_transaction_plan(&patch_with_resources),
+        TagWriteTransactionPlan {
+            operation: TagWriteOperation::PatchMetadataAndAssignments,
+            steps: vec![
+                TagWriteStep::ResolveOperatorOwner,
+                TagWriteStep::VerifyTagExists,
+                TagWriteStep::VerifyOwnerMatch,
+                TagWriteStep::VerifyResourceTypeSupported,
+                TagWriteStep::VerifyResourceExists,
+                TagWriteStep::VerifyResourceOwnerMatch,
+                TagWriteStep::UpdateMetadata,
+                TagWriteStep::ClearResourceAssignments,
+                TagWriteStep::InsertResourceAssignment,
+                TagWriteStep::TouchMetadata,
             ],
         }
     );
@@ -611,8 +693,8 @@ fn tag_write_sql_uses_parameterized_metadata_queries_only() {
     let update = tag_update_metadata_sql();
     assert!(update.contains("UPDATE tags"));
     assert!(update.contains("coalesce($2, name)"));
+    assert!(update.contains("resource_type = coalesce($6, resource_type)"));
     assert!(update.contains("WHERE id = $1"));
-    assert!(!update.contains("resource_type ="));
     assert!(!update.contains("tag_resources"));
 
     let delete_state = tag_write_unassigned_state_sql();
@@ -652,9 +734,9 @@ fn tag_write_sql_uses_parameterized_metadata_queries_only() {
 
     let clear_resources = tag_resource_clear_sql();
     assert!(clear_resources.contains("DELETE FROM tag_resources"));
-    assert!(clear_resources.contains("resource_type = $2"));
-    assert!(clear_resources.contains("resource_location = 0"));
-    assert!(!clear_resources.contains("resource = $3"));
+    assert!(clear_resources.contains("WHERE tag = $1"));
+    assert!(!clear_resources.contains("resource_type"));
+    assert!(!clear_resources.contains("resource_location"));
 
     let touch = tag_touch_metadata_sql();
     assert!(touch.contains("UPDATE tags SET modification_time"));

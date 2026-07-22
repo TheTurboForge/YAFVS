@@ -2855,7 +2855,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tag-metadata-read
       summary: List tags
-      description: Read-only tag metadata backed by gvmd/PostgreSQL. Explicit native resource assignment supports native-safe resource ids, including catalog-backed Security Information ids. Filter-based resource actions and resource-type changes remain compatibility paths while their native contracts are designed.
+      description: Read-only tag metadata backed by gvmd/PostgreSQL. Explicit native resource assignment and atomic resource-type replacement support native-safe resource ids, including catalog-backed Security Information ids. Filter-based resource actions remain on the isolated compatibility path while their native query contract is designed.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -3015,7 +3015,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-and-resource-assignment-write
       summary: Atomically update tag metadata and optional resource assignments
-      description: Updates tag metadata directly when no resource selection is supplied. Composite metadata and resource assignment changes use gvmd's authoritative transaction and filter engine. A resource_type change is accepted only together with resources.action=set, so old-type assignments are cleared atomically before the new selection is applied.
+      description: Updates tag metadata and explicit resource-id assignments in one native database transaction. A resource_type change is accepted only together with resources.action=set, so all old-type assignments are cleared atomically before the explicit new selection is applied. Filter-based resource selection remains on gvmd's authoritative filter path until a bounded native query contract replaces it.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -3093,7 +3093,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tag-metadata-export-read
       summary: Export tag metadata
-      description: Scriptable JSON metadata export for one tag. Bulk tag JSON export is composed from native tag reads; filter-based resource actions and resource-type changes remain compatibility paths on adjacent tag operations.
+      description: Scriptable JSON metadata export for one tag. Bulk tag JSON export is composed from native tag reads; filter-based resource actions remain a compatibility path on adjacent tag operations.
       parameters:
         - $ref: '#/components/parameters/TagId'
       responses:
@@ -3131,7 +3131,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Clone tag metadata and assignments
-      description: Direct write-control endpoint for copying any human-owned live tag into a new tag owned by the direct API operator when the tag resource type is supported by native explicit resource writes. The clone copies comment, value, resource type, active state, and existing resource assignments; optional name/comment fields override copied metadata. Unsupported resource classes, filter-based bulk actions, and resource-type change semantics remain inherited.
+      description: Direct write-control endpoint for copying any human-owned live tag into a new tag owned by the direct API operator when the tag resource type is supported by native explicit resource writes. The clone copies comment, value, resource type, active state, and existing resource assignments; optional name/comment fields override copied metadata. Unsupported resource classes and filter-based bulk actions remain inherited.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:

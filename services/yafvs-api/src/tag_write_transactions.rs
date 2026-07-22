@@ -178,6 +178,15 @@ pub(crate) async fn execute_tag_resource_update_transaction(
     state: &TagWriteState,
     request: &ValidatedTagResourceUpdate,
 ) -> Result<(), ApiError> {
+    let resources = resolve_tag_resource_update_records(tx, state, request).await?;
+    apply_tag_resource_update_transaction(tx, state, request, resources).await
+}
+
+async fn resolve_tag_resource_update_records(
+    tx: &Transaction<'_>,
+    state: &TagWriteState,
+    request: &ValidatedTagResourceUpdate,
+) -> Result<Vec<TagResourceWriteRecord>, ApiError> {
     let mut resources = Vec::new();
     for resource_id in &request.resource_ids {
         let resource =
@@ -185,14 +194,19 @@ pub(crate) async fn execute_tag_resource_update_transaction(
         ensure_tag_resource_is_team_assignable(&state.resource_type, resource.owner_id)?;
         resources.push(resource);
     }
+    Ok(resources)
+}
 
+async fn apply_tag_resource_update_transaction(
+    tx: &Transaction<'_>,
+    state: &TagWriteState,
+    request: &ValidatedTagResourceUpdate,
+    resources: Vec<TagResourceWriteRecord>,
+) -> Result<(), ApiError> {
     if request.action == TagResourceUpdateAction::Set {
-        tx.execute(
-            tag_resource_clear_sql(),
-            &[&state.internal_id, &state.resource_type],
-        )
-        .await
-        .map_err(|error| map_tag_write_db_error(error, "clear tag resources"))?;
+        tx.execute(tag_resource_clear_sql(), &[&state.internal_id])
+            .await
+            .map_err(|error| map_tag_write_db_error(error, "clear tag resources"))?;
     }
 
     for resource in resources {
@@ -263,22 +277,43 @@ pub(crate) async fn execute_tag_clone_transaction(
 
 pub(crate) async fn execute_tag_patch_transaction(
     tx: &Transaction<'_>,
-    tag_internal_id: i32,
+    state: &TagWriteState,
     request: &ValidatedTagPatch,
 ) -> Result<TagWriteRecord, ApiError> {
-    query_tag_write_record(
+    let effective_resource_type = request
+        .resource_type
+        .as_deref()
+        .unwrap_or(&state.resource_type);
+    let effective_state = TagWriteState {
+        internal_id: state.internal_id,
+        uuid: state.uuid.clone(),
+        owner_id: state.owner_id,
+        resource_type: effective_resource_type.to_string(),
+        resource_count: state.resource_count,
+    };
+    let resources = if let Some(update) = request.resources.as_ref() {
+        Some(resolve_tag_resource_update_records(tx, &effective_state, update).await?)
+    } else {
+        None
+    };
+    let record = query_tag_write_record(
         tx,
         tag_update_metadata_sql(),
         &[
-            &tag_internal_id,
+            &state.internal_id,
             &request.name,
             &request.comment,
             &request.value,
             &request.active.map(|value| value as i32),
+            &request.resource_type,
         ],
         "update tag metadata",
     )
-    .await
+    .await?;
+    if let Some((update, resources)) = request.resources.as_ref().zip(resources) {
+        apply_tag_resource_update_transaction(tx, &effective_state, update, resources).await?;
+    }
+    Ok(record)
 }
 
 async fn resolve_tag_resource_write_record(

@@ -12,6 +12,7 @@ pub(crate) enum TagWriteOperation {
     CreateMetadata,
     CloneMetadataAndAssignments,
     PatchMetadata,
+    PatchMetadataAndAssignments,
     MoveToTrash,
     UpdateResourceAssignments,
 }
@@ -102,16 +103,34 @@ pub(crate) fn tag_clone_transaction_plan(_request: &ValidatedTagClone) -> TagWri
     }
 }
 
-pub(crate) fn tag_patch_transaction_plan(_request: &ValidatedTagPatch) -> TagWriteTransactionPlan {
-    TagWriteTransactionPlan {
-        operation: TagWriteOperation::PatchMetadata,
-        steps: vec![
-            TagWriteStep::ResolveOperatorOwner,
-            TagWriteStep::VerifyTagExists,
-            TagWriteStep::VerifyOwnerMatch,
-            TagWriteStep::UpdateMetadata,
-        ],
-    }
+pub(crate) fn tag_patch_transaction_plan(request: &ValidatedTagPatch) -> TagWriteTransactionPlan {
+    let mut steps = vec![
+        TagWriteStep::ResolveOperatorOwner,
+        TagWriteStep::VerifyTagExists,
+        TagWriteStep::VerifyOwnerMatch,
+        TagWriteStep::VerifyResourceTypeSupported,
+    ];
+    let operation = if let Some(resources) = request.resources.as_ref() {
+        steps.extend([
+            TagWriteStep::VerifyResourceExists,
+            TagWriteStep::VerifyResourceOwnerMatch,
+        ]);
+        steps.push(TagWriteStep::UpdateMetadata);
+        match resources.action {
+            TagResourceUpdateAction::Add => steps.push(TagWriteStep::InsertResourceAssignment),
+            TagResourceUpdateAction::Remove => steps.push(TagWriteStep::DeleteResourceAssignment),
+            TagResourceUpdateAction::Set => {
+                steps.push(TagWriteStep::ClearResourceAssignments);
+                steps.push(TagWriteStep::InsertResourceAssignment);
+            }
+        }
+        steps.push(TagWriteStep::TouchMetadata);
+        TagWriteOperation::PatchMetadataAndAssignments
+    } else {
+        steps.push(TagWriteStep::UpdateMetadata);
+        TagWriteOperation::PatchMetadata
+    };
+    TagWriteTransactionPlan { operation, steps }
 }
 
 pub(crate) fn tag_delete_transaction_plan() -> TagWriteTransactionPlan {

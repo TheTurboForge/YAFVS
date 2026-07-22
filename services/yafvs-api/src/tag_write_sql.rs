@@ -60,6 +60,7 @@ pub(crate) fn tag_update_metadata_sql() -> &'static str {
             comment = coalesce($3, comment),
             value = coalesce($4, value),
             active = coalesce($5, active),
+            resource_type = coalesce($6, resource_type),
             modification_time = m_now()
       WHERE id = $1
       RETURNING id::integer, uuid::text;"
@@ -102,9 +103,7 @@ pub(crate) fn tag_resource_delete_sql() -> &'static str {
 
 pub(crate) fn tag_resource_clear_sql() -> &'static str {
     "DELETE FROM tag_resources
-      WHERE tag = $1
-        AND resource_type = $2
-        AND resource_location = 0;"
+      WHERE tag = $1;"
 }
 
 pub(crate) fn tag_touch_metadata_sql() -> &'static str {

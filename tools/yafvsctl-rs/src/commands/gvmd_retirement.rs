@@ -41,8 +41,6 @@ const REQUIRED_EXIT_CRITERIA: [&str; 6] = [
 #[serde(deny_unknown_fields)]
 struct Program {
     baseline_head: String,
-    progress_percent: u8,
-    next_update_percent: u8,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -95,6 +93,22 @@ struct Counts {
     callers_by_kind: BTreeMap<String, usize>,
     callers_by_status: BTreeMap<String, usize>,
     exit_criteria_by_status: BTreeMap<String, usize>,
+}
+
+#[derive(Debug, Serialize)]
+struct ProgressEvidence {
+    measurement: &'static str,
+    terminal_responsibility_weight: u32,
+    total_responsibility_weight: u32,
+    terminal_responsibility_percent: f64,
+    terminal_responsibility_count: usize,
+    total_responsibility_count: usize,
+    retired_caller_count: usize,
+    total_caller_count: usize,
+    verified_exit_criterion_count: usize,
+    total_exit_criterion_count: usize,
+    complete: bool,
+    interpretation: &'static str,
 }
 
 pub fn command_gvmd_retirement_state(repo_root: &Path, status_only: bool) -> ResultEnvelope {
@@ -165,18 +179,20 @@ pub fn command_gvmd_retirement_state(repo_root: &Path, status_only: bool) -> Res
         findings,
     )
     .with_details(full_details);
+    let progress_evidence = progress_evidence(&registry, total_weight);
     if status_only {
-        compact_status_only(&mut result, &registry, &counts, total_weight);
+        compact_status_only(&mut result, &registry, &counts, &progress_evidence);
     }
+    result.details.as_mut().unwrap()["progress_evidence"] = json!(progress_evidence);
     result
 }
 
 fn validate_registry(repo_root: &Path, registry: &Registry) -> Vec<Finding> {
     let mut findings = Vec::new();
-    if registry.schema_version != 1 {
+    if registry.schema_version != 2 {
         findings.push(fail(
             "gvmd-retirement.schema-version",
-            "schema_version must be 1".to_string(),
+            "schema_version must be 2".to_string(),
         ));
     }
     validate_program(&registry.program, &registry.exit_criteria, &mut findings);
@@ -287,35 +303,6 @@ fn validate_registry(repo_root: &Path, registry: &Registry) -> Vec<Finding> {
             &mut findings,
         );
     }
-    if registry.program.progress_percent == 100 {
-        let incomplete_responsibilities = registry
-            .responsibilities
-            .iter()
-            .filter(|row| {
-                (row.target_owner == "delete" && row.status != "retired")
-                    || (row.target_owner != "delete" && row.status != "native-owned")
-            })
-            .map(|row| row.id.clone())
-            .collect::<Vec<_>>();
-        let incomplete_callers = registry
-            .callers
-            .iter()
-            .filter(|row| row.status != "retired")
-            .map(|row| row.id.clone())
-            .collect::<Vec<_>>();
-        if !incomplete_responsibilities.is_empty() || !incomplete_callers.is_empty() {
-            findings.push(
-                fail(
-                    "gvmd-retirement.program-completion",
-                    "100% progress requires native ownership or retirement of every responsibility and retirement of every caller".to_string(),
-                )
-                .with_details(json!({
-                    "incomplete_responsibilities": incomplete_responsibilities,
-                    "incomplete_callers": incomplete_callers,
-                })),
-            );
-        }
-    }
     findings
 }
 
@@ -330,18 +317,6 @@ fn validate_program(
             "program baseline_head must not be empty".to_string(),
         ));
     }
-    if program.progress_percent > 100
-        || !program.progress_percent.is_multiple_of(5)
-        || program.next_update_percent > 100
-        || (program.progress_percent < 100
-            && program.next_update_percent != program.progress_percent + 5)
-        || (program.progress_percent == 100 && program.next_update_percent != 100)
-    {
-        findings.push(fail(
-            "gvmd-retirement.program-progress",
-            "progress must use five-point checkpoints and name the next checkpoint".to_string(),
-        ));
-    }
     let observed = exit_criteria
         .iter()
         .map(|criterion| criterion.id.as_str())
@@ -353,16 +328,6 @@ fn validate_program(
                 format!("required exit criterion {required} is missing"),
             ));
         }
-    }
-    if program.progress_percent == 100
-        && exit_criteria
-            .iter()
-            .any(|criterion| criterion.status != "verified")
-    {
-        findings.push(fail(
-            "gvmd-retirement.program-completion",
-            "100% progress requires every exit criterion to be verified".to_string(),
-        ));
     }
 }
 
@@ -500,11 +465,60 @@ fn count_values<'a>(values: impl Iterator<Item = &'a str>) -> BTreeMap<String, u
     counts
 }
 
+fn responsibility_is_terminal(row: &Responsibility) -> bool {
+    (row.target_owner == "delete" && row.status == "retired")
+        || (row.target_owner != "delete" && row.status == "native-owned")
+}
+
+fn progress_evidence(registry: &Registry, total_weight: u32) -> ProgressEvidence {
+    let terminal_responsibilities = registry
+        .responsibilities
+        .iter()
+        .filter(|row| responsibility_is_terminal(row))
+        .collect::<Vec<_>>();
+    let terminal_weight = terminal_responsibilities
+        .iter()
+        .map(|row| row.weight)
+        .sum::<u32>();
+    let retired_callers = registry
+        .callers
+        .iter()
+        .filter(|row| row.status == "retired")
+        .count();
+    let verified_exits = registry
+        .exit_criteria
+        .iter()
+        .filter(|row| row.status == "verified")
+        .count();
+    let terminal_percent = if total_weight == 0 {
+        0.0
+    } else {
+        ((terminal_weight as f64 * 10_000.0 / total_weight as f64).round()) / 100.0
+    };
+    let complete = terminal_responsibilities.len() == registry.responsibilities.len()
+        && retired_callers == registry.callers.len()
+        && verified_exits == registry.exit_criteria.len();
+    ProgressEvidence {
+        measurement: "registered-terminal-responsibility-weight",
+        terminal_responsibility_weight: terminal_weight,
+        total_responsibility_weight: total_weight,
+        terminal_responsibility_percent: terminal_percent,
+        terminal_responsibility_count: terminal_responsibilities.len(),
+        total_responsibility_count: registry.responsibilities.len(),
+        retired_caller_count: retired_callers,
+        total_caller_count: registry.callers.len(),
+        verified_exit_criterion_count: verified_exits,
+        total_exit_criterion_count: registry.exit_criteria.len(),
+        complete,
+        interpretation: "Descriptive closure of registered weighted responsibility scope only; this is not an estimate of total engineering completion and does not account for unregistered work, uncertainty, or the difficulty of open rows.",
+    }
+}
+
 fn compact_status_only(
     result: &mut ResultEnvelope,
     registry: &Registry,
     counts: &Counts,
-    total_weight: u32,
+    progress_evidence: &ProgressEvidence,
 ) {
     let finding_count = result.findings.len();
     let non_pass_count = result
@@ -525,7 +539,7 @@ fn compact_status_only(
         "schema_version": registry.schema_version,
         "program": registry.program,
         "counts": counts,
-        "total_responsibility_weight": total_weight,
+        "progress_evidence": progress_evidence,
         "finding_count": finding_count,
         "non_pass_count": non_pass_count,
         "returned_non_pass_count": non_pass_count.min(20),
@@ -570,11 +584,9 @@ mod tests {
         fs::create_dir(root.join("policy")).unwrap();
         fs::write(root.join("proof.txt"), "literal-anchor\n").unwrap();
         let mut source = String::from(
-            r#"schema_version = 1
+            r#"schema_version = 2
 [program]
 baseline_head = "abc123"
-progress_percent = 5
-next_update_percent = 10
 "#,
         );
         for id in REQUIRED_EXIT_CRITERIA {
@@ -622,6 +634,9 @@ notes = "A bounded caller."
             result.details.as_ref().unwrap()["responsibilities"][0]["id"],
             "one-responsibility"
         );
+        let program = &result.details.as_ref().unwrap()["program"];
+        assert!(program.get("progress_percent").is_none());
+        assert!(program.get("next_update_percent").is_none());
     }
 
     #[test]
@@ -689,7 +704,19 @@ notes = "A bounded caller."
         assert_eq!(result.status, "pass");
         assert_eq!(result.findings.len(), 1);
         assert!(details.get("responsibilities").is_none());
-        assert_eq!(details["program"]["progress_percent"], 5);
+        assert_eq!(
+            details["progress_evidence"]["terminal_responsibility_weight"],
+            0
+        );
+        assert_eq!(
+            details["progress_evidence"]["total_responsibility_weight"],
+            1
+        );
+        assert_eq!(
+            details["progress_evidence"]["terminal_responsibility_percent"],
+            0.0
+        );
+        assert_eq!(details["progress_evidence"]["complete"], false);
         assert_eq!(details["truncated_count"], 0);
     }
 
@@ -793,8 +820,8 @@ notes = "A bounded caller."
         valid_registry(&root.0);
         let path = root.0.join(REGISTRY_PATH);
         let source = fs::read_to_string(&path).unwrap().replace(
-            "schema_version = 1",
-            "schema_version = 1\nprogress_percnt = 5",
+            "schema_version = 2",
+            "schema_version = 2\nprogress_percnt = 5",
         );
         fs::write(path, source).unwrap();
         let result = command_gvmd_retirement_state(&root.0, false);
@@ -803,24 +830,34 @@ notes = "A bounded caller."
     }
 
     #[test]
-    fn one_hundred_percent_requires_terminal_rows() {
+    fn completion_is_derived_from_all_terminal_boundaries() {
         let root = TempRoot::new();
         valid_registry(&root.0);
         let path = root.0.join(REGISTRY_PATH);
         let source = fs::read_to_string(&path)
             .unwrap()
-            .replace("progress_percent = 5", "progress_percent = 100")
-            .replace("next_update_percent = 10", "next_update_percent = 100")
             .replace(
                 "status = \"open\"\nevidence = []",
                 "status = \"verified\"\nevidence = [\"proof.txt::literal-anchor\"]",
+            )
+            .replace(
+                "status = \"inventoried\"\nweight = 1",
+                "status = \"native-owned\"\nweight = 1",
+            )
+            .replace(
+                "kind = \"characterization\"\nstatus = \"characterized\"",
+                "kind = \"characterization\"\nstatus = \"retired\"",
             );
         fs::write(path, source).unwrap();
         let result = command_gvmd_retirement_state(&root.0, false);
-        assert_eq!(result.status, "fail");
-        assert!(result.findings.iter().any(|finding| {
-            finding.check == "gvmd-retirement.program-completion" && finding.details.is_some()
-        }));
+        assert_eq!(result.status, "pass");
+        let progress = &result.details.unwrap()["progress_evidence"];
+        assert_eq!(progress["terminal_responsibility_weight"], 1);
+        assert_eq!(progress["total_responsibility_weight"], 1);
+        assert_eq!(progress["terminal_responsibility_percent"], 100.0);
+        assert_eq!(progress["retired_caller_count"], 1);
+        assert_eq!(progress["verified_exit_criterion_count"], 6);
+        assert_eq!(progress["complete"], true);
     }
 
     #[cfg(unix)]

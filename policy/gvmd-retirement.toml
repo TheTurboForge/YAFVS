@@ -1,12 +1,10 @@
 # SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-schema_version = 1
+schema_version = 2
 
 [program]
 baseline_head = "aa06efd1"
-progress_percent = 5
-next_update_percent = 10
 
 [[exit_criteria]]
 id = "zero-required-gmp-calls"

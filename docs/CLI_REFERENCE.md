@@ -32,9 +32,13 @@ not use a failure exit code; `fail` exits non-zero.
 - `just rust-migration-state`: inspect C-to-Rust tooling and the current proof
   candidate.
 - `just gvmd-retirement-state --status-only --json`: validate the public,
-  machine-readable gvmd/GMP responsibility and caller registry and report its
-  rough progress checkpoint. This is an inventory aid, not a claim that gvmd
-  is already retired.
+  machine-readable gvmd/GMP responsibility and caller registry. It derives
+  evidenced terminal responsibility weight, retired caller count, and verified
+  exit-criterion count. The terminal-weight percentage describes registered
+  scope only: it is not an estimate of total engineering completion and cannot
+  account for unregistered work, uncertainty, or the difficulty of open rows.
+  Completion is true only when every responsibility, caller, and exit criterion
+  is terminal.
 
 The incremental Rust command spine currently implements 104 parity-tested
 subcommands. Commands in this mechanically checked block have a native Rust

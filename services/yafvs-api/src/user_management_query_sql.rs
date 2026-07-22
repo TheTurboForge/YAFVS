@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 //
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 /// Shared by the user-management collection and typed User tag selection.
 /// Search is literal, case-insensitive data rather than a SQL wildcard pattern.

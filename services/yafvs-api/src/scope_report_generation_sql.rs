@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 //
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 pub(crate) fn scope_report_generation_state_sql() -> &'static str {
     "SELECT id::integer, owner::integer, coalesce(is_global, 0)::integer,

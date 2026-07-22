@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 //
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 const DIRECT_ROUTES: &str = include_str!("direct_api_routes.rs");

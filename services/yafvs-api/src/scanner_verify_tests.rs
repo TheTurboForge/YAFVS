@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
 //
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: AGPL-3.0-or-later
 
 use super::scanner_verify::{parse_osp_get_version_response, scanner_verify_osp_socket_is_allowed};
 

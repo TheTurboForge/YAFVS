@@ -27,10 +27,14 @@ translation. Adaptations and translations must name their exact source and
 license. This is intentionally independent of whether the source happens to be
 publicly available.
 
-The current `services/yafvs-api` relationship to AGPL-covered `gvmd` behavior
-remains an explicit legal-classification review. Until resolved, the project
-must not assume that a GPL-3.0 label alone settles the obligations of any code
-that may constitute an adaptation. Non-source release modes remain blocked.
+Original network-facing YAFVS services default to `AGPL-3.0-or-later`; local
+operator tooling defaults to `GPL-3.0-or-later`; scanner-linked work follows
+its stricter GPLv2-compatible boundary. The current `services/yafvs-api`
+relationship to AGPL-covered `gvmd` behavior remains an explicit
+legal-classification review. The AGPL label does not by itself settle whether a
+file is an adaptation or what provenance it must carry. Non-source release
+modes remain blocked until that review and the exact Corresponding Source
+procedure are complete.
 
 ## Release Evidence Bundle
 

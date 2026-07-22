@@ -516,7 +516,11 @@ fn no_comment_manifest_gaps(review: &[String]) -> (Vec<String>, Vec<String>, Vec
 
 fn added_turbovas_spdx_gaps(repo_root: &Path, rows: &[NameStatus]) -> Vec<String> {
     rows.iter()
-        .filter(|row| row.status.starts_with('A') && !imported_added_path(&row.path))
+        .filter(|row| {
+            row.status.starts_with('A')
+                && !imported_added_path(&row.path)
+                && !row.path.starts_with("LICENSES/")
+        })
         .filter(|row| {
             let path = repo_root.join(&row.path);
             path.is_file() && !has_spdx_header(&path)
@@ -907,6 +911,19 @@ mod tests {
         assert!(comment_notice_supported("src/main.rs"));
         assert!(comment_notice_supported("Makefile"));
         assert!(!comment_notice_supported("package.json"));
+    }
+
+    #[test]
+    fn canonical_license_texts_do_not_require_self_referential_spdx_headers() {
+        let fixture = Fixture::new();
+        fixture.write("LICENSES/AGPL-3.0-or-later.txt", "GNU Affero GPL text\n");
+        fixture.write("src/missing.rs", "fn main() {}\n");
+        let rows = parse_name_status("A\tLICENSES/AGPL-3.0-or-later.txt\nA\tsrc/missing.rs\n");
+
+        assert_eq!(
+            added_turbovas_spdx_gaps(&fixture.root, &rows),
+            vec!["src/missing.rs"]
+        );
     }
 
     #[test]

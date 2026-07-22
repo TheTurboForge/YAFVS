@@ -16,13 +16,15 @@ endorsed by Greenbone AG. Greenbone/OpenVAS component references in this audit
 are provenance records and do not imply Greenbone approval or support for
 YAFVS.
 
-Original project-created root tooling and public documentation use
-`GPL-3.0-or-later` as the project default unless a more specific compatible
-license is selected for a component-local file.
+Original project-created local tooling and public documentation use
+`GPL-3.0-or-later` as their default unless a more specific compatible license
+is selected. Original network-facing services use `AGPL-3.0-or-later` so users
+of modified network deployments can obtain the corresponding source.
 
-Project-created service and tooling code outside imported upstream component
-trees, including `services/yafvs-api` and `tools/yafvsctl-rs`, follows
-this `GPL-3.0-or-later` default. Third-party Rust crate dependencies recorded
+Accordingly, `services/yafvs-api` is `AGPL-3.0-or-later`, while the local
+operator tool `tools/yafvsctl-rs` remains `GPL-3.0-or-later`. Scanner-linked
+work continues to use the exact GPLv2-compatible license required by the
+GPL-2.0-only scanner boundary. Third-party Rust crate dependencies recorded
 in their tracked `Cargo.lock` files are external package dependencies, not
 vendored source. Keep the lockfiles tracked for reproducibility and run the
 normal license/public-release gates before packaging, publishing, or
@@ -170,9 +172,9 @@ reason it cannot.
 
 - Confirm whether YAFVS should preserve upstream git history in a later archival/import refinement, or whether explicit source snapshots plus `UPSTREAMS.md` are sufficient.
 - Review `components/openvas-scanner/license-details.md` before changing scanner/NASL/Rust license-sensitive files.
-- Revisit the `GPL-3.0-or-later` root tooling/documentation/service default
-  only if a future legal/product decision needs a different project-level
-  policy.
+- Revisit the scoped AGPL network-service and GPL local-tooling defaults only
+  through an explicit legal/product decision; never apply either default over
+  an inherited or scanner-linked license boundary.
 - Re-review `components/openvas-smb` Samba-derived provenance before binary,
   container, or other artifact distribution; the current source-public boundary
   preserves the relevant provenance files.
@@ -183,8 +185,9 @@ reason it cannot.
 - Define artifact-specific source publication and attribution procedures before
   binary, container, hosted-service, or feed-redistribution modes.
 - Resolve the registered classification of `services/yafvs-api` relative to
-  AGPL-covered `gvmd` expression before treating its current GPL-3.0 declaration
-  as sufficient for a binary, container, or hosted distribution.
+  AGPL-covered `gvmd` expression and record the exact provenance/Corresponding
+  Source boundary before binary, container, or hosted distribution. Applying
+  AGPL-3.0-or-later does not by itself answer whether a file is an adaptation.
 - Bring the inherited aggregate to whole-tree REUSE compliance without
   mechanically replacing component-specific licenses, exceptions, generated
   provenance, or Samba-derived notices.

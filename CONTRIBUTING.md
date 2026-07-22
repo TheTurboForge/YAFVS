@@ -64,6 +64,12 @@ programs and linked code are recorded as different relationships; changing a
 boundary requires updating the policy and providing build evidence, not merely
 changing a label.
 
+Original network-facing YAFVS services use `AGPL-3.0-or-later`. Original local
+operator tooling uses `GPL-3.0-or-later`. Scanner-linked additions use only an
+explicitly reviewed GPLv2-compatible license. Documentation, specifications,
+and data are separate licensing decisions; do not infer their license from a
+code default.
+
 Dependencies, generated code, vendored material, copied tests, and translated
 implementations all require source and license provenance. A dependency change
 must preserve its lockfile and the applicable artifact's complete license/SBOM

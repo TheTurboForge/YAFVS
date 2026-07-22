@@ -14,4 +14,4 @@ allowed_derivations = ["original", "behavioral-reimplementation", "adaptation", 
 id = "native-manager-gvmd-derivation"
 path = "services/yafvs-api/"
 status = "legal-review-required"
-question = "Classify native manager/API code as independent behavioral reimplementation or an adaptation of AGPL-3.0-or-later gvmd, and confirm the resulting distribution license obligation."
+question = "The native manager/API is AGPL-3.0-or-later. Classify its files as independent behavioral reimplementation or adaptation of gvmd, record any required source provenance, and confirm the exact Corresponding Source boundary."

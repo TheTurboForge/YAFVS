@@ -12,6 +12,11 @@ prefix = ""
 allowed_licenses = ["GPL-3.0-or-later"]
 
 [[path_rules]]
+id = "yafvs-network-services-agpl"
+prefix = "services/"
+allowed_licenses = ["AGPL-3.0-or-later"]
+
+[[path_rules]]
 id = "openvas-scanner-gpl2"
 prefix = "components/openvas-scanner/"
 allowed_licenses = ["GPL-2.0-only", "GPL-2.0-or-later"]
@@ -95,7 +100,7 @@ manifest = "crates/yafvs-domain/Cargo.toml"
 
 [[artifacts]]
 id = "yafvs-api"
-concluded_license = "GPL-3.0-or-later"
+concluded_license = "AGPL-3.0-or-later"
 manifest = "services/yafvs-api/Cargo.toml"
 
 [[artifacts]]

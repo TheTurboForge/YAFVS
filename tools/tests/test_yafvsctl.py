@@ -7570,7 +7570,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("redacted row inventory", docs)
         self.assertRegex(contract, r"intentionally excludes credential\s+secrets,\s+target\s+hosts")
         self.assertIn(
-            "Credential, report-format, and task permanent delete",
+            "Credential and task permanent delete",
             docs,
         )
         self.assertIn("generic GSA/gsad GMP restore bridge is removed", docs)

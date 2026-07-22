@@ -442,10 +442,12 @@ inside PostgreSQL without loading or returning them, restores trash-side
 target/scanner references and tag locations, preserves `allow_insecure`, and
 returns only redacted credential metadata. All supported browser restore
 operations are therefore native and the generic GSA/gsad GMP restore bridge is
-removed. Credential, report-format, and task permanent delete retain declared
-browser/GMP compatibility while those native owners remain incomplete.
-Report-format restore is deliberately unavailable:
-it could reintroduce a retired custom executable report format. Separately
+removed. Credential and task permanent delete retain declared browser/GMP
+compatibility while those native owners remain incomplete. Individual
+report-format restore and permanent delete are deliberately unavailable: gvmd
+has no retained command handler, and restoring a row could reintroduce a
+retired custom executable report format. Confirmed owner-scoped Trashcan
+emptying remains the cleanup path for legacy report-format rows and directories. Separately
 classified raw GMP behavior remains outside this browser contract.
 
 Native report-format rows include report-format identity, summary/description,

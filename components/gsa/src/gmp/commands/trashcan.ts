@@ -61,7 +61,6 @@ export interface TrashCanEmptyParams {
 const LEGACY_DELETE_RESOURCE_TYPES = {
   credential: 'credential',
   task: 'task',
-  reportformat: 'report_format',
 } as const satisfies Partial<Record<EntityType, string>>;
 
 interface UsageTypeElement extends ModelElement {

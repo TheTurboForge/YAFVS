@@ -279,11 +279,12 @@ and does not revive retired inherited row-level permission mutations.
 Credential restore copies opaque secret rows inside PostgreSQL, preserves
 `allow_insecure`, restores trash-side target/scanner references and tag
 locations, rejects collisions and ownerless rows, and returns only redacted
-metadata. The generic GSA/gsad GMP restore bridge is removed. Credential,
-report-format, and task permanent delete remain bounded compatibility tails.
-Report-format
-restore is deliberately removed because it could resurrect a retired custom
-executable format; cleanup remains available.
+metadata. The generic GSA/gsad GMP restore bridge is removed. Credential and
+task permanent delete remain bounded compatibility tails. Individual
+report-format restore and permanent delete are removed because gvmd has no
+retained command handler and restoration could resurrect a retired custom
+executable format; confirmed owner-scoped Trashcan emptying remains the
+legacy row/directory cleanup path.
 The legacy Python client/tooling dependency is removed. Further native API
 expansion should target the remaining explicit GSA/gsad/gvmd owner tails and
 production direct-access hardening without weakening scanner-control or secret

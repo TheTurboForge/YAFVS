@@ -10,6 +10,7 @@ const GSA_TRASH_ACTIONS: &str =
 const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
+const GVMD_GMP: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GVMD_MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
 const GVMD_REPORT_FORMATS: &str =
     include_str!("../../../components/gvmd/src/manage_sql_report_formats.c");
@@ -88,7 +89,7 @@ fn trashcan_permanent_delete_allowlists_remain_narrow_and_fail_closed() {
     assert!(gsa_delete.contains("[`${resourceType}_id`]: id"));
     assert!(!gsa_delete.contains("apiType("));
     assert!(!gsa_delete.contains("cmdApiType"));
-    assert!(GSA_TRASHCAN.contains("reportformat: 'report_format'"));
+    assert!(!GSA_TRASHCAN.contains("reportformat: 'report_format'"));
 
     let delete_from_trash = inherited_function(GSAD_GMP, "delete_from_trash_gmp");
     assert!(
@@ -98,7 +99,7 @@ fn trashcan_permanent_delete_allowlists_remain_narrow_and_fail_closed() {
         inherited_function(GSAD_GMP, "trashcan_delete_resource_type_is_supported");
     assert!(delete_allowlist.contains("g_strcmp0 (resource_type, \"credential\")"));
     assert!(delete_allowlist.contains("g_strcmp0 (resource_type, \"task\")"));
-    assert!(delete_allowlist.contains("g_strcmp0 (resource_type, \"report_format\")"));
+    assert!(!delete_allowlist.contains("g_strcmp0 (resource_type, \"report_format\")"));
     assert!(delete_from_trash.contains("Unsupported resource_type for the trash delete"));
     assert!(
         delete_from_trash
@@ -107,20 +108,40 @@ fn trashcan_permanent_delete_allowlists_remain_narrow_and_fail_closed() {
 }
 
 #[test]
-fn retired_executable_report_formats_cannot_be_restored() {
+fn retired_executable_report_formats_have_no_individual_trash_lifecycle_actions() {
+    assert!(!GVMD_GMP.contains("DELETE_REPORT_FORMAT"));
+    assert!(!GVMD_GMP.contains("delete_report_format"));
     assert!(!GVMD_MANAGE_SQL.contains("restore_report_format (id)"));
     assert!(!GVMD_REPORT_FORMATS.contains("restore_report_format ("));
     assert!(!GVMD_REPORT_FORMATS_HEADER.contains("restore_report_format ("));
 
     let report_format_actions = GSA_TRASH_ACTIONS
-        .split_once("reportformat: entity => {")
+        .split_once("reportformat: () => {")
         .expect("report-format trash action policy must exist")
         .1
         .split_once("  },")
         .expect("report-format trash action policy must terminate")
         .0;
     assert!(report_format_actions.contains("restorable: false"));
-    assert!(report_format_actions.contains("deletable: !entity.isInUse()"));
+    assert!(report_format_actions.contains("deletable: false"));
+
+    let owner_scoped_cleanup = inherited_function(
+        GVMD_REPORT_FORMATS,
+        "empty_trashcan_report_formats",
+    );
+    for required in [
+        "DELETE FROM report_format_param_options_trash",
+        "DELETE FROM report_format_params_trash",
+        "DELETE FROM report_formats_trash",
+        "current_credentials.uuid",
+        "report_format_trash_dir",
+        "gvm_file_remove_recurse",
+    ] {
+        assert!(
+            owner_scoped_cleanup.contains(required),
+            "report-format trash cleanup missing {required}"
+        );
+    }
 }
 
 #[test]

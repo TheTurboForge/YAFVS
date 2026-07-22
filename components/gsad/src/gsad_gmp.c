@@ -1537,8 +1537,7 @@ static gboolean
 trashcan_delete_resource_type_is_supported (const gchar *resource_type)
 {
   return g_strcmp0 (resource_type, "credential") == 0
-         || g_strcmp0 (resource_type, "task") == 0
-         || g_strcmp0 (resource_type, "report_format") == 0;
+         || g_strcmp0 (resource_type, "task") == 0;
 }
 
 /**

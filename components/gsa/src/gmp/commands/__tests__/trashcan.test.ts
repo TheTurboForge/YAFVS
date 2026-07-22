@@ -399,7 +399,6 @@ describe('TrashCanCommand tests', () => {
 
   test.each([
     ['credential', 'credential'],
-    ['reportformat', 'report_format'],
     ['task', 'task'],
   ] as const)(
     'should permanently delete retained %s trash entities through the typed GMP bridge',
@@ -430,6 +429,18 @@ describe('TrashCanCommand tests', () => {
       });
     },
   );
+
+  test('should reject retired report-format permanent delete without a network request', async () => {
+    const fakeHttp = createHttp(createResponse({}));
+    const cmd = new TrashCanCommand(fakeHttp);
+
+    await expect(
+      cmd.delete({id: '1234', entityType: 'reportformat'}),
+    ).rejects.toThrow(
+      'Trashcan permanent delete is unavailable for reportformat',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
 
   test('should reject an untyped permanent delete without a network request', async () => {
     const fakeHttp = createHttp(createResponse({}));

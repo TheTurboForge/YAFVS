@@ -190,7 +190,10 @@ const RESTORE_PATHS: Partial<Record<EntityType, string>> = {
   task: 'tasks',
 };
 
-const DELETE_PATHS = NATIVE_TRASH_PATHS;
+const DELETE_PATHS: Partial<Record<EntityType, string>> = {
+  ...NATIVE_TRASH_PATHS,
+  credential: 'credentials',
+};
 
 export const supportsNativeTrashcanRestore = (
   entityType?: EntityType,

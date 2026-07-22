@@ -19,6 +19,27 @@ pub(crate) fn credential_live_uuid_count_sql() -> &'static str {
     "SELECT count(*)::bigint FROM credentials WHERE uuid = $1;"
 }
 
+pub(crate) fn credential_trash_in_use_sql() -> &'static str {
+    "SELECT (
+         EXISTS (
+           SELECT 1 FROM targets_trash_login_data
+            WHERE credential = $1 AND credential_location = 1
+         )
+         OR EXISTS (
+           SELECT 1 FROM scanners_trash
+            WHERE credential = $1 AND credential_location = 1
+         )
+         OR EXISTS (
+           SELECT 1 FROM alert_method_data_trash
+            WHERE name IN (
+              'recipient_credential', 'scp_credential',
+              'smb_credential', 'pkcs12_credential'
+            )
+              AND data = $2
+         )
+       )::boolean;"
+}
+
 pub(crate) fn credential_write_state_sql() -> &'static str {
     "SELECT id::integer,
             owner::integer
@@ -80,6 +101,20 @@ pub(crate) fn credential_restore_trash_tag_locations_sql() -> &'static str {
 
 pub(crate) fn credential_delete_trash_data_sql() -> &'static str {
     "DELETE FROM credentials_trash_data WHERE credential = $1;"
+}
+
+pub(crate) fn credential_delete_trash_tag_links_sql() -> &'static str {
+    "DELETE FROM tag_resources
+      WHERE resource_type = 'credential'
+        AND resource = $1
+        AND resource_location = 1;"
+}
+
+pub(crate) fn credential_delete_trash_trash_tag_links_sql() -> &'static str {
+    "DELETE FROM tag_resources_trash
+      WHERE resource_type = 'credential'
+        AND resource = $1
+        AND resource_location = 1;"
 }
 
 pub(crate) fn credential_delete_trash_metadata_sql() -> &'static str {

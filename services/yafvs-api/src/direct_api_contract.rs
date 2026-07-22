@@ -283,6 +283,9 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         (&Method::POST, ["", "api", "v1", "credentials", credential_id, "restore"]) => {
             direct_api_write_id_segment_is_allowed(credential_id)
         }
+        (&Method::DELETE, ["", "api", "v1", "credentials", credential_id, "trash"]) => {
+            direct_api_write_id_segment_is_allowed(credential_id)
+        }
         (&Method::PATCH | &Method::DELETE, ["", "api", "v1", "scanners", scanner_id]) => {
             direct_api_write_id_segment_is_allowed(scanner_id)
         }

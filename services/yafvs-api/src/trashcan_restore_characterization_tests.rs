@@ -91,14 +91,25 @@ fn trashcan_permanent_delete_allowlists_remain_narrow_and_fail_closed() {
     assert!(!gsa_delete.contains("cmdApiType"));
     assert!(!GSA_TRASHCAN.contains("reportformat: 'report_format'"));
 
+    let native_delete_paths = GSA_NATIVE_TRASHCAN
+        .split_once("const DELETE_PATHS: Partial<Record<EntityType, string>> = {")
+        .expect("native delete map must exist")
+        .1
+        .split_once("};")
+        .expect("native delete map must terminate")
+        .0;
+    assert!(native_delete_paths.contains("...NATIVE_TRASH_PATHS"));
+    assert!(native_delete_paths.contains("credential: 'credentials'"));
+    assert!(!native_delete_paths.contains("task:"));
+
     let delete_from_trash = inherited_function(GSAD_GMP, "delete_from_trash_gmp");
     assert!(
         delete_from_trash.contains("trashcan_delete_resource_type_is_supported (resource_type)")
     );
     let delete_allowlist =
         inherited_function(GSAD_GMP, "trashcan_delete_resource_type_is_supported");
-    assert!(delete_allowlist.contains("g_strcmp0 (resource_type, \"credential\")"));
     assert!(delete_allowlist.contains("g_strcmp0 (resource_type, \"task\")"));
+    assert!(!delete_allowlist.contains("g_strcmp0 (resource_type, \"credential\")"));
     assert!(!delete_allowlist.contains("g_strcmp0 (resource_type, \"report_format\")"));
     assert!(delete_from_trash.contains("Unsupported resource_type for the trash delete"));
     assert!(

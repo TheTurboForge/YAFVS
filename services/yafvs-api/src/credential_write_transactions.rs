@@ -71,6 +71,35 @@ pub(crate) async fn execute_credential_restore_transaction(
     .await
 }
 
+pub(crate) async fn execute_credential_hard_delete_transaction(
+    tx: &Transaction<'_>,
+    trash_internal_id: i32,
+) -> Result<CredentialWriteRecord, ApiError> {
+    for (sql, action) in [
+        (
+            credential_delete_trash_tag_links_sql(),
+            "delete credential trash tag links",
+        ),
+        (
+            credential_delete_trash_trash_tag_links_sql(),
+            "delete trashed tag links to credential trash id",
+        ),
+        (
+            credential_delete_trash_data_sql(),
+            "delete credential trash secret data",
+        ),
+    ] {
+        execute_credential_write_sql(tx, sql, &[&trash_internal_id], action).await?;
+    }
+    query_credential_write_record(
+        tx,
+        credential_delete_trash_metadata_sql(),
+        &[&trash_internal_id],
+        "delete credential trash metadata",
+    )
+    .await
+}
+
 pub(crate) async fn execute_credential_patch_transaction(
     tx: &Transaction<'_>,
     credential_internal_id: i32,

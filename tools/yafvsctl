@@ -349,6 +349,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "credential-redacted-metadata-export-read",
         "credential-redacted-metadata-detail-read",
         "credential-redacted-metadata-list-read",
+        "credential-trash-hard-delete",
         "credential-trash-restore",
         "credential-metadata-modify",
         "credential-up-usk-create",
@@ -7120,6 +7121,13 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
                 templates.add(f"{prefix.rstrip('/')}/{{}}")
                 if prefix_variable not in {"host_identifier_prefix", "host_operating_system_prefix", "scope_prefix", "tls_certificate_prefix"} and trash_suffix and "trash_suffix" in delete_function_body:
                     templates.add(f"{prefix.rstrip('/')}/{{}}{trash_suffix}")
+        credential_prefix = delete_constants.get("credential_prefix")
+        if (
+            credential_prefix
+            and trash_suffix
+            and "g_str_has_prefix (path, credential_prefix)" in delete_function_body
+        ):
+            templates.add(f"{credential_prefix.rstrip('/')}/{{}}{trash_suffix}")
         port_list_prefix = delete_constants.get("port_list_prefix")
         if (
             port_list_prefix
@@ -7347,6 +7355,13 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
                 if prefix_variable not in {"host_identifier_prefix", "host_operating_system_prefix", "host_prefix", "scope_prefix", "scope_report_prefix", "task_prefix", "tls_certificate_prefix"} and trash_suffix and "trash_suffix" in delete_function_body:
                     operations.add(f"DELETE {prefix.rstrip('/')}/{{}}{trash_suffix}")
         user_management_prefix = delete_constants.get("USER_MANAGEMENT_USER_PREFIX")
+        credential_prefix = delete_constants.get("credential_prefix")
+        if (
+            credential_prefix
+            and trash_suffix
+            and "g_str_has_prefix (path, credential_prefix)" in delete_function_body
+        ):
+            operations.add(f"DELETE {credential_prefix.rstrip('/')}/{{}}{trash_suffix}")
         if user_management_prefix and "is_user_management_user_path (path)" in delete_function_body:
             operations.add(f"DELETE {user_management_prefix.rstrip('/')}/{{}}")
         port_list_prefix = delete_constants.get("port_list_prefix")
@@ -7978,7 +7993,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["guarded native username/password and username/SSH-key credential creation", "native-credentials-from-csv", "future GSA native credential create"],
                 "residual_inherited": [
-                    "Secret updates, other credential types, clone, and delete remain inherited; restore is native.",
+                    "Secret updates, other credential types, clone, moving live credentials to trash, and live deletion remain inherited; restore and permanent trash deletion are native.",
                     "Passwords, passphrases, and private keys are write-only and are never returned by the native API."
                 ],
             },
@@ -8007,8 +8022,19 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser credential restore", "direct native credential restore"],
                 "residual_inherited": [
-                    "Credential permanent delete, clone, secret mutation, and download/export semantics remain inherited.",
+                    "Credential clone, secret mutation, live trash/delete, and download/export semantics remain inherited; permanent trash deletion is native.",
                     "Restore copies opaque secret rows transactionally but returns only redacted metadata."
+                ],
+            },
+            {
+                "method": "delete",
+                "endpoint": "/api/v1/credentials/{credential_id}/trash",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser credential permanent trash delete", "direct native credential permanent trash delete"],
+                "residual_inherited": [
+                    "The route accepts only a human-owned trash UUID and cannot delete a live credential.",
+                    "Trash target, scanner, and alert-delivery references block deletion; opaque secret rows remain inside PostgreSQL and are never selected or returned."
                 ],
             },
             {

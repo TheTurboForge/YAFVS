@@ -14,6 +14,28 @@ pub(crate) struct CredentialWriteRecord {
     pub(crate) uuid: String,
 }
 
+pub(crate) async fn ensure_trash_credential_not_in_use(
+    tx: &Transaction<'_>,
+    trash_internal_id: i32,
+    credential_uuid: &str,
+) -> Result<(), ApiError> {
+    let in_use: bool = tx
+        .query_one(
+            credential_trash_in_use_sql(),
+            &[&trash_internal_id, &credential_uuid],
+        )
+        .await
+        .map_err(|error| map_credential_write_db_error(error, "check trash credential usage"))?
+        .get(0);
+    if in_use {
+        Err(ApiError::Conflict(
+            "credential is still referenced by a trashed resource".to_string(),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CredentialTrashState {
     pub(crate) internal_id: i32,

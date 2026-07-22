@@ -346,6 +346,7 @@ describe('TrashCanCommand tests', () => {
 
   test.each([
     ['alert', 'alerts'],
+    ['credential', 'credentials'],
     ['filter', 'filters'],
     ['override', 'overrides'],
     ['portlist', 'port-lists'],
@@ -397,10 +398,7 @@ describe('TrashCanCommand tests', () => {
     },
   );
 
-  test.each([
-    ['credential', 'credential'],
-    ['task', 'task'],
-  ] as const)(
+  test.each([['task', 'task']] as const)(
     'should permanently delete retained %s trash entities through the typed GMP bridge',
     async (entityType, resourceType) => {
       const response = createResponse({});

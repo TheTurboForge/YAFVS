@@ -423,12 +423,12 @@ boundary. Create, modify, clone, export, and delete actions remain inherited
 until native write semantics are designed.
 
 Native Trashcan summary, redacted row inventory, confirmation-bound emptying,
-nine complete typed resource lifecycles, and native task and credential restore
+ten complete typed resource lifecycles, and native task restore
 are available through `/api/v1/trashcan` and resource-specific restore routes.
 The native inventory intentionally excludes credential secrets, target
 hosts, scanner connection fields, scan-config preferences, alert method data,
 `results_trash`, and child trash tables. Alert, filter, override, port list,
-scan config, scanner, schedule, tag, and target restore and permanent delete
+credential, scan config, scanner, schedule, tag, and target restore and permanent delete
 are native-only and fail closed if the native API is unavailable. Alert restore
 transactionally restores its metadata, condition/event/method rows, task links,
 and tag links but returns only redacted metadata. Alert hard-delete removes only
@@ -440,10 +440,12 @@ and rejects any non-live task dependency. Retired inherited row-level permission
 mutations are not reintroduced. Credential restore copies opaque secret rows
 inside PostgreSQL without loading or returning them, restores trash-side
 target/scanner references and tag locations, preserves `allow_insecure`, and
-returns only redacted credential metadata. All supported browser restore
+returns only redacted credential metadata. Credential hard-delete blocks trash
+target/scanner/alert-delivery references and deletes opaque secret rows without
+selecting, returning, or logging their values. All supported browser restore
 operations are therefore native and the generic GSA/gsad GMP restore bridge is
-removed. Credential and task permanent delete retain declared browser/GMP
-compatibility while those native owners remain incomplete. Individual
+removed. Only task permanent delete retains declared browser/GMP compatibility
+while that native owner remains incomplete. Individual
 report-format restore and permanent delete are deliberately unavailable: gvmd
 has no retained command handler, and restoring a row could reintroduce a
 retired custom executable report format. Confirmed owner-scoped Trashcan

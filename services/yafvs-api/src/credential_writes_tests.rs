@@ -23,6 +23,94 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> CredentialPatchRe
 }
 
 #[test]
+fn credential_hard_delete_is_guarded_reference_safe_and_secret_opaque() {
+    let inherited = GVMD_MANAGE_SQL
+        .split_once("int\ndelete_credential (const char *credential_id, int ultimate)")
+        .expect("imported credential delete authority")
+        .1
+        .split_once("int\ncredential_count")
+        .expect("imported credential delete authority end")
+        .0;
+    for required in [
+        "trash_credential_in_use (credential)",
+        "permissions_set_orphans (\"credential\"",
+        "tags_remove_resource (\"credential\"",
+        "DELETE FROM credentials_trash_data",
+        "DELETE FROM credentials_trash",
+    ] {
+        assert!(
+            inherited.contains(required),
+            "imported credential hard-delete authority missing {required}"
+        );
+    }
+
+    let in_use = credential_trash_in_use_sql();
+    for required in [
+        "targets_trash_login_data",
+        "scanners_trash",
+        "alert_method_data_trash",
+        "credential_location = 1",
+        "recipient_credential",
+        "scp_credential",
+        "smb_credential",
+        "pkcs12_credential",
+        "data = $2",
+    ] {
+        assert!(
+            in_use.contains(required),
+            "trash usage guard missing {required}"
+        );
+    }
+    assert!(!in_use.contains("credentials_trash_data"));
+
+    let handler_source = include_str!("credential_writes.rs");
+    let handler = handler_source
+        .split_once("pub(crate) async fn hard_delete_credential")
+        .expect("credential hard-delete handler")
+        .1
+        .split_once("pub(crate) async fn request_credential_create")
+        .expect("credential hard-delete handler end")
+        .0;
+    for required in [
+        "require_credential_write_operator(operator)?",
+        "resolve_credential_write_operator_owner(&tx, &operator).await?",
+        "alert_method_data_trash",
+        "load_credential_trash_state",
+        "ensure_credential_is_human_owned",
+        "ensure_trash_credential_not_in_use",
+        "execute_credential_hard_delete_transaction",
+        "tx.commit()",
+        "StatusCode::NO_CONTENT",
+    ] {
+        assert!(
+            handler.contains(required),
+            "hard-delete handler missing {required}"
+        );
+    }
+    assert!(!handler.contains("credentials_data.value"));
+
+    let transaction = include_str!("credential_write_transactions.rs")
+        .split_once("pub(crate) async fn execute_credential_hard_delete_transaction")
+        .expect("credential hard-delete transaction")
+        .1
+        .split_once("pub(crate) async fn execute_credential_patch_transaction")
+        .expect("credential hard-delete transaction end")
+        .0;
+    for ordered in [
+        "credential_delete_trash_tag_links_sql",
+        "credential_delete_trash_trash_tag_links_sql",
+        "credential_delete_trash_data_sql",
+        "credential_delete_trash_metadata_sql",
+    ] {
+        assert!(
+            transaction.contains(ordered),
+            "hard-delete transaction missing {ordered}"
+        );
+    }
+    assert!(!transaction.contains("permissions"));
+}
+
+#[test]
 fn credential_restore_preserves_secret_rows_without_loading_them_into_rust() {
     let inherited = GVMD_MANAGE_SQL
         .split_once("  /* Credential. */")

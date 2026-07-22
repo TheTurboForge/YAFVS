@@ -16,7 +16,8 @@ use crate::{
     credential_payloads::CredentialAssetItem,
     credential_write_db::*,
     credential_write_transactions::{
-        execute_credential_patch_transaction, execute_credential_restore_transaction,
+        execute_credential_hard_delete_transaction, execute_credential_patch_transaction,
+        execute_credential_restore_transaction,
     },
     credential_write_validation::{
         CredentialCreateRequest, CredentialPatchRequest, ValidatedCredentialCreate,
@@ -50,6 +51,33 @@ pub(crate) async fn create_credential(
         StatusCode::CREATED,
         Json(load_credential_asset_detail(&client, &credential_id).await?),
     ))
+}
+
+pub(crate) async fn hard_delete_credential(
+    State(state): State<AppState>,
+    Path(credential_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<StatusCode, ApiError> {
+    let operator = require_credential_write_operator(operator)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_credential_write_db_error(error, "begin hard-delete credential transaction")
+    })?;
+    resolve_credential_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE credentials_trash, credentials_trash_data, targets_trash_login_data, scanners_trash, alert_method_data_trash, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_credential_write_db_error(error, "lock credential hard-delete tables"))?;
+    let trash = load_credential_trash_state(&tx, &credential_id).await?;
+    ensure_credential_is_human_owned(trash.owner_id)?;
+    ensure_trash_credential_not_in_use(&tx, trash.internal_id, &trash.uuid).await?;
+    execute_credential_hard_delete_transaction(&tx, trash.internal_id).await?;
+    tx.commit().await.map_err(|error| {
+        map_credential_write_db_error(error, "commit hard-delete credential transaction")
+    })?;
+
+    Ok(StatusCode::NO_CONTENT)
 }
 
 pub(crate) async fn restore_credential(

@@ -865,6 +865,7 @@ static gboolean
 native_api_delete_path_is_allowed (const gchar *path)
 {
   const gchar *alert_prefix = "/api/v1/alerts/";
+  const gchar *credential_prefix = "/api/v1/credentials/";
   const gchar *filter_prefix = "/api/v1/filters/";
   const gchar *host_prefix = "/api/v1/hosts/";
   const gchar *host_identifier_prefix = "/api/v1/host-identifiers/";
@@ -893,6 +894,12 @@ native_api_delete_path_is_allowed (const gchar *path)
       const gchar *id = path + strlen (alert_prefix);
       return is_uuid_segment (id, strlen (id))
              || is_uuid_segment_with_suffix (id, trash_suffix);
+    }
+
+  if (g_str_has_prefix (path, credential_prefix))
+    {
+      const gchar *id = path + strlen (credential_prefix);
+      return is_uuid_segment_with_suffix (id, trash_suffix);
     }
 
   if (g_str_has_prefix (path, scanner_prefix))

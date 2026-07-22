@@ -3628,10 +3628,10 @@ class YAFVSCtlTests(unittest.TestCase):
         )
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_openapi_direct_marker_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["unexpected_openapi_direct_marker_count"], 0)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 208)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_operation_count"], 209)
         self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_read_operation_count"], 112)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 96)
-        self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 96)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["openapi_marked_direct_write_control_count"], 97)
+        self.assertEqual(status_only["details"]["direct_api_contract"]["non_get_openapi_marked_direct_count"], 97)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_route_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["untracked_rust_route_count"], 0)
         self.assertEqual(status_only["details"]["direct_api_contract"]["missing_rust_direct_allowlist_count"], 0)
@@ -3665,8 +3665,8 @@ class YAFVSCtlTests(unittest.TestCase):
                 "method_parse_error_count",
             },
         )
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 98)
-        self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 96)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["browser_write_proxy_count"], 99)
+        self.assertEqual(status_only["details"]["browser_proxy_contract"]["direct_write_control_count"], 97)
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["gsad_proxy_methods"], ["DELETE", "PATCH", "POST", "PUT"])
         self.assertEqual(status_only["details"]["browser_proxy_contract"]["write_proxy_boundary_status"], "pass")
         self.assertFalse(status_only["details"]["browser_proxy_contract"]["write_proxy_requires_design"])
@@ -3746,8 +3746,8 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_openapi_collection_parameter_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_rust_collection_contract_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["write_control_alignment_status"], "pass")
-        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_operation_count"], 99)
-        self.assertEqual(status_only["details"]["openapi_contract"]["direct_write_control_operation_count"], 96)
+        self.assertEqual(status_only["details"]["openapi_contract"]["write_control_operation_count"], 100)
+        self.assertEqual(status_only["details"]["openapi_contract"]["direct_write_control_operation_count"], 97)
         self.assertEqual(status_only["details"]["openapi_contract"]["missing_write_control_metadata_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_write_control_metadata_count"], 0)
         self.assertEqual(status_only["details"]["openapi_contract"]["invalid_write_control_path_parameter_count"], 0)
@@ -3785,12 +3785,13 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(contract["unexpected_rust_direct_allowlist"], [])
         self.assertEqual(contract["openapi_marked_direct_operation_count"], len(contract["openapi_marked_direct_operations"]))
         self.assertEqual(contract["openapi_marked_direct_read_operation_count"], 112)
-        self.assertEqual(contract["openapi_marked_direct_write_control_count"], 96)
+        self.assertEqual(contract["openapi_marked_direct_write_control_count"], 97)
         self.assertEqual(
             contract["openapi_marked_direct_write_control_operations"],
             [
                 "DELETE /api/v1/alerts/{alert_id}",
                 "DELETE /api/v1/alerts/{alert_id}/trash",
+                "DELETE /api/v1/credentials/{credential_id}/trash",
                 "DELETE /api/v1/filters/{filter_id}",
                 "DELETE /api/v1/filters/{filter_id}/trash",
                 "DELETE /api/v1/host-identifiers/{identifier_id}",
@@ -3887,12 +3888,13 @@ class YAFVSCtlTests(unittest.TestCase):
                 "PUT /api/v1/users/current/timezone",
             ],
         )
-        self.assertEqual(contract["non_get_openapi_marked_direct_count"], 96)
+        self.assertEqual(contract["non_get_openapi_marked_direct_count"], 97)
         self.assertEqual(
             contract["non_get_openapi_marked_direct_operations"],
             [
                 "DELETE /api/v1/alerts/{alert_id}",
                 "DELETE /api/v1/alerts/{alert_id}/trash",
+                "DELETE /api/v1/credentials/{credential_id}/trash",
                 "DELETE /api/v1/filters/{filter_id}",
                 "DELETE /api/v1/filters/{filter_id}/trash",
                 "DELETE /api/v1/host-identifiers/{identifier_id}",
@@ -4148,8 +4150,8 @@ class YAFVSCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.browser-proxy-contract"]["status"], "pass")
-        self.assertEqual(contract["browser_write_proxy_count"], 98)
-        self.assertEqual(contract["direct_write_control_count"], 96)
+        self.assertEqual(contract["browser_write_proxy_count"], 99)
+        self.assertEqual(contract["direct_write_control_count"], 97)
         self.assertEqual(contract["gsad_proxy_methods"], ["DELETE", "PATCH", "POST", "PUT"])
         self.assertEqual(contract["gsad_proxy_method_parse_errors"], [])
         self.assertEqual(contract["write_proxy_boundary_status"], "pass")
@@ -4165,6 +4167,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("DELETE /api/v1/filters/{filter_id}/trash", contract["browser_write_proxy_operations"])
         self.assertIn("DELETE /api/v1/alerts/{alert_id}", contract["browser_write_proxy_operations"])
         self.assertIn("DELETE /api/v1/alerts/{alert_id}/trash", contract["browser_write_proxy_operations"])
+        self.assertIn("DELETE /api/v1/credentials/{credential_id}/trash", contract["browser_write_proxy_operations"])
         self.assertIn("PATCH /api/v1/alerts/{alert_id}", contract["browser_write_proxy_operations"])
         self.assertIn("PATCH /api/v1/filters/{filter_id}", contract["browser_write_proxy_operations"])
         self.assertIn("PATCH /api/v1/port-lists/{port_list_id}", contract["browser_write_proxy_operations"])
@@ -4511,7 +4514,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
         self.assertEqual(contract["alignment_status"], "pass")
         self.assertEqual(findings["native-tooling.openapi-contract"]["status"], "pass")
-        self.assertEqual(contract["operation_count"], 211)
+        self.assertEqual(contract["operation_count"], 212)
         self.assertEqual(contract["missing_operation_ids"], [])
         self.assertEqual(contract["missing_operation_summaries"], [])
         self.assertIn(
@@ -4639,6 +4642,7 @@ class YAFVSCtlTests(unittest.TestCase):
          'credential-redacted-metadata-detail-read',
          'credential-redacted-metadata-export-read',
          'credential-redacted-metadata-list-read',
+         'credential-trash-hard-delete',
          'credential-trash-restore',
          'credential-up-usk-create',
          'current-user-setting-read',
@@ -4917,8 +4921,8 @@ class YAFVSCtlTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "pass", json.dumps(result, sort_keys=True))
         self.assertEqual(details["openapi_version"], "0.1.0-contract")
-        self.assertEqual(details["operation_count"], 211)
-        self.assertEqual(details["direct_operation_count"], 208)
+        self.assertEqual(details["operation_count"], 212)
+        self.assertEqual(details["direct_operation_count"], 209)
         self.assertEqual(details["direct_read_operation_count"], 112)
         self.assertIn(
             "POST /tasks/{task_id}/replace-target",
@@ -4959,6 +4963,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 "POST /credentials",
                 "PATCH /credentials/{credential_id}",
                 "POST /credentials/{credential_id}/restore",
+                "DELETE /credentials/{credential_id}/trash",
                 "POST /filters",
                 "PATCH /filters/{filter_id}",
                 "DELETE /filters/{filter_id}",
@@ -5063,9 +5068,9 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertEqual(status_only["details"]["operation_count"], full["details"]["operation_count"])
         self.assertEqual(status_only["details"]["direct_operation_count"], full["details"]["direct_operation_count"])
         self.assertEqual(status_only["details"]["direct_read_operation_count"], full["details"]["direct_read_operation_count"])
-        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 96)
-        self.assertEqual(status_only["details"]["write_control_operation_count"], 99)
-        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 96)
+        self.assertEqual(status_only["details"]["non_get_direct_operation_count"], 97)
+        self.assertEqual(status_only["details"]["write_control_operation_count"], 100)
+        self.assertEqual(status_only["details"]["direct_write_control_operation_count"], 97)
         self.assertEqual(status_only["details"]["operation_request_body_count"], 54)
         self.assertEqual(status_only["details"]["get_request_body_count"], 0)
         self.assertEqual(status_only["details"]["openapi_alignment_status"], "pass")
@@ -5152,11 +5157,11 @@ class YAFVSCtlTests(unittest.TestCase):
         source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
 
         self.assertEqual(result["status"], "pass")
-        self.assertEqual(details["summary"]["total_rows"], 211)
-        self.assertEqual(details["summary"]["openapi_operation_rows"], 211)
-        self.assertEqual(details["summary"]["inventory_rows"], 211)
-        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 211)
-        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_yafvs_exposure"], 211)
+        self.assertEqual(details["summary"]["total_rows"], 212)
+        self.assertEqual(details["summary"]["openapi_operation_rows"], 212)
+        self.assertEqual(details["summary"]["inventory_rows"], 212)
+        self.assertEqual(details["summary"]["rows_with_checked_migration_metadata"], 212)
+        self.assertEqual(details["summary"]["checked_migration_field_counts"]["x_yafvs_exposure"], 212)
         self.assertEqual(details["summary"]["rows_missing_openapi_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_inventory_count"], 0)
         self.assertEqual(details["summary"]["rows_missing_migration_metadata_count"], 0)
@@ -6017,7 +6022,7 @@ class YAFVSCtlTests(unittest.TestCase):
             for item in operations
         ]
 
-        self.assertEqual(len(operation_ids), 211)
+        self.assertEqual(len(operation_ids), 212)
         self.assertEqual(len(operation_ids), len(set(operation_ids)))
         self.assertEqual(yafvsctl.openapi_contract_operation_id("get", "/alerts/{alert_id}"), "getAlertsByAlertId")
         self.assertEqual(yafvsctl.openapi_contract_operation_id("patch", "/alerts/{alert_id}"), "patchAlertsByAlertId")
@@ -7570,7 +7575,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("redacted row inventory", docs)
         self.assertRegex(contract, r"intentionally excludes credential\s+secrets,\s+target\s+hosts")
         self.assertIn(
-            "Credential and task permanent delete",
+            "Only task permanent delete",
             docs,
         )
         self.assertIn("generic GSA/gsad GMP restore bridge is removed", docs)

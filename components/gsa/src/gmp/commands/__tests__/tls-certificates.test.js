@@ -284,6 +284,9 @@ describe('TlsCertificatesCommand tests', () => {
     expect(result.data[0].id).toEqual('tls-certificate-id');
     expect(result.data[0].subjectDn).toEqual('CN=example.org');
     expect(result.data[0].isWritable()).toBe(true);
+    expect(result.data[0].userCapabilities.mayDelete('tlscertificate')).toBe(
+      true,
+    );
     expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/tls-certificates', {
       token: 'test-token',
       page: 1,

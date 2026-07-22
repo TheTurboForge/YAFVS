@@ -288,6 +288,9 @@ const nativeTlsCertificateToModel = (
     trust: detail ? booleanToYesNo(item.trust) : undefined,
     time_status: detail ? nativeTimeStatus(item.time_status) : undefined,
     writable: booleanToYesNo(item.writable),
+    permissions: item.writable
+      ? {permission: [{name: 'everything'}]}
+      : {permission: []},
     user_tags: detail ? nativeUserTagsElement(item.user_tags ?? []) : undefined,
     sources: detail
       ? {source: (item.sources ?? []).map(nativeSourceToElement)}

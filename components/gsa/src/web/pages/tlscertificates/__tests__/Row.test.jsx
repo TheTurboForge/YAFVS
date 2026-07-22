@@ -26,6 +26,7 @@ const tlsCertificate = TlsCertificate.fromElement({
   serial: '123',
   sha256_fingerprint: '2142',
   md5_fingerprint: '4221',
+  writable: 1,
   permissions: {permission: [{name: 'everything'}]},
 });
 
@@ -46,6 +47,7 @@ describe('Tls Certificate Row tests', () => {
     const handleToggleDetailsClick = testing.fn();
 
     const {render} = rendererWith({
+      capabilities: true,
       gmp: createGmp(),
       store: true,
     });
@@ -88,6 +90,7 @@ describe('Tls Certificate Row tests', () => {
     const handleToggleDetailsClick = testing.fn();
 
     const {render} = rendererWith({
+      capabilities: true,
       gmp: createGmp(),
       store: true,
     });
@@ -124,6 +127,7 @@ describe('Tls Certificate Row tests', () => {
     const handleToggleDetailsClick = testing.fn();
 
     const {render} = rendererWith({
+      capabilities: true,
       gmp: createGmp(),
       store: true,
     });
@@ -155,6 +159,40 @@ describe('Tls Certificate Row tests', () => {
     const exportIcon = screen.getByTestId('export-icon');
     fireEvent.click(exportIcon);
     expect(handleTlsCertificateExport).toHaveBeenCalledWith(tlsCertificate);
+  });
+
+  test('should not delete a protected TLS certificate', () => {
+    const protectedCertificate = TlsCertificate.fromElement({
+      _id: 'protected',
+      subject_dn: 'CN=Protected',
+      writable: 0,
+      permissions: {permission: []},
+    });
+    const handleTlsCertificateDelete = testing.fn();
+    const {render} = rendererWith({
+      capabilities: true,
+      gmp: createGmp(),
+      store: true,
+    });
+
+    render(
+      <Row
+        entity={protectedCertificate}
+        links={true}
+        onTlsCertificateDeleteClick={handleTlsCertificateDelete}
+        onTlsCertificateDownloadClick={testing.fn()}
+        onTlsCertificateExportClick={testing.fn()}
+        onToggleDetailsClick={testing.fn()}
+      />,
+    );
+
+    const deleteIcon = screen.getAllByTestId('delete-icon')[0];
+    expect(deleteIcon).toHaveAttribute(
+      'title',
+      'TLS Certificate is not writable',
+    );
+    fireEvent.click(deleteIcon);
+    expect(handleTlsCertificateDelete).not.toHaveBeenCalled();
   });
 
   console.error = consoleError;

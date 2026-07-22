@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -10,18 +11,6 @@
 
 char*
 tag_uuid (tag_t);
-
-int
-tag_in_use (tag_t);
-
-int
-trash_tag_in_use (tag_t);
-
-int
-tag_writable (tag_t);
-
-int
-trash_tag_writable (tag_t);
 
 int
 copy_tag (const char *, const char *, const char *, tag_t *);
@@ -37,30 +26,6 @@ int
 modify_tag (const char *, const char *, const char *, const char *,
             const char *, array_t *, const char *, const char *, const char*,
             gchar **);
-
-int
-tag_count (const get_data_t *);
-
-int
-init_tag_iterator (iterator_t *, get_data_t *);
-
-const char*
-tag_iterator_resource_type (iterator_t *);
-
-int
-tag_iterator_active (iterator_t *);
-
-const char*
-tag_iterator_value (iterator_t *);
-
-int
-tag_iterator_resources (iterator_t *);
-
-int
-init_tag_name_iterator (iterator_t *, get_data_t *);
-
-const char*
-tag_name_iterator_name (iterator_t *);
 
 int
 init_resource_tag_iterator (iterator_t *, const char *, resource_t, int,

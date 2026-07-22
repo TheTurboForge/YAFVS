@@ -83,7 +83,6 @@ command_t gmp_commands[]
     {"GET_SCANNERS", "Get all scanners."},
     {"GET_SCHEDULES", "Get all schedules."},
     {"GET_SETTINGS", "Get all settings."},
-    {"GET_TAGS", "Get all tags."},
     {"GET_TARGETS", "Get all targets."},
     {"GET_TASKS", "Get all tasks."},
     {"GET_TLS_CERTIFICATES", "Get all TLS certificates."},
@@ -123,6 +122,7 @@ static const char *native_acl_operations[] = {
   "CREATE_SCHEDULE",
   "GET_FILTERS",
   "GET_REPORT_FORMATS",
+  "GET_TAGS",
   "MODIFY_SCHEDULE",
   NULL
 };

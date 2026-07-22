@@ -94,8 +94,6 @@ gsad_init_validator ()
                      "|(get_scopes)"
                      "|(get_setting)"
                      "|(get_settings)"
-                     "|(get_tag)"
-                     "|(get_tags)"
                      "|(get_target)"
                      "|(get_targets)"
                      "|(get_task)"

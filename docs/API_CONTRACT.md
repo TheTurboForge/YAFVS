@@ -376,10 +376,11 @@ Native tag rows include tag identity, owner, comment, resource type, inherited
 resource count, active state, value, permissions, and timestamps. Tag metadata
 is operator labeling data, so these endpoints stay inside the authenticated
 operator boundary. Native assigned-resource expansion is limited to read-only
-strict-whitelist references for the current tag detail Assigned Items tab. Tag
-create, modify, clone, enable/disable, export, delete, unsupported resource
-types, and tag write semantics remain inherited until native write semantics
-are designed.
+strict-whitelist references for the current tag detail Assigned Items tab.
+Tag metadata export and the supported create, modify, clone, enable/disable,
+trash, restore, hard-delete, and explicit or typed-filter assignment lifecycles
+are native. Unsupported raw resource types and gvmd raw mutation compatibility
+remain inherited and separately classified.
 
 Native scan-config rows include config identity, owner, comment, family/NVT
 counts, growth flags, predefined/deprecated state, in-use state, and

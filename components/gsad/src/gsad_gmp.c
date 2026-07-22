@@ -178,10 +178,6 @@ get_port_list (gvm_connection_t *, gsad_credentials_t *, params_t *,
                const char *, gsad_command_response_data_t *);
 
 static char *
-get_tag (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
-         gsad_command_response_data_t *);
-
-static char *
 get_target (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
             gsad_command_response_data_t *);
 
@@ -3985,62 +3981,6 @@ delete_target_gmp (gvm_connection_t *connection,
  * @return Target XML on success.  Enveloped XML
  *         on error.
  */
-/**
- * @brief Get one tag, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[in]  extra_xml    Extra XML to insert inside page element.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-static char *
-get_tag (gvm_connection_t *connection, gsad_credentials_t *credentials,
-         params_t *params, const char *extra_xml,
-         gsad_command_response_data_t *response_data)
-{
-  return get_one (connection, "tag", credentials, params, extra_xml, NULL,
-                  response_data);
-}
-
-/**
- * @brief Get one tag, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_tag_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-             params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_tag (connection, credentials, params, NULL, response_data);
-}
-
-/**
- * @brief Get all tags, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_tags_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-              params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_many (connection, "tags", credentials, params, NULL,
-                   response_data);
-}
-
-
 /**
  * @brief Get one target, envelope the result.
  *
@@ -8555,8 +8495,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_scopes)
   ELSE (get_setting)
   ELSE (get_settings)
-  ELSE (get_tag)
-  ELSE (get_tags)
   ELSE (get_target)
   ELSE (get_targets)
   ELSE (get_task)

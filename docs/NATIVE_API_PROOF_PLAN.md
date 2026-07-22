@@ -254,8 +254,9 @@ clone, export, delete, trashcan mutation, and result-specific expansion remain
 inherited. Tag list/detail metadata reads are browser-proxied, including
 resource type/count, active state, and value; tag assigned-resource expansion is
 browser-proxied only for read-only strict-whitelist id/type/name references;
-tag create, modify, clone, enable/disable, export, delete, unsupported resource
-types, and writes remain inherited. Scan-config list reads are browser-proxied,
+tag metadata export and supported create, modify, clone, enable/disable,
+trash, restore, hard-delete, and assignment writes are native. Unsupported raw
+resource types and gvmd raw mutation compatibility remain inherited. Scan-config list reads are browser-proxied,
 and scan-config metadata
 detail exists for internal automation; rich detail tabs, scanner/NVT
 preferences, selector/family expansion, import/export, and writes remain

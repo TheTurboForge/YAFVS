@@ -1,4 +1,5 @@
 /* Copyright (C) 2026 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -27,36 +28,6 @@
    { "tag_resources_count (tags.id, tags.resource_type)",                    \
      "resources", KEYWORD_TYPE_INTEGER },                                    \
    { NULL, NULL, KEYWORD_TYPE_UNKNOWN }                                      \
- }
-
-/**
- * @brief Tag iterator trash columns.
- */
-#define TAG_ITERATOR_TRASH_COLUMNS                                           \
- {                                                                           \
-   GET_ITERATOR_COLUMNS (tags_trash),                                        \
-   { "resource_type", NULL, KEYWORD_TYPE_STRING },                           \
-   { "active", NULL, KEYWORD_TYPE_INTEGER },                                 \
-   { "value", NULL, KEYWORD_TYPE_STRING },                                   \
-   { "tag_resources_trash_count (tags_trash.id, tags_trash.resource_type)",  \
-     "resources", KEYWORD_TYPE_INTEGER },                                    \
-   { NULL, NULL, KEYWORD_TYPE_UNKNOWN }                                      \
- }
-
-/**
- * @brief Filter columns for Tag name iterator.
- */
-#define TAG_NAME_ITERATOR_FILTER_COLUMNS                         \
- { "name", "resource_type", NULL }
-
-/**
- * @brief Tag name iterator columns.
- */
-#define TAG_NAME_ITERATOR_COLUMNS                                \
- {                                                               \
-   { "name", NULL, KEYWORD_TYPE_STRING },                        \
-   { "resource_type", NULL, KEYWORD_TYPE_STRING },               \
-   { NULL, NULL, KEYWORD_TYPE_UNKNOWN }                          \
  }
 
 void

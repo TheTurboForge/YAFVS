@@ -173,7 +173,6 @@ set(
   manage_scan_queue.c
   manage_scanner_relays.c
   manage_schedules.c
-  manage_tags.c
   manage_targets.c
   manage_users.c
   manage_report_export_scheduler.c

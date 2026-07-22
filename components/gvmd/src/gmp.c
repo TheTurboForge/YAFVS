@@ -1324,27 +1324,6 @@ get_settings_data_reset (get_settings_data_t *data)
   memset (data, 0, sizeof (get_settings_data_t));
 }
 /**
- * @brief Command data for the get_tags command.
- */
-typedef struct
-{
-  get_data_t get;    ///< Get args.
-  int names_only;    ///< Boolean. Whether to get only distinct names.
-} get_tags_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-get_tags_data_reset (get_tags_data_t *data)
-{
-  get_data_reset (&data->get);
-  memset (data, 0, sizeof (get_tags_data_t));
-}
-
-/**
  * @brief Command data for the get_targets command.
  */
 typedef struct
@@ -2010,7 +1989,6 @@ typedef union
   get_schedules_data_t get_schedules;                 ///< get_schedules
   get_scanners_data_t get_scanners;                   ///< get_scanners
   get_settings_data_t get_settings;                   ///< get_settings
-  get_tags_data_t get_tags;                           ///< get_tags
   get_targets_data_t get_targets;                     ///< get_targets
   get_tasks_data_t get_tasks;                         ///< get_tasks
   get_users_data_t get_users;                         ///< get_users
@@ -2249,12 +2227,6 @@ static get_schedules_data_t *get_schedules_data
  */
 static get_settings_data_t *get_settings_data
  = &(command_data.get_settings);
-
-/**
- * @brief Parser callback data for GET_TAGS.
- */
-static get_tags_data_t *get_tags_data
- = &(command_data.get_tags);
 
 /**
  * @brief Parser callback data for GET_TARGETS.
@@ -2519,7 +2491,6 @@ typedef enum
   CLIENT_GET_SCANNERS,
   CLIENT_GET_SCHEDULES,
   CLIENT_GET_SETTINGS,
-  CLIENT_GET_TAGS,
   CLIENT_GET_TARGETS,
   CLIENT_GET_TASKS,
   CLIENT_GET_TLS_CERTIFICATES,
@@ -3379,21 +3350,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
               get_settings_data->sort_order = 1;
 
             set_client_state (CLIENT_GET_SETTINGS);
-          }
-        else if (strcasecmp ("GET_TAGS", element_name) == 0)
-          {
-            const gchar* attribute;
-            get_data_parse_attributes (&get_tags_data->get, "tag",
-                                       attribute_names,
-                                       attribute_values);
-
-            if (find_attribute (attribute_names, attribute_values,
-                                "names_only", &attribute))
-              get_tags_data->names_only = strcmp (attribute, "0");
-            else
-              get_tags_data->names_only = 0;
-
-            set_client_state (CLIENT_GET_TAGS);
           }
         else if (strcasecmp ("GET_TARGETS", element_name) == 0)
           {
@@ -11052,110 +11008,6 @@ handle_get_settings (gmp_parser_t *gmp_parser, GError **error)
   set_client_state (CLIENT_AUTHENTIC);
 }
 /**
- * @brief Handle end of GET_TAGS element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_tags (gmp_parser_t *gmp_parser, GError **error)
-{
-  iterator_t tags;
-  int ret, count, first, filtered;
-
-  INIT_GET (tag, Tag);
-
-  if (get_tags_data->names_only)
-    ret = init_tag_name_iterator (&tags, &get_tags_data->get);
-  else
-    ret = init_tag_iterator (&tags, &get_tags_data->get);
-
-  if (ret)
-    {
-      switch (ret)
-        {
-          case 1:
-            if (send_find_error_to_client ("get_tags",
-                                           "tag", get_tags_data->get.id,
-                                           gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            break;
-          case 2:
-            if (send_find_error_to_client
-                  ("get_tags", "filter", get_tags_data->get.filt_id,
-                   gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            break;
-          default:
-            SEND_TO_CLIENT_OR_FAIL
-              (XML_INTERNAL_ERROR ("get_tags"));
-        }
-      get_tags_data_reset (get_tags_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  SEND_GET_START ("tag");
-  while (1)
-    {
-      ret = get_next (&tags, &get_tags_data->get, &first, &count,
-                      get_tags_data->names_only
-                        ? init_tag_name_iterator
-                        : init_tag_iterator);
-      if (ret == 1)
-        break;
-      if (ret == -1)
-        {
-          internal_error_send_to_client (error);
-          return;
-        }
-
-      if (get_tags_data->names_only)
-        SENDF_TO_CLIENT_OR_FAIL ("<tag>"
-                                 "<name>%s</name>"
-                                 "</tag>",
-                                 tag_name_iterator_name (&tags));
-      else
-        {
-          gchar* value;
-
-          value = g_markup_escape_text (tag_iterator_value (&tags), -1);
-
-          SEND_GET_COMMON (tag, &get_tags_data->get, &tags);
-
-          SENDF_TO_CLIENT_OR_FAIL ("<resources>"
-                                   "<type>%s</type>"
-                                   "<count><total>%d</total></count>"
-                                   "</resources>"
-                                   "<value>%s</value>"
-                                   "<active>%d</active>"
-                                   "</tag>",
-                                   tag_iterator_resource_type (&tags),
-                                   tag_iterator_resources (&tags),
-                                   value,
-                                   tag_iterator_active (&tags));
-
-          g_free (value);
-        }
-      count++;
-    }
-  cleanup_iterator (&tags);
-  filtered = get_tags_data->get.id
-              ? 1
-              : tag_count (&get_tags_data->get);
-  SEND_GET_END ("tag", &get_tags_data->get, count, filtered);
-
-  get_tags_data_reset (get_tags_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
  * @brief Send a legacy-style alive tests string to the client.
  *
  * @param[in]  alive_tests  The alive tests bitfield.
@@ -13242,10 +13094,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
       case CLIENT_GET_SETTINGS:
         handle_get_settings (gmp_parser, error);
-        break;
-
-      case CLIENT_GET_TAGS:
-        handle_get_tags (gmp_parser, error);
         break;
 
       case CLIENT_GET_TARGETS:

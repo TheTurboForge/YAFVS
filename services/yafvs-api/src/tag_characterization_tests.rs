@@ -8,11 +8,23 @@ use crate::direct_api::direct_api_v1_method_is_allowed;
 
 const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
 const MANAGE_SQL_TAGS: &str = include_str!("../../../components/gvmd/src/manage_sql_tags.c");
-const MANAGE_TAGS: &str = include_str!("../../../components/gvmd/src/manage_tags.c");
+const MANAGE_SQL_TAGS_H: &str = include_str!("../../../components/gvmd/src/manage_sql_tags.h");
+const MANAGE_TAGS_H: &str = include_str!("../../../components/gvmd/src/manage_tags.h");
+const MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
+const MANAGE_C: &str = include_str!("../../../components/gvmd/src/manage.c");
+const MANAGE_COMMANDS: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
+const GVMD_GMP: &str = include_str!("../../../components/gvmd/src/gmp.c");
+const GVMD_GMP_GET: &str = include_str!("../../../components/gvmd/src/gmp_get.c");
+const GVMD_CMAKE: &str = include_str!("../../../components/gvmd/src/CMakeLists.txt");
+const GMP_SCHEMA: &str = include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
 const YAFVS_CONTROL: &str = include_str!("../../../components/gvmd/src/yafvs_control.c");
 const TAG_WRITES: &str = include_str!("tag_writes.rs");
+const TAG_PAYLOADS: &str = include_str!("tag_payloads.rs");
 const GSA_TAGS: &str = include_str!("../../../components/gsa/src/gmp/native-api/tags.ts");
+const GSA_CAPABILITIES: &str =
+    include_str!("../../../components/gsa/src/gmp/capabilities/capabilities.ts");
 const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GSAD_GMP_H: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GSA_TAG_SELECTION: &str =
     include_str!("../../../components/gsa/src/gmp/native-api/tag-resource-selection.ts");
@@ -26,6 +38,112 @@ fn inherited_function(source: &str, name: &str) -> String {
     let tail = &source[start..];
     let end = tail.find("\n/**").unwrap_or(tail.len());
     tail[..end].to_string()
+}
+
+#[test]
+fn dedicated_get_tags_xml_transport_is_retired_without_losing_shared_semantics() {
+    for retired in [
+        "get_tag_gmp",
+        "get_tags_gmp",
+        "ELSE (get_tag)",
+        "ELSE (get_tags)",
+    ] {
+        assert!(!GSAD_GMP.contains(retired));
+        assert!(!GSAD_GMP_H.contains(retired));
+    }
+    for retired in ["|(get_tag)", "|(get_tags)"] {
+        assert!(!GSAD_VALIDATOR.contains(retired));
+    }
+    for retired in [
+        "get_tags_data",
+        "CLIENT_GET_TAGS",
+        "handle_get_tags",
+        "strcasecmp (\"GET_TAGS\"",
+    ] {
+        assert!(!GVMD_GMP.contains(retired));
+    }
+    assert!(!MANAGE_COMMANDS.contains("{\"GET_TAGS\""));
+    assert!(MANAGE_COMMANDS.contains("\"GET_TAGS\","));
+    let valid_command = inherited_function(MANAGE_COMMANDS, "valid_gmp_command");
+    assert!(valid_command.contains("native_acl_operations"));
+
+    for retired in [
+        "\ntag_count (",
+        "\ninit_tag_iterator (",
+        "DEF_ACCESS (tag_iterator_resource_type,",
+        "\ntag_iterator_active (",
+        "DEF_ACCESS (tag_iterator_value,",
+        "\ntag_iterator_resources (",
+        "\ninit_tag_name_iterator (",
+        "DEF_ACCESS (tag_name_iterator_name,",
+        "\ntag_in_use (",
+        "\ntrash_tag_in_use (",
+        "\ntag_writable (",
+        "\ntrash_tag_writable (",
+    ] {
+        assert!(!MANAGE_SQL_TAGS.contains(retired));
+        assert!(!MANAGE_TAGS_H.contains(retired));
+    }
+    assert!(!GVMD_CMAKE.contains("manage_tags.c"));
+    assert!(!GMP_SCHEMA.contains("<name>get_tags</name>"));
+    assert!(GMP_SCHEMA.contains("CREATE_TAG, GET_TAGS, MODIFY_TAG"));
+
+    for retained in ["TAG_ITERATOR_FILTER_COLUMNS", "TAG_ITERATOR_COLUMNS"] {
+        assert!(MANAGE_SQL_TAGS_H.contains(retained));
+    }
+    assert!(!MANAGE_SQL_TAGS_H.contains("TAG_ITERATOR_TRASH_COLUMNS"));
+    let select_columns = inherited_function(MANAGE_SQL, "type_select_columns");
+    assert!(select_columns.contains("strcasecmp (type, \"TAG\") == 0"));
+    assert!(select_columns.contains("return tag_columns"));
+    let filter_columns = inherited_function(MANAGE_SQL, "type_filter_columns");
+    assert!(filter_columns.contains("strcasecmp (type, \"TAG\") == 0"));
+    assert!(filter_columns.contains("TAG_ITERATOR_FILTER_COLUMNS"));
+
+    for retained in [
+        "copy_tag (",
+        "create_tag (",
+        "modify_tag (",
+        "delete_tag (",
+        "init_resource_tag_iterator (",
+        "resource_tag_iterator_uuid",
+        "resource_tag_iterator_name",
+        "resource_tag_iterator_value",
+        "resource_tag_iterator_comment",
+        "resource_tag_exists (",
+        "resource_tag_count (",
+    ] {
+        assert!(
+            MANAGE_SQL_TAGS.contains(retained),
+            "shared or raw tag implementation was lost: {retained}"
+        );
+        assert!(
+            MANAGE_TAGS_H.contains(retained),
+            "shared or raw tag declaration was lost: {retained}"
+        );
+    }
+    for (consumer, source) in [
+        ("generic resource response", GVMD_GMP_GET),
+        ("override and result response", GVMD_GMP),
+        ("NVT response", MANAGE_C),
+        ("report and task response", MANAGE_SQL),
+    ] {
+        assert!(
+            source.contains("init_resource_tag_iterator"),
+            "{consumer} lost shared tag expansion"
+        );
+        assert!(
+            source.contains("resource_tag_iterator_uuid"),
+            "{consumer} lost shared tag identity expansion"
+        );
+    }
+    assert!(GSA_TAGS.contains("api/v1/tags"));
+    assert!(GSA_CAPABILITIES.contains("'get_tags'"));
+    assert!(TAG_PAYLOADS.contains("row.get::<_, bool>(\"human_owned\")"));
+    assert!(TAG_PAYLOADS.contains("tag_resource_direct_write_type_is_supported"));
+    assert!(TAG_PAYLOADS.contains("in_use: false"));
+
+    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    assert!(!repo.join("components/gvmd/src/manage_tags.c").exists());
 }
 
 #[test]
@@ -311,18 +429,6 @@ fn inherited_modify_tag_owns_set_add_remove_and_filter_resource_semantics() {
             "modify_tag missing inherited resource mutation branch {required}"
         );
     }
-}
-
-#[test]
-fn inherited_tag_writability_helpers_are_currently_permissive_live_closed_trash() {
-    let tag_writable = inherited_function(MANAGE_TAGS, "tag_writable");
-    let trash_tag_writable = inherited_function(MANAGE_TAGS, "trash_tag_writable");
-    let tag_in_use = inherited_function(MANAGE_TAGS, "tag_in_use");
-    let trash_tag_in_use = inherited_function(MANAGE_TAGS, "trash_tag_in_use");
-    assert!(tag_writable.contains("return 1;"));
-    assert!(trash_tag_writable.contains("return 0;"));
-    assert!(tag_in_use.contains("return 0;"));
-    assert!(trash_tag_in_use.contains("return 0;"));
 }
 
 #[test]

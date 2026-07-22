@@ -93,7 +93,6 @@ fn trashcan_inventory_is_native_only_and_has_no_gmp_fallback() {
         ("get_port_lists_data", "port_list"),
         ("get_scanners_data", "scanner"),
         ("get_schedules_data", "schedule"),
-        ("get_tags_data", "tag"),
         ("get_targets_data", "target"),
         ("get_tasks_data", "task"),
     ] {
@@ -106,6 +105,10 @@ fn trashcan_inventory_is_native_only_and_has_no_gmp_fallback() {
         );
     }
     assert!(!GVMD_GMP.contains("get_report_formats_data"));
+    assert!(
+        !GVMD_GMP.contains("get_tags_data"),
+        "tag trash inventory and lifecycle are native; GET_TAGS must stay retired"
+    );
     assert!(
         !GVMD_GMP.contains("get_filters_data"),
         "saved-filter trash inventory and lifecycle are native; GET_FILTERS must stay retired"

@@ -120,6 +120,62 @@ describe('ScannerCommand tests', () => {
     expect(result.data.id).toEqual('123');
   });
 
+  test('should clone a scanner through the native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({id: 'clone-id'}),
+      ok: true,
+      status: 201,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScannerCommand(fakeHttp);
+
+    const result = await cmd.clone({id: 'source/id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/scanners/source%2Fid/clone',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-YAFVS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({}),
+      },
+    );
+    expect(result.data.id).toEqual('clone-id');
+  });
+
+  test('should delete a scanner through the native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new ScannerCommand(fakeHttp);
+
+    await cmd.delete({id: 'scanner/id'});
+
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/scanners/scanner%2Fid',
+      {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'X-YAFVS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+      },
+    );
+  });
+
   test('should replace scanner configuration through the native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing

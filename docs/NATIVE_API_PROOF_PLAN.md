@@ -103,9 +103,10 @@ remains read-only metadata/source provenance and intentionally excludes stored
 certificate bytes and file-transfer semantics.
 Scanner detail now reads native metadata, active User Tags, and non-hidden task
 backlinks through the authenticated `gsad` proxy for safe socket/builtin
-page-load reads, while inherited GMP remains the fallback for remote scanner
-certificate context and still owns verify, export/download,
-credential/certificate download context, delete, clone, edit, and
+page-load reads. Native write-control now owns create, metadata/configuration
+edit, clone, trash, restore, hard-delete, and bounded local verification.
+Inherited compatibility remains for remote TLS/relay verification, legacy file
+export/download formats, credential/certificate download context, and deeper
 scanner-control behavior.
 Scan Config detail Information fields, active User Tags, and shallow non-hidden
 task backlinks now read native metadata through the authenticated `gsad` proxy

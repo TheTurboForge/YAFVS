@@ -444,7 +444,11 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "scanner-metadata-modify",
         "scanner-create",
         "scanner-complete-retained-editor-configuration-modify",
+        "scanner-clone",
         "scanner-verify",
+        "scanner-restore",
+        "scanner-hard-delete",
+        "scanner-trash-move",
         "schedule-metadata-detail-read",
         "schedule-metadata-export-read",
         "schedule-metadata-list-read",
@@ -6882,7 +6886,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         stop_suffix = post_constants.get("stop_suffix")
         replace_target_suffix = post_constants.get("replace_target_suffix")
         replace_configuration_suffix = post_constants.get("replace_configuration_suffix")
-        for prefix_variable in ("alert_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
+        for prefix_variable in ("alert_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{clone_suffix}")
@@ -7001,6 +7005,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
             "override_prefix",
             "port_list_prefix",
             "scan_config_prefix",
+            "scanner_prefix",
             "schedule_prefix",
             "scope_prefix",
             "tag_prefix",
@@ -7059,7 +7064,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
         resources_suffix = post_constants.get("resources_suffix")
         ranges_suffix = post_constants.get("ranges_suffix")
         verify_suffix = post_constants.get("verify_suffix")
-        for prefix_variable in ("alert_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
+        for prefix_variable in ("alert_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{clone_suffix}")
@@ -7222,6 +7227,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             "override_prefix",
             "port_list_prefix",
             "scan_config_prefix",
+            "scanner_prefix",
             "schedule_prefix",
             "scope_prefix",
             "scope_report_prefix",
@@ -7763,7 +7769,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser scanner create", "direct native scanner configuration create"],
                 "residual_inherited": [
-                    "Scanner clone, delete, restore, inherited export formats, and remote TLS/relay verification remain inherited.",
+                    "Inherited file export formats and remote TLS/relay verification remain inherited.",
                     "Native create does not contact, verify, or start the configured scanner."
                 ],
             },
@@ -7779,7 +7785,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser complete retained scanner editor save", "direct native scanner configuration replacement"],
                 "residual_inherited": [
-                    "Scanner clone, delete, restore, inherited export formats, and remote TLS/relay verification remain inherited.",
+                    "Inherited file export formats and remote TLS/relay verification remain inherited.",
                     "Native replacement preserves relay settings, rejects built-in or in-use scanners, and does not contact or start the scanner."
                 ],
             },
@@ -7790,8 +7796,52 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser scanner metadata PATCH for command-level metadata-only saves", "direct native scanner name/comment metadata patch"],
                 "residual_inherited": [
-                    "Scanner host, port, type, relay, CA material, credential links, live status, verify/control operations, export/download formats, create, clone, restore, and delete remain inherited.",
+                    "Relay mutation, remote TLS/relay verification, credential-secret workflows, and inherited file export/download formats remain inherited.",
                     "Native PATCH is limited to operator-owned non-built-in scanner name/comment metadata."
+                ],
+            },
+            {
+                "endpoint": "/api/v1/scanners/{scanner_id}",
+                "method": "delete",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser scanner trash move", "direct native scanner trash move"],
+                "residual_inherited": [
+                    "Native trash rejects built-in scanners and non-hidden live task references.",
+                    "Hidden or trash-side task references and scanner tag links are atomically rebound to the trash row."
+                ],
+            },
+            {
+                "endpoint": "/api/v1/scanners/{scanner_id}/clone",
+                "method": "post",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser scanner clone", "direct native scanner clone"],
+                "residual_inherited": [
+                    "Clone intentionally does not copy relay configuration, matching inherited copy semantics.",
+                    "The built-in CVE scanner and ownerless custom scanners remain protected from clone."
+                ],
+            },
+            {
+                "endpoint": "/api/v1/scanners/{scanner_id}/restore",
+                "method": "post",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser scanner restore", "direct native scanner restore"],
+                "residual_inherited": [
+                    "Restore preserves UUID, owner, relay configuration, task references, and tag links.",
+                    "Live UUID/name collisions and unavailable credential references fail closed."
+                ],
+            },
+            {
+                "endpoint": "/api/v1/scanners/{scanner_id}/trash",
+                "method": "delete",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser scanner hard-delete", "direct native scanner hard-delete"],
+                "residual_inherited": [
+                    "Trash-side task references block hard-delete.",
+                    "The route deletes only trashed scanner metadata and scanner tag links."
                 ],
             },
             {

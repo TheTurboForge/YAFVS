@@ -177,6 +177,7 @@ const RESTORE_PATHS: Partial<Record<EntityType, string>> = {
   override: 'overrides',
   portlist: 'port-lists',
   scanconfig: 'scan-configs',
+  scanner: 'scanners',
   schedule: 'schedules',
   tag: 'tags',
   target: 'targets',

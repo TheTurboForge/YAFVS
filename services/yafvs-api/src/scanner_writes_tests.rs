@@ -5,18 +5,14 @@
 use crate::{
     errors::ApiError,
     scanner_write_db::{
-        ScannerWriteState, ensure_scanner_live_task_count_allows_replace,
-        ensure_scanner_metadata_patch_allowed,
+        ScannerWriteState, ensure_scanner_clone_source_allowed,
+        ensure_scanner_live_task_count_allows_replace, ensure_scanner_metadata_patch_allowed,
     },
-    scanner_write_sql::{
-        scanner_create_configuration_sql, scanner_credential_state_sql,
-        scanner_live_task_count_sql, scanner_replace_configuration_sql,
-        scanner_update_metadata_sql, scanner_write_state_sql,
-    },
+    scanner_write_sql::*,
     scanner_write_validation::{
-        MAX_SCANNER_CA_PUB_BYTES, MAX_SCANNER_TEXT_BYTES, ScannerConfigurationRequest,
-        ScannerPatchRequest, validate_scanner_configuration_request,
-        validate_scanner_patch_request,
+        MAX_SCANNER_CA_PUB_BYTES, MAX_SCANNER_TEXT_BYTES, ScannerCloneRequest,
+        ScannerConfigurationRequest, ScannerPatchRequest, validate_scanner_clone_request,
+        validate_scanner_configuration_request, validate_scanner_patch_request,
     },
 };
 use yafvs_domain::ScannerType;
@@ -32,6 +28,13 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> ScannerPatchReque
     }
 }
 
+fn clone_request(name: Option<&str>, comment: Option<&str>) -> ScannerCloneRequest {
+    ScannerCloneRequest {
+        name: name.map(str::to_string),
+        comment: comment.map(str::to_string),
+    }
+}
+
 fn configuration_request(host: &str, port: i64) -> ScannerConfigurationRequest {
     ScannerConfigurationRequest {
         name: " scanner ".to_string(),
@@ -42,6 +45,27 @@ fn configuration_request(host: &str, port: i64) -> ScannerConfigurationRequest {
         ca_pub: Some(CERTIFICATE_SHAPED_PEM.to_string()),
         credential_id: Some(CREDENTIAL_ID.to_string()),
     }
+}
+
+#[test]
+fn scanner_clone_request_accepts_defaults_and_bounded_metadata_overrides() {
+    let default = validate_scanner_clone_request(clone_request(None, None))
+        .expect("default scanner clone request");
+    assert_eq!(default.name, None);
+    assert_eq!(default.comment, None);
+
+    let named =
+        validate_scanner_clone_request(clone_request(Some("  Scanner copy  "), Some("  copied  ")))
+            .expect("scanner clone metadata overrides");
+    assert_eq!(named.name.as_deref(), Some("Scanner copy"));
+    assert_eq!(named.comment.as_deref(), Some("copied"));
+    assert!(matches!(
+        validate_scanner_clone_request(clone_request(Some("  "), None)),
+        Err(ApiError::BadRequest(_))
+    ));
+    assert!(
+        serde_json::from_value::<ScannerCloneRequest>(serde_json::json!({"host": "bad"})).is_err()
+    );
 }
 
 #[test]
@@ -70,6 +94,41 @@ fn scanner_configuration_validates_network_and_unix_socket_shapes() {
     assert_eq!(unix.port, 0);
     assert_eq!(unix.ca_pub, None);
     assert_eq!(unix.credential_id, None);
+}
+
+#[test]
+fn scanner_clone_allows_default_or_human_owned_but_rejects_cve_and_ownerless_custom() {
+    for state in [
+        ScannerWriteState {
+            internal_id: 1,
+            uuid: "08b69003-5fc2-4037-a479-93b440211c73".to_string(),
+            owner_id: None,
+        },
+        ScannerWriteState {
+            internal_id: 2,
+            uuid: "12345678-1234-1234-1234-123456789abc".to_string(),
+            owner_id: Some(42),
+        },
+    ] {
+        assert!(ensure_scanner_clone_source_allowed(&state).is_ok());
+    }
+    for state in [
+        ScannerWriteState {
+            internal_id: 3,
+            uuid: "6acd0832-df90-11e4-b9d5-28d24461215b".to_string(),
+            owner_id: None,
+        },
+        ScannerWriteState {
+            internal_id: 4,
+            uuid: "12345678-1234-1234-1234-123456789abd".to_string(),
+            owner_id: None,
+        },
+    ] {
+        assert!(matches!(
+            ensure_scanner_clone_source_allowed(&state),
+            Err(ApiError::Forbidden)
+        ));
+    }
 }
 
 #[test]
@@ -351,11 +410,108 @@ fn scanner_configuration_replace_rejects_live_non_hidden_task_references() {
     ));
 
     let in_use = scanner_live_task_count_sql();
-    for required in ["FROM tasks", "scanner = $1", "coalesce(hidden, 0) = 0"] {
+    for required in [
+        "FROM tasks",
+        "scanner = $1",
+        "coalesce(scanner_location, 0) = 0",
+        "coalesce(hidden, 0) = 0",
+    ] {
         assert!(
             in_use.contains(required),
             "scanner in-use SQL missing {required}"
         );
+    }
+}
+
+#[test]
+fn scanner_lifecycle_sql_preserves_references_and_losslessly_round_trips_relays() {
+    let clone = scanner_clone_metadata_sql();
+    for required in [
+        "make_uuid()",
+        "uniquify('scanner', name, $2, ' Clone')",
+        "host",
+        "port",
+        "type",
+        "ca_pub",
+        "credential",
+        "NULL",
+        "RETURNING id::integer, uuid::text",
+    ] {
+        assert!(
+            clone.contains(required),
+            "scanner clone SQL missing {required}"
+        );
+    }
+    assert!(clone.contains("credential,\n            NULL,\n            0,\n            m_now()"));
+    assert!(!clone.contains("SELECT\n            make_uuid(),\n            uniquify('scanner', name, $2, ' Clone'),\n            host,\n            port,\n            type,\n            ca_pub,\n            credential,\n            relay_host"));
+
+    let clone_tags = scanner_clone_tags_sql();
+    for required in [
+        "INSERT INTO tag_resources",
+        "resource_type = 'scanner'",
+        "resource_location = 0",
+        "$2, $3, 0",
+    ] {
+        assert!(clone_tags.contains(required));
+    }
+
+    let trash = scanner_trash_insert_sql();
+    let restore = scanner_restore_metadata_sql();
+    for required in ["relay_host", "relay_port", "credential_location"] {
+        assert!(
+            trash.contains(required),
+            "scanner trash SQL missing {required}"
+        );
+    }
+    for required in ["relay_host", "relay_port", "credential"] {
+        assert!(
+            restore.contains(required),
+            "scanner restore SQL missing {required}"
+        );
+    }
+    assert!(scanner_trash_task_relink_sql().contains("scanner_location = 1"));
+    assert!(scanner_restore_task_relink_sql().contains("scanner_location = 0"));
+    assert!(scanner_tag_locations_to_trash_sql().contains("resource_location = 1"));
+    assert!(scanner_tag_locations_to_live_sql().contains("resource_location = 0"));
+    assert!(scanner_delete_live_metadata_sql().contains("DELETE FROM scanners WHERE id = $1"));
+    assert!(
+        scanner_delete_trash_metadata_sql().contains("DELETE FROM scanners_trash WHERE id = $1")
+    );
+}
+
+#[test]
+fn scanner_lifecycle_handlers_guard_before_atomic_mutation() {
+    let source = include_str!("scanner_writes.rs");
+    for (name, guard, mutation) in [
+        (
+            "clone_scanner",
+            "ensure_scanner_clone_source_allowed",
+            "execute_scanner_clone_transaction",
+        ),
+        (
+            "delete_scanner",
+            "ensure_scanner_not_in_use_for_delete",
+            "execute_scanner_trash_transaction",
+        ),
+        (
+            "restore_scanner",
+            "ensure_trash_scanner_credential_is_live",
+            "execute_scanner_restore_transaction",
+        ),
+        (
+            "hard_delete_scanner",
+            "ensure_trash_scanner_not_in_use",
+            "execute_scanner_hard_delete_transaction",
+        ),
+    ] {
+        let handler = source
+            .split_once(&format!("pub(crate) async fn {name}"))
+            .unwrap_or_else(|| panic!("{name} handler"))
+            .1;
+        assert!(handler.contains("require_scanner_write_operator(operator)?"));
+        assert!(handler.contains("resolve_scanner_write_operator_owner"));
+        assert!(handler.find(guard).unwrap() < handler.find(mutation).unwrap());
+        assert!(handler.find(mutation).unwrap() < handler.find("tx.commit()").unwrap());
     }
 }
 

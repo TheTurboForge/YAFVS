@@ -872,6 +872,7 @@ native_api_delete_path_is_allowed (const gchar *path)
   const gchar *override_prefix = "/api/v1/overrides/";
   const gchar *port_list_prefix = "/api/v1/port-lists/";
   const gchar *scan_config_prefix = "/api/v1/scan-configs/";
+  const gchar *scanner_prefix = "/api/v1/scanners/";
   const gchar *schedule_prefix = "/api/v1/schedules/";
   const gchar *scope_prefix = "/api/v1/scopes/";
   const gchar *scope_report_prefix = "/api/v1/scope-reports/";
@@ -891,6 +892,13 @@ native_api_delete_path_is_allowed (const gchar *path)
     {
       const gchar *id = path + strlen (alert_prefix);
       return is_uuid_segment (id, strlen (id));
+    }
+
+  if (g_str_has_prefix (path, scanner_prefix))
+    {
+      const gchar *id = path + strlen (scanner_prefix);
+      return is_uuid_segment (id, strlen (id))
+             || is_uuid_segment_with_suffix (id, trash_suffix);
     }
 
   if (g_str_has_prefix (path, filter_prefix))
@@ -1142,7 +1150,9 @@ native_api_post_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, scanner_prefix))
     {
       const gchar *id = path + strlen (scanner_prefix);
-      return is_uuid_segment_with_suffix (id, verify_suffix)
+      return is_uuid_segment_with_suffix (id, clone_suffix)
+             || is_uuid_segment_with_suffix (id, restore_suffix)
+             || is_uuid_segment_with_suffix (id, verify_suffix)
              || is_uuid_segment_with_suffix (id, replace_configuration_suffix);
     }
 

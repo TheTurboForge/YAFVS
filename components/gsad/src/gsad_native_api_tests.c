@@ -96,6 +96,40 @@ Ensure (gsad_native_api, should_forward_typed_filters_for_collection_reads)
   g_free (target);
 }
 
+Ensure (gsad_native_api, should_only_allow_canonical_scanner_lifecycle_paths)
+{
+  const gchar *id = "12345678-1234-1234-1234-123456789abc";
+  gchar *detail = g_strdup_printf ("/api/v1/scanners/%s", id);
+  gchar *clone = g_strdup_printf ("%s/clone", detail);
+  gchar *restore = g_strdup_printf ("%s/restore", detail);
+  gchar *trash = g_strdup_printf ("%s/trash", detail);
+  const gchar *rejected[] = {
+    "/api/v1/scanners/not-a-uuid/clone",
+    "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/clone/extra",
+    "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/restore?unexpected=query",
+    "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/trash/",
+  };
+
+  assert_that (gsad_native_api_test_post_path_is_allowed (clone), is_true);
+  assert_that (gsad_native_api_test_post_path_is_allowed (restore), is_true);
+  assert_that (gsad_native_api_test_delete_path_is_allowed (detail), is_true);
+  assert_that (gsad_native_api_test_delete_path_is_allowed (trash), is_true);
+
+  for (gsize index = 0; index < G_N_ELEMENTS (rejected); index++)
+    {
+      assert_that (gsad_native_api_test_post_path_is_allowed (rejected[index]),
+                   is_false);
+      assert_that (
+        gsad_native_api_test_delete_path_is_allowed (rejected[index]),
+        is_false);
+    }
+
+  g_free (trash);
+  g_free (restore);
+  g_free (clone);
+  g_free (detail);
+}
+
 /* Handler dependencies are not part of this parser-focused unit target. */
 gsad_user_t *
 gsad_credentials_get_user (gsad_credentials_t *credentials)
@@ -1030,6 +1064,9 @@ main (int argc, char **argv)
   add_test_with_context (
     suite, gsad_native_api,
     should_only_allow_canonical_scanner_configuration_replacement_posts);
+  add_test_with_context (
+    suite, gsad_native_api,
+    should_only_allow_canonical_scanner_lifecycle_paths);
   add_test_with_context (suite, gsad_native_api,
                          should_only_allow_canonical_override_mutations);
   add_test_with_context (suite, gsad_native_api,

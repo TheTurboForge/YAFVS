@@ -18,7 +18,9 @@ import Scanner, {
 import {
   exportNativeScannerMetadata,
   fetchNativeScanner,
+  cloneNativeScanner,
   createNativeScanner,
+  deleteNativeScanner,
   patchNativeScanner,
   replaceNativeScannerConfiguration,
   verifyNativeScanner,
@@ -74,6 +76,21 @@ const isScannerMetadataOnlySave = (
 class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
   constructor(http: Http) {
     super(http, 'scanner', Scanner);
+  }
+
+  async clone({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      return cloneNativeScanner(this.http, id);
+    }
+    return super.clone({id});
+  }
+
+  async delete({id}: EntityCommandParams) {
+    if (canUseNativeApi(this.http)) {
+      await deleteNativeScanner(this.http, id);
+      return;
+    }
+    return super.delete({id});
   }
 
   getElementFromRoot(root: Element): ScannerElement {

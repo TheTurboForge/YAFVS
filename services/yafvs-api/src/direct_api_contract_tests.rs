@@ -275,6 +275,26 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
         safety_contract: "write-control-v1",
     },
     NativeWriteRouteContract {
+        method: "delete",
+        path: "/api/v1/scanners/:scanner_id",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
+        method: "post",
+        path: "/api/v1/scanners/:scanner_id/clone",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
+        method: "post",
+        path: "/api/v1/scanners/:scanner_id/restore",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
+        method: "delete",
+        path: "/api/v1/scanners/:scanner_id/trash",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
         method: "post",
         path: "/api/v1/scanners/:scanner_id/replace-configuration",
         safety_contract: "write-control-v1",
@@ -761,12 +781,14 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("/api/v1/tags/:tag_id/clone"));
     assert!(browser_routes.contains("/api/v1/targets"));
     assert!(browser_routes.contains("/api/v1/targets/:target_id/clone"));
+    assert!(browser_routes.contains("/api/v1/scanners/:scanner_id/clone"));
     assert!(browser_routes.contains("/api/v1/filters/:filter_id/restore"));
     assert!(browser_routes.contains("/api/v1/port-lists/:port_list_id/restore"));
     assert!(browser_routes.contains("/api/v1/scan-configs/:scan_config_id/restore"));
     assert!(browser_routes.contains("/api/v1/schedules/:schedule_id/restore"));
     assert!(browser_routes.contains("/api/v1/tags/:tag_id/restore"));
     assert!(browser_routes.contains("/api/v1/targets/:target_id/restore"));
+    assert!(browser_routes.contains("/api/v1/scanners/:scanner_id/restore"));
     assert!(browser_routes.contains("/api/v1/tags/:tag_id/resources"));
     assert!(browser_routes.contains("post(browser_proxy_create_alert)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_alert)"));
@@ -776,6 +798,8 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("post(browser_proxy_create_scanner)"));
     assert!(browser_routes.contains("post(browser_proxy_replace_scanner_configuration)"));
     assert!(browser_routes.contains("post(browser_proxy_verify_scanner)"));
+    assert!(browser_routes.contains("post(browser_proxy_clone_scanner)"));
+    assert!(browser_routes.contains("post(browser_proxy_restore_scanner)"));
     assert!(browser_routes.contains("post(browser_proxy_create_filter)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_filter)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_port_list)"));
@@ -826,6 +850,8 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("delete(browser_proxy_delete_task)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_target)"));
     assert!(browser_routes.contains("delete(browser_proxy_hard_delete_target)"));
+    assert!(browser_routes.contains("delete(browser_proxy_delete_scanner)"));
+    assert!(browser_routes.contains("delete(browser_proxy_hard_delete_scanner)"));
     assert!(browser_routes.contains("delete(browser_proxy_delete_user)"));
     assert_eq!(browser_delete_routes, expected_delete_routes);
     assert!(browser_routes.contains("DefaultBodyLimit::max("));

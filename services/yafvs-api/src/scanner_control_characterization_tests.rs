@@ -233,7 +233,7 @@ fn native_direct_api_gates_scanner_configuration_metadata_and_verify_controls() 
             "{method} /api/v1/scanners must remain closed"
         );
     }
-    for method in [Method::POST, Method::DELETE, Method::PUT] {
+    for method in [Method::POST, Method::PUT] {
         assert!(
             !direct_api_v1_method_is_allowed(
                 &method,
@@ -256,6 +256,21 @@ fn native_direct_api_gates_scanner_configuration_metadata_and_verify_controls() 
         "/api/v1/scanners/12345678-1234-1234-1234-123456789abc",
         true,
     ));
+    assert!(direct_api_v1_method_is_allowed(
+        &Method::DELETE,
+        "/api/v1/scanners/12345678-1234-1234-1234-123456789abc",
+        true,
+    ));
+    for (method, action) in [
+        (Method::POST, "clone"),
+        (Method::POST, "restore"),
+        (Method::DELETE, "trash"),
+    ] {
+        let path = format!("/api/v1/scanners/12345678-1234-1234-1234-123456789abc/{action}");
+        assert!(!direct_api_v1_path_is_allowed(&path));
+        assert!(direct_api_v1_method_is_allowed(&method, &path, true));
+        assert!(!direct_api_v1_method_is_allowed(&method, &path, false));
+    }
     assert!(!direct_api_v1_method_is_allowed(
         &Method::PATCH,
         "/api/v1/scanners/12345678-1234-1234-1234-123456789abc",
@@ -287,7 +302,7 @@ fn native_direct_api_gates_scanner_configuration_metadata_and_verify_controls() 
         "/api/v1/scanners/12345678-1234-1234-1234-123456789abc/verify",
         false,
     ));
-    for action in ["download", "trash"] {
+    for action in ["download"] {
         let path = format!("/api/v1/scanners/12345678-1234-1234-1234-123456789abc/{action}");
         assert!(
             !direct_api_v1_path_is_allowed(&path),
@@ -297,7 +312,7 @@ fn native_direct_api_gates_scanner_configuration_metadata_and_verify_controls() 
 }
 
 #[test]
-fn openapi_documents_scanner_configuration_metadata_and_verify_control_boundary() {
+fn openapi_documents_complete_native_scanner_lifecycle_and_verify_boundary() {
     let list = openapi_path_block("/scanners");
     assert!(list.contains("get:"));
     assert!(list.contains("post:"));
@@ -325,18 +340,16 @@ fn openapi_documents_scanner_configuration_metadata_and_verify_control_boundary(
     let detail = openapi_path_block("/scanners/{scanner_id}");
     assert!(detail.contains("get:"));
     assert!(detail.contains("patch:"));
-    assert!(!detail.contains("delete:"));
+    assert!(detail.contains("delete:"));
     assert!(detail.contains("x-yafvs-exposure: direct-read"));
     assert!(detail.contains("x-yafvs-exposure: direct-write"));
     assert!(!detail.contains("x-yafvs-inherited-still-owns: remote-scanner-certificate-context-control-credentials-writes-downloads-and-deletes"));
-    assert!(
-        detail.contains("Native direct write-control can create scanners, replace complete retained editor configuration, patch name/comment metadata, and verify bounded local scanner availability")
-    );
+    assert!(detail.contains("Native direct write-control owns create, clone"));
     for residual in [
         "Credential secrets, credential certificate metadata",
         "remote/TLS/relay verification",
         "relay mutation",
-        "inherited export/download formats, clone, restore, and delete remain inherited",
+        "inherited file export/download formats remain inherited",
     ] {
         assert!(detail.contains(residual), "detail docs missing {residual}");
     }
@@ -427,5 +440,25 @@ fn openapi_documents_scanner_configuration_metadata_and_verify_control_boundary(
             !export.contains(forbidden),
             "scanner metadata export must not expose inherited control/download/write behavior: {forbidden}"
         );
+    }
+
+    for (path, operation) in [
+        (
+            "/scanners/{scanner_id}/clone",
+            "operationId: postScannersByScannerIdClone",
+        ),
+        (
+            "/scanners/{scanner_id}/restore",
+            "operationId: postScannersByScannerIdRestore",
+        ),
+        (
+            "/scanners/{scanner_id}/trash",
+            "operationId: deleteScannersByScannerIdTrash",
+        ),
+    ] {
+        let block = openapi_path_block(path);
+        assert!(block.contains(operation), "{path} missing {operation}");
+        assert!(block.contains("x-yafvs-exposure: direct-write"));
+        assert!(block.contains("x-yafvs-safety-contract: write-control-v1"));
     }
 }

@@ -1370,7 +1370,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-configuration-write
       summary: Create an operator-owned scanner
-      description: Creates one scanner configuration owned by the authenticated operator without contacting or verifying the scanner. Supported scanner types are 2, 5, 6, and 8; type 3 CVE scanners cannot be created. Network scanners require a valid host and port plus optional CA certificate and a human-owned certificate credential visible to the trusted operator team. Unix socket scanners store port 0 and clear CA and credential fields. Relay configuration is initialized empty. Clone, delete, remote verification, and relay mutation remain inherited.
+      description: Creates one scanner configuration owned by the authenticated operator without contacting or verifying the scanner. Supported scanner types are 2, 5, 6, and 8; type 3 CVE scanners cannot be created. Network scanners require a valid host and port plus optional CA certificate and a human-owned certificate credential visible to the trusted operator team. Unix socket scanners store port 0 and clear CA and credential fields. Relay configuration is initialized empty. Remote verification beyond the bounded native probe and relay mutation remain inherited.
       requestBody:
         required: true
         content:
@@ -1417,7 +1417,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scanner-metadata-detail-info-tags-and-task-backlink-read
       summary: Read one scanner metadata record with safe backlinks
-      description: Scanner metadata backed by gvmd/PostgreSQL. Detail includes active user tags, non-hidden task backlinks, and scanner CA public certificate text when present. Native direct write-control can create scanners, replace complete retained editor configuration, patch name/comment metadata, and verify bounded local scanner availability. Credential secrets, credential certificate metadata, live scanner status beyond verify, remote/TLS/relay verification, relay mutation, inherited export/download formats, clone, restore, and delete remain inherited.
+      description: Scanner metadata backed by PostgreSQL. Detail includes active user tags, non-hidden task backlinks, and scanner CA public certificate text when present. Native direct write-control owns create, clone, retained configuration replacement, metadata patch, trash, restore, hard-delete, and bounded verification. Credential secrets, credential certificate metadata, live status beyond verify, remote/TLS/relay verification, relay mutation, and inherited file export/download formats remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       responses:
@@ -1454,7 +1454,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Update scanner metadata
-      description: Direct write-control endpoint for updating scanner name and comment only on human-owned non-built-in scanners. Any authenticated stack operator may continue this work; the scanner's existing owner remains attribution. Complete retained editor configuration uses the separate replace-configuration endpoint. Scanner verify is exposed through the separate bounded verify endpoint. Relay mutation, live status beyond verify, remote/TLS/relay verification, inherited export/download formats, clone, restore, and delete remain inherited.
+      description: Direct write-control endpoint for updating scanner name and comment only on human-owned non-built-in scanners. Any authenticated stack operator may continue this work; the scanner's existing owner remains attribution. Complete retained editor configuration uses the separate replace-configuration endpoint. Scanner verify is exposed through the separate bounded verify endpoint. Relay mutation, live status beyond verify, remote/TLS/relay verification, and inherited file export/download formats remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       requestBody:
@@ -1490,6 +1490,43 @@ paths:
           $ref: '#/components/responses/InternalError'
         '502':
           $ref: '#/components/responses/BadGateway'
+    delete:
+      operationId: deleteScannersByScannerId
+      x-yafvs-direct: true
+      x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
+      x-yafvs-maturity: live-write
+      x-yafvs-replaces: scanner-trash-move
+      x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
+      x-yafvs-safety-contract: write-control-v1
+      x-yafvs-side-effect: metadata-delete
+      summary: Move a scanner to trash
+      description: Moves a human-owned non-built-in scanner to trash when no non-hidden live task references it. Hidden or trash-side task references and scanner tag links are atomically rebound to the trash row. Relay configuration is preserved so a later restore is lossless.
+      parameters:
+        - $ref: '#/components/parameters/ScannerId'
+      responses:
+        '204':
+          description: Scanner moved to trash
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scanners/{scanner_id}/replace-configuration:
     post:
       operationId: postScannersByScannerIdReplaceConfiguration
@@ -1504,7 +1541,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-configuration-write
       summary: Replace complete retained scanner editor configuration
-      description: Atomically replaces name, comment, host, port, scanner type, CA certificate, and optional human-owned certificate credential for a human-owned non-built-in scanner that is not referenced by a live non-hidden task, without contacting or verifying it. Any authenticated stack operator may continue this work; the scanner's existing owner remains attribution. In-use scanners return conflict; their name/comment can still be changed through the metadata PATCH endpoint. Supported scanner types are 2, 5, 6, and 8. Unix socket configurations store port 0 and clear CA and credential fields. Existing relay host and relay port are preserved because the retained editor has no relay controls. Clone, delete, remote verification, and relay mutation remain inherited.
+      description: Atomically replaces name, comment, host, port, scanner type, CA certificate, and optional human-owned certificate credential for a human-owned non-built-in scanner that is not referenced by a live non-hidden task, without contacting or verifying it. Any authenticated stack operator may continue this work; the scanner's existing owner remains attribution. In-use scanners return conflict; their name/comment can still be changed through the metadata PATCH endpoint. Supported scanner types are 2, 5, 6, and 8. Unix socket configurations store port 0 and clear CA and credential fields. Existing relay host and relay port are preserved because the retained editor has no relay controls. Remote verification beyond the bounded native probe and relay mutation remain inherited.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       requestBody:
@@ -1540,6 +1577,142 @@ paths:
           $ref: '#/components/responses/InternalError'
         '502':
           $ref: '#/components/responses/BadGateway'
+  /scanners/{scanner_id}/clone:
+    post:
+      operationId: postScannersByScannerIdClone
+      x-yafvs-direct: true
+      x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
+      x-yafvs-maturity: live-write
+      x-yafvs-replaces: scanner-clone
+      x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-owner-semantics: request-operator-owner
+      x-yafvs-team-authority: authenticated-stack-operator
+      x-yafvs-safety-contract: write-control-v1
+      x-yafvs-side-effect: metadata-write
+      summary: Clone scanner configuration and tags
+      description: Clones the default scanner or a human-owned scanner into a new scanner owned by the authenticated operator. Host, port, type, CA, credential reference, and active tags are copied; relay configuration is intentionally not copied, matching the inherited clone contract. The built-in CVE scanner and ownerless custom scanners cannot be cloned.
+      parameters:
+        - $ref: '#/components/parameters/ScannerId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScannerCloneRequest'
+      responses:
+        '201':
+          description: Scanner cloned
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScannerAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+  /scanners/{scanner_id}/restore:
+    post:
+      operationId: postScannersByScannerIdRestore
+      x-yafvs-direct: true
+      x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
+      x-yafvs-maturity: live-write
+      x-yafvs-replaces: scanner-restore
+      x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
+      x-yafvs-safety-contract: write-control-v1
+      x-yafvs-side-effect: metadata-write
+      summary: Restore scanner from trash
+      description: Restores a human-owned scanner with its UUID, owner, complete configuration including relay fields, task references, and tag links. Restore rejects live UUID/name conflicts and unavailable or trashed credentials.
+      parameters:
+        - $ref: '#/components/parameters/ScannerId'
+      responses:
+        '200':
+          description: Restored scanner detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScannerAssetDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+  /scanners/{scanner_id}/trash:
+    delete:
+      operationId: deleteScannersByScannerIdTrash
+      x-yafvs-direct: true
+      x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
+      x-yafvs-maturity: live-write
+      x-yafvs-replaces: scanner-hard-delete
+      x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
+      x-yafvs-safety-contract: write-control-v1
+      x-yafvs-side-effect: metadata-delete
+      summary: Hard-delete a trashed scanner
+      description: Permanently deletes a human-owned trashed scanner and its tag links. Trash-side task references block the operation; this route never deletes a live scanner.
+      parameters:
+        - $ref: '#/components/parameters/ScannerId'
+      responses:
+        '204':
+          description: Trashed scanner deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /scanners/{scanner_id}/verify:
     post:
       operationId: postScannersByScannerIdVerify
@@ -1554,7 +1727,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: scanner-control
       summary: Verify a scanner through a bounded native control probe
-      description: Direct write-control endpoint for verifying local Unix-socket OSP scanners by sending an OSP get_version probe. CVE and openvasd scanner rows preserve inherited no-contact success semantics. Remote, TLS, TCP, relay, scanner clone/delete, credential-secret, scan stop, and live status streaming remain inherited while their safety contracts are designed. Task start is provided separately through the gvmd scan queue.
+      description: Direct write-control endpoint for verifying local Unix-socket OSP scanners by sending an OSP get_version probe. CVE and openvasd scanner rows preserve inherited no-contact success semantics. Remote, TLS, TCP, relay, credential-secret, scan stop, and live status streaming remain inherited while their safety contracts are designed. Task start is provided separately through the gvmd scan queue.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       responses:
@@ -1591,7 +1764,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: scanner-metadata-export-read
       summary: Export scanner metadata JSON
-      description: Direct scriptable scanner metadata export backed by gvmd/PostgreSQL. This returns the same scanner detail JSON as the native detail read, including scanner CA public certificate text when present. Credential secrets, credential certificate metadata, live scanner status beyond verify, remote/TLS/relay verification, file export/download behavior, and writes remain inherited.
+      description: Direct scriptable scanner metadata export backed by PostgreSQL. This returns the same scanner detail JSON as the native detail read, including scanner CA public certificate text when present. Credential secrets, credential certificate metadata, live scanner status beyond verify, remote/TLS/relay verification, and inherited file export/download formats remain outside this metadata endpoint.
       parameters:
         - $ref: '#/components/parameters/ScannerId'
       responses:
@@ -10246,6 +10419,19 @@ components:
           type: string
           maxLength: 4096
           description: New scanner comment. Blank comments clear the comment after trimming.
+    ScannerCloneRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: Optional clone name; omitted names are generated from the source name.
+        comment:
+          type: string
+          maxLength: 4096
+          description: Optional clone comment; omitted comments are copied from the source.
     ScannerConfigurationRequest:
       type: object
       additionalProperties: false

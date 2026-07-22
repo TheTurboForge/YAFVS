@@ -28,17 +28,18 @@ use crate::{
         browser_proxy_delete_host_operating_system, browser_proxy_patch_host,
     },
     browser_proxy_metadata_patch::{
-        browser_proxy_clone_alert, browser_proxy_clone_override, browser_proxy_clone_task,
-        browser_proxy_create_alert, browser_proxy_create_credential, browser_proxy_create_override,
-        browser_proxy_create_scanner, browser_proxy_create_task, browser_proxy_delete_alert,
-        browser_proxy_delete_override, browser_proxy_delete_task,
-        browser_proxy_delete_tls_certificate, browser_proxy_deliver_alert_report,
-        browser_proxy_hard_delete_override, browser_proxy_patch_alert,
+        browser_proxy_clone_alert, browser_proxy_clone_override, browser_proxy_clone_scanner,
+        browser_proxy_clone_task, browser_proxy_create_alert, browser_proxy_create_credential,
+        browser_proxy_create_override, browser_proxy_create_scanner, browser_proxy_create_task,
+        browser_proxy_delete_alert, browser_proxy_delete_override, browser_proxy_delete_scanner,
+        browser_proxy_delete_task, browser_proxy_delete_tls_certificate,
+        browser_proxy_deliver_alert_report, browser_proxy_hard_delete_override,
+        browser_proxy_hard_delete_scanner, browser_proxy_patch_alert,
         browser_proxy_patch_credential, browser_proxy_patch_override, browser_proxy_patch_scanner,
         browser_proxy_patch_task, browser_proxy_replace_scanner_configuration,
         browser_proxy_replace_task, browser_proxy_replace_task_target,
-        browser_proxy_restore_override, browser_proxy_start_task, browser_proxy_stop_task,
-        browser_proxy_test_alert, browser_proxy_verify_scanner,
+        browser_proxy_restore_override, browser_proxy_restore_scanner, browser_proxy_start_task,
+        browser_proxy_stop_task, browser_proxy_test_alert, browser_proxy_verify_scanner,
     },
     browser_proxy_port_list::{
         browser_proxy_clone_port_list, browser_proxy_create_port_list,
@@ -169,6 +170,22 @@ pub(crate) fn browser_proxy_native_api_router(
         .route(
             "/api/v1/scanners/:scanner_id",
             patch(browser_proxy_patch_scanner),
+        )
+        .route(
+            "/api/v1/scanners/:scanner_id",
+            delete(browser_proxy_delete_scanner),
+        )
+        .route(
+            "/api/v1/scanners/:scanner_id/clone",
+            post(browser_proxy_clone_scanner),
+        )
+        .route(
+            "/api/v1/scanners/:scanner_id/restore",
+            post(browser_proxy_restore_scanner),
+        )
+        .route(
+            "/api/v1/scanners/:scanner_id/trash",
+            delete(browser_proxy_hard_delete_scanner),
         )
         .route(
             "/api/v1/scanners/:scanner_id/replace-configuration",

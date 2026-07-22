@@ -73,6 +73,7 @@ describe('TrashCanCommand tests', () => {
   test.each([
     ['filter', 'filters'],
     ['override', 'overrides'],
+    ['scanner', 'scanners'],
   ] as const)(
     'should restore supported %s trash entities through native API',
     async (entityType, path) => {
@@ -351,6 +352,7 @@ describe('TrashCanCommand tests', () => {
   test.each([
     ['filter', 'filters'],
     ['override', 'overrides'],
+    ['scanner', 'scanners'],
   ] as const)(
     'should delete supported %s trash entities through native API',
     async (entityType, path) => {

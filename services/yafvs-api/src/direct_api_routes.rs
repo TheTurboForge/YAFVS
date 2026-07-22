@@ -43,7 +43,10 @@ use crate::{
         select_diagnostic_nvt,
     },
     scanner_verify::verify_scanner,
-    scanner_writes::{create_scanner, patch_scanner, replace_scanner_configuration},
+    scanner_writes::{
+        clone_scanner, create_scanner, delete_scanner, hard_delete_scanner, patch_scanner,
+        replace_scanner_configuration, restore_scanner,
+    },
     schedule_writes::{
         clone_schedule, create_schedule, delete_schedule, hard_delete_schedule, patch_schedule,
         restore_schedule,
@@ -208,6 +211,16 @@ pub(crate) fn direct_native_api_router(
             .route("/api/v1/credentials", post(create_credential))
             .route("/api/v1/scanners", post(create_scanner))
             .route("/api/v1/scanners/:scanner_id", patch(patch_scanner))
+            .route("/api/v1/scanners/:scanner_id", delete(delete_scanner))
+            .route("/api/v1/scanners/:scanner_id/clone", post(clone_scanner))
+            .route(
+                "/api/v1/scanners/:scanner_id/restore",
+                post(restore_scanner),
+            )
+            .route(
+                "/api/v1/scanners/:scanner_id/trash",
+                delete(hard_delete_scanner),
+            )
             .route(
                 "/api/v1/scanners/:scanner_id/replace-configuration",
                 post(replace_scanner_configuration),

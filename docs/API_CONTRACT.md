@@ -310,10 +310,15 @@ legacy task file export or lifecycle control.
 Native scanner metadata rows include scanner identity, host/socket, port,
 inherited scanner type, safe credential references, relay metadata, and
 timestamps. Scanner detail adds active User Tags and non-hidden task backlinks
-for safe socket/builtin page-load reads. Inherited GMP remains the fallback for
-remote scanner certificate context and keeps CA/certificate data, credential
-download context, verify/file export/download/delete/clone/edit actions, and
-scanner control behavior. Direct scriptable
+for safe socket/builtin page-load reads. Native write-control owns scanner
+create, metadata patch, retained configuration replacement, clone, live-to-trash,
+restore, hard-delete, and bounded local verification. Clone copies the retained
+scanner configuration and active tag links but intentionally initializes relay
+configuration empty; trash and restore preserve relay fields losslessly. Live
+non-hidden task references block trash, and trash-side task references block
+hard-delete. Inherited paths remain only for remote TLS/relay verification,
+credential/certificate download context, legacy file export/download formats,
+and deeper scanner-control behavior. Direct scriptable
 `GET /api/v1/scanners/{scanner_id}/export` returns the same redacted scanner
 detail JSON for metadata export; it does not replace legacy scanner file export
 or scanner-control behavior. Native scanner reads do not expose credential

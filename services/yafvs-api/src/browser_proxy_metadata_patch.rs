@@ -32,8 +32,13 @@ use crate::{
     },
     scanner_asset_payloads::ScannerAssetDetail,
     scanner_verify::{ScannerVerifyResult, verify_scanner},
-    scanner_write_validation::{ScannerConfigurationRequest, ScannerPatchRequest},
-    scanner_writes::{create_scanner, patch_scanner, replace_scanner_configuration},
+    scanner_write_validation::{
+        ScannerCloneRequest, ScannerConfigurationRequest, ScannerPatchRequest,
+    },
+    scanner_writes::{
+        clone_scanner, create_scanner, delete_scanner, hard_delete_scanner, patch_scanner,
+        replace_scanner_configuration, restore_scanner,
+    },
     task_control::{TaskStartResult, start_task},
     task_stop::{TaskStopResult, stop_task},
     task_target_payloads::TaskItem,
@@ -53,6 +58,53 @@ pub(crate) async fn browser_proxy_create_alert(
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     let request = parse_alert_create_payload(payload)?;
     create_alert(State(state), Some(Extension(operator)), Ok(Json(request))).await
+}
+
+pub(crate) async fn browser_proxy_clone_scanner(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(scanner_id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<ScannerCloneRequest>,
+) -> Result<(StatusCode, HeaderMap, Json<ScannerAssetDetail>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    clone_scanner(
+        State(state),
+        Path(scanner_id),
+        Some(Extension(operator)),
+        Json(request),
+    )
+    .await
+}
+
+pub(crate) async fn browser_proxy_delete_scanner(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(scanner_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    delete_scanner(State(state), Path(scanner_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_restore_scanner(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(scanner_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<ScannerAssetDetail>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    restore_scanner(State(state), Path(scanner_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_hard_delete_scanner(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(scanner_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    hard_delete_scanner(State(state), Path(scanner_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_test_alert(

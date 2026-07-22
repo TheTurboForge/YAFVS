@@ -24,6 +24,15 @@ pub(crate) struct ScannerPatchRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub(crate) struct ScannerCloneRequest {
+    #[serde(default)]
+    pub(crate) name: Option<String>,
+    #[serde(default)]
+    pub(crate) comment: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct ScannerConfigurationRequest {
     pub(crate) name: String,
     pub(crate) comment: String,
@@ -34,6 +43,21 @@ pub(crate) struct ScannerConfigurationRequest {
     pub(crate) ca_pub: Option<String>,
     #[serde(default)]
     pub(crate) credential_id: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct ValidatedScannerClone {
+    pub(crate) name: Option<String>,
+    pub(crate) comment: Option<String>,
+}
+
+pub(crate) fn validate_scanner_clone_request(
+    request: ScannerCloneRequest,
+) -> Result<ValidatedScannerClone, ApiError> {
+    Ok(ValidatedScannerClone {
+        name: normalize_optional_required_scanner_text(request.name, "name")?,
+        comment: normalize_optional_scanner_text(request.comment, "comment")?,
+    })
 }
 
 #[derive(Debug, PartialEq, Eq)]

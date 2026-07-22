@@ -18,10 +18,26 @@ pub(crate) struct ScannerWriteRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ScannerWriteRecordWithInternalId {
+    pub(crate) internal_id: i32,
+    pub(crate) uuid: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ScannerWriteState {
     pub(crate) internal_id: i32,
     pub(crate) uuid: String,
     pub(crate) owner_id: Option<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ScannerTrashState {
+    pub(crate) internal_id: i32,
+    pub(crate) uuid: String,
+    pub(crate) owner_id: Option<i32>,
+    pub(crate) name: Option<String>,
+    pub(crate) credential_id: Option<i32>,
+    pub(crate) credential_location: i32,
 }
 
 pub(crate) fn require_scanner_write_operator(
@@ -32,6 +48,25 @@ pub(crate) fn require_scanner_write_operator(
         return Err(ApiError::Forbidden);
     };
     Ok(operator)
+}
+
+pub(crate) async fn load_scanner_trash_state(
+    tx: &Transaction<'_>,
+    scanner_id: &str,
+) -> Result<ScannerTrashState, ApiError> {
+    let scanner_id = parse_uuid(scanner_id)?.to_string();
+    tx.query_opt(scanner_trash_state_sql(), &[&scanner_id])
+        .await
+        .map_err(|error| map_scanner_write_db_error(error, "load scanner trash state"))?
+        .map(|row| ScannerTrashState {
+            internal_id: row.get(0),
+            uuid: row.get(1),
+            owner_id: row.get(2),
+            name: row.get(3),
+            credential_id: row.get(4),
+            credential_location: row.get(5),
+        })
+        .ok_or(ApiError::NotFound)
 }
 
 pub(crate) async fn resolve_scanner_write_operator_owner(
@@ -52,6 +87,30 @@ pub(crate) async fn resolve_scanner_write_operator_owner(
         })
 }
 
+pub(crate) fn ensure_scanner_clone_source_allowed(
+    state: &ScannerWriteState,
+) -> Result<(), ApiError> {
+    if state.uuid.eq_ignore_ascii_case(SCANNER_UUID_CVE) {
+        return Err(ApiError::Forbidden);
+    }
+    if state.owner_id.is_some() || state.uuid.eq_ignore_ascii_case(SCANNER_UUID_DEFAULT) {
+        Ok(())
+    } else {
+        tracing::warn!(
+            scanner_uuid = %state.uuid,
+            "direct API scanner clone rejected an ownerless custom scanner"
+        );
+        Err(ApiError::Forbidden)
+    }
+}
+
+pub(crate) fn ensure_scanner_is_human_owned(owner_id: Option<i32>) -> Result<i32, ApiError> {
+    owner_id.ok_or_else(|| {
+        tracing::warn!("direct API scanner lifecycle rejected an ownerless scanner");
+        ApiError::Forbidden
+    })
+}
+
 pub(crate) async fn load_scanner_write_state(
     tx: &Transaction<'_>,
     scanner_id: &str,
@@ -68,6 +127,86 @@ pub(crate) async fn load_scanner_write_state(
         .ok_or(ApiError::NotFound)
 }
 
+pub(crate) async fn ensure_scanner_not_in_use_for_delete(
+    tx: &Transaction<'_>,
+    scanner_internal_id: i32,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(scanner_live_task_count_sql(), &[&scanner_internal_id])
+        .await
+        .map_err(|error| map_scanner_write_db_error(error, "check scanner live task references"))?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "scanner cannot be deleted while it is used by a live task".to_string(),
+        ))
+    }
+}
+
+pub(crate) async fn ensure_trash_scanner_not_in_use(
+    tx: &Transaction<'_>,
+    scanner_internal_id: i32,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(scanner_trash_task_count_sql(), &[&scanner_internal_id])
+        .await
+        .map_err(|error| map_scanner_write_db_error(error, "check scanner trash task references"))?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "scanner cannot be hard-deleted while trash tasks reference it".to_string(),
+        ))
+    }
+}
+
+pub(crate) async fn ensure_scanner_uuid_not_live(
+    tx: &Transaction<'_>,
+    scanner_uuid: &str,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(scanner_live_uuid_conflict_sql(), &[&scanner_uuid])
+        .await
+        .map_err(|error| map_scanner_write_db_error(error, "check live scanner id conflict"))?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "scanner with the same id already exists".to_string(),
+        ))
+    }
+}
+
+pub(crate) async fn ensure_trash_scanner_credential_is_live(
+    tx: &Transaction<'_>,
+    trash: &ScannerTrashState,
+) -> Result<(), ApiError> {
+    if trash.credential_location != 0 {
+        return Err(ApiError::Conflict(
+            "scanner cannot be restored while its credential is in trash".to_string(),
+        ));
+    }
+    let Some(credential_id) = trash.credential_id else {
+        return Ok(());
+    };
+    let count: i64 = tx
+        .query_one(scanner_live_credential_count_sql(), &[&credential_id])
+        .await
+        .map_err(|error| map_scanner_write_db_error(error, "check scanner restore credential"))?
+        .get(0);
+    if count == 1 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "scanner cannot be restored because its credential is unavailable".to_string(),
+        ))
+    }
+}
+
 pub(crate) fn ensure_scanner_metadata_patch_allowed(
     state: &ScannerWriteState,
 ) -> Result<(), ApiError> {
@@ -80,6 +219,22 @@ pub(crate) fn ensure_scanner_metadata_patch_allowed(
         tracing::warn!("direct API scanner write rejected an ownerless scanner");
         Err(ApiError::Forbidden)
     }
+}
+
+pub(crate) async fn query_scanner_write_record_with_internal_id(
+    tx: &Transaction<'_>,
+    sql: &str,
+    params: &[&(dyn ToSql + Sync)],
+    action: &'static str,
+) -> Result<ScannerWriteRecordWithInternalId, ApiError> {
+    tx.query_opt(sql, params)
+        .await
+        .map_err(|error| map_scanner_write_db_error(error, action))?
+        .map(|row| ScannerWriteRecordWithInternalId {
+            internal_id: row.get(0),
+            uuid: row.get(1),
+        })
+        .ok_or(ApiError::NotFound)
 }
 
 pub(crate) async fn ensure_unique_scanner_name(

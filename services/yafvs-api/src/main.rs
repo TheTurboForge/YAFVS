@@ -271,6 +271,7 @@ mod user_account_payloads;
 mod user_account_query_sql;
 mod user_accounts;
 mod user_management;
+mod user_management_query_sql;
 mod user_settings;
 mod user_tags;
 mod vulnerability_payloads;

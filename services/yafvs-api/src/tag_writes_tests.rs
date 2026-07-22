@@ -94,6 +94,20 @@ fn tag_resource_selection_is_closed_bounded_and_exclusive() {
             expected_count: 5,
         }
     );
+    let user = validate_tag_resource_update_request(
+        serde_json::from_str(
+            r#"{"action":"add","resource_selection":{"resource_type":"user","search":"alice","expected_count":2}}"#,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        user.resource_selection.unwrap(),
+        ValidatedTagResourceSelection::User {
+            search: Some("alice".to_string()),
+            expected_count: 2,
+        }
+    );
     for value in [
         r#"{"action":"add","resource_selection":{"resource_type":"result","expected_count":1}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":1,"unknown":true}}"#,
@@ -103,6 +117,8 @@ fn tag_resource_selection_is_closed_bounded_and_exclusive() {
         r#"{"action":"add","resource_selection":{"resource_type":"scanner","expected_count":1,"search":"bad\nsearch"}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"target","expected_count":1,"predefined":true}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"target","expected_count":1,"search":"bad\nsearch"}}"#,
+        r#"{"action":"add","resource_selection":{"resource_type":"user","expected_count":1,"predefined":true}}"#,
+        r#"{"action":"add","resource_selection":{"resource_type":"user","expected_count":1,"search":"bad\nsearch"}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":0}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":100001}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","search":"bad\nsearch","expected_count":1}}"#,
@@ -127,6 +143,48 @@ fn tag_resource_selection_is_closed_bounded_and_exclusive() {
             Err(_) => true,
         }
     );
+}
+
+#[test]
+fn tag_user_selection_shares_literal_collection_predicate_and_locks_rows_first() {
+    let handlers = include_str!("tag_writes.rs");
+    let patch = handlers
+        .split_once("pub(crate) async fn patch_tag")
+        .unwrap()
+        .1
+        .split_once("pub(crate) async fn clone_tag")
+        .unwrap()
+        .0;
+    assert!(
+        patch.find("resolve_tag_user_selection_records").unwrap()
+            < patch
+                .find("LOCK TABLE tags, tag_resources IN SHARE ROW EXCLUSIVE MODE")
+                .unwrap()
+    );
+    assert_eq!(patch.matches("LOCK TABLE users IN SHARE MODE").count(), 1);
+    assert!(
+        patch
+            .find("ValidatedTagResourceSelection::Credential")
+            .unwrap()
+            < patch.find("LOCK TABLE users IN SHARE MODE").unwrap()
+    );
+    let selector = crate::user_management_query_sql::tag_user_selection_sql();
+    let selector_predicate = crate::user_management_query_sql::user_management_search_predicate_sql(
+        "u.uuid::text",
+        "coalesce(u.name, '')",
+        "coalesce(u.comment, '')",
+        "$1",
+    );
+    let collection_predicate =
+        crate::user_management_query_sql::user_management_search_predicate_sql(
+            "id", "name", "comment", "$2",
+        );
+    assert!(selector.contains(&selector_predicate));
+    assert!(selector_predicate.contains("strpos(lower"));
+    assert!(collection_predicate.contains("strpos(lower"));
+    assert!(!selector.contains("LIKE"));
+    assert!(selector.contains("LIMIT $2"));
+    assert!(selector.contains("FOR UPDATE OF u"));
 }
 
 #[test]

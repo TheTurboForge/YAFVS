@@ -13,6 +13,8 @@ const YAFVS_CONTROL: &str = include_str!("../../../components/gvmd/src/yafvs_con
 const TAG_CONTROL: &str = include_str!("tag_control.rs");
 const TAG_WRITES: &str = include_str!("tag_writes.rs");
 const GSA_TAGS: &str = include_str!("../../../components/gsa/src/gmp/native-api/tags.ts");
+const GSA_TAG_SELECTION: &str =
+    include_str!("../../../components/gsa/src/gmp/native-api/tag-resource-selection.ts");
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 
 fn inherited_function(source: &str, name: &str) -> String {
@@ -23,6 +25,61 @@ fn inherited_function(source: &str, name: &str) -> String {
     let tail = &source[start..];
     let end = tail.find("\n/**").unwrap_or(tail.len());
     tail[..end].to_string()
+}
+
+#[test]
+fn every_live_filtered_bulk_tag_page_has_a_typed_selector() {
+    fn collect_bulk_tag_pages(
+        root: &std::path::Path,
+        current: &std::path::Path,
+        pages: &mut std::collections::BTreeSet<String>,
+    ) {
+        for entry in std::fs::read_dir(current).expect("GSA page directory must be readable") {
+            let path = entry.expect("GSA page entry must be readable").path();
+            if path.is_dir() {
+                if path.file_name().is_some_and(|name| name == "__tests__") {
+                    continue;
+                }
+                collect_bulk_tag_pages(root, &path, pages);
+            } else if matches!(
+                path.extension().and_then(|value| value.to_str()),
+                Some("ts" | "tsx" | "js" | "jsx")
+            ) {
+                let source =
+                    std::fs::read_to_string(&path).expect("GSA page source must be readable");
+                if source.contains("onTagsBulk={") {
+                    pages.insert(
+                        path.strip_prefix(root)
+                            .expect("GSA page must be below page root")
+                            .to_string_lossy()
+                            .replace('\\', "/"),
+                    );
+                }
+            }
+        }
+    }
+
+    let page_root =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../components/gsa/src/web/pages");
+    let mut pages = std::collections::BTreeSet::new();
+    collect_bulk_tag_pages(&page_root, &page_root, &mut pages);
+    let expected = [
+        "credentials/CredentialListPage.tsx",
+        "portlists/PortListListPage.tsx",
+        "scanners/ScannerListPage.tsx",
+        "targets/TargetListPage.tsx",
+        "users/UsersListPage.jsx",
+    ]
+    .into_iter()
+    .map(str::to_string)
+    .collect();
+    assert_eq!(pages, expected);
+    for resource_type in ["credential", "portlist", "scanner", "target", "user"] {
+        assert!(
+            GSA_TAG_SELECTION.contains(&format!("case '{resource_type}'")),
+            "live filtered bulk-tag resource lacks typed selector: {resource_type}"
+        );
+    }
 }
 
 #[test]

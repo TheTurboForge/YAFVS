@@ -161,10 +161,7 @@ user_rows AS (
 ),
 filtered AS (
   SELECT * FROM user_rows
-  WHERE ($2 = ''
-         OR lower(id) LIKE '%' || lower($2) || '%'
-         OR lower(name) LIKE '%' || lower($2) || '%'
-         OR lower(comment) LIKE '%' || lower($2) || '%')
+  WHERE {search_predicate}
 )
 SELECT count(*) OVER()::bigint AS total, * FROM filtered
 ORDER BY {sort_sql}, name ASC, id ASC LIMIT $3 OFFSET $4
@@ -233,7 +230,12 @@ pub(crate) async fn user_management_users(
     let operator = require_operator(operator)?;
     let params = normalize_collection_query(query.collection_query(), USER_ACCOUNT_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, USER_ACCOUNT_SORT_FIELDS)?;
-    let sql = USER_MANAGEMENT_LIST_SQL.replace("{sort_sql}", &sort_sql);
+    let search_predicate = crate::user_management_query_sql::user_management_search_predicate_sql(
+        "id", "name", "comment", "$2",
+    );
+    let sql = USER_MANAGEMENT_LIST_SQL
+        .replace("{search_predicate}", &search_predicate)
+        .replace("{sort_sql}", &sort_sql);
     let client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let rows = client
         .query(
@@ -866,8 +868,17 @@ mod tests {
 
     #[test]
     fn management_queries_require_operator_and_expose_only_safe_method_metadata() {
-        let list = USER_MANAGEMENT_LIST_SQL.to_ascii_lowercase();
+        let list = USER_MANAGEMENT_LIST_SQL
+            .replace(
+                "{search_predicate}",
+                &crate::user_management_query_sql::user_management_search_predicate_sql(
+                    "id", "name", "comment", "$2",
+                ),
+            )
+            .to_ascii_lowercase();
         let detail = USER_MANAGEMENT_DETAIL_SQL.to_ascii_lowercase();
+        assert!(list.contains("strpos(lower"));
+        assert!(!list.contains(" like "));
         for sql in [&list, &detail] {
             assert!(sql.contains("operator"));
             assert!(sql.contains("auth_method"));

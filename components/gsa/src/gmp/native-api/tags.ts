@@ -150,6 +150,11 @@ export type NativeTagResourceSelectionInput =
       resourceType: 'target';
       search?: string;
       expectedCount: number;
+    }
+  | {
+      resourceType: 'user';
+      search?: string;
+      expectedCount: number;
     };
 
 export interface TagCommandCreateParams {
@@ -166,6 +171,14 @@ export interface TagCommandSaveParams extends TagCommandCreateParams {
   id: string;
   resourceSelection?: NativeTagResourceSelectionInput;
   resourcesAction?: 'add' | 'remove' | 'set';
+}
+
+interface TagCommandParams {
+  id: string;
+}
+
+interface TagCommandOptions {
+  filter?: Filter | string;
 }
 
 const nativeTagResourceSelectionPayload = (
@@ -205,14 +218,6 @@ const nativeTagResourceUpdatePayload = ({
         : {resource_ids: resourceIds ?? []}),
   };
 };
-
-interface TagCommandParams {
-  id: string;
-}
-
-interface TagCommandOptions {
-  filter?: Filter | string;
-}
 
 const TAG_SORT_FIELDS: Record<string, string> = {
   name: 'name',

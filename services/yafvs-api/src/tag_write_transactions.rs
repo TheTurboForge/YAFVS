@@ -24,6 +24,7 @@ use crate::{
         ValidatedTagResourceUpdate,
     },
     target_query_sql::tag_target_selection_sql,
+    user_management_query_sql::tag_user_selection_sql,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -204,6 +205,7 @@ async fn resolve_tag_resource_update_records(
             ValidatedTagResourceSelection::Target { .. } => {
                 resolve_tag_target_selection_records(tx, state, selection).await
             }
+            ValidatedTagResourceSelection::User { .. } => Err(ApiError::Config),
         };
     }
     let mut resources = Vec::new();
@@ -405,6 +407,47 @@ pub(crate) async fn resolve_tag_credential_selection_records(
                 owner_id: row.get(2),
             };
             ensure_tag_resource_is_team_assignable("credential", resource.owner_id)?;
+            Ok(resource)
+        })
+        .collect()
+}
+
+pub(crate) async fn resolve_tag_user_selection_records(
+    tx: &Transaction<'_>,
+    selection: &ValidatedTagResourceSelection,
+) -> Result<Vec<TagResourceWriteRecord>, ApiError> {
+    let ValidatedTagResourceSelection::User {
+        search,
+        expected_count,
+    } = selection
+    else {
+        return Err(ApiError::BadRequest(
+            "resource_selection requires a user tag".to_string(),
+        ));
+    };
+    let search = search.as_deref().unwrap_or("");
+    let selection_limit = i64::from(MAX_TAG_RESOURCE_SELECTION_MATCHES) + 1;
+    let rows = tx
+        .query(&tag_user_selection_sql(), &[&search, &selection_limit])
+        .await
+        .map_err(|error| {
+            map_tag_write_db_error(error, "select users for tag resource selection")
+        })?;
+    if rows.len() > MAX_TAG_RESOURCE_SELECTION_MATCHES as usize
+        || rows.len() as i64 != *expected_count
+    {
+        return Err(ApiError::Conflict(
+            "tag resource selection no longer matches expected_count".to_string(),
+        ));
+    }
+    rows.into_iter()
+        .map(|row| {
+            let resource = TagResourceWriteRecord {
+                internal_id: row.get(0),
+                uuid: row.get(1),
+                owner_id: row.get(2),
+            };
+            ensure_tag_resource_is_team_assignable("user", resource.owner_id)?;
             Ok(resource)
         })
         .collect()

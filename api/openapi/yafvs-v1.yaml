@@ -3015,7 +3015,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-and-resource-assignment-write
       summary: Atomically update tag metadata and optional resource assignments
-      description: Updates tag metadata and resource assignments. Explicit IDs and typed collection selections use a native database transaction. A resource_type change is accepted only together with resources.action=set and explicit IDs, so old-type assignments are cleared atomically before the new selection is applied. Transitional raw filter expressions remain for the filtered Users bulk-tag action on gvmd's compatibility path pending its typed selector and removal.
+      description: Updates tag metadata and resource assignments. Explicit IDs and typed collection selections use a native database transaction. A resource_type change is accepted only together with resources.action=set and explicit IDs, so old-type assignments are cleared atomically before the new selection is applied. Transitional raw filter expressions have no remaining first-party browser caller and remain on gvmd's compatibility path pending removal.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -3253,7 +3253,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tag-resource-reference-read
       summary: List assigned tag resource references
-      description: Read-only active-table tag resource references for a strict whitelist of asset, report/result UUID-backed, and security-information resource types. Security-information resource mutation, filter-based bulk actions, trash behavior, users, permissions, and other unsafe resource classes remain on inherited compatibility paths.
+      description: Read-only active-table tag resource references for a strict whitelist of asset, report/result UUID-backed, User, and security-information resource types. Security-information resource mutation, filter-based bulk actions, trash behavior, permissions, and other unsafe resource classes remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/TagId'
         - $ref: '#/components/parameters/Page'
@@ -3294,7 +3294,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: resource-assignment-write
       summary: Add, remove, or replace active tag resource assignments
-      description: Adds, removes, or replaces assignments for the tag's existing resource type using bounded explicit resource_ids, a typed port-list, credential, scanner, or target resource_selection, or one transitional gvmd resource_filter. Explicit IDs and typed selections use native database transactions; raw filter expressions use gvmd's compatibility path. The three selection forms are mutually exclusive. set with none clears all current assignments.
+      description: Adds, removes, or replaces assignments for the tag's existing resource type using bounded explicit resource_ids, a typed port-list, credential, scanner, target, or user resource_selection, or one transitional gvmd resource_filter. Explicit IDs and typed selections use native database transactions; raw filter expressions use gvmd's compatibility path. The three selection forms are mutually exclusive. set with none clears all current assignments.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -10087,7 +10087,7 @@ components:
           type: string
           minLength: 1
           maxLength: 16384
-          description: A transitional gvmd raw-filter compatibility field retained for the filtered Users bulk-tag action pending its typed selector and removal. Mutually exclusive with resource_ids and resource_selection.
+          description: A transitional gvmd raw-filter compatibility field with no remaining first-party browser caller. Mutually exclusive with resource_ids and resource_selection and retained temporarily pending removal.
         resource_selection:
           $ref: '#/components/schemas/TagResourceSelection'
           description: Typed collection selection. Currently accepted only with action=add.
@@ -10097,6 +10097,7 @@ components:
         - $ref: '#/components/schemas/TagCredentialResourceSelection'
         - $ref: '#/components/schemas/TagScannerResourceSelection'
         - $ref: '#/components/schemas/TagTargetResourceSelection'
+        - $ref: '#/components/schemas/TagUserResourceSelection'
       discriminator:
         propertyName: resource_type
         mapping:
@@ -10104,6 +10105,7 @@ components:
           credential: '#/components/schemas/TagCredentialResourceSelection'
           scanner: '#/components/schemas/TagScannerResourceSelection'
           target: '#/components/schemas/TagTargetResourceSelection'
+          user: '#/components/schemas/TagUserResourceSelection'
     TagPortListResourceSelection:
       type: object
       required: [resource_type, expected_count]
@@ -10119,6 +10121,23 @@ components:
         predefined:
           type: boolean
           description: Optional exact predefined-state predicate.
+        expected_count:
+          type: integer
+          minimum: 1
+          maximum: 100000
+          description: Number of rows shown as matching when the operator confirmed the action. The transaction fails on drift before mutation.
+    TagUserResourceSelection:
+      type: object
+      required: [resource_type, expected_count]
+      additionalProperties: false
+      properties:
+        resource_type:
+          type: string
+          const: user
+        search:
+          type: string
+          maxLength: 4096
+          description: Optional literal case-insensitive search over user UUID, name, and comment. This is data, not a filter expression.
         expected_count:
           type: integer
           minimum: 1

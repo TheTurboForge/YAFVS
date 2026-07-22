@@ -138,18 +138,36 @@ pub(crate) async fn patch_tag(
         .resources
         .as_ref()
         .and_then(|value| value.resource_selection.as_ref());
-    if let Some(credential_selection @ ValidatedTagResourceSelection::Credential { .. }) = selection
+    if let Some(
+        prelocked_selection @ (ValidatedTagResourceSelection::Credential { .. }
+        | ValidatedTagResourceSelection::User { .. }),
+    ) = selection
     {
-        // Stabilize owner-name search without taking an incompatible
-        // credentials table lock. Credential rows are locked before tag tables
-        // to match inherited credential deletion order.
-        tx.batch_execute("LOCK TABLE users IN SHARE MODE;")
-            .await
-            .map_err(|error| {
-                map_tag_write_db_error(error, "lock credential owners for tag patch")
-            })?;
+        if matches!(
+            prelocked_selection,
+            ValidatedTagResourceSelection::Credential { .. }
+        ) {
+            // Stabilize credential owner-name search without taking an
+            // incompatible credentials table lock.
+            tx.batch_execute("LOCK TABLE users IN SHARE MODE;")
+                .await
+                .map_err(|error| {
+                    map_tag_write_db_error(error, "lock credential owners for tag patch")
+                })?;
+        }
         resolve_tag_write_operator_owner(&tx, &operator).await?;
-        let resources = resolve_tag_credential_selection_records(&tx, credential_selection).await?;
+        // Credential and User rows must be locked before tag tables to match
+        // inherited deletion order. User selection deliberately takes no
+        // stronger users table lock than SELECT FOR UPDATE requires.
+        let resources = match prelocked_selection {
+            ValidatedTagResourceSelection::Credential { .. } => {
+                resolve_tag_credential_selection_records(&tx, prelocked_selection).await?
+            }
+            ValidatedTagResourceSelection::User { .. } => {
+                resolve_tag_user_selection_records(&tx, prelocked_selection).await?
+            }
+            _ => unreachable!(),
+        };
         tx.batch_execute("LOCK TABLE tags, tag_resources IN SHARE ROW EXCLUSIVE MODE;")
             .await
             .map_err(|error| map_tag_write_db_error(error, "lock tag tables for patch"))?;
@@ -160,10 +178,11 @@ pub(crate) async fn patch_tag(
             .as_deref()
             .unwrap_or(&state.resource_type);
         ensure_tag_resource_direct_write_type_is_supported(effective_resource_type)?;
-        if state.resource_type != "credential" || effective_resource_type != "credential" {
-            return Err(ApiError::BadRequest(
-                "resource_selection requires a credential tag".to_string(),
-            ));
+        let required_type = prelocked_selection.resource_type();
+        if state.resource_type != required_type || effective_resource_type != required_type {
+            return Err(ApiError::BadRequest(format!(
+                "resource_selection requires a {required_type} tag"
+            )));
         }
         let record =
             execute_tag_patch_with_resolved_resources(&tx, &state, &request, Some(resources))
@@ -212,6 +231,9 @@ fn tag_resource_update_lock_sql(selection: Option<&ValidatedTagResourceSelection
         }
         Some(ValidatedTagResourceSelection::Credential { .. }) => {
             unreachable!("credential selections use row locks before tag tables")
+        }
+        Some(ValidatedTagResourceSelection::User { .. }) => {
+            unreachable!("user selections use row locks before tag tables")
         }
         Some(ValidatedTagResourceSelection::Scanner { .. }) => {
             // Scanner writers acquire scanners before tag resources. Keep the
@@ -321,26 +343,42 @@ pub(crate) async fn update_tag_resources(
         .transaction()
         .await
         .map_err(|error| map_tag_write_db_error(error, "begin tag resource transaction"))?;
-    if let Some(credential_selection @ ValidatedTagResourceSelection::Credential { .. }) =
-        request.resource_selection.as_ref()
+    if let Some(
+        prelocked_selection @ (ValidatedTagResourceSelection::Credential { .. }
+        | ValidatedTagResourceSelection::User { .. }),
+    ) = request.resource_selection.as_ref()
     {
-        tx.batch_execute("LOCK TABLE users IN SHARE MODE;")
-            .await
-            .map_err(|error| {
-                map_tag_write_db_error(error, "lock credential owners for tag resource update")
-            })?;
+        if matches!(
+            prelocked_selection,
+            ValidatedTagResourceSelection::Credential { .. }
+        ) {
+            tx.batch_execute("LOCK TABLE users IN SHARE MODE;")
+                .await
+                .map_err(|error| {
+                    map_tag_write_db_error(error, "lock credential owners for tag resource update")
+                })?;
+        }
         resolve_tag_write_operator_owner(&tx, &operator).await?;
-        let resources = resolve_tag_credential_selection_records(&tx, credential_selection).await?;
+        let resources = match prelocked_selection {
+            ValidatedTagResourceSelection::Credential { .. } => {
+                resolve_tag_credential_selection_records(&tx, prelocked_selection).await?
+            }
+            ValidatedTagResourceSelection::User { .. } => {
+                resolve_tag_user_selection_records(&tx, prelocked_selection).await?
+            }
+            _ => unreachable!(),
+        };
         tx.batch_execute("LOCK TABLE tags, tag_resources IN SHARE ROW EXCLUSIVE MODE;")
             .await
             .map_err(|error| map_tag_write_db_error(error, "lock tag resource tables"))?;
         let state = load_tag_write_state(&tx, &tag_id).await?;
         ensure_tag_is_human_owned(state.owner_id)?;
         ensure_tag_resource_direct_write_type_is_supported(&state.resource_type)?;
-        if state.resource_type != "credential" {
-            return Err(ApiError::BadRequest(
-                "resource_selection requires a credential tag".to_string(),
-            ));
+        let required_type = prelocked_selection.resource_type();
+        if state.resource_type != required_type {
+            return Err(ApiError::BadRequest(format!(
+                "resource_selection requires a {required_type} tag"
+            )));
         }
         apply_tag_resource_update_transaction(&tx, &state, &request, resources).await?;
         let tag = load_tag_write_detail(&tx, &state.uuid).await?;

@@ -58,6 +58,11 @@ pub(crate) enum TagResourceSelectionRequest {
         credential_type: Option<String>,
         expected_count: u32,
     },
+    User {
+        #[serde(default)]
+        search: Option<String>,
+        expected_count: u32,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -160,6 +165,10 @@ pub(crate) enum ValidatedTagResourceSelection {
         credential_type: Option<String>,
         expected_count: i64,
     },
+    User {
+        search: Option<String>,
+        expected_count: i64,
+    },
 }
 
 impl ValidatedTagResourceSelection {
@@ -169,6 +178,7 @@ impl ValidatedTagResourceSelection {
             Self::Credential { .. } => "credential",
             Self::Scanner { .. } => "scanner",
             Self::Target { .. } => "target",
+            Self::User { .. } => "user",
         }
     }
 }
@@ -281,6 +291,13 @@ fn validate_tag_resource_selection_request(
                         credential_type,
                         "credential_type",
                     )?,
+                    expected_count: validate_expected_count(expected_count)?,
+                }),
+                TagResourceSelectionRequest::User {
+                    search,
+                    expected_count,
+                } => Ok(ValidatedTagResourceSelection::User {
+                    search: validate_tag_selection_text(search, "search")?,
                     expected_count: validate_expected_count(expected_count)?,
                 }),
             }

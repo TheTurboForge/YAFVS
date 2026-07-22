@@ -9,6 +9,7 @@ import {nativePortListsQueryFromFilter} from 'gmp/native-api/port-lists';
 import {nativeScannersQueryFromFilter} from 'gmp/native-api/scanners';
 import type {NativeTagResourceSelectionInput} from 'gmp/native-api/tags';
 import {nativeTargetQueryFromFilter} from 'gmp/native-api/targets';
+import {nativeUserManagementQueryFromFilter} from 'gmp/native-api/users';
 import type {EntityType} from 'gmp/utils/entity-type';
 
 const supportedCollectionControlTerms = new Set([
@@ -173,6 +174,15 @@ export const nativeTagResourceSelectionFromFilter = (
       const query = nativeTargetQueryFromFilter(filter.all());
       return {
         resourceType: 'target',
+        ...(query.filter === '' ? {} : {search: query.filter}),
+        expectedCount,
+      };
+    }
+    case 'user': {
+      requireOneLiteralSearch(filter, 'user');
+      const query = nativeUserManagementQueryFromFilter(filter.all());
+      return {
+        resourceType: 'user',
         ...(query.filter === '' ? {} : {search: query.filter}),
         expectedCount,
       };

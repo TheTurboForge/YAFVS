@@ -70,6 +70,7 @@ allowed_licenses = ["GPL-3.0-or-later"]
 id = "openvas-scanner"
 concluded_license = "GPL-2.0-only"
 manifest = "components/openvas-scanner/rust/Cargo.toml"
+allowed_link_licenses = ["GPL-2.0-only", "GPL-2.0-or-later"]
 
 [[artifacts]]
 id = "gvm-libs"

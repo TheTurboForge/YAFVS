@@ -37,6 +37,8 @@ struct Artifact {
     concluded_license: String,
     #[serde(default)]
     manifest: Option<String>,
+    #[serde(default)]
+    allowed_link_licenses: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -437,23 +439,33 @@ fn marker_value(text: &str, marker: &str) -> Option<String> {
 }
 
 fn artifact_graph_finding(policy: &BoundaryPolicy) -> Finding {
-    let licenses = policy
+    let artifacts = policy
         .artifacts
         .iter()
-        .map(|artifact| (artifact.id.as_str(), artifact.concluded_license.as_str()))
+        .map(|artifact| (artifact.id.as_str(), artifact))
         .collect::<BTreeMap<_, _>>();
     let mut violations = Vec::new();
     let mut checked = Vec::new();
     for edge in &policy.dependency_edges {
-        let from_license = licenses.get(edge.from.as_str()).copied();
-        let to_license = licenses.get(edge.to.as_str()).copied();
+        let from_artifact = artifacts.get(edge.from.as_str()).copied();
+        let to_artifact = artifacts.get(edge.to.as_str()).copied();
+        let from_license = from_artifact.map(|artifact| artifact.concluded_license.as_str());
+        let to_license = to_artifact.map(|artifact| artifact.concluded_license.as_str());
         let known_relationship = matches!(
             edge.relationship.as_str(),
             "static-link" | "dynamic-link" | "process" | "data"
         );
-        let incompatible = matches!(edge.relationship.as_str(), "static-link" | "dynamic-link")
-            && from_license == Some("GPL-2.0-only")
-            && to_license.is_some_and(is_gpl3_or_agpl3);
+        let linked = matches!(edge.relationship.as_str(), "static-link" | "dynamic-link");
+        let incompatible = linked
+            && from_artifact.is_some_and(|artifact| {
+                artifact.concluded_license == "GPL-2.0-only"
+                    && !to_license.is_some_and(|license| {
+                        artifact
+                            .allowed_link_licenses
+                            .iter()
+                            .any(|allowed| allowed == license)
+                    })
+            });
         let valid = from_license.is_some()
             && to_license.is_some()
             && known_relationship
@@ -489,10 +501,6 @@ fn artifact_graph_finding(policy: &BoundaryPolicy) -> Finding {
         },
     )
     .with_details(json!({ "checked": checked, "violations": violations }))
-}
-
-fn is_gpl3_or_agpl3(license: &str) -> bool {
-    license.starts_with("GPL-3.0") || license.starts_with("AGPL-3.0")
 }
 
 fn cargo_path_dependency_finding(repo_root: &Path, policy: &BoundaryPolicy) -> Finding {
@@ -569,7 +577,12 @@ fn cargo_path_dependency_finding(repo_root: &Path, policy: &BoundaryPolicy) -> F
                 })
             });
             let incompatible = artifact.concluded_license == "GPL-2.0-only"
-                && target_license.as_deref().is_some_and(is_gpl3_or_agpl3);
+                && !target_license.as_deref().is_some_and(|license| {
+                    artifact
+                        .allowed_link_licenses
+                        .iter()
+                        .any(|allowed| allowed == license)
+                });
             let row = json!({
                 "artifact": artifact.id,
                 "artifact_license": artifact.concluded_license,
@@ -791,11 +804,13 @@ mod tests {
                     id: "scanner".to_string(),
                     concluded_license: "GPL-2.0-only".to_string(),
                     manifest: None,
+                    allowed_link_licenses: Vec::new(),
                 },
                 Artifact {
                     id: "manager".to_string(),
                     concluded_license: "GPL-3.0-or-later".to_string(),
                     manifest: None,
+                    allowed_link_licenses: Vec::new(),
                 },
             ],
             dependency_edges: vec![DependencyEdge {
@@ -819,11 +834,13 @@ mod tests {
                     id: "scanner".to_string(),
                     concluded_license: "GPL-2.0-only".to_string(),
                     manifest: None,
+                    allowed_link_licenses: Vec::new(),
                 },
                 Artifact {
                     id: "manager".to_string(),
                     concluded_license: "AGPL-3.0-or-later".to_string(),
                     manifest: None,
+                    allowed_link_licenses: Vec::new(),
                 },
             ],
             dependency_edges: vec![DependencyEdge {
@@ -831,6 +848,36 @@ mod tests {
                 to: "manager".to_string(),
                 relationship: "process".to_string(),
                 rationale: "HTTP boundary".to_string(),
+            }],
+        };
+        assert_eq!(artifact_graph_finding(&policy).status, "pass");
+    }
+
+    #[test]
+    fn gpl2_only_link_requires_an_explicit_compatible_allowlist_entry() {
+        let policy = BoundaryPolicy {
+            schema_version: 1,
+            policy_epoch: "epoch".to_string(),
+            path_rules: vec![rule("", &["GPL-3.0-or-later"])],
+            artifacts: vec![
+                Artifact {
+                    id: "scanner".to_string(),
+                    concluded_license: "GPL-2.0-only".to_string(),
+                    manifest: None,
+                    allowed_link_licenses: vec!["GPL-2.0-or-later".to_string()],
+                },
+                Artifact {
+                    id: "library".to_string(),
+                    concluded_license: "GPL-2.0-or-later".to_string(),
+                    manifest: None,
+                    allowed_link_licenses: Vec::new(),
+                },
+            ],
+            dependency_edges: vec![DependencyEdge {
+                from: "scanner".to_string(),
+                to: "library".to_string(),
+                relationship: "dynamic-link".to_string(),
+                rationale: "explicit reviewed compatibility".to_string(),
             }],
         };
         assert_eq!(artifact_graph_finding(&policy).status, "pass");
@@ -887,11 +934,13 @@ mod tests {
                     id: "scanner".to_string(),
                     concluded_license: "GPL-2.0-only".to_string(),
                     manifest: Some("scanner/Cargo.toml".to_string()),
+                    allowed_link_licenses: vec!["GPL-2.0-or-later".to_string()],
                 },
                 Artifact {
                     id: "manager".to_string(),
                     concluded_license: "GPL-3.0-or-later".to_string(),
                     manifest: Some("manager/Cargo.toml".to_string()),
+                    allowed_link_licenses: Vec::new(),
                 },
             ],
             dependency_edges: vec![DependencyEdge {

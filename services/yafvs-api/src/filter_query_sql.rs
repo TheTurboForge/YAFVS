@@ -10,6 +10,7 @@ pub(crate) fn filter_assets_sql(sort_sql: &str) -> String {
                     coalesce(f.comment, '') AS comment,
                     coalesce(f.type, '') AS filter_type,
                     coalesce(f.term, '') AS term,
+                    (f.owner IS NOT NULL) AS writable,
                     coalesce(f.creation_time, 0)::bigint AS created_at_unix,
                     coalesce(f.modification_time, 0)::bigint AS modified_at_unix,
                     (
@@ -49,6 +50,7 @@ pub(crate) fn filter_asset_detail_sql() -> &'static str {
               coalesce(f.comment, '') AS comment,
               coalesce(f.type, '') AS filter_type,
               coalesce(f.term, '') AS term,
+              (f.owner IS NOT NULL) AS writable,
               coalesce(f.creation_time, 0)::bigint AS created_at_unix,
               coalesce(f.modification_time, 0)::bigint AS modified_at_unix,
               (

@@ -309,12 +309,6 @@ char *
 sync_cert_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                gsad_command_response_data_t *);
 
-char *
-get_filter_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                gsad_command_response_data_t *);
-char *
-get_filters_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                 gsad_command_response_data_t *);
 
 char *
 create_user_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,

@@ -71,7 +71,6 @@ command_t gmp_commands[]
     {"GET_ASSETS", "Get all assets."},
     {"GET_CONFIGS", "Get all configs."},
     {"GET_CREDENTIALS", "Get all credentials."},
-    {"GET_FILTERS", "Get all filters."},
     {"GET_INFO", "Get raw information for a given item."},
     {"GET_INTEGRATION_CONFIGS", "Get integration configurations."},
     {"GET_NVTS", "Get one or all available NVTs."},

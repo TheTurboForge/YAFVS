@@ -5,7 +5,10 @@
  */
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
-import {FiltersCommand} from 'gmp/commands/filters';
+import {
+  FiltersCommand,
+  NativeFilterBulkDeleteError,
+} from 'gmp/commands/filters';
 import {createHttp} from 'gmp/commands/testing';
 import Filter from 'gmp/models/filter';
 import {createSession} from 'gmp/testing';
@@ -73,6 +76,23 @@ describe('FiltersCommand tests', () => {
         },
       },
     );
+  });
+
+  test('should not fall back to GMP when native filter list fails', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new FiltersCommand(fakeHttp);
+
+    await expect(cmd.get({filter: 'rows=25'})).rejects.toThrow(
+      'Native API request failed with status 503',
+    );
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should fetch all filters through native API with pagination', async () => {
@@ -297,5 +317,349 @@ describe('FiltersCommand tests', () => {
       {id: 'f1', name: 'Alpha'},
       {id: 'f2', name: 'Beta'},
     ]);
+  });
+
+  test('should bulk delete selected filters through native API', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing
+          .fn()
+          .mockResolvedValue({id: 'f1', name: 'Alpha', writable: true}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing
+          .fn()
+          .mockResolvedValue({id: 'f2', name: 'Beta', writable: true}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({ok: true, status: 204})
+      .mockResolvedValueOnce({ok: true, status: 204});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new FiltersCommand(fakeHttp);
+
+    const result = await cmd.deleteByIds(['f1', 'f2']);
+
+    expect(result.data).toEqual(['f1', 'f2']);
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/filters/f1', {
+      token: 'test-token',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/filters/f2', {
+      token: 'test-token',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(3, 'api/v1/filters/f1');
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(4, 'api/v1/filters/f2');
+    expect(fetchMock.mock.calls[0][1]).not.toHaveProperty('method');
+    expect(fetchMock.mock.calls[1][1]).not.toHaveProperty('method');
+    expect(fetchMock.mock.calls[2][1]).toEqual(
+      expect.objectContaining({method: 'DELETE'}),
+    );
+    expect(fetchMock.mock.calls[3][1]).toEqual(
+      expect.objectContaining({method: 'DELETE'}),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should reject mixed writable selection before any native delete', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing
+          .fn()
+          .mockResolvedValue({id: 'f1', name: 'Alpha', writable: true}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing
+          .fn()
+          .mockResolvedValue({id: 'f2', name: 'Global', writable: false}),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new FiltersCommand(fakeHttp);
+
+    await expect(cmd.deleteByIds(['f1', 'f2'])).rejects.toThrow(
+      'Native filter bulk delete refused non-writable filter f2',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const [, options] of fetchMock.mock.calls) {
+      expect(options).not.toHaveProperty('method');
+    }
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should reject an in-use selected filter before any native delete', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'f1',
+          name: 'Alpha',
+          writable: true,
+          alert_count: 0,
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          id: 'f2',
+          name: 'Linked to an alert',
+          writable: true,
+          alert_count: 1,
+        }),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new FiltersCommand(fakeHttp);
+
+    await expect(cmd.deleteByIds(['f1', 'f2'])).rejects.toThrow(
+      'Native filter bulk delete refused in-use filter f2',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const [, options] of fetchMock.mock.calls) {
+      expect(options).not.toHaveProperty('method');
+    }
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should snapshot all filtered pages before native deletion', async () => {
+    const firstPage = {
+      page: {
+        page: 1,
+        page_size: 2,
+        total: 3,
+        sort: 'name',
+        filter: 'alpha',
+      },
+      items: [
+        {id: 'f1', name: 'Alpha', filter_type: 'user', writable: true},
+        {id: 'f2', name: 'Beta', filter_type: 'user', writable: true},
+      ],
+    };
+    const remainingPage = {
+      page: {
+        page: 2,
+        page_size: 2,
+        total: 3,
+        sort: 'name',
+        filter: 'alpha',
+      },
+      items: [{id: 'f3', name: 'Gamma', filter_type: 'user', writable: true}],
+    };
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue(firstPage),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue(remainingPage),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({ok: true, status: 204})
+      .mockResolvedValueOnce({ok: true, status: 204})
+      .mockResolvedValueOnce({ok: true, status: 204});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new FiltersCommand(fakeHttp);
+    const filter = Filter.fromString('first=1 rows=1 search=alpha').all();
+
+    const result = await cmd.deleteByFilter(filter);
+
+    expect(result.data.map(savedFilter => savedFilter.id)).toEqual([
+      'f1',
+      'f2',
+      'f3',
+    ]);
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/filters', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: 'alpha',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/filters', {
+      token: 'test-token',
+      page: 2,
+      page_size: 500,
+      sort: 'name',
+      filter: 'alpha',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(3, 'api/v1/filters/f1');
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(4, 'api/v1/filters/f2');
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(5, 'api/v1/filters/f3');
+    for (const call of [3, 4, 5]) {
+      expect(fetchMock.mock.calls[call - 1][1]).toEqual(
+        expect.objectContaining({method: 'DELETE'}),
+      );
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should reject collection drift before deleting an all-filtered snapshot', async () => {
+    const firstPage = {
+      page: {
+        page: 1,
+        page_size: 1,
+        total: 2,
+        sort: 'name',
+        filter: 'alpha',
+      },
+      items: [{id: 'f1', name: 'Alpha', filter_type: 'user', writable: true}],
+    };
+    const changedPage = {
+      page: {
+        page: 2,
+        page_size: 2,
+        total: 3,
+        sort: 'name',
+        filter: 'alpha',
+      },
+      items: [
+        {id: 'f2', name: 'Beta', filter_type: 'user', writable: true},
+        {id: 'f3', name: 'Gamma', filter_type: 'user', writable: true},
+      ],
+    };
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue(firstPage),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue(changedPage),
+        ok: true,
+        status: 200,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new FiltersCommand(fakeHttp);
+    const filter = Filter.fromString('first=1 rows=1 search=alpha').all();
+
+    await expect(cmd.deleteByFilter(filter)).rejects.toThrow(
+      'Native filter bulk delete preflight detected collection drift',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const [, options] of fetchMock.mock.calls) {
+      expect(options).not.toHaveProperty('method');
+    }
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should delete only the current filtered page', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({
+          page: {
+            page: 2,
+            page_size: 1,
+            total: 3,
+            sort: 'name',
+            filter: 'alpha',
+          },
+          items: [
+            {
+              id: 'f2',
+              name: 'Beta',
+              filter_type: 'user',
+              writable: true,
+            },
+          ],
+        }),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({ok: true, status: 204});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new FiltersCommand(fakeHttp);
+    const filter = Filter.fromString('first=2 rows=1 search=alpha');
+
+    const result = await cmd.deleteByFilter(filter);
+
+    expect(result.data.map(savedFilter => savedFilter.id)).toEqual(['f2']);
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/filters', {
+      token: 'test-token',
+      page: 2,
+      page_size: 1,
+      sort: 'name',
+      filter: 'alpha',
+    });
+    expect(fakeHttp.buildUrl).toHaveBeenNthCalledWith(2, 'api/v1/filters/f2');
+    expect(fetchMock.mock.calls[0][1]).not.toHaveProperty('method');
+    expect(fetchMock.mock.calls[1][1]).toEqual(
+      expect.objectContaining({method: 'DELETE'}),
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should report partial native bulk delete failure without XML fallback', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing
+          .fn()
+          .mockResolvedValue({id: 'f1', name: 'Alpha', writable: true}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing
+          .fn()
+          .mockResolvedValue({id: 'f2', name: 'Beta', writable: true}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        json: testing
+          .fn()
+          .mockResolvedValue({id: 'f3', name: 'Gamma', writable: true}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({ok: true, status: 204})
+      .mockResolvedValueOnce({ok: false, status: 409});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new FiltersCommand(fakeHttp);
+
+    const operation = cmd.deleteByIds(['f1', 'f2', 'f3']);
+
+    await expect(operation).rejects.toMatchObject({
+      name: 'NativeFilterBulkDeleteError',
+      deletedIds: ['f1'],
+      failedId: 'f2',
+      pendingIds: ['f3'],
+    });
+    await operation.catch(error => {
+      expect(error).toBeInstanceOf(NativeFilterBulkDeleteError);
+      expect(error.cause).toBeInstanceOf(Error);
+      expect(error.cause.message).toEqual(
+        'Native API request failed with status 409',
+      );
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fakeHttp.buildUrl).not.toHaveBeenNthCalledWith(
+      6,
+      'api/v1/filters/f3',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 });

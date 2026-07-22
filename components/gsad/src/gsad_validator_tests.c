@@ -39,6 +39,10 @@ Ensure (gsad_validator, reject_removed_native_only_commands)
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "get_vulns"),
                is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_filter"),
+               is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_filters"),
+               is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "get_trash_alerts"),
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "get_trash_configs"),

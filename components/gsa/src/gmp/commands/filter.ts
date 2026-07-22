@@ -4,13 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import EntityCommand from 'gmp/commands/entity';
 import type {EntityCommandParams} from 'gmp/commands/entity';
+import HttpCommand from 'gmp/commands/http';
 import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
-import {type XmlResponseData} from 'gmp/http/transform/fast-xml';
-import Filter, {type FilterModelElement} from 'gmp/models/filter';
+import type Filter from 'gmp/models/filter';
 import {
   cloneNativeFilter,
   createNativeFilter,
@@ -21,23 +20,15 @@ import {
 } from 'gmp/native-api/filters';
 import {resourceType, type EntityType} from 'gmp/utils/entity-type';
 
-interface GetFilterResponseData extends XmlResponseData {
-  get_filter?: {
-    get_filters_response?: {
-      filter?: FilterModelElement;
-    };
-  };
-}
-
 const requireNativeFilterApi = (http: Http) => {
   if (!canUseNativeApi(http)) {
     throw new Error('Native filter API is required for filter command');
   }
 };
 
-export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
+export class FilterCommand extends HttpCommand {
   constructor(http: Http) {
-    super(http, 'filter', Filter);
+    super(http);
   }
 
   async export({id}: EntityCommandParams) {
@@ -62,7 +53,9 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
     const filterType = resourceType(type);
     requireNativeFilterApi(this.http);
     if (filterType === undefined) {
-      throw new Error('Native filter create received unsupported resource type');
+      throw new Error(
+        'Native filter create received unsupported resource type',
+      );
     }
     return await createNativeFilter(this.http, {
       term,
@@ -102,13 +95,6 @@ export class FilterCommand extends EntityCommand<Filter, FilterModelElement> {
       filterType,
       comment,
     });
-  }
-
-  getElementFromRoot(root: XmlResponseData): FilterModelElement {
-    return (
-      (root as GetFilterResponseData).get_filter?.get_filters_response
-        ?.filter ?? ({} as FilterModelElement)
-    );
   }
 }
 

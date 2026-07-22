@@ -80,8 +80,6 @@ gsad_init_validator ()
                      "|(get_configs)"
                      "|(get_credential)"
                      "|(get_credentials)"
-                     "|(get_filter)"
-                     "|(get_filters)"
                      "|(get_info)"
                      "|(get_override)"
                      "|(get_overrides)"

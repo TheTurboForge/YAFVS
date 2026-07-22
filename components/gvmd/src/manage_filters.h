@@ -58,39 +58,6 @@ char *
 trash_filter_name (filter_t);
 
 int
-trash_filter_in_use (filter_t);
-
-int
-filter_in_use (filter_t);
-
-int
-trash_filter_writable (filter_t);
-
-int
-filter_writable (filter_t);
-
-int
-filter_count (const get_data_t *);
-
-int
 init_filter_iterator (iterator_t *, get_data_t *);
-
-const char*
-filter_iterator_type (iterator_t *);
-
-const char*
-filter_iterator_term (iterator_t *);
-
-void
-init_filter_alert_iterator (iterator_t *, filter_t);
-
-const char*
-filter_alert_iterator_name (iterator_t *);
-
-const char*
-filter_alert_iterator_uuid (iterator_t *);
-
-int
-filter_alert_iterator_readable (iterator_t *);
 
 #endif /* not _GVMD_MANAGE_FILTERS_H */

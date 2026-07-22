@@ -8,7 +8,8 @@ import CollectionCounts from 'gmp/collection/collection-counts';
 import Response from 'gmp/http/response';
 import type {UrlParams} from 'gmp/http/utils';
 import Filter from 'gmp/models/filter';
-import type QueryFilter from 'gmp/models/filter';
+
+type QueryFilter = Filter;
 
 interface NativeApiSession {
   readonly jwt?: string;
@@ -39,6 +40,7 @@ interface NativeFilterPayload {
   comment?: string;
   filter_type?: string;
   term?: string;
+  writable?: boolean;
   alert_count?: number;
   alerts?: NativeFilterAlertPayload[];
   created_at?: string;
@@ -205,7 +207,7 @@ const nativeFilterToModel = (item: NativeFilterPayload): Filter =>
     type: stringValue(item.filter_type),
     term: stringValue(item.term),
     in_use: integerValue(item.alert_count) > 0 ? 1 : 0,
-    writable: 1,
+    writable: item.writable === true ? 1 : 0,
     alerts: {
       alert: (item.alerts ?? []).map(alert => ({
         _id: stringValue(alert.id),

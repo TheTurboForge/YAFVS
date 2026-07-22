@@ -166,10 +166,6 @@ get_config_family (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
 
 static char *
-get_filter (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
-            gsad_command_response_data_t *);
-
-static char *
 get_credential (gvm_connection_t *, gsad_credentials_t *, params_t *,
                 const char *, gsad_command_response_data_t *);
 
@@ -6506,68 +6502,6 @@ sync_cert_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
                     "Synchronize CERT Feed", "the CERT feed", response_data);
 }
 
-/* Filters. */
-
-/**
- * @brief Get one filter, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[in]  extra_xml    Extra XML to insert inside page element.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_filter (gvm_connection_t *connection, gsad_credentials_t *credentials,
-            params_t *params, const char *extra_xml,
-            gsad_command_response_data_t *response_data)
-{
-  gmp_arguments_t *arguments;
-  arguments = gmp_arguments_new ();
-
-  gmp_arguments_add (arguments, "alerts", "1");
-
-  return get_one (connection, "filter", credentials, params, extra_xml,
-                  arguments, response_data);
-}
-
-/**
- * @brief Get one filter, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_filter_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_filter (connection, credentials, params, NULL, response_data);
-}
-
-/**
- * @brief Get all filters, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_filters_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                 params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_many (connection, "filters", credentials, params, NULL,
-                   response_data);
-}
-
 /* Schedules. */
 
 /**
@@ -8692,8 +8626,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_config_family)
   ELSE (get_credential)
   ELSE (get_credentials)
-  ELSE (get_filter)
-  ELSE (get_filters)
   ELSE (get_info)
   ELSE (get_override)
   ELSE (get_overrides)

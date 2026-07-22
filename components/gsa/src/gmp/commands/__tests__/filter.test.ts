@@ -70,6 +70,40 @@ describe('FilterCommand tests', () => {
     expect(result.data.name).toEqual('Host filter');
   });
 
+  test('should not fall back to GMP when native filter detail fails', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({error: {message: 'disabled'}}),
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(
+      createResponse({
+        get_filter: {
+          get_filters_response: {
+            filter: {_id: 'legacy-filter-id', name: 'Legacy filter'},
+          },
+        },
+      }),
+    ) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+
+    const cmd = new FilterCommand(fakeHttp);
+
+    await expect(cmd.get({id: 'filter-id'})).rejects.toThrow(
+      'Native API request failed with status 503',
+    );
+    expect(fetchMock).toHaveBeenCalled();
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should fetch filter alert detail through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

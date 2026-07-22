@@ -1065,27 +1065,6 @@ get_credentials_data_reset (get_credentials_data_t *data)
 }
 
 /**
- * @brief Command data for the get_filters command.
- */
-typedef struct
-{
-  get_data_t get;    ///< Get args.
-  int alerts;        ///< Boolean.  Whether to include alerts that use filter.
-} get_filters_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-get_filters_data_reset (get_filters_data_t *data)
-{
-  get_data_reset (&data->get);
-  memset (data, 0, sizeof (get_filters_data_t));
-}
-
-/**
  * @brief Command data for the get_info command.
  */
 typedef struct
@@ -2041,7 +2020,6 @@ typedef union
   get_alerts_data_t get_alerts;                       ///< get_alerts
   get_assets_data_t get_assets;                       ///< get_assets
   get_credentials_data_t get_credentials;             ///< get_credentials
-  get_filters_data_t get_filters;                     ///< get_filters
   get_info_data_t get_info;                           ///< get_info
   get_nvts_data_t get_nvts;                           ///< get_nvts
   get_overrides_data_t get_overrides;                 ///< get_overrides
@@ -2222,12 +2200,6 @@ static get_assets_data_t *get_assets_data
  */
 static get_credentials_data_t *get_credentials_data
  = &(command_data.get_credentials);
-
-/**
- * @brief Parser callback data for GET_FILTERS.
- */
-static get_filters_data_t *get_filters_data
- = &(command_data.get_filters);
 
 /**
  * @brief Parser callback data for GET_INFO.
@@ -2563,7 +2535,6 @@ typedef enum
   CLIENT_GET_ASSETS,
   CLIENT_GET_CONFIGS,
   CLIENT_GET_CREDENTIALS,
-  CLIENT_GET_FILTERS,
   CLIENT_GET_INFO,
   CLIENT_GET_INTEGRATION_CONFIGS,
   CLIENT_GET_NVTS,
@@ -3185,20 +3156,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &get_credentials_data->format);
             set_client_state (CLIENT_GET_CREDENTIALS);
           }
-        else if (strcasecmp ("GET_FILTERS", element_name) == 0)
-          {
-            const gchar* attribute;
-            get_data_parse_attributes (&get_filters_data->get, "filter",
-                                       attribute_names,
-                                       attribute_values);
-            if (find_attribute (attribute_names, attribute_values,
-                                "alerts", &attribute))
-              get_filters_data->alerts = strcmp (attribute, "0");
-            else
-              get_filters_data->alerts = 0;
-            set_client_state (CLIENT_GET_FILTERS);
-          }
-
         ELSE_GET_START (integration_configs, INTEGRATION_CONFIGS)
 
         else if (strcasecmp ("GET_NVTS", element_name) == 0)
@@ -8322,112 +8279,6 @@ handle_get_credentials (gmp_parser_t *gmp_parser, GError **error)
   SEND_GET_END ("credential", &get_credentials_data->get,
                 count, filtered);
   get_credentials_data_reset (get_credentials_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
- * @brief Handle end of GET_FILTERS element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_filters (gmp_parser_t *gmp_parser, GError **error)
-{
-  iterator_t filters;
-  int count, filtered, ret, first;
-
-  INIT_GET (filter, Filter);
-
-  ret = init_filter_iterator (&filters, &get_filters_data->get);
-  if (ret)
-    {
-      switch (ret)
-        {
-          case 1:
-            if (send_find_error_to_client ("get_filters", "filter",
-                                           get_filters_data->get.id,
-                                           gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            break;
-          case 2:
-            if (send_find_error_to_client
-                  ("get_filters", "filter",
-                   get_filters_data->get.filt_id, gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            break;
-          case -1:
-            SEND_TO_CLIENT_OR_FAIL
-              (XML_INTERNAL_ERROR ("get_filters"));
-            break;
-        }
-      get_filters_data_reset (get_filters_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  SEND_GET_START ("filter");
-  while (1)
-    {
-      ret = get_next (&filters, &get_filters_data->get, &first, &count,
-                      init_filter_iterator);
-      if (ret == 1)
-        break;
-      if (ret == -1)
-        {
-          internal_error_send_to_client (error);
-          return;
-        }
-
-      SEND_GET_COMMON (filter, &get_filters_data->get, &filters);
-
-      SENDF_TO_CLIENT_OR_FAIL ("<type>%s</type>"
-                               "<term>%s</term>",
-                               filter_iterator_type (&filters),
-                               filter_iterator_term (&filters));
-
-      if (get_filters_data->alerts)
-        {
-          iterator_t alerts;
-
-          SEND_TO_CLIENT_OR_FAIL ("<alerts>");
-          init_filter_alert_iterator (&alerts,
-                                      get_iterator_resource
-                                        (&filters));
-          while (next (&alerts))
-            {
-              SENDF_TO_CLIENT_OR_FAIL
-               ("<alert id=\"%s\">"
-                "<name>%s</name>",
-                filter_alert_iterator_uuid (&alerts),
-                filter_alert_iterator_name (&alerts));
-              if (filter_alert_iterator_readable (&alerts))
-                SEND_TO_CLIENT_OR_FAIL ("</alert>");
-              else
-                SEND_TO_CLIENT_OR_FAIL ("<permissions/>"
-                                        "</alert>");
-            }
-          cleanup_iterator (&alerts);
-          SEND_TO_CLIENT_OR_FAIL ("</alerts>");
-        }
-
-      SEND_TO_CLIENT_OR_FAIL ("</filter>");
-
-      count++;
-    }
-  cleanup_iterator (&filters);
-  filtered = get_filters_data->get.id
-              ? 1
-              : filter_count (&get_filters_data->get);
-  SEND_GET_END ("filter", &get_filters_data->get, count, filtered);
-
-  get_filters_data_reset (get_filters_data);
   set_client_state (CLIENT_AUTHENTIC);
 }
 
@@ -13718,10 +13569,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         handle_get_credentials (gmp_parser, error);
         break;
 
-
-      case CLIENT_GET_FILTERS:
-        handle_get_filters (gmp_parser, error);
-        break;
 
       case CLIENT_GET_INFO:
         handle_get_info (gmp_parser, error);

@@ -1584,14 +1584,42 @@ class YAFVSCtlTests(unittest.TestCase):
                 self.assertNotIn(marker, source, f"{label} still exposes {marker}")
 
         gsad_source = retired_sources["gsad dispatch"].read_text(encoding="utf-8")
+        gsad_header = retired_sources["gsad declarations"].read_text(encoding="utf-8")
+        gsad_validator = retired_sources["gsad validation"].read_text(encoding="utf-8")
         gvmd_source = retired_sources["gvmd parser"].read_text(encoding="utf-8")
         filter_sql_source = retired_sources["gvmd filter SQL"].read_text(encoding="utf-8")
+        filter_header = retired_sources["gvmd filter declarations"].read_text(encoding="utf-8")
+        capabilities_source = retired_sources["gsa capabilities"].read_text(encoding="utf-8")
+        schema_source = retired_sources["GMP schema"].read_text(encoding="utf-8")
         native_write_source = (root / "services" / "yafvs-api" / "src" / "filter_writes.rs").read_text(encoding="utf-8")
-        self.assertIn("get_filter_gmp", gsad_source)
-        self.assertIn("get_filters_gmp", gsad_source)
-        self.assertIn("CLIENT_GET_FILTERS", gvmd_source)
-        self.assertIn("filter_in_use", filter_sql_source)
-        self.assertIn("trash_filter_in_use", filter_sql_source)
+        for marker in ("get_filter_gmp", "get_filters_gmp", "ELSE (get_filter)", "ELSE (get_filters)"):
+            self.assertNotIn(marker, gsad_source)
+            self.assertNotIn(marker, gsad_header)
+        self.assertNotIn("|(get_filter)", gsad_validator)
+        self.assertNotIn("|(get_filters)", gsad_validator)
+        for marker in ("get_filters_data", "CLIENT_GET_FILTERS", "handle_get_filters"):
+            self.assertNotIn(marker, gvmd_source)
+        for marker in (
+            "filter_count (",
+            "filter_iterator_type (",
+            "filter_iterator_term",
+            "init_filter_alert_iterator",
+            "filter_alert_iterator_",
+            "filter_in_use (",
+            "trash_filter_in_use (",
+            "filter_writable (",
+            "trash_filter_writable (",
+        ):
+            self.assertNotIn(marker, filter_sql_source)
+            self.assertNotIn(marker, filter_header)
+        self.assertNotIn("<name>get_filters</name>", schema_source)
+        self.assertIn("GET_FILTERS, CREATE_FILTER, MODIFY_FILTER", schema_source)
+        self.assertIn("'get_filters'", capabilities_source)
+        self.assertIn("init_filter_iterator", filter_sql_source)
+        self.assertIn("find_filter_with_permission", filter_sql_source)
+        self.assertIn("filter_term_sql", filter_sql_source)
+        self.assertIn("init_filter_iterator", gvmd_source)
+        self.assertIn('"get_filters"', gvmd_source)
         self.assertIn("pub(crate) async fn create_filter", native_write_source)
         self.assertIn("pub(crate) async fn patch_filter", native_write_source)
         self.assertIn("pub(crate) async fn delete_filter", native_write_source)

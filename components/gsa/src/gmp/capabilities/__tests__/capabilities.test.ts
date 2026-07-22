@@ -50,6 +50,16 @@ describe('Capabilities tests', () => {
     expect(caps.map(cap => cap)).toEqual(['get_tasks']);
   });
 
+  test('should retain filter access after the XML command is retired', () => {
+    const caps = new Capabilities(['get_filters']);
+
+    expect(caps.mayAccess('filter')).toEqual(true);
+    // @ts-expect-error plural resource names remain accepted for UI callers
+    expect(caps.mayAccess('filters')).toEqual(true);
+    expect(caps.mayAccess('task')).toEqual(false);
+    expect(caps.map(cap => cap)).toEqual(['get_filters']);
+  });
+
   test('should allow singular and plural for access', () => {
     const caps = new Capabilities(['get_tasks']);
 

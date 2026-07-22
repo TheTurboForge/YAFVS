@@ -12568,7 +12568,7 @@ components:
           type: string
     FilterAsset:
       type: object
-      required: [id, name, filter_type, term, alert_count, alerts]
+      required: [id, name, filter_type, term, writable, alert_count, alerts]
       properties:
         id:
           type: string
@@ -12582,6 +12582,9 @@ components:
         term:
           type: string
           description: Saved filter term. This can reveal operator search logic and remains authenticated operator data.
+        writable:
+          type: boolean
+          description: Whether this saved filter is human-owned and eligible for guarded mutation.
         alert_count:
           type: integer
         alerts:

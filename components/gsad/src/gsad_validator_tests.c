@@ -25,6 +25,8 @@ Ensure (gsad_validator, reject_removed_native_only_commands)
                is_equal_to (2));
   assert_that (gvm_validate (validator, "cmd", "get_nvt_families"),
                is_equal_to (2));
+  assert_that (gvm_validate (validator, "cmd", "get_feeds"),
+               is_equal_to (2));
 }
 
 Ensure (gsad_validator, reject_removed_scan_config_commands)

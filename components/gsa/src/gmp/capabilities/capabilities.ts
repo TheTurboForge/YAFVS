@@ -50,7 +50,6 @@ const CAPABILITY_NAMES = [
   'get_assets',
   'get_configs',
   'get_credentials',
-  'get_feeds',
   'get_filters',
   'get_info',
   'get_nvts',

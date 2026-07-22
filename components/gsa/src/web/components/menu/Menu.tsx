@@ -410,7 +410,7 @@ const Menu = () => {
             isPathMatch: isTrashcanActive,
             active: isTrashcanActive,
           },
-          capabilities.mayOp('get_feeds') && {
+          {
             label: _('Feed Status'),
             to: '/feed-status',
             isPathMatch: isFeedStatusActive,

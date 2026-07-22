@@ -10258,6 +10258,13 @@ components:
         timestamp:
           type: string
           description: Timestamp text read from the inherited feed lock file when a sync/update lock is active.
+    FeedSyncNotAvailable:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Safe operator-facing diagnostic when metadata or synchronization state cannot be read.
     FeedItem:
       type: object
       required: [name, version, type, status, sync_status, metadata_source, status_source]
@@ -10278,9 +10285,11 @@ components:
           enum: [up_to_date, syncing, unknown]
         currently_syncing:
           $ref: '#/components/schemas/FeedCurrentlySyncing'
+        sync_not_available:
+          $ref: '#/components/schemas/FeedSyncNotAvailable'
         metadata_source:
           type: string
-          enum: [runtime_feed_copy]
+          enum: [runtime_feed_copy, unavailable]
         status_source:
           type: string
           enum: [runtime_feed_lock, unavailable]

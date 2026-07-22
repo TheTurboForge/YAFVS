@@ -110,6 +110,20 @@ describe('Menu rendering', () => {
     expect(screen.queryByText('Performance')).not.toBeInTheDocument();
   });
 
+  test('renders Feed Status without the retired get_feeds capability', async () => {
+    renderMenuWith({
+      capabilities: new Capabilities(),
+      gmpSettings: {
+        enableAssetManagement: false,
+        reloadInterval: 5000,
+        reloadIntervalActive: 5000,
+        reloadIntervalInactive: 5000,
+      },
+    });
+
+    expect(screen.getByText('Feed Status')).toBeInTheDocument();
+  });
+
   test.each(['Configuration'])(
     'should not render %s when mayAccess returns false',
     async text => {

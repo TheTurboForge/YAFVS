@@ -6839,70 +6839,6 @@ get_port_lists_gmp (gvm_connection_t *connection,
 /* Feeds. */
 
 /**
- * @brief Get descriptions of the feeds connected to the manager.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_feeds_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-               params_t *params, gsad_command_response_data_t *response_data)
-{
-  entity_t entity;
-  char *text = NULL;
-  gchar *response;
-  time_t now;
-  struct tm tm;
-  gchar current_timestamp[30];
-
-  if (gvm_connection_sendf (connection, "<get_feeds/>") == -1)
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while getting the feed list. "
-        "The current list of feeds is not available. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    }
-
-  if (read_entity_and_text_c (connection, &entity, &text))
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while getting the feed. "
-        "The current list of feeds is not available. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    }
-
-  time (&now);
-  if (gmtime_r (&now, &tm) == NULL
-      || (strftime (current_timestamp, 29, "%Y-%m-%dT%H:%M:%S", &tm) == 0))
-    {
-      current_timestamp[0] = '\0';
-    }
-
-  response = g_strdup_printf ("<get_feeds>"
-                              "%s"
-                              "<current_time_utc>%s</current_time_utc>"
-                              "</get_feeds>",
-                              text, current_timestamp);
-
-  g_free (text);
-
-  return envelope_gmp (connection, credentials, params, response,
-                       response_data);
-}
-
-/**
  * @brief Synchronize with a feed and envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -9466,7 +9402,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_credential)
   ELSE (get_credentials)
   ELSE (get_features)
-  ELSE (get_feeds)
   ELSE (get_filter)
   ELSE (get_filters)
   ELSE (get_info)

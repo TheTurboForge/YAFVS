@@ -2345,6 +2345,17 @@ fn feed_contract_ok(object: Option<&Map<String, Value>>) -> bool {
             let Some(item) = item.as_object() else {
                 return false;
             };
+            let metadata_source = item.get("metadata_source").and_then(Value::as_str);
+            let metadata_contract_ok = match metadata_source {
+                Some("runtime_feed_copy") => true,
+                Some("unavailable") => item
+                    .get("sync_not_available")
+                    .and_then(Value::as_object)
+                    .and_then(|value| value.get("error"))
+                    .and_then(Value::as_str)
+                    .is_some_and(|value| !value.is_empty()),
+                _ => false,
+            };
             item.get("name").and_then(Value::as_str).is_some()
                 && item.get("version").and_then(Value::as_str).is_some()
                 && matches!(
@@ -2355,7 +2366,7 @@ fn feed_contract_ok(object: Option<&Map<String, Value>>) -> bool {
                     item.get("sync_status").and_then(Value::as_str),
                     Some("up_to_date" | "syncing" | "unknown")
                 )
-                && item.get("metadata_source").and_then(Value::as_str) == Some("runtime_feed_copy")
+                && metadata_contract_ok
                 && matches!(
                     item.get("status_source").and_then(Value::as_str),
                     Some("runtime_feed_lock" | "unavailable")
@@ -2528,7 +2539,7 @@ mod tests {
         vec![output(true, "container-id\n"), output(true, "true\n")]
     }
     fn feeds() -> &'static str {
-        r#"{"items":[{"type":"NVT","name":"n","version":"v","status":"Up-to-date...","sync_status":"up_to_date","metadata_source":"runtime_feed_copy","status_source":"runtime_feed_lock"},{"type":"SCAP","name":"n","version":"v","status":"Unknown","sync_status":"unknown","metadata_source":"runtime_feed_copy","status_source":"unavailable"},{"type":"CERT","name":"n","version":"v","status":"Unknown","sync_status":"unknown","metadata_source":"runtime_feed_copy","status_source":"unavailable"},{"type":"GVMD_DATA","name":"n","version":"v","status":"Unknown","sync_status":"unknown","metadata_source":"runtime_feed_copy","status_source":"unavailable"}]}"#
+        r#"{"items":[{"type":"NVT","name":"n","version":"v","status":"Up-to-date...","sync_status":"up_to_date","metadata_source":"runtime_feed_copy","status_source":"runtime_feed_lock"},{"type":"SCAP","name":"","version":"","status":"Unknown","sync_status":"unknown","sync_not_available":{"error":"Feed metadata is unavailable or invalid."},"metadata_source":"unavailable","status_source":"unavailable"},{"type":"CERT","name":"n","version":"v","status":"Unknown","sync_status":"unknown","metadata_source":"runtime_feed_copy","status_source":"unavailable"},{"type":"GVMD_DATA","name":"n","version":"v","status":"Unknown","sync_status":"unknown","metadata_source":"runtime_feed_copy","status_source":"unavailable"}]}"#
     }
     fn bad_request_output() -> ProcessOutput {
         output(
@@ -2699,6 +2710,19 @@ mod tests {
                 .is_file()
         );
         finish_test(&repo);
+    }
+
+    #[test]
+    fn unavailable_feed_metadata_requires_a_safe_diagnostic() {
+        let payload = serde_json::from_str::<Value>(feeds()).unwrap();
+        assert!(feed_contract_ok(payload.as_object()));
+
+        let mut missing_diagnostic = payload;
+        missing_diagnostic["items"][1]
+            .as_object_mut()
+            .unwrap()
+            .remove("sync_not_available");
+        assert!(!feed_contract_ok(missing_diagnostic.as_object()));
     }
 
     #[test]

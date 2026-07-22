@@ -75,6 +75,11 @@ struct FeedCurrentlySyncing {
 }
 
 #[derive(Debug, Serialize)]
+struct FeedSyncNotAvailable {
+    error: &'static str,
+}
+
+#[derive(Debug, Serialize)]
 struct FeedItem {
     name: String,
     version: String,
@@ -84,6 +89,8 @@ struct FeedItem {
     sync_status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     currently_syncing: Option<FeedCurrentlySyncing>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sync_not_available: Option<FeedSyncNotAvailable>,
     metadata_source: &'static str,
     status_source: &'static str,
 }
@@ -92,32 +99,67 @@ struct FeedItem {
 enum FeedSyncState {
     UpToDate,
     Syncing { timestamp: Option<String> },
-    Unknown,
+    Unknown { diagnostic: Option<&'static str> },
 }
 
 pub(crate) async fn feeds() -> Result<Json<FeedsResponse>, ApiError> {
-    Ok(Json(feed_inventory()?))
+    Ok(Json(feed_inventory()))
 }
 
-fn feed_inventory() -> Result<FeedsResponse, ApiError> {
+fn feed_inventory() -> FeedsResponse {
     let metadata_root = feed_metadata_root();
     let lock_root = feed_lock_root();
+    feed_inventory_from_roots(&metadata_root, &lock_root)
+}
+
+fn feed_inventory_from_roots(metadata_root: &FsPath, lock_root: &FsPath) -> FeedsResponse {
     let mut items = Vec::with_capacity(FEED_DEFINITIONS.len());
     for definition in FEED_DEFINITIONS {
         let metadata_path = metadata_root.join(definition.metadata_rel);
-        let metadata = read_text_file_bounded(&metadata_path, MAX_FEED_METADATA_BYTES).map_err(|error| {
-            tracing::warn!(%error, path = %metadata_path.display(), "feed metadata read failed");
-            ApiError::Config
-        })?;
-        let (name, version) = match definition.format {
-            FeedMetadataFormat::PluginInfo => parse_plugin_feed_info(&metadata)?,
-            FeedMetadataFormat::FeedXml => parse_feed_xml(&metadata, definition.feed_type)?,
+        let metadata = read_text_file_bounded(&metadata_path, MAX_FEED_METADATA_BYTES);
+        let parsed = metadata
+            .as_ref()
+            .ok()
+            .and_then(|text| match definition.format {
+                FeedMetadataFormat::PluginInfo => parse_plugin_feed_info(text).ok(),
+                FeedMetadataFormat::FeedXml => parse_feed_xml(text, definition.feed_type).ok(),
+            });
+        let (name, version, metadata_source, metadata_diagnostic) = match parsed {
+            Some((name, version)) => (name, version, "runtime_feed_copy", None),
+            None => {
+                match metadata {
+                    Ok(_) => tracing::warn!(
+                        path = %metadata_path.display(),
+                        feed_type = definition.feed_type,
+                        "feed metadata parse failed"
+                    ),
+                    Err(error) => tracing::warn!(
+                        %error,
+                        path = %metadata_path.display(),
+                        feed_type = definition.feed_type,
+                        "feed metadata read failed"
+                    ),
+                }
+                (
+                    String::new(),
+                    String::new(),
+                    "unavailable",
+                    Some("Feed metadata is unavailable or invalid."),
+                )
+            }
         };
         let lock_path = lock_root.join(definition.lock_rel);
         let sync_state = feed_sync_state(&lock_path);
-        items.push(feed_item(definition.feed_type, name, version, sync_state));
+        items.push(feed_item(
+            definition.feed_type,
+            name,
+            version,
+            sync_state,
+            metadata_source,
+            metadata_diagnostic,
+        ));
     }
-    Ok(FeedsResponse { items })
+    FeedsResponse { items }
 }
 
 fn env_string(name: &str) -> Option<String> {
@@ -144,6 +186,8 @@ fn feed_item(
     name: String,
     version: String,
     sync_state: FeedSyncState,
+    metadata_source: &'static str,
+    metadata_diagnostic: Option<&'static str>,
 ) -> FeedItem {
     match sync_state {
         FeedSyncState::UpToDate => FeedItem {
@@ -153,7 +197,8 @@ fn feed_item(
             status: "Up-to-date...".to_string(),
             sync_status: "up_to_date".to_string(),
             currently_syncing: None,
-            metadata_source: "runtime_feed_copy",
+            sync_not_available: metadata_diagnostic.map(|error| FeedSyncNotAvailable { error }),
+            metadata_source,
             status_source: "runtime_feed_lock",
         },
         FeedSyncState::Syncing { timestamp } => FeedItem {
@@ -163,17 +208,21 @@ fn feed_item(
             status: "Update in progress...".to_string(),
             sync_status: "syncing".to_string(),
             currently_syncing: Some(FeedCurrentlySyncing { timestamp }),
-            metadata_source: "runtime_feed_copy",
+            sync_not_available: metadata_diagnostic.map(|error| FeedSyncNotAvailable { error }),
+            metadata_source,
             status_source: "runtime_feed_lock",
         },
-        FeedSyncState::Unknown => FeedItem {
+        FeedSyncState::Unknown { diagnostic } => FeedItem {
             name,
             version,
             feed_type: feed_type.to_string(),
             status: "Unknown".to_string(),
             sync_status: "unknown".to_string(),
             currently_syncing: None,
-            metadata_source: "runtime_feed_copy",
+            sync_not_available: metadata_diagnostic
+                .or(diagnostic)
+                .map(|error| FeedSyncNotAvailable { error }),
+            metadata_source,
             status_source: "unavailable",
         },
     }
@@ -250,7 +299,13 @@ fn feed_sync_state(lock_path: &FsPath) -> FeedSyncState {
         Ok(file) => file,
         Err(error) => {
             tracing::debug!(%error, path = %lock_path.display(), "feed lock file is unavailable");
-            return FeedSyncState::Unknown;
+            // Feed-update locks are ephemeral. Their absence means there is no
+            // observed active update, as in the inherited get_feeds behavior;
+            // other open failures are operator-visible diagnostics.
+            return FeedSyncState::Unknown {
+                diagnostic: (error.kind() != ErrorKind::NotFound)
+                    .then_some("Feed synchronization status is unavailable."),
+            };
         }
     };
     match try_shared_flock(&file) {
@@ -263,7 +318,9 @@ fn feed_sync_state(lock_path: &FsPath) -> FeedSyncState {
         },
         Err(error) => {
             tracing::warn!(%error, path = %lock_path.display(), "feed lock status read failed");
-            FeedSyncState::Unknown
+            FeedSyncState::Unknown {
+                diagnostic: Some("Feed synchronization status is unavailable."),
+            }
         }
     }
 }
@@ -336,6 +393,115 @@ FEED_COMMIT = "not part of the public contract";
             assert!(!definition.metadata_rel.contains(".."));
             assert!(!definition.lock_rel.starts_with('/'));
             assert!(!definition.lock_rel.contains(".."));
+        }
+    }
+
+    #[test]
+    fn feed_inventory_degrades_each_missing_metadata_source_independently() {
+        use std::{
+            fs, process,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = env::temp_dir().join(format!("yafvs-feed-inventory-{}-{nonce}", process::id()));
+        let metadata_root = root.join("metadata");
+        let lock_root = root.join("locks");
+
+        for definition in FEED_DEFINITIONS {
+            let path = metadata_root.join(definition.metadata_rel);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let metadata = match definition.format {
+                FeedMetadataFormat::PluginInfo => {
+                    "PLUGIN_SET = \"202601010000\";\nPLUGIN_FEED = \"Test NVT Feed\";\n"
+                        .to_string()
+                }
+                FeedMetadataFormat::FeedXml => format!(
+                    "<feed><type>{}</type><name>Test {} Feed</name><version>202601010000</version></feed>",
+                    definition.feed_type, definition.feed_type
+                ),
+            };
+            fs::write(path, metadata).unwrap();
+        }
+        fs::write(
+            metadata_root.join(FEED_DEFINITIONS[1].metadata_rel),
+            "<feed>invalid SCAP metadata</feed>",
+        )
+        .unwrap();
+
+        let response = feed_inventory_from_roots(&metadata_root, &lock_root);
+        assert_eq!(response.items.len(), FEED_DEFINITIONS.len());
+        for item in response.items {
+            if item.feed_type == "SCAP" {
+                assert!(item.name.is_empty());
+                assert!(item.version.is_empty());
+                assert_eq!(item.metadata_source, "unavailable");
+                assert_eq!(
+                    item.sync_not_available.map(|value| value.error),
+                    Some("Feed metadata is unavailable or invalid.")
+                );
+            } else {
+                assert!(!item.name.is_empty());
+                assert_eq!(item.version, "202601010000");
+                assert_eq!(item.metadata_source, "runtime_feed_copy");
+                assert!(item.sync_not_available.is_none());
+            }
+        }
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn absent_ephemeral_lock_does_not_report_a_sync_failure() {
+        let missing_lock =
+            env::temp_dir().join(format!("yafvs-absent-feed-lock-{}", std::process::id()));
+        let state = feed_sync_state(&missing_lock);
+        assert!(matches!(state, FeedSyncState::Unknown { diagnostic: None }));
+        let item = feed_item(
+            "NVT",
+            "Test Feed".to_string(),
+            "202601010000".to_string(),
+            state,
+            "runtime_feed_copy",
+            None,
+        );
+        assert_eq!(item.status_source, "unavailable");
+        assert!(item.sync_not_available.is_none());
+    }
+
+    #[test]
+    fn inherited_get_feeds_transport_is_absent_after_native_cutover() {
+        const GSA_CAPABILITIES: &str =
+            include_str!("../../../components/gsa/src/gmp/capabilities/capabilities.ts");
+        const GSA_MENU: &str =
+            include_str!("../../../components/gsa/src/web/components/menu/Menu.tsx");
+        const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+        const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
+        const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
+        const GVMD_GMP: &str = include_str!("../../../components/gvmd/src/gmp.c");
+        const GVMD_COMMANDS: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
+        const GVMD_SCHEMA: &str =
+            include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
+
+        for (source, retired) in [
+            (GSA_CAPABILITIES, "'get_feeds'"),
+            (GSA_MENU, "mayOp('get_feeds')"),
+            (GSAD_GMP, "get_feeds_gmp"),
+            (GSAD_GMP, "ELSE (get_feeds)"),
+            (GSAD_GMP_HEADER, "get_feeds_gmp"),
+            (GSAD_VALIDATOR, "|(get_feeds)"),
+            (GVMD_GMP, "handle_get_feeds"),
+            (GVMD_GMP, "CLIENT_GET_FEEDS"),
+            (GVMD_COMMANDS, "{\"GET_FEEDS\","),
+            (GVMD_SCHEMA, "<name>get_feeds</name>"),
+        ] {
+            assert!(
+                !source.contains(retired),
+                "retired get_feeds transport symbol remains: {retired}"
+            );
         }
     }
 }

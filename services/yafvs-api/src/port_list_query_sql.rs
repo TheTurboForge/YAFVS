@@ -60,7 +60,7 @@ pub(crate) fn port_list_collection_predicate_sql(
     predefined_parameter: &str,
 ) -> String {
     format!(
-        "({search_parameter} = ''\n             OR lower({id_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({name_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({comment_expression}) LIKE '%' || lower({search_parameter}) || '%')\n        AND ({predefined_parameter} = ''\n             OR ({predefined_parameter} = '1' AND {predefined_expression} = 1)\n             OR ({predefined_parameter} = '0' AND {predefined_expression} = 0))"
+        "({search_parameter} = ''\n             OR strpos(lower({id_expression}), lower({search_parameter})) > 0\n             OR strpos(lower({name_expression}), lower({search_parameter})) > 0\n             OR strpos(lower({comment_expression}), lower({search_parameter})) > 0)\n        AND ({predefined_parameter} = ''\n             OR ({predefined_parameter} = '1' AND {predefined_expression} = 1)\n             OR ({predefined_parameter} = '0' AND {predefined_expression} = 0))"
     )
 }
 

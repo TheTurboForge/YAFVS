@@ -67,7 +67,7 @@ pub(crate) fn credential_collection_predicate_sql(
     credential_type_parameter: &str,
 ) -> String {
     format!(
-        "({search_parameter} = ''\n             OR lower({id_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({name_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({comment_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({owner_name_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({credential_type_expression}) LIKE '%' || lower({search_parameter}) || '%')\n        AND ({credential_type_parameter} = '' OR {credential_type_expression} = {credential_type_parameter})"
+        "({search_parameter} = ''\n             OR strpos(lower({id_expression}), lower({search_parameter})) > 0\n             OR strpos(lower({name_expression}), lower({search_parameter})) > 0\n             OR strpos(lower({comment_expression}), lower({search_parameter})) > 0\n             OR strpos(lower({owner_name_expression}), lower({search_parameter})) > 0\n             OR strpos(lower({credential_type_expression}), lower({search_parameter})) > 0)\n        AND ({credential_type_parameter} = '' OR {credential_type_expression} = {credential_type_parameter})"
     )
 }
 

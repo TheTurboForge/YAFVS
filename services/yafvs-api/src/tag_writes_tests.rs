@@ -200,6 +200,8 @@ fn tag_scanner_selection_stays_native_bounded_and_lock_ordered() {
     );
     assert!(selector.contains(&selector_predicate));
     assert!(collection.contains(&collection_predicate));
+    assert!(selector.contains("strpos(lower"));
+    assert!(!selector.contains("LIKE"));
     assert!(selector.contains("LIMIT $2"));
     assert!(selector.contains("FOR UPDATE OF s"));
 }
@@ -227,10 +229,11 @@ fn tag_port_list_selection_stays_native_parameterized_and_pre_mutation() {
     let selector = crate::port_list_query_sql::tag_port_list_selection_sql();
     assert!(selector.contains("LIMIT $3"));
     let collection = crate::port_list_query_sql::port_list_assets_sql("name ASC");
-    for fragment in ["lower", "LIKE '%'", "predefined"] {
+    for fragment in ["lower", "strpos", "predefined"] {
         assert!(selector.contains(fragment));
         assert!(collection.contains(fragment));
     }
+    assert!(!selector.contains("LIKE"));
     assert!(selector.contains("$1") && selector.contains("$2"));
 }
 
@@ -276,6 +279,8 @@ fn tag_credential_selection_uses_row_locks_before_tag_tables() {
     );
     assert!(selector.contains(&selector_predicate));
     assert!(collection.contains(&collection_predicate));
+    assert!(selector.contains("strpos(lower"));
+    assert!(!selector.contains("LIKE"));
     assert!(selector.contains("LIMIT $3"));
     assert!(selector.contains("FOR UPDATE OF c"));
     assert!(selector.contains("$1") && selector.contains("$2"));

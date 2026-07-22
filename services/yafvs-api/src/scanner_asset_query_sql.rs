@@ -51,7 +51,7 @@ pub(crate) fn scanner_collection_predicate_sql(
     search_parameter: &str,
 ) -> String {
     format!(
-        "({search_parameter} = ''\n             OR lower({id_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({name_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({comment_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({host_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower(coalesce({credential_name_expression}, '')) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower(coalesce({relay_host_expression}, '')) LIKE '%' || lower({search_parameter}) || '%')"
+        "({search_parameter} = ''\n             OR strpos(lower({id_expression}), lower({search_parameter})) > 0\n             OR strpos(lower({name_expression}), lower({search_parameter})) > 0\n             OR strpos(lower({comment_expression}), lower({search_parameter})) > 0\n             OR strpos(lower({host_expression}), lower({search_parameter})) > 0\n             OR strpos(lower(coalesce({credential_name_expression}, '')), lower({search_parameter})) > 0\n             OR strpos(lower(coalesce({relay_host_expression}, '')), lower({search_parameter})) > 0)"
     )
 }
 

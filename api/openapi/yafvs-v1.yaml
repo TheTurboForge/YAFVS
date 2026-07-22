@@ -3015,7 +3015,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-and-resource-assignment-write
       summary: Atomically update tag metadata and optional resource assignments
-      description: Updates tag metadata and resource assignments. Explicit IDs and typed collection selections use a native database transaction. A resource_type change is accepted only together with resources.action=set and explicit IDs, so old-type assignments are cleared atomically before the new selection is applied. The transitional raw-filter compatibility field has no remaining first-party browser caller and remains on gvmd's compatibility path pending removal.
+      description: Updates tag metadata and resource assignments. Explicit IDs and typed collection selections use a native database transaction. A resource_type change is accepted only together with resources.action=set and explicit IDs, so old-type assignments are cleared atomically before the new selection is applied. Transitional raw filter expressions have no remaining first-party browser caller and remain on gvmd's compatibility path pending removal.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:

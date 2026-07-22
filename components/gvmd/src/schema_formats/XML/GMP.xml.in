@@ -17224,50 +17224,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       </response>
     </example>
   </command>
-  <command>
-    <name>verify_scanner</name>
-    <summary>Verify a scanner</summary>
-    <description>
-      <p>
-        The client uses the verify_scanner command to verify whether it is
-        possible to connect to an existing scanner.
-      </p>
-    </description>
-    <pattern>
-      <attrib>
-        <name>scanner_id</name>
-        <type>uuid</type>
-        <required>1</required>
-      </attrib>
-    </pattern>
-    <response>
-      <pattern>
-        <attrib>
-          <name>status</name>
-          <type>status</type>
-          <required>1</required>
-        </attrib>
-        <attrib>
-          <name>status_text</name>
-          <type>text</type>
-          <required>1</required>
-        </attrib>
-      </pattern>
-    </response>
-    <example>
-      <summary>Verify a scanner</summary>
-      <request>
-        <verify_scanner scanner_id="6acd0832-df90-11e4-b9d5-28d24461215b">
-        </verify_scanner>
-      </request>
-      <response>
-        <verify_scanner_response status="200" status_text="OK">
-          <version>OTP/2.0</version>
-        </verify_scanner_response>
-      </response>
-    </example>
-  </command>
-
   <!-- Compatibility changes between versions. -->
   <change>
     <command>GET_RESULTS</command>

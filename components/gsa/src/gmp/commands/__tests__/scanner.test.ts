@@ -6,11 +6,7 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import ScannerCommand from 'gmp/commands/scanner';
-import {
-  createHttp,
-  createActionResultResponse,
-  createEntityResponse,
-} from 'gmp/commands/testing';
+import {createHttp, createEntityResponse} from 'gmp/commands/testing';
 import Scanner, {OPENVASD_SCANNER_TYPE} from 'gmp/models/scanner';
 import {createSession} from 'gmp/testing';
 
@@ -422,21 +418,13 @@ describe('ScannerCommand tests', () => {
     expect('verified' in result.data && result.data.verified).toBe(true);
   });
 
-  test('should retain GMP scanner verification without native API', async () => {
-    const response = createActionResultResponse({
-      action: 'verify_scanner',
-      id: '123',
-      message: 'OK',
-    });
-    const fakeHttp = createHttp(response);
+  test('should fail closed when native scanner verification is unavailable', () => {
+    const fakeHttp = createHttp();
     const cmd = new ScannerCommand(fakeHttp);
-    await cmd.verify({id: '123'});
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'verify_scanner',
-        scanner_id: '123',
-      },
-    });
+    expect(() => cmd.verify({id: '123'})).toThrow(
+      'Native scanner API is required for this scanner operation',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should fetch scanner detail through native API without details by default', async () => {

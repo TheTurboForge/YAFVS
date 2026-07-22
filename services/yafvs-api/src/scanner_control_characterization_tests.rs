@@ -119,20 +119,23 @@ fn inherited_verify_scanner_can_contact_osp_scanners_and_maps_other_types() {
 }
 
 #[test]
-fn retired_browser_gmp_scanner_mutations_stay_absent_while_control_compatibility_remains() {
+fn retired_browser_gmp_scanner_commands_stay_absent_while_cli_control_remains() {
     for retired in [
         "create_scanner_gmp",
         "save_scanner_gmp",
         "delete_scanner_gmp",
+        "verify_scanner_gmp",
         "ELSE (create_scanner)",
         "ELSE (save_scanner)",
         "ELSE (delete_scanner)",
         "CLIENT_CREATE_SCANNER",
         "CLIENT_MODIFY_SCANNER",
         "CLIENT_DELETE_SCANNER",
+        "CLIENT_VERIFY_SCANNER",
         "<name>create_scanner</name>",
         "<name>modify_scanner</name>",
         "<name>delete_scanner</name>",
+        "<name>verify_scanner</name>",
     ] {
         assert!(
             !GSAD_GMP_C.contains(retired),
@@ -147,22 +150,29 @@ fn retired_browser_gmp_scanner_mutations_stay_absent_while_control_compatibility
             "GMP schema still exposes {retired}"
         );
     }
-    for retired in ["|(create_scanner)", "|(save_scanner)", "|(delete_scanner)"] {
+    for retired in [
+        "|(create_scanner)",
+        "|(save_scanner)",
+        "|(delete_scanner)",
+        "|(verify_scanner)",
+    ] {
         assert!(
             !GSAD_VALIDATOR_C.contains(retired),
             "validator still accepts {retired}"
         );
     }
-    for retired in ["super.clone({id})", "super.delete({id})"] {
+    for retired in [
+        "super.clone({id})",
+        "super.delete({id})",
+        "cmd: 'verify_scanner'",
+    ] {
         assert!(
             !GSA_SCANNER_TS.contains(retired),
             "GSA scanner command still has inherited fallback {retired}"
         );
     }
 
-    let verify = inherited_function(GSAD_GMP_C, "verify_scanner_gmp");
-    assert!(verify.contains(r#"<verify_scanner scanner_id=\"%s\"/>"#));
-    for command in ["|(get_scanner)", "|(get_scanners)", "|(verify_scanner)"] {
+    for command in ["|(get_scanner)", "|(get_scanners)"] {
         assert!(
             GSAD_VALIDATOR_C.contains(command),
             "validator missing {command}"
@@ -171,8 +181,6 @@ fn retired_browser_gmp_scanner_mutations_stay_absent_while_control_compatibility
     assert!(GSAD_GMP_C.contains("get_scanner_gmp"));
     assert!(GSAD_GMP_C.contains("export_scanner_gmp"));
     assert!(!GSAD_GMP_C.contains("get_trash_scanners_gmp"));
-    assert!(GMP_C.contains("CLIENT_VERIFY_SCANNER"));
-    assert!(GMP_SCHEMA.contains("<name>verify_scanner</name>"));
 }
 
 #[test]

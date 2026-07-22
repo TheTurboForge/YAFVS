@@ -122,7 +122,6 @@ gsad_init_validator ()
                      "|(sync_scap)"
                      "|(sync_cert)"
                      "|(sync_config)"
-                     "|(verify_scanner)"
                      "|(wizard_get))$");
 
   gvm_validator_add (validator, "action_message", "(?s)^.*$");

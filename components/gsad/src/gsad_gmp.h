@@ -163,10 +163,6 @@ char *
 export_scanners_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                      gsad_command_response_data_t *);
 char *
-verify_scanner_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                    gsad_command_response_data_t *);
-
-char *
 delete_schedule_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                      gsad_command_response_data_t *);
 char *

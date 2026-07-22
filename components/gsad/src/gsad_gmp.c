@@ -5977,71 +5977,6 @@ export_scanners_gmp (gvm_connection_t *connection,
                       response_data);
 }
 
-/**
- * @brief Verify scanner, get scanners, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-verify_scanner_gmp (gvm_connection_t *connection,
-                    gsad_credentials_t *credentials, params_t *params,
-                    gsad_command_response_data_t *response_data)
-{
-  gchar *html;
-  const char *scanner_id;
-  int ret;
-  entity_t entity;
-
-  scanner_id = params_value (params, "scanner_id");
-  CHECK_VARIABLE_INVALID (scanner_id, "Verify Scanner");
-
-  ret = gmpf (connection, credentials, NULL, &entity, response_data,
-              "<verify_scanner scanner_id=\"%s\"/>", scanner_id);
-
-  switch (ret)
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while verifying a scanner. "
-        "The scanner was not verified. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while verifying a scanner. "
-        "It is unclear whether the scanner was verified or not. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while verifying a scanner. "
-        "It is unclear whether the scanner was verified or not. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    }
-
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Verify Scanner", response_data);
-  free_entity (entity);
-  return html;
-}
-
 /* Schedules. */
 
 /**
@@ -8750,7 +8685,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (sync_scap)
   ELSE (sync_cert)
   ELSE (test_alert)
-  ELSE (verify_scanner)
   else
   {
     gsad_command_response_data_set_status_code (response_data,

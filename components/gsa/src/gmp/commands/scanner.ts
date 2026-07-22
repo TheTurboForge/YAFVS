@@ -63,7 +63,9 @@ const SCANNER_METADATA_SAVE_KEYS = new Set(['id', 'name', 'comment']);
 
 const requireNativeScannerApi = (http: Http) => {
   if (!canUseNativeApi(http)) {
-    throw new Error('Native scanner API is required for scanner mutation');
+    throw new Error(
+      'Native scanner API is required for this scanner operation',
+    );
   }
 };
 
@@ -174,13 +176,8 @@ class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
   }
 
   verify({id}: ScannerCommandVerifyParams) {
-    if (canUseNativeApi(this.http)) {
-      return verifyNativeScanner(this.http, id);
-    }
-    return this.action({
-      cmd: 'verify_scanner',
-      id,
-    });
+    requireNativeScannerApi(this.http);
+    return verifyNativeScanner(this.http, id);
   }
 }
 

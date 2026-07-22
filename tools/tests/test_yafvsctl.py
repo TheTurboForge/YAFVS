@@ -1784,7 +1784,7 @@ class YAFVSCtlTests(unittest.TestCase):
         ):
             self.assertIn(marker, native_write_source)
 
-    def test_legacy_scanner_mutation_commands_are_removed_full_stack(self):
+    def test_legacy_scanner_mutation_and_verify_commands_are_removed_full_stack(self):
         root = Path(__file__).resolve().parents[2]
         retired_sources = {
             "gsa capabilities": root / "components" / "gsa" / "src" / "gmp" / "capabilities" / "capabilities.ts",
@@ -1798,15 +1798,18 @@ class YAFVSCtlTests(unittest.TestCase):
             "create_scanner_gmp",
             "save_scanner_gmp",
             "delete_scanner_gmp",
+            "verify_scanner_gmp",
             "ELSE (create_scanner)",
             "ELSE (save_scanner)",
             "ELSE (delete_scanner)",
             "CLIENT_CREATE_SCANNER",
             "CLIENT_MODIFY_SCANNER",
             "CLIENT_DELETE_SCANNER",
+            "CLIENT_VERIFY_SCANNER",
             "<name>create_scanner</name>",
             "<name>modify_scanner</name>",
             "<name>delete_scanner</name>",
+            "<name>verify_scanner</name>",
         )
 
         for label, path in retired_sources.items():
@@ -1822,6 +1825,7 @@ class YAFVSCtlTests(unittest.TestCase):
 
         self.assertNotIn("super.clone({id})", gsa_scanner)
         self.assertNotIn("super.delete({id})", gsa_scanner)
+        self.assertNotIn("cmd: 'verify_scanner'", gsa_scanner)
         capabilities = (root / "components" / "gsa" / "src" / "gmp" / "capabilities" / "capabilities.ts").read_text(encoding="utf-8")
         for retained in ("'create_scanner'", "'modify_scanner'", "'delete_scanner'"):
             self.assertIn(retained, capabilities)
@@ -1866,9 +1870,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("get_scanner_gmp", gsad_source)
         self.assertIn("export_scanner_gmp", gsad_source)
         self.assertNotIn("get_trash_scanners_gmp", gsad_source)
-        self.assertIn("verify_scanner_gmp", gsad_source)
         self.assertIn("CLIENT_GET_SCANNERS", gvmd_source)
-        self.assertIn("CLIENT_VERIFY_SCANNER", gvmd_source)
         for marker in (
             "pub(crate) async fn create_scanner",
             "pub(crate) async fn clone_scanner",

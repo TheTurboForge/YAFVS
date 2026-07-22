@@ -1816,27 +1816,6 @@ test_alert_data_reset (test_alert_data_t *data)
 
 
 /**
- * @brief Command data for the verify_scanner command.
- */
-typedef struct
-{
-  char *scanner_id;   ///< ID of scanner to verify.
-} verify_scanner_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-verify_scanner_data_reset (verify_scanner_data_t *data)
-{
-  g_free (data->scanner_id);
-
-  memset (data, 0, sizeof (verify_scanner_data_t));
-}
-
-/**
  * @brief Command data, as passed between GMP parser callbacks.
  */
 typedef union
@@ -1887,7 +1866,6 @@ typedef union
   start_task_data_t start_task;                       ///< start_task
   stop_task_data_t stop_task;                         ///< stop_task
   test_alert_data_t test_alert;                       ///< test_alert
-  verify_scanner_data_t verify_scanner;               ///< verify_scanner
 } command_data_t;
 
 /**
@@ -2181,12 +2159,6 @@ static test_alert_data_t *test_alert_data
 
 
 /**
- * @brief Parser callback data for VERIFY_SCANNER.
- */
-static verify_scanner_data_t *verify_scanner_data
- = (verify_scanner_data_t*) &(command_data.verify_scanner);
-
-/**
  * @brief Buffer of output to the client.
  */
 char to_client[TO_CLIENT_BUFFER_SIZE];
@@ -2422,7 +2394,6 @@ typedef enum
   CLIENT_START_TASK,
   CLIENT_STOP_TASK,
   CLIENT_TEST_ALERT,
-  CLIENT_VERIFY_SCANNER,
 } client_state_t;
 
 /**
@@ -3339,12 +3310,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               "alert_id",
                               &test_alert_data->alert_id);
             set_client_state (CLIENT_TEST_ALERT);
-          }
-        else if (strcasecmp ("VERIFY_SCANNER", element_name) == 0)
-          {
-            append_attribute (attribute_names, attribute_values, "scanner_id",
-                              &verify_scanner_data->scanner_id);
-            set_client_state (CLIENT_VERIFY_SCANNER);
           }
         else
           {
@@ -15770,60 +15735,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
            (XML_ERROR_SYNTAX ("stop_task",
                               "A task_id attribute is required"));
         stop_task_data_reset (stop_task_data);
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
-
-      case CLIENT_VERIFY_SCANNER:
-        if (verify_scanner_data->scanner_id)
-          {
-            char *version = NULL;
-            switch (verify_scanner (verify_scanner_data->scanner_id, &version))
-              {
-                case 0:
-                  SENDF_TO_CLIENT_OR_FAIL
-                   ("<verify_scanner_response status=\"" STATUS_OK "\""
-                    " status_text=\"" STATUS_OK_TEXT "\">"
-                    "<version>%s</version>"
-                    "</verify_scanner_response>", version);
-                  break;
-                case 1:
-                  if (send_find_error_to_client
-                       ("verify_scanner", "scanner",
-                        verify_scanner_data->scanner_id, gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  break;
-                case 2:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_UNAVAILABLE ("verify_scanner",
-                                           "Service unavailable"));
-                  break;
-                case 3:
-                  SENDF_TO_CLIENT_OR_FAIL
-                   ("<verify_scanner_response status=\"%s\""
-                    " status_text=\"Failed to authenticate\">"
-                    "<version>%s</version>"
-                    "</verify_scanner_response>",
-                    STATUS_SERVICE_UNAVAILABLE,
-                    version);
-                  break;
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("verify_scanner", "Permission denied"));
-                  break;
-                default:
-                  SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR
-                                           ("verify_scanner"));
-                  break;
-              }
-          }
-        else
-          SEND_TO_CLIENT_OR_FAIL
-           (XML_ERROR_SYNTAX ("verify_scanner",
-                              "A scanner_id attribute is required"));
-        verify_scanner_data_reset (verify_scanner_data);
         set_client_state (CLIENT_AUTHENTIC);
         break;
 

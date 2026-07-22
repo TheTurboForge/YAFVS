@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
+// YAFVS-Derivation: original
 
 const CARGO_MANIFEST: &str = include_str!("../Cargo.toml");
 const API_DOCKERFILE: &str = include_str!("../../../docker/yafvs-api/Dockerfile");

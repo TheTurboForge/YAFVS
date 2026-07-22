@@ -92,6 +92,18 @@ class CredentialCommand extends EntityCommand<
     super(http, 'credential', Credential);
   }
 
+  async clone({id}: EntityCommandParams) {
+    return await this.entityAction(
+      {
+        cmd: 'clone',
+        resource_type: 'credential',
+      },
+      {
+        extraParams: {id},
+      },
+    );
+  }
+
   async export({id}: EntityCommandParams) {
     return await exportNativeCredentialMetadata(this.http, id);
   }

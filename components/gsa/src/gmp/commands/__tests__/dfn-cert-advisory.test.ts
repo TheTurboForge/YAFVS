@@ -98,23 +98,6 @@ describe('DfnCertAdvisoryCommand tests', () => {
     expect(result.data.advisoryLink).toEqual('https://example.test/native');
   });
 
-  test('should allow to clone a dfn cert advisory', async () => {
-    const response = createActionResultResponse({id: '456'});
-    const fakeHttp = createHttp(response);
-    const cmd = new DfnCertAdvisoryCommand(fakeHttp);
-    const result = await cmd.clone({id: '123'});
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'clone',
-        details: '1',
-        info_type: 'dfn_cert_adv',
-        id: '123',
-        resource_type: 'info',
-      },
-    });
-    expect(result.data.id).toEqual('456');
-  });
-
   test('should allow to delete a dfn cert advisory', async () => {
     const response = createActionResultResponse({id: '123'});
     const fakeHttp = createHttp(response);

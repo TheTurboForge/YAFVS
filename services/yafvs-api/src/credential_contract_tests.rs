@@ -13,6 +13,9 @@ use crate::{
 };
 
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
+const GSA_CREDENTIAL_COMMAND: &str =
+    include_str!("../../../components/gsa/src/gmp/commands/credential.ts");
+const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 
 fn openapi_path_block(path: &str) -> String {
     let marker = format!("  {path}:");
@@ -31,6 +34,25 @@ fn openapi_path_block(path: &str) -> String {
             }
         })
         .unwrap_or_else(|| tail.to_string())
+}
+
+#[test]
+fn credential_clone_keeps_a_fixed_credential_only_gmp_payload() {
+    let clone_start = GSAD_GMP_C
+        .find("\nclone_gmp (")
+        .expect("clone_gmp function must exist");
+    let clone_tail = &GSAD_GMP_C[clone_start..];
+    let clone_end = clone_tail.find("\n/**").unwrap_or(clone_tail.len());
+    let clone_gmp = &clone_tail[..clone_end];
+
+    assert!(GSA_CREDENTIAL_COMMAND.contains("async clone({id}: EntityCommandParams)"));
+    assert!(GSA_CREDENTIAL_COMMAND.contains("cmd: 'clone'"));
+    assert!(GSA_CREDENTIAL_COMMAND.contains("resource_type: 'credential'"));
+    assert!(clone_gmp.contains("strcmp (type, \"credential\")"));
+    assert!(clone_gmp.contains("<create_credential><copy>%s</copy>"));
+    assert!(!clone_gmp.contains("<create_%s>"));
+    assert!(!clone_gmp.contains("<alterable>1</alterable>"));
+    assert!(!clone_gmp.contains("params_value (params, \"alterable\")"));
 }
 
 #[test]

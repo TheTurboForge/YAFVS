@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -135,28 +136,6 @@ describe('EntityCommand tests', () => {
     expect(cmdResponse).toBeInstanceOf(Response);
     expect(cmdResponse.data).toBeInstanceOf(Foo);
     expect(cmdResponse.data.id).toEqual('123');
-  });
-
-  test('should clone an entity', async () => {
-    const response = createActionResultResponse({
-      action: 'Clone Foo',
-      id: '456',
-      message: 'Cloned Foo with id 123',
-    });
-    const fakeHttp = createHttp(response);
-
-    const cmd = new TestEntityCommand(fakeHttp);
-    const cmdResponse = await cmd.clone({id: '123'});
-
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'clone',
-        id: '123',
-        resource_type: 'foo',
-      },
-    });
-    expect(cmdResponse).toBeInstanceOf(Response);
-    expect(cmdResponse.data).toEqual({id: '456'});
   });
 
   test('should delete an entity', async () => {

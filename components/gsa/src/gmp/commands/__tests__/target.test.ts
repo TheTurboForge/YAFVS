@@ -231,6 +231,16 @@ describe('TargetCommand tests', () => {
     expect(result.data.id).toEqual('native-target-clone-id');
   });
 
+  test('should reject target clone without native API and never request GMP', async () => {
+    const fakeHttp = createHttp(createActionResultResponse());
+    const cmd = new TargetCommand(fakeHttp);
+
+    await expect(cmd.clone({id: 'target-id'})).rejects.toThrow(
+      'Native target API is required for target command',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should not fall back to GMP when native target clone fails', async () => {
     const response = createActionResultResponse({
       action: 'Clone Target',

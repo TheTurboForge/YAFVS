@@ -3987,7 +3987,7 @@ create_target_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Clone a resource, envelope the result.
+ * @brief Clone a credential, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
  * @param[in]  credentials  Username and password for authentication.
@@ -4001,51 +4001,31 @@ clone_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
            params_t *params, gsad_command_response_data_t *response_data)
 {
   gchar *html;
-  const char *id, *type, *alterable;
+  const char *id, *type;
   entity_t entity;
 
   id = params_value (params, "id");
   type = params_value (params, "resource_type");
-  alterable = params_value (params, "alterable");
+  CHECK_VARIABLE_INVALID (id, "Clone Credential");
+  CHECK_VARIABLE_INVALID (type, "Clone Credential");
 
-  CHECK_VARIABLE_INVALID (id, "Clone");
-  CHECK_VARIABLE_INVALID (type, "Clone");
+  if (strcmp (type, "credential"))
+    return message_invalid (connection, credentials, params, response_data,
+                            "Only credentials can be cloned.",
+                            "Clone Credential");
 
-  /* Clone the resource. */
-
-  if (alterable && strcmp (alterable, "0"))
-    {
-      if (gvm_connection_sendf (connection,
-                                "<create_%s>"
-                                "<copy>%s</copy>"
-                                "<alterable>1</alterable>"
-                                "</create_%s>",
-                                type, id, type)
-          == -1)
-        {
-          gsad_command_response_data_set_status_code (
-            response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-          return gsad_http_create_gsad_message (
-            credentials,
-            "An internal error occurred while cloning a resource. "
-            "The resource was not cloned. "
-            "Diagnostics: Failure to send command to manager daemon.",
-            response_data);
-        }
-    }
-  else if (gvm_connection_sendf (connection,
-                                 "<create_%s>"
-                                 "<copy>%s</copy>"
-                                 "</create_%s>",
-                                 type, id, type)
+  if (gvm_connection_sendf (connection,
+                            "<create_credential><copy>%s</copy>"
+                            "</create_credential>",
+                            id)
            == -1)
     {
       gsad_command_response_data_set_status_code (
         response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
       return gsad_http_create_gsad_message (
         credentials,
-        "An internal error occurred while cloning a resource. "
-        "The resource was not cloned. "
+        "An internal error occurred while cloning a credential. "
+        "The credential was not cloned. "
         "Diagnostics: Failure to send command to manager daemon.",
         response_data);
     }
@@ -4057,15 +4037,15 @@ clone_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
         response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
       return gsad_http_create_gsad_message (
         credentials,
-        "An internal error occurred while cloning a resource. "
-        "It is unclear whether the resource has been cloned or not. "
+        "An internal error occurred while cloning a credential. "
+        "It is unclear whether the credential has been cloned or not. "
         "Diagnostics: Failure to read response from manager daemon.",
         response_data);
     }
 
   /* Cleanup, and return next page. */
-  html = response_from_entity (connection, credentials, params, entity, "Clone",
-                               response_data);
+  html = response_from_entity (connection, credentials, params, entity,
+                               "Clone Credential", response_data);
 
   free_entity (entity);
 

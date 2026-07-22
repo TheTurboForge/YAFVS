@@ -323,17 +323,11 @@ fn inherited_target_gmp_gsad_and_gsa_surfaces_still_carry_broad_control() {
             "GSA target command missing {required}"
         );
     }
-    for required in [
-        "const response = await this.entityAction(",
-        "cmd: 'clone'",
-        "resource_type: this.name",
-        "cmd: 'delete_' + this.name",
-    ] {
-        assert!(
-            GSA_ENTITY_COMMAND.contains(required),
-            "generic GSA target entity surface missing {required}"
-        );
-    }
+    assert!(!GSA_ENTITY_COMMAND.contains("async clone("));
+    assert!(GSA_TARGET_COMMAND.contains("const requireNativeTargetApi"));
+    assert!(GSA_TARGET_COMMAND.contains("requireNativeTargetApi(this.http)"));
+    assert!(GSA_TARGET_COMMAND.contains("cloneNativeTarget(this.http, id)"));
+    assert!(!GSA_TARGET_COMMAND.contains("super.clone({id})"));
 }
 
 #[test]

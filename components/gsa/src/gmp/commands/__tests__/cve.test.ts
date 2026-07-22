@@ -110,23 +110,6 @@ describe('CveCommand tests', () => {
     expect(result.data.id).toEqual('CVE-2026-10001');
   });
 
-  test('should allow to clone a cve', async () => {
-    const response = createActionResultResponse({id: '456'});
-    const fakeHttp = createHttp(response);
-    const cmd = new CveCommand(fakeHttp);
-    const result = await cmd.clone({id: '123'});
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'clone',
-        details: '1',
-        info_type: 'cve',
-        id: '123',
-        resource_type: 'info',
-      },
-    });
-    expect(result.data.id).toEqual('456');
-  });
-
   test('should allow to delete a cve', async () => {
     const response = createActionResultResponse({id: '123'});
     const fakeHttp = createHttp(response);

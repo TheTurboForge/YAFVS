@@ -22,6 +22,27 @@ afterEach(() => {
 });
 
 describe('CredentialCommand tests', () => {
+  test('should clone a credential through the credential-only GMP action', async () => {
+    const response = createActionResultResponse({
+      action: 'Clone Credential',
+      id: 'cloned-credential-id',
+      message: 'Credential cloned',
+    });
+    const fakeHttp = createHttp(response);
+    const cmd = new CredentialCommand(fakeHttp);
+
+    const result = await cmd.clone({id: 'credential-id'});
+
+    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+      data: {
+        cmd: 'clone',
+        id: 'credential-id',
+        resource_type: 'credential',
+      },
+    });
+    expect(result.data).toEqual({id: 'cloned-credential-id'});
+  });
+
   test('should export redacted credential metadata through native API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({

@@ -41,6 +41,12 @@ import {UNSET_VALUE} from 'web/utils/Render';
 export type TargetSource = 'manual' | 'file' | 'asset_hosts';
 export type TargetExcludeSource = 'manual' | 'file';
 
+const requireNativeTargetApi = (http: Http) => {
+  if (!canUseNativeApi(http)) {
+    throw new Error('Native target API is required for target command');
+  }
+};
+
 interface TargetCommandCreateParams {
   aliveTests?: AliveTest[];
   allowSimultaneousIPs?: boolean;
@@ -564,10 +570,8 @@ class TargetCommand extends EntityCommand<Target> {
   }
 
   async clone({id}: EntityCommandParams) {
-    if (canUseNativeApi(this.http)) {
-      return await cloneNativeTarget(this.http, id);
-    }
-    return super.clone({id});
+    requireNativeTargetApi(this.http);
+    return await cloneNativeTarget(this.http, id);
   }
 
   async delete({id}: EntityCommandParams) {

@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import EntitiesCommand from 'gmp/commands/entities';
-import type {HttpCommandInputParams} from 'gmp/commands/http';
+import HttpCommand, {type HttpCommandInputParams} from 'gmp/commands/http';
 import {
   filterFromCommandParams,
   nativeCollectionMeta,
@@ -13,7 +12,7 @@ import {
 } from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
-import Scanner from 'gmp/models/scanner';
+import type Scanner from 'gmp/models/scanner';
 import {
   fetchNativeScanners,
   exportNativeScannersMetadata,
@@ -25,13 +24,9 @@ const shouldExportAllByFilter = filter => {
   return Number.isFinite(rows) && rows < 0;
 };
 
-class ScannersCommand extends EntitiesCommand<Scanner> {
+class ScannersCommand extends HttpCommand {
   constructor(http: Http) {
-    super(http, 'scanner', Scanner);
-  }
-
-  getEntitiesResponse(root) {
-    return root.get_scanners.get_scanners_response;
+    super(http);
   }
 
   async get(params: HttpCommandInputParams = {}) {
@@ -80,9 +75,7 @@ class ScannersCommand extends EntitiesCommand<Scanner> {
 
   export(entities: Scanner[]) {
     return this.exportByIds(
-      entities.flatMap(entity =>
-        entity.id === undefined ? [] : [entity.id],
-      ),
+      entities.flatMap(entity => (entity.id === undefined ? [] : [entity.id])),
     );
   }
 

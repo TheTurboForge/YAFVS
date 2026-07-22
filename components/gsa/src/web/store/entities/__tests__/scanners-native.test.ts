@@ -5,7 +5,7 @@
  */
 
 import {afterEach, describe, expect, test, testing} from '@gsa/testing';
-import Credential, {type CredentialElement} from 'gmp/models/credential';
+import Credential from 'gmp/models/credential';
 import Filter from 'gmp/models/filter';
 import Scanner from 'gmp/models/scanner';
 import {fetchNativeScanner, fetchNativeScanners} from 'gmp/native-api/scanners';
@@ -295,37 +295,9 @@ describe('native API scanner detail', () => {
     expect(scanner?.isWritable()).toEqual(true);
   });
 
-  test('keeps inherited detail context for remote scanner certificate fields', async () => {
+  test('loads remote scanner detail with one native request and no command fallback', async () => {
     const id = '08b69003-5fc2-4037-a479-93b440211c73';
-    const calls: string[] = [];
-    const inherited = Scanner.fromElement({
-      _id: id,
-      name: 'Inherited Scanner',
-      comment: 'inherited comment',
-      type: 2,
-      host: 'inherited.example',
-      port: 9390,
-      writable: 1,
-      ca_pub: 'retained CA certificate',
-      credential: {
-        _id: '6d799e1f-a81b-4b33-8090-5d4b0ed8ec77',
-        name: 'Inherited credential',
-        certificate_info: {
-          issuer: 'Inherited Issuer',
-        },
-      } as CredentialElement,
-      tasks: {
-        task: [{_id: 'task-1', name: 'Retained task', usage_type: 'scan'}],
-      },
-      configs: {
-        config: [{_id: 'config-1', name: 'Retained config'}],
-      },
-      user_tags: {
-        tag: [{_id: 'tag-1', name: 'Retained tag', value: 'true'}],
-      },
-    });
     const fetchMock = testing.fn().mockImplementation(() => {
-      calls.push('native');
       return Promise.resolve({
         json: testing.fn().mockResolvedValue({
           id,
@@ -334,10 +306,26 @@ describe('native API scanner detail', () => {
           host: '127.0.0.1',
           port: 443,
           scanner_type: 5,
+          ca_pub: 'native CA certificate',
           credential: {
             id: '6d799e1f-a81b-4b33-8090-5d4b0ed8ec77',
             name: 'Native credential',
           },
+          tasks: [
+            {
+              id: 'task-1',
+              name: 'Native task',
+              usage_type: 'scan',
+            },
+          ],
+          user_tags: [
+            {
+              id: 'tag-1',
+              name: 'Native tag',
+              value: 'true',
+              comment: '',
+            },
+          ],
           created_at: '2026-06-18T18:00:00Z',
           modified_at: '2026-06-18T20:00:00Z',
         }),
@@ -349,10 +337,7 @@ describe('native API scanner detail', () => {
     const gmp = {
       ...createGmp({jwt: 'jwt-token'}),
       scanner: {
-        get: testing.fn().mockImplementation(() => {
-          calls.push('gmp');
-          return Promise.resolve({data: inherited});
-        }),
+        get: testing.fn().mockRejectedValue(new Error('fallback used')),
       },
     };
     const actions: Array<{type: string; data?: Scanner}> = [];
@@ -376,8 +361,8 @@ describe('native API scanner detail', () => {
       action => action.type === 'ENTITY_LOADING_SUCCESS',
     );
     const scanner = success?.data;
-    expect(calls).toEqual(['native', 'gmp']);
-    expect(gmp.scanner.get).toHaveBeenCalledWith({id});
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(gmp.scanner.get).not.toHaveBeenCalled();
     expect(scanner).toBeInstanceOf(Scanner);
     expect(scanner?.name).toEqual('Native Scanner');
     expect(scanner?.comment).toEqual('native comment');
@@ -386,13 +371,11 @@ describe('native API scanner detail', () => {
     expect(scanner?.scannerType).toEqual('5');
     expect(scanner?.credential).toBeInstanceOf(Credential);
     expect(scanner?.credential?.name).toEqual('Native credential');
-    expect(scanner?.credential?.certificateInfo?.issuer).toEqual(
-      'Inherited Issuer',
-    );
-    expect(scanner?.caPub?.certificate).toEqual('retained CA certificate');
-    expect(scanner?.tasks?.[0].name).toEqual('Retained task');
-    expect(scanner?.configs?.[0].name).toEqual('Retained config');
-    expect(scanner?.userTags?.[0].name).toEqual('Retained tag');
+    expect(scanner?.credential?.certificateInfo).toBeUndefined();
+    expect(scanner?.caPub?.certificate).toEqual('native CA certificate');
+    expect(scanner?.tasks?.[0].name).toEqual('Native task');
+    expect(scanner?.configs).toEqual([]);
+    expect(scanner?.userTags?.[0].name).toEqual('Native tag');
     expect(scanner?.isWritable()).toEqual(true);
   });
 });

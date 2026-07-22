@@ -6,8 +6,8 @@
 
 import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import ScannerCommand from 'gmp/commands/scanner';
-import {createHttp, createEntityResponse} from 'gmp/commands/testing';
-import Scanner, {OPENVASD_SCANNER_TYPE} from 'gmp/models/scanner';
+import {createHttp} from 'gmp/commands/testing';
+import {OPENVASD_SCANNER_TYPE} from 'gmp/models/scanner';
 import {createSession} from 'gmp/testing';
 
 afterEach(() => {
@@ -521,26 +521,25 @@ describe('ScannerCommand tests', () => {
     expect(result.data.scannerType).toEqual(OPENVASD_SCANNER_TYPE);
   });
 
-  test('should keep scanner detail with details on GMP when requested', async () => {
-    const response = createEntityResponse('scanner', {
-      id: '123',
-      name: 'Test Scanner',
-      type: OPENVASD_SCANNER_TYPE,
+  test('should keep explicit details requests on the native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: '123',
+        name: 'Test Scanner',
+        scanner_type: Number(OPENVASD_SCANNER_TYPE),
+      }),
+      ok: true,
+      status: 200,
     });
-    const fetchMock = testing.fn();
     testing.stubGlobal('fetch', fetchMock);
     const fakeHttp = createNativeHttp();
-    fakeHttp.request = testing.fn().mockResolvedValue(response);
     const cmd = new ScannerCommand(fakeHttp);
     const result = await cmd.get({id: '123'}, {details: true});
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_scanner',
-        scanner_id: '123',
-        details: '1',
-      },
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith('api/v1/scanners/123', {
+      token: 'test-token',
     });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(result.data.id).toEqual('123');
     expect(result.data.name).toEqual('Test Scanner');
     expect(result.data.scannerType).toEqual(OPENVASD_SCANNER_TYPE);
@@ -570,28 +569,12 @@ describe('ScannerCommand tests', () => {
     expect(result.data.scannerType).toEqual(OPENVASD_SCANNER_TYPE);
   });
 
-  test('should keep explicit no-detail scanner fallback on GMP when native API is not available', async () => {
-    const response = createEntityResponse('scanner', {
-      id: '123',
-      name: 'Test Scanner',
-      type: OPENVASD_SCANNER_TYPE,
-    });
-    const fakeHttp = createHttp(response);
+  test('should fail closed when native scanner detail is unavailable', async () => {
+    const fakeHttp = createHttp();
     const cmd = new ScannerCommand(fakeHttp);
-    const result = await cmd.get({id: '123'}, {details: false});
-    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
-      args: {
-        cmd: 'get_scanner',
-        scanner_id: '123',
-        details: '0',
-      },
-    });
-    expect(result.data).toEqual(
-      new Scanner({
-        id: '123',
-        name: 'Test Scanner',
-        scannerType: OPENVASD_SCANNER_TYPE,
-      }),
+    await expect(cmd.get({id: '123'}, {details: false})).rejects.toThrow(
+      'Native scanner API is required for this scanner operation',
     );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 });

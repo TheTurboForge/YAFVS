@@ -4,17 +4,12 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import EntityCommand, {type EntityCommandParams} from 'gmp/commands/entity';
+import type {EntityCommandParams} from 'gmp/commands/entity';
+import HttpCommand from 'gmp/commands/http';
 import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
-import {type XmlMeta} from 'gmp/http/transform/fast-xml';
-import {filterString} from 'gmp/models/filter/utils';
-import {type Element} from 'gmp/models/model';
-import Scanner, {
-  type ScannerElement,
-  type ScannerType,
-} from 'gmp/models/scanner';
+import {type ScannerType} from 'gmp/models/scanner';
 import {
   exportNativeScannerMetadata,
   fetchNativeScanner,
@@ -54,11 +49,6 @@ interface ScannerCommandVerifyParams {
   id: string;
 }
 
-const nativeScannerDetailSupportsFilter = (filter?: string): boolean => {
-  const value = filterString(filter);
-  return filter === undefined || value === 'tasks=1' || value === 'alerts=1';
-};
-
 const SCANNER_METADATA_SAVE_KEYS = new Set(['id', 'name', 'comment']);
 
 const requireNativeScannerApi = (http: Http) => {
@@ -81,9 +71,9 @@ const isScannerMetadataOnlySave = (
   );
 };
 
-class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
+class ScannerCommand extends HttpCommand {
   constructor(http: Http) {
-    super(http, 'scanner', Scanner);
+    super(http);
   }
 
   async clone({id}: EntityCommandParams) {
@@ -96,32 +86,17 @@ class ScannerCommand extends EntityCommand<Scanner, ScannerElement> {
     await deleteNativeScanner(this.http, id);
   }
 
-  getElementFromRoot(root: Element): ScannerElement {
-    // @ts-expect-error
-    return root.get_scanner.get_scanners_response.scanner;
-  }
-
   async get(
     {id}: EntityCommandParams,
-    {filter, details, ...options}: {filter?: string; details?: boolean} = {},
-  ): Promise<Response<Scanner, XmlMeta>> {
-    if (
-      details !== true &&
-      canUseNativeApi(this.http) &&
-      nativeScannerDetailSupportsFilter(filter)
-    ) {
-      const nativeResponse = await fetchNativeScanner(this.http, id);
-      return new Response(nativeResponse.scanner);
-    }
-
-    const response = await this.httpGetWithTransform(
-      {id, filter, details: details ? '1' : '0'},
-      options,
-    );
-    return this.transformResponseToModel(response);
+    _options: {filter?: string; details?: boolean} = {},
+  ) {
+    requireNativeScannerApi(this.http);
+    const nativeResponse = await fetchNativeScanner(this.http, id);
+    return new Response(nativeResponse.scanner);
   }
 
   async export({id}: EntityCommandParams) {
+    requireNativeScannerApi(this.http);
     return await exportNativeScannerMetadata(this.http, id);
   }
 

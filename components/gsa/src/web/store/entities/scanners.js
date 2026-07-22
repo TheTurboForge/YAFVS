@@ -4,65 +4,20 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import {createAll} from 'web/store/entities/utils/main';
 import {
   fetchNativeScanner,
   fetchNativeScanners,
   nativeScannersQueryFromFilter,
 } from 'gmp/native-api/scanners';
-import {CVE_SCANNER_TYPE} from 'gmp/models/scanner';
+import {createAll} from 'web/store/entities/utils/main';
 
 const {
   loadAllEntities,
-  loadEntities,
-  loadEntity,
   reducer,
   selector,
   entitiesLoadingActions,
   entityLoadingActions,
 } = createAll('scanner');
-
-const canUseNativeApi = gmp => typeof gmp?.buildUrl === 'function';
-
-const mergeNativeCredentialReference = (
-  inheritedCredential,
-  nativeCredential,
-) => {
-  if (nativeCredential === undefined) {
-    return inheritedCredential;
-  }
-
-  if (inheritedCredential === undefined) {
-    return nativeCredential;
-  }
-
-  return Object.assign(
-    Object.create(Object.getPrototypeOf(inheritedCredential)),
-    inheritedCredential,
-    {
-      id: nativeCredential.id,
-      name: nativeCredential.name,
-    },
-  );
-};
-
-const mergeNativeInformation = (inherited, native) =>
-  Object.assign(Object.create(Object.getPrototypeOf(inherited)), inherited, {
-    name: native.name,
-    comment: native.comment,
-    creationTime: native.creationTime,
-    modificationTime: native.modificationTime,
-    host: native.host,
-    port: native.port,
-    scannerType: native.scannerType,
-    credential: mergeNativeCredentialReference(
-      inherited.credential,
-      native.credential,
-    ),
-  });
-
-const canUseNativeOnlyDetail = scanner =>
-  scanner.hasUnixSocket() || scanner.scannerType === CVE_SCANNER_TYPE;
 
 const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
   const rootState = getState();
@@ -89,10 +44,6 @@ const nativeLoadEntities = gmp => filter => (dispatch, getState) => {
 };
 
 const nativeLoadEntity = gmp => id => (dispatch, getState) => {
-  if (!canUseNativeApi(gmp)) {
-    return loadEntity(gmp)(id)(dispatch, getState);
-  }
-
   const rootState = getState();
   const state = selector(rootState);
 
@@ -102,27 +53,11 @@ const nativeLoadEntity = gmp => id => (dispatch, getState) => {
 
   dispatch(entityLoadingActions.request(id));
 
-  return fetchNativeScanner(gmp, id)
-    .then(nativeResponse => {
-      if (canUseNativeOnlyDetail(nativeResponse.scanner)) {
-        return dispatch(
-          entityLoadingActions.success(id, nativeResponse.scanner),
-        );
-      }
-
-      return gmp.scanner.get({id}).then(inheritedResponse =>
-        dispatch(
-          entityLoadingActions.success(
-            id,
-            mergeNativeInformation(
-              inheritedResponse.data,
-              nativeResponse.scanner,
-            ),
-          ),
-        ),
-      );
-    })
-    .catch(error => dispatch(entityLoadingActions.error(id, error)));
+  return fetchNativeScanner(gmp, id).then(
+    nativeResponse =>
+      dispatch(entityLoadingActions.success(id, nativeResponse.scanner)),
+    error => dispatch(entityLoadingActions.error(id, error)),
+  );
 };
 
 export {

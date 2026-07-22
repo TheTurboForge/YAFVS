@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+set -u -o pipefail
+umask 077
+
+mode=${1:-binary}
+case "$mode" in
+  binary|container|hosted|feed-redistribution) ;;
+  *) echo "usage: $0 {binary|container|hosted|feed-redistribution}" >&2; exit 2 ;;
+esac
+
+repo=$(git rev-parse --show-toplevel) || exit 2
+cd "$repo" || exit 2
+head=$(git rev-parse HEAD) || exit 2
+out=${YAFVS_EVIDENCE_DIR:-"$repo/YAFVS-runtime/artifacts/release-compliance/${head}-${mode}"}
+mkdir -p "$out" || exit 2
+
+failures=()
+record_failure() {
+  failures+=("$1")
+}
+
+if ! cargo run --quiet --locked --manifest-path tools/yafvsctl-rs/Cargo.toml -- \
+  license-report --json --public-release --mode "$mode" >"$out/license-gate.json"; then
+  record_failure "license-gate"
+fi
+
+if command -v reuse >/dev/null 2>&1; then
+  if ! reuse lint >"$out/reuse-lint.txt" 2>&1; then
+    record_failure "reuse-lint"
+  fi
+else
+  printf '%s\n' "reuse is unavailable" >"$out/reuse-lint.txt"
+  record_failure "reuse-unavailable"
+fi
+
+git archive --format=tar.gz --output="$out/YAFVS-source-${head}.tar.gz" HEAD || \
+  record_failure "source-archive"
+git ls-files '*COPYING*' '*LICENSE*' '*NOTICE*' 'policy/*' | \
+  tar -czf "$out/license-notice-policy-files.tar.gz" -T - || \
+  record_failure "license-notice-archive"
+
+manifests=(
+  components/openvas-scanner/rust/Cargo.toml
+  services/yafvs-api/Cargo.toml
+  tools/yafvsctl-rs/Cargo.toml
+)
+for manifest in "${manifests[@]}"; do
+  id=$(dirname "$manifest" | tr '/.' '--')
+  cargo metadata --locked --format-version 1 --manifest-path "$manifest" \
+    >"$out/cargo-metadata-${id}.json" || record_failure "cargo-metadata-${id}"
+done
+
+subjects=(
+  "openvas-scanner:components/openvas-scanner"
+  "gsa:components/gsa"
+  "notus-scanner:components/notus-scanner"
+  "ospd-openvas:components/ospd-openvas"
+  "yafvs-api:services/yafvs-api"
+  "yafvsctl:tools/yafvsctl-rs"
+)
+if command -v syft >/dev/null 2>&1; then
+  for subject in "${subjects[@]}"; do
+    id=${subject%%:*}
+    path=${subject#*:}
+    syft scan "dir:$path" -q -o "spdx-json=$out/sbom-source-${id}.spdx.json" || \
+      record_failure "source-sbom-${id}"
+  done
+else
+  record_failure "syft-unavailable"
+fi
+
+build_root=${YAFVS_RELEASE_BUILD_DIR:-"${TMPDIR:-/tmp}/yafvs-release-build-${head}"}
+if [[ "$mode" == binary || "$mode" == container ]]; then
+  if cargo build --quiet --locked --release --target-dir "$build_root/api" \
+    --manifest-path services/yafvs-api/Cargo.toml; then
+    cp "$build_root/api/release/yafvs-api" "$out/yafvs-api"
+  else
+    record_failure "build-yafvs-api"
+  fi
+  if cargo build --quiet --locked --release --target-dir "$build_root/ctl" \
+    --manifest-path tools/yafvsctl-rs/Cargo.toml; then
+    cp "$build_root/ctl/release/yafvsctl" "$out/yafvsctl"
+  else
+    record_failure "build-yafvsctl"
+  fi
+  for binary in "$out/yafvs-api" "$out/yafvsctl"; do
+    [[ -f "$binary" ]] || continue
+    name=$(basename "$binary")
+    if command -v readelf >/dev/null 2>&1; then
+      readelf -d "$binary" >"$out/readelf-${name}.txt" || record_failure "readelf-${name}"
+    else
+      record_failure "readelf-unavailable"
+    fi
+    if command -v syft >/dev/null 2>&1; then
+      syft scan "file:$binary" -q -o "spdx-json=$out/sbom-binary-${name}.spdx.json" || \
+        record_failure "binary-sbom-${name}"
+    fi
+  done
+fi
+
+if [[ "$mode" == container ]]; then
+  image="yafvs-api-compliance:${head}"
+  if docker build --file docker/yafvs-api/Dockerfile --tag "$image" . \
+    >"$out/container-build.txt" 2>&1; then
+    syft scan "$image" -q -o "spdx-json=$out/sbom-container-yafvs-api.spdx.json" || \
+      record_failure "container-sbom-yafvs-api"
+    docker image rm "$image" >/dev/null 2>&1 || true
+  else
+    record_failure "container-build-yafvs-api"
+  fi
+fi
+
+printf '%s\n' "${failures[@]}" >"$out/failures.txt"
+jq -n \
+  --arg schema_version "1" \
+  --arg commit "$head" \
+  --arg mode "$mode" \
+  --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --argjson failures "$(printf '%s\n' "${failures[@]}" | jq -Rsc 'split("\n") | map(select(length > 0))')" \
+  '{schema_version: ($schema_version | tonumber), commit: $commit, mode: $mode, generated_at: $generated_at, failures: $failures}' \
+  >"$out/manifest.json" || record_failure "manifest"
+
+checksum_list=$(mktemp "${TMPDIR:-/tmp}/yafvs-release-checksums.XXXXXX") || exit 2
+(cd "$out" && find . -type f ! -name SHA256SUMS -print0 | sort -z >"$checksum_list")
+(cd "$out" && xargs -0 sha256sum <"$checksum_list" >SHA256SUMS) || record_failure "checksums"
+rm -f "$checksum_list"
+
+if ((${#failures[@]})); then
+  printf 'release compliance blocked: %s\n' "${failures[*]}" >&2
+  exit 1
+fi
+printf 'release compliance evidence: %s\n' "$out"

@@ -73,6 +73,12 @@ the change introduces no third-party dependency or new distribution boundary.
   product/legal decision.
 - Mark ambiguous cases for human/legal review before public release or distribution.
 - Run `just license-report` during license-sensitive work. The report checks expected component license files, preserved TurboVAS-era or current YAFVS modification notices on modified, renamed, and copied imported source files, SPDX headers on new YAFVS-created files, explicit handling for modified imported files that cannot carry comments, accidental tracking of runtime feed/cache content, and public-release review gate state.
+- Treat `policy/license-boundaries.toml` and
+  `policy/derivation-provenance.toml` as enforced distribution controls. New
+  source must use an allowed path license and derivation marker; non-original
+  source needs exact provenance. Configured Rust path dependencies and declared
+  artifact links must remain compatible. Commits after the recorded DCO epoch
+  require `Signed-off-by` attestations.
 - Run `just license-public-release-gate --mode source-public` before changing
   repository visibility for public source read access. This mode is limited to
   source visibility and does not authorize binaries, containers, hosted
@@ -84,6 +90,11 @@ the change introduces no third-party dependency or new distribution boundary.
   includes text, locale strings, public image assets, SVG icon files, favicons,
   banners, splash images, screenshots, and other visual files that can carry
   inherited OpenVAS, Greenbone, GSA, Enterprise, or misleading product identity.
+- Before distributing an artifact, run the mode-specific manual Release
+  Compliance Evidence workflow described in
+  `docs/DISTRIBUTION_COMPLIANCE.md`. Preserve its source archive, per-artifact
+  SPDX SBOMs, dependency metadata, ELF/container evidence, notices, REUSE
+  result, manifest, and checksums with the release record.
 
 ## Modification Notice Policy
 
@@ -171,3 +182,9 @@ reason it cannot.
   packaging, or distribution.
 - Define artifact-specific source publication and attribution procedures before
   binary, container, hosted-service, or feed-redistribution modes.
+- Resolve the registered classification of `services/yafvs-api` relative to
+  AGPL-covered `gvmd` expression before treating its current GPL-3.0 declaration
+  as sufficient for a binary, container, or hosted distribution.
+- Bring the inherited aggregate to whole-tree REUSE compliance without
+  mechanically replacing component-specific licenses, exceptions, generated
+  provenance, or Samba-derived notices.

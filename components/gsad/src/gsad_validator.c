@@ -27,7 +27,6 @@ gsad_init_validator ()
                      "|(create_asset)"
                      "|(create_credential)"
                      "|(create_host)"
-                     "|(create_tags)"
                      "|(create_target)"
                      "|(create_task)"
                      "|(create_tls_certificate)"

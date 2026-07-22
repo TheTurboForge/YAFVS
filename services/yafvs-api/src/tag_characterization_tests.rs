@@ -102,8 +102,9 @@ fn tag_creation_has_no_transitional_filter_control_path() {
 }
 
 #[test]
-fn obsolete_gsad_tag_mutation_commands_stay_removed() {
+fn retired_and_dangling_gsad_tag_commands_stay_removed() {
     for function in [
+        "create_tags_gmp",
         "create_tag_gmp",
         "delete_tag_gmp",
         "save_tag_gmp",
@@ -114,7 +115,13 @@ fn obsolete_gsad_tag_mutation_commands_stay_removed() {
             "obsolete GSAD function remains: {function}"
         );
     }
-    for command in ["create_tag", "delete_tag", "save_tag", "toggle_tag"] {
+    for command in [
+        "create_tags",
+        "create_tag",
+        "delete_tag",
+        "save_tag",
+        "toggle_tag",
+    ] {
         assert!(
             !GSAD_VALIDATOR.contains(&format!("|({command})")),
             "obsolete GSAD validator command remains: {command}"

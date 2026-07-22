@@ -187,9 +187,6 @@ export_schedules_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                       gsad_command_response_data_t *);
 
 char *
-create_tags_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                 gsad_command_response_data_t *);
-char *
 get_tag_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
              gsad_command_response_data_t *);
 char *

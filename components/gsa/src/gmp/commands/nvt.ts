@@ -6,7 +6,6 @@
 
 import type {EntityCommandParams} from 'gmp/commands/entity';
 import InfoEntityCommand from 'gmp/commands/info-entity';
-import {canUseNativeApi} from 'gmp/commands/native';
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import Nvt from 'gmp/models/nvt';
@@ -62,29 +61,13 @@ class NvtCommand extends InfoEntityCommand<Nvt> {
   }
 
   async getConfigNvt({oid, configId}: {oid: string; configId: string}) {
-    if (canUseNativeApi(this.http)) {
-      const [nativeNvt, scanConfig] = await Promise.all([
-        fetchNativeNvt(this.http, oid),
-        fetchNativeScanConfig(this.http, configId),
-      ]);
-      return new Response(
-        composeNativeConfigNvt(nativeNvt.nvt, scanConfig.scanConfig, oid),
-      );
-    }
-
-    const response = await this.httpGetWithTransform(
-      {
-        cmd: 'get_config_nvt',
-        config_id: configId,
-        oid,
-      },
-      {includeDefaultParams: false},
+    const [nativeNvt, scanConfig] = await Promise.all([
+      fetchNativeNvt(this.http, oid),
+      fetchNativeScanConfig(this.http, configId),
+    ]);
+    return new Response(
+      composeNativeConfigNvt(nativeNvt.nvt, scanConfig.scanConfig, oid),
     );
-    const {data} = response;
-    const configResponse = data.get_config_nvt_response;
-    // @ts-expect-error
-    const nvt = Nvt.fromElement(configResponse.get_nvts_response);
-    return response.setData(nvt);
   }
 }
 

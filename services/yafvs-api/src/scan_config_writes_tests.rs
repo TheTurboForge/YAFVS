@@ -9,6 +9,60 @@ use crate::scan_config_write_db::{
     ensure_scan_config_family_is_not_whole_only, ensure_scan_config_is_human_owned,
     ensure_scan_config_not_predefined,
 };
+
+const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
+const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
+const GSA_NVT_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/nvt.ts");
+const GSA_SCAN_CONFIG_COMMAND: &str =
+    include_str!("../../../components/gsa/src/gmp/commands/scan-configs.js");
+
+#[test]
+fn config_nvt_detail_and_preference_writes_have_no_gsad_gmp_adapter() {
+    for retired in [
+        "get_config_nvt_gmp",
+        "save_config_nvt_gmp",
+        "ELSE (get_config_nvt)",
+        "ELSE (save_config_nvt)",
+    ] {
+        assert!(
+            !GSAD_GMP.contains(retired),
+            "gsad still contains retired config-NVT adapter {retired}"
+        );
+        assert!(
+            !GSAD_GMP_HEADER.contains(retired),
+            "gsad header still contains retired config-NVT adapter {retired}"
+        );
+    }
+    for retired in ["|(get_config_nvt)", "|(save_config_nvt)"] {
+        assert!(
+            !GSAD_VALIDATOR.contains(retired),
+            "gsad validator still accepts retired config-NVT adapter {retired}"
+        );
+    }
+    for required in [
+        "fetchNativeNvt",
+        "fetchNativeScanConfig",
+        "composeNativeConfigNvt",
+    ] {
+        assert!(
+            GSA_NVT_COMMAND.contains(required),
+            "native config-NVT detail missing {required}"
+        );
+    }
+    for retired in [
+        "canUseNativeApi",
+        "cmd: 'get_config_nvt'",
+        "get_config_nvt_response",
+    ] {
+        assert!(
+            !GSA_NVT_COMMAND.contains(retired),
+            "GSA NVT command still contains GMP fallback {retired}"
+        );
+    }
+    assert!(GSA_SCAN_CONFIG_COMMAND.contains("patchNativeScanConfig"));
+    assert!(!GSA_SCAN_CONFIG_COMMAND.contains("save_config_nvt"));
+}
 use crate::scan_config_write_sql::*;
 use crate::scan_config_write_transactions::{
     canonical_scan_config_preference_value, scan_config_family_nvt_selector_exclude,

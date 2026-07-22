@@ -206,7 +206,6 @@ const allowedSnakeCase = [
   'get_aggregates_response',
   'get_capabilities',
   'get_config_family_response',
-  'get_config_nvt_response',
   'get_credential',
   'get_credentials_response',
   'get_features_response',

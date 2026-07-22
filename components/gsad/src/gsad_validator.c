@@ -88,7 +88,6 @@ gsad_init_validator ()
                      "|(get_filters)"
                      "|(get_info)"
                      "|(get_license)"
-                     "|(get_nvt_families)"
                      "|(get_override)"
                      "|(get_overrides)"
                      "|(get_port_list)"

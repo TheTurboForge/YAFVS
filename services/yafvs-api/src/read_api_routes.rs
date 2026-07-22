@@ -16,6 +16,7 @@ use crate::{
     host_assets::*,
     metrics::*,
     nvt_catalog::*,
+    nvt_families::nvt_families,
     operating_systems::*,
     overrides::*,
     port_lists::*,
@@ -203,6 +204,7 @@ pub(crate) fn native_api_router() -> Router<AppState> {
             get(export_schedule_metadata),
         )
         .route("/api/v1/timezones", get(timezones))
+        .route("/api/v1/nvt-families", get(nvt_families))
         .route("/api/v1/report-formats", get(report_format_assets))
         .route(
             "/api/v1/report-formats/:report_format_id",

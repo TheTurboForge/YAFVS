@@ -85,6 +85,7 @@ mod metrics;
 mod metrics_payloads;
 mod nvt_catalog;
 mod nvt_catalog_payloads;
+mod nvt_families;
 mod nvt_payloads;
 mod operating_system_payloads;
 mod operating_system_query_sql;

@@ -96,6 +96,22 @@ Ensure (gsad_native_api, should_forward_typed_filters_for_collection_reads)
   g_free (target);
 }
 
+Ensure (gsad_native_api, should_only_allow_canonical_nvt_family_reads)
+{
+  assert_that (
+    gsad_native_api_test_get_path_is_allowed ("/api/v1/nvt-families"),
+    is_true);
+  assert_that (
+    gsad_native_api_test_post_path_is_allowed ("/api/v1/nvt-families"),
+    is_false);
+  assert_that (
+    gsad_native_api_test_get_path_is_allowed ("/api/v1/nvt-families/"),
+    is_false);
+  assert_that (
+    gsad_native_api_test_get_path_is_allowed ("/api/v1/nvt-families?x=1"),
+    is_false);
+}
+
 Ensure (gsad_native_api, should_only_allow_canonical_credential_restore_posts)
 {
   const gchar *valid =
@@ -1110,6 +1126,9 @@ main (int argc, char **argv)
   add_test_with_context (
     suite, gsad_native_api,
     should_forward_typed_filters_for_collection_reads);
+  add_test_with_context (
+    suite, gsad_native_api,
+    should_only_allow_canonical_nvt_family_reads);
   add_test_with_context (suite, gsad_native_api,
                          should_require_a_session_user_for_browser_reads);
   add_test_with_context (

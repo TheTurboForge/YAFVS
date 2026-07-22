@@ -373,6 +373,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "ldap-authentication-provider-settings-write",
         "none",
         "nvt-catalog-detail-read",
+        "nvt-family-list-read",
         "nvt-catalog-list-read",
         "nvt-catalog-metadata-export-read",
         "operating-system-asset-detail-info-read",
@@ -719,6 +720,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/metrics"): "direct-read",
     ("get", "/scopes/{scope_id}/reports/{scope_report_id}/retention-plan"): "direct-read",
     ("get", "/timezones"): "direct-read",
+    ("get", "/nvt-families"): "direct-read",
     ("post", "/scopes"): "direct-write",
     ("patch", "/scopes/{scope_id}"): "direct-write",
     ("delete", "/scopes/{scope_id}"): "direct-write",
@@ -1513,6 +1515,10 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
         "x-yafvs-maturity": "live-read",
         "x-yafvs-replaces": "timezone-list-read",
     },
+    ("get", "/nvt-families"): {
+        "x-yafvs-maturity": "live-read",
+        "x-yafvs-replaces": "nvt-family-list-read",
+    },
     ("patch", "/schedules/{schedule_id}"): {
         "x-yafvs-maturity": "live-write",
         "x-yafvs-replaces": "schedule-metadata-modify",
@@ -1954,6 +1960,7 @@ DIRECT_API_SCRIPTABLE_ENDPOINTS = frozenset(
         "/api/v1/schedules/{}",
         "/api/v1/schedules/{}/export",
         "/api/v1/timezones",
+        "/api/v1/nvt-families",
         "/api/v1/scan-configs",
         "/api/v1/scan-configs/{}",
         "/api/v1/scan-configs/{}/backup",
@@ -8670,6 +8677,12 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "scriptable_read",
                 "replacement_candidates": ["GSA schedule dialog timezone lookup (migrated through gsad same-origin proxy)", "read-only timezone automation", "native-api-request helper"],
+            },
+            {
+                "endpoint": "/api/v1/nvt-families",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "scriptable_read",
+                "replacement_candidates": ["GSA scan-config family inventory (migrated through gsad same-origin proxy)", "read-only NVT family automation", "native-api-request helper"],
             },
             {
                 "method": "patch",

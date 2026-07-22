@@ -251,10 +251,6 @@ export_report_formats_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                            gsad_command_response_data_t *);
 
 char *
-get_nvt_families_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                      gsad_command_response_data_t *);
-
-char *
 get_port_list_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
 char *

@@ -5963,6 +5963,35 @@ paths:
           $ref: '#/components/responses/InternalError'
         '502':
           $ref: '#/components/responses/BadGateway'
+  /nvt-families:
+    get:
+      operationId: getNvtFamilies
+      x-yafvs-direct: true
+      x-yafvs-exposure: direct-read
+      x-yafvs-profile: shared-read
+      x-yafvs-maturity: live-read
+      x-yafvs-replaces: nvt-family-list-read
+      summary: List NVT families and available NVT counts
+      description: Read-only feed-catalog family inventory. The family universe, Credentials-family exclusion, ascending order, and per-family counts preserve the independently anchored inherited manager semantics.
+      responses:
+        '200':
+          description: Available NVT families
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NvtFamilyCollection'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
   /timezones:
     get:
       operationId: getTimezones
@@ -13439,6 +13468,24 @@ components:
               description: Active user tags attached directly to this schedule. Write/tag actions remain inherited.
               items:
                 $ref: '#/components/schemas/ReportUserTag'
+    NvtFamily:
+      type: object
+      required: [name, max_nvt_count]
+      properties:
+        name:
+          type: string
+        max_nvt_count:
+          type: integer
+          format: int64
+          minimum: 0
+    NvtFamilyCollection:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/NvtFamily'
     TimezoneCollection:
       type: object
       required: [items]

@@ -1172,25 +1172,6 @@ get_nvts_data_reset (get_nvts_data_t *data)
 }
 
 /**
- * @brief Command data for the get_nvt_families command.
- */
-typedef struct
-{
-  int sort_order;        ///< Result sort order: 0 descending, else ascending.
-} get_nvt_families_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-get_nvt_families_data_reset (get_nvt_families_data_t *data)
-{
-  memset (data, 0, sizeof (get_nvt_families_data_t));
-}
-
-/**
  * @brief Command data for the get_overrides command.
  */
 typedef struct
@@ -2107,7 +2088,6 @@ typedef union
   get_filters_data_t get_filters;                     ///< get_filters
   get_info_data_t get_info;                           ///< get_info
   get_nvts_data_t get_nvts;                           ///< get_nvts
-  get_nvt_families_data_t get_nvt_families;           ///< get_nvt_families
   get_overrides_data_t get_overrides;                 ///< get_overrides
   get_port_lists_data_t get_port_lists;               ///< get_port_lists
   get_preferences_data_t get_preferences;             ///< get_preferences
@@ -2311,12 +2291,6 @@ static get_info_data_t *get_info_data
  */
 static get_nvts_data_t *get_nvts_data
  = &(command_data.get_nvts);
-
-/**
- * @brief Parser callback data for GET_NVT_FAMILIES.
- */
-static get_nvt_families_data_t *get_nvt_families_data
- = &(command_data.get_nvt_families);
 
 /**
  * @brief Parser callback data for GET_OVERRIDES.
@@ -2654,7 +2628,6 @@ typedef enum
   CLIENT_GET_INTEGRATION_CONFIGS,
   CLIENT_GET_LICENSE,
   CLIENT_GET_NVTS,
-  CLIENT_GET_NVT_FAMILIES,
   CLIENT_GET_OVERRIDES,
   CLIENT_GET_PORT_LISTS,
   CLIENT_GET_PREFERENCES,
@@ -3364,17 +3337,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             else
               get_nvts_data->sort_order = 1;
             set_client_state (CLIENT_GET_NVTS);
-          }
-        else if (strcasecmp ("GET_NVT_FAMILIES", element_name) == 0)
-          {
-            const gchar* attribute;
-            if (find_attribute (attribute_names, attribute_values,
-                                "sort_order", &attribute))
-              get_nvt_families_data->sort_order = strcmp (attribute,
-                                                          "descending");
-            else
-              get_nvt_families_data->sort_order = 1;
-            set_client_state (CLIENT_GET_NVT_FAMILIES);
           }
         else if (strcasecmp ("GET_OVERRIDES", element_name) == 0)
           {
@@ -10001,65 +9963,6 @@ handle_get_nvts (gmp_parser_t *gmp_parser, GError **error)
 }
 
 /**
- * @brief Handle end of GET_NVT_FAMILIES element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_nvt_families (gmp_parser_t *gmp_parser, GError **error)
-{
-  iterator_t families;
-
-  if (acl_user_may ("get_nvt_families") == 0)
-    {
-      SEND_TO_CLIENT_OR_FAIL
-       (XML_ERROR_SYNTAX ("get_nvt_families",
-                          "Permission denied"));
-      get_nvt_families_data_reset (get_nvt_families_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  SEND_TO_CLIENT_OR_FAIL ("<get_nvt_families_response"
-                          " status=\"" STATUS_OK "\""
-                          " status_text=\"" STATUS_OK_TEXT "\">"
-                          "<families>");
-
-  init_family_iterator (&families,
-                        1,
-                        NULL,
-                        get_nvt_families_data->sort_order);
-  while (next (&families))
-    {
-      int family_max;
-      const char *family;
-
-      family = family_iterator_name (&families);
-      if (family)
-        family_max = family_nvt_count (family);
-      else
-        family_max = -1;
-
-      SENDF_TO_CLIENT_OR_FAIL
-       ("<family>"
-        "<name>%s</name>"
-        /* The total number of NVT's in the family. */
-        "<max_nvt_count>%i</max_nvt_count>"
-        "</family>",
-        family ? family : "",
-        family_max);
-    }
-  cleanup_iterator (&families);
-
-  SEND_TO_CLIENT_OR_FAIL ("</families>"
-                          "</get_nvt_families_response>");
-
-  get_nvt_families_data_reset (get_nvt_families_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
  * @brief Handle end of GET_OVERRIDES element.
  *
  * @param[in]  gmp_parser   GMP parser.
@@ -14602,11 +14505,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       case CLIENT_GET_NVTS:
         handle_get_nvts (gmp_parser, error);
         break;
-
-      case CLIENT_GET_NVT_FAMILIES:
-        handle_get_nvt_families (gmp_parser, error);
-        break;
-
 
       case CLIENT_GET_OVERRIDES:
         handle_get_overrides (gmp_parser, error);

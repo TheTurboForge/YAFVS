@@ -1489,6 +1489,7 @@ native_api_path_is_allowed (const gchar *path)
   const gchar *schedule_prefix = "/api/v1/schedules/";
   const gchar *schedule_export_suffix = "/export";
   const gchar *timezones_path = "/api/v1/timezones";
+  const gchar *nvt_families_path = "/api/v1/nvt-families";
   const gchar *report_formats_path = "/api/v1/report-formats";
   const gchar *report_format_prefix = "/api/v1/report-formats/";
   const gchar *report_format_export_suffix = "/export";
@@ -1844,6 +1845,9 @@ native_api_path_is_allowed (const gchar *path)
     return TRUE;
 
   if (g_strcmp0 (path, timezones_path) == 0)
+    return TRUE;
+
+  if (g_strcmp0 (path, nvt_families_path) == 0)
     return TRUE;
 
   if (g_str_has_prefix (path, schedule_prefix))

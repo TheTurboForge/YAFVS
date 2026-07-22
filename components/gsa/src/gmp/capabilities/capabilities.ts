@@ -54,7 +54,6 @@ const CAPABILITY_NAMES = [
   'get_filters',
   'get_info',
   'get_nvts',
-  'get_nvt_families',
   'get_overrides',
   'get_port_lists',
   'get_preferences',

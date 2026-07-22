@@ -5052,25 +5052,6 @@ save_config_family_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Get all nvt_families, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_nvt_families_gmp (gvm_connection_t *connection,
-                      gsad_credentials_t *credentials, params_t *params,
-                      gsad_command_response_data_t *response_data)
-{
-  return get_entities (connection, "nvt_families", credentials, params, NULL,
-                       response_data);
-}
-
-/**
  * @brief Delete config, get all configs, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -9490,7 +9471,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_filters)
   ELSE (get_info)
   ELSE (get_license)
-  ELSE (get_nvt_families)
   ELSE (get_override)
   ELSE (get_overrides)
   ELSE (get_port_list)

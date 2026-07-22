@@ -77,7 +77,6 @@ command_t gmp_commands[]
     {"GET_INTEGRATION_CONFIGS", "Get integration configurations."},
     {"GET_LICENSE", "Get license information." },
     {"GET_NVTS", "Get one or all available NVTs."},
-    {"GET_NVT_FAMILIES", "Get a list of all NVT families."},
     {"GET_OVERRIDES", "Get all overrides."},
     {"GET_PORT_LISTS", "Get all port lists."},
     {"GET_PREFERENCES", "Get preferences for all available NVTs."},

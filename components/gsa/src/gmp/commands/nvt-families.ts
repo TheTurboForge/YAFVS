@@ -1,30 +1,21 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
 import HttpCommand from 'gmp/commands/http';
 import type Http from 'gmp/http/http';
-import {parseInt} from 'gmp/parser';
-import {map} from 'gmp/utils/array';
+import Response from 'gmp/http/response';
+import {fetchNativeNvtFamilies} from 'gmp/native-api/nvt-families';
 
 class NvtFamiliesCommand extends HttpCommand {
   constructor(http: Http) {
-    super(http, {cmd: 'get_nvt_families'});
+    super(http);
   }
 
   async get() {
-    const response = await this.httpGetWithTransform();
-    const {data} = response;
-    const {family: families} =
-      // @ts-expect-error
-      data.get_nvt_families.get_nvt_families_response.families;
-    return response.set(
-      map(families, family => ({
-        name: family.name,
-        maxNvtCount: parseInt(family.max_nvt_count),
-      })),
-    );
+    return new Response(await fetchNativeNvtFamilies(this.http));
   }
 }
 

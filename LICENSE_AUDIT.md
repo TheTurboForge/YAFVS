@@ -80,7 +80,11 @@ the change introduces no third-party dependency or new distribution boundary.
   source must use an allowed path license and derivation marker; non-original
   source needs exact provenance. Configured Rust path dependencies and declared
   artifact links must remain compatible. Commits after the recorded DCO epoch
-  require `Signed-off-by` attestations.
+  require `Signed-off-by` attestations. If protected history prevents repairing
+  an omitted commit trailer, `policy/derivation-provenance.toml` may carry a
+  narrowly scoped forward attestation naming the exact commit, original signer,
+  date, and reason. The checker rejects malformed, duplicate, or out-of-range
+  attestations; moving the DCO epoch is not an acceptable substitute.
 - Run `just license-public-release-gate --mode source-public` before changing
   repository visibility for public source read access. This mode is limited to
   source visibility and does not authorize binaries, containers, hosted

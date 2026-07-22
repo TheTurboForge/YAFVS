@@ -7,6 +7,15 @@ dco_epoch = "f68260ea09c26d2a989edb7ea9d50f29d10b1a69"
 source_suffixes = ["c", "h", "cc", "cpp", "rs", "py", "js", "jsx", "ts", "tsx", "sql"]
 allowed_derivations = ["original", "behavioral-reimplementation", "adaptation", "translation"]
 
+# Protected main history cannot be rewritten to add a missing trailer. This
+# forward attestation preserves the original DCO epoch and names only the exact
+# commit re-attested by its original author.
+[[dco_attestations]]
+commit = "c225399b762a05c300f6131f77defdd0d3acb2cf"
+signed_off_by = "TheTurboForge <288388994+TheTurboForge@users.noreply.github.com>"
+attested_on = "2026-07-22"
+reason = "The original author re-attests this contribution after protected main rejected a history rewrite to add the omitted Signed-off-by trailer."
+
 # `original` means written for YAFVS without adapting source expression. Behavioral
 # reimplementation may use documented behavior and independently anchored tests.
 # Adaptation and translation both require an exact YAFVS-Source-Provenance marker.

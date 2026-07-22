@@ -54,10 +54,20 @@ struct DerivationPolicy {
     schema_version: u32,
     policy_epoch: String,
     dco_epoch: String,
+    #[serde(default)]
+    dco_attestations: Vec<DcoAttestation>,
     source_suffixes: Vec<String>,
     allowed_derivations: Vec<String>,
     #[serde(default)]
     review_surfaces: Vec<ReviewSurface>,
+}
+
+#[derive(Debug, Deserialize)]
+struct DcoAttestation {
+    commit: String,
+    signed_off_by: String,
+    attested_on: String,
+    reason: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -131,7 +141,7 @@ pub(super) fn license_policy_findings(
     }
     findings.push(artifact_graph_finding(&boundary));
     findings.push(cargo_path_dependency_finding(repo_root, &boundary));
-    findings.push(dco_finding(repo_root, runner, &derivation.dco_epoch));
+    findings.push(dco_finding(repo_root, runner, &derivation));
     findings.push(review_surface_finding(&derivation));
     findings
 }
@@ -177,6 +187,22 @@ fn validate_policy_shape(boundary: &BoundaryPolicy, derivation: &DerivationPolic
     }
     if derivation.dco_epoch.trim().is_empty() {
         errors.push("DCO epoch must not be empty".to_string());
+    }
+    duplicate_values(
+        derivation
+            .dco_attestations
+            .iter()
+            .map(|attestation| attestation.commit.as_str()),
+        "DCO attestation commit",
+        &mut errors,
+    );
+    for attestation in &derivation.dco_attestations {
+        if !valid_dco_attestation(attestation) {
+            errors.push(format!(
+                "invalid DCO attestation for commit {}",
+                attestation.commit
+            ));
+        }
     }
     if !boundary
         .path_rules
@@ -653,8 +679,8 @@ fn cargo_manifest_license(manifest: &Path) -> Option<String> {
         .map(str::to_string)
 }
 
-fn dco_finding(repo_root: &Path, runner: &dyn CommandRunner, epoch: &str) -> Finding {
-    let range = format!("{epoch}..HEAD");
+fn dco_finding(repo_root: &Path, runner: &dyn CommandRunner, policy: &DerivationPolicy) -> Finding {
+    let range = format!("{}..HEAD", policy.dco_epoch);
     let Some(output) = run_git(runner, repo_root, &["log", "--format=%H%x1f%B%x1e", &range]) else {
         return Finding::new(
             "fail",
@@ -662,23 +688,50 @@ fn dco_finding(repo_root: &Path, runner: &dyn CommandRunner, epoch: &str) -> Fin
             "Could not inspect commits for Developer Certificate of Origin sign-offs.".to_string(),
         );
     };
-    let missing = output
+    let records = output
         .split('\u{1e}')
         .filter_map(|record| {
             let (commit, body) = record.trim().split_once('\u{1f}')?;
-            (!body.lines().any(valid_signoff)).then(|| commit.to_string())
+            Some((commit.to_string(), body.lines().any(valid_signoff)))
         })
         .collect::<Vec<_>>();
+    let history_commits = records
+        .iter()
+        .map(|(commit, _)| commit.as_str())
+        .collect::<BTreeSet<_>>();
+    let attested_commits = policy
+        .dco_attestations
+        .iter()
+        .filter(|attestation| valid_dco_attestation(attestation))
+        .map(|attestation| attestation.commit.as_str())
+        .collect::<BTreeSet<_>>();
+    let missing = records
+        .iter()
+        .filter(|(commit, has_signoff)| !has_signoff && !attested_commits.contains(commit.as_str()))
+        .map(|(commit, _)| commit.clone())
+        .collect::<Vec<_>>();
+    let unknown_attestations = attested_commits
+        .difference(&history_commits)
+        .copied()
+        .collect::<Vec<_>>();
+    let passed = missing.is_empty() && unknown_attestations.is_empty();
     Finding::new(
-        if missing.is_empty() { "pass" } else { "fail" },
+        if passed { "pass" } else { "fail" },
         "license.commit-dco",
-        if missing.is_empty() {
-            "Commits after the DCO epoch contain Signed-off-by attestations.".to_string()
+        if passed {
+            "Commits after the DCO epoch contain commit-message or explicit forward attestations."
+                .to_string()
         } else {
-            "Commits after the DCO epoch are missing Signed-off-by attestations.".to_string()
+            "Commits after the DCO epoch are missing attestations or the policy names an unknown commit."
+                .to_string()
         },
     )
-    .with_details(json!({ "epoch": epoch, "missing_commits": missing }))
+    .with_details(json!({
+        "epoch": policy.dco_epoch,
+        "missing_commits": missing,
+        "attested_commits": attested_commits,
+        "unknown_attestations": unknown_attestations,
+    }))
 }
 
 fn valid_signoff(line: &str) -> bool {
@@ -689,6 +742,22 @@ fn valid_signoff(line: &str) -> bool {
         return false;
     };
     !name.trim().is_empty() && address.ends_with('>') && address[..address.len() - 1].contains('@')
+}
+
+fn valid_dco_attestation(attestation: &DcoAttestation) -> bool {
+    let commit = attestation.commit.as_bytes();
+    let valid_commit =
+        matches!(commit.len(), 40 | 64) && commit.iter().all(|byte| byte.is_ascii_hexdigit());
+    let valid_signer = valid_signoff(&format!("Signed-off-by: {}", attestation.signed_off_by));
+    let date = attestation.attested_on.as_bytes();
+    let valid_date = date.len() == 10
+        && date[4] == b'-'
+        && date[7] == b'-'
+        && date
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| matches!(index, 4 | 7) || byte.is_ascii_digit());
+    valid_commit && valid_signer && valid_date && !attestation.reason.trim().is_empty()
 }
 
 fn review_surface_finding(policy: &DerivationPolicy) -> Finding {
@@ -721,6 +790,7 @@ fn review_surface_finding(policy: &DerivationPolicy) -> Finding {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::process::ProcessOutput;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
@@ -740,6 +810,33 @@ mod tests {
             id: prefix.to_string(),
             prefix: prefix.to_string(),
             allowed_licenses: licenses.iter().map(|item| (*item).to_string()).collect(),
+        }
+    }
+
+    struct DcoRunner {
+        log: String,
+    }
+
+    impl CommandRunner for DcoRunner {
+        fn run(&self, _program: &str, _args: &[&str]) -> Option<ProcessOutput> {
+            Some(ProcessOutput {
+                success: true,
+                exit_code: Some(0),
+                stdout: self.log.clone(),
+                stderr: String::new(),
+            })
+        }
+    }
+
+    fn derivation_policy(dco_attestations: Vec<DcoAttestation>) -> DerivationPolicy {
+        DerivationPolicy {
+            schema_version: 1,
+            policy_epoch: "epoch".to_string(),
+            dco_epoch: "dco-epoch".to_string(),
+            dco_attestations,
+            source_suffixes: vec!["rs".to_string()],
+            allowed_derivations: vec!["original".to_string(), "adaptation".to_string()],
+            review_surfaces: Vec::new(),
         }
     }
 
@@ -890,14 +987,7 @@ mod tests {
         let path = root.join(relative);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, "// YAFVS-Derivation: adaptation\n").unwrap();
-        let policy = DerivationPolicy {
-            schema_version: 1,
-            policy_epoch: "epoch".to_string(),
-            dco_epoch: "dco-epoch".to_string(),
-            source_suffixes: vec!["rs".to_string()],
-            allowed_derivations: vec!["original".to_string(), "adaptation".to_string()],
-            review_surfaces: Vec::new(),
-        };
+        let policy = derivation_policy(Vec::new());
         let finding = derivation_finding(
             &root,
             &policy,
@@ -961,5 +1051,63 @@ mod tests {
         ));
         assert!(!valid_signoff("Signed-off-by: no-address"));
         assert!(!valid_signoff("signed-off-by: Robert <r@example.test>"));
+    }
+
+    #[test]
+    fn dco_forward_attestation_requires_exact_commit_signer_date_and_reason() {
+        let valid = DcoAttestation {
+            commit: "a".repeat(40),
+            signed_off_by: "Robert Pelfrey <robert@pelfrey.de>".to_string(),
+            attested_on: "2026-07-22".to_string(),
+            reason: "Protected history cannot be amended safely.".to_string(),
+        };
+        assert!(valid_dco_attestation(&valid));
+
+        let invalid = DcoAttestation {
+            commit: "short".to_string(),
+            signed_off_by: "no-address".to_string(),
+            attested_on: "22-07-2026".to_string(),
+            reason: String::new(),
+        };
+        assert!(!valid_dco_attestation(&invalid));
+    }
+
+    #[test]
+    fn dco_forward_attestation_covers_only_its_exact_history_commit() {
+        let commit = "a".repeat(40);
+        let runner = DcoRunner {
+            log: format!("{commit}\u{1f}Unsigned contribution\u{1e}"),
+        };
+        assert_eq!(
+            dco_finding(Path::new("."), &runner, &derivation_policy(Vec::new())).status,
+            "fail"
+        );
+
+        let attestation = DcoAttestation {
+            commit: commit.clone(),
+            signed_off_by: "Robert Pelfrey <robert@pelfrey.de>".to_string(),
+            attested_on: "2026-07-22".to_string(),
+            reason: "Protected history cannot be amended safely.".to_string(),
+        };
+        assert_eq!(
+            dco_finding(
+                Path::new("."),
+                &runner,
+                &derivation_policy(vec![attestation])
+            )
+            .status,
+            "pass"
+        );
+
+        let unknown = DcoAttestation {
+            commit: "b".repeat(40),
+            signed_off_by: "Robert Pelfrey <robert@pelfrey.de>".to_string(),
+            attested_on: "2026-07-22".to_string(),
+            reason: "Wrong commit must fail closed.".to_string(),
+        };
+        assert_eq!(
+            dco_finding(Path::new("."), &runner, &derivation_policy(vec![unknown])).status,
+            "fail"
+        );
     }
 }

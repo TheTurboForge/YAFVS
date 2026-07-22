@@ -395,8 +395,8 @@ before runtime checks or side effects. Preflight and status never start a scan.
 - `just runtime-scope-report-summary`: summarize the latest Organization scope
   report.
 - `just runtime-scope-report-metrics`: read native scope-report metrics.
-- `just runtime-rbac-smoke`: characterize the retained operator-account
-  compatibility boundary.
+- `just runtime-rbac-smoke`: verify trusted operator-team visibility and
+  cross-user native administration without starting scans.
 
 When a report ID is omitted, raw-report commands select the newest completed
 YAFVS full-test report. Scope reports analyze existing completed evidence;

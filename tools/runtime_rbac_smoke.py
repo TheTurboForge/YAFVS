@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
 # SPDX-License-Identifier: GPL-3.0-or-later
-"""Verify YAFVS operator-account semantics over GMP without starting scans."""
+"""Verify YAFVS trusted operator-team semantics without starting scans."""
 
 from __future__ import annotations
 
@@ -9,18 +9,13 @@ import argparse
 import http.cookiejar
 import json
 import secrets
-import socket
 import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
-import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
-from xml.sax.saxutils import quoteattr
-
-from runtime_gmp_smoke import gmp_authenticate_xml, send_gmp_xml_command
 
 SECONDARY_USER = "yafvs-rbac-smoke"
 TEMP_FILTER_PREFIX = "YAFVS RBAC smoke filter"
@@ -35,210 +30,6 @@ def now_iso() -> str:
 
 def result(status: str, summary: str, **details: Any) -> dict[str, Any]:
     return {"status": status, "summary": summary, "generated_at": now_iso(), "details": details}
-
-
-def response_root(response: Any) -> Any | None:
-    if isinstance(response, bytes):
-        response = response.decode("utf-8", errors="replace")
-    if isinstance(response, str):
-        try:
-            return ET.fromstring(response)
-        except ET.ParseError:
-            return None
-    return response
-
-
-def xml_bool(value: bool | None) -> str:
-    return "1" if value else "0"
-
-
-def require_ok_response(response: Any, action: str) -> Any:
-    root_node = response_root(response)
-    if root_node is None:
-        raise RuntimeError(f"{action} returned an unparsable GMP response")
-    status = root_node.get("status")
-    if status and not status.startswith("2"):
-        status_text = root_node.get("status_text") or ""
-        raise RuntimeError(f"{action} failed with GMP status {status}: {status_text}")
-    return response
-
-
-def local_name(tag: str) -> str:
-    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
-
-
-def child_text(element: Any, child_name: str) -> str | None:
-    for child in list(element):
-        if local_name(str(child.tag)) == child_name:
-            return child.text
-    return None
-
-
-def child_id(element: Any, child_name: str) -> str | None:
-    for child in list(element):
-        if local_name(str(child.tag)) == child_name:
-            return child.get("id")
-    return None
-
-
-def child_element(element: Any, child_name: str) -> Any | None:
-    for child in list(element):
-        if local_name(str(child.tag)) == child_name:
-            return child
-    return None
-
-
-def descendant_text(element: Any, child_name: str) -> str | None:
-    for child in element.iter():
-        if local_name(str(child.tag)) == child_name and child.text:
-            return child.text
-    return None
-
-
-def child_path_text(element: Any, child_names: tuple[str, ...]) -> str | None:
-    current = element
-    for child_name in child_names:
-        current = child_element(current, child_name)
-        if current is None:
-            return None
-    return current.text
-
-
-def object_rows(response: Any, object_tag: str) -> list[dict[str, str | None]]:
-    root = response_root(response)
-    if root is None or not hasattr(root, "iter"):
-        return []
-    rows: list[dict[str, str | None]] = []
-    for element in root.iter():
-        if local_name(str(element.tag)) != object_tag:
-            continue
-        rows.append(
-            {
-                "id": element.get("id"),
-                "name": child_text(element, "name"),
-                "status": child_text(element, "status"),
-                "progress": child_text(element, "progress"),
-                "target_id": child_id(element, "target"),
-                "scanner_id": child_id(element, "scanner"),
-                "config_id": child_id(element, "config"),
-                "report_id": child_id(element, "report"),
-            }
-        )
-    return rows
-
-
-def report_rows(response: Any) -> list[dict[str, str | None]]:
-    root = response_root(response)
-    if root is None or not hasattr(root, "iter"):
-        return []
-    rows: list[dict[str, str | None]] = []
-    for element in list(root):
-        if local_name(str(element.tag)) != "report":
-            continue
-        detail = child_element(element, "report")
-        if detail is None:
-            detail = element
-        rows.append(
-            {
-                "id": element.get("id"),
-                "task_id": child_id(element, "task") or child_id(detail, "task"),
-                "name": child_text(element, "name"),
-                "scan_run_status": descendant_text(detail, "scan_run_status"),
-                "scan_start": descendant_text(detail, "scan_start"),
-                "scan_end": descendant_text(detail, "scan_end"),
-                "result_count": child_path_text(detail, ("result_count", "full")),
-                "hosts_count": child_path_text(detail, ("hosts", "count")),
-                "vulns_count": child_path_text(detail, ("vulns", "count")),
-                "cves_count": child_path_text(detail, ("cves", "count")),
-                "os_count": child_path_text(detail, ("os", "count")),
-            }
-        )
-    return rows
-
-
-def latest_report_for_task(
-    client: Any, task_id: str
-) -> tuple[dict[str, str | None] | None, str | None]:
-    try:
-        response = client.get_reports(
-            filter_string=f"task_id={task_id} rows=10 sort-reverse=date",
-            details=True,
-            ignore_pagination=True,
-        )
-    except Exception as error:  # pylint: disable=broad-except
-        return None, f"{type(error).__name__}: {error}"
-    reports = [row for row in report_rows(response) if row.get("task_id") == task_id]
-    return (reports[0] if reports else None), None
-
-
-class RawGmpClient:
-    """Minimal raw GMP connection retained only for RBAC characterization."""
-
-    def __init__(self, socket_path: Path, username: str, password: str, timeout: int) -> None:
-        self.socket_path = socket_path
-        self.username = username
-        self.password = password
-        self.timeout = timeout
-        self.connection: socket.socket | None = None
-
-    def connect(self) -> None:
-        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        try:
-            connection.settimeout(self.timeout)
-            connection.connect(str(self.socket_path))
-            send_gmp_xml_command(connection, gmp_authenticate_xml(self.username, self.password))
-        except Exception:
-            connection.close()
-            raise
-        self.connection = connection
-
-    def send_xml(self, command: str) -> bytes:
-        if self.connection is None:
-            raise RuntimeError("GMP socket is not connected")
-        return send_gmp_xml_command(self.connection, command)
-
-    def disconnect(self) -> None:
-        if self.connection is not None:
-            self.connection.close()
-            self.connection = None
-
-
-class RbacGmpClient(RawGmpClient):
-    """Tiny raw GMP subset for the operator-account runtime smoke."""
-
-    def get_tasks(
-        self,
-        *,
-        details: bool | None = None,
-        ignore_pagination: bool | None = None,
-    ) -> bytes:
-        attributes = " usage_type=\"scan\""
-        if details is not None:
-            attributes += f" details={quoteattr(xml_bool(details))}"
-        if ignore_pagination is not None:
-            attributes += f" ignore_pagination={quoteattr(xml_bool(ignore_pagination))}"
-        return self.send_xml(f"<get_tasks{attributes}/>")
-
-    def get_reports(
-        self,
-        *,
-        filter_string: str | None = None,
-        details: bool | None = None,
-        ignore_pagination: bool | None = None,
-    ) -> bytes:
-        attributes = " usage_type=\"scan\""
-        if filter_string:
-            attributes += f" report_filter={quoteattr(filter_string)}"
-        if details is not None:
-            attributes += f" details={quoteattr(xml_bool(details))}"
-        if ignore_pagination is not None:
-            attributes += f" ignore_pagination={quoteattr(xml_bool(ignore_pagination))}"
-        return self.send_xml(f"<get_reports{attributes}/>")
-
-    def delete_task(self, task_id: str, *, ultimate: bool | None = False) -> bytes:
-        return self.send_xml(
-            f"<delete_task task_id={quoteattr(task_id)} ultimate={quoteattr(xml_bool(ultimate))}/>"
-        )
 
 
 class NativeBrowserClient:
@@ -331,14 +122,6 @@ class NativeBrowserClient:
         return decoded
 
 
-def connect_with_password(socket_path: Path, username: str, password: str, timeout: int):
-    if not socket_path.is_socket():
-        raise RuntimeError(f"gvmd socket is not ready: {socket_path}")
-    client = RbacGmpClient(socket_path, username, password, timeout)
-    client.connect()
-    return client
-
-
 def ensure_secondary_user(admin_client: NativeBrowserClient, password: str) -> dict[str, Any]:
     collection = admin_client.request_json(
         "GET",
@@ -379,16 +162,29 @@ def ensure_secondary_user(admin_client: NativeBrowserClient, password: str) -> d
     return {"id": user_id, "name": SECONDARY_USER, "action": action}
 
 
-def verify_full_test_visibility(client: Any) -> dict[str, Any]:
-    task_rows = object_rows(client.get_tasks(details=True, ignore_pagination=True), "task")
+def verify_full_test_visibility(client: NativeBrowserClient) -> dict[str, Any]:
+    try:
+        tasks_response = client.request_json(
+            "GET",
+            "tasks",
+            query={"page": "1", "page_size": "500", "sort": "name"},
+        )
+    except Exception as error:  # pylint: disable=broad-except
+        return {
+            "status": "fail",
+            "task_error": f"{type(error).__name__}: {error}",
+            "task": None,
+            "latest_report": None,
+        }
     candidates = sorted(
         (
-            task
-            for task in task_rows
-            if (task.get("name") or "").startswith(FULL_TEST_TASK_PREFIXES)
-            and task.get("id")
+            item
+            for item in tasks_response.get("items", [])
+            if isinstance(item, dict)
+            and isinstance(item.get("id"), str)
+            and (item.get("name") or "").startswith(FULL_TEST_TASK_PREFIXES)
         ),
-        key=lambda task: task.get("name") or "",
+        key=lambda item: item.get("name") or "",
     )
     if not candidates:
         return {
@@ -399,8 +195,32 @@ def verify_full_test_visibility(client: Any) -> dict[str, Any]:
         }
     report_errors = []
     for task in candidates:
-        latest_report, report_error = latest_report_for_task(client, task["id"])
-        if latest_report is not None and report_error is None:
+        task_id = task["id"]
+        try:
+            reports_response = client.request_json(
+                "GET",
+                "reports",
+                query={
+                    "task_id": task_id,
+                    "page": "1",
+                    "page_size": "10",
+                    "sort": "-creation_time",
+                },
+            )
+        except Exception as error:  # pylint: disable=broad-except
+            report_errors.append(f"{type(error).__name__}: {error}")
+            continue
+        latest_report = next(
+            (
+                report
+                for report in reports_response.get("items", [])
+                if isinstance(report, dict)
+                and isinstance(report.get("task"), dict)
+                and report["task"].get("id") == task_id
+            ),
+            None,
+        )
+        if latest_report is not None:
             return {
                 "status": "pass",
                 "task_error": None,
@@ -408,7 +228,7 @@ def verify_full_test_visibility(client: Any) -> dict[str, Any]:
                 "latest_report": latest_report,
                 "report_error": None,
             }
-        report_errors.append(report_error or "Latest full-test report is not visible.")
+        report_errors.append(f"No report returned for task {task_id}.")
     return {
         "status": "fail",
         "task_error": None,
@@ -511,7 +331,6 @@ def first_native_resource_id(
 def verify_native_cross_user_target_task_admin(
     admin_client: NativeBrowserClient,
     secondary_client: NativeBrowserClient,
-    secondary_gmp_client: RbacGmpClient,
 ) -> dict[str, Any]:
     """Prove target/task team authority without starting a scan."""
     suffix = secrets.token_hex(4)
@@ -570,10 +389,7 @@ def verify_native_cross_user_target_task_admin(
         )
         admin_client.request_json("DELETE", f"tasks/{task_id}")
         task_state = "trash"
-        require_ok_response(
-            secondary_gmp_client.delete_task(task_id, ultimate=True),
-            "hard-delete temporary task as secondary user",
-        )
+        secondary_client.request_json("DELETE", f"tasks/{task_id}/trash")
         task_state = "deleted"
 
         secondary_client.request_json(
@@ -596,17 +412,17 @@ def verify_native_cross_user_target_task_admin(
             "task_id": task_id,
             "target_created_by": "admin",
             "task_created_by": SECONDARY_USER,
-            "task_modified_and_deleted_by": "admin",
+            "task_modified_and_trashed_by": "admin",
+            "task_hard_deleted_by": SECONDARY_USER,
             "target_modified_and_deleted_by": SECONDARY_USER,
             "scans_started": 0,
         }
     except Exception as error:  # pylint: disable=broad-except
         if task_id and task_state != "deleted":
             try:
-                require_ok_response(
-                    secondary_gmp_client.delete_task(task_id, ultimate=True),
-                    "cleanup temporary task",
-                )
+                if task_state == "live":
+                    secondary_client.request_json("DELETE", f"tasks/{task_id}")
+                secondary_client.request_json("DELETE", f"tasks/{task_id}/trash")
             except Exception:
                 pass
         if target_id and target_state != "deleted":
@@ -636,25 +452,21 @@ def write_artifact(artifact_dir: Path, payload: dict[str, Any]) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Verify YAFVS operator-account semantics over GMP")
-    parser.add_argument("--socket", required=True, help="gvmd Unix socket path")
-    parser.add_argument("--username", required=True, help="admin GMP username")
-    parser.add_argument("--password-file", required=True, help="file containing the admin GMP password")
+    parser = argparse.ArgumentParser(description="Verify YAFVS trusted operator-team semantics")
+    parser.add_argument("--username", required=True, help="admin native API username")
+    parser.add_argument("--password-file", required=True, help="file containing the admin native API password")
     parser.add_argument("--base-url", required=True, help="development GSA base URL")
     parser.add_argument("--artifact-dir", required=True, help="directory for smoke artifacts")
-    parser.add_argument("--timeout", type=int, default=60, help="socket timeout in seconds")
+    parser.add_argument("--timeout", type=int, default=60, help="native API timeout in seconds")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    socket_path = Path(args.socket)
     password_path = Path(args.password_file)
     artifact_dir = Path(args.artifact_dir)
     admin_password = ""
     secondary_password = secrets.token_urlsafe(24)
-    admin_client = None
-    secondary_client = None
     try:
         if not password_path.is_file():
             raise RuntimeError(f"admin password file is missing: {password_path}")
@@ -666,14 +478,12 @@ def main(argv: list[str] | None = None) -> int:
         secondary_user = ensure_secondary_user(native_admin, secondary_password)
         native_secondary = NativeBrowserClient(args.base_url, args.timeout)
         native_secondary.login(SECONDARY_USER, secondary_password)
-        admin_client = connect_with_password(socket_path, args.username, admin_password, args.timeout)
-        secondary_client = connect_with_password(socket_path, SECONDARY_USER, secondary_password, args.timeout)
-        visibility = verify_full_test_visibility(secondary_client)
+        visibility = verify_full_test_visibility(native_secondary)
         native_filter_admin = verify_native_cross_user_filter_admin(
             native_admin, native_secondary
         )
         native_target_task_admin = verify_native_cross_user_target_task_admin(
-            native_admin, native_secondary, secondary_client
+            native_admin, native_secondary
         )
         checks = (
             visibility,
@@ -702,14 +512,8 @@ def main(argv: list[str] | None = None) -> int:
             error=error_text,
             scans_started=0,
         )
-    finally:
-        for client in (secondary_client, admin_client):
-            if client is not None:
-                try:
-                    client.disconnect()
-                except Exception:
-                    pass
-    payload["artifacts"] = [write_artifact(artifact_dir, payload)]
+    payload["artifacts"] = [str(artifact_dir / "rbac-smoke.json")]
+    write_artifact(artifact_dir, payload)
     print(json.dumps(payload, indent=2, sort_keys=True))
     return 1 if payload["status"] == "fail" else 0
 

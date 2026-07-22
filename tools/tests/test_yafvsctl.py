@@ -11353,17 +11353,27 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("python-gvm.venv", scope_wrapper)
         self.assertNotIn("gvmd_socket_path(repo_root)", scope_wrapper)
 
-    def test_runtime_rbac_smoke_uses_raw_bridge_not_python_gvm_connection(self):
+    def test_runtime_rbac_smoke_uses_only_native_api(self):
         source = RUNTIME_RBAC_PATH.read_text(encoding="utf-8")
         wrapper_source = (Path(__file__).resolve().parents[1] / "yafvsctl").read_text(encoding="utf-8")
         rust_wrapper_source = (
             Path(__file__).resolve().parents[1]
             / "yafvsctl-rs/src/commands/runtime_probe.rs"
         ).read_text(encoding="utf-8")
+        rbac_wrapper = rust_wrapper_source.split(
+            "fn command_runtime_rbac_smoke_with", 1
+        )[1].split("fn command_runtime_scope_smoke_with", 1)[0]
         self.assertNotIn("runtime_full_test_scan.connect_gmp", source)
         self.assertNotIn("from gvm", source)
         self.assertNotIn("gmp.", source)
-        self.assertIn("RbacGmpClient", source)
+        self.assertNotIn("runtime_gmp_smoke", source)
+        self.assertNotIn("RawGmpClient", source)
+        self.assertNotIn("RbacGmpClient", source)
+        self.assertNotIn("send_gmp_xml_command", source)
+        self.assertNotIn("gmp_authenticate_xml", source)
+        self.assertNotIn("<get_", source)
+        self.assertNotIn("<delete_task", source)
+        self.assertNotIn('"--socket"', source)
         self.assertIn("NativeBrowserClient", source)
         self.assertIn('"user-management/users"', source)
         self.assertIn("verify_native_cross_user_filter_admin", source)
@@ -11381,6 +11391,33 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertNotIn("def modify_user", source)
         self.assertNotIn("def command_runtime_rbac_smoke", wrapper_source)
         self.assertIn("command_runtime_rbac_smoke", rust_wrapper_source)
+        self.assertNotIn("gvmd_socket_path", rbac_wrapper)
+        self.assertNotIn('"--socket"', rbac_wrapper)
+
+    def test_runtime_rbac_failure_writes_artifact_and_returns_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            artifact_dir = Path(tmp) / "artifacts"
+            stdout = io.StringIO()
+            with unittest.mock.patch("sys.stdout", new=stdout):
+                exit_code = runtime_rbac_smoke.main(
+                    [
+                        "--username",
+                        "admin",
+                        "--password-file",
+                        str(Path(tmp) / "missing-secret"),
+                        "--base-url",
+                        "https://127.0.0.1:19392",
+                        "--artifact-dir",
+                        str(artifact_dir),
+                    ]
+                )
+
+            payload = json.loads(stdout.getvalue())
+            artifact = artifact_dir / "rbac-smoke.json"
+            self.assertEqual(exit_code, 1)
+            self.assertEqual(payload["status"], "fail")
+            self.assertEqual(payload["artifacts"], [str(artifact)])
+            self.assertEqual(json.loads(artifact.read_text(encoding="utf-8")), payload)
 
     def test_runtime_rbac_native_filter_check_uses_secondary_for_full_lifecycle(self):
         calls = []
@@ -11411,23 +11448,34 @@ class YAFVSCtlTests(unittest.TestCase):
             ],
         )
 
-    def test_runtime_rbac_raw_client_emits_only_retained_xml_subset(self):
-        client = runtime_rbac_smoke.RbacGmpClient(Path("/tmp/gvmd.sock"), "admin", "secret", 10)
-        sent = []
+    def test_runtime_rbac_full_test_visibility_uses_native_task_scoped_reports(self):
+        calls = []
 
-        def fake_send(command):
-            sent.append(command)
-            return b'<ok_response id="generated" status="201"/>'
+        class FakeNativeClient:
+            def request_json(self, method, path, *, payload=None, query=None):
+                calls.append((method, path, payload, query))
+                if path == "tasks":
+                    return {
+                        "items": [
+                            {
+                                "id": "task-1",
+                                "name": "YAFVS full test scan 192.0.2.0/24",
+                            }
+                        ]
+                    }
+                return {"items": [{"id": "report-1", "task": {"id": "task-1"}}]}
 
-        client.send_xml = fake_send
+        result = runtime_rbac_smoke.verify_full_test_visibility(FakeNativeClient())
 
-        client.get_tasks(details=True, ignore_pagination=True)
-        client.get_reports(filter_string="task_id=task-1 rows=10 sort-reverse=date", details=True, ignore_pagination=True)
-        client.delete_task("task-id", ultimate=True)
-
-        self.assertEqual(sent[0], '<get_tasks usage_type="scan" details="1" ignore_pagination="1"/>')
-        self.assertEqual(sent[1], '<get_reports usage_type="scan" report_filter="task_id=task-1 rows=10 sort-reverse=date" details="1" ignore_pagination="1"/>')
-        self.assertEqual(sent[2], '<delete_task task_id="task-id" ultimate="1"/>')
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["task"]["id"], "task-1")
+        self.assertEqual(result["latest_report"]["id"], "report-1")
+        self.assertEqual(
+            [(method, path) for method, path, _payload, _query in calls],
+            [("GET", "tasks"), ("GET", "reports")],
+        )
+        self.assertEqual(calls[1][3]["task_id"], "task-1")
+        self.assertEqual(calls[1][3]["sort"], "-creation_time")
 
     def test_runtime_rbac_native_target_task_check_uses_secondary_without_starting_scan(self):
         calls = []
@@ -11449,15 +11497,9 @@ class YAFVSCtlTests(unittest.TestCase):
                     return {"id": "task-1"}
                 return {}
 
-        class FakeGmpClient:
-            def delete_task(self, task_id, *, ultimate=False):
-                calls.append(("secondary-gmp", "DELETE", task_id, ultimate, None))
-                return b'<delete_task_response status="200" status_text="OK"/>'
-
         result = runtime_rbac_smoke.verify_native_cross_user_target_task_admin(
             FakeNativeClient("admin"),
             FakeNativeClient("secondary"),
-            FakeGmpClient(),
         )
 
         self.assertEqual(result["status"], "pass")
@@ -11467,7 +11509,7 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn(("secondary", "POST", "tasks"), operations)
         self.assertIn(("admin", "PATCH", "tasks/task-1"), operations)
         self.assertIn(("admin", "DELETE", "tasks/task-1"), operations)
-        self.assertIn(("secondary-gmp", "DELETE", "task-1"), operations)
+        self.assertIn(("secondary", "DELETE", "tasks/task-1/trash"), operations)
         self.assertIn(("secondary", "PATCH", "targets/target-1"), operations)
         self.assertIn(("secondary", "POST", "targets/target-1/restore"), operations)
         self.assertEqual(
@@ -11477,11 +11519,6 @@ class YAFVSCtlTests(unittest.TestCase):
                 ("secondary", "DELETE", "targets/target-1/trash"),
             ],
         )
-
-    def test_runtime_rbac_retained_raw_task_delete_failures_raise(self):
-        response = b'<delete_task_response status="400" status_text="bad task"/>'
-        with self.assertRaisesRegex(RuntimeError, "delete temporary task failed"):
-            runtime_rbac_smoke.require_ok_response(response, "delete temporary task")
 
     def test_feed_activation_commits_journal_before_restarting_services(self):
         transition_source = (

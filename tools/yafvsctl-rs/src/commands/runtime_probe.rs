@@ -703,7 +703,6 @@ pub(crate) fn command_runtime_gmp_smoke_with(
 
 fn command_runtime_rbac_smoke_with(repo_root: &Path, runner: &dyn CommandRunner) -> ResultEnvelope {
     let secret_path = runtime_secret_path(repo_root, ADMIN_SECRET);
-    let socket_path = gvmd_socket_path(repo_root);
     let probe = repo_root.join("tools/runtime_rbac_smoke.py");
     let artifact_dir = runtime_dir(repo_root).join("artifacts/rbac-smoke");
     let environment = build_env(repo_root);
@@ -711,7 +710,7 @@ fn command_runtime_rbac_smoke_with(repo_root: &Path, runner: &dyn CommandRunner)
         .into_iter()
         .next()
         .unwrap_or_else(|| "https://127.0.0.1:19392".to_string());
-    let mut findings = vec![simple_socket_prerequisite(&socket_path)];
+    let mut findings = Vec::new();
     let password = append_secret_prerequisite(
         repo_root,
         &secret_path,
@@ -757,8 +756,6 @@ fn command_runtime_rbac_smoke_with(repo_root: &Path, runner: &dyn CommandRunner)
         runner,
         &probe,
         &[
-            "--socket",
-            &socket_path.display().to_string(),
             "--username",
             ADMIN_USER,
             "--password-file",
@@ -1147,20 +1144,6 @@ fn file_prerequisite(
         },
     )
     .with_path(&display)
-}
-
-fn simple_socket_prerequisite(path: &Path) -> Finding {
-    let ready = fs::metadata(path).is_ok_and(|metadata| metadata.file_type().is_socket());
-    Finding::new(
-        if ready { "pass" } else { "fail" },
-        "gvmd.socket",
-        if ready {
-            "gvmd socket is ready.".into()
-        } else {
-            "gvmd socket is not ready.".into()
-        },
-    )
-    .with_path(&path.display().to_string())
 }
 
 pub(crate) fn socket_readiness_finding(
@@ -1816,9 +1799,6 @@ mod tests {
     #[test]
     fn rbac_helper_warn_and_artifacts_are_preserved() {
         let (root, repo) = fixture("rbac-warn");
-        let socket = gvmd_socket_path(&repo);
-        fs::create_dir_all(socket.parent().unwrap()).unwrap();
-        let _listener = UnixListener::bind(&socket).unwrap();
         prepare_secret(&repo, "admin-secret");
         fs::write(repo.join("tools/runtime_rbac_smoke.py"), "# helper\n").unwrap();
         let runner = ProbeRunner {
@@ -1840,7 +1820,6 @@ mod tests {
                 .map(|item| item.check.as_str())
                 .collect::<Vec<_>>(),
             [
-                "gvmd.socket",
                 "runtime.admin-secret",
                 "runtime-rbac.probe",
                 "runtime-rbac.artifact-dir",
@@ -1853,9 +1832,6 @@ mod tests {
     #[test]
     fn unsafe_secret_hardlink_stops_before_helper() {
         let (root, repo) = fixture("unsafe-secret");
-        let socket = gvmd_socket_path(&repo);
-        fs::create_dir_all(socket.parent().unwrap()).unwrap();
-        let _listener = UnixListener::bind(&socket).unwrap();
         fs::write(repo.join("tools/runtime_rbac_smoke.py"), "# helper\n").unwrap();
         prepare_secret(&repo, "unsafe-secret");
         let secret = runtime_secret_path(&repo, ADMIN_SECRET);

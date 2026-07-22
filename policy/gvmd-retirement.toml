@@ -335,10 +335,10 @@ notes = "Raw GMP provisioning, task start, and state reads are removed; the guar
 [[callers]]
 id = "runtime-rbac-smoke"
 kind = "characterization"
-status = "inventoried"
-evidence = ["tools/runtime_rbac_smoke.py::class RbacGmpClient"]
+status = "retired"
+evidence = ["tools/tests/test_yafvsctl.py::test_runtime_rbac_smoke_uses_only_native_api"]
 replacement = ["team-authority-permissions", "crud-query-api-surface"]
-notes = "GMP remains only for independent full-test visibility and temporary-task hard-delete cleanup. Filter team-authority assertions and cleanup are native-only."
+notes = "Full-test visibility and cross-user filter, target, and task lifecycle assertions use only the native browser API and never start a scan; the helper has no GMP or gvmd socket dependency."
 
 [[callers]]
 id = "runtime-browser-smoke-cleanup-fallback"

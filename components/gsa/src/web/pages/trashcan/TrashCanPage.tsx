@@ -5,10 +5,7 @@
  */
 
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {
-  showSuccessNotification,
-  showErrorNotification,
-} from '@greenbone/ui-lib';
+import {showSuccessNotification} from '@greenbone/ui-lib';
 import styled from 'styled-components';
 import {type TrashCanGetData} from 'gmp/commands/trashcan';
 import type Rejection from 'gmp/http/rejection';
@@ -123,18 +120,6 @@ const TrashCan = () => {
       const summary = await summaryRequest;
       setTrash(response.data);
       setTrashSummary(summary);
-
-      if (
-        response.data.failedRequests &&
-        response.data.failedRequests.length > 0
-      ) {
-        response.data.failedRequests.forEach(requestType => {
-          showErrorNotification(
-            '',
-            _('Failed to load {{type}} from trashcan', {type: requestType}),
-          );
-        });
-      }
     } catch (error) {
       showError(error as Rejection);
       setTrashSummary(undefined);

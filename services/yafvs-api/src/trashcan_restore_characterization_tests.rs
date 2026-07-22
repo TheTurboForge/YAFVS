@@ -5,6 +5,8 @@
 const GSA_TRASHCAN: &str = include_str!("../../../components/gsa/src/gmp/commands/trashcan.ts");
 const GSA_NATIVE_TRASHCAN: &str =
     include_str!("../../../components/gsa/src/gmp/native-api/trashcan.ts");
+const GSA_TRASHCAN_PAGE: &str =
+    include_str!("../../../components/gsa/src/web/pages/trashcan/TrashCanPage.tsx");
 const GSA_TRASH_ACTIONS: &str =
     include_str!("../../../components/gsa/src/web/pages/extras/TrashActions.jsx");
 const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
@@ -25,6 +27,27 @@ fn inherited_function(source: &str, name: &str) -> String {
     let tail = &source[start..];
     let end = tail.find("\n/**").unwrap_or(tail.len());
     tail[..end].to_string()
+}
+
+#[test]
+fn trashcan_inventory_is_native_only_and_has_no_gmp_fallback() {
+    let get_inventory = GSA_TRASHCAN
+        .split_once("async get()")
+        .expect("GSA Trashcan inventory method must exist")
+        .1
+        .split_once("\n  }\n}")
+        .expect("GSA Trashcan inventory method must terminate")
+        .0;
+    assert!(get_inventory.contains("if (!canUseNativeApi(this.http))"));
+    assert!(get_inventory.contains("Native Trashcan inventory is unavailable"));
+    assert!(get_inventory.contains("fetchNativeTrashcanItems(this.http)"));
+    assert!(!get_inventory.contains("httpGetWithTransform"));
+    assert!(!GSA_TRASHCAN.contains("cmd: 'get_trash_"));
+    assert!(!GSA_TRASHCAN.contains("Promise.allSettled"));
+    assert!(!GSA_TRASHCAN.contains("get_tags_response"));
+    assert!(!GSA_TRASHCAN.contains("failedRequests"));
+    assert!(!GSA_TRASHCAN_PAGE.contains("failedRequests"));
+    assert!(!GSA_TRASHCAN_PAGE.contains("showErrorNotification"));
 }
 
 #[test]

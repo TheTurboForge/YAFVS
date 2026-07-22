@@ -470,10 +470,24 @@ describe('TrashCanCommand tests', () => {
   test('should load trashcan rows through native redacted item API when available', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
-        page: {page: 1, page_size: 500, total: 3},
+        page: {page: 1, page_size: 500, total: 12},
         items: [
           {
             id: '11111111-1111-1111-1111-111111111111',
+            resource_type: 'alerts',
+            entity_type: 'alert',
+            title: 'Alerts',
+            name: 'Alert in trash',
+          },
+          {
+            id: '22222222-2222-2222-2222-222222222222',
+            resource_type: 'configs',
+            entity_type: 'scanconfig',
+            title: 'Scan configurations',
+            name: 'Scan configuration in trash',
+          },
+          {
+            id: '33333333-3333-3333-3333-333333333333',
             resource_type: 'credentials',
             entity_type: 'credential',
             title: 'Credentials',
@@ -481,14 +495,63 @@ describe('TrashCanCommand tests', () => {
             comment: 'redacted row',
           },
           {
-            id: '22222222-2222-2222-2222-222222222222',
+            id: '44444444-4444-4444-4444-444444444444',
+            resource_type: 'filters',
+            entity_type: 'filter',
+            title: 'Filters',
+            name: 'Filter in trash',
+          },
+          {
+            id: '55555555-5555-5555-5555-555555555555',
+            resource_type: 'overrides',
+            entity_type: 'override',
+            title: 'Overrides',
+            name: 'Override in trash',
+          },
+          {
+            id: '66666666-6666-6666-6666-666666666666',
+            resource_type: 'port_lists',
+            entity_type: 'portlist',
+            title: 'Port lists',
+            name: 'Port list in trash',
+          },
+          {
+            id: '77777777-7777-7777-7777-777777777777',
+            resource_type: 'report_formats',
+            entity_type: 'reportformat',
+            title: 'Report formats',
+            name: 'Report format in trash',
+          },
+          {
+            id: '88888888-8888-8888-8888-888888888888',
+            resource_type: 'scanners',
+            entity_type: 'scanner',
+            title: 'Scanners',
+            name: 'Scanner in trash',
+          },
+          {
+            id: '99999999-9999-9999-9999-999999999999',
+            resource_type: 'schedules',
+            entity_type: 'schedule',
+            title: 'Schedules',
+            name: 'Schedule in trash',
+          },
+          {
+            id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+            resource_type: 'tags',
+            entity_type: 'tag',
+            title: 'Tags',
+            name: 'Tag in trash',
+          },
+          {
+            id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
             resource_type: 'targets',
             entity_type: 'target',
             title: 'Targets',
             name: 'Target without hosts',
           },
           {
-            id: '33333333-3333-3333-3333-333333333333',
+            id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
             resource_type: 'tasks',
             entity_type: 'task',
             title: 'Tasks',
@@ -532,29 +595,43 @@ describe('TrashCanCommand tests', () => {
       },
     );
     expect(data.data.credentials[0].id).toBe(
-      '11111111-1111-1111-1111-111111111111',
+      '33333333-3333-3333-3333-333333333333',
     );
     expect(data.data.credentials[0].name).toBe('SSH credential');
+    expect(data.data.alerts[0].name).toBe('Alert in trash');
+    expect(data.data.scanConfigs[0].name).toBe('Scan configuration in trash');
+    expect(data.data.filters[0].name).toBe('Filter in trash');
+    expect(data.data.overrides[0].name).toBe('Override in trash');
+    expect(data.data.portLists[0].name).toBe('Port list in trash');
+    expect(data.data.reportFormats[0].name).toBe('Report format in trash');
+    expect(data.data.scanners[0].name).toBe('Scanner in trash');
+    expect(data.data.schedules[0].name).toBe('Schedule in trash');
+    expect(data.data.tags[0].name).toBe('Tag in trash');
     expect(data.data.targets[0].name).toBe('Target without hosts');
     expect(data.data.tasks[0].entityType).toBe('task');
   });
 
-  test('should handle failed requests gracefully', async () => {
-    const response = createResponse({
-      get_trash: {
-        get_alerts_response: {
-          alert: [{_id: 'alert1'}],
-        },
-      },
+  test('should not fall back to GMP when native inventory fails', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
     });
+    testing.stubGlobal('fetch', fetchMock);
+    const {cmd, fakeHttp} = createNativeTrashcanCommand();
 
-    const fakeHttp = createHttp(response);
+    await expect(cmd.get()).rejects.toThrow(
+      'Native API request failed with status 500',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should not fall back to GMP when native inventory is unavailable', async () => {
+    const fakeHttp = createHttp(createResponse({}));
     const cmd = new TrashCanCommand(fakeHttp);
-    const data = await cmd.get();
 
-    expect(data.data.alerts.length).toBe(1);
-    expect(data.data.scanConfigs.length).toBe(0);
-
-    expect(data.data).toHaveProperty('failedRequests');
+    await expect(cmd.get()).rejects.toThrow(
+      'Native Trashcan inventory is unavailable',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 });

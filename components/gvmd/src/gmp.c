@@ -2592,7 +2592,6 @@ typedef enum
   CLIENT_GET_ASSETS,
   CLIENT_GET_CONFIGS,
   CLIENT_GET_CREDENTIALS,
-  CLIENT_GET_FEATURES,
   CLIENT_GET_FILTERS,
   CLIENT_GET_INFO,
   CLIENT_GET_INTEGRATION_CONFIGS,
@@ -3215,10 +3214,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             append_attribute (attribute_names, attribute_values, "format",
                               &get_credentials_data->format);
             set_client_state (CLIENT_GET_CREDENTIALS);
-          }
-        else if (strcasecmp ("GET_FEATURES", element_name) == 0)
-          {
-            set_client_state (CLIENT_GET_FEATURES);
           }
         else if (strcasecmp ("GET_FILTERS", element_name) == 0)
           {
@@ -8361,66 +8356,6 @@ handle_get_credentials (gmp_parser_t *gmp_parser, GError **error)
   SEND_GET_END ("credential", &get_credentials_data->get,
                 count, filtered);
   get_credentials_data_reset (get_credentials_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
- * @brief Handle end of GET_FEATURES element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_features (gmp_parser_t *gmp_parser, GError **error)
-{
-  int compiled_in;
-  int enabled;
-
-  SEND_TO_CLIENT_OR_FAIL ("<get_features_response"
-                          " status=\"" STATUS_OK "\""
-                          " status_text=\"" STATUS_OK_TEXT "\">");
-
-  /* OPENVASD */
-  compiled_in = feature_compiled_in (FEATURE_ID_OPENVASD_SCANNER) ? 1 : 0;
-  if (compiled_in)
-    enabled = feature_enabled (FEATURE_ID_OPENVASD_SCANNER) ? 1 : 0;
-  else
-    enabled = 0;
-  SENDF_TO_CLIENT_OR_FAIL (
-    "<feature compiled_in=\"%d\" enabled=\"%d\"><name>%s</name></feature>",
-    compiled_in, enabled, "ENABLE_OPENVASD");
-
-  /* FEED_VT_METADATA */
-  compiled_in = feature_compiled_in (FEATURE_ID_VT_METADATA) ? 1 : 0;
-  if (compiled_in)
-    enabled = feature_enabled (FEATURE_ID_VT_METADATA) ? 1 : 0;
-  else
-    enabled = 0;
-  SENDF_TO_CLIENT_OR_FAIL (
-    "<feature compiled_in=\"%d\" enabled=\"%d\"><name>%s</name></feature>",
-    compiled_in, enabled, "FEED_VT_METADATA");
-
-  /* REPORT_EXPORT */
-  compiled_in = feature_compiled_in (FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT) ? 1 : 0;
-  if (compiled_in)
-    enabled = feature_enabled (FEATURE_ID_SECURITY_INTELLIGENCE_EXPORT) ? 1 : 0;
-  else
-    enabled = 0;
-  SENDF_TO_CLIENT_OR_FAIL (
-    "<feature compiled_in=\"%d\" enabled=\"%d\"><name>%s</name></feature>",
-    compiled_in, enabled, "ENABLE_SECURITY_INTELLIGENCE_EXPORT");
-
-  /* JWT_AUTH */
-  compiled_in = feature_compiled_in (FEATURE_ID_JWT_AUTH) ? 1 : 0;
-  if (compiled_in)
-    enabled = feature_enabled (FEATURE_ID_JWT_AUTH) ? 1 : 0;
-  else
-    enabled = 0;
-  SENDF_TO_CLIENT_OR_FAIL (
-    "<feature compiled_in=\"%d\" enabled=\"%d\"><name>%s</name></feature>",
-    compiled_in, enabled, "ENABLE_JWT_AUTH");
-
-  SEND_TO_CLIENT_OR_FAIL ("</get_features_response>");
   set_client_state (CLIENT_AUTHENTIC);
 }
 
@@ -13930,10 +13865,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         handle_get_credentials (gmp_parser, error);
         break;
 
-
-      case CLIENT_GET_FEATURES:
-        handle_get_features (gmp_parser, error);
-        break;
 
       case CLIENT_GET_FILTERS:
         handle_get_filters (gmp_parser, error);

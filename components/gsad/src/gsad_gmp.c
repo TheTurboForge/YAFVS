@@ -8732,62 +8732,6 @@ get_capabilities_gmp (gvm_connection_t *connection,
                        g_string_free (xml, FALSE), response_data);
 }
 
-char *
-get_features_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                  params_t *params, gsad_command_response_data_t *response_data)
-{
-  entity_t entity = NULL;
-  GString *xml;
-
-  /* Get features list */
-  if (gvm_connection_sendf (connection, "<get_features/>"))
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while getting the features list. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    }
-
-  xml = g_string_new ("");
-  g_string_append (xml, "<get_features>");
-
-  /* Read the response. */
-  if (read_entity_and_string_c (connection, &entity, &xml))
-    {
-      g_string_free (xml, TRUE);
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while getting the feature list. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    }
-
-  if (gmp_success (entity) != 1)
-    {
-      gchar *message;
-
-      set_http_status_from_entity (entity, response_data);
-
-      message = gsad_http_create_gsad_message (
-        credentials, entity_attribute (entity, "status_text"), response_data);
-
-      g_string_free (xml, TRUE);
-      free_entity (entity);
-      return message;
-    }
-
-  free_entity (entity);
-
-  g_string_append (xml, "</get_features>");
-  return envelope_gmp (connection, credentials, params,
-                       g_string_free (xml, FALSE), response_data);
-}
-
 /**
  * @brief Check authentication credentials.
  *
@@ -9288,7 +9232,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_config_family)
   ELSE (get_credential)
   ELSE (get_credentials)
-  ELSE (get_features)
   ELSE (get_filter)
   ELSE (get_filters)
   ELSE (get_info)

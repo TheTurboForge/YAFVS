@@ -233,6 +233,7 @@ fn validate_registry(repo_root: &Path, registry: &Registry) -> Vec<Finding> {
             }
         }
     }
+
     for caller in &registry.callers {
         validate_unique_id(&caller.id, "caller", &mut all_ids, &mut findings);
         if !CALLER_KINDS.contains(&caller.kind.as_str()) {
@@ -746,6 +747,44 @@ notes = "A bounded caller."
                 "retired appliance-licensing file remains: {retired_path}"
             );
         }
+    }
+
+    #[test]
+    fn optional_feature_inventory_transport_is_absent() {
+        const GSA_USER: &str = include_str!("../../../../components/gsa/src/gmp/commands/user.ts");
+        const GSA_USER_TEST: &str =
+            include_str!("../../../../components/gsa/src/gmp/commands/__tests__/user.test.ts");
+        const GSAD_GMP: &str = include_str!("../../../../components/gsad/src/gsad_gmp.c");
+        const GSAD_HEADER: &str = include_str!("../../../../components/gsad/src/gsad_gmp.h");
+        const GSAD_VALIDATOR: &str =
+            include_str!("../../../../components/gsad/src/gsad_validator.c");
+        const GVMD_GMP: &str = include_str!("../../../../components/gvmd/src/gmp.c");
+        const GVMD_SCHEMA: &str =
+            include_str!("../../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
+
+        for (source, retired) in [
+            (GSAD_GMP, "get_features_gmp"),
+            (GSAD_GMP, "ELSE (get_features)"),
+            (GSAD_HEADER, "get_features_gmp"),
+            (GSAD_VALIDATOR, "|(get_features)"),
+            (GVMD_GMP, "CLIENT_GET_FEATURES"),
+            (GVMD_GMP, "handle_get_features"),
+            (GVMD_GMP, "strcasecmp (\"GET_FEATURES\""),
+            (GVMD_SCHEMA, "<name>get_features</name>"),
+        ] {
+            assert!(
+                !source.contains(retired),
+                "retired optional-feature transport marker remains: {retired}"
+            );
+        }
+
+        assert!(GSA_USER.contains("async currentFeatures()"));
+        assert!(GSA_USER.contains("return new Response(new Features());"));
+        assert!(
+            GSA_USER_TEST
+                .contains("should disable non-retained optional features without a GMP request")
+        );
+        assert!(GSA_USER_TEST.contains("expect(fakeHttp.request).not.toHaveBeenCalled();"));
     }
 
     #[test]

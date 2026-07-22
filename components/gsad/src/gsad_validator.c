@@ -82,7 +82,6 @@ gsad_init_validator ()
                      "|(get_configs)"
                      "|(get_credential)"
                      "|(get_credentials)"
-                     "|(get_features)"
                      "|(get_filter)"
                      "|(get_filters)"
                      "|(get_info)"

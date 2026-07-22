@@ -77,32 +77,4 @@ get_integration_configs
 modify_integration_config
 ```
 
-## Extended get_features Response
-
-To help clients understand which features are compiled-in and enabled at runtime, the `get_features` command now returns
-both fields:
-
-**compiled_in**: whether gvmd binary was built with the feature
-
-**enabled**: final runtime result after applying environment + config
-
-Exact example response:
-
-```
-<get_features_response status="200" status_text="OK">
-  <feature compiled_in="1" enabled="0">
-  <name>ENABLE_OPENVASD</name>
-  </feature>
-  <feature compiled_in="1" enabled="0">
-  <name>FEED_VT_METADATA</name>
-  </feature>
-  <feature compiled_in="1" enabled="0">
-  <name>ENABLE_SECURITY_INTELLIGENCE_EXPORT</name>
-  </feature>
-  <feature compiled_in="1" enabled="0">
-  <name>ENABLE_JWT_AUTH</name>
-  </feature>
-</get_features_response>
-```
-
 ---

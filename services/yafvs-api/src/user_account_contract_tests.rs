@@ -10,6 +10,11 @@ use crate::{
 };
 
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
+const GSA_USER_COMMAND: &str = include_str!("../../../components/gsa/src/gmp/commands/user.ts");
+const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GSAD_GMP_HEADER: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
+const GSAD_NATIVE_API: &str = include_str!("../../../components/gsad/src/gsad_native_api.c");
+const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 
 fn openapi_path_block(path: &str) -> String {
     let marker = format!("  {path}:");
@@ -28,6 +33,57 @@ fn openapi_path_block(path: &str) -> String {
             }
         })
         .unwrap_or_else(|| tail.to_string())
+}
+
+#[test]
+fn operator_capabilities_and_session_ping_have_no_public_gmp_route() {
+    let capabilities = GSA_USER_COMMAND
+        .split_once("async currentCapabilities()")
+        .expect("current capabilities method")
+        .1
+        .split_once("async currentFeatures()")
+        .expect("current capabilities method boundary")
+        .0;
+    assert!(capabilities.contains("new Capabilities(['everything'])"));
+    assert!(!capabilities.contains("this.http"));
+
+    let ping = GSA_USER_COMMAND
+        .split_once("async ping()")
+        .expect("session ping method")
+        .1;
+    assert!(ping.contains("api/v1/session/ping"));
+    assert!(ping.contains("method: 'GET'"));
+
+    for retired in ["get_capabilities", "ping"] {
+        let handler = format!("{retired}_gmp");
+        let dispatch = format!("ELSE ({retired})");
+        let validator = format!("|({retired})");
+        assert!(!GSAD_GMP.contains(&handler), "gsad still defines {handler}");
+        assert!(
+            !GSAD_GMP_HEADER.contains(&handler),
+            "gsad still declares {handler}"
+        );
+        assert!(
+            !GSAD_GMP.contains(&dispatch),
+            "gsad still dispatches {dispatch}"
+        );
+        assert!(
+            !GSAD_VALIDATOR.contains(&validator),
+            "gsad still accepts {validator}"
+        );
+    }
+
+    assert!(GSAD_NATIVE_API.contains("g_strcmp0 (path, SESSION_PING_PATH) == 0"));
+    assert!(GSAD_NATIVE_API.contains(r#"{\"status\":\"ok\"}"#));
+
+    let login_auth = GSAD_GMP
+        .split_once("authenticate_gmp_with_user_uuid (")
+        .expect("manager-backed login helper")
+        .1
+        .split_once("\nint\nauthenticate_gmp (")
+        .expect("manager-backed login helper boundary")
+        .0;
+    assert!(login_auth.contains(r#"<help format=\"XML\" type=\"brief\"/>"#));
 }
 
 #[test]

@@ -408,16 +408,8 @@ delete_tls_certificate_gmp (gvm_connection_t *, gsad_credentials_t *,
                             params_t *, gsad_command_response_data_t *);
 
 char *
-get_capabilities_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                      gsad_command_response_data_t *);
-
-char *
 renew_session_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
-char *
-ping_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-          gsad_command_response_data_t *);
-
 char *
 change_password_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                      gsad_command_response_data_t *);

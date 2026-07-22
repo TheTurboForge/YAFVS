@@ -320,7 +320,7 @@ notes = "Replace manager socket authentication and logout/session coupling with 
 id = "runtime-gmp-smoke"
 kind = "characterization"
 status = "characterized"
-evidence = ["tools/runtime_gmp_smoke.py::raw_gmp_get_version"]
+evidence = ["tools/runtime_gmp_smoke.py::raw_gmp_checks"]
 replacement = ["runtime-initialization-health"]
 notes = "Keep only while it independently characterizes a still-live compatibility boundary."
 

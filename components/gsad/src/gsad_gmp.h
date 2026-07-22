@@ -31,10 +31,6 @@ exec_gmp_post (gsad_http_connection_t *connection,
                gsad_credentials_t *credentials);
 
 char *
-clone_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-           gsad_command_response_data_t *);
-
-char *
 create_task_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                  gsad_command_response_data_t *);
 char *

@@ -3962,72 +3962,6 @@ create_target_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Clone a credential, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-clone_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-           params_t *params, gsad_command_response_data_t *response_data)
-{
-  gchar *html;
-  const char *id, *type;
-  entity_t entity;
-
-  id = params_value (params, "id");
-  type = params_value (params, "resource_type");
-  CHECK_VARIABLE_INVALID (id, "Clone Credential");
-  CHECK_VARIABLE_INVALID (type, "Clone Credential");
-
-  if (strcmp (type, "credential"))
-    return message_invalid (connection, credentials, params, response_data,
-                            "Only credentials can be cloned.",
-                            "Clone Credential");
-
-  if (gvm_connection_sendf (connection,
-                            "<create_credential><copy>%s</copy>"
-                            "</create_credential>",
-                            id)
-           == -1)
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while cloning a credential. "
-        "The credential was not cloned. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    }
-
-  entity = NULL;
-  if (read_entity_c (connection, &entity))
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while cloning a credential. "
-        "It is unclear whether the credential has been cloned or not. "
-        "Diagnostics: Failure to read response from manager daemon.",
-        response_data);
-    }
-
-  /* Cleanup, and return next page. */
-  html = response_from_entity (connection, credentials, params, entity,
-                               "Clone Credential", response_data);
-
-  free_entity (entity);
-
-  return html;
-}
-
-/**
  * @brief Delete a target, get all targets, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -9490,7 +9424,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (bulk_delete)
   ELSE (bulk_export)
   ELSE (change_password)
-  ELSE (clone)
   ELSE (create_asset)
   ELSE (create_credential)
   ELSE (create_host)

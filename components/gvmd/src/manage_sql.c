@@ -16638,42 +16638,6 @@ create_credential (const char* name, const char* comment, const char* login,
 }
 
 /**
- * @brief Create an LSC Credential from an existing one.
- *
- * @param[in]  name                 Name of new Credential. NULL to copy
- *                                  from existing.
- * @param[in]  comment              Comment on new Credential. NULL to copy
- *                                  from existing.
- * @param[in]  credential_id        UUID of existing Credential.
- * @param[out] new_credential       New Credential.
- *
- * @return 0 success, 1 Credential exists already, 2 failed to find
- *         existing Credential, -1 error.
- */
-int
-copy_credential (const char* name, const char* comment,
-                 const char *credential_id,
-                 credential_t* new_credential)
-{
-  int ret;
-  credential_t credential;
-
-  assert (new_credential);
-
-  ret = copy_resource ("credential", name, comment, credential_id,
-                       "type", 1, new_credential, &credential);
-  if (ret)
-    return ret;
-
-  sql ("INSERT INTO credentials_data (credential, type, value)"
-       " SELECT %llu, type, value FROM credentials_data"
-       " WHERE credential = %llu;",
-       *new_credential, credential);
-
-  return 0;
-}
-
-/**
  * @brief Modify a Credential.
  *
  * @param[in]   credential_id       UUID of Credential.

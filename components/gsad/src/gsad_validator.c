@@ -23,7 +23,6 @@ gsad_init_validator ()
                      "^((bulk_delete)"
                      "|(bulk_export)"
                      "|(change_password)"
-                     "|(clone)"
                      "|(create_asset)"
                      "|(create_credential)"
                      "|(create_host)"

@@ -9,6 +9,7 @@ import argparse
 import json
 import socket
 import xml.etree.ElementTree as ET
+import uuid
 from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
@@ -70,12 +71,42 @@ def send_gmp_xml_command(connection: socket.socket, command: str) -> bytes:
     return read_gmp_xml_response(connection)
 
 
-def raw_gmp_get_version(socket_path: Path, username: str, password: str, timeout: int) -> bytes:
+def parse_gmp_response(response: bytes) -> ET.Element:
+    return ET.fromstring(response)
+
+
+def raw_gmp_checks(
+    socket_path: Path, username: str, password: str, timeout: int
+) -> tuple[bytes, bytes, bytes, bytes, str]:
+    probe_name = f"yafvs-retired-copy-probe-{uuid.uuid4()}"
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
         connection.settimeout(timeout)
         connection.connect(str(socket_path))
         send_gmp_xml_command(connection, gmp_authenticate_xml(username, password))
-        return send_gmp_xml_command(connection, "<get_version/>")
+        version_response = send_gmp_xml_command(connection, "<get_version/>")
+        copy_response = send_gmp_xml_command(
+            connection,
+            "<create_credential>"
+            f"<name>{escape(probe_name)}</name>"
+            "<copy>00000000-0000-0000-0000-000000000000</copy>"
+            "</create_credential>",
+        )
+        copy_only_response = send_gmp_xml_command(
+            connection,
+            "<create_credential>"
+            "<copy>00000000-0000-0000-0000-000000000000</copy>"
+            "</create_credential>",
+        )
+        credentials_response = send_gmp_xml_command(
+            connection, '<get_credentials filter="rows=-1"/>'
+        )
+        return (
+            version_response,
+            copy_response,
+            copy_only_response,
+            credentials_response,
+            probe_name,
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -105,7 +136,13 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        version_response = raw_gmp_get_version(socket_path, args.username, password, args.timeout)
+        (
+            version_response,
+            copy_response,
+            copy_only_response,
+            credentials_response,
+            probe_name,
+        ) = raw_gmp_checks(socket_path, args.username, password, args.timeout)
     except Exception as error:  # pylint: disable=broad-except
         print(
             json.dumps(
@@ -120,17 +157,46 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     version = parse_version(version_response)
+    copy_root = parse_gmp_response(copy_response)
+    copy_rejected = (
+        copy_root.get("status") == "400"
+        and copy_root.get("status_text") == "Credential copy is no longer supported"
+    )
+    copy_only_root = parse_gmp_response(copy_only_response)
+    copy_only_rejected = (
+        copy_only_root.get("status") == "400"
+        and copy_only_root.get("status_text") == "Credential copy is no longer supported"
+    )
+    credential_names = {
+        name.text
+        for name in parse_gmp_response(credentials_response).findall("./credential/name")
+        if name.text
+    }
+    no_credential_created = probe_name not in credential_names
+    passed = (
+        bool(version)
+        and copy_rejected
+        and copy_only_rejected
+        and no_credential_created
+    )
     print(
         json.dumps(
             result(
-                "pass" if version else "warn",
-                "GMP authentication and get_version completed",
+                "pass" if passed else "fail",
+                "GMP authentication, get_version, and retired credential-copy rejection completed",
                 authenticated=True,
                 version=version,
+                credential_copy_rejected=copy_rejected,
+                credential_copy_status=copy_root.get("status"),
+                credential_copy_status_text=copy_root.get("status_text"),
+                credential_copy_only_rejected=copy_only_rejected,
+                credential_copy_only_status=copy_only_root.get("status"),
+                credential_copy_only_status_text=copy_only_root.get("status_text"),
+                credential_copy_residue_absent=no_credential_created,
             )
         )
     )
-    return 0 if version else 2
+    return 0 if passed else 1
 
 
 if __name__ == "__main__":

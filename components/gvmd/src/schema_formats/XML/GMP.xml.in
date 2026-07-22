@@ -3322,7 +3322,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
     <pattern>
       <e>name</e>
       <o><e>comment</e></o>
-      <o><e>copy</e></o>
       <o><e>allow_insecure</e></o>
       <o><e>certificate</e></o>
       <o><e>kdc</e></o>
@@ -3346,13 +3345,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       <summary>A comment on the credential</summary>
       <pattern>
         text
-      </pattern>
-    </ele>
-    <ele>
-      <name>copy</name>
-      <summary>The UUID of an existing credential</summary>
-      <pattern>
-        <t>uuid</t>
       </pattern>
     </ele>
     <ele>

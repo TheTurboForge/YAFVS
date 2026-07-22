@@ -1718,10 +1718,6 @@ create_credential (const char*, const char*, const char*, const char*,
                    credential_t*);
 
 int
-copy_credential (const char*, const char*, const char*,
-                 credential_t*);
-
-int
 modify_credential (const char*, const char*, const char*, const char*,
                    const char*, const char*, const char*, const char*,
                    const char*, const char*, const char*, const char*,

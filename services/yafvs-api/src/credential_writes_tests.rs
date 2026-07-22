@@ -13,6 +13,7 @@ use crate::{
     errors::ApiError,
 };
 
+const YAFVSCTL: &str = include_str!("../../../tools/yafvsctl");
 const GVMD_MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
 
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> CredentialPatchRequest {
@@ -24,22 +25,19 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> CredentialPatchRe
 
 #[test]
 fn credential_clone_is_operator_owned_atomic_and_secret_opaque() {
-    let inherited = GVMD_MANAGE_SQL
-        .split_once("copy_credential (const char* name, const char* comment,")
-        .expect("imported credential clone authority")
-        .1
-        .split_once("/**\n * @brief Modify a Credential.")
-        .expect("imported credential clone authority end")
-        .0;
     for required in [
-        "copy_resource (\"credential\"",
-        "\"type\", 1",
-        "INSERT INTO credentials_data",
-        "SELECT %llu, type, value FROM credentials_data",
+        "findings.extend(native_api_direct_credential_clone_findings(",
+        "native-api-direct.credential-clone-fixture",
+        "native-api-direct.credential-clone-response",
+        "native-api-direct.credential-clone-database-state",
+        "native-api-direct.credential-clone-missing",
+        "native-api-direct.credential-clone-ownerless",
+        "native-api-direct.credential-clone-cleanup",
+        "EXCEPT ALL SELECT type, value FROM credentials_data",
     ] {
         assert!(
-            inherited.contains(required),
-            "imported credential clone authority missing {required}"
+            YAFVSCTL.contains(required),
+            "runtime clone characterization missing {required}"
         );
     }
 

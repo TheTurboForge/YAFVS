@@ -457,7 +457,7 @@ typedef struct
   char *allow_insecure;    ///< Whether to allow insecure use.
   char *certificate;       ///< Certificate for client certificate auth.
   char *comment;           ///< Comment.
-  char *copy;              ///< UUID of resource to copy.
+  int copy_requested;      ///< Whether a retired copy element was supplied.
   char *kdc;               ///< Kerberos KDC (key distribution centers).
   char *kdcs_kdc;          ///< Current Kerberos KDC (key distribution centers).
   array_t *kdcs;           ///< List of Kerberos KDC (key distribution centers).
@@ -487,7 +487,6 @@ create_credential_data_reset (create_credential_data_t *data)
   free (data->allow_insecure);
   free (data->certificate);
   free (data->comment);
-  free (data->copy);
   free (data->kdc);
   free (data->kdcs_kdc);
   array_free (data->kdcs);
@@ -2499,7 +2498,6 @@ typedef enum
   CLIENT_CREATE_CREDENTIAL_CERTIFICATE,
   CLIENT_CREATE_CREDENTIAL_COMMENT,
   CLIENT_CREATE_CREDENTIAL_COMMUNITY,
-  CLIENT_CREATE_CREDENTIAL_COPY,
   CLIENT_CREATE_CREDENTIAL_KDC,
   CLIENT_CREATE_CREDENTIAL_KDCS,
   CLIENT_CREATE_CREDENTIAL_KDCS_KDC,
@@ -3772,7 +3770,10 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             set_client_state (CLIENT_CREATE_CREDENTIAL_COMMUNITY);
           }
         else if (strcasecmp ("COPY", element_name) == 0)
-          set_client_state (CLIENT_CREATE_CREDENTIAL_COPY);
+          {
+            create_credential_data->copy_requested = 1;
+            set_read_over (gmp_parser);
+          }
         else if (strcasecmp ("KDC", element_name) == 0)
           {
             gvm_free_string_var (&create_credential_data->kdc);
@@ -14222,52 +14223,13 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
           assert (create_credential_data->name != NULL);
 
-          if (create_credential_data->copy)
-            switch (copy_credential (create_credential_data->name,
-                                     create_credential_data->comment,
-                                     create_credential_data->copy,
-                                     &new_credential))
-              {
-                case 0:
-                  {
-                    char *uuid;
-                    uuid = credential_uuid (new_credential);
-                    SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_credential"),
-                                             uuid);
-                    log_event ("credential", "Credential", uuid, "created");
-                    free (uuid);
-                    break;
-                  }
-                case 1:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_credential",
-                                      "Credential exists already"));
-                  log_event_fail ("credential", "Credential", NULL, "created");
-                  break;
-                case 2:
-                  if (send_find_error_to_client ("create_credential",
-                                                 "credential",
-                                                 create_credential_data->copy,
-                                                 gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  log_event_fail ("credential", "Credential", NULL, "created");
-                  break;
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_credential",
-                                      "Permission denied"));
-                  log_event_fail ("credential", "Credential", NULL, "created");
-                  break;
-                case -1:
-                default:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_INTERNAL_ERROR ("create_credential"));
-                  log_event_fail ("credential", "Credential", NULL, "created");
-                  break;
-              }
+          if (create_credential_data->copy_requested)
+            {
+              SEND_TO_CLIENT_OR_FAIL
+               (XML_ERROR_SYNTAX ("create_credential",
+                                  "Credential copy is no longer supported"));
+              log_event_fail ("credential", "Credential", NULL, "created");
+            }
           else if (strlen (create_credential_data->name) == 0)
             {
               SEND_TO_CLIENT_OR_FAIL
@@ -14483,7 +14445,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_CREATE_CREDENTIAL, CERTIFICATE);
       CLOSE (CLIENT_CREATE_CREDENTIAL, COMMENT);
       CLOSE (CLIENT_CREATE_CREDENTIAL, COMMUNITY);
-      CLOSE (CLIENT_CREATE_CREDENTIAL, COPY);
       CLOSE (CLIENT_CREATE_CREDENTIAL, KDC);
       CLOSE (CLIENT_CREATE_CREDENTIAL, KDCS);
       case CLIENT_CREATE_CREDENTIAL_KDCS_KDC:
@@ -17423,9 +17384,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
 
       APPEND (CLIENT_CREATE_CREDENTIAL_COMMUNITY,
               &create_credential_data->community);
-
-      APPEND (CLIENT_CREATE_CREDENTIAL_COPY,
-              &create_credential_data->copy);
 
       APPEND (CLIENT_CREATE_CREDENTIAL_KDC,
               &create_credential_data->kdc);

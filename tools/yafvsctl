@@ -8033,7 +8033,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["guarded native username/password and username/SSH-key credential creation", "native-credentials-from-csv", "future GSA native credential create"],
                 "residual_inherited": [
-                    "Secret updates, other credential types, clone, moving live credentials to trash, and live deletion remain inherited; restore and permanent trash deletion are native.",
+                    "Secret updates, other credential types, moving live credentials to trash, and live deletion remain inherited; clone, restore, and permanent trash deletion are native.",
                     "Passwords, passphrases, and private keys are write-only and are never returned by the native API."
                 ],
             },

@@ -4958,6 +4958,8 @@ def native_tooling_category(relative_path: str) -> tuple[str, str] | None:
         return "compatibility_bridge", "Rust CLI orchestration retains bounded raw GMP smoke helpers without depending on removed python-gvm or gvm-tools clients."
     if relative_path == "tools/yafvsctl-rs/src/commands/runtime_scanner_register.rs":
         return "compatibility_bridge", "Rust scanner registration names and reuses the bounded authenticated GMP readiness probe while using pinned gvmd control without python-gvm or gvm-tools."
+    if relative_path == "tools/yafvsctl-rs/src/commands/gvmd_retirement.rs":
+        return "compatibility_bridge", "Rust retirement-state checks inventory and guard the shrinking GMP/gvmd compatibility boundary; they do not retain a product workflow."
     if relative_path == "tools/yafvsctl":
         return "compatibility_bridge", "yafvsctl measures the completed legacy-client teardown and remaining GMP owner tails."
     if relative_path.startswith("tools/runtime_") and relative_path.endswith(".py"):

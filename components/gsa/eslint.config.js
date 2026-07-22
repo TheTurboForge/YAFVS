@@ -1,3 +1,5 @@
+/* YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. */
+
 import pluginJs from '@eslint/js';
 import typescript from '@typescript-eslint/eslint-plugin';
 import tsParser from '@typescript-eslint/parser';
@@ -28,7 +30,13 @@ const customPlugin = {
 
 pluginHeader.rules.header.meta.schema = false; // https://github.com/Stuk/eslint-plugin-header/issues/57
 
-const year = new Date().getFullYear();
+const spdxHeaderPattern = [
+  '^ (?:SPDX-FileCopyrightText: \\d{4} (?:Greenbone AG|Robert Pelfrey <[Rr]obert@[Pp]elfrey\\.de>)|(?:YAFVS|TurboVAS) modifications Copyright \\(C\\) \\d{4} Robert Pelfrey <[Rr]obert@[Pp]elfrey\\.de>\\.)',
+  '(?:\\n \\*(?: (?:SPDX-FileCopyrightText: \\d{4} (?:Greenbone AG|Robert Pelfrey <[Rr]obert@[Pp]elfrey\\.de>)|(?:YAFVS|TurboVAS) modifications Copyright \\(C\\) \\d{4} Robert Pelfrey <[Rr]obert@[Pp]elfrey\\.de>\\.))?)*',
+  '\\n \\* SPDX-License-Identifier: AGPL-3\\.0-or-later',
+  '(?:\\n \\* YAFVS-Derivation: original)?',
+  '\\n $',
+].join('');
 
 // Common rules for both JS and TS files
 const commonRules = {
@@ -57,15 +65,7 @@ const commonRules = {
   'header/header': [
     2,
     'block',
-    [
-      {
-        pattern: ' SPDX-FileCopyrightText: \\d{4} Greenbone AG',
-        template: ` SPDX-FileCopyrightText: ${year} Greenbone AG`,
-      },
-      ' *',
-      ' * SPDX-License-Identifier: AGPL-3.0-or-later',
-      ' ',
-    ],
+    {pattern: spdxHeaderPattern},
     2,
   ],
   'react/jsx-sort-props': [

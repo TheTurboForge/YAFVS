@@ -204,7 +204,6 @@ pub(crate) const BUILD_META: &[BuildMeta] = &[
             "-DENABLE_AGENTS=0",
             "-DENABLE_JWT_AUTH=0",
             "-DENABLE_OPENVASD=0",
-            "-DWITH_LIBTHEIA=0",
         ],
         install_for_dependents: true,
         node_scripts: &[],
@@ -547,7 +546,6 @@ mod tests {
                 "-DENABLE_AGENTS=0",
                 "-DENABLE_JWT_AUTH=0",
                 "-DENABLE_OPENVASD=0",
-                "-DWITH_LIBTHEIA=0",
             ]
         );
         assert_eq!(build_meta("gsa").expect("gsa").node_scripts, ["build"]);

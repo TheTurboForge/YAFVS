@@ -100,16 +100,6 @@ if(NOT GPGME_FOUND)
   endif(NOT GPGME)
 endif(NOT GPGME_FOUND)
 
-if(WITH_LIBTHEIA)
-  find_package(Theia 1.0.0 REQUIRED)
-  message(STATUS "Using libtheia ${Theia_VERSION} in ${Theia_DIR}")
-  add_definitions(-DHAS_LIBTHEIA="1")
-  set(OPT_THEIA_TGT Theia::Theia)
-else(WITH_LIBTHEIA)
-  message(STATUS "Not using libtheia - licensing functions disabled")
-  set(OPT_THEIA_TGT "")
-endif(WITH_LIBTHEIA)
-
 include_directories(
   ${LIBGVM_GMP_INCLUDE_DIRS}
   ${LIBGVM_OPENVASD_INCLUDE_DIRS}
@@ -154,7 +144,6 @@ set(
   manage_get.c
   manage_http_scanner.c
   manage_integration_configs.c
-  manage_license.c
   manage_openvas.c
   manage_openvasd.c
   manage_osp.c
@@ -238,7 +227,6 @@ set(
   gmp_delete.c
   gmp_get.c
   gmp_integration_configs.c
-  gmp_license.c
   gmp_logout.c
   gmp_report_formats.c
   gmp_tls_certificates.c
@@ -348,7 +336,6 @@ target_link_libraries(
   ${LIBGVM_HTTP_SCANNER_LDFLAGS}
   ${LIBICAL_LDFLAGS}
   ${LINKER_HARDENING_FLAGS}
-  ${OPT_THEIA_TGT}
 )
 target_link_libraries(
   gvm-pg-server

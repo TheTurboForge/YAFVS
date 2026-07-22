@@ -7427,6 +7427,10 @@ class YAFVSCtlTests(unittest.TestCase):
     def test_native_tooling_category_keeps_scripts_and_docs_distinct(self):
         self.assertEqual(yafvsctl.native_tooling_category("tools/runtime_scope.py")[0], "required_runtime")
         self.assertEqual(yafvsctl.native_tooling_category("tools/yafvsctl")[0], "compatibility_bridge")
+        self.assertEqual(
+            yafvsctl.native_tooling_category("tools/yafvsctl-rs/src/commands/gvmd_retirement.rs")[0],
+            "compatibility_bridge",
+        )
         self.assertEqual(yafvsctl.native_tooling_category("tools/runtime_browser_smoke.py")[0], "compatibility_bridge")
         self.assertEqual(yafvsctl.native_tooling_category("tools/tests/test_yafvsctl.py")[0], "compatibility_bridge")
         self.assertEqual(yafvsctl.native_tooling_category("components/gsa/src/gmp/commands/scopes.ts")[0], "product_workflow")

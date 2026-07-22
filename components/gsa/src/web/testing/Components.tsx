@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -13,7 +14,6 @@ import CapabilitiesContext from 'web/components/provider/CapabilitiesProvider';
 import FeaturesContext from 'web/components/provider/FeaturesProvider';
 import GmpContext from 'web/components/provider/GmpProvider';
 import {LanguageContext} from 'web/components/provider/LanguageProvider';
-import LicenseProvider from 'web/components/provider/LicenseProvider';
 
 export const Main = ({children}: {children: React.ReactNode}) => {
   return (
@@ -60,11 +60,6 @@ export const TestingFeaturesProvider = withProvider(
   'features',
   'value',
 )(FeaturesContext.Provider);
-export const TestingLicenseProvider = withProvider(
-  'license',
-  'value',
-)(LicenseProvider);
-
 // Mock LanguageProvider that doesn't use GMP
 export const TestingLanguageProvider = ({
   children,

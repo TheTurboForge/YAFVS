@@ -8548,119 +8548,6 @@ delete_tls_certificate_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Get the current license and its status, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[in]  extra_xml    Extra XML to insert inside page element.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-static char *
-get_license (gvm_connection_t *connection, gsad_credentials_t *credentials,
-             params_t *params, const char *extra_xml,
-             gsad_command_response_data_t *response_data)
-{
-  return get_entity (connection, "license", credentials, params, NULL,
-                     response_data);
-}
-
-/**
- * @brief Get the current license and its status, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_license_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                 params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_license (connection, credentials, params, NULL, response_data);
-}
-
-/**
- * @brief Modify a theia license
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials     Username and password for authentication.
- * @param[in]  params          Request parameters.
- * @param[out] response_data   Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-save_license_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                  params_t *params, gsad_command_response_data_t *response_data)
-{
-  entity_t entity;
-  const char *file;
-  int file_size;
-  char *file_base64;
-  char *ret;
-
-  file = params_value (params, "file");
-  file_size = params_value_size (params, "file");
-
-  CHECK_VARIABLE_INVALID (file, "Save License");
-
-  file_base64 = g_base64_encode ((const guchar *) file, file_size);
-
-  entity = NULL;
-  switch (gmpf (connection, credentials, NULL, &entity, response_data,
-                "<modify_license>"
-                "<file>%s</file>"
-                "</modify_license>",
-                file_base64))
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      g_free (file_base64);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a license. "
-        "The license remains the same. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      g_free (file_base64);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a license. "
-        "It is unclear whether the license has been saved or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      g_free (file_base64);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a license. "
-        "It is unclear whether the license has been saved or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  ret = response_from_entity (connection, credentials, params, entity,
-                              "Save License", response_data);
-
-  g_free (file_base64);
-  free_entity (entity);
-  return ret;
-}
-
-/**
  * @brief Change user password
  *
  * @param[in]  connection     Connection to manager.
@@ -9405,7 +9292,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_filter)
   ELSE (get_filters)
   ELSE (get_info)
-  ELSE (get_license)
   ELSE (get_override)
   ELSE (get_overrides)
   ELSE (get_port_list)
@@ -9686,7 +9572,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (save_config)
   ELSE (save_config_family)
   ELSE (save_credential)
-  ELSE (save_license)
   ELSE (save_target)
   ELSE (save_task)
   ELSE (save_tls_certificate)

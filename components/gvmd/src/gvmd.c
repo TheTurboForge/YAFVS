@@ -3893,12 +3893,6 @@ gvmd (int argc, char** argv, char *env[])
   if (disable)
     g_string_append (full_disable_commands, disable);
 
-#ifndef HAS_LIBTHEIA
-  if (full_disable_commands->len)
-    g_string_append_c (full_disable_commands, ',');
-  g_string_append (full_disable_commands, "get_license,modify_license");
-#endif
-
   /* Append disable commands with runtime flags*/
   runtime_append_disabled_commands (full_disable_commands);
 

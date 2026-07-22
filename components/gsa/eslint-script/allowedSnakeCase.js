@@ -215,8 +215,6 @@ const allowedSnakeCase = [
   'get_img_url',
   'get_info',
   'get_info_response',
-  'get_license',
-  'get_license_response',
   'get_nvts_response',
   'get_resource_names',
   'get_resource_names_response',

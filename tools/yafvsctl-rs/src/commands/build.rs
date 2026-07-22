@@ -1243,7 +1243,6 @@ mod tests {
             ]
         );
         assert!(gvmd.contains(&"-DENABLE_AGENTS=0".into()));
-        assert!(gvmd.contains(&"-DWITH_LIBTHEIA=0".into()));
         assert!(!gvmd.iter().any(|argument| argument == "--fresh"));
 
         let pg_gvm = cmake_arguments(root, build_meta("pg-gvm").unwrap(), None, &[]);

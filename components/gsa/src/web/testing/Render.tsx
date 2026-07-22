@@ -1,4 +1,5 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -25,7 +26,6 @@ import {
   TestingFeaturesProvider,
   TestingGmpProvider,
   TestingLanguageProvider,
-  TestingLicenseProvider,
   TestingStoreProvider,
 } from 'web/testing/Components';
 import {userEvent, PointerEventsCheckLevel} from 'web/testing/event';
@@ -35,7 +35,6 @@ export interface RendererOptions {
   features?: Features;
   gmp?: Record<string, unknown>;
   store?: Store | boolean;
-  license?: Record<string, unknown>;
   router?: boolean;
   route?: InitialEntry;
   showLocation?: boolean;
@@ -84,7 +83,6 @@ export const rendererWith = ({
   capabilities,
   features,
   gmp,
-  license,
   store = true,
   router = true,
   route = '/',
@@ -112,26 +110,22 @@ export const rendererWith = ({
       <TestingGmpProvider gmp={gmp}>
         <TestingCapabilitiesProvider capabilities={capabilities}>
           <TestingFeaturesProvider features={features}>
-            <TestingLicenseProvider license={license}>
-              <TestingStoreProvider store={store}>
-                <TestingLanguageProvider
-                  language={
-                    typeof language === 'string' ? {language} : language
-                  }
-                >
-                  <QueryClientProvider client={queryClient}>
-                    {router ? (
-                      <MemoryRouter initialEntries={[route]}>
-                        {children}
-                        {showLocation && <LocationDisplay />}
-                      </MemoryRouter>
-                    ) : (
-                      children
-                    )}
-                  </QueryClientProvider>
-                </TestingLanguageProvider>
-              </TestingStoreProvider>
-            </TestingLicenseProvider>
+            <TestingStoreProvider store={store}>
+              <TestingLanguageProvider
+                language={typeof language === 'string' ? {language} : language}
+              >
+                <QueryClientProvider client={queryClient}>
+                  {router ? (
+                    <MemoryRouter initialEntries={[route]}>
+                      {children}
+                      {showLocation && <LocationDisplay />}
+                    </MemoryRouter>
+                  ) : (
+                    children
+                  )}
+                </QueryClientProvider>
+              </TestingLanguageProvider>
+            </TestingStoreProvider>
           </TestingFeaturesProvider>
         </TestingCapabilitiesProvider>
       </TestingGmpProvider>

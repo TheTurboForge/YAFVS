@@ -55,7 +55,6 @@ macro(add_unit_test _baseName _objects _extraSource)
     ${LIBGVM_HTTP_SCANNER_LDFLAGS}
     ${LIBICAL_LDFLAGS}
     ${LINKER_HARDENING_FLAGS}
-    ${OPT_THEIA_TGT}
   )
   set_target_properties(${_testName} PROPERTIES LINKER_LANGUAGE C)
   if(NOT CMAKE_BUILD_TYPE MATCHES "Release")

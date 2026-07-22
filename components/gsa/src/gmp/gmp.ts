@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import 'gmp/commands/license';
 import 'gmp/commands/os';
 import 'gmp/commands/overrides';
 import 'gmp/commands/scan-configs';
@@ -42,7 +41,6 @@ import ScannersCommand from 'gmp/commands/scanners';
 import {ScopeReportsCommand, ScopesCommand} from 'gmp/commands/scopes';
 import TargetCommand from 'gmp/commands/target';
 import TargetsCommand from 'gmp/commands/targets';
-import TaskCommand from 'gmp/native-api/task-command';
 import TasksCommand from 'gmp/commands/tasks';
 import TimezonesCommand from 'gmp/commands/timezones';
 import TrashCanCommand from 'gmp/commands/trashcan';
@@ -57,6 +55,7 @@ import {HostCommand, HostsCommand} from 'gmp/native-api/hosts';
 import {PortListCommand, PortListsCommand} from 'gmp/native-api/port-lists';
 import {ScheduleCommand, SchedulesCommand} from 'gmp/native-api/schedules';
 import {TagCommand, TagsCommand} from 'gmp/native-api/tags';
+import TaskCommand from 'gmp/native-api/task-command';
 import type Session from 'gmp/session/session';
 import type Settings from 'gmp/settings';
 import {isDefined} from 'gmp/utils/identity';

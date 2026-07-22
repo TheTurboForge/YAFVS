@@ -693,6 +693,62 @@ notes = "A bounded caller."
     }
 
     #[test]
+    fn legacy_appliance_licensing_surface_is_absent() {
+        const GSA_GMP: &str = include_str!("../../../../components/gsa/src/gmp/gmp.ts");
+        const GSAD_GMP: &str = include_str!("../../../../components/gsad/src/gsad_gmp.c");
+        const GSAD_HEADER: &str = include_str!("../../../../components/gsad/src/gsad_gmp.h");
+        const GSAD_VALIDATOR: &str =
+            include_str!("../../../../components/gsad/src/gsad_validator.c");
+        const GVMD_GMP: &str = include_str!("../../../../components/gvmd/src/gmp.c");
+        const GVMD_COMMANDS: &str =
+            include_str!("../../../../components/gvmd/src/manage_commands.c");
+        const GVMD_CMAKE: &str = include_str!("../../../../components/gvmd/src/CMakeLists.txt");
+        const GVMD_SCHEMA: &str =
+            include_str!("../../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
+
+        for (source, retired) in [
+            (GSA_GMP, "gmp/commands/license"),
+            (GSAD_GMP, "get_license_gmp"),
+            (GSAD_GMP, "save_license_gmp"),
+            (GSAD_HEADER, "get_license_gmp"),
+            (GSAD_HEADER, "save_license_gmp"),
+            (GSAD_VALIDATOR, "|(get_license)"),
+            (GSAD_VALIDATOR, "|(save_license)"),
+            (GVMD_GMP, "CLIENT_GET_LICENSE"),
+            (GVMD_GMP, "CLIENT_MODIFY_LICENSE"),
+            (GVMD_COMMANDS, "{\"GET_LICENSE\","),
+            (GVMD_COMMANDS, "{\"MODIFY_LICENSE\","),
+            (GVMD_CMAKE, "WITH_LIBTHEIA"),
+            (GVMD_CMAKE, "OPT_THEIA_TGT"),
+            (GVMD_SCHEMA, "<name>get_license</name>"),
+            (GVMD_SCHEMA, "<name>modify_license</name>"),
+        ] {
+            assert!(
+                !source.contains(retired),
+                "retired appliance-licensing marker remains: {retired}"
+            );
+        }
+
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        for retired_path in [
+            "components/gsa/src/gmp/commands/license.js",
+            "components/gsa/src/gmp/models/license.ts",
+            "components/gsa/src/web/components/provider/LicenseProvider.jsx",
+            "components/gsa/src/web/components/notification/LicenseNotification.jsx",
+            "components/gvmd/src/gmp_license.c",
+            "components/gvmd/src/gmp_license.h",
+            "components/gvmd/src/manage_license.c",
+            "components/gvmd/src/manage_license.h",
+            "components/gvmd/src/theia_dummy.h",
+        ] {
+            assert!(
+                !repo.join(retired_path).exists(),
+                "retired appliance-licensing file remains: {retired_path}"
+            );
+        }
+    }
+
+    #[test]
     fn unknown_top_level_fields_fail_schema_parsing() {
         let root = TempRoot::new();
         valid_registry(&root.0);

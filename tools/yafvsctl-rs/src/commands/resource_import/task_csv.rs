@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+// SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 //! Bounded CSV task creation with complete native-reference preflight.

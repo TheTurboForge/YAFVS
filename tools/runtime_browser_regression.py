@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+# SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Deep browser-level YAFVS runtime regression checks using Playwright."""
 

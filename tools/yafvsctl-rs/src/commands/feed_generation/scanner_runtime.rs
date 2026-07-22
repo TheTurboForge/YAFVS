@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+// SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 //! Private runtime configuration required before starting the feed scanners.
@@ -166,7 +166,7 @@ fn failure(message: &str, path: &Path, reason: &str) -> StepOutcome {
 
 fn render_openvas_config(mqtt_password: &str) -> String {
     format!(
-        "# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>\n\
+        "# SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>\n\
 # SPDX-License-Identifier: GPL-3.0-or-later\n\
 # Generated development runtime configuration.\n\
 db_address = /runtime/run/redis-openvas/redis.sock\n\
@@ -248,7 +248,7 @@ mod tests {
     fn renders_the_exact_python_compatible_openvas_configuration() {
         assert_eq!(
             render_openvas_config("private-value"),
-            "# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>\n\
+            "# SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>\n\
 # SPDX-License-Identifier: GPL-3.0-or-later\n\
 # Generated development runtime configuration.\n\
 db_address = /runtime/run/redis-openvas/redis.sock\n\

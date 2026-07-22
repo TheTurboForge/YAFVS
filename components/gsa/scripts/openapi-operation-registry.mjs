@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+// SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 const HTTP_METHODS = new Set([
@@ -255,7 +255,7 @@ export const renderOperationRegistry = contract => {
   }
 
   const lines = [
-    '<!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> -->',
+    '<!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de> -->',
     '<!-- SPDX-License-Identifier: GPL-3.0-or-later -->',
     '',
     '# Native API Operation Registry',

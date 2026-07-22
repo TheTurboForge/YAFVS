@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+// SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use super::common::{git_tracked_files, metadata, run_git};
@@ -949,7 +949,7 @@ mod tests {
         let destination = "components/gsa/src/YAFVSLogo.tsx";
         fixture.write(
             destination,
-            "/* SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> */\n",
+            "/* SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de> */\n",
         );
         let rows = parse_name_status(&format!("R100\t{source}\t{destination}\n"));
         let exempt = BTreeSet::from([source.to_string()]);

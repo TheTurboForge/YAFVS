@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+// SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::errors::ApiError;

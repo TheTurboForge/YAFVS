@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+# SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 FROM rust:1.96-bookworm AS build

@@ -1,4 +1,4 @@
-<!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de> -->
+<!-- SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de> -->
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 
 # License Audit
@@ -67,7 +67,7 @@ the change introduces no third-party dependency or new distribution boundary.
 - Preserve existing Robert Pelfrey-attributed TurboVAS modification notices;
   use the corresponding YAFVS wording for a newly required project notice.
 - Add explicit license information to new YAFVS-created files, including
-  `SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>`.
+  `SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>`.
 - Treat feed content terms separately from source code licensing.
 - Treat development feed caches and runtime feed copies as local, untracked runtime state; do not commit, bundle, package, or redistribute feed content without a separate feed-terms review.
 - Treat YAFVS as Greenbone Community Feed-only. Do not add or re-enable
@@ -118,7 +118,7 @@ under the file's existing license unless a more specific compatible notice is
 reviewed and documented.
 
 New YAFVS-created files should include an SPDX license identifier and
-`SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>`. Prefer the
+`SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>`. Prefer the
 license already governing the component or subdirectory where the file lives. If
 the governing license is unclear, especially in mixed-license areas such as
 `components/openvas-scanner`, stop and review before adding the file.

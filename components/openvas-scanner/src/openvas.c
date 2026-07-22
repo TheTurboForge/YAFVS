@@ -3,7 +3,7 @@
 /* SPDX-FileCopyrightText: 2023 Greenbone AG
  * SPDX-FileCopyrightText: 2006 Software in the Public Interest, Inc.
  * SPDX-FileCopyrightText: 1998-2006 Tenable Network Security, Inc.
- * SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
  * TurboVAS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: GPL-2.0-only

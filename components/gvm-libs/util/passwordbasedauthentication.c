@@ -1,5 +1,5 @@
 /* SPDX-FileCopyrightText: 2020-2023 Greenbone AG
- * SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+ * SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */

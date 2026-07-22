@@ -221,7 +221,7 @@ main (int argc, char **argv)
   add_test_with_context (suite, gsad_validator,
                          reject_removed_report_alert_command);
   add_test_with_context (suite, gsad_validator,
-                         reject_removed_create_config_command);
+                         reject_removed_scan_config_commands);
   add_test_with_context (suite, gsad_validator, validate_kdcs_name_and_value);
   add_test_with_context (suite, gsad_validator, validate_ca_pub);
   add_test_with_context (suite, gsad_validator,

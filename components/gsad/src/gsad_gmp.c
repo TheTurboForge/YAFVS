@@ -182,10 +182,6 @@ get_target (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
             gsad_command_response_data_t *);
 
 static char *
-get_scanner (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
-             gsad_command_response_data_t *);
-
-static char *
 get_schedule (gvm_connection_t *, gsad_credentials_t *, params_t *,
               const char *, gsad_command_response_data_t *);
 
@@ -5872,111 +5868,6 @@ get_override_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   return get_override (connection, credentials, params, NULL, response_data);
 }
 
-/**
- * @brief Create an override, get report, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-/* Scanners. */
-
-/**
- * @brief Get all scanners, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_scanners_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                  params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_many (connection, "scanners", credentials, params, NULL,
-                   response_data);
-}
-
-/**
- * @brief Get one scanner, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[in]  extra_xml    Extra XML to insert inside page element.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-static char *
-get_scanner (gvm_connection_t *connection, gsad_credentials_t *credentials,
-             params_t *params, const char *extra_xml,
-             gsad_command_response_data_t *response_data)
-{
-  return get_one (connection, "scanner", credentials, params, extra_xml, NULL,
-                  response_data);
-}
-
-/**
- * @brief Get one scanner, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_scanner_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-                 params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_scanner (connection, credentials, params, NULL, response_data);
-}
-
-/**
- * @brief Export a scanner.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Scanner XML on success.  Enveloped XML on error.
- */
-char *
-export_scanner_gmp (gvm_connection_t *connection,
-                    gsad_credentials_t *credentials, params_t *params,
-                    gsad_command_response_data_t *response_data)
-{
-  return export_resource (connection, "scanner", credentials, params,
-                          response_data);
-}
-
-/**
- * @brief Export a list of scanners.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Scanners XML on success. Enveloped XML on error.
- */
-char *
-export_scanners_gmp (gvm_connection_t *connection,
-                     gsad_credentials_t *credentials, params_t *params,
-                     gsad_command_response_data_t *response_data)
-{
-  return export_many (connection, "scanner", credentials, params,
-                      response_data);
-}
-
 /* Schedules. */
 
 /**
@@ -8394,8 +8285,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (export_preference_file)
   ELSE (export_result)
   ELSE (export_results)
-  ELSE (export_scanner)
-  ELSE (export_scanners)
   ELSE (export_schedule)
   ELSE (export_schedules)
   ELSE (export_target)
@@ -8422,8 +8311,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_report)
   ELSE (get_reports)
   ELSE (get_resource_names)
-  ELSE (get_scanner)
-  ELSE (get_scanners)
   ELSE (get_schedule)
   ELSE (get_schedules)
   ELSE (get_scope)

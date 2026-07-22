@@ -296,7 +296,7 @@ If this path doesn't match your setup you need to change the socket path accordi
 
 Get the UUID of the `OpenVAS Default` scanner:
 
-    gvmd --get-scanners
+    GET /api/v1/scanners
 
 Update the built-in scanner socket through YAFVS native scanner configuration.
 The authenticated scanner full-configuration replacement endpoint owns the
@@ -512,10 +512,10 @@ If you change scanner trust or client-authentication material, update the
 scanner through YAFVS native scanner configuration. The authenticated
 full-configuration replacement contract owns the CA bundle and certificate
 credential reference together with host, port, type, and relay configuration;
-the removed gvmd scanner mutation options cannot update them. The scanner UUID
-can still be read with `gvmd --get-scanners` or the native scanner metadata
-endpoint. See the [YAFVS API contract](../../docs/API_CONTRACT.md) for the
-native write-control contract.
+the removed gvmd scanner mutation options cannot update them. Read the scanner
+UUID from the native scanner metadata endpoint. See the
+[YAFVS API contract](../../docs/API_CONTRACT.md) for the native write-control
+contract.
 
 To set just a new default CA certificate:
 

@@ -1872,10 +1872,6 @@ credential_encrypted_value (credential_t, const char*);
 int
 manage_verify_scanner (GSList *, const db_conn_info_t *, const gchar *);
 
-int
-manage_get_scanners (GSList *, const db_conn_info_t *);
-
-
 gboolean
 find_scanner_with_permission (const char *, scanner_t *, const char *);
 

@@ -41,7 +41,6 @@ command_t gmp_commands[]
     {"CREATE_REPORT", "Create a report."},
     {"CREATE_REPORT_FORMAT", "Create a report format."},
     {"CREATE_SCOPE", "Create a reporting scope."},
-    {"CREATE_SCANNER", "Create a scanner."},
     {"CREATE_TARGET", "Create a target."},
     {"CREATE_TASK", "Create a task."},
     {"CREATE_TLS_CERTIFICATE", "Create a TLS certificate."},
@@ -56,7 +55,6 @@ command_t gmp_commands[]
     {"DELETE_REPORT", "Delete a report."},
     {"DELETE_REPORT_FORMAT", "Delete a report format."},
     {"DELETE_SCOPE", "Delete a reporting scope."},
-    {"DELETE_SCANNER", "Delete a scanner."},
     {"DELETE_SCHEDULE", "Delete a schedule."},
     {"DELETE_TARGET", "Delete a target."},
     {"DELETE_TASK", "Delete a task."},
@@ -78,7 +76,6 @@ command_t gmp_commands[]
     {"GET_REPORTS", "Get all reports."},
     {"GET_SCOPE", "Get one reporting scope."},
     {"GET_SCOPES", "Get reporting scopes."},
-    {"GET_SCANNERS", "Get all scanners."},
     {"GET_SCHEDULES", "Get all schedules."},
     {"GET_SETTINGS", "Get all settings."},
     {"GET_TARGETS", "Get all targets."},
@@ -96,7 +93,6 @@ command_t gmp_commands[]
     {"MODIFY_PORT_LIST", "Modify an existing port list."},
     {"MODIFY_REPORT_FORMAT", "Modify an existing report format."},
     {"MODIFY_SCOPE", "Modify a reporting scope."},
-    {"MODIFY_SCANNER", "Modify an existing scanner."},
     {"MODIFY_SETTING", "Modify an existing setting."},
     {"MODIFY_TARGET", "Modify an existing target."},
     {"MODIFY_TASK", "Update an existing task."},
@@ -108,7 +104,6 @@ command_t gmp_commands[]
     {"SYNC_CONFIG", "Synchronize a config with a scanner."},
     {"TEST_ALERT", "Run an alert."},
     {"VERIFY_REPORT_FORMAT", "Verify a report format."},
-    {"VERIFY_SCANNER", "Verify a scanner."},
     {NULL, NULL}};
 
 /* Native control paths can retain gvmd ACL operation keys after their public

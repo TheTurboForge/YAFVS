@@ -6,13 +6,19 @@ use axum::http::Method;
 
 use crate::direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed};
 
+const MANAGE_C: &str = include_str!("../../../components/gvmd/src/manage.c");
+const MANAGE_COMMANDS_C: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
 const MANAGE_SQL_C: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
+const MANAGE_SQL_CONFIGS_C: &str =
+    include_str!("../../../components/gvmd/src/manage_sql_configs.c");
 const MANAGE_H: &str = include_str!("../../../components/gvmd/src/manage.h");
 const GVMD_C: &str = include_str!("../../../components/gvmd/src/gvmd.c");
 const GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GSA_SCANNER_TS: &str = include_str!("../../../components/gsa/src/gmp/commands/scanner.ts");
+const GSA_CAPABILITIES_TS: &str =
+    include_str!("../../../components/gsa/src/gmp/capabilities/capabilities.ts");
 const GMP_SCHEMA: &str = include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 
@@ -27,11 +33,12 @@ fn inherited_function(source: &str, name: &str) -> String {
 }
 
 #[test]
-fn retired_cli_scanner_mutations_and_writers_stay_absent_while_verify_remains() {
+fn retired_cli_and_protocol_scanner_commands_stay_absent_while_verify_remains() {
     for retired in [
         "--create-scanner",
         "--modify-scanner",
         "--delete-scanner",
+        "--get-scanners",
         "--scanner-ca-pub",
         "--scanner-credential",
         "--scanner-host",
@@ -46,6 +53,7 @@ fn retired_cli_scanner_mutations_and_writers_stay_absent_while_verify_remains() 
         "manage_create_scanner",
         "manage_modify_scanner",
         "manage_delete_scanner",
+        "manage_get_scanners",
     ] {
         assert!(
             !GVMD_C.contains(retired),
@@ -56,6 +64,7 @@ fn retired_cli_scanner_mutations_and_writers_stay_absent_while_verify_remains() 
         "manage_create_scanner (",
         "manage_modify_scanner (",
         "manage_delete_scanner (",
+        "manage_get_scanners (",
         "create_scanner (",
         "modify_scanner (",
         "delete_scanner (",
@@ -119,23 +128,44 @@ fn inherited_verify_scanner_can_contact_osp_scanners_and_maps_other_types() {
 }
 
 #[test]
-fn retired_browser_gmp_scanner_commands_stay_absent_while_cli_control_remains() {
+fn scanner_read_permission_vocabulary_remains_for_internal_authorization() {
+    assert!(MANAGE_C.contains("check_available (\"scanner\", scanner, \"get_scanners\")"));
+    assert!(MANAGE_SQL_C.contains("array_add (permissions, g_strdup (\"get_scanners\"))"));
+    assert!(
+        MANAGE_SQL_CONFIGS_C
+            .contains("find_scanner_with_permission (scanner_id, &scanner, \"get_scanners\")")
+    );
+    assert!(GSA_CAPABILITIES_TS.contains("'get_scanners'"));
+}
+
+#[test]
+fn retired_browser_gmp_scanner_commands_stay_absent_while_verify_remains() {
     for retired in [
         "create_scanner_gmp",
         "save_scanner_gmp",
         "delete_scanner_gmp",
         "verify_scanner_gmp",
+        "get_scanner_gmp",
+        "get_scanners_gmp",
+        "export_scanner_gmp",
+        "export_scanners_gmp",
         "ELSE (create_scanner)",
         "ELSE (save_scanner)",
         "ELSE (delete_scanner)",
+        "ELSE (get_scanner)",
+        "ELSE (get_scanners)",
+        "ELSE (export_scanner)",
+        "ELSE (export_scanners)",
         "CLIENT_CREATE_SCANNER",
         "CLIENT_MODIFY_SCANNER",
         "CLIENT_DELETE_SCANNER",
         "CLIENT_VERIFY_SCANNER",
+        "CLIENT_GET_SCANNERS",
         "<name>create_scanner</name>",
         "<name>modify_scanner</name>",
         "<name>delete_scanner</name>",
         "<name>verify_scanner</name>",
+        "<name>get_scanners</name>",
     ] {
         assert!(
             !GSAD_GMP_C.contains(retired),
@@ -151,10 +181,26 @@ fn retired_browser_gmp_scanner_commands_stay_absent_while_cli_control_remains() 
         );
     }
     for retired in [
+        "{\"CREATE_SCANNER\"",
+        "{\"DELETE_SCANNER\"",
+        "{\"GET_SCANNERS\"",
+        "{\"MODIFY_SCANNER\"",
+        "{\"VERIFY_SCANNER\"",
+    ] {
+        assert!(
+            !MANAGE_COMMANDS_C.contains(retired),
+            "GMP help still advertises {retired}"
+        );
+    }
+    for retired in [
         "|(create_scanner)",
         "|(save_scanner)",
         "|(delete_scanner)",
         "|(verify_scanner)",
+        "|(get_scanner)",
+        "|(get_scanners)",
+        "|(export_scanner)",
+        "|(export_scanners)",
     ] {
         assert!(
             !GSAD_VALIDATOR_C.contains(retired),
@@ -165,6 +211,8 @@ fn retired_browser_gmp_scanner_commands_stay_absent_while_cli_control_remains() 
         "super.clone({id})",
         "super.delete({id})",
         "cmd: 'verify_scanner'",
+        "httpGetWithTransform",
+        "getElementFromRoot",
     ] {
         assert!(
             !GSA_SCANNER_TS.contains(retired),
@@ -172,14 +220,6 @@ fn retired_browser_gmp_scanner_commands_stay_absent_while_cli_control_remains() 
         );
     }
 
-    for command in ["|(get_scanner)", "|(get_scanners)"] {
-        assert!(
-            GSAD_VALIDATOR_C.contains(command),
-            "validator missing {command}"
-        );
-    }
-    assert!(GSAD_GMP_C.contains("get_scanner_gmp"));
-    assert!(GSAD_GMP_C.contains("export_scanner_gmp"));
     assert!(!GSAD_GMP_C.contains("get_trash_scanners_gmp"));
 }
 

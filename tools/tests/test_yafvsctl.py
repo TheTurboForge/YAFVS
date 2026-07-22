@@ -1846,6 +1846,7 @@ class YAFVSCtlTests(unittest.TestCase):
             "--create-scanner",
             "--modify-scanner",
             "--delete-scanner",
+            "--get-scanners",
             "--scanner-ca-pub",
             "--scanner-credential",
             "--scanner-host",
@@ -1867,10 +1868,18 @@ class YAFVSCtlTests(unittest.TestCase):
         self.assertIn("ret = manage_verify_scanner (", gvmd_cli)
         gsad_source = retired_sources["gsad dispatch"].read_text(encoding="utf-8")
         gvmd_source = retired_sources["gvmd parser"].read_text(encoding="utf-8")
-        self.assertIn("get_scanner_gmp", gsad_source)
-        self.assertIn("export_scanner_gmp", gsad_source)
+        for retired in (
+            "get_scanner_gmp",
+            "get_scanners_gmp",
+            "export_scanner_gmp",
+            "export_scanners_gmp",
+        ):
+            self.assertNotIn(retired, gsad_source)
         self.assertNotIn("get_trash_scanners_gmp", gsad_source)
-        self.assertIn("CLIENT_GET_SCANNERS", gvmd_source)
+        self.assertNotIn("CLIENT_GET_SCANNERS", gvmd_source)
+        self.assertNotIn("manage_get_scanners (", manage_sql)
+        self.assertNotIn("manage_get_scanners (", manage_h)
+        self.assertNotIn("get-scanners", gvmd_cli)
         for marker in (
             "pub(crate) async fn create_scanner",
             "pub(crate) async fn clone_scanner",

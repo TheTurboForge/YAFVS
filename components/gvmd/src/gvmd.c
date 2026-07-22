@@ -2303,7 +2303,6 @@ gvmd (int argc, char** argv, char *env[])
   static int encryption_key_length = 0;
   static gchar *set_encryption_key = NULL;
   static gboolean get_users = FALSE;
-  static gboolean get_scanners = FALSE;
   static gboolean foreground = FALSE;
   static gboolean print_version = FALSE;
   static int max_ips_per_target = MANAGE_MAX_HOSTS;
@@ -2495,10 +2494,6 @@ gvmd (int argc, char** argv, char *env[])
         { "foreground", 'f', 0, G_OPTION_ARG_NONE,
           &foreground,
           "Run in foreground.",
-          NULL },
-        { "get-scanners", '\0', 0, G_OPTION_ARG_NONE,
-          &get_scanners,
-          "List scanners and exit.",
           NULL },
         { "get-users", '\0', 0, G_OPTION_ARG_NONE,
           &get_users,
@@ -3456,22 +3451,6 @@ gvmd (int argc, char** argv, char *env[])
       set_skip_update_nvti_cache (TRUE);
       ret = manage_get_users (log_config, &database, role, verbose);
       set_skip_update_nvti_cache (FALSE);
-      log_config_free ();
-      if (ret)
-        return EXIT_FAILURE;
-      return EXIT_SUCCESS;
-    }
-
-  if (get_scanners)
-    {
-      int ret;
-
-      setproctitle ("Getting scanners");
-
-      if (option_lock (&lockfile_checking))
-        return EXIT_FAILURE;
-
-      ret = manage_get_scanners (log_config, &database);
       log_config_free ();
       if (ret)
         return EXIT_FAILURE;

@@ -94,15 +94,11 @@ Greenbone Vulnerability Manager for which a global trusted CA certificate
 can be configured.
 
 
-Registering an OSP daemon at Greenbone Vulnerability Manager
-------------------------------------------------------------
+Registering an OSP daemon in YAFVS
+----------------------------------
 
 The file [README](../README.md) explains how to control the OSP daemon via
 command line.
-
-It is also possible to register an OSP daemon at the Greenbone Vulnerability
-Manager and then use GMP clients to control the OSP daemon, for example the
-web interface GSA.
 
 Register the OSP daemon through YAFVS native scanner configuration. The
 authenticated native scanner create and full-configuration replacement
@@ -111,14 +107,11 @@ references; the removed `gvmd` scanner mutation options cannot create or modify
 scanners. See the [YAFVS API contract](../../../docs/API_CONTRACT.md) for the
 native write-control contract.
 
-Check whether Greenbone Vulnerability Manager can connect to the OSP daemon:
-
-    $ gvmd --get-scanners
-    08b69003-5fc2-4037-a479-93b440211c73  OpenVAS Default
-    3566ddf1-cecf-4491-8bcc-5d62a87404c3  OSP Scanner
-
-    $ gvmd --verify-scanner=3566ddf1-cecf-4491-8bcc-5d62a87404c3
-    Scanner version: 1.0.
+Confirm registration through authenticated `GET /api/v1/scanners`. When direct
+write-control is enabled, `POST /api/v1/scanners/{scanner_id}/verify` provides
+the bounded native probe for local Unix-socket scanners. The retained
+`gvmd --verify-scanner` compatibility path is limited to remote TLS/relay
+verification until that responsibility migrates.
 
 Use the native scanner configuration contract rather than GMP/XML or the removed gvmd mutation options when registering an OSP scanner.
 

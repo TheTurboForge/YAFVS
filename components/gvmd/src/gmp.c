@@ -1208,27 +1208,6 @@ typedef struct
 } get_schedules_data_t;
 
 /**
- * @brief Command data for the get_scanners command.
- */
-typedef struct
-{
-  get_data_t get;        ///< Get args.
-} get_scanners_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-get_scanners_data_reset (get_scanners_data_t *data)
-{
-  get_data_reset (&data->get);
-
-  memset (data, 0, sizeof (get_scanners_data_t));
-}
-
-/**
  * @brief Reset command data.
  *
  * @param[in]  data  Command data.
@@ -1849,7 +1828,6 @@ typedef union
   scope_command_data_t get_scope;                     ///< get_scope
   scope_command_data_t get_scopes;                    ///< get_scopes
   get_schedules_data_t get_schedules;                 ///< get_schedules
-  get_scanners_data_t get_scanners;                   ///< get_scanners
   get_settings_data_t get_settings;                   ///< get_settings
   get_targets_data_t get_targets;                     ///< get_targets
   get_tasks_data_t get_tasks;                         ///< get_tasks
@@ -2056,12 +2034,6 @@ static scope_command_data_t *get_scope_data
  */
 static scope_command_data_t *get_scopes_data
  = &(command_data.get_scopes);
-
-/**
- * @brief Parser callback data for GET_scannerS.
- */
-static get_scanners_data_t *get_scanners_data
- = &(command_data.get_scanners);
 
 /**
  * @brief Parser callback data for GET_SCHEDULES.
@@ -2307,7 +2279,6 @@ typedef enum
   CLIENT_GET_RESOURCE_NAMES,
   CLIENT_GET_SCOPE,
   CLIENT_GET_SCOPES,
-  CLIENT_GET_SCANNERS,
   CLIENT_GET_SCHEDULES,
   CLIENT_GET_SETTINGS,
   CLIENT_GET_TARGETS,
@@ -3085,12 +3056,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             scope_command_data_start (get_scopes_data, attribute_names,
                                       attribute_values, 0);
             set_client_state (CLIENT_GET_SCOPES);
-          }
-        else if (strcasecmp ("GET_SCANNERS", element_name) == 0)
-          {
-            get_data_parse_attributes (&get_scanners_data->get, "scanner",
-                                       attribute_names, attribute_values);
-            set_client_state (CLIENT_GET_SCANNERS);
           }
         else if (strcasecmp ("GET_SCHEDULES", element_name) == 0)
           {
@@ -10183,370 +10148,6 @@ handle_get_resource_names (gmp_parser_t *gmp_parser, GError **error)
 }
 
 /**
- * @brief Send scanner info to the GMP client.
- *
- * @param[in]  scanners     Scanner iterator.
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-send_scanner_info (iterator_t *scanners, gmp_parser_t *gmp_parser,
-                   GError **error)
-{
-  switch (scanner_iterator_type (scanners))
-    {
-      case SCANNER_TYPE_OPENVAS:
-      case SCANNER_TYPE_OSP_SENSOR:
-        {
-          char *s_name = NULL, *s_ver = NULL;
-          char *d_name = NULL, *d_ver = NULL;
-          char *p_name = NULL, *p_ver = NULL, *desc = NULL;
-          GSList *params = NULL, *nodes;
-
-          if (!osp_get_version_from_iterator
-                (scanners, &s_name, &s_ver, &d_name, &d_ver, &p_name, &p_ver)
-              && !osp_get_details_from_iterator (scanners, &desc, &params))
-            {
-              SENDF_TO_CLIENT_OR_FAIL
-               ("<info><scanner><name>%s</name><version>%s</version>"
-                "</scanner><daemon><name>%s</name><version>%s</version>"
-                "</daemon><protocol><name>%s</name><version>%s"
-                "</version></protocol><description>%s</description>",
-                s_name, s_ver, d_name, d_ver, p_name, p_ver, desc);
-
-              SENDF_TO_CLIENT_OR_FAIL ("<params>");
-              nodes = params;
-              while (nodes)
-                {
-                  osp_param_t *param = nodes->data;
-
-                  SENDF_TO_CLIENT_OR_FAIL
-                   ("<param><id>%s</id><name>%s</name>"
-                    "<default>%s</default><description>%s</description>"
-                    "<type>osp_%s</type><mandatory>%d</mandatory></param>",
-                    osp_param_id (param), osp_param_name (param),
-                    osp_param_default (param), osp_param_desc (param),
-                    osp_param_type_str (param), osp_param_mandatory (param));
-
-                  osp_param_free (nodes->data);
-                  nodes = nodes->next;
-                }
-              SENDF_TO_CLIENT_OR_FAIL ("</params></info>");
-            }
-          else
-            SENDF_TO_CLIENT_OR_FAIL
-             ("<info><scanner><name/><version/></scanner>"
-              "<daemon><name/><version/></daemon>"
-              "<protocol><name/><version/></protocol><description/><params/>"
-              "</info>");
-          g_free (s_name);
-          g_free (s_ver);
-          g_free (d_name);
-          g_free (d_ver);
-          g_free (p_name);
-          g_free (p_ver);
-          g_free (desc);
-          g_slist_free (params);
-        }
-        break;
-#if ENABLE_OPENVASD
-      case SCANNER_TYPE_OPENVASD:
-      case SCANNER_TYPE_OPENVASD_SENSOR:
-        {
-          char *s_name = NULL, *s_ver = NULL;
-          char *d_name = NULL, *d_ver = NULL;
-          char *p_name = NULL, *p_ver = NULL, *desc = NULL;
-          GSList *params = NULL, *nodes;
-
-          if (!openvasd_get_details_from_iterator (scanners, &desc, &params))
-            {
-              SENDF_TO_CLIENT_OR_FAIL
-               ("<info><scanner><name>openvasd</name><version>0.1</version>"
-                "</scanner><daemon><name>OpenVAS</name><version>23.4.1</version>"
-                "</daemon><protocol><name>SCANNER API</name><version>0.1"
-                "</version></protocol><description>openvasd Sensor</description>");
-
-              SENDF_TO_CLIENT_OR_FAIL ("<params>");
-              nodes = params;
-              while (nodes)
-                {
-                  http_scanner_param_t *param = nodes->data;
-                  g_warning("<param><id>%s</id><name>%s</name>"
-                    "<default>%s</default><description>%s</description>"
-                    "<type>osp_%s</type><mandatory>%d</mandatory></param>",
-                    http_scanner_param_id (param), http_scanner_param_name (param),
-                    http_scanner_param_default (param), http_scanner_param_desc (param),
-                    http_scanner_param_type (param), http_scanner_param_mandatory (param));
-                  SENDF_TO_CLIENT_OR_FAIL
-                   ("<param><id>%s</id><name>%s</name>"
-                    "<default>%s</default><description>%s</description>"
-                    "<type>osp_%s</type><mandatory>%d</mandatory></param>",
-                    http_scanner_param_id (param), http_scanner_param_name (param),
-                    http_scanner_param_default (param), http_scanner_param_desc (param),
-                    http_scanner_param_type (param), 1);
-
-                  http_scanner_param_free (nodes->data);
-                  nodes = nodes->next;
-                }
-              SENDF_TO_CLIENT_OR_FAIL ("</params></info>");
-            }
-          else
-            SENDF_TO_CLIENT_OR_FAIL
-             ("<info><scanner><name/><version/></scanner>"
-              "<daemon><name/><version/></daemon>"
-              "<protocol><name/><version/></protocol><description/><params/>"
-              "</info>");
-          g_free (s_name);
-          g_free (s_ver);
-          g_free (d_name);
-          g_free (d_ver);
-          g_free (p_name);
-          g_free (p_ver);
-          g_free (desc);
-          g_slist_free (params);
-        }
-        break;
-#endif
-      default:
-        {
-          SENDF_TO_CLIENT_OR_FAIL
-           ("<info><scanner><name>OpenVAS</name><version/></scanner>"
-            "<daemon><name/><version/></daemon>"
-            "<protocol><name/><version/></protocol><description/><params/>"
-            "</info>");
-        }
-    }
-}
-
-/**
- * @brief Handle end of GET_SCANNERS element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_scanners (gmp_parser_t *gmp_parser, GError **error)
-{
-  iterator_t scanners;
-  int ret, count, filtered, first;
-
-  INIT_GET (scanner, Scanner);
-  ret = init_scanner_iterator (&scanners, &get_scanners_data->get);
-  switch (ret)
-    {
-      case 0:
-        break;
-      case 1:
-        if (send_find_error_to_client
-             ("get_scanners", "scanners", get_scanners_data->get.id,
-              gmp_parser))
-          {
-            error_send_to_client (error);
-            break;
-          }
-        break;
-      case 2:
-        if (send_find_error_to_client
-             ("get_scanners", "filter", get_scanners_data->get.filt_id,
-              gmp_parser))
-          {
-            error_send_to_client (error);
-            break;
-          }
-        break;
-      case -1:
-        SEND_TO_CLIENT_OR_FAIL (XML_INTERNAL_ERROR ("get_scanners"));
-        break;
-    }
-  if (ret)
-    {
-      get_scanners_data_reset (get_scanners_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  SEND_GET_START ("scanner");
-  while (1)
-    {
-      gchar *credential_id;
-      ret = get_next (&scanners, &get_scanners_data->get, &first, &count,
-                      init_scanner_iterator);
-      if (ret == 1)
-        break;
-      if (ret == -1)
-        {
-          internal_error_send_to_client (error);
-          break;
-        }
-
-      SEND_GET_COMMON (scanner, &get_scanners_data->get, &scanners);
-
-      SENDF_TO_CLIENT_OR_FAIL
-       ("<host>%s</host>"
-        "<port>%d</port>"
-        "<type>%d</type>"
-        "<ca_pub>%s</ca_pub>"
-        "<relay_host>%s</relay_host>"
-        "<relay_port>%d</relay_port>",
-        scanner_iterator_host (&scanners) ?: "",
-        scanner_iterator_port (&scanners) ?: 0,
-        scanner_iterator_type (&scanners),
-        scanner_iterator_ca_pub (&scanners) ?: "",
-        scanner_iterator_relay_host (&scanners) ?: "",
-        scanner_iterator_relay_port (&scanners) ?: 0);
-
-      if (check_scanner_feature (scanner_iterator_type (&scanners))
-           != SCANNER_FEATURE_OK)
-        {
-          SENDF_TO_CLIENT_OR_FAIL ("<disabled>1</disabled>");
-        }
-
-      if (get_scanners_data->get.details)
-        {
-          time_t activation_time, expiration_time;
-          gchar *activation_time_str, *expiration_time_str;
-
-          if (scanner_iterator_ca_pub (&scanners))
-            {
-              /* CA Certificate */
-              gchar *md5_fingerprint, *issuer;
-
-              get_certificate_info (scanner_iterator_ca_pub (&scanners),
-                                    -1,
-                                    TRUE,
-                                    &activation_time,
-                                    &expiration_time,
-                                    &md5_fingerprint,
-                                    NULL,   /* sha256_fingerprint */
-                                    NULL,   /* subject */
-                                    &issuer,
-                                    NULL,   /* serial */
-                                    NULL);  /* certificate_format */
-
-              activation_time_str = certificate_iso_time (activation_time);
-              expiration_time_str = certificate_iso_time (expiration_time);
-              SENDF_TO_CLIENT_OR_FAIL
-               ("<ca_pub_info>"
-                "<time_status>%s</time_status>"
-                "<activation_time>%s</activation_time>"
-                "<expiration_time>%s</expiration_time>"
-                "<md5_fingerprint>%s</md5_fingerprint>"
-                "<issuer>%s</issuer>"
-                "</ca_pub_info>",
-                certificate_time_status (activation_time, expiration_time),
-                activation_time_str,
-                expiration_time_str,
-                md5_fingerprint,
-                issuer);
-              g_free (activation_time_str);
-              g_free (expiration_time_str);
-              g_free (md5_fingerprint);
-              g_free (issuer);
-            }
-        }
-
-      credential_id = credential_uuid (scanner_iterator_credential (&scanners));
-      SENDF_TO_CLIENT_OR_FAIL
-       ("<credential id=\"%s\">"
-        "<name>%s</name>"
-        "<type>%s</type>"
-        "<trash>%d</trash>",
-        credential_id ? credential_id : "",
-        scanner_iterator_credential_name (&scanners) ?: "",
-        scanner_iterator_credential_type (&scanners) ?: "",
-        scanner_iterator_credential_trash (&scanners));
-
-      if (get_scanners_data->get.details)
-        {
-          time_t activation_time, expiration_time;
-          gchar *activation_time_str, *expiration_time_str;
-
-          if (scanner_iterator_key_pub (&scanners))
-            {
-              /* Certificate */
-              gchar *md5_fingerprint, *issuer;
-
-              get_certificate_info (scanner_iterator_key_pub (&scanners),
-                                    -1,
-                                    TRUE,
-                                    &activation_time,
-                                    &expiration_time,
-                                    &md5_fingerprint,
-                                    NULL,   /* sha256_fingerprint */
-                                    NULL,   /* subject */
-                                    &issuer,
-                                    NULL,   /* serial */
-                                    NULL);  /* certificate_format */
-
-              activation_time_str = certificate_iso_time (activation_time);
-              expiration_time_str = certificate_iso_time (expiration_time);
-              SENDF_TO_CLIENT_OR_FAIL
-               ("<certificate_info>"
-                "<time_status>%s</time_status>"
-                "<activation_time>%s</activation_time>"
-                "<expiration_time>%s</expiration_time>"
-                "<md5_fingerprint>%s</md5_fingerprint>"
-                "<issuer>%s</issuer>"
-                "</certificate_info>",
-                certificate_time_status (activation_time, expiration_time),
-                activation_time_str,
-                expiration_time_str,
-                md5_fingerprint,
-                issuer);
-              g_free (activation_time_str);
-              g_free (expiration_time_str);
-              g_free (md5_fingerprint);
-              g_free (issuer);
-            }
-        }
-
-      SENDF_TO_CLIENT_OR_FAIL
-        ("</credential>");
-      g_free (credential_id);
-      count++;
-      if (get_scanners_data->get.details)
-        {
-          iterator_t tasks;
-
-          SEND_TO_CLIENT_OR_FAIL ("<tasks>");
-          init_scanner_task_iterator (&tasks,
-                                      get_iterator_resource (&scanners));
-          while (next (&tasks))
-            {
-              if (scanner_task_iterator_readable (&tasks) == 0)
-                /* Only show tasks the user may see. */
-                continue;
-
-              SENDF_TO_CLIENT_OR_FAIL (
-                "<task id=\"%s\">"
-                "<name>%s</name>"
-                "<usage_type>%s</usage_type>",
-                scanner_task_iterator_uuid (&tasks),
-                scanner_task_iterator_name (&tasks),
-                scanner_task_iterator_usage_type (&tasks));
-
-              if (scanner_task_iterator_readable (&tasks))
-                SEND_TO_CLIENT_OR_FAIL ("</task>");
-              else
-                SEND_TO_CLIENT_OR_FAIL ("<permissions/>"
-                                        "</task>");
-            }
-          cleanup_iterator (&tasks);
-          SEND_TO_CLIENT_OR_FAIL ("</tasks>");
-
-          send_scanner_info (&scanners, gmp_parser, error);
-        }
-      SEND_TO_CLIENT_OR_FAIL ("</scanner>");
-    }
-  cleanup_iterator (&scanners);
-  filtered = get_scanners_data->get.id
-              ? 1 : scanner_count (&get_scanners_data->get);
-  SEND_GET_END ("scanner", &get_scanners_data->get, count, filtered);
-  get_scanners_data_reset (get_scanners_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
  * @brief Handle end of GET_SCHEDULES element.
  *
  * @param[in]  gmp_parser   GMP parser.
@@ -12854,10 +12455,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       case CLIENT_GET_SCOPES:
         handle_get_scopes_command (gmp_parser, error, get_scopes_data,
                                    "get_scopes");
-        break;
-
-      case CLIENT_GET_SCANNERS:
-        handle_get_scanners (gmp_parser, error);
         break;
 
       case CLIENT_GET_SCHEDULES:

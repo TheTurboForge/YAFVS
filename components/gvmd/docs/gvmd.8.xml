@@ -197,12 +197,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       </optdesc>
     </option>
     <option>
-      <p><opt>--get-scanners</opt></p>
-      <optdesc>
-        <p>List scanners and exit.</p>
-      </optdesc>
-    </option>
-    <option>
       <p><opt>--get-users</opt></p>
       <optdesc>
         <p>List users and exit.</p>

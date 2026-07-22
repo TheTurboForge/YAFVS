@@ -318,6 +318,8 @@ mod direct_api_contract_tests;
 #[cfg(test)]
 mod filter_characterization_tests;
 #[cfg(test)]
+mod gmp_command_inventory_characterization_tests;
+#[cfg(test)]
 mod gsa_sort_contract_tests;
 #[cfg(test)]
 mod metadata_export_characterization_tests;

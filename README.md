@@ -102,6 +102,11 @@ cover during leave or other absences. Asset count does not make an installation
 multi-tenant. People who only consume findings for remediation, compliance,
 management, or reporting should receive controlled reports, exports,
 notifications, or delivery artifacts rather than console accounts.
+Retaining fine-grained roles for operators who are expected to work with
+equivalent authority would add permission and visibility complexity without
+creating a genuine tenant boundary. The
+[upstream-divergence rationale](docs/CHANGES_FROM_UPSTREAM.md#operator-only-console-model)
+explains this tradeoff and its limits.
 
 Where administrative or confidentiality boundaries require hard tenant
 isolation, deploy separate, independently operated stacks with separate data,

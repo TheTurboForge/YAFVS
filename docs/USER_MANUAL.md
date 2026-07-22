@@ -63,6 +63,14 @@ This makes the scanner administration boundary explicit:
   auditability, and credential handling are the enterprise controls around
   scanner administration.
 
+This design also avoids carrying permission-query overhead, complex
+resource-visibility rules, configuration drift, and a large role-combination
+test matrix for a console whose admitted operators are expected to have
+equivalent authority. Those engineering benefits are secondary to the trust
+model, not a substitute for it. See
+[Changes From Upstream](CHANGES_FROM_UPSTREAM.md#operator-only-console-model)
+for the full rationale and its limits.
+
 YAFVS does not expose a product-level distinction between admin and super
 admin accounts. If a person should not be allowed to administer the scanner,
 that person should not be able to log in to YAFVS.
@@ -75,7 +83,7 @@ privileged service identities, scanner workers, runtime secrets, network reach,
 and failure domain remain shared. YAFVS therefore does not market one
 installation as a multi-tenant vulnerability-management platform.
 
-When customers, legal entities, security domains, administrative authorities,
+When organizations, legal entities, security domains, administrative authorities,
 confidentiality boundaries, or target-network trust zones must not share
 scanner control or data, deploy separate, independently operated YAFVS
 stacks. The stacks must separately own the database, reports and evidence,

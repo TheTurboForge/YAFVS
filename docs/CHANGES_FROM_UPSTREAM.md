@@ -66,6 +66,33 @@ accounts remain for login identity, authentication source, preferences, and
 attribution, not for modeling every organization's internal workflow as product
 roles.
 
+This is a deliberate tradeoff for YAFVS's intended deployment model.
+Operational continuity naturally drives a scanner-operations team toward broad,
+equivalent operator authority: every member needs enough context and control to
+continue shared work, respond to incidents, and cover for an unavailable
+colleague. If a role model prevents that handover, the team has a sound
+operational reason to broaden its role assignments until continuity is
+restored. The practical result is often nearly identical operator access. In
+that setting, retaining a granular role layer can preserve its full
+implementation and operating cost without creating a useful boundary between
+teammates. For YAFVS those costs include:
+
+- permission joins and filters on operational queries;
+- visibility and edit rules that become harder to explain, diagnose, and test
+  across related scanner resources;
+- permission configuration drift and accidental gaps in team coverage;
+- migrations and combinatorial tests for role and permission states; and
+- a risk that resource-level visibility rules are mistaken for tenant
+  isolation while privileged processes, data, secrets, and failure domains
+  remain shared.
+
+Removing that layer lets YAFVS make the actual boundary explicit: individual
+identities establish who authenticated and who acted, while all admitted human
+operators belong to the same product-level trust domain. This rationale is
+specific to YAFVS. Products designed to host mutually untrusted groups inside
+one application may reasonably choose a different authorization model; YAFVS
+instead requires separate stacks for that problem.
+
 When groups require a real administrative or confidentiality boundary, they
 must use separate, independently operated stacks. That deployment boundary can
 isolate databases, reports, scanner execution, runtime secrets, networks, logs,

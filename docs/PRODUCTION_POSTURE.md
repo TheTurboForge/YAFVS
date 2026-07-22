@@ -3,8 +3,9 @@
 
 # Production Posture
 
-YAFVS is currently a private development project. The Docker runtime is a
-development runtime, not production deployment guidance.
+YAFVS is currently an early alpha development project. Its source is public,
+but the Docker runtime remains a development runtime rather than production
+deployment guidance.
 
 ## Security Boundary
 

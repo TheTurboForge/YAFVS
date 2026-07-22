@@ -16,8 +16,8 @@ use crate::{
     credential_payloads::CredentialAssetItem,
     credential_write_db::*,
     credential_write_transactions::{
-        execute_credential_hard_delete_transaction, execute_credential_patch_transaction,
-        execute_credential_restore_transaction,
+        execute_credential_clone_transaction, execute_credential_hard_delete_transaction,
+        execute_credential_patch_transaction, execute_credential_restore_transaction,
     },
     credential_write_validation::{
         CredentialCreateRequest, CredentialPatchRequest, ValidatedCredentialCreate,
@@ -30,6 +30,43 @@ use crate::{
         map_control_socket_error, request_gvmd_control_response_bytes,
     },
 };
+
+pub(crate) async fn clone_credential(
+    State(state): State<AppState>,
+    Path(credential_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<(StatusCode, Json<CredentialAssetItem>), ApiError> {
+    let operator = require_credential_write_operator(operator)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_credential_write_db_error(error, "begin clone credential transaction")
+    })?;
+    let owner_id = resolve_credential_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE users, credentials, credentials_data, tag_resources IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_credential_write_db_error(error, "lock credential tables for clone"))?;
+    let source = load_credential_write_state(&tx, &credential_id).await?;
+    ensure_credential_is_human_owned(source.owner_id)?;
+    let record = execute_credential_clone_transaction(&tx, source.internal_id, owner_id).await?;
+    tx.commit().await.map_err(|error| {
+        map_credential_write_db_error(error, "commit clone credential transaction")
+    })?;
+    Ok((
+        StatusCode::CREATED,
+        Json(
+            load_credential_asset_detail(&client, &record.uuid)
+                .await
+                .map_err(|error| {
+                    mutation_committed_response_unavailable(
+                        error,
+                        "clone credential response reload",
+                    )
+                })?,
+        ),
+    ))
+}
 
 pub(crate) async fn create_credential(
     State(state): State<AppState>,

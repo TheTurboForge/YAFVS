@@ -69,6 +69,7 @@ pub(crate) fn direct_api_v1_path_is_allowed(path: &str) -> bool {
             | ["", "api", "v1", "scanners", _]
             | ["", "api", "v1", "scanners", _, "export"]
             | ["", "api", "v1", "credentials", _]
+            | ["", "api", "v1", "credentials", _, "clone"]
             | ["", "api", "v1", "credentials", _, "export"]
             | ["", "api", "v1", "users", _]
             | ["", "api", "v1", "user-management", "users", _]
@@ -279,6 +280,9 @@ fn direct_api_v1_write_method_path_is_allowed(method: &Method, path: &str) -> bo
         }
         (&Method::POST, ["", "api", "v1", "credentials"]) => true,
         (&Method::PATCH, ["", "api", "v1", "credentials", credential_id]) => {
+            direct_api_write_id_segment_is_allowed(credential_id)
+        }
+        (&Method::POST, ["", "api", "v1", "credentials", credential_id, "clone"]) => {
             direct_api_write_id_segment_is_allowed(credential_id)
         }
         (&Method::POST, ["", "api", "v1", "credentials", credential_id, "restore"]) => {

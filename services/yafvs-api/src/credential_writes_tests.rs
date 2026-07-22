@@ -23,6 +23,78 @@ fn patch_request(name: Option<&str>, comment: Option<&str>) -> CredentialPatchRe
 }
 
 #[test]
+fn credential_clone_is_operator_owned_atomic_and_secret_opaque() {
+    let inherited = GVMD_MANAGE_SQL
+        .split_once("copy_credential (const char* name, const char* comment,")
+        .expect("imported credential clone authority")
+        .1
+        .split_once("/**\n * @brief Modify a Credential.")
+        .expect("imported credential clone authority end")
+        .0;
+    for required in [
+        "copy_resource (\"credential\"",
+        "\"type\", 1",
+        "INSERT INTO credentials_data",
+        "SELECT %llu, type, value FROM credentials_data",
+    ] {
+        assert!(
+            inherited.contains(required),
+            "imported credential clone authority missing {required}"
+        );
+    }
+
+    let metadata = credential_clone_metadata_sql();
+    for required in [
+        "make_uuid()",
+        "uniquify('credential', name, $2, ' Clone')",
+        "comment",
+        "m_now()",
+        "type",
+        "allow_insecure",
+        "RETURNING id::integer, uuid::text",
+    ] {
+        assert!(
+            metadata.contains(required),
+            "clone metadata missing {required}"
+        );
+    }
+    let data = credential_clone_data_sql();
+    assert!(data.contains("SELECT $2, type, value"));
+    assert!(data.contains("FROM credentials_data"));
+    assert!(!data.contains("RETURNING"));
+    let tags = credential_clone_tags_sql();
+    assert!(tags.contains("INSERT INTO tag_resources"));
+    assert!(tags.contains("resource_location = 0"));
+
+    let handler_source = include_str!("credential_writes.rs");
+    let handler = handler_source
+        .split_once("pub(crate) async fn clone_credential")
+        .expect("credential clone handler")
+        .1
+        .split_once("pub(crate) async fn create_credential")
+        .expect("credential clone handler end")
+        .0;
+    for required in [
+        "require_credential_write_operator(operator)?",
+        "resolve_credential_write_operator_owner(&tx, &operator).await?",
+        "credentials_data",
+        "tag_resources",
+        "load_credential_write_state",
+        "ensure_credential_is_human_owned",
+        "execute_credential_clone_transaction",
+        "tx.commit()",
+        "load_credential_asset_detail",
+        "StatusCode::CREATED",
+    ] {
+        assert!(
+            handler.contains(required),
+            "clone handler missing {required}"
+        );
+    }
+    assert!(!handler.contains("credentials_data.value"));
+}
+
+#[test]
 fn credential_hard_delete_is_guarded_reference_safe_and_secret_opaque() {
     let inherited = GVMD_MANAGE_SQL
         .split_once("int\ndelete_credential (const char *credential_id, int ultimate)")

@@ -1126,7 +1126,8 @@ native_api_post_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, credential_prefix))
     {
       const gchar *id = path + strlen (credential_prefix);
-      return is_uuid_segment_with_suffix (id, restore_suffix);
+      return is_uuid_segment_with_suffix (id, clone_suffix)
+             || is_uuid_segment_with_suffix (id, restore_suffix);
     }
 
   if (g_str_has_prefix (path, scope_prefix))

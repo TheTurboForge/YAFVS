@@ -6,6 +6,36 @@ pub(crate) fn credential_write_operator_owner_sql() -> &'static str {
     "SELECT id::integer FROM users WHERE uuid = $1;"
 }
 
+pub(crate) fn credential_clone_metadata_sql() -> &'static str {
+    "INSERT INTO credentials
+        (uuid, owner, name, comment, creation_time, modification_time, type,
+         allow_insecure)
+     SELECT make_uuid(), $2, uniquify('credential', name, $2, ' Clone'),
+            comment, m_now(), m_now(), type, allow_insecure
+       FROM credentials
+      WHERE id = $1
+      RETURNING id::integer, uuid::text;"
+}
+
+pub(crate) fn credential_clone_data_sql() -> &'static str {
+    "INSERT INTO credentials_data (credential, type, value)
+     SELECT $2, type, value
+       FROM credentials_data
+      WHERE credential = $1;"
+}
+
+pub(crate) fn credential_clone_tags_sql() -> &'static str {
+    "INSERT INTO tag_resources
+        (tag, resource_type, resource, resource_uuid, resource_location)
+     SELECT tag, resource_type, $2,
+            (SELECT uuid FROM credentials WHERE id = $2),
+            resource_location
+       FROM tag_resources
+      WHERE resource_type = 'credential'
+        AND resource = $1
+        AND resource_location = 0;"
+}
+
 pub(crate) fn credential_trash_state_sql() -> &'static str {
     "SELECT id::integer,
             uuid::text,

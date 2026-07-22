@@ -16,6 +16,7 @@ import Credential, {
 } from 'gmp/models/credential';
 import {type Element} from 'gmp/models/model';
 import {
+  cloneNativeCredential,
   exportNativeCredentialMetadata,
   patchNativeCredential,
 } from 'gmp/native-api/credentials';
@@ -93,15 +94,7 @@ class CredentialCommand extends EntityCommand<
   }
 
   async clone({id}: EntityCommandParams) {
-    return await this.entityAction(
-      {
-        cmd: 'clone',
-        resource_type: 'credential',
-      },
-      {
-        extraParams: {id},
-      },
-    );
+    return cloneNativeCredential(this.http, id);
   }
 
   async export({id}: EntityCommandParams) {

@@ -291,6 +291,7 @@ OPENAPI_ALLOWED_SIDE_EFFECT_VALUES = frozenset(
         "alert-real-delivery-control",
         "account-auth-control",
         "credential-secret-control",
+        "secret-opaque-clone",
         "destructive-mutation",
         "export-generation",
         "feed-control",
@@ -352,6 +353,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "credential-trash-hard-delete",
         "credential-trash-restore",
         "credential-metadata-modify",
+        "credential-clone",
         "credential-up-usk-create",
         "cpe-catalog-detail-read",
         "cpe-catalog-list-read",
@@ -546,6 +548,7 @@ OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
         "delivery-payload-mutations",
         "credential-secrets-writes-and-deletes",
         "credential-secret-updates-non-up-usk-types-and-deletes",
+        "credential-secret-updates-non-up-usk-types-and-live-delete",
         "feed-sync-import-control",
         "host-os-catalog-target-creation-tags-export-and-rich-history",
         "operating-system-writes-deletes-and-rich-history",
@@ -635,6 +638,7 @@ OPENAPI_REQUIRED_EXPOSURE = {
     ("post", "/credentials"): "direct-write",
     ("get", "/credentials/{credential_id}"): "direct-read",
     ("patch", "/credentials/{credential_id}"): "direct-write",
+    ("post", "/credentials/{credential_id}/clone"): "direct-write",
     ("get", "/users"): "direct-read",
     ("get", "/users/current/settings"): "direct-read",
     ("get", "/users/current/settings/{setting_id}"): "direct-read",
@@ -756,6 +760,15 @@ OPENAPI_REQUIRED_MIGRATION_METADATA = {
     ("get", "/alerts"): {
         "x-yafvs-maturity": "live-read",
         "x-yafvs-replaces": "alert-metadata-list-read",
+    },
+    ("post", "/credentials/{credential_id}/clone"): {
+        "x-yafvs-inherited-still-owns": "credential-secret-updates-non-up-usk-types-and-live-delete",
+        "x-yafvs-maturity": "live-write",
+        "x-yafvs-operator-identity": "direct-token-operator",
+        "x-yafvs-owner-semantics": "request-operator-owner",
+        "x-yafvs-replaces": "credential-clone",
+        "x-yafvs-safety-contract": "write-control-v1",
+        "x-yafvs-side-effect": "secret-opaque-clone",
     },
     ("post", "/alerts"): {
         "x-yafvs-inherited-still-owns": "delivery-payload-mutations",
@@ -6999,7 +7012,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         replace_configuration_suffix = post_constants.get("replace_configuration_suffix")
         for prefix_variable in ("alert_prefix", "credential_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix", "task_prefix"):
             prefix = post_constants.get(prefix_variable)
-            if prefix_variable != "credential_prefix" and prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
+            if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{clone_suffix}")
             if prefix_variable == "alert_prefix" and prefix and test_suffix and f"is_uuid_segment_with_suffix (id, test_suffix)" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{test_suffix}")
@@ -7195,7 +7208,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
         verify_suffix = post_constants.get("verify_suffix")
         for prefix_variable in ("alert_prefix", "credential_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix", "task_prefix"):
             prefix = post_constants.get(prefix_variable)
-            if prefix_variable != "credential_prefix" and prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
+            if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{clone_suffix}")
             if prefix_variable == "alert_prefix" and prefix and test_suffix and f"is_uuid_segment_with_suffix (id, test_suffix)" in post_function_body:
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{test_suffix}")
@@ -8043,12 +8056,23 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
             },
             {
                 "method": "post",
+                "endpoint": "/api/v1/credentials/{credential_id}/clone",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser credential clone", "direct native secret-opaque credential clone"],
+                "residual_inherited": [
+                    "Clone copies opaque secret rows and active tag links transactionally without loading or returning secret values.",
+                    "Secret mutation, moving live credentials to trash, and live deletion remain inherited."
+                ],
+            },
+            {
+                "method": "post",
                 "endpoint": "/api/v1/credentials/{credential_id}/restore",
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser credential restore", "direct native credential restore"],
                 "residual_inherited": [
-                    "Credential clone, secret mutation, live trash/delete, and download/export semantics remain inherited; permanent trash deletion is native.",
+                    "Credential secret mutation, live trash/delete, and download semantics remain inherited; clone and permanent trash deletion are native.",
                     "Restore copies opaque secret rows transactionally but returns only redacted metadata."
                 ],
             },

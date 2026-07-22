@@ -21,7 +21,8 @@ use crate::{
         update_ldap_authentication_settings, update_radius_authentication_settings,
     },
     credential_writes::{
-        create_credential, hard_delete_credential, patch_credential, restore_credential,
+        clone_credential, create_credential, hard_delete_credential, patch_credential,
+        restore_credential,
     },
     filter_writes::{
         clone_filter, create_filter, delete_filter, hard_delete_filter, patch_filter,
@@ -216,6 +217,10 @@ pub(crate) fn direct_native_api_router(
             .route(
                 "/api/v1/credentials/:credential_id",
                 patch(patch_credential),
+            )
+            .route(
+                "/api/v1/credentials/:credential_id/clone",
+                post(clone_credential),
             )
             .route(
                 "/api/v1/credentials/:credential_id/restore",

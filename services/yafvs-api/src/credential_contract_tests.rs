@@ -15,6 +15,8 @@ use crate::{
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 const GSA_CREDENTIAL_COMMAND: &str =
     include_str!("../../../components/gsa/src/gmp/commands/credential.ts");
+const GSA_NATIVE_CREDENTIALS: &str =
+    include_str!("../../../components/gsa/src/gmp/native-api/credentials.ts");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 
 fn openapi_path_block(path: &str) -> String {
@@ -37,7 +39,7 @@ fn openapi_path_block(path: &str) -> String {
 }
 
 #[test]
-fn credential_clone_keeps_a_fixed_credential_only_gmp_payload() {
+fn credential_clone_uses_native_secret_opaque_contract() {
     let clone_start = GSAD_GMP_C
         .find("\nclone_gmp (")
         .expect("clone_gmp function must exist");
@@ -46,13 +48,33 @@ fn credential_clone_keeps_a_fixed_credential_only_gmp_payload() {
     let clone_gmp = &clone_tail[..clone_end];
 
     assert!(GSA_CREDENTIAL_COMMAND.contains("async clone({id}: EntityCommandParams)"));
-    assert!(GSA_CREDENTIAL_COMMAND.contains("cmd: 'clone'"));
-    assert!(GSA_CREDENTIAL_COMMAND.contains("resource_type: 'credential'"));
+    assert!(GSA_CREDENTIAL_COMMAND.contains("return cloneNativeCredential(this.http, id)"));
+    assert!(!GSA_CREDENTIAL_COMMAND.contains("cmd: 'clone'"));
+    assert!(GSA_NATIVE_CREDENTIALS.contains("api/v1/credentials/"));
+    assert!(GSA_NATIVE_CREDENTIALS.contains("/clone"));
     assert!(clone_gmp.contains("strcmp (type, \"credential\")"));
     assert!(clone_gmp.contains("<create_credential><copy>%s</copy>"));
     assert!(!clone_gmp.contains("<create_%s>"));
     assert!(!clone_gmp.contains("<alterable>1</alterable>"));
     assert!(!clone_gmp.contains("params_value (params, \"alterable\")"));
+
+    let path = "/api/v1/credentials/12345678-1234-1234-1234-123456789abc/clone";
+    assert!(!direct_api_v1_method_is_allowed(&Method::POST, path, false));
+    assert!(direct_api_v1_method_is_allowed(&Method::POST, path, true));
+    let block = openapi_path_block("/credentials/{credential_id}/clone");
+    for required in [
+        "operationId: postCredentialsByCredentialIdClone",
+        "x-yafvs-replaces: credential-clone",
+        "x-yafvs-owner-semantics: request-operator-owner",
+        "x-yafvs-side-effect: secret-opaque-clone",
+        "encrypted credential data rows",
+        "response contains redacted metadata only",
+    ] {
+        assert!(
+            block.contains(required),
+            "credential clone block missing {required}"
+        );
+    }
 }
 
 #[test]
@@ -295,7 +317,7 @@ fn credential_patch_route_is_direct_write_control_metadata_only() {
         "x-yafvs-safety-contract: write-control-v1",
         "x-yafvs-side-effect: metadata-write",
         "CredentialPatchRequest",
-        "Secret updates, allow_insecure mutation, credential type changes, target/scanner link mutation, export, download, clone, moving live credentials to trash, and live deletion remain on inherited compatibility paths; restore and permanent trash deletion are separately native.",
+        "Secret updates, allow_insecure mutation, credential type changes, target/scanner link mutation, export, download, moving live credentials to trash, and live deletion remain on inherited compatibility paths; clone, restore, and permanent trash deletion are separately native.",
     ] {
         assert!(
             block.contains(required),

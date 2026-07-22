@@ -44,6 +44,7 @@ fn committed_response_operations_document_the_indeterminate_retry_contract() {
         "patchScannersByScannerId",
         "postScannersByScannerIdReplaceConfiguration",
         "patchCredentialsByCredentialId",
+        "postCredentialsByCredentialIdClone",
         "postFilters",
         "patchFiltersByFilterId",
         "postFiltersByFilterIdClone",

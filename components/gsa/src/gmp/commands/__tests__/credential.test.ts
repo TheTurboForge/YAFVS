@@ -22,25 +22,69 @@ afterEach(() => {
 });
 
 describe('CredentialCommand tests', () => {
-  test('should clone a credential through the credential-only GMP action', async () => {
-    const response = createActionResultResponse({
-      action: 'Clone Credential',
-      id: 'cloned-credential-id',
-      message: 'Credential cloned',
+  test('should clone a credential through the native API', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      json: testing.fn().mockResolvedValue({
+        id: 'cloned-credential-id',
+      }),
+      ok: true,
+      status: 201,
     });
-    const fakeHttp = createHttp(response);
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
     const cmd = new CredentialCommand(fakeHttp);
 
     const result = await cmd.clone({id: 'credential-id'});
 
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'clone',
-        id: 'credential-id',
-        resource_type: 'credential',
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+    expect(fakeHttp.buildUrl).toHaveBeenCalledWith(
+      'api/v1/credentials/credential-id/clone',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://yafvs.example/api/v1/credentials/credential-id/clone',
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          'X-YAFVS-Token': 'test-token',
+          Authorization: 'Bearer jwt-token',
+        },
+        body: JSON.stringify({}),
       },
-    });
+    );
     expect(result.data).toEqual({id: 'cloned-credential-id'});
+  });
+
+  test('should propagate native credential clone failure without GMP fallback', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({ok: false, status: 500});
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createHttp(undefined) as ReturnType<typeof createHttp> & {
+      buildUrl: ReturnType<typeof testing.fn>;
+      session: ReturnType<typeof createSession>;
+    };
+    fakeHttp.buildUrl = testing.fn(
+      (path: string) => `https://yafvs.example/${path}`,
+    );
+    fakeHttp.session = createSession();
+    fakeHttp.session.token = 'test-token';
+    fakeHttp.session.jwt = 'jwt-token';
+    const cmd = new CredentialCommand(fakeHttp);
+
+    await expect(cmd.clone({id: 'credential-id'})).rejects.toThrow(
+      'Native API request failed with status 500',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should export redacted credential metadata through native API when available', async () => {

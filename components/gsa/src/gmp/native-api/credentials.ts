@@ -321,3 +321,15 @@ export const patchNativeCredential = async (
     }),
   );
 };
+
+export const cloneNativeCredential = async (
+  gmp: NativeApiGmp,
+  id: string,
+): Promise<Response<{id: string}>> => {
+  const payload = await writeNativeJson<NativeCredentialPayload>(
+    gmp,
+    `api/v1/credentials/${encodeURIComponent(id)}/clone`,
+    {},
+  );
+  return new Response({id: stringValue(payload.id)});
+};

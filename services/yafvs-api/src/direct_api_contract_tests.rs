@@ -276,6 +276,11 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
     },
     NativeWriteRouteContract {
         method: "post",
+        path: "/api/v1/credentials/:credential_id/clone",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
+        method: "post",
         path: "/api/v1/credentials/:credential_id/restore",
         safety_contract: "write-control-v1",
     },
@@ -828,6 +833,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("post(browser_proxy_clone_alert)"));
     assert!(browser_routes.contains("post(browser_proxy_restore_alert)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_credential)"));
+    assert!(browser_routes.contains("post(browser_proxy_clone_credential)"));
     assert!(browser_routes.contains("delete(browser_proxy_hard_delete_credential)"));
     assert!(browser_routes.contains("patch(browser_proxy_patch_scanner)"));
     assert!(browser_routes.contains("post(browser_proxy_create_scanner)"));

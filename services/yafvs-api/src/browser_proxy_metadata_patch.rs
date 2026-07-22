@@ -22,7 +22,8 @@ use crate::{
     credential_payloads::CredentialAssetItem,
     credential_write_validation::{CredentialCreateRequest, CredentialPatchRequest},
     credential_writes::{
-        create_credential, hard_delete_credential, patch_credential, restore_credential,
+        clone_credential, create_credential, hard_delete_credential, patch_credential,
+        restore_credential,
     },
     errors::ApiError,
     override_payloads::OverrideAssetItem,
@@ -54,6 +55,16 @@ use crate::{
     },
     tls_certificate_writes::delete_tls_certificate,
 };
+
+pub(crate) async fn browser_proxy_clone_credential(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(credential_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<(StatusCode, Json<CredentialAssetItem>), ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    clone_credential(State(state), Path(credential_id), Some(Extension(operator))).await
+}
 
 pub(crate) async fn browser_proxy_create_alert(
     State(state): State<AppState>,

@@ -71,6 +71,31 @@ pub(crate) async fn execute_credential_restore_transaction(
     .await
 }
 
+pub(crate) async fn execute_credential_clone_transaction(
+    tx: &Transaction<'_>,
+    source_internal_id: i32,
+    owner_id: i32,
+) -> Result<CredentialWriteRecord, ApiError> {
+    let cloned = query_credential_write_record_with_internal_id(
+        tx,
+        credential_clone_metadata_sql(),
+        &[&source_internal_id, &owner_id],
+        "clone credential metadata",
+    )
+    .await?;
+    for (sql, action) in [
+        (
+            credential_clone_data_sql(),
+            "clone credential secret data opaquely",
+        ),
+        (credential_clone_tags_sql(), "clone credential tag links"),
+    ] {
+        execute_credential_write_sql(tx, sql, &[&source_internal_id, &cloned.internal_id], action)
+            .await?;
+    }
+    Ok(CredentialWriteRecord { uuid: cloned.uuid })
+}
+
 pub(crate) async fn execute_credential_hard_delete_transaction(
     tx: &Transaction<'_>,
     trash_internal_id: i32,

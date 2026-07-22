@@ -1429,26 +1429,6 @@ get_users_data_reset (get_users_data_t * data)
 }
 
 /**
- * @brief Command data for the get_vulns command.
- */
-typedef struct
-{
-  get_data_t get;    ///< Get args.
-} get_vulns_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-get_vulns_data_reset (get_vulns_data_t * data)
-{
-  get_data_reset (&data->get);
-  memset (data, 0, sizeof (get_vulns_data_t));
-}
-
-/**
  * @brief Command data for the modify_config command.
  */
 typedef struct
@@ -2079,7 +2059,6 @@ typedef union
   get_targets_data_t get_targets;                     ///< get_targets
   get_tasks_data_t get_tasks;                         ///< get_tasks
   get_users_data_t get_users;                         ///< get_users
-  get_vulns_data_t get_vulns;                         ///< get_vulns
   help_data_t help;                                   ///< help
   modify_asset_data_t modify_asset;                   ///< modify_asset
   modify_config_data_t modify_config;                 ///< modify_config
@@ -2353,12 +2332,6 @@ static get_users_data_t *get_users_data
  = &(command_data.get_users);
 
 /**
- * @brief Parser callback data for GET_VULNS.
- */
-static get_vulns_data_t *get_vulns_data
- = &(command_data.get_vulns);
-
-/**
  * @brief Parser callback data for HELP.
  */
 static help_data_t *help_data
@@ -2612,7 +2585,6 @@ typedef enum
   CLIENT_GET_USERS,
   CLIENT_GET_VERSION,
   CLIENT_GET_VERSION_AUTHENTIC,
-  CLIENT_GET_VULNS,
   CLIENT_HELP,
   CLIENT_LOGOUT,
   CLIENT_MODIFY_ASSET,
@@ -3584,13 +3556,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
           }
         else if (strcasecmp ("GET_VERSION", element_name) == 0)
           set_client_state (CLIENT_GET_VERSION_AUTHENTIC);
-        else if (strcasecmp ("GET_VULNS", element_name) == 0)
-          {
-            get_data_parse_attributes (&get_vulns_data->get, "vuln",
-                                       attribute_names,
-                                       attribute_values);
-            set_client_state (CLIENT_GET_VULNS);
-          }
         else if (strcasecmp ("HELP", element_name) == 0)
           {
             append_attribute (attribute_names, attribute_values, "format",
@@ -13176,119 +13141,6 @@ handle_get_version (gmp_parser_t *gmp_parser, GError **error)
     set_client_state (CLIENT_TOP);
 }
 
-/**
- * @brief Handle end of GET_VULNS element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_vulns (gmp_parser_t *gmp_parser, GError **error)
-{
-  get_data_t *get;
-  int count, filtered, first;
-  int ret;
-  iterator_t vulns;
-
-  get = &get_vulns_data->get;
-
-  // Assumes that second param is only used for plural
-  INIT_GET (vuln, Vulnerabilitie);
-
-  ret = init_vuln_iterator (&vulns, get);
-  if (ret)
-    {
-      switch (ret)
-        {
-          case 1:
-            if (send_find_error_to_client ("get_vulns",
-                                           "vuln",
-                                           get_vulns_data->get.id,
-                                           gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            break;
-          case 2:
-            if (send_find_error_to_client
-                  ("get_vulns", "filter",
-                   get_vulns_data->get.filt_id, gmp_parser))
-              {
-                error_send_to_client (error);
-                return;
-              }
-            break;
-          case -1:
-            SEND_TO_CLIENT_OR_FAIL
-              (XML_INTERNAL_ERROR ("get_vulns"));
-            break;
-        }
-      get_vulns_data_reset (get_vulns_data);
-      set_client_state (CLIENT_AUTHENTIC);
-      return;
-    }
-
-  SEND_GET_START ("vuln");
-
-  while (next (&vulns))
-    {
-      time_t oldest, newest;
-
-      count ++;
-      SENDF_TO_CLIENT_OR_FAIL ("<vuln id=\"%s\">"
-                               "<name>%s</name>"
-                               "<type>%s</type>",
-                               get_iterator_uuid (&vulns),
-                               get_iterator_name (&vulns),
-                               vuln_iterator_type (&vulns));
-
-      SENDF_TO_CLIENT_OR_FAIL ("<creation_time>%s</creation_time>",
-                               iso_if_time (get_iterator_creation_time (&vulns)));
-
-      SENDF_TO_CLIENT_OR_FAIL ("<modification_time>%s</modification_time>",
-                               iso_if_time (get_iterator_modification_time (&vulns)));
-
-      SENDF_TO_CLIENT_OR_FAIL ("<severity>%1.1f</severity>"
-                               "<qod>%d</qod>",
-                               vuln_iterator_severity (&vulns),
-                               vuln_iterator_qod (&vulns));
-
-      // results for the vulnerability
-      oldest = vuln_iterator_oldest (&vulns);
-      SENDF_TO_CLIENT_OR_FAIL ("<results>"
-                               "<count>%d</count>"
-                               "<oldest>%s</oldest>",
-                               vuln_iterator_results (&vulns),
-                               iso_time (&oldest));
-
-      newest = vuln_iterator_newest (&vulns);
-      SENDF_TO_CLIENT_OR_FAIL ("<newest>%s</newest>",
-                               iso_time (&newest));
-
-      SEND_TO_CLIENT_OR_FAIL ("</results>");
-
-      // hosts with the vulnerability
-      SENDF_TO_CLIENT_OR_FAIL ("<hosts>"
-                               "<count>%d</count>",
-                               vuln_iterator_hosts (&vulns));
-
-      SEND_TO_CLIENT_OR_FAIL ("</hosts>");
-
-      // closing tag
-      SEND_TO_CLIENT_OR_FAIL ("</vuln>");
-    }
-
-  cleanup_iterator (&vulns);
-
-  filtered = vuln_count (get);
-
-  SEND_GET_END ("vuln", &get_vulns_data->get, count, filtered);
-
-  get_vulns_data_reset (get_vulns_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
 extern char client_address[];
 
 /**
@@ -13949,10 +13801,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       case CLIENT_GET_VERSION:
       case CLIENT_GET_VERSION_AUTHENTIC:
         handle_get_version (gmp_parser, error);
-        break;
-
-      case CLIENT_GET_VULNS:
-        handle_get_vulns (gmp_parser, error);
         break;
 
       case CLIENT_HELP:

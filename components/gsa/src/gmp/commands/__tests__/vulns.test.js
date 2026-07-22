@@ -63,9 +63,25 @@ describe('VulnerabilityCommand tests', () => {
       severity: 7.5,
     });
   });
+
 });
 
 describe('VulnerabilitiesCommand tests', () => {
+  test('fails closed when the native vulnerability list is unavailable', async () => {
+    const fetchMock = testing.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+    });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new VulnerabilitiesCommand(fakeHttp);
+
+    await expect(cmd.get()).rejects.toThrow(
+      'Native API request failed with status 503',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
   test('should fetch vulnerabilities through native API', async () => {
     const fetchMock = testing.fn().mockResolvedValue({
       json: testing.fn().mockResolvedValue({
@@ -109,6 +125,28 @@ describe('VulnerabilitiesCommand tests', () => {
       sort: 'severity',
       filter: 'postgres',
     });
+  });
+
+  test('fails the selected export without a legacy or partial fallback', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce({
+        json: testing.fn().mockResolvedValue({id: 'vuln-1'}),
+        ok: true,
+        status: 200,
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+      });
+    testing.stubGlobal('fetch', fetchMock);
+    const fakeHttp = createNativeHttp();
+    const cmd = new VulnerabilitiesCommand(fakeHttp);
+
+    await expect(cmd.exportByIds(['vuln-1', 'vuln-2'])).rejects.toThrow(
+      'Native API request failed with status 404',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should page through native API for getAll', async () => {
@@ -364,6 +402,23 @@ describe('VulnerabilitiesCommand tests', () => {
         cmd: 'get_aggregate',
         filter: 'first=1',
         group_column: 'severity',
+      },
+    });
+  });
+
+  test('should request host aggregates for vulnerabilities', async () => {
+    const response = createAggregatesResponse();
+    const fakeHttp = createHttp(response);
+    const cmd = new VulnerabilitiesCommand(fakeHttp);
+
+    await cmd.getHostAggregates({filter: 'first=1'});
+
+    expect(fakeHttp.request).toHaveBeenCalledWith('get', {
+      args: {
+        aggregate_type: 'vuln',
+        cmd: 'get_aggregate',
+        filter: 'first=1',
+        group_column: 'hosts',
       },
     });
   });

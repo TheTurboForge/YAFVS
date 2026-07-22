@@ -2347,35 +2347,6 @@ secinfo_count_after (const get_data_t *, const char *, time_t, gboolean);
 
 
 
-/* Vulns. */
-
-int
-init_vuln_iterator (iterator_t*, const get_data_t*);
-
-int
-vuln_iterator_results (iterator_t*);
-
-time_t
-vuln_iterator_oldest (iterator_t*);
-
-time_t
-vuln_iterator_newest (iterator_t*);
-
-const char*
-vuln_iterator_type (iterator_t*);
-
-int
-vuln_iterator_hosts (iterator_t*);
-
-double
-vuln_iterator_severity (iterator_t*);
-
-int
-vuln_iterator_qod (iterator_t*);
-
-int
-vuln_count (const get_data_t*);
-
 #define MANAGE_AUTH_SETTINGS_HOST_MAX_BYTES 1024
 #define MANAGE_AUTH_SETTINGS_AUTH_DN_MAX_BYTES 4096
 #define MANAGE_AUTH_SETTINGS_CERT_MAX_BYTES 32768

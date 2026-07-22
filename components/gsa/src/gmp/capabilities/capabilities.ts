@@ -68,7 +68,6 @@ const CAPABILITY_NAMES = [
   'get_tls_certificates',
   'get_users',
   'get_version',
-  'get_vulns',
   'help',
   'modify_alert',
   'modify_asset',

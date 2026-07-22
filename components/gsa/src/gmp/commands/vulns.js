@@ -41,10 +41,6 @@ class VulnerabilitiesCommand extends EntitiesCommand {
     super(http, 'vuln', Vulnerability);
   }
 
-  getEntitiesResponse(root) {
-    return root.get_vulns.get_vulns_response;
-  }
-
   async get(params = {}) {
     const filter = filterFromCommandParams(params);
     const nativeResponse = await fetchNativeVulnerabilities(

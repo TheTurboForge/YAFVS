@@ -6785,24 +6785,6 @@ create_user_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
 }
 
 /**
- * @brief Get multiple vulns, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_vulns_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-               params_t *params, gsad_command_response_data_t *response_data)
-{
-  return get_many (connection, "vulns", credentials, params, NULL,
-                   response_data);
-}
-
-/**
  * @brief Modify a user, get all users, envelope the result.
  *
  * @param[in]  connection       Connection to manager.
@@ -7367,13 +7349,13 @@ bulk_export_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   CHECK_VARIABLE_INVALID (bulk_select, "Bulk Export")
 
   if (str_equal (type, "filter") || str_equal (type, "port_list")
-      || str_equal (type, "tag"))
+      || str_equal (type, "tag") || str_equal (type, "vuln"))
     {
       gsad_command_response_data_set_status_code (response_data,
                                                   MHD_HTTP_BAD_REQUEST);
       return gsad_http_create_gsad_message (
         credentials,
-        "Filter, port-list, and tag XML bulk export are no "
+        "Filter, port-list, tag, and vulnerability XML bulk export are no "
         "longer supported. Use the native JSON metadata export endpoints "
         "instead.",
         response_data);
@@ -8740,8 +8722,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_tls_certificates)
   ELSE (get_user)
   ELSE (get_users)
-  ELSE (get_vulns)
-
   else if (!strcmp (cmd, "download_ssl_cert"))
   {
     gsad_command_response_data_set_content_type (response_data,

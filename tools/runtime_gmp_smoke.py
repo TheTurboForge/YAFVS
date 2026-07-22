@@ -77,7 +77,7 @@ def parse_gmp_response(response: bytes) -> ET.Element:
 
 def raw_gmp_checks(
     socket_path: Path, username: str, password: str, timeout: int
-) -> tuple[bytes, bytes, bytes, bytes, str]:
+) -> tuple[bytes, bytes, bytes, bytes, bytes, str]:
     probe_name = f"yafvs-retired-copy-probe-{uuid.uuid4()}"
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
         connection.settimeout(timeout)
@@ -100,11 +100,16 @@ def raw_gmp_checks(
         credentials_response = send_gmp_xml_command(
             connection, '<get_credentials filter="rows=-1"/>'
         )
+        aggregate_response = send_gmp_xml_command(
+            connection,
+            '<get_aggregates type="vuln" group_column="severity" first_group="1" max_groups="1"/>',
+        )
         return (
             version_response,
             copy_response,
             copy_only_response,
             credentials_response,
+            aggregate_response,
             probe_name,
         )
 
@@ -141,6 +146,7 @@ def main(argv: list[str] | None = None) -> int:
             copy_response,
             copy_only_response,
             credentials_response,
+            aggregate_response,
             probe_name,
         ) = raw_gmp_checks(socket_path, args.username, password, args.timeout)
     except Exception as error:  # pylint: disable=broad-except
@@ -173,17 +179,23 @@ def main(argv: list[str] | None = None) -> int:
         if name.text
     }
     no_credential_created = probe_name not in credential_names
+    aggregate_root = parse_gmp_response(aggregate_response)
+    vulnerability_aggregate_available = (
+        aggregate_root.tag == "get_aggregates_response"
+        and aggregate_root.get("status") == "200"
+    )
     passed = (
         bool(version)
         and copy_rejected
         and copy_only_rejected
         and no_credential_created
+        and vulnerability_aggregate_available
     )
     print(
         json.dumps(
             result(
                 "pass" if passed else "fail",
-                "GMP authentication, get_version, and retired credential-copy rejection completed",
+                "GMP authentication, retained vulnerability aggregation, and retired credential-copy rejection completed",
                 authenticated=True,
                 version=version,
                 credential_copy_rejected=copy_rejected,
@@ -193,6 +205,9 @@ def main(argv: list[str] | None = None) -> int:
                 credential_copy_only_status=copy_only_root.get("status"),
                 credential_copy_only_status_text=copy_only_root.get("status_text"),
                 credential_copy_residue_absent=no_credential_created,
+                vulnerability_aggregate_available=vulnerability_aggregate_available,
+                vulnerability_aggregate_status=aggregate_root.get("status"),
+                vulnerability_aggregate_status_text=aggregate_root.get("status_text"),
             )
         )
     )

@@ -355,3 +355,5 @@ mod task_target_replace_tests;
 mod trashcan_restore_characterization_tests;
 #[cfg(test)]
 mod user_account_contract_tests;
+#[cfg(test)]
+mod vulnerability_characterization_tests;

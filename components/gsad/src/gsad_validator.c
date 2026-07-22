@@ -110,7 +110,6 @@ gsad_init_validator ()
                      "|(get_tls_certificates)"
                      "|(get_user)"
                      "|(get_users)"
-                     "|(get_vulns)"
                      "|(login)"
                      "|(move_task)"
                      "|(renew_session)"

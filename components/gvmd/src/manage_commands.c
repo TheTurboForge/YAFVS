@@ -91,7 +91,6 @@ command_t gmp_commands[]
     {"GET_TLS_CERTIFICATES", "Get all TLS certificates."},
     {"GET_USERS", "Get all users."},
     {"GET_VERSION", "Get the Greenbone Management Protocol version."},
-    {"GET_VULNS", "Get all vulnerabilities."},
     {"HELP", "Get this help text."},
     {"MODIFY_ASSET", "Modify an existing asset."},
     {"MODIFY_AUTH", "Modify the authentication methods."},

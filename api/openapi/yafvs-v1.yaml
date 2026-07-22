@@ -2388,7 +2388,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: alert-metadata-list-read
       summary: List redacted alert metadata
-      description: Read-only alert metadata backed by gvmd/PostgreSQL. This list intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export, restore, hard-delete, and delivery-payload mutations.
+      description: Read-only alert metadata backed by gvmd/PostgreSQL. This list intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export, and delivery-payload mutations.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -2476,7 +2476,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: alert-metadata-detail-read
       summary: Read one redacted alert metadata row
-      description: Read-only alert detail metadata backed by gvmd/PostgreSQL. This detail response intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export, restore, hard-delete, and delivery-payload mutations; task references are id/name metadata only.
+      description: Read-only alert detail metadata backed by gvmd/PostgreSQL. This detail response intentionally excludes alert condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates, inherited XML export, and delivery-payload mutations; task references are id/name metadata only.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       responses:
@@ -2513,7 +2513,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Update alert metadata
-      description: Direct write-control endpoint for updating the name and comment of any human-owned alert. Any authenticated stack operator may continue this work; the alert's existing owner remains attribution. Alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, restore, hard-delete, and delivery-payload mutation remain on inherited compatibility paths.
+      description: Direct write-control endpoint for updating the name and comment of any human-owned alert. Any authenticated stack operator may continue this work; the alert's existing owner remains attribution. Alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, and delivery-payload mutation remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       requestBody:
@@ -2560,7 +2560,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Move alert to trash
-      description: Direct write-control endpoint for moving a human-owned live alert to trash. Any authenticated stack operator may continue this work; the alert's existing owner remains attribution. Alerts referenced by visible live tasks are rejected; hidden/trash task references, alert condition/event/method data, and tag links are moved consistently. Delivery-payload mutation, inherited XML export, restore, and hard-delete remain on inherited compatibility paths.
+      description: Direct write-control endpoint for moving a human-owned live alert to trash. Any authenticated stack operator may continue this work; the alert's existing owner remains attribution. Alerts referenced by visible live tasks are rejected; hidden/trash task references, alert condition/event/method data, and tag links are moved consistently. Delivery-payload mutation and inherited XML export remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/AlertId'
       responses:
@@ -2570,6 +2570,90 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /alerts/{alert_id}/restore:
+    post:
+      operationId: postAlertsByAlertIdRestore
+      x-yafvs-direct: true
+      x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
+      x-yafvs-maturity: live-write
+      x-yafvs-replaces: alert-trash-restore
+      x-yafvs-inherited-still-owns: raw-gmp-alert-trash-control
+      x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
+      x-yafvs-safety-contract: write-control-v1
+      x-yafvs-side-effect: metadata-write
+      summary: Restore alert from trash
+      description: Direct write-control endpoint for restoring a human-owned alert from trash. Any authenticated stack operator may continue this work; restore preserves UUID and owner attribution, copies condition/event/method rows without returning their delivery payloads, relinks trash-side task and tag references, and rejects conflicting live UUID or same-owner live name collisions. An alert whose filter remains in trash cannot be restored. Raw GMP alert trash control remains separately classified migration work.
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      responses:
+        '200':
+          description: Restored redacted alert detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertAsset'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '405':
+          $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          $ref: '#/components/responses/BadGateway'
+  /alerts/{alert_id}/trash:
+    delete:
+      operationId: deleteAlertsByAlertIdTrash
+      x-yafvs-direct: true
+      x-yafvs-exposure: direct-write
+      x-yafvs-profile: shared-write
+      x-yafvs-maturity: live-write
+      x-yafvs-replaces: alert-trash-hard-delete
+      x-yafvs-inherited-still-owns: raw-gmp-alert-trash-control
+      x-yafvs-operator-identity: direct-token-operator
+      x-yafvs-owner-semantics: preserve-existing-owner
+      x-yafvs-team-authority: authenticated-stack-operator
+      x-yafvs-safety-contract: write-control-v1
+      x-yafvs-side-effect: metadata-delete
+      summary: Hard-delete a trashed alert
+      description: Direct write-control endpoint for permanently deleting a human-owned trashed alert. Any authenticated stack operator may continue this work; ownership remains attribution. Alerts referenced by trash tasks are rejected. The operation deletes only trash-side alert metadata, condition/event/method rows, and tag links; live alerts and delivery-related resources are never deleted through this route. Raw GMP alert trash control remains separately classified migration work.
+      parameters:
+        - $ref: '#/components/parameters/AlertId'
+      responses:
+        '204':
+          description: Trashed alert deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '405':

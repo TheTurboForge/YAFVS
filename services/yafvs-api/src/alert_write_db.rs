@@ -19,6 +19,15 @@ pub(crate) struct AlertWriteState {
     pub(crate) owner_id: Option<i32>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AlertTrashWriteState {
+    pub(crate) internal_id: i32,
+    pub(crate) uuid: String,
+    pub(crate) name: String,
+    pub(crate) owner_id: Option<i32>,
+    pub(crate) filter_location: i32,
+}
+
 pub(crate) fn require_alert_write_operator(
     operator: Option<Extension<DirectApiOperator>>,
 ) -> Result<DirectApiOperator, ApiError> {
@@ -27,6 +36,24 @@ pub(crate) fn require_alert_write_operator(
         return Err(ApiError::Forbidden);
     };
     Ok(operator)
+}
+
+pub(crate) async fn load_alert_trash_state(
+    tx: &Transaction<'_>,
+    alert_id: &str,
+) -> Result<AlertTrashWriteState, ApiError> {
+    let alert_id = parse_uuid(alert_id)?.to_string();
+    tx.query_opt(alert_trash_state_sql(), &[&alert_id])
+        .await
+        .map_err(|error| map_alert_write_db_error(error, "load alert trash state"))?
+        .map(|row| AlertTrashWriteState {
+            internal_id: row.get(0),
+            uuid: row.get(1),
+            name: row.get(2),
+            owner_id: row.get(3),
+            filter_location: row.get(4),
+        })
+        .ok_or(ApiError::NotFound)
 }
 
 pub(crate) async fn resolve_alert_write_operator_owner(
@@ -45,6 +72,73 @@ pub(crate) async fn resolve_alert_write_operator_owner(
             tracing::warn!("direct API alert write operator does not resolve to a database user");
             ApiError::Forbidden
         })
+}
+
+pub(crate) async fn ensure_unique_live_alert_name_for_owner(
+    tx: &Transaction<'_>,
+    name: &str,
+    owner_id: i32,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(alert_unique_live_owner_name_sql(), &[&name, &owner_id])
+        .await
+        .map_err(|error| map_alert_write_db_error(error, "check live alert name uniqueness"))?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "alert with the same name already exists".to_string(),
+        ))
+    }
+}
+
+pub(crate) async fn ensure_alert_uuid_not_live(
+    tx: &Transaction<'_>,
+    alert_uuid: &str,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(alert_live_uuid_conflict_sql(), &[&alert_uuid])
+        .await
+        .map_err(|error| map_alert_write_db_error(error, "check live alert uuid conflict"))?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "alert with the same id already exists".to_string(),
+        ))
+    }
+}
+
+pub(crate) fn ensure_trash_alert_filter_is_live(
+    trash: &AlertTrashWriteState,
+) -> Result<(), ApiError> {
+    if trash.filter_location == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "alert cannot be restored while its filter is in trash".to_string(),
+        ))
+    }
+}
+
+pub(crate) async fn ensure_alert_not_in_use_by_trash_tasks(
+    tx: &Transaction<'_>,
+    alert_internal_id: i32,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(alert_trash_task_count_sql(), &[&alert_internal_id])
+        .await
+        .map_err(|error| map_alert_write_db_error(error, "check alert trash task usage"))?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "alert is still referenced by a trash task".to_string(),
+        ))
+    }
 }
 
 pub(crate) async fn load_alert_write_state(

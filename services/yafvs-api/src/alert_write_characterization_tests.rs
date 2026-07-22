@@ -597,7 +597,6 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
 
     for path in [
         "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/test",
-        "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/restore",
     ] {
         assert!(
             !direct_api_v1_path_is_allowed(path),
@@ -607,6 +606,20 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
             !direct_api_v1_method_is_allowed(&Method::GET, path, true),
             "alert delivery/control path must not be reachable: {path}"
         );
+    }
+    for (path, method) in [
+        (
+            "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/restore",
+            Method::POST,
+        ),
+        (
+            "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/trash",
+            Method::DELETE,
+        ),
+    ] {
+        assert!(direct_api_v1_path_is_allowed(path));
+        assert!(!direct_api_v1_method_is_allowed(&method, path, false));
+        assert!(direct_api_v1_method_is_allowed(&method, path, true));
     }
 
     assert!(
@@ -646,7 +659,8 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
             "x-yafvs-exposure: direct-read",
             replaces,
             "condition data, event data, method delivery payloads, credentials, destinations, message bodies, certificates",
-            "inherited XML export, restore, hard-delete, and delivery-payload mutations",
+            "inherited XML export",
+            "delivery-payload mutations",
         ] {
             assert!(block.contains(required), "{path} missing {required}");
         }
@@ -666,7 +680,7 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
         "x-yafvs-replaces: alert-metadata-modify",
         "x-yafvs-safety-contract: write-control-v1",
         "AlertPatchRequest",
-        "event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, restore, hard-delete, and delivery-payload mutation remain on inherited compatibility paths",
+        "event/condition/method data, delivery payloads, credentials, destinations, task links, inherited XML export, and delivery-payload mutation remain on inherited compatibility paths",
     ] {
         assert!(
             patch.contains(required),
@@ -703,6 +717,29 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
     }
     assert!(!delete.contains("x-yafvs-inherited-still-owns: alert-detail-delivery-control"));
     assert!(!clone.contains("x-yafvs-inherited-still-owns: alert-detail-delivery-control"));
+
+    for (path, operation_id, replaces) in [
+        (
+            "/alerts/{alert_id}/restore",
+            "postAlertsByAlertIdRestore",
+            "alert-trash-restore",
+        ),
+        (
+            "/alerts/{alert_id}/trash",
+            "deleteAlertsByAlertIdTrash",
+            "alert-trash-hard-delete",
+        ),
+    ] {
+        let operation = openapi_path_block(path);
+        for required in [
+            operation_id,
+            replaces,
+            "x-yafvs-exposure: direct-write",
+            "x-yafvs-safety-contract: write-control-v1",
+        ] {
+            assert!(operation.contains(required), "{path} missing {required}");
+        }
+    }
 }
 
 #[test]

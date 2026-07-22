@@ -423,15 +423,18 @@ boundary. Create, modify, clone, export, and delete actions remain inherited
 until native write semantics are designed.
 
 Native Trashcan summary, redacted row inventory, confirmation-bound emptying,
-and eight typed resource lifecycles are available through `/api/v1/trashcan`
+and nine typed resource lifecycles are available through `/api/v1/trashcan`
 routes. The native inventory intentionally excludes credential secrets, target
 hosts, scanner connection fields, scan-config preferences, alert method data,
-`results_trash`, and child trash tables. Filter, override, port list, scan
-config, scanner, schedule, tag, and target restore and permanent delete are
-native-only and fail closed if the native API is unavailable. Alert,
-credential, and task restore plus alert, credential, report-format, and task
-permanent delete retain declared browser/GMP compatibility while those native
-owners remain incomplete. Report-format restore is deliberately unavailable:
+`results_trash`, and child trash tables. Alert, filter, override, port list,
+scan config, scanner, schedule, tag, and target restore and permanent delete
+are native-only and fail closed if the native API is unavailable. Alert restore
+transactionally restores its metadata, condition/event/method rows, task links,
+and tag links but returns only redacted metadata. Alert hard-delete removes only
+the trash-side alert family and is blocked while a trash task references it.
+Credential and task restore plus credential, report-format, and task permanent
+delete retain declared browser/GMP compatibility while those native owners
+remain incomplete. Report-format restore is deliberately unavailable:
 it could reintroduce a retired custom executable report format. Separately
 classified raw GMP behavior remains outside this browser contract.
 

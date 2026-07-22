@@ -711,7 +711,8 @@ unreferenced raw reports are pruned by retention count.
 
 The Trashcan remains available for retained resource types. It is useful as an
 operator recovery mechanism, but it only covers resource types still supported by
-YAFVS.
+YAFVS. Alert recovery and permanent deletion use native typed operations; alert
+delivery payloads remain redacted from ordinary Trashcan and restore responses.
 
 Legacy Agent Controller functionality, including agent groups, agent installers,
 and agent tasks, has been removed. YAFVS keeps raw scan/report evidence,

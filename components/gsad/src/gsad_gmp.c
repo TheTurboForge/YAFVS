@@ -1536,8 +1536,7 @@ move_resource_to_trash (gvm_connection_t *connection, const char *type,
 static gboolean
 trashcan_restore_resource_type_is_supported (const gchar *resource_type)
 {
-  return g_strcmp0 (resource_type, "alert") == 0
-         || g_strcmp0 (resource_type, "credential") == 0
+  return g_strcmp0 (resource_type, "credential") == 0
          || g_strcmp0 (resource_type, "task") == 0;
 }
 

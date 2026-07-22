@@ -14,7 +14,8 @@ use crate::{
     alert_payloads::AlertAssetItem,
     alert_write_db::*,
     alert_write_transactions::{
-        execute_alert_clone_transaction, execute_alert_patch_transaction,
+        execute_alert_clone_transaction, execute_alert_hard_delete_transaction,
+        execute_alert_patch_transaction, execute_alert_restore_transaction,
         execute_alert_trash_transaction,
     },
     alert_write_validation::{
@@ -515,6 +516,69 @@ pub(crate) async fn delete_alert(
     tx.commit()
         .await
         .map_err(|error| map_alert_write_db_error(error, "commit delete alert transaction"))?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub(crate) async fn restore_alert(
+    State(state): State<AppState>,
+    Path(alert_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<Json<AlertAssetItem>, ApiError> {
+    let operator = require_alert_write_operator(operator)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client
+        .transaction()
+        .await
+        .map_err(|error| map_alert_write_db_error(error, "begin restore alert transaction"))?;
+    resolve_alert_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE alerts, alerts_trash, alert_condition_data, alert_condition_data_trash, alert_event_data, alert_event_data_trash, alert_method_data, alert_method_data_trash, task_alerts, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_alert_write_db_error(error, "lock alert tables for restore"))?;
+    let trash = load_alert_trash_state(&tx, &alert_id).await?;
+    let owner_id = ensure_alert_is_human_owned(trash.owner_id)?;
+    ensure_unique_live_alert_name_for_owner(&tx, &trash.name, owner_id).await?;
+    ensure_alert_uuid_not_live(&tx, &trash.uuid).await?;
+    ensure_trash_alert_filter_is_live(&trash)?;
+    let record = execute_alert_restore_transaction(&tx, trash.internal_id).await?;
+    tx.commit()
+        .await
+        .map_err(|error| map_alert_write_db_error(error, "commit restore alert transaction"))?;
+
+    Ok(Json(
+        load_alert_asset_detail(&client, &record.uuid)
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(error, "restore alert response reload")
+            })?,
+    ))
+}
+
+pub(crate) async fn hard_delete_alert(
+    State(state): State<AppState>,
+    Path(alert_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<StatusCode, ApiError> {
+    let operator = require_alert_write_operator(operator)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_alert_write_db_error(error, "begin hard-delete alert transaction")
+    })?;
+    resolve_alert_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE alerts_trash, alert_condition_data_trash, alert_event_data_trash, alert_method_data_trash, task_alerts, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_alert_write_db_error(error, "lock alert trash tables for hard delete"))?;
+    let trash = load_alert_trash_state(&tx, &alert_id).await?;
+    ensure_alert_is_human_owned(trash.owner_id)?;
+    ensure_alert_not_in_use_by_trash_tasks(&tx, trash.internal_id).await?;
+    execute_alert_hard_delete_transaction(&tx, trash.internal_id).await?;
+    tx.commit().await.map_err(|error| {
+        map_alert_write_db_error(error, "commit hard-delete alert transaction")
+    })?;
 
     Ok(StatusCode::NO_CONTENT)
 }

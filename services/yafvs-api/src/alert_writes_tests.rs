@@ -4,7 +4,9 @@
 
 use crate::{
     alert_payloads::AlertAssetItem,
-    alert_write_db::ensure_alert_is_human_owned,
+    alert_write_db::{
+        ensure_alert_is_human_owned, ensure_trash_alert_filter_is_live, AlertTrashWriteState,
+    },
     alert_write_sql::*,
     alert_write_validation::{
         AlertCloneRequest, AlertCreateRequest, AlertEmailCreateRequest, AlertPatchRequest,
@@ -38,6 +40,133 @@ fn email_create_json(notice: &str) -> serde_json::Value {
         "subject": "Scan report",
         "notice": notice
     })
+}
+
+#[test]
+fn alert_restore_and_hard_delete_handlers_guard_trash_state_before_mutation() {
+    let source = include_str!("alert_writes.rs");
+    let restore = source
+        .split_once("pub(crate) async fn restore_alert")
+        .expect("restore alert handler must exist")
+        .1
+        .split_once("pub(crate) async fn hard_delete_alert")
+        .expect("hard-delete handler follows restore handler")
+        .0;
+    for required in [
+        "resolve_alert_write_operator_owner(&tx, &operator).await?",
+        "load_alert_trash_state(&tx, &alert_id).await?",
+        "ensure_alert_is_human_owned(trash.owner_id)?",
+        "ensure_unique_live_alert_name_for_owner",
+        "ensure_alert_uuid_not_live",
+        "ensure_trash_alert_filter_is_live(&trash)?",
+        "execute_alert_restore_transaction",
+    ] {
+        assert!(restore.contains(required), "alert restore missing {required}");
+    }
+    assert!(
+        restore.find("ensure_trash_alert_filter_is_live").unwrap()
+            < restore.find("execute_alert_restore_transaction").unwrap()
+    );
+
+    let hard_delete = source
+        .split_once("pub(crate) async fn hard_delete_alert")
+        .expect("hard-delete alert handler must exist")
+        .1
+        .split_once("pub(crate) async fn patch_alert")
+        .expect("patch handler follows hard delete")
+        .0;
+    for required in [
+        "resolve_alert_write_operator_owner(&tx, &operator).await?",
+        "load_alert_trash_state(&tx, &alert_id).await?",
+        "ensure_alert_is_human_owned(trash.owner_id)?",
+        "ensure_alert_not_in_use_by_trash_tasks",
+        "execute_alert_hard_delete_transaction",
+    ] {
+        assert!(
+            hard_delete.contains(required),
+            "alert hard delete missing {required}"
+        );
+    }
+    assert!(
+        hard_delete
+            .find("ensure_alert_not_in_use_by_trash_tasks")
+            .unwrap()
+            < hard_delete
+                .find("execute_alert_hard_delete_transaction")
+                .unwrap()
+    );
+}
+
+#[test]
+fn alert_trash_restore_and_hard_delete_sql_preserve_dependents_and_children() {
+    let state = alert_trash_state_sql();
+    assert!(state.contains("FROM alerts_trash"));
+    assert!(state.contains("owner::integer"));
+    assert!(state.contains("filter_location::integer"));
+    let mut trash = AlertTrashWriteState {
+        internal_id: 7,
+        uuid: TEST_UUID.to_string(),
+        name: "restored alert".to_string(),
+        owner_id: Some(11),
+        filter_location: 0,
+    };
+    assert!(ensure_trash_alert_filter_is_live(&trash).is_ok());
+    for non_live_location in [1, -1, 2] {
+        trash.filter_location = non_live_location;
+        assert!(matches!(
+            ensure_trash_alert_filter_is_live(&trash),
+            Err(ApiError::Conflict(_))
+        ));
+    }
+
+    assert!(alert_unique_live_owner_name_sql().contains("owner = $2"));
+    assert!(alert_live_uuid_conflict_sql().contains("uuid = $1"));
+    let task_guard = alert_trash_task_count_sql();
+    assert!(task_guard.contains("FROM task_alerts"));
+    assert!(task_guard.contains("alert_location <> 0"));
+
+    let metadata = alert_restore_metadata_sql();
+    assert!(metadata.contains("INSERT INTO alerts"));
+    assert!(metadata.contains("FROM alerts_trash"));
+    assert!(metadata.contains("RETURNING id::integer, uuid::text"));
+    for (sql, live, trash) in [
+        (
+            alert_restore_condition_data_sql(),
+            "alert_condition_data",
+            "alert_condition_data_trash",
+        ),
+        (
+            alert_restore_event_data_sql(),
+            "alert_event_data",
+            "alert_event_data_trash",
+        ),
+        (
+            alert_restore_method_data_sql(),
+            "alert_method_data",
+            "alert_method_data_trash",
+        ),
+    ] {
+        assert!(sql.contains(&format!("INSERT INTO {live}")));
+        assert!(sql.contains(&format!("FROM {trash}")));
+        assert!(sql.contains("SELECT $2, name, data"));
+    }
+    assert!(alert_task_relink_to_live_sql().contains("alert_location = 0"));
+    assert!(alert_tag_locations_to_live_sql().contains("resource_location = 0"));
+    assert!(
+        alert_trash_tag_locations_to_live_sql().contains("resource_location = 0")
+    );
+
+    for sql in [
+        alert_delete_trash_condition_data_sql(),
+        alert_delete_trash_event_data_sql(),
+        alert_delete_trash_method_data_sql(),
+        alert_delete_trash_metadata_sql(),
+    ] {
+        assert!(sql.starts_with("DELETE FROM"));
+        assert!(!sql.contains("DELETE FROM alerts WHERE"));
+    }
+    assert!(alert_trash_tag_delete_sql().contains("resource_location = 1"));
+    assert!(alert_trash_tag_trash_delete_sql().contains("resource_location = 1"));
 }
 
 fn start_task_create_json() -> serde_json::Value {

@@ -14,7 +14,8 @@ use crate::{
     alert_test::test_alert,
     alert_write_validation::{AlertCloneRequest, AlertCreateRequest, AlertPatchRequest},
     alert_writes::{
-        clone_alert, create_alert, delete_alert, parse_alert_create_payload, patch_alert,
+        clone_alert, create_alert, delete_alert, hard_delete_alert, parse_alert_create_payload,
+        patch_alert, restore_alert,
     },
     app_state::AppState,
     browser_proxy_api::{BrowserProxyAuth, browser_proxy_operator_from_headers},
@@ -277,6 +278,26 @@ pub(crate) async fn browser_proxy_delete_alert(
 ) -> Result<StatusCode, ApiError> {
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     delete_alert(State(state), Path(alert_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_restore_alert(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(alert_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<AlertAssetItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    restore_alert(State(state), Path(alert_id), Some(Extension(operator))).await
+}
+
+pub(crate) async fn browser_proxy_hard_delete_alert(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(alert_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<StatusCode, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    hard_delete_alert(State(state), Path(alert_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_delete_override(

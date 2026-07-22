@@ -74,6 +74,100 @@ pub(crate) async fn execute_alert_clone_transaction(
     Ok(record)
 }
 
+pub(crate) async fn execute_alert_restore_transaction(
+    tx: &Transaction<'_>,
+    alert_trash_internal_id: i32,
+) -> Result<AlertWriteRecord, ApiError> {
+    let record = query_alert_write_record(
+        tx,
+        alert_restore_metadata_sql(),
+        &[&alert_trash_internal_id],
+        "restore alert metadata from trash",
+    )
+    .await?;
+    for (sql, action) in [
+        (
+            alert_restore_condition_data_sql(),
+            "restore alert condition data from trash",
+        ),
+        (
+            alert_restore_event_data_sql(),
+            "restore alert event data from trash",
+        ),
+        (
+            alert_restore_method_data_sql(),
+            "restore alert method data from trash",
+        ),
+        (alert_task_relink_to_live_sql(), "relink tasks to restored alert"),
+        (alert_tag_locations_to_live_sql(), "move alert tag links to live"),
+        (
+            alert_trash_tag_locations_to_live_sql(),
+            "move trashed tag links to restored alert",
+        ),
+    ] {
+        execute_alert_write_sql(
+            tx,
+            sql,
+            &[&alert_trash_internal_id, &record.internal_id],
+            action,
+        )
+        .await?;
+    }
+    for (sql, action) in [
+        (
+            alert_delete_trash_condition_data_sql(),
+            "delete alert trash condition data after restore",
+        ),
+        (
+            alert_delete_trash_event_data_sql(),
+            "delete alert trash event data after restore",
+        ),
+        (
+            alert_delete_trash_method_data_sql(),
+            "delete alert trash method data after restore",
+        ),
+        (
+            alert_delete_trash_metadata_sql(),
+            "delete alert trash metadata after restore",
+        ),
+    ] {
+        execute_alert_write_sql(tx, sql, &[&alert_trash_internal_id], action).await?;
+    }
+    Ok(record)
+}
+
+pub(crate) async fn execute_alert_hard_delete_transaction(
+    tx: &Transaction<'_>,
+    alert_trash_internal_id: i32,
+) -> Result<(), ApiError> {
+    for (sql, action) in [
+        (alert_trash_tag_delete_sql(), "delete alert trash tag links"),
+        (
+            alert_trash_tag_trash_delete_sql(),
+            "delete trashed tag links to alert trash id",
+        ),
+        (
+            alert_delete_trash_condition_data_sql(),
+            "delete alert trash condition data",
+        ),
+        (
+            alert_delete_trash_event_data_sql(),
+            "delete alert trash event data",
+        ),
+        (
+            alert_delete_trash_method_data_sql(),
+            "delete alert trash method data",
+        ),
+        (
+            alert_delete_trash_metadata_sql(),
+            "delete alert trash metadata",
+        ),
+    ] {
+        execute_alert_write_sql(tx, sql, &[&alert_trash_internal_id], action).await?;
+    }
+    Ok(())
+}
+
 pub(crate) async fn execute_alert_trash_transaction(
     tx: &Transaction<'_>,
     alert_internal_id: i32,

@@ -89,7 +89,11 @@ id = "crud-query-api-surface"
 target_owner = "api"
 status = "characterized"
 weight = 5
-evidence = ["services/yafvs-api/src/read_api_routes.rs::native_api_router"]
+evidence = [
+  "services/yafvs-api/src/read_api_routes.rs::native_api_router",
+  "services/yafvs-api/src/alert_writes.rs::restore_alert",
+  "services/yafvs-api/src/alert_writes.rs::hard_delete_alert",
+]
 independent_authority = ["api/openapi/yafvs-v1.yaml::x-yafvs-inherited-still-owns"]
 dependencies = ["login-session-account-auth", "team-authority-permissions"]
 notes = "Finish retained resource operations and remove their inherited owner tails without recreating unwanted compatibility behavior."
@@ -294,7 +298,7 @@ kind = "product"
 status = "inventoried"
 evidence = ["components/gsa/src/gmp/gmp.ts::class Gmp"]
 replacement = ["crud-query-api-surface", "login-session-account-auth"]
-notes = "Separate harmless internal module names from command methods that still issue legacy requests."
+notes = "Separate harmless internal module names from command methods that still issue legacy requests. Alert browser restore and permanent delete are native-only; credential and task Trashcan restore plus credential, report-format, and task permanent delete remain declared compatibility tails."
 
 [[callers]]
 id = "gsad-gmp-route"

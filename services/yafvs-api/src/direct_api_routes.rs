@@ -12,7 +12,9 @@ use crate::{
     alert_definition::{get_alert_definition, put_alert_definition},
     alert_deliver_report::deliver_alert_report,
     alert_test::test_alert,
-    alert_writes::{clone_alert, create_alert, delete_alert, patch_alert},
+    alert_writes::{
+        clone_alert, create_alert, delete_alert, hard_delete_alert, patch_alert, restore_alert,
+    },
     app_state::AppState,
     authentication_settings::{
         MAX_AUTHENTICATION_SETTINGS_BODY_BYTES, authentication_settings,
@@ -185,6 +187,11 @@ pub(crate) fn direct_native_api_router(
                 put(put_alert_definition),
             )
             .route("/api/v1/alerts/:alert_id", delete(delete_alert))
+            .route("/api/v1/alerts/:alert_id/restore", post(restore_alert))
+            .route(
+                "/api/v1/alerts/:alert_id/trash",
+                delete(hard_delete_alert),
+            )
             .route("/api/v1/alerts", post(create_alert))
             .route("/api/v1/alerts/:alert_id/test", post(test_alert))
             .route(

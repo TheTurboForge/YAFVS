@@ -58,6 +58,7 @@ const createNativeTrashcanCommand = () => {
 
 describe('TrashCanCommand tests', () => {
   test.each([
+    ['alert', 'alerts'],
     ['filter', 'filters'],
     ['override', 'overrides'],
     ['portlist', 'port-lists'],
@@ -113,7 +114,6 @@ describe('TrashCanCommand tests', () => {
   );
 
   test.each([
-    ['alert', 'alert'],
     ['credential', 'credential'],
     ['task', 'task'],
   ] as const)(
@@ -376,6 +376,7 @@ describe('TrashCanCommand tests', () => {
   });
 
   test.each([
+    ['alert', 'alerts'],
     ['filter', 'filters'],
     ['override', 'overrides'],
     ['portlist', 'port-lists'],
@@ -428,7 +429,6 @@ describe('TrashCanCommand tests', () => {
   );
 
   test.each([
-    ['alert', 'alert'],
     ['credential', 'credential'],
     ['reportformat', 'report_format'],
     ['task', 'task'],

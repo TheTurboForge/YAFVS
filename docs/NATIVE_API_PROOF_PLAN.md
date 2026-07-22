@@ -268,9 +268,11 @@ CERT-Bund and DFN-CERT list reads are browser-proxied, while their detail
 metadata endpoints remain internal automation/catalog probes because rich GSA
 detail/export behavior still depends on XML-only feed fields that PostgreSQL
 does not store. Trashcan summary, redacted row inventory, confirmation-bound
-emptying, and eight typed restore/hard-delete lifecycles use native JSON.
-Alert, credential, and task restore plus alert, credential, report-format, and
-task permanent delete remain bounded compatibility tails. Report-format
+emptying, and nine typed restore/hard-delete lifecycles use native JSON. Alert
+restore and permanent delete are native-only across GSA and gsad, with child
+tables and task/tag references covered by transactional characterization.
+Credential and task restore plus credential, report-format, and task permanent
+delete remain bounded compatibility tails. Report-format
 restore is deliberately removed because it could resurrect a retired custom
 executable format; cleanup remains available.
 The legacy Python client/tooling dependency is removed. Further native API

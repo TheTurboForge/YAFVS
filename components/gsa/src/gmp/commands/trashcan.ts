@@ -59,7 +59,6 @@ export interface TrashCanEmptyParams {
 }
 
 const LEGACY_RESTORE_RESOURCE_TYPES = {
-  alert: 'alert',
   credential: 'credential',
   task: 'task',
 } as const satisfies Partial<Record<EntityType, string>>;

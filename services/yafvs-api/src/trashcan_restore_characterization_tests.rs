@@ -34,7 +34,6 @@ fn trashcan_restore_allowlists_remain_narrow_and_typed() {
         .expect("typed GSA legacy restore map must terminate")
         .0;
     for (entity_type, resource_type) in [
-        ("alert", "alert"),
         ("credential", "credential"),
         ("task", "task"),
     ] {
@@ -43,7 +42,8 @@ fn trashcan_restore_allowlists_remain_narrow_and_typed() {
             "GSA legacy restore map missing {entity_type} -> {resource_type}"
         );
     }
-    assert_eq!(gsa_restore.matches(':').count(), 3);
+    assert_eq!(gsa_restore.matches(':').count(), 2);
+    assert!(!gsa_restore.contains("alert"));
     assert!(!gsa_restore.contains("reportformat"));
 
     let native_paths = GSA_NATIVE_TRASHCAN
@@ -54,6 +54,7 @@ fn trashcan_restore_allowlists_remain_narrow_and_typed() {
         .expect("native restore map must terminate")
         .0;
     for entity_type in [
+        "alert",
         "filter",
         "override",
         "portlist",
@@ -68,14 +69,14 @@ fn trashcan_restore_allowlists_remain_narrow_and_typed() {
             "native restore map missing {entity_type}"
         );
     }
-    assert_eq!(native_paths.matches(':').count(), 8);
+    assert_eq!(native_paths.matches(':').count(), 9);
 
     let allowlist = inherited_function(GSAD_GMP, "trashcan_restore_resource_type_is_supported");
     let restore_allowlist = allowlist
         .split_once("\nstatic gboolean\ntrashcan_delete_resource_type_is_supported")
         .expect("gsad restore allowlist must end before the delete allowlist")
         .0;
-    for resource_type in ["alert", "credential", "task"] {
+    for resource_type in ["credential", "task"] {
         assert!(
             restore_allowlist.contains(&format!("g_strcmp0 (resource_type, \"{resource_type}\")")),
             "gsad trashcan restore allowlist missing {resource_type}"
@@ -85,8 +86,9 @@ fn trashcan_restore_allowlists_remain_narrow_and_typed() {
         restore_allowlist
             .matches("g_strcmp0 (resource_type,")
             .count(),
-        3
+        2
     );
+    assert!(!restore_allowlist.contains("\"alert\""));
     assert!(!restore_allowlist.contains("report_format"));
 
     let restore = inherited_function(GSAD_GMP, "restore_gmp");

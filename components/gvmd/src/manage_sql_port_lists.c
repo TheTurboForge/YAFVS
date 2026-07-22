@@ -32,15 +32,13 @@
  */
 #define G_LOG_DOMAIN "md manage"
 
-
-
+
 /* Static headers for internal non-SQL functions. */
 
 int
 sync_port_lists_with_feed (gboolean);
 
-
-
+
 /* Port list functions. */
 
 /**
@@ -1961,7 +1959,7 @@ migrate_predefined_port_lists ()
 }
 
 
-
+
 /* Startup. */
 
 /**

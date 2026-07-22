@@ -98,8 +98,14 @@ pub(crate) async fn execute_alert_restore_transaction(
             alert_restore_method_data_sql(),
             "restore alert method data from trash",
         ),
-        (alert_task_relink_to_live_sql(), "relink tasks to restored alert"),
-        (alert_tag_locations_to_live_sql(), "move alert tag links to live"),
+        (
+            alert_task_relink_to_live_sql(),
+            "relink tasks to restored alert",
+        ),
+        (
+            alert_tag_locations_to_live_sql(),
+            "move alert tag links to live",
+        ),
         (
             alert_trash_tag_locations_to_live_sql(),
             "move trashed tag links to restored alert",

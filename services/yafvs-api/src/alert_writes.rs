@@ -563,9 +563,10 @@ pub(crate) async fn hard_delete_alert(
 ) -> Result<StatusCode, ApiError> {
     let operator = require_alert_write_operator(operator)?;
     let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
-    let tx = client.transaction().await.map_err(|error| {
-        map_alert_write_db_error(error, "begin hard-delete alert transaction")
-    })?;
+    let tx = client
+        .transaction()
+        .await
+        .map_err(|error| map_alert_write_db_error(error, "begin hard-delete alert transaction"))?;
     resolve_alert_write_operator_owner(&tx, &operator).await?;
     tx.batch_execute(
         "LOCK TABLE alerts_trash, alert_condition_data_trash, alert_event_data_trash, alert_method_data_trash, task_alerts, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
@@ -576,9 +577,9 @@ pub(crate) async fn hard_delete_alert(
     ensure_alert_is_human_owned(trash.owner_id)?;
     ensure_alert_not_in_use_by_trash_tasks(&tx, trash.internal_id).await?;
     execute_alert_hard_delete_transaction(&tx, trash.internal_id).await?;
-    tx.commit().await.map_err(|error| {
-        map_alert_write_db_error(error, "commit hard-delete alert transaction")
-    })?;
+    tx.commit()
+        .await
+        .map_err(|error| map_alert_write_db_error(error, "commit hard-delete alert transaction"))?;
 
     Ok(StatusCode::NO_CONTENT)
 }

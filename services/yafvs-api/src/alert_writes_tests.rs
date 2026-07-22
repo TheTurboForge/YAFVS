@@ -5,7 +5,7 @@
 use crate::{
     alert_payloads::AlertAssetItem,
     alert_write_db::{
-        ensure_alert_is_human_owned, ensure_trash_alert_filter_is_live, AlertTrashWriteState,
+        AlertTrashWriteState, ensure_alert_is_human_owned, ensure_trash_alert_filter_is_live,
     },
     alert_write_sql::*,
     alert_write_validation::{
@@ -61,7 +61,10 @@ fn alert_restore_and_hard_delete_handlers_guard_trash_state_before_mutation() {
         "ensure_trash_alert_filter_is_live(&trash)?",
         "execute_alert_restore_transaction",
     ] {
-        assert!(restore.contains(required), "alert restore missing {required}");
+        assert!(
+            restore.contains(required),
+            "alert restore missing {required}"
+        );
     }
     assert!(
         restore.find("ensure_trash_alert_filter_is_live").unwrap()
@@ -152,9 +155,7 @@ fn alert_trash_restore_and_hard_delete_sql_preserve_dependents_and_children() {
     }
     assert!(alert_task_relink_to_live_sql().contains("alert_location = 0"));
     assert!(alert_tag_locations_to_live_sql().contains("resource_location = 0"));
-    assert!(
-        alert_trash_tag_locations_to_live_sql().contains("resource_location = 0")
-    );
+    assert!(alert_trash_tag_locations_to_live_sql().contains("resource_location = 0"));
 
     for sql in [
         alert_delete_trash_condition_data_sql(),

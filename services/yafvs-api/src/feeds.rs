@@ -416,8 +416,7 @@ FEED_COMMIT = "not part of the public contract";
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             let metadata = match definition.format {
                 FeedMetadataFormat::PluginInfo => {
-                    "PLUGIN_SET = \"202601010000\";\nPLUGIN_FEED = \"Test NVT Feed\";\n"
-                        .to_string()
+                    "PLUGIN_SET = \"202601010000\";\nPLUGIN_FEED = \"Test NVT Feed\";\n".to_string()
                 }
                 FeedMetadataFormat::FeedXml => format!(
                     "<feed><type>{}</type><name>Test {} Feed</name><version>202601010000</version></feed>",

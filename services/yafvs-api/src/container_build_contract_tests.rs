@@ -14,8 +14,7 @@ fn api_container_copies_every_declared_local_domain_crate() {
     );
     assert!(
         API_DOCKERFILE.contains("WORKDIR /workspace/services/yafvs-api")
-            && API_DOCKERFILE
-                .contains("COPY crates/yafvs-domain /workspace/crates/yafvs-domain")
+            && API_DOCKERFILE.contains("COPY crates/yafvs-domain /workspace/crates/yafvs-domain")
             && API_DOCKERFILE.contains(
                 "COPY --from=build /workspace/services/yafvs-api/target/release/yafvs-api",
             ),

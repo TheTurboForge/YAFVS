@@ -21,8 +21,7 @@ const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c")
 const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GVMD_GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GVMD_MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
-const GMP_SCHEMA: &str =
-    include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
+const GMP_SCHEMA: &str = include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
 
 fn openapi_path_block(path: &str) -> String {
     let marker = format!("  {path}:");
@@ -57,18 +56,26 @@ fn credential_clone_uses_native_secret_opaque_contract() {
     assert!(!GVMD_MANAGE_SQL.contains("copy_credential ("));
     assert!(!GVMD_GMP_C.contains("CLIENT_CREATE_CREDENTIAL_COPY"));
     assert!(GVMD_GMP_C.contains("copy_requested"));
-    assert!(GVMD_GMP_C.contains("create_credential_data->copy_requested = 1;\n            set_read_over (gmp_parser);"));
+    assert!(GVMD_GMP_C.contains(
+        "create_credential_data->copy_requested = 1;\n            set_read_over (gmp_parser);"
+    ));
     assert!(GVMD_GMP_C.contains("Credential copy is no longer supported"));
     let credential_end = GVMD_GMP_C
-        .split_once("case CLIENT_CREATE_CREDENTIAL:\n        {\n          credential_t new_credential;")
+        .split_once(
+            "case CLIENT_CREATE_CREDENTIAL:\n        {\n          credential_t new_credential;",
+        )
         .expect("credential end handler")
         .1
         .split_once("create_credential_data_reset (create_credential_data);")
         .expect("credential end handler boundary")
         .0;
     assert!(
-        credential_end.find("copy_requested").expect("copy tombstone")
-            < credential_end.find("strlen (create_credential_data->name)").expect("normal create validation"),
+        credential_end
+            .find("copy_requested")
+            .expect("copy tombstone")
+            < credential_end
+                .find("strlen (create_credential_data->name)")
+                .expect("normal create validation"),
         "retired copy requests must be rejected before normal credential creation"
     );
     let create_credential_schema = GMP_SCHEMA

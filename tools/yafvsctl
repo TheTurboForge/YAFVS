@@ -5918,6 +5918,31 @@ OPENAPI_TAG_PATCH_SCHEMA_EXPECTED_VALUES = {
     "properties.resource_type.enum": OPENAPI_TAG_RESOURCE_TYPE_ENUM,
     "properties.resources.$ref": "#/components/schemas/TagResourceUpdateRequest",
 }
+OPENAPI_TAG_RESOURCE_UPDATE_SCHEMA_EXPECTED_VALUES = {
+    "type": "object",
+    "additionalProperties": "false",
+    "properties.action.type": "string",
+    "properties.action.enum": "[add, remove, set]",
+    "properties.resource_ids.type": "array",
+    "properties.resource_ids.maxItems": "200",
+    "properties.resource_ids.items.type": "string",
+    "properties.resource_filter.type": "string",
+    "properties.resource_filter.minLength": "1",
+    "properties.resource_filter.maxLength": "16384",
+    "properties.resource_selection.$ref": "#/components/schemas/TagResourceSelection",
+}
+OPENAPI_TAG_PORT_LIST_SELECTION_SCHEMA_EXPECTED_VALUES = {
+    "type": "object",
+    "additionalProperties": "false",
+    "properties.resource_type.type": "string",
+    "properties.resource_type.const": "port_list",
+    "properties.search.type": "string",
+    "properties.search.maxLength": "4096",
+    "properties.predefined.type": "boolean",
+    "properties.expected_count.type": "integer",
+    "properties.expected_count.minimum": "1",
+    "properties.expected_count.maximum": "100000",
+}
 
 
 def openapi_tag_write_schema_contract_drift(repo_root: Path | None) -> dict[str, Any]:
@@ -5934,6 +5959,16 @@ def openapi_tag_write_schema_contract_drift(repo_root: Path | None) -> dict[str,
             OPENAPI_TAG_PATCH_SCHEMA_EXPECTED_VALUES,
             None,
             {"name", "comment", "value", "active", "resource_type", "resources"},
+        ),
+        "TagResourceUpdateRequest": (
+            OPENAPI_TAG_RESOURCE_UPDATE_SCHEMA_EXPECTED_VALUES,
+            "[action]",
+            {"action", "resource_ids", "resource_filter", "resource_selection"},
+        ),
+        "TagPortListResourceSelection": (
+            OPENAPI_TAG_PORT_LIST_SELECTION_SCHEMA_EXPECTED_VALUES,
+            "[resource_type, expected_count]",
+            {"resource_type", "search", "predefined", "expected_count"},
         ),
     }
     for schema_name, (expected_values, expected_required, expected_properties) in contracts.items():

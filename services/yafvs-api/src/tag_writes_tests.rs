@@ -38,6 +38,74 @@ fn tag_create_request_normalizes_metadata_only_contract() {
 }
 
 #[test]
+fn tag_resource_selection_is_closed_bounded_and_exclusive() {
+    let selected = validate_tag_resource_update_request(serde_json::from_str(
+        r#"{"action":"add","resource_selection":{"resource_type":"port_list","search":"  Production  ","predefined":true,"expected_count":2}}"#,
+    ).unwrap()).unwrap();
+    let selection = selected.resource_selection.unwrap();
+    assert_eq!(selection.search.as_deref(), Some("  Production  "));
+    assert_eq!(selection.predefined, Some(true));
+    assert_eq!(selection.expected_count, 2);
+    for value in [
+        r#"{"action":"add","resource_selection":{"resource_type":"target","expected_count":1}}"#,
+        r#"{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":1,"unknown":true}}"#,
+        r#"{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":0}}"#,
+        r#"{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":100001}}"#,
+        r#"{"action":"add","resource_selection":{"resource_type":"port_list","search":"bad\nsearch","expected_count":1}}"#,
+        r#"{"action":"add","resource_ids":[],"resource_selection":{"resource_type":"port_list","expected_count":1}}"#,
+        r#"{"action":"remove","resource_selection":{"resource_type":"port_list","expected_count":1}}"#,
+        r#"{"action":"set","resource_selection":{"resource_type":"port_list","expected_count":1}}"#,
+    ] {
+        assert!(
+            match serde_json::from_str::<TagResourceUpdateRequest>(value) {
+                Ok(request) => validate_tag_resource_update_request(request).is_err(),
+                Err(_) => true,
+            }
+        );
+    }
+    let oversized = format!(
+        r#"{{"action":"add","resource_selection":{{"resource_type":"port_list","search":"{}","expected_count":1}}}}"#,
+        "x".repeat(crate::collections::MAX_COLLECTION_FILTER_LENGTH + 1)
+    );
+    assert!(
+        match serde_json::from_str::<TagResourceUpdateRequest>(&oversized) {
+            Ok(request) => validate_tag_resource_update_request(request).is_err(),
+            Err(_) => true,
+        }
+    );
+}
+
+#[test]
+fn tag_port_list_selection_stays_native_parameterized_and_pre_mutation() {
+    let handlers = include_str!("tag_writes.rs");
+    assert!(handlers.contains("resource_filter.is_some()"));
+    assert!(handlers.contains("LOCK TABLE port_lists, tags, tag_resources"));
+    let transactions = include_str!("tag_write_transactions.rs");
+    assert!(transactions.contains("tag_port_list_selection_sql()"));
+    assert!(transactions.contains("&[&search, &predefined, &selection_limit]"));
+    assert!(transactions.contains("i64::from(MAX_TAG_RESOURCE_SELECTION_MATCHES) + 1"));
+    assert!(transactions.contains("rows.len() as i64 != selection.expected_count"));
+    let patch_transaction = transactions
+        .split_once("pub(crate) async fn execute_tag_patch_transaction")
+        .unwrap()
+        .1;
+    assert!(
+        patch_transaction
+            .find("resolve_tag_resource_update_records")
+            .unwrap()
+            < patch_transaction.find("query_tag_write_record").unwrap()
+    );
+    let selector = crate::port_list_query_sql::tag_port_list_selection_sql();
+    assert!(selector.contains("LIMIT $3"));
+    let collection = crate::port_list_query_sql::port_list_assets_sql("name ASC");
+    for fragment in ["lower", "LIKE '%'", "predefined"] {
+        assert!(selector.contains(fragment));
+        assert!(collection.contains(fragment));
+    }
+    assert!(selector.contains("$1") && selector.contains("$2"));
+}
+
+#[test]
 fn tag_create_request_accepts_explicit_resource_ids_only() {
     let request: TagCreateRequest = serde_json::from_str(
         r#"{"name":"owner:selected","resource_type":"task","resource_ids":["12345678-1234-1234-1234-123456789abc","12345678-1234-1234-1234-123456789abc"]}"#,
@@ -396,6 +464,15 @@ fn tag_patch_uses_gvmd_control_only_for_filter_selection() {
     )
     .expect("valid filtered resource patch");
     assert!(tag_patch_requires_control(&filtered));
+
+    let typed = validate_tag_patch_request(
+        serde_json::from_str(
+            r#"{"resources":{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":1}}}"#,
+        )
+        .expect("typed resource patch"),
+    )
+    .expect("valid typed resource patch");
+    assert!(!tag_patch_requires_control(&typed));
 }
 
 #[test]
@@ -449,27 +526,30 @@ fn tag_resource_update_request_supports_explicit_ids_filters_and_empty_set() {
     assert!(matches!(
         validate_tag_resource_update_request(TagResourceUpdateRequest {
             action: TagResourceUpdateAction::Add,
-            resource_ids: Vec::new(),
+            resource_ids: Some(Vec::new()),
             resource_filter: None,
+            resource_selection: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
     assert!(matches!(
         validate_tag_resource_update_request(TagResourceUpdateRequest {
             action: TagResourceUpdateAction::Remove,
-            resource_ids: vec!["bad\nresource".to_string()],
+            resource_ids: Some(vec!["bad\nresource".to_string()]),
             resource_filter: None,
+            resource_selection: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
     assert!(matches!(
         validate_tag_resource_update_request(TagResourceUpdateRequest {
             action: TagResourceUpdateAction::Add,
-            resource_ids: vec![
+            resource_ids: Some(vec![
                 "12345678-1234-1234-1234-123456789abc".to_string();
                 MAX_TAG_RESOURCE_WRITE_IDS + 1
-            ],
+            ]),
             resource_filter: None,
+            resource_selection: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
@@ -511,16 +591,18 @@ fn tag_resource_update_request_rejects_ambiguous_selection_and_bad_ids() {
     assert!(matches!(
         validate_tag_resource_update_request(TagResourceUpdateRequest {
             action: TagResourceUpdateAction::Add,
-            resource_ids: vec![" ".to_string()],
+            resource_ids: Some(vec![" ".to_string()]),
             resource_filter: None,
+            resource_selection: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
     assert!(matches!(
         validate_tag_resource_update_request(TagResourceUpdateRequest {
             action: TagResourceUpdateAction::Add,
-            resource_ids: vec!["x".repeat(MAX_TAG_RESOURCE_ID_BYTES + 1)],
+            resource_ids: Some(vec!["x".repeat(MAX_TAG_RESOURCE_ID_BYTES + 1)]),
             resource_filter: None,
+            resource_selection: None,
         }),
         Err(ApiError::BadRequest(_))
     ));
@@ -565,6 +647,7 @@ fn tag_write_plans_keep_mutation_steps_explicit() {
         action: TagResourceUpdateAction::Set,
         resource_ids: vec!["12345678-1234-1234-1234-123456789abc".to_string()],
         resource_filter: None,
+        resource_selection: None,
     };
     assert_eq!(
         tag_resource_update_transaction_plan(&set_resource_update),
@@ -616,6 +699,7 @@ fn tag_write_plans_keep_mutation_steps_explicit() {
             action: TagResourceUpdateAction::Set,
             resource_ids: vec!["12345678-1234-1234-1234-123456789abc".to_string()],
             resource_filter: None,
+            resource_selection: None,
         }),
     };
     assert_eq!(
@@ -659,6 +743,7 @@ fn tag_write_plans_keep_mutation_steps_explicit() {
         action: TagResourceUpdateAction::Remove,
         resource_ids: vec!["12345678-1234-1234-1234-123456789abc".to_string()],
         resource_filter: None,
+        resource_selection: None,
     };
     assert_eq!(
         tag_resource_update_transaction_plan(&resource_update),

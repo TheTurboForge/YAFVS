@@ -132,9 +132,15 @@ pub(crate) async fn patch_tag(
         .transaction()
         .await
         .map_err(|error| map_tag_write_db_error(error, "begin patch tag transaction"))?;
-    tx.batch_execute("LOCK TABLE tags, tag_resources IN SHARE ROW EXCLUSIVE MODE;")
-        .await
-        .map_err(|error| map_tag_write_db_error(error, "lock tag tables for patch"))?;
+    tx.batch_execute(tag_resource_update_lock_sql(
+        request
+            .resources
+            .as_ref()
+            .and_then(|value| value.resource_selection.as_ref())
+            .is_some(),
+    ))
+    .await
+    .map_err(|error| map_tag_write_db_error(error, "lock tag tables for patch"))?;
     resolve_tag_write_operator_owner(&tx, &operator).await?;
     let state = load_tag_write_state(&tx, &tag_id).await?;
     ensure_tag_is_human_owned(state.owner_id)?;
@@ -143,6 +149,17 @@ pub(crate) async fn patch_tag(
         .as_deref()
         .unwrap_or(&state.resource_type);
     ensure_tag_resource_direct_write_type_is_supported(effective_resource_type)?;
+    if request
+        .resources
+        .as_ref()
+        .and_then(|resources| resources.resource_selection.as_ref())
+        .is_some()
+        && (state.resource_type != "port_list" || effective_resource_type != "port_list")
+    {
+        return Err(ApiError::BadRequest(
+            "resource_selection requires a port_list tag".to_string(),
+        ));
+    }
     let record = execute_tag_patch_transaction(&tx, &state, &request).await?;
     let tag = load_tag_write_detail(&tx, &record.uuid).await?;
     tx.commit()
@@ -150,6 +167,17 @@ pub(crate) async fn patch_tag(
         .map_err(|error| map_tag_commit_error(error, "commit patch tag transaction"))?;
 
     Ok(Json(tag))
+}
+
+fn tag_resource_update_lock_sql(has_port_list_selection: bool) -> &'static str {
+    if has_port_list_selection {
+        // Port-list writers acquire port_lists before tag_resources. Keep the
+        // same global order here so concurrent lifecycle and selection writes
+        // cannot form a table-lock cycle.
+        "LOCK TABLE port_lists, tags, tag_resources IN SHARE ROW EXCLUSIVE MODE;"
+    } else {
+        "LOCK TABLE tags, tag_resources IN SHARE ROW EXCLUSIVE MODE;"
+    }
 }
 
 fn tag_patch_requires_control(request: &crate::tag_write_validation::ValidatedTagPatch) -> bool {
@@ -244,13 +272,20 @@ pub(crate) async fn update_tag_resources(
         .transaction()
         .await
         .map_err(|error| map_tag_write_db_error(error, "begin tag resource transaction"))?;
-    tx.batch_execute("LOCK TABLE tags, tag_resources IN SHARE ROW EXCLUSIVE MODE;")
-        .await
-        .map_err(|error| map_tag_write_db_error(error, "lock tag resource tables"))?;
+    tx.batch_execute(tag_resource_update_lock_sql(
+        request.resource_selection.is_some(),
+    ))
+    .await
+    .map_err(|error| map_tag_write_db_error(error, "lock tag resource tables"))?;
     resolve_tag_write_operator_owner(&tx, &operator).await?;
     let state = load_tag_write_state(&tx, &tag_id).await?;
     ensure_tag_is_human_owned(state.owner_id)?;
     ensure_tag_resource_direct_write_type_is_supported(&state.resource_type)?;
+    if request.resource_selection.is_some() && state.resource_type != "port_list" {
+        return Err(ApiError::BadRequest(
+            "resource_selection requires a port_list tag".to_string(),
+        ));
+    }
     execute_tag_resource_update_transaction(&tx, &state, &request).await?;
     let tag = load_tag_write_detail(&tx, &state.uuid).await?;
     tx.commit()

@@ -48,6 +48,7 @@ pub(crate) async fn request_tag_resource_update(
             action: request.action,
             resource_ids: request.resource_ids.clone(),
             resource_filter: request.resource_filter.clone(),
+            resource_selection: None,
         }),
     };
     request_tag_modify(socket_path, control_secret, operator_uuid, tag_uuid, &patch).await

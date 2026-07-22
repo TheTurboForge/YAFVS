@@ -22,6 +22,7 @@ fn tag_modify_control_frame_preserves_atomic_set_and_filter_selection() {
             action: TagResourceUpdateAction::Set,
             resource_ids: Vec::new(),
             resource_filter: Some("rows=-1 name~production".to_string()),
+            resource_selection: None,
         }),
     };
     let frame = tag_modify_command(CONTROL_SECRET, OPERATOR_UUID, TAG_UUID, &request).unwrap();
@@ -46,6 +47,7 @@ fn tag_control_frames_reject_oversized_composite_payloads() {
             action: TagResourceUpdateAction::Add,
             resource_ids: vec!["x".repeat(MAX_CONTROL_REQUEST_BYTES)],
             resource_filter: None,
+            resource_selection: None,
         }),
     };
     let error = match tag_modify_command(CONTROL_SECRET, OPERATOR_UUID, TAG_UUID, &request) {

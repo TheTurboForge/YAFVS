@@ -3015,7 +3015,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-and-resource-assignment-write
       summary: Atomically update tag metadata and optional resource assignments
-      description: Updates tag metadata and explicit resource-id assignments in one native database transaction. A resource_type change is accepted only together with resources.action=set, so all old-type assignments are cleared atomically before the explicit new selection is applied. Filter-based resource selection remains on gvmd's authoritative filter path until a bounded native query contract replaces it.
+      description: Updates tag metadata and resource assignments. Explicit IDs and typed port-list collection selections use one native database transaction. A resource_type change is accepted only together with resources.action=set and explicit IDs, so old-type assignments are cleared atomically before the new selection is applied. Transitional raw filter expressions remain on gvmd's compatibility path while the remaining typed selectors migrate.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -3035,10 +3035,14 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/RequestTooLarge'
         '429':
@@ -3290,7 +3294,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: resource-assignment-write
       summary: Add, remove, or replace active tag resource assignments
-      description: Adds, removes, or replaces assignments for the tag's existing resource type using either bounded explicit resource_ids or one bounded gvmd resource_filter. Explicit ids use the native database transaction; filters use gvmd's authoritative filter, ACL, transaction, and audit path. resource_ids and resource_filter are mutually exclusive. set with neither clears all current assignments.
+      description: Adds, removes, or replaces assignments for the tag's existing resource type using bounded explicit resource_ids, a typed port-list resource_selection, or one transitional gvmd resource_filter. Explicit IDs and typed selections use the native database transaction; raw filter expressions use gvmd's compatibility path. The three selection forms are mutually exclusive. set with none clears all current assignments.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -3310,10 +3314,14 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '405':
           $ref: '#/components/responses/MethodNotAllowed'
+        '409':
+          $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/RequestTooLarge'
         '429':
@@ -10072,14 +10080,44 @@ components:
         resource_ids:
           type: array
           maxItems: 200
-          description: Explicit resource ids. Mutually exclusive with resource_filter. May be empty only for set, which clears all assignments.
+          description: Explicit resource ids. Mutually exclusive with resource_filter and resource_selection. May be empty only for set, which clears all assignments.
           items:
             type: string
         resource_filter:
           type: string
           minLength: 1
           maxLength: 16384
-          description: A gvmd resource filter. Mutually exclusive with resource_ids.
+          description: A transitional gvmd resource filter retained while the remaining typed selectors migrate. Mutually exclusive with resource_ids and resource_selection.
+        resource_selection:
+          $ref: '#/components/schemas/TagResourceSelection'
+          description: Typed collection selection. Currently accepted only with action=add.
+    TagResourceSelection:
+      oneOf:
+        - $ref: '#/components/schemas/TagPortListResourceSelection'
+      discriminator:
+        propertyName: resource_type
+        mapping:
+          port_list: '#/components/schemas/TagPortListResourceSelection'
+    TagPortListResourceSelection:
+      type: object
+      required: [resource_type, expected_count]
+      additionalProperties: false
+      properties:
+        resource_type:
+          type: string
+          const: port_list
+        search:
+          type: string
+          maxLength: 4096
+          description: Optional literal case-insensitive search over port-list UUID, name, and comment. This is data, not a filter expression.
+        predefined:
+          type: boolean
+          description: Optional exact predefined-state predicate.
+        expected_count:
+          type: integer
+          minimum: 1
+          maximum: 100000
+          description: Number of rows shown as matching when the operator confirmed the action. The transaction fails on drift before mutation.
     TagResourceCollection:
       type: object
       required: [tag_id, resource_type, page, items]

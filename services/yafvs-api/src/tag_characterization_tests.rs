@@ -310,8 +310,8 @@ fn openapi_tag_contract_replaces_filter_and_resource_type_tail() {
         patch_block
             .contains("x-yafvs-replaces: tag-metadata-resource-type-and-atomic-assignment-write")
     );
-    assert!(patch_block.contains("explicit resource-id assignments"));
-    assert!(patch_block.contains("Filter-based resource selection remains"));
+    assert!(patch_block.contains("typed port-list collection selections"));
+    assert!(patch_block.contains("raw filter expressions"));
     let clone_block = openapi_path_block("/tags/{tag_id}/clone");
     assert!(clone_block.contains("x-yafvs-replaces: tag-clone"));
     assert!(clone_block.contains("x-yafvs-safety-contract: write-control-v1"));

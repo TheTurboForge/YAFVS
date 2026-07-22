@@ -9,10 +9,12 @@ import type CollectionCounts from 'gmp/collection/collection-counts';
 import Filter from 'gmp/models/filter';
 import type Model from 'gmp/models/model';
 import Tag from 'gmp/models/tag';
+import {nativePortListsQueryFromFilter} from 'gmp/native-api/port-lists';
 import {
   fetchNativeTag,
   fetchNativeTags,
   nativeTagsQueryFromFilter,
+  type NativeTagResourceSelectionInput,
 } from 'gmp/native-api/tags';
 import {apiType, type EntityType, getEntityType} from 'gmp/utils/entity-type';
 import {isDefined} from 'gmp/utils/identity';
@@ -41,6 +43,62 @@ const tagIdFromResponse = (data: unknown): string =>
   typeof data === 'string'
     ? data
     : String((data as {id?: string | number})?.id ?? '');
+
+const portListResourceSelection = (
+  filter: Filter,
+  expectedCount: number,
+): NativeTagResourceSelectionInput => {
+  const selectionFilter = filter.all();
+  const supportedControlTerms = new Set([
+    'first',
+    'rows',
+    'sort',
+    'sort-reverse',
+  ]);
+  const criteriaTerms = selectionFilter
+    .getAllTerms()
+    .filter(term => !supportedControlTerms.has(term.keyword ?? ''));
+  const searchTerms = criteriaTerms.filter(term => term.keyword === 'search');
+  const predefinedTerms = criteriaTerms.filter(
+    term => term.keyword === 'predefined',
+  );
+  const literalSearchTerms = criteriaTerms.filter(
+    term => term.keyword === undefined && term.relation === undefined,
+  );
+  const onlySupportedTerms = criteriaTerms.every(
+    term =>
+      (term.keyword === undefined && term.relation === undefined) ||
+      ((term.keyword === 'search' || term.keyword === 'predefined') &&
+        term.relation === '=' &&
+        term.value !== undefined),
+  );
+  if (
+    !onlySupportedTerms ||
+    searchTerms.length > 1 ||
+    predefinedTerms.length > 1 ||
+    (searchTerms.length > 0 && literalSearchTerms.length > 0)
+  ) {
+    throw new Error(
+      'Filtered port-list tagging supports only literal search and predefined filters',
+    );
+  }
+  const query = nativePortListsQueryFromFilter(selectionFilter);
+  if (
+    query.predefined !== undefined &&
+    query.predefined !== '0' &&
+    query.predefined !== '1'
+  ) {
+    throw new Error('Invalid port-list predefined filter');
+  }
+  return {
+    resourceType: 'port_list',
+    ...(query.filter === '' ? {} : {search: query.filter}),
+    ...(query.predefined === undefined
+      ? {}
+      : {predefined: query.predefined === '1'}),
+    expectedCount,
+  };
+};
 
 const loadTag = (gmp: ReturnType<typeof useGmp>, data: unknown) => {
   const id = tagIdFromResponse(data);
@@ -178,11 +236,22 @@ const BulkTags = <TEntity extends Model>({
     ({comment, id, name, value = ''}: TagsDialogData) => {
       let tagEntitiesIds: string[] | undefined = undefined;
       let loadedFilter: string | undefined = undefined;
+      let resourceSelection: NativeTagResourceSelectionInput | undefined =
+        undefined;
 
       if (selectionType === SelectionType.SELECTION_USER) {
         tagEntitiesIds = getEntityIds(selectedEntities);
       } else if (selectionType === SelectionType.SELECTION_PAGE_CONTENTS) {
         tagEntitiesIds = getEntityIds(entities);
+      } else if (entitiesType === 'portlist') {
+        try {
+          resourceSelection = portListResourceSelection(
+            filter,
+            entitiesCounts.filtered,
+          );
+        } catch (error) {
+          return Promise.reject(error);
+        }
       } else {
         loadedFilter = filter.all().toFilterString();
       }
@@ -195,6 +264,7 @@ const BulkTags = <TEntity extends Model>({
           id: id as string,
           name: name as string,
           resourceIds: tagEntitiesIds,
+          resourceSelection,
           resourceType: entitiesType,
           resourcesAction: 'add',
           value,
@@ -204,6 +274,7 @@ const BulkTags = <TEntity extends Model>({
     },
     [
       entities,
+      entitiesCounts.filtered,
       entitiesType,
       filter,
       gmp.tag,

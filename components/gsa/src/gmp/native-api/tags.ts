@@ -125,6 +125,14 @@ export interface NativeTagResourceUpdateInput {
   action: 'add' | 'remove' | 'set';
   resourceIds?: string[];
   filter?: Filter | string;
+  resourceSelection?: NativeTagResourceSelectionInput;
+}
+
+export interface NativeTagResourceSelectionInput {
+  resourceType: 'port_list';
+  search?: string;
+  predefined?: boolean;
+  expectedCount: number;
 }
 
 export interface TagCommandCreateParams {
@@ -139,8 +147,42 @@ export interface TagCommandCreateParams {
 export interface TagCommandSaveParams extends TagCommandCreateParams {
   filter?: Filter | string;
   id: string;
+  resourceSelection?: NativeTagResourceSelectionInput;
   resourcesAction?: 'add' | 'remove' | 'set';
 }
+
+const nativeTagResourceSelectionPayload = (
+  selection: NativeTagResourceSelectionInput,
+) => ({
+  resource_type: selection.resourceType,
+  ...(selection.search === undefined || selection.search === ''
+    ? {}
+    : {search: selection.search}),
+  ...(selection.predefined === undefined
+    ? {}
+    : {predefined: selection.predefined}),
+  expected_count: selection.expectedCount,
+});
+
+const nativeTagResourceUpdatePayload = ({
+  action,
+  resourceIds,
+  filter,
+  resourceSelection,
+}: NativeTagResourceUpdateInput) => {
+  const resourceFilter = filterString(filter);
+  return {
+    action,
+    ...(resourceSelection !== undefined
+      ? {
+          resource_selection:
+            nativeTagResourceSelectionPayload(resourceSelection),
+        }
+      : resourceFilter !== undefined && resourceFilter !== ''
+        ? {resource_filter: resourceFilter}
+        : {resource_ids: resourceIds ?? []}),
+  };
+};
 
 interface TagCommandParams {
   id: string;
@@ -475,18 +517,10 @@ export const patchNativeTag = async (
   id: string,
   {active, comment, name, value, resourceType, resources}: NativeTagPatchInput,
 ): Promise<Response<{id: string}>> => {
-  const resourceFilter = filterString(resources?.filter);
   const resourcesPayload =
     resources === undefined
       ? {}
-      : {
-          resources: {
-            action: resources.action,
-            ...(resourceFilter !== undefined && resourceFilter !== ''
-              ? {resource_filter: resourceFilter}
-              : {resource_ids: resources.resourceIds ?? []}),
-          },
-        };
+      : {resources: nativeTagResourceUpdatePayload(resources)};
   const payload = await writeNativeJson<NativeTagPayload>(
     gmp,
     `api/v1/tags/${encodeURIComponent(id)}`,
@@ -508,18 +542,12 @@ export const patchNativeTag = async (
 export const updateNativeTagResources = async (
   gmp: NativeApiGmp,
   id: string,
-  {action, resourceIds, filter}: NativeTagResourceUpdateInput,
+  request: NativeTagResourceUpdateInput,
 ): Promise<Response<{id: string}>> => {
-  const resourceFilter = filterString(filter);
   const payload = await writeNativeJson<NativeTagPayload>(
     gmp,
     `api/v1/tags/${encodeURIComponent(id)}/resources`,
-    {
-      action,
-      ...(resourceFilter !== undefined && resourceFilter !== ''
-        ? {resource_filter: resourceFilter}
-        : {resource_ids: resourceIds ?? []}),
-    },
+    nativeTagResourceUpdatePayload(request),
   );
   return new Response({id: stringValue(payload.id)});
 };
@@ -625,13 +653,14 @@ export class TagCommand {
     active,
     filter,
     resourceIds = [],
+    resourceSelection,
     resourceType,
     resourcesAction,
     value = '',
   }: TagCommandSaveParams) {
     if (resourcesAction === undefined) {
-      if (filterString(filter)) {
-        throw new Error('Native tag save filter requires a resource action');
+      if (filterString(filter) || resourceSelection !== undefined) {
+        throw new Error('Native tag save selection requires a resource action');
       }
       return patchNativeTag(this.http, id, {active, comment, name, value});
     }
@@ -645,6 +674,7 @@ export class TagCommand {
         action: resourcesAction,
         resourceIds,
         filter,
+        resourceSelection,
       },
     });
   }

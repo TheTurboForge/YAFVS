@@ -237,6 +237,39 @@ describe('TagCommand', () => {
     expect(body.resource_type).toBeUndefined();
   });
 
+  test('saves a typed port-list collection selection', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValue(jsonResponse({id: 'tag-1'}));
+    testing.stubGlobal('fetch', fetchMock);
+
+    await new TagCommand(createNativeHttp()).save({
+      active: true,
+      id: 'tag-1',
+      name: 'Managed port lists',
+      resourceSelection: {
+        resourceType: 'port_list',
+        search: 'office',
+        predefined: false,
+        expectedCount: 7,
+      },
+      resourceType: 'portlist',
+      resourcesAction: 'add',
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.resources).toEqual({
+      action: 'add',
+      resource_selection: {
+        resource_type: 'port_list',
+        search: 'office',
+        predefined: false,
+        expected_count: 7,
+      },
+    });
+    expect(body.resource_type).toBeUndefined();
+  });
+
   test('rejects a detail filter outside the native detail contract', async () => {
     await expect(
       new TagCommand(createNativeHttp()).get(
@@ -263,6 +296,13 @@ describe('native tag resource assignments', () => {
       action: 'set',
       resourceIds: [],
     });
+    await updateNativeTagResources(http, 'tag-1', {
+      action: 'add',
+      resourceSelection: {
+        resourceType: 'port_list',
+        expectedCount: 2,
+      },
+    });
 
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
       action: 'add',
@@ -271,6 +311,13 @@ describe('native tag resource assignments', () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
       action: 'set',
       resource_ids: [],
+    });
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({
+      action: 'add',
+      resource_selection: {
+        resource_type: 'port_list',
+        expected_count: 2,
+      },
     });
   });
 

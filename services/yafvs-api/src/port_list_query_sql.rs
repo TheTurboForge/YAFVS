@@ -34,16 +34,47 @@ pub(crate) fn port_list_assets_sql(sort_sql: &str) -> String {
          ),
          filtered AS (
              SELECT * FROM port_list_rows
-              WHERE ($1 = ''
-                     OR lower(id) LIKE '%' || lower($1) || '%'
-                     OR lower(name) LIKE '%' || lower($1) || '%'
-                     OR lower(comment) LIKE '%' || lower($1) || '%')
-                AND ($4 = ''
-                     OR ($4 = '1' AND predefined_int = 1)
-                     OR ($4 = '0' AND predefined_int = 0))
+              WHERE {}
          )
          SELECT count(*) OVER()::bigint AS total, * FROM filtered
           ORDER BY {sort_sql}, name ASC, id ASC LIMIT $2 OFFSET $3;"#,
+        port_list_collection_predicate_sql(
+            "port_list_rows.id",
+            "port_list_rows.name",
+            "port_list_rows.comment",
+            "port_list_rows.predefined_int",
+            "$1",
+            "$4",
+        ),
+    )
+}
+
+/// Shared with the native tag port-list selector. Keep this predicate aligned
+/// with `port_list_assets_sql`: UUID/name/comment are searched case-insensitively.
+pub(crate) fn port_list_collection_predicate_sql(
+    id_expression: &str,
+    name_expression: &str,
+    comment_expression: &str,
+    predefined_expression: &str,
+    search_parameter: &str,
+    predefined_parameter: &str,
+) -> String {
+    format!(
+        "({search_parameter} = ''\n             OR lower({id_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({name_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({comment_expression}) LIKE '%' || lower({search_parameter}) || '%')\n        AND ({predefined_parameter} = ''\n             OR ({predefined_parameter} = '1' AND {predefined_expression} = 1)\n             OR ({predefined_parameter} = '0' AND {predefined_expression} = 0))"
+    )
+}
+
+pub(crate) fn tag_port_list_selection_sql() -> String {
+    format!(
+        "SELECT pl.id::integer, pl.uuid::text, pl.owner::integer\n           FROM port_lists pl\n          WHERE {}\n          ORDER BY pl.id ASC\n          LIMIT $3;",
+        port_list_collection_predicate_sql(
+            "pl.uuid",
+            "coalesce(pl.name, '')",
+            "coalesce(pl.comment, '')",
+            "coalesce(pl.predefined, 0)::integer",
+            "$1",
+            "$2",
+        )
     )
 }
 

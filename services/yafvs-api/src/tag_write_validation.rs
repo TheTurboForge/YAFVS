@@ -5,12 +5,16 @@
 use serde::Deserialize;
 use std::collections::BTreeSet;
 
-use crate::{errors::ApiError, tag_resource_helpers::tag_resource_type_is_supported};
+use crate::{
+    collections::MAX_COLLECTION_FILTER_LENGTH, errors::ApiError,
+    tag_resource_helpers::tag_resource_type_is_supported,
+};
 
 pub(crate) const MAX_TAG_TEXT_BYTES: usize = 4096;
 pub(crate) const MAX_TAG_RESOURCE_ID_BYTES: usize = 4096;
 pub(crate) const MAX_TAG_RESOURCE_WRITE_IDS: usize = 200;
 pub(crate) const MAX_TAG_RESOURCE_FILTER_BYTES: usize = 16_384;
+pub(crate) const MAX_TAG_RESOURCE_SELECTION_MATCHES: u32 = 100_000;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -25,6 +29,23 @@ pub(crate) struct TagCreateRequest {
     pub(crate) value: Option<String>,
     #[serde(default = "default_tag_active")]
     pub(crate) active: bool,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum TagResourceSelectionType {
+    PortList,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct TagResourceSelectionRequest {
+    pub(crate) resource_type: TagResourceSelectionType,
+    #[serde(default)]
+    pub(crate) search: Option<String>,
+    #[serde(default)]
+    pub(crate) predefined: Option<bool>,
+    pub(crate) expected_count: u32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -72,9 +93,11 @@ pub(crate) enum TagResourceUpdateAction {
 pub(crate) struct TagResourceUpdateRequest {
     pub(crate) action: TagResourceUpdateAction,
     #[serde(default)]
-    pub(crate) resource_ids: Vec<String>,
+    pub(crate) resource_ids: Option<Vec<String>>,
     #[serde(default)]
     pub(crate) resource_filter: Option<String>,
+    #[serde(default)]
+    pub(crate) resource_selection: Option<TagResourceSelectionRequest>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -102,6 +125,14 @@ pub(crate) struct ValidatedTagResourceUpdate {
     pub(crate) action: TagResourceUpdateAction,
     pub(crate) resource_ids: Vec<String>,
     pub(crate) resource_filter: Option<String>,
+    pub(crate) resource_selection: Option<ValidatedTagResourceSelection>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ValidatedTagResourceSelection {
+    pub(crate) search: Option<String>,
+    pub(crate) predefined: Option<bool>,
+    pub(crate) expected_count: i64,
 }
 
 pub(crate) fn default_tag_active() -> bool {
@@ -111,35 +142,92 @@ pub(crate) fn default_tag_active() -> bool {
 pub(crate) fn validate_tag_resource_update_request(
     request: TagResourceUpdateRequest,
 ) -> Result<ValidatedTagResourceUpdate, ApiError> {
-    let resource_ids = validate_tag_resource_ids(request.resource_ids, true)?;
+    let resource_ids_present = request.resource_ids.is_some();
+    let resource_ids = validate_tag_resource_ids(request.resource_ids.unwrap_or_default(), true)?;
     let resource_filter = normalize_tag_resource_filter(request.resource_filter)?;
-    validate_tag_resource_selection(request.action, &resource_ids, resource_filter.as_deref())?;
+    let resource_selection = validate_tag_resource_selection_request(request.resource_selection)?;
+    validate_tag_resource_selection(
+        request.action,
+        resource_ids_present,
+        !resource_ids.is_empty(),
+        resource_filter.as_deref(),
+        resource_selection.as_ref(),
+    )?;
     Ok(ValidatedTagResourceUpdate {
         action: request.action,
         resource_ids,
         resource_filter,
+        resource_selection,
     })
 }
 
 fn validate_tag_resource_selection(
     action: TagResourceUpdateAction,
-    resource_ids: &[String],
+    resource_ids_present: bool,
+    resource_ids_nonempty: bool,
     resource_filter: Option<&str>,
+    resource_selection: Option<&ValidatedTagResourceSelection>,
 ) -> Result<(), ApiError> {
-    if !resource_ids.is_empty() && resource_filter.is_some() {
+    let selection_count = resource_ids_present as usize
+        + resource_filter.is_some() as usize
+        + resource_selection.is_some() as usize;
+    if selection_count > 1 {
         return Err(ApiError::BadRequest(
-            "resource_ids and resource_filter are mutually exclusive".to_string(),
+            "resource_ids, resource_filter, and resource_selection are mutually exclusive"
+                .to_string(),
+        ));
+    }
+    if resource_selection.is_some() && action != TagResourceUpdateAction::Add {
+        return Err(ApiError::BadRequest(
+            "resource_selection currently supports only the add action".to_string(),
         ));
     }
     if action != TagResourceUpdateAction::Set
-        && resource_ids.is_empty()
+        && !resource_ids_nonempty
         && resource_filter.is_none()
+        && resource_selection.is_none()
     {
         return Err(ApiError::BadRequest(
-            "add and remove require resource_ids or resource_filter".to_string(),
+            "add and remove require resource_ids, resource_filter, or resource_selection"
+                .to_string(),
         ));
     }
     Ok(())
+}
+
+fn validate_tag_resource_selection_request(
+    value: Option<TagResourceSelectionRequest>,
+) -> Result<Option<ValidatedTagResourceSelection>, ApiError> {
+    value
+        .map(|value| {
+            let search = value
+                .search
+                .map(|value| {
+                    if value.len() > MAX_COLLECTION_FILTER_LENGTH || value.chars().any(char::is_control) {
+                        return Err(ApiError::BadRequest(format!(
+                            "resource_selection.search must be printable text up to {MAX_COLLECTION_FILTER_LENGTH} bytes"
+                        )));
+                    }
+                    Ok(value)
+                })
+                .transpose()?;
+            if value.expected_count == 0
+                || value.expected_count > MAX_TAG_RESOURCE_SELECTION_MATCHES
+            {
+                return Err(ApiError::BadRequest(
+                    format!(
+                        "resource_selection.expected_count must be between 1 and {MAX_TAG_RESOURCE_SELECTION_MATCHES}"
+                    ),
+                ));
+            }
+            let TagResourceSelectionType::PortList = value.resource_type;
+            Ok(ValidatedTagResourceSelection {
+                search,
+                predefined: value.predefined,
+                expected_count: i64::from(value.expected_count),
+            })
+        })
+        .transpose()
 }
 
 fn validate_tag_resource_ids(

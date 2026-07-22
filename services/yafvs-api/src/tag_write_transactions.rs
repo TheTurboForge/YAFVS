@@ -7,6 +7,7 @@ use tokio_postgres::{Row, Transaction, types::ToSql};
 use crate::{
     errors::ApiError,
     path_ids::parse_uuid,
+    port_list_query_sql::tag_port_list_selection_sql,
     tag_resource_helpers::{
         tag_resource_active_lookup_sql, tag_resource_direct_write_id_must_be_uuid,
     },
@@ -16,7 +17,8 @@ use crate::{
     },
     tag_write_sql::*,
     tag_write_validation::{
-        TagResourceUpdateAction, ValidatedTagClone, ValidatedTagCreate, ValidatedTagPatch,
+        MAX_TAG_RESOURCE_SELECTION_MATCHES, TagResourceUpdateAction, ValidatedTagClone,
+        ValidatedTagCreate, ValidatedTagPatch, ValidatedTagResourceSelection,
         ValidatedTagResourceUpdate,
     },
 };
@@ -187,6 +189,9 @@ async fn resolve_tag_resource_update_records(
     state: &TagWriteState,
     request: &ValidatedTagResourceUpdate,
 ) -> Result<Vec<TagResourceWriteRecord>, ApiError> {
+    if let Some(selection) = request.resource_selection.as_ref() {
+        return resolve_tag_port_list_selection_records(tx, state, selection).await;
+    }
     let mut resources = Vec::new();
     for resource_id in &request.resource_ids {
         let resource =
@@ -195,6 +200,51 @@ async fn resolve_tag_resource_update_records(
         resources.push(resource);
     }
     Ok(resources)
+}
+
+async fn resolve_tag_port_list_selection_records(
+    tx: &Transaction<'_>,
+    state: &TagWriteState,
+    selection: &ValidatedTagResourceSelection,
+) -> Result<Vec<TagResourceWriteRecord>, ApiError> {
+    if state.resource_type != "port_list" {
+        return Err(ApiError::BadRequest(
+            "resource_selection requires a port_list tag".to_string(),
+        ));
+    }
+    let search = selection.search.as_deref().unwrap_or("");
+    let predefined = selection
+        .predefined
+        .map(|value| if value { "1" } else { "0" })
+        .unwrap_or("");
+    let selection_limit = i64::from(MAX_TAG_RESOURCE_SELECTION_MATCHES) + 1;
+    let rows = tx
+        .query(
+            &tag_port_list_selection_sql(),
+            &[&search, &predefined, &selection_limit],
+        )
+        .await
+        .map_err(|error| {
+            map_tag_write_db_error(error, "select port lists for tag resource selection")
+        })?;
+    if rows.len() > MAX_TAG_RESOURCE_SELECTION_MATCHES as usize
+        || rows.len() as i64 != selection.expected_count
+    {
+        return Err(ApiError::Conflict(
+            "tag resource selection no longer matches expected_count".to_string(),
+        ));
+    }
+    rows.into_iter()
+        .map(|row| {
+            let resource = TagResourceWriteRecord {
+                internal_id: row.get(0),
+                uuid: row.get(1),
+                owner_id: row.get(2),
+            };
+            ensure_tag_resource_is_team_assignable("port_list", resource.owner_id)?;
+            Ok(resource)
+        })
+        .collect()
 }
 
 async fn apply_tag_resource_update_transaction(

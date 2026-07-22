@@ -122,8 +122,8 @@ fn operating_system_metadata_export_reuses_detail_loader() {
 #[test]
 fn port_list_read_sql_is_metadata_ranges_and_target_backlinks_only() {
     let list_sql = port_list_assets_sql("name ASC");
-    assert!(list_sql.contains("($4 = '1' AND predefined_int = 1)"));
-    assert!(list_sql.contains("($4 = '0' AND predefined_int = 0)"));
+    assert!(list_sql.contains("($4 = '1' AND port_list_rows.predefined_int = 1)"));
+    assert!(list_sql.contains("($4 = '0' AND port_list_rows.predefined_int = 0)"));
     let detail_sql = port_list_asset_detail_sql();
     for sql in [&list_sql, detail_sql] {
         assert!(sql.contains("FROM port_lists pl"));

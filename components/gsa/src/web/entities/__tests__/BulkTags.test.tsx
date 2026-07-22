@@ -15,6 +15,7 @@ import {
 } from 'web/testing';
 import CollectionCounts from 'gmp/collection/collection-counts';
 import Filter from 'gmp/models/filter';
+import PortList from 'gmp/models/port-list';
 import Tag from 'gmp/models/tag';
 import Task from 'gmp/models/task';
 import BulkTags from 'web/entities/BulkTags';
@@ -77,6 +78,106 @@ describe('BulkTags tests', () => {
     );
     const title = screen.getDialogTitle();
     expect(title).toHaveTextContent('Add Tag to All Filtered');
+  });
+
+  test('should use a typed collection selection for all filtered port lists', async () => {
+    const entities = [
+      new PortList({id: '1', name: 'Office'}),
+      new PortList({id: '2', name: 'Office services'}),
+    ];
+    const entitiesCounts = new CollectionCounts({filtered: 7, all: 9});
+    const filter = Filter.fromString(
+      'search=office predefined=0 first=1 rows=10 sort=name',
+    );
+    const onClose = testing.fn();
+    const getAllTags = testing
+      .fn()
+      .mockResolvedValue({data: [new Tag({id: 'tag-1', name: 'Managed'})]});
+    const getTag = testing.fn().mockResolvedValue({
+      data: new Tag({id: 'tag-1', name: 'Managed', resourceType: 'portlist'}),
+    });
+    const saveTag = testing.fn().mockResolvedValue({data: {id: 'tag-1'}});
+    const gmp = {
+      tags: {getAll: getAllTags},
+      tag: {get: getTag, save: saveTag},
+    };
+    const {render} = rendererWith({gmp, store: true});
+    render(
+      <BulkTags
+        entities={entities}
+        entitiesCounts={entitiesCounts}
+        filter={filter}
+        selectedEntities={[]}
+        selectionType={SelectionType.SELECTION_FILTER}
+        onClose={onClose}
+      />,
+    );
+
+    const select = screen.getSelectElement();
+    const selectItems = await getSelectItemElementsForSelect(select);
+    fireEvent.click(selectItems[0]);
+    await wait();
+    fireEvent.click(screen.getDialogSaveButton());
+    await wait();
+
+    expect(saveTag).toHaveBeenCalledWith({
+      active: true,
+      comment: '',
+      filter: undefined,
+      id: 'tag-1',
+      name: 'Managed',
+      resourceIds: undefined,
+      resourceSelection: {
+        resourceType: 'port_list',
+        search: 'office',
+        predefined: false,
+        expectedCount: 7,
+      },
+      resourceType: 'portlist',
+      resourcesAction: 'add',
+      value: '',
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  test('should reject unsupported filtered port-list criteria without broadening the selection', async () => {
+    const entities = [new PortList({id: '1', name: 'Office'})];
+    const entitiesCounts = new CollectionCounts({filtered: 1, all: 9});
+    const filter = Filter.fromString('name~office first=1 rows=10 sort=name');
+    const getAllTags = testing
+      .fn()
+      .mockResolvedValue({data: [new Tag({id: 'tag-1', name: 'Managed'})]});
+    const getTag = testing.fn().mockResolvedValue({
+      data: new Tag({id: 'tag-1', name: 'Managed', resourceType: 'portlist'}),
+    });
+    const saveTag = testing.fn().mockResolvedValue({data: {id: 'tag-1'}});
+    const gmp = {
+      tags: {getAll: getAllTags},
+      tag: {get: getTag, save: saveTag},
+    };
+    const {render} = rendererWith({gmp, store: true});
+    render(
+      <BulkTags
+        entities={entities}
+        entitiesCounts={entitiesCounts}
+        filter={filter}
+        selectedEntities={[]}
+        selectionType={SelectionType.SELECTION_FILTER}
+        onClose={testing.fn()}
+      />,
+    );
+
+    const select = screen.getSelectElement();
+    const selectItems = await getSelectItemElementsForSelect(select);
+    fireEvent.click(selectItems[0]);
+    await wait();
+    fireEvent.click(screen.getDialogSaveButton());
+    await wait();
+
+    expect(saveTag).not.toHaveBeenCalled();
+    expect(screen.getDialog()).toHaveTextContent(
+      'Filtered port-list tagging supports only literal search and predefined filters',
+    );
   });
 
   test('should load selectable tags through the native API when available', async () => {

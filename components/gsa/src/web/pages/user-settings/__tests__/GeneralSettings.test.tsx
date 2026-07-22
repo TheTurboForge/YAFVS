@@ -82,13 +82,6 @@ describe('General tab', () => {
       value: '1',
       comment: 'Auto cache rebuild comment',
     });
-    const securityIntelligenceExportSetting = Setting.fromElement({
-      _id: 'g10',
-      name: 'securityintelligenceexport',
-      value: '0',
-      comment: 'Security intelligence export comment',
-    });
-
     const settingsData = {
       userInterfaceDateFormat: dateFormatSetting,
       userInterfaceTimeFormat: timeFormatSetting,
@@ -99,13 +92,12 @@ describe('General tab', () => {
       maxrowsperpage: maxRowsPerPageSetting,
       userinterfacelanguage: languageSetting,
       autocacherebuild: autoCacheRebuildSetting,
-      securityintelligenceexport: securityIntelligenceExportSetting,
     };
 
     const USER_SETTINGS_DEFAULTS_LOADING_SUCCESS =
       'USER_SETTINGS_DEFAULTS_LOADING_SUCCESS';
     const UserSettingsPage = GeneralSettings;
-    const features = new Features(['ENABLE_SECURITY_INTELLIGENCE_EXPORT']);
+    const features = new Features();
 
     const {render, store} = rendererWith({
       capabilities: true,
@@ -161,11 +153,6 @@ describe('General tab', () => {
 
     expect(screen.getByText('Auto Cache Rebuild')).toBeVisible();
     expect(screen.getByText(/Yes/i)).toBeVisible();
-
-    expect(
-      screen.getByText('Export Reports to Security Intelligence'),
-    ).toBeVisible();
-    expect(screen.getByText(/No/i)).toBeVisible();
   });
 
   const Setting = {
@@ -186,7 +173,7 @@ describe('General tab', () => {
       router: true,
       gmp: createGmp(),
       store: true,
-      features: new Features(['ENABLE_SECURITY_INTELLIGENCE_EXPORT']),
+      features: new Features(),
     });
     store.dispatch({
       type: USER_SETTINGS_DEFAULTS_LOADING_SUCCESS,
@@ -444,52 +431,5 @@ describe('General tab', () => {
     });
     const autoCacheInput = await screen.findByTestId('opensight-checkbox');
     expect((autoCacheInput as HTMLInputElement).checked).toBe(true);
-  });
-
-  test('can edit and save Security Intelligence Export', async () => {
-    const settingsData = {
-      securityintelligenceexport: Setting.fromElement({
-        _id: 'g10',
-        name: 'securityintelligenceexport',
-        value: '0',
-        comment: 'Security intelligence export comment',
-      }),
-    };
-    const store = setupStore(settingsData);
-    const rows = screen.getAllByRole('row');
-    const securityIntelligenceExportRow = rows.find(row =>
-      row.textContent?.includes(
-        'Export Reports to Security Intelligence',
-      ),
-    );
-    expect(securityIntelligenceExportRow).toBeTruthy();
-    const editButton = within(
-      securityIntelligenceExportRow as HTMLElement,
-    ).getByTestId('edit-icon');
-    expect(editButton).toBeTruthy();
-    editButton.click();
-    const checkbox = await screen.findByTestId('opensight-checkbox');
-    expect(checkbox).toBeVisible();
-    expect((checkbox as HTMLInputElement).checked).toBe(false);
-    checkbox.click();
-    const saveButton = screen.getByTestId('save-icon');
-    expect(saveButton).toBeVisible();
-    saveButton.click();
-    store.dispatch({
-      type: USER_SETTINGS_DEFAULTS_LOADING_SUCCESS,
-      data: {
-        securityintelligenceexport: Setting.fromElement({
-          _id: 'g10',
-          name: 'securityintelligenceexport',
-          value: '1',
-          comment: 'Security intelligence export comment',
-        }),
-      },
-    });
-    const securityIntelligenceExportInput =
-      await screen.findByTestId('opensight-checkbox');
-    expect((securityIntelligenceExportInput as HTMLInputElement).checked).toBe(
-      true,
-    );
   });
 });

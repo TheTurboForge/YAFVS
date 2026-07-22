@@ -8,13 +8,11 @@ import {afterEach, describe, test, expect, testing} from '@gsa/testing';
 import {screen, within, rendererWith, wait} from 'web/testing';
 import Capabilities from 'gmp/capabilities/capabilities';
 import Features from 'gmp/capabilities/features';
-import Filter from 'gmp/models/filter';
 import Setting from 'gmp/models/setting';
 import {createSession} from 'gmp/testing';
 import UserSettingsPage, {
   ToolBarIcons,
 } from 'web/pages/user-settings/UserSettingsPage';
-import {USER_SETTINGS_DEFAULT_FILTER_LOADING_SUCCESS} from 'web/store/usersettings/defaultfilters/actions';
 import {USER_SETTINGS_DEFAULTS_LOADING_SUCCESS} from 'web/store/usersettings/defaults/actions';
 
 const manualUrl = 'test/';
@@ -217,13 +215,6 @@ describe('UserSettingsPage', () => {
         comment: 'Auto cache rebuild comment',
       });
 
-      const securityIntelligenceExportSetting = Setting.fromElement({
-        _id: 'g10',
-        name: 'securityintelligenceexport',
-        value: '0',
-        comment: 'Security intelligence export comment',
-      });
-
       const settingsData = {
         userInterfaceDateFormat: dateFormatSetting,
         userInterfaceTimeFormat: timeFormatSetting,
@@ -234,11 +225,10 @@ describe('UserSettingsPage', () => {
         maxrowsperpage: maxRowsPerPageSetting,
         userinterfacelanguage: languageSetting,
         autocacherebuild: autoCacheRebuildSetting,
-        securityintelligenceexport: securityIntelligenceExportSetting,
       };
 
       const gmp = createGmp();
-      const features = new Features(['ENABLE_SECURITY_INTELLIGENCE_EXPORT']);
+      const features = new Features();
 
       const {render, store} = rendererWith({
         capabilities: true,
@@ -302,11 +292,6 @@ describe('UserSettingsPage', () => {
 
       expect(screen.getByText('Auto Cache Rebuild')).toBeVisible();
       expect(screen.getByText('Yes')).toBeVisible();
-
-      expect(
-        screen.getByText('Export Reports to Security Intelligence'),
-      ).toBeVisible();
-      expect(screen.getByText(/No/i)).toBeVisible();
     });
   });
 

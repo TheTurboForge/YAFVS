@@ -6,11 +6,7 @@
 
 import {map} from 'gmp/utils/array';
 
-export type Feature =
-  | 'CVSS3_RATINGS'
-  | 'FEED_VT_METADATA'
-  | 'ENABLE_OPENVASD'
-  | 'ENABLE_SECURITY_INTELLIGENCE_EXPORT';
+export type Feature = 'CVSS3_RATINGS' | 'FEED_VT_METADATA' | 'ENABLE_OPENVASD';
 
 class Features {
   private readonly _features: Set<Feature>;

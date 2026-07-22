@@ -640,9 +640,6 @@ test('should disable non-retained optional features without a GMP request', asyn
   expect(fakeHttp.request).not.toHaveBeenCalled();
   expect(features.length).toBe(0);
   expect(features.featureEnabled('ENABLE_OPENVASD')).toBe(false);
-  expect(features.featureEnabled('ENABLE_SECURITY_INTELLIGENCE_EXPORT')).toBe(
-    false,
-  );
 });
 
 describe('UserCommand saveTimezone() tests', () => {

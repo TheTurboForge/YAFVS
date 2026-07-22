@@ -331,7 +331,6 @@
   "Cannot save list export filename: missing setting ID.": "Kann Dateilisten-Export-Name nicht speichern: fehlende Einstellungs-ID.",
   "Cannot save report export filename: missing setting ID.": "Kann Bericht-Export-Name nicht speichern: fehlende Einstellungs-ID.",
   "Cannot save rows per page: missing setting ID.": "Kann Zeilen pro Seite nicht speichern: fehlende Einstellungs-ID.",
-  "Cannot save security intelligence export: missing setting ID.": "Kann automatischen Berichtexport nicht speichern: fehlende Einstellungs-ID.",
   "Cannot save setting: missing setting ID.": "Kann Einstellung nicht speichern: fehlende Einstellungs-ID.",
   "Cannot save: scanner ID is missing.": "Kann nicht speichern: Scanner-ID fehlt.",
   "Categories": "Kategorien",

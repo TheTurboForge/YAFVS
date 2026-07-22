@@ -2669,7 +2669,6 @@ typedef enum
   CLIENT_GET_TAGS,
   CLIENT_GET_TARGETS,
   CLIENT_GET_TASKS,
-  CLIENT_GET_TIMEZONES,
   CLIENT_GET_TLS_CERTIFICATES,
   CLIENT_GET_USERS,
   CLIENT_GET_VERSION,
@@ -3646,10 +3645,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             set_client_state (CLIENT_GET_TASKS);
           }
         ELSE_GET_START (tls_certificates, TLS_CERTIFICATES)
-        else if (strcasecmp ("GET_TIMEZONES", element_name) == 0)
-          {
-            set_client_state (CLIENT_GET_TIMEZONES);
-          }
         else if (strcasecmp ("GET_USERS", element_name) == 0)
           {
             get_data_parse_attributes (&get_users_data->get, "user",
@@ -13786,35 +13781,6 @@ handle_get_tasks (gmp_parser_t *gmp_parser, GError **error)
 }
 
 /**
- * @brief Handle end of GET_TIMEZONES element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_timezones (gmp_parser_t *gmp_parser, GError **error)
-{
-  array_t *timezones;
-  SEND_TO_CLIENT_OR_FAIL ("<get_timezones_response"
-                          " status=\"" STATUS_OK "\""
-                          " status_text=\"" STATUS_OK_TEXT "\">");
-
-  timezones = manage_get_timezones ();
-  for (int i = 0; i < timezones->len; i++)
-    {
-      const char *name = timezones->pdata[i];
-      SENDF_TO_CLIENT_OR_FAIL ("<timezone>"
-                               "<name>%s</name>"
-                               "</timezone>",
-                               name);
-    }
-  array_free (timezones);
-
-  SEND_TO_CLIENT_OR_FAIL ("</get_timezones_response>");
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
-/**
  * @brief Handle end of GET_USER element.
  *
  * @param[in]  gmp_parser   GMP parser.
@@ -14702,10 +14668,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
 
       CASE_GET_END (TLS_CERTIFICATES, tls_certificates);
-
-      case CLIENT_GET_TIMEZONES:
-        handle_get_timezones (gmp_parser, error);
-        break;
 
       case CLIENT_GET_USERS:
         handle_get_users (gmp_parser, error);

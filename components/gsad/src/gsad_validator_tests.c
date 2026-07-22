@@ -14,6 +14,13 @@ BeforeEach (gsad_validator)
   gsad_init_validator ();
 }
 
+Ensure (gsad_validator, reject_removed_timezone_command)
+{
+  validator_t validator = gsad_get_validator ();
+  assert_that (gvm_validate (validator, "cmd", "get_timezones"),
+               is_equal_to (2));
+}
+
 Ensure (gsad_validator, reject_removed_scan_config_commands)
 {
   validator_t validator = gsad_get_validator ();
@@ -220,6 +227,8 @@ main (int argc, char **argv)
   add_test_with_context (suite, gsad_validator, validate_comment);
   add_test_with_context (suite, gsad_validator,
                          reject_removed_report_alert_command);
+  add_test_with_context (suite, gsad_validator,
+                         reject_removed_timezone_command);
   add_test_with_context (suite, gsad_validator,
                          reject_removed_scan_config_commands);
   add_test_with_context (suite, gsad_validator, validate_kdcs_name_and_value);

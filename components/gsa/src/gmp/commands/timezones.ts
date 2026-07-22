@@ -11,7 +11,7 @@ import {fetchNativeTimezones} from 'gmp/native-api/timezones';
 
 class TimezonesCommand extends HttpCommand {
   constructor(http: Http) {
-    super(http, {cmd: 'get_timezones'});
+    super(http);
   }
 
   async get() {

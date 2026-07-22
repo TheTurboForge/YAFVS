@@ -113,7 +113,6 @@ gsad_init_validator ()
                      "|(get_targets)"
                      "|(get_task)"
                      "|(get_tasks)"
-                     "|(get_timezones)"
                      "|(get_tls_certificate)"
                      "|(get_tls_certificates)"
                      "|(get_trash_alerts)"

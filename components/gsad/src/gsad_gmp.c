@@ -8674,72 +8674,6 @@ save_asset_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
 }
 
 /**
- * @brief Get all supported timezones, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_timezones_gmp (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   gsad_command_response_data_t *response_data)
-{
-  entity_t entity = NULL;
-  GString *xml;
-
-  /* Get timezones list */
-  if (gvm_connection_sendf (connection, "<get_timezones/>"))
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while getting the timezones list. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    }
-
-  xml = g_string_new ("<get_timezones>");
-
-  /* Read the response. */
-  if (read_entity_and_string_c (connection, &entity, &xml))
-    {
-      g_string_free (xml, TRUE);
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while getting the timezones list. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    }
-
-  if (gmp_success (entity) != 1)
-    {
-      gchar *message;
-
-      set_http_status_from_entity (entity, response_data);
-
-      message = gsad_http_create_gsad_message (
-        credentials, entity_attribute (entity, "status_text"), response_data);
-
-      g_string_free (xml, TRUE);
-      free_entity (entity);
-      return message;
-    }
-
-  free_entity (entity);
-
-  g_string_append (xml, "</get_timezones>");
-  return envelope_gmp (connection, credentials, params,
-                       g_string_free (xml, FALSE), response_data);
-}
-
-/**
  * @brief Get all TLS certificates, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -9873,7 +9807,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_targets)
   ELSE (get_task)
   ELSE (get_tasks)
-  ELSE (get_timezones)
   ELSE (get_tls_certificate)
   ELSE (get_tls_certificates)
   ELSE (get_trash_alerts)

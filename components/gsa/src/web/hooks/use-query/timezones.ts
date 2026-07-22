@@ -21,7 +21,7 @@ export const useGetTimezones = ({
 
   return useQuery({
     enabled: enabled && Boolean(token),
-    queryKey: ['get_timezones', token],
+    queryKey: ['native-timezones', token],
     queryFn: () => fetchNativeTimezones(gmp),
   });
 };

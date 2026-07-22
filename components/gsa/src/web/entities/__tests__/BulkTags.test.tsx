@@ -17,6 +17,7 @@ import CollectionCounts from 'gmp/collection/collection-counts';
 import Filter from 'gmp/models/filter';
 import Credential from 'gmp/models/credential';
 import PortList from 'gmp/models/port-list';
+import Scanner from 'gmp/models/scanner';
 import Tag from 'gmp/models/tag';
 import Task from 'gmp/models/task';
 import BulkTags from 'web/entities/BulkTags';
@@ -280,6 +281,103 @@ describe('BulkTags tests', () => {
     expect(saveTag).not.toHaveBeenCalled();
     expect(screen.getDialog()).toHaveTextContent(
       'Filtered credential tagging supports only literal search and exact credential type filters',
+    );
+  });
+
+  test('should use a typed collection selection for all filtered scanners', async () => {
+    const entities = [
+      new Scanner({id: '1', name: 'Remote'}),
+      new Scanner({id: '2', name: 'Remote backup'}),
+    ];
+    const entitiesCounts = new CollectionCounts({filtered: 4, all: 6});
+    const filter = Filter.fromString('search=remote first=1 rows=10 sort=name');
+    const onClose = testing.fn();
+    const getAllTags = testing
+      .fn()
+      .mockResolvedValue({data: [new Tag({id: 'tag-1', name: 'Managed'})]});
+    const getTag = testing.fn().mockResolvedValue({
+      data: new Tag({id: 'tag-1', name: 'Managed', resourceType: 'scanner'}),
+    });
+    const saveTag = testing.fn().mockResolvedValue({data: {id: 'tag-1'}});
+    const gmp = {
+      tags: {getAll: getAllTags},
+      tag: {get: getTag, save: saveTag},
+    };
+    const {render} = rendererWith({gmp, store: true});
+    render(
+      <BulkTags
+        entities={entities}
+        entitiesCounts={entitiesCounts}
+        filter={filter}
+        selectedEntities={[]}
+        selectionType={SelectionType.SELECTION_FILTER}
+        onClose={onClose}
+      />,
+    );
+
+    const select = screen.getSelectElement();
+    const selectItems = await getSelectItemElementsForSelect(select);
+    fireEvent.click(selectItems[0]);
+    await wait();
+    fireEvent.click(screen.getDialogSaveButton());
+    await wait();
+
+    expect(saveTag).toHaveBeenCalledWith({
+      active: true,
+      comment: '',
+      filter: undefined,
+      id: 'tag-1',
+      name: 'Managed',
+      resourceIds: undefined,
+      resourceSelection: {
+        resourceType: 'scanner',
+        search: 'remote',
+        expectedCount: 4,
+      },
+      resourceType: 'scanner',
+      resourcesAction: 'add',
+      value: '',
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  test('should reject unsupported filtered scanner criteria without broadening the selection', async () => {
+    const entities = [new Scanner({id: '1', name: 'Remote'})];
+    const entitiesCounts = new CollectionCounts({filtered: 1, all: 6});
+    const filter = Filter.fromString('host~remote first=1 rows=10 sort=name');
+    const getAllTags = testing
+      .fn()
+      .mockResolvedValue({data: [new Tag({id: 'tag-1', name: 'Managed'})]});
+    const getTag = testing.fn().mockResolvedValue({
+      data: new Tag({id: 'tag-1', name: 'Managed', resourceType: 'scanner'}),
+    });
+    const saveTag = testing.fn().mockResolvedValue({data: {id: 'tag-1'}});
+    const gmp = {
+      tags: {getAll: getAllTags},
+      tag: {get: getTag, save: saveTag},
+    };
+    const {render} = rendererWith({gmp, store: true});
+    render(
+      <BulkTags
+        entities={entities}
+        entitiesCounts={entitiesCounts}
+        filter={filter}
+        selectedEntities={[]}
+        selectionType={SelectionType.SELECTION_FILTER}
+        onClose={testing.fn()}
+      />,
+    );
+
+    const select = screen.getSelectElement();
+    const selectItems = await getSelectItemElementsForSelect(select);
+    fireEvent.click(selectItems[0]);
+    await wait();
+    fireEvent.click(screen.getDialogSaveButton());
+    await wait();
+
+    expect(saveTag).not.toHaveBeenCalled();
+    expect(screen.getDialog()).toHaveTextContent(
+      'Filtered scanner tagging supports only one literal search',
     );
   });
 

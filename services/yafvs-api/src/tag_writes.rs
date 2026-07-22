@@ -213,6 +213,11 @@ fn tag_resource_update_lock_sql(selection: Option<&ValidatedTagResourceSelection
         Some(ValidatedTagResourceSelection::Credential { .. }) => {
             unreachable!("credential selections use row locks before tag tables")
         }
+        Some(ValidatedTagResourceSelection::Scanner { .. }) => {
+            // Scanner writers acquire scanners before tag resources. Keep the
+            // same global order and stabilize the selected collection.
+            "LOCK TABLE scanners, tags, tag_resources IN SHARE ROW EXCLUSIVE MODE;"
+        }
         None => "LOCK TABLE tags, tag_resources IN SHARE ROW EXCLUSIVE MODE;",
     }
 }

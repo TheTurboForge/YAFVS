@@ -140,6 +140,11 @@ export type NativeTagResourceSelectionInput =
       search?: string;
       credentialType?: string;
       expectedCount: number;
+    }
+  | {
+      resourceType: 'scanner';
+      search?: string;
+      expectedCount: number;
     };
 
 export interface TagCommandCreateParams {

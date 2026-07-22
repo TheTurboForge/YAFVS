@@ -66,11 +66,27 @@ fn tag_resource_selection_is_closed_bounded_and_exclusive() {
             expected_count: 3,
         }
     );
+    let scanner = validate_tag_resource_update_request(
+        serde_json::from_str(
+            r#"{"action":"add","resource_selection":{"resource_type":"scanner","search":"remote","expected_count":4}}"#,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        scanner.resource_selection.unwrap(),
+        ValidatedTagResourceSelection::Scanner {
+            search: Some("remote".to_string()),
+            expected_count: 4,
+        }
+    );
     for value in [
         r#"{"action":"add","resource_selection":{"resource_type":"target","expected_count":1}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":1,"unknown":true}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"credential","expected_count":1,"predefined":true}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"credential","expected_count":1,"credential_type":"bad\ntype"}}"#,
+        r#"{"action":"add","resource_selection":{"resource_type":"scanner","expected_count":1,"predefined":true}}"#,
+        r#"{"action":"add","resource_selection":{"resource_type":"scanner","expected_count":1,"search":"bad\nsearch"}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":0}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":100001}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","search":"bad\nsearch","expected_count":1}}"#,
@@ -95,6 +111,41 @@ fn tag_resource_selection_is_closed_bounded_and_exclusive() {
             Err(_) => true,
         }
     );
+}
+
+#[test]
+fn tag_scanner_selection_stays_native_bounded_and_lock_ordered() {
+    let handlers = include_str!("tag_writes.rs");
+    assert!(
+        handlers.contains("LOCK TABLE scanners, tags, tag_resources IN SHARE ROW EXCLUSIVE MODE")
+    );
+    let transactions = include_str!("tag_write_transactions.rs");
+    assert!(transactions.contains("tag_scanner_selection_sql()"));
+    assert!(transactions.contains("&[&search, &selection_limit]"));
+    let selector = crate::scanner_asset_query_sql::tag_scanner_selection_sql();
+    let collection = crate::scanner_asset_query_sql::scanner_assets_sql("name ASC");
+    let selector_predicate = crate::scanner_asset_query_sql::scanner_collection_predicate_sql(
+        "s.uuid",
+        "coalesce(s.name, '')",
+        "coalesce(s.comment, '')",
+        "coalesce(s.host, '')",
+        "c.name",
+        "coalesce(s.relay_host, '')",
+        "$1",
+    );
+    let collection_predicate = crate::scanner_asset_query_sql::scanner_collection_predicate_sql(
+        "scanner_rows.id",
+        "scanner_rows.name",
+        "scanner_rows.comment",
+        "scanner_rows.host",
+        "scanner_rows.credential_name",
+        "scanner_rows.relay_host",
+        "$1",
+    );
+    assert!(selector.contains(&selector_predicate));
+    assert!(collection.contains(&collection_predicate));
+    assert!(selector.contains("LIMIT $2"));
+    assert!(selector.contains("FOR UPDATE OF s"));
 }
 
 #[test]

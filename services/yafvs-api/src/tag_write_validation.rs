@@ -41,6 +41,11 @@ pub(crate) enum TagResourceSelectionRequest {
         predefined: Option<bool>,
         expected_count: u32,
     },
+    Scanner {
+        #[serde(default)]
+        search: Option<String>,
+        expected_count: u32,
+    },
     Credential {
         #[serde(default)]
         search: Option<String>,
@@ -137,6 +142,10 @@ pub(crate) enum ValidatedTagResourceSelection {
         predefined: Option<bool>,
         expected_count: i64,
     },
+    Scanner {
+        search: Option<String>,
+        expected_count: i64,
+    },
     Credential {
         search: Option<String>,
         credential_type: Option<String>,
@@ -149,6 +158,7 @@ impl ValidatedTagResourceSelection {
         match self {
             Self::PortList { .. } => "port_list",
             Self::Credential { .. } => "credential",
+            Self::Scanner { .. } => "scanner",
         }
     }
 }
@@ -235,6 +245,13 @@ fn validate_tag_resource_selection_request(
                 } => Ok(ValidatedTagResourceSelection::PortList {
                     search: validate_tag_selection_text(search, "search")?,
                     predefined,
+                    expected_count: validate_expected_count(expected_count)?,
+                }),
+                TagResourceSelectionRequest::Scanner {
+                    search,
+                    expected_count,
+                } => Ok(ValidatedTagResourceSelection::Scanner {
+                    search: validate_tag_selection_text(search, "search")?,
                     expected_count: validate_expected_count(expected_count)?,
                 }),
                 TagResourceSelectionRequest::Credential {

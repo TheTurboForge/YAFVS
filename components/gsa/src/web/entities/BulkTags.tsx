@@ -11,6 +11,7 @@ import type Model from 'gmp/models/model';
 import Tag from 'gmp/models/tag';
 import {nativeCredentialsQueryFromFilter} from 'gmp/native-api/credentials';
 import {nativePortListsQueryFromFilter} from 'gmp/native-api/port-lists';
+import {nativeScannersQueryFromFilter} from 'gmp/native-api/scanners';
 import {
   fetchNativeTag,
   fetchNativeTags,
@@ -98,6 +99,43 @@ const portListResourceSelection = (
     ...(query.predefined === undefined
       ? {}
       : {predefined: query.predefined === '1'}),
+    expectedCount,
+  };
+};
+
+const scannerResourceSelection = (
+  filter: Filter,
+  expectedCount: number,
+): NativeTagResourceSelectionInput => {
+  const selectionFilter = filter.all();
+  const criteriaTerms = selectionFilter
+    .getAllTerms()
+    .filter(term => !supportedCollectionControlTerms.has(term.keyword ?? ''));
+  const searchTerms = criteriaTerms.filter(term => term.keyword === 'search');
+  const literalSearchTerms = criteriaTerms.filter(
+    term => term.keyword === undefined && term.relation === undefined,
+  );
+  const onlySupportedTerms = criteriaTerms.every(
+    term =>
+      (term.keyword === undefined && term.relation === undefined) ||
+      (term.keyword === 'search' &&
+        term.relation === '=' &&
+        term.value !== undefined),
+  );
+  if (
+    !onlySupportedTerms ||
+    searchTerms.length > 1 ||
+    literalSearchTerms.length > 1 ||
+    (searchTerms.length > 0 && literalSearchTerms.length > 0)
+  ) {
+    throw new Error(
+      'Filtered scanner tagging supports only one literal search',
+    );
+  }
+  const query = nativeScannersQueryFromFilter(selectionFilter);
+  return {
+    resourceType: 'scanner',
+    ...(query.filter === '' ? {} : {search: query.filter}),
     expectedCount,
   };
 };
@@ -303,6 +341,15 @@ const BulkTags = <TEntity extends Model>({
       } else if (entitiesType === 'credential') {
         try {
           resourceSelection = credentialResourceSelection(
+            filter,
+            entitiesCounts.filtered,
+          );
+        } catch (error) {
+          return Promise.reject(error);
+        }
+      } else if (entitiesType === 'scanner') {
+        try {
+          resourceSelection = scannerResourceSelection(
             filter,
             entitiesCounts.filtered,
           );

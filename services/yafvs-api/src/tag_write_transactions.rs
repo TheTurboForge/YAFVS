@@ -9,6 +9,7 @@ use crate::{
     errors::ApiError,
     path_ids::parse_uuid,
     port_list_query_sql::tag_port_list_selection_sql,
+    scanner_asset_query_sql::tag_scanner_selection_sql,
     tag_resource_helpers::{
         tag_resource_active_lookup_sql, tag_resource_direct_write_id_must_be_uuid,
     },
@@ -196,6 +197,9 @@ async fn resolve_tag_resource_update_records(
                 resolve_tag_port_list_selection_records(tx, state, selection).await
             }
             ValidatedTagResourceSelection::Credential { .. } => Err(ApiError::Config),
+            ValidatedTagResourceSelection::Scanner { .. } => {
+                resolve_tag_scanner_selection_records(tx, state, selection).await
+            }
         };
     }
     let mut resources = Vec::new();
@@ -257,6 +261,53 @@ async fn resolve_tag_port_list_selection_records(
                 owner_id: row.get(2),
             };
             ensure_tag_resource_is_team_assignable("port_list", resource.owner_id)?;
+            Ok(resource)
+        })
+        .collect()
+}
+
+async fn resolve_tag_scanner_selection_records(
+    tx: &Transaction<'_>,
+    state: &TagWriteState,
+    selection: &ValidatedTagResourceSelection,
+) -> Result<Vec<TagResourceWriteRecord>, ApiError> {
+    let ValidatedTagResourceSelection::Scanner {
+        search,
+        expected_count,
+    } = selection
+    else {
+        return Err(ApiError::BadRequest(
+            "resource_selection requires a scanner tag".to_string(),
+        ));
+    };
+    if state.resource_type != "scanner" {
+        return Err(ApiError::BadRequest(
+            "resource_selection requires a scanner tag".to_string(),
+        ));
+    }
+    let search = search.as_deref().unwrap_or("");
+    let selection_limit = i64::from(MAX_TAG_RESOURCE_SELECTION_MATCHES) + 1;
+    let rows = tx
+        .query(&tag_scanner_selection_sql(), &[&search, &selection_limit])
+        .await
+        .map_err(|error| {
+            map_tag_write_db_error(error, "select scanners for tag resource selection")
+        })?;
+    if rows.len() > MAX_TAG_RESOURCE_SELECTION_MATCHES as usize
+        || rows.len() as i64 != *expected_count
+    {
+        return Err(ApiError::Conflict(
+            "tag resource selection no longer matches expected_count".to_string(),
+        ));
+    }
+    rows.into_iter()
+        .map(|row| {
+            let resource = TagResourceWriteRecord {
+                internal_id: row.get(0),
+                uuid: row.get(1),
+                owner_id: row.get(2),
+            };
+            ensure_tag_resource_is_team_assignable("scanner", resource.owner_id)?;
             Ok(resource)
         })
         .collect()

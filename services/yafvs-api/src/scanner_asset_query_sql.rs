@@ -23,16 +23,50 @@ pub(crate) fn scanner_assets_sql(sort_sql: &str) -> String {
          ),
          filtered AS (
              SELECT * FROM scanner_rows
-              WHERE ($1 = ''
-                     OR lower(id) LIKE '%' || lower($1) || '%'
-                     OR lower(name) LIKE '%' || lower($1) || '%'
-                     OR lower(comment) LIKE '%' || lower($1) || '%'
-                     OR lower(host) LIKE '%' || lower($1) || '%'
-                     OR lower(coalesce(credential_name, '')) LIKE '%' || lower($1) || '%'
-                     OR lower(coalesce(relay_host, '')) LIKE '%' || lower($1) || '%')
+              WHERE {}
          )
          SELECT count(*) OVER()::bigint AS total, * FROM filtered
           ORDER BY {sort_sql}, name ASC, id ASC LIMIT $2 OFFSET $3;"#,
+        scanner_collection_predicate_sql(
+            "scanner_rows.id",
+            "scanner_rows.name",
+            "scanner_rows.comment",
+            "scanner_rows.host",
+            "scanner_rows.credential_name",
+            "scanner_rows.relay_host",
+            "$1",
+        ),
+    )
+}
+
+/// Shared with the typed scanner tag selector. Search remains literal data
+/// across UUID, name, comment, host, credential name, and relay host.
+pub(crate) fn scanner_collection_predicate_sql(
+    id_expression: &str,
+    name_expression: &str,
+    comment_expression: &str,
+    host_expression: &str,
+    credential_name_expression: &str,
+    relay_host_expression: &str,
+    search_parameter: &str,
+) -> String {
+    format!(
+        "({search_parameter} = ''\n             OR lower({id_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({name_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({comment_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower({host_expression}) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower(coalesce({credential_name_expression}, '')) LIKE '%' || lower({search_parameter}) || '%'\n             OR lower(coalesce({relay_host_expression}, '')) LIKE '%' || lower({search_parameter}) || '%')"
+    )
+}
+
+pub(crate) fn tag_scanner_selection_sql() -> String {
+    format!(
+        "SELECT s.id::integer, s.uuid::text, s.owner::integer\n           FROM scanners s\n      LEFT JOIN credentials c ON c.id = s.credential\n          WHERE {}\n          ORDER BY s.id ASC\n          LIMIT $2\n          FOR UPDATE OF s;",
+        scanner_collection_predicate_sql(
+            "s.uuid",
+            "coalesce(s.name, '')",
+            "coalesce(s.comment, '')",
+            "coalesce(s.host, '')",
+            "c.name",
+            "coalesce(s.relay_host, '')",
+            "$1",
+        )
     )
 }
 

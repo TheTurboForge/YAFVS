@@ -400,7 +400,7 @@ const nativeTagToModel = (item: NativeTagPayload): Tag => {
     owner: {name: stringValue(item.owner?.name)},
     creation_time: stringValue(item.created_at),
     modification_time: stringValue(item.modified_at),
-    writable: yesNoValue(item.writable ?? true),
+    writable: yesNoValue(item.writable),
     in_use: yesNoValue(item.in_use),
     orphan: yesNoValue(item.orphan),
     active: yesNoValue(item.active ?? true),
@@ -646,8 +646,67 @@ const shouldApplyToAllFilteredTags = (filter: Filter): boolean => {
   return Number.isFinite(rows) && rows < 0;
 };
 
-const tagIds = (tags: Tag[]) =>
-  tags.flatMap(tag => (tag.id === undefined ? [] : [tag.id]));
+const TAG_DESTRUCTIVE_FILTER_CONTROLS = new Set([
+  'first',
+  'rows',
+  'sort',
+  'sort-reverse',
+]);
+
+const TAG_DESTRUCTIVE_FILTER_FIELDS = new Set([
+  'search',
+  'active',
+  'resource_type',
+]);
+
+const requireSupportedDestructiveTagFilter = (filter: Filter): void => {
+  const criteriaTerms = filter
+    .getAllTerms()
+    .filter(term => !TAG_DESTRUCTIVE_FILTER_CONTROLS.has(term.keyword ?? ''));
+  const keyedTerms = criteriaTerms.filter(term => term.keyword !== undefined);
+  const literalTerms = criteriaTerms.filter(
+    term => term.keyword === undefined && term.relation === undefined,
+  );
+  const supported = criteriaTerms.every(
+    term =>
+      (term.keyword === undefined && term.relation === undefined) ||
+      (term.keyword !== undefined &&
+        TAG_DESTRUCTIVE_FILTER_FIELDS.has(term.keyword) &&
+        term.relation === '=' &&
+        term.value !== undefined),
+  );
+  const uniqueFields = new Set(keyedTerms.map(term => term.keyword));
+  const active = filter.get('active');
+  if (
+    !supported ||
+    literalTerms.length > 1 ||
+    (literalTerms.length > 0 && keyedTerms.length > 0) ||
+    uniqueFields.size !== keyedTerms.length ||
+    (active !== undefined &&
+      active !== 0 &&
+      active !== 1 &&
+      active !== '0' &&
+      active !== '1')
+  ) {
+    throw new Error(
+      'Native tag bulk delete requires a losslessly supported filter',
+    );
+  }
+};
+
+const tagIds = (tags: Tag[]): string[] =>
+  tags.map(tag => {
+    if (tag.id === undefined) {
+      throw new Error('Native tag operation requires a tag id');
+    }
+    return tag.id;
+  });
+
+const requireUniqueTagIds = (ids: string[]): void => {
+  if (new Set(ids).size !== ids.length) {
+    throw new Error('Native tag bulk delete requires unique tag ids');
+  }
+};
 
 export class TagCommand {
   private readonly http: Http;
@@ -833,31 +892,74 @@ export class TagsCommand {
   }
 
   async deleteByIds(ids: string[]) {
+    requireUniqueTagIds(ids);
+    const tags = await Promise.all(
+      ids.map(id => fetchNativeTag(this.http, id)),
+    );
+    this.requireDeletableTags(tags);
     const deletedIds: string[] = [];
     await this.deleteIds(ids, deletedIds);
     return new Response(deletedIds);
   }
 
   async deleteByFilter(filter: Filter) {
-    const deletedTags: Tag[] = [];
+    requireSupportedDestructiveTagFilter(filter);
+    const tags: Tag[] = [];
     const deletedIds: string[] = [];
-    const query = nativeTagsQueryFromFilter(filter);
-    const deleteAll = shouldApplyToAllFilteredTags(filter);
-    let hasMore = true;
-
-    while (hasMore) {
+    const query = nativeTagsQueryFromFilter(filter.all());
+    let snapshotTotal: number | undefined;
+    const seenIds = new Set<string>();
+    for (let page = 1; ; page += 1) {
       const nativeResponse = await fetchNativeTags(this.http, {
         ...query,
-        ...(deleteAll ? {page: 1, pageSize: NATIVE_COMMAND_PAGE_SIZE} : {}),
+        page,
+        pageSize: NATIVE_COMMAND_PAGE_SIZE,
       });
-      hasMore = deleteAll && nativeResponse.tags.length > 0;
-      if (nativeResponse.tags.length === 0) {
+      if (snapshotTotal === undefined) {
+        snapshotTotal = nativeResponse.page.total;
+      } else if (nativeResponse.page.total !== snapshotTotal) {
+        throw new Error(
+          'Native tag bulk delete preflight detected collection drift',
+        );
+      }
+      for (const tag of nativeResponse.tags) {
+        const [id] = tagIds([tag]);
+        if (seenIds.has(id)) {
+          throw new Error(
+            'Native tag bulk delete preflight detected collection drift',
+          );
+        }
+        seenIds.add(id);
+        tags.push(tag);
+      }
+      if (tags.length === snapshotTotal) {
         break;
       }
-      await this.deleteIds(tagIds(nativeResponse.tags), deletedIds);
-      deletedTags.push(...nativeResponse.tags);
+      if (
+        nativeResponse.tags.length === 0 ||
+        tags.length > snapshotTotal ||
+        page >= snapshotTotal
+      ) {
+        throw new Error(
+          'Native tag bulk delete preflight detected collection drift',
+        );
+      }
     }
-    return new Response(deletedTags);
+
+    this.requireDeletableTags(tags);
+    const ids = tagIds(tags);
+    requireUniqueTagIds(ids);
+    await this.deleteIds(ids, deletedIds);
+    return new Response(tags);
+  }
+
+  private requireDeletableTags(tags: Tag[]) {
+    const blocked = tags.find(tag => !tag.isWritable());
+    if (blocked !== undefined) {
+      throw new Error(
+        `Native tag bulk delete refused non-writable tag ${blocked.id ?? '(missing id)'}`,
+      );
+    }
   }
 
   private async deleteIds(ids: string[], deletedIds: string[]) {

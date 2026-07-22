@@ -122,19 +122,8 @@ const TagsPage = () => {
       input = allEntities ?? [];
     }
 
-    try {
-      await bulkDelete.mutateAsync(input);
-    } catch (error) {
-      showError(error as Error);
-    }
-  }, [
-    selectionType,
-    selectedEntities,
-    filter,
-    allEntities,
-    bulkDelete,
-    showError,
-  ]);
+    await bulkDelete.mutateAsync(input);
+  }, [selectionType, selectedEntities, filter, allEntities, bulkDelete]);
 
   const handleBulkDownload = useCallback(async () => {
     let input: Tag[] | Filter;

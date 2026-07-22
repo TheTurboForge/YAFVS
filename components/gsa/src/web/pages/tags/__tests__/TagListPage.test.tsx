@@ -206,6 +206,11 @@ describe('TagsListPage tests', () => {
 
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeVisible();
+    expect(
+      screen.getByText(
+        'Are you sure you want to move all items on this page to the trashcan?',
+      ),
+    ).toBeVisible();
     fireEvent.click(screen.getByText('Move to Trashcan'));
 
     await wait();
@@ -246,6 +251,11 @@ describe('TagsListPage tests', () => {
 
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeVisible();
+    expect(
+      screen.getByText(
+        'Are you sure you want to move the selected items to the trashcan?',
+      ),
+    ).toBeVisible();
     fireEvent.click(screen.getByText('Move to Trashcan'));
 
     await wait();
@@ -280,6 +290,11 @@ describe('TagsListPage tests', () => {
 
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeVisible();
+    expect(
+      screen.getByText(
+        'Are you sure you want to move all filtered items to the trashcan?',
+      ),
+    ).toBeVisible();
     fireEvent.click(screen.getByText('Move to Trashcan'));
 
     await wait();
@@ -400,12 +415,20 @@ describe('TagsListPage tests', () => {
 
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeVisible();
+    const completedBefore = screen.queryAllByText(
+      'Move to trashcan completed',
+    ).length;
 
     const confirmButton = screen.getByText('Move to Trashcan');
     fireEvent.click(confirmButton);
 
     await wait();
     expect(deleteByModels).toHaveBeenCalled();
+    expect(await screen.findByText('delete failed')).toBeVisible();
+    expect(screen.getAllByText('delete failed')).toHaveLength(1);
+    expect(screen.queryAllByText('Move to trashcan completed')).toHaveLength(
+      completedBefore,
+    );
   });
 
   test('should show error notification when bulk export fails', async () => {

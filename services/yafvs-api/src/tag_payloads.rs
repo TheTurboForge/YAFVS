@@ -5,7 +5,10 @@
 use serde::Serialize;
 use tokio_postgres::Row;
 
-use crate::{formatters::unix_ts_to_rfc3339, query::PageInfo};
+use crate::{
+    formatters::unix_ts_to_rfc3339, query::PageInfo,
+    tag_resource_helpers::tag_resource_direct_write_type_is_supported,
+};
 
 #[derive(Serialize)]
 pub(crate) struct TagOwner {
@@ -63,6 +66,8 @@ pub(crate) struct TagResourceCollection {
 
 pub(crate) fn tag_asset_from_row(row: &Row) -> TagAssetItem {
     let resource_type: String = row.get("resource_type");
+    let writable = row.get::<_, bool>("human_owned")
+        && tag_resource_direct_write_type_is_supported(&resource_type);
     let resource_count: i64 = row.get("resource_count");
     let raw_value: String = row.get("value");
     let value = if raw_value.trim().is_empty() {
@@ -87,8 +92,9 @@ pub(crate) fn tag_asset_from_row(row: &Row) -> TagAssetItem {
         },
         active: row.get::<_, i32>("active_int") != 0,
         value,
-        writable: true,
-        in_use: tag_asset_in_use(resource_count),
+        writable,
+        // Deleting a tag moves its assignments to trash in the same transaction.
+        in_use: false,
         orphan: false,
         trash: false,
         permissions: vec![
@@ -99,21 +105,6 @@ pub(crate) fn tag_asset_from_row(row: &Row) -> TagAssetItem {
         ],
         created_at: unix_ts_to_rfc3339(row.get("created_at_unix")),
         modified_at: unix_ts_to_rfc3339(row.get("modified_at_unix")),
-    }
-}
-
-fn tag_asset_in_use(resource_count: i64) -> bool {
-    resource_count > 0
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn tag_asset_in_use_matches_assigned_resource_count() {
-        assert!(!tag_asset_in_use(0));
-        assert!(tag_asset_in_use(1));
     }
 }
 

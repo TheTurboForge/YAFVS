@@ -1142,10 +1142,13 @@ fn schedule_user_tags_are_detail_only_active_schedule_tags() {
 fn tag_asset_read_sql_is_metadata_and_resource_count_only() {
     let list_sql = tag_assets_sql("name ASC");
     let detail_sql = tag_asset_detail_sql();
+    let write_detail_sql = crate::tag_write_sql::tag_write_detail_sql();
     let lookup_sql = tag_resource_lookup_sql();
+    let payloads = include_str!("tag_payloads.rs");
     for required in [
         "FROM tags t",
         "LEFT JOIN users u ON u.id = t.owner",
+        "(t.owner IS NOT NULL) AS human_owned",
         "tag_resources_count(t.id, t.resource_type)",
         "active_int",
         "ORDER BY name ASC, name ASC, id ASC LIMIT $2 OFFSET $3",
@@ -1157,6 +1160,8 @@ fn tag_asset_read_sql_is_metadata_and_resource_count_only() {
     }
     assert!(detail_sql.contains("FROM tags t"));
     assert!(detail_sql.contains("WHERE t.uuid = $1"));
+    assert!(detail_sql.contains("(t.owner IS NOT NULL) AS human_owned"));
+    assert!(write_detail_sql.contains("(t.owner IS NOT NULL) AS human_owned"));
     assert!(lookup_sql.contains("FROM tags"));
     assert!(lookup_sql.contains("coalesce(resource_type, '') AS resource_type"));
     for sql in [list_sql.as_str(), detail_sql, lookup_sql] {
@@ -1169,6 +1174,9 @@ fn tag_asset_read_sql_is_metadata_and_resource_count_only() {
         assert!(!sql.contains("tag_resources_trash"));
         assert!(!sql.contains("permissions"));
     }
+    assert!(payloads.contains("row.get::<_, bool>(\"human_owned\")"));
+    assert!(payloads.contains("tag_resource_direct_write_type_is_supported(&resource_type)"));
+    assert!(payloads.contains("in_use: false"));
 }
 
 #[test]

@@ -1,4 +1,6 @@
 /* SPDX-FileCopyrightText: 2024 Greenbone AG
+ * SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -85,6 +87,27 @@ const EntitiesFooter = <TEntity = Model,>({
   const [isDialogVisible, setIsDialogVisible] = useState(false);
   const [isInProgress, setIsInProgress] = useState(false);
 
+  const deleteDialogText =
+    selectionType === SelectionType.SELECTION_FILTER
+      ? _(
+          'Are you sure you want to delete all filtered items?\nThis action cannot be undone.',
+        )
+      : selectionType === SelectionType.SELECTION_USER
+        ? _(
+            'Are you sure you want to delete the selected items?\nThis action cannot be undone.',
+          )
+        : _(
+            'Are you sure you want to delete all items on this page?\nThis action cannot be undone.',
+          );
+  const trashDialogText =
+    selectionType === SelectionType.SELECTION_FILTER
+      ? _('Are you sure you want to move all filtered items to the trashcan?')
+      : selectionType === SelectionType.SELECTION_USER
+        ? _('Are you sure you want to move the selected items to the trashcan?')
+        : _(
+            'Are you sure you want to move all items on this page to the trashcan?',
+          );
+
   const onIconClick = (
     type: DialogType,
     propOnAction?: () => void | Promise<void>,
@@ -98,9 +121,7 @@ const EntitiesFooter = <TEntity = Model,>({
 
     const configMap = {
       [DIALOG_TYPES.DELETE]: {
-        dialogText: _(
-          'Are you sure you want to delete all items on this page?\nThis action cannot be undone.',
-        ),
+        dialogText: deleteDialogText,
         dialogTitle: _('Confirm Deletion'),
         dialogButtonTitle: _('Delete'),
         confirmFunction: async () => {
@@ -117,9 +138,7 @@ const EntitiesFooter = <TEntity = Model,>({
         },
       },
       [DIALOG_TYPES.TRASH]: {
-        dialogText: _(
-          'Are you sure you want to move all items on this page to the trashcan?',
-        ),
+        dialogText: trashDialogText,
         dialogTitle: _('Confirm move to trashcan'),
         dialogButtonTitle: _('Move to Trashcan'),
         confirmFunction: async () => {
@@ -241,7 +260,7 @@ const EntitiesFooter = <TEntity = Model,>({
               width="500px"
               onClose={closeDialog}
               onResumeClick={() => {
-                void configDialog.confirmFunction();
+                void configDialog.confirmFunction().catch(() => undefined);
                 closeDialog();
               }}
             />

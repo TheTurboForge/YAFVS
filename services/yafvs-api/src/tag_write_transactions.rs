@@ -614,18 +614,6 @@ async fn resolve_tag_resource_write_record(
         .ok_or(ApiError::NotFound)
 }
 
-#[cfg(test)]
-pub(crate) fn ensure_tag_is_unassigned(resource_count: i64) -> Result<(), ApiError> {
-    if resource_count == 0 {
-        Ok(())
-    } else {
-        Err(ApiError::Conflict(
-            "tag with assigned resources cannot be deleted by this metadata-only direct API"
-                .to_string(),
-        ))
-    }
-}
-
 async fn query_tag_write_record(
     tx: &Transaction<'_>,
     sql: &str,

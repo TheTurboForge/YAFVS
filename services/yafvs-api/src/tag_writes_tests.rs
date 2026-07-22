@@ -1032,15 +1032,6 @@ fn tag_write_sql_uses_parameterized_metadata_queries_only() {
 }
 
 #[test]
-fn tag_delete_rejects_assigned_tags() {
-    assert!(ensure_tag_is_unassigned(0).is_ok());
-    assert!(matches!(
-        ensure_tag_is_unassigned(1),
-        Err(ApiError::Conflict(_))
-    ));
-}
-
-#[test]
 fn tag_commit_failures_are_classified_as_indeterminate() {
     let handler = include_str!("tag_writes.rs");
     let database_helpers = include_str!("tag_write_db.rs");

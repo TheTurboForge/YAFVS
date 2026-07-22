@@ -69,6 +69,7 @@ describe('TagsCommand', () => {
     expect(response.data[0].id).toEqual('tag-1');
     expect(response.data[0].resourceType).toEqual('task');
     expect(response.data[0].resourceCount).toEqual(2);
+    expect(response.data[0].isWritable()).toEqual(false);
     expect(http.buildUrl).toHaveBeenCalledWith('api/v1/tags', {
       token: 'test-token',
       page: 1,
@@ -107,6 +108,15 @@ describe('TagsCommand', () => {
   test('reports exact partial progress when native bulk delete fails', async () => {
     const fetchMock = testing
       .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({id: 'tag-1', name: 'One', writable: true}),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({id: 'tag-2', name: 'Two', writable: true}),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({id: 'tag-3', name: 'Three', writable: true}),
+      )
       .mockResolvedValueOnce(jsonResponse({}, true, 204))
       .mockResolvedValueOnce(jsonResponse({}, false, 409));
     testing.stubGlobal('fetch', fetchMock);
@@ -123,32 +133,205 @@ describe('TagsCommand', () => {
       failedId: 'tag-2',
       pendingIds: ['tag-3'],
     });
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    for (const call of [1, 2, 3]) {
+      expect(fetchMock.mock.calls[call - 1][1]).not.toHaveProperty('method');
+    }
+    for (const call of [4, 5]) {
+      expect(fetchMock.mock.calls[call - 1][1]).toEqual(
+        expect.objectContaining({method: 'DELETE'}),
+      );
+    }
   });
 
-  test('deletes all filtered tags from page one until empty', async () => {
+  test('rejects duplicate selected ids before any native request', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      new TagsCommand(createNativeHttp()).deleteByIds(['tag-1', 'tag-1']),
+    ).rejects.toThrow('Native tag bulk delete requires unique tag ids');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test('rejects value filters whose native semantics are not exact', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      new TagsCommand(createNativeHttp()).deleteByFilter(
+        Filter.fromString('rows=-1 value=production'),
+      ),
+    ).rejects.toThrow(
+      'Native tag bulk delete requires a losslessly supported filter',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test('allows assigned writable tags to be moved to trash', async () => {
     const fetchMock = testing
       .fn()
       .mockResolvedValueOnce(
         jsonResponse({
-          page: {page: 1, page_size: 500, total: 1, sort: 'name', filter: 'x'},
-          items: [{id: 'tag-1', name: 'One'}],
+          id: 'tag-1',
+          name: 'Assigned',
+          resource_count: 2,
+          writable: true,
+          in_use: false,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({}, true, 204));
+    testing.stubGlobal('fetch', fetchMock);
+
+    await new TagsCommand(createNativeHttp()).deleteByIds(['tag-1']);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1][1]).toEqual(
+      expect.objectContaining({method: 'DELETE'}),
+    );
+  });
+
+  test('rejects unsupported destructive filters before any request', async () => {
+    const fetchMock = testing.fn();
+    testing.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      new TagsCommand(createNativeHttp()).deleteByFilter(
+        Filter.fromString('rows=-1 name=production'),
+      ),
+    ).rejects.toThrow(
+      'Native tag bulk delete requires a losslessly supported filter',
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  test('snapshots all filtered tags before native deletion', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: 'x'},
+          items: [{id: 'tag-1', name: 'One', writable: true}],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: 'x'},
+          items: [{id: 'tag-2', name: 'Two', writable: true}],
         }),
       )
       .mockResolvedValueOnce(jsonResponse({}, true, 204))
+      .mockResolvedValueOnce(jsonResponse({}, true, 204));
+    testing.stubGlobal('fetch', fetchMock);
+    const http = createNativeHttp();
+
+    const response = await new TagsCommand(http).deleteByFilter(
+      Filter.fromString('first=2 rows=1 search=x'),
+    );
+
+    expect(response.data.map(tag => tag.id)).toEqual(['tag-1', 'tag-2']);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    for (const call of [1, 2]) {
+      expect(fetchMock.mock.calls[call - 1][1]).not.toHaveProperty('method');
+    }
+    for (const call of [3, 4]) {
+      expect(fetchMock.mock.calls[call - 1][1]).toEqual(
+        expect.objectContaining({method: 'DELETE'}),
+      );
+    }
+    expect(http.buildUrl).toHaveBeenNthCalledWith(1, 'api/v1/tags', {
+      token: 'test-token',
+      page: 1,
+      page_size: 500,
+      sort: 'name',
+      filter: 'x',
+      active: '',
+      resource_type: '',
+      value: '',
+    });
+  });
+
+  test('rejects duplicate ids across snapshot pages before deletion', async () => {
+    const fetchMock = testing
+      .fn()
       .mockResolvedValueOnce(
         jsonResponse({
-          page: {page: 1, page_size: 500, total: 0, sort: 'name', filter: 'x'},
-          items: [],
+          page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: 'x'},
+          items: [{id: 'tag-1', name: 'One', writable: true}],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          page: {page: 2, page_size: 500, total: 2, sort: 'name', filter: 'x'},
+          items: [{id: 'tag-1', name: 'One', writable: true}],
         }),
       );
     testing.stubGlobal('fetch', fetchMock);
 
-    const response = await new TagsCommand(createNativeHttp()).deleteByFilter(
-      Filter.fromString('rows=-1 search=x'),
+    await expect(
+      new TagsCommand(createNativeHttp()).deleteByFilter(
+        Filter.fromString('rows=-1 search=x'),
+      ),
+    ).rejects.toThrow(
+      'Native tag bulk delete preflight detected collection drift',
     );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const [, options] of fetchMock.mock.calls) {
+      expect(options).not.toHaveProperty('method');
+    }
+  });
 
-    expect(response.data.map(tag => tag.id)).toEqual(['tag-1']);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+  test('rejects mixed writable selection before any native delete', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({id: 'tag-1', name: 'One', writable: true}),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({id: 'tag-2', name: 'Global', writable: false}),
+      );
+    testing.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      new TagsCommand(createNativeHttp()).deleteByIds(['tag-1', 'tag-2']),
+    ).rejects.toThrow('Native tag bulk delete refused non-writable tag tag-2');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const [, options] of fetchMock.mock.calls) {
+      expect(options).not.toHaveProperty('method');
+    }
+  });
+
+  test('rejects collection drift before deleting an all-filtered snapshot', async () => {
+    const fetchMock = testing
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          page: {page: 1, page_size: 500, total: 2, sort: 'name', filter: 'x'},
+          items: [{id: 'tag-1', name: 'One', writable: true}],
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          page: {page: 2, page_size: 500, total: 3, sort: 'name', filter: 'x'},
+          items: [
+            {id: 'tag-2', name: 'Two', writable: true},
+            {id: 'tag-3', name: 'Three', writable: true},
+          ],
+        }),
+      );
+    testing.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      new TagsCommand(createNativeHttp()).deleteByFilter(
+        Filter.fromString('rows=-1 search=x'),
+      ),
+    ).rejects.toThrow(
+      'Native tag bulk delete preflight detected collection drift',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const [, options] of fetchMock.mock.calls) {
+      expect(options).not.toHaveProperty('method');
+    }
   });
 });
 

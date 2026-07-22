@@ -7059,6 +7059,17 @@ bulk_delete_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
         response_data);
     }
 
+  if (g_ascii_strcasecmp (type, "tag") == 0)
+    {
+      gsad_command_response_data_set_status_code (response_data,
+                                                  MHD_HTTP_BAD_REQUEST);
+      return gsad_http_create_gsad_message (
+        credentials,
+        "Tag deletion must use the native API so destructive-filter and tag "
+        "write-eligibility checks cannot be bypassed.",
+        response_data);
+    }
+
   /* Extra attributes */
   extra_attribs = NULL;
 

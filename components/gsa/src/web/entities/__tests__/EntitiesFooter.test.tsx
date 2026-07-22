@@ -1,4 +1,6 @@
 /* SPDX-FileCopyrightText: 2025 Greenbone AG
+ * SPDX-FileCopyrightText: 2026 Robert Pelfrey <robert@pelfrey.de>
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -6,6 +8,7 @@
 import {describe, test, expect, testing} from '@gsa/testing';
 import {screen, rendererWithTable, fireEvent, wait} from 'web/testing';
 import EntitiesFooter from 'web/entities/EntitiesFooter';
+import SelectionType from 'web/utils/SelectionType';
 
 describe('EntitiesFooter tests', () => {
   test('should render children', async () => {
@@ -65,6 +68,52 @@ describe('EntitiesFooter tests', () => {
     expect(dialogTitle).not.toBeVisible();
   });
 
+  test.each([
+    [
+      SelectionType.SELECTION_USER,
+      'Are you sure you want to move the selected items to the trashcan?',
+    ],
+    [
+      SelectionType.SELECTION_FILTER,
+      'Are you sure you want to move all filtered items to the trashcan?',
+    ],
+  ])('should describe the selected trash scope', (selectionType, message) => {
+    const {render} = rendererWithTable();
+
+    render(
+      <EntitiesFooter
+        selectionType={selectionType}
+        span={2}
+        trash={true}
+        onTrashClick={testing.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByTestId('trash-icon'));
+    expect(screen.getByText(message)).toBeVisible();
+  });
+
+  test('should not report success when an async trash action fails', async () => {
+    const {render} = rendererWithTable();
+    const onTrashClick = testing.fn().mockRejectedValue(new Error('failed'));
+
+    render(
+      <EntitiesFooter span={2} trash={true} onTrashClick={onTrashClick} />,
+    );
+
+    const completedBefore = screen.queryAllByText(
+      'Move to trashcan completed',
+    ).length;
+    fireEvent.click(screen.getByTestId('trash-icon'));
+    fireEvent.click(screen.getByRole('button', {name: 'Move to Trashcan'}));
+    await wait();
+
+    expect(onTrashClick).toHaveBeenCalledOnce();
+    expect(screen.queryAllByText('Move to trashcan completed')).toHaveLength(
+      completedBefore,
+    );
+  });
+
   test('should show ConfirmationDialog when TrashIcon is clicked and notification', async () => {
     const {render} = rendererWithTable();
     const onTrashClick = testing.fn();
@@ -95,7 +144,7 @@ describe('EntitiesFooter tests', () => {
 
     fireEvent.click(resumeButton);
 
-    expect(screen.getByText('Moving to trashcan')).toBeVisible();
+    expect(screen.getAllByText('Moving to trashcan')).not.toHaveLength(0);
 
     await wait();
 

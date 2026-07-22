@@ -29,6 +29,18 @@ fn inherited_function(source: &str, name: &str) -> String {
 }
 
 #[test]
+fn generic_gsad_bulk_delete_rejects_tags_before_xml_synthesis() {
+    let bulk_delete = inherited_function(GSAD_GMP, "bulk_delete_gmp");
+    let rejection = bulk_delete
+        .find("g_ascii_strcasecmp (type, \"tag\")")
+        .expect("generic gsad bulk delete must reject tags case-insensitively");
+    let synthesis = bulk_delete
+        .find("g_strdup_printf (\"<delete_%s")
+        .expect("generic bulk delete synthesis boundary must remain visible");
+    assert!(rejection < synthesis);
+}
+
+#[test]
 fn every_live_filtered_bulk_tag_page_has_a_typed_selector() {
     fn collect_bulk_tag_pages(
         root: &std::path::Path,

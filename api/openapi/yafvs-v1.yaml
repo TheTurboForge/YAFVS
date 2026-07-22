@@ -13305,6 +13305,7 @@ components:
           type: [string, 'null']
         writable:
           type: boolean
+          description: True only for a human-owned tag whose resource type is supported by native writes.
         in_use:
           type: boolean
         orphan:

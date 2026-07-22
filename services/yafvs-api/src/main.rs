@@ -308,6 +308,8 @@ mod collection_contract_tests;
 #[cfg(test)]
 mod collection_query_contract_tests;
 #[cfg(test)]
+mod container_build_contract_tests;
+#[cfg(test)]
 mod credential_contract_tests;
 #[cfg(test)]
 mod credential_writes_tests;

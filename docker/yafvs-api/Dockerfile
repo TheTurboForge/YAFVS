@@ -4,9 +4,10 @@
 
 FROM rust:1.96-bookworm AS build
 
-WORKDIR /src
+WORKDIR /workspace/services/yafvs-api
 COPY services/yafvs-api/Cargo.toml services/yafvs-api/Cargo.lock ./
 COPY services/yafvs-api/src ./src
+COPY crates/yafvs-domain /workspace/crates/yafvs-domain
 RUN cargo build --locked --release
 
 FROM debian:bookworm-slim
@@ -17,7 +18,7 @@ RUN apt-get update \
     && mkdir -p /runtime/feeds /runtime/run/ospd \
     && chown -R 1000:1000 /runtime
 
-COPY --from=build /src/target/release/yafvs-api /usr/local/bin/yafvs-api
+COPY --from=build /workspace/services/yafvs-api/target/release/yafvs-api /usr/local/bin/yafvs-api
 
 USER 1000:1000
 ENV YAFVS_API_BIND=0.0.0.0:9080

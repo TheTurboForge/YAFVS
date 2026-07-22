@@ -267,10 +267,12 @@ recalculation remain inherited.
 CERT-Bund and DFN-CERT list reads are browser-proxied, while their detail
 metadata endpoints remain internal automation/catalog probes because rich GSA
 detail/export behavior still depends on XML-only feed fields that PostgreSQL
-does not store. Trashcan Contents reads can use
-`/api/v1/trashcan/summary` for counts-only native JSON, but row-level
-Trashcan data and restore/delete/empty mutations remain inherited because
-credential/target/scanner trash tables contain secret-adjacent payloads.
+does not store. Trashcan summary, redacted row inventory, confirmation-bound
+emptying, and eight typed restore/hard-delete lifecycles use native JSON.
+Alert, credential, and task restore plus alert, credential, report-format, and
+task permanent delete remain bounded compatibility tails. Report-format
+restore is deliberately removed because it could resurrect a retired custom
+executable format; cleanup remains available.
 The legacy Python client/tooling dependency is removed. Further native API
 expansion should target the remaining explicit GSA/gsad/gvmd owner tails and
 production direct-access hardening without weakening scanner-control or secret

@@ -32,9 +32,6 @@ report_format_filter_columns ();
 column_t*
 report_format_select_columns ();
 
-int
-restore_report_format (const char *);
-
 gchar *
 apply_report_format (gchar *, gchar *, gchar *, gchar *, GList **);
 

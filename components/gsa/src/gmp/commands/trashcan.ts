@@ -58,11 +58,15 @@ export interface TrashCanEmptyParams {
   expectedSnapshotDigest: string;
 }
 
-const LEGACY_TRASHCAN_RESOURCE_TYPES = {
+const LEGACY_RESTORE_RESOURCE_TYPES = {
   alert: 'alert',
   credential: 'credential',
-  reportformat: 'report_format',
   task: 'task',
+} as const satisfies Partial<Record<EntityType, string>>;
+
+const LEGACY_DELETE_RESOURCE_TYPES = {
+  ...LEGACY_RESTORE_RESOURCE_TYPES,
+  reportformat: 'report_format',
 } as const satisfies Partial<Record<EntityType, string>>;
 
 interface UsageTypeElement extends ModelElement {
@@ -222,7 +226,7 @@ class TrashCanCommand extends HttpCommand {
       return;
     }
 
-    const resourceType = LEGACY_TRASHCAN_RESOURCE_TYPES[entityType];
+    const resourceType = LEGACY_RESTORE_RESOURCE_TYPES[entityType];
     if (resourceType === undefined) {
       throw new Error(`Trashcan restore is unavailable for ${entityType}`);
     }
@@ -245,7 +249,7 @@ class TrashCanCommand extends HttpCommand {
       return;
     }
 
-    const resourceType = LEGACY_TRASHCAN_RESOURCE_TYPES[entityType];
+    const resourceType = LEGACY_DELETE_RESOURCE_TYPES[entityType];
     if (resourceType === undefined) {
       throw new Error(
         `Trashcan permanent delete is unavailable for ${entityType}`,

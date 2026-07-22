@@ -21056,11 +21056,6 @@ manage_restore (const char *id)
   if (ret != 2)
     return ret;
 
-  /* Report Format. */
-  ret = restore_report_format (id);
-  if (ret != 2)
-    return ret;
-
   /* Config. */
 
   if (find_trash ("config", id, &resource))

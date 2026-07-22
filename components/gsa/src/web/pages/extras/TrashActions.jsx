@@ -46,7 +46,7 @@ const getRestorableDeletableForEntityType = {
     return {restorable: true, deletable: !entity.isInUse()};
   },
   reportformat: entity => {
-    return {restorable: true, deletable: !entity.isInUse()};
+    return {restorable: false, deletable: !entity.isInUse()};
   },
   role: entity => {
     return {restorable: true, deletable: !entity.isInUse()};

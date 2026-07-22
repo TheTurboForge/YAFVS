@@ -115,7 +115,6 @@ describe('TrashCanCommand tests', () => {
   test.each([
     ['alert', 'alert'],
     ['credential', 'credential'],
-    ['reportformat', 'report_format'],
     ['task', 'task'],
   ] as const)(
     'should restore retained %s trash entities through the typed GMP bridge',
@@ -154,6 +153,16 @@ describe('TrashCanCommand tests', () => {
     await expect(cmd.restore({id: '1234'} as never)).rejects.toThrow(
       'Trashcan restore is unavailable for undefined',
     );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should reject retired report-format restore without a network request', async () => {
+    const fakeHttp = createHttp(createResponse({}));
+    const cmd = new TrashCanCommand(fakeHttp);
+
+    await expect(
+      cmd.restore({id: '1234', entityType: 'reportformat'}),
+    ).rejects.toThrow('Trashcan restore is unavailable for reportformat');
     expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 

@@ -429,10 +429,11 @@ hosts, scanner connection fields, scan-config preferences, alert method data,
 `results_trash`, and child trash tables. Filter, override, port list, scan
 config, scanner, schedule, tag, and target restore and permanent delete are
 native-only and fail closed if the native API is unavailable. Alert,
-credential, report-format, and task restore and permanent delete retain a
-declared four-family browser/GMP compatibility bridge while those native
-owners remain incomplete. Separately classified raw GMP behavior remains
-outside this browser contract.
+credential, and task restore plus alert, credential, report-format, and task
+permanent delete retain declared browser/GMP compatibility while those native
+owners remain incomplete. Report-format restore is deliberately unavailable:
+it could reintroduce a retired custom executable report format. Separately
+classified raw GMP behavior remains outside this browser contract.
 
 Native report-format rows include report-format identity, summary/description,
 extension/content type, trust state, active/predefined/configurable/deprecated

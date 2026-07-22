@@ -1534,12 +1534,18 @@ move_resource_to_trash (gvm_connection_t *connection, const char *type,
 }
 
 static gboolean
-trashcan_compatibility_resource_type_is_supported (const gchar *resource_type)
+trashcan_restore_resource_type_is_supported (const gchar *resource_type)
 {
   return g_strcmp0 (resource_type, "alert") == 0
          || g_strcmp0 (resource_type, "credential") == 0
-         || g_strcmp0 (resource_type, "report_format") == 0
          || g_strcmp0 (resource_type, "task") == 0;
+}
+
+static gboolean
+trashcan_delete_resource_type_is_supported (const gchar *resource_type)
+{
+  return trashcan_restore_resource_type_is_supported (resource_type)
+         || g_strcmp0 (resource_type, "report_format") == 0;
 }
 
 /**
@@ -1563,7 +1569,7 @@ delete_from_trash_gmp (gvm_connection_t *connection,
 
   CHECK_VARIABLE_INVALID (resource_type, "Delete from Trashcan");
 
-  if (!trashcan_compatibility_resource_type_is_supported (resource_type))
+  if (!trashcan_delete_resource_type_is_supported (resource_type))
     {
       gsad_command_response_data_set_status_code (response_data,
                                                   MHD_HTTP_BAD_REQUEST);
@@ -4118,7 +4124,7 @@ restore_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   CHECK_VARIABLE_INVALID (target_id, "Restore")
   CHECK_VARIABLE_INVALID (resource_type, "Restore")
 
-  if (!trashcan_compatibility_resource_type_is_supported (resource_type))
+  if (!trashcan_restore_resource_type_is_supported (resource_type))
     {
       gsad_command_response_data_set_status_code (response_data,
                                                   MHD_HTTP_BAD_REQUEST);

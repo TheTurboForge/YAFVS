@@ -366,26 +366,17 @@ describe('TrashCanCommand tests', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  test('should allow to delete an entity from the trashcan', async () => {
-    const response = createResponse({});
-    const fakeHttp = createHttp(response);
-    const cmd = new TrashCanCommand(fakeHttp);
-    await cmd.delete({id: '1234', entityType: 'task'});
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'delete_from_trash',
-        task_id: '1234',
-        resource_type: 'task',
-      },
-    });
-  });
-
   test.each([
     ['filter', 'filters'],
     ['override', 'overrides'],
+    ['portlist', 'port-lists'],
+    ['scanconfig', 'scan-configs'],
     ['scanner', 'scanners'],
+    ['schedule', 'schedules'],
+    ['tag', 'tags'],
+    ['target', 'targets'],
   ] as const)(
-    'should delete supported %s trash entities through native API',
+    'should permanently delete supported %s trash entities through native API',
     async (entityType, path) => {
       const fetchMock = testing.fn().mockResolvedValue({
         ok: true,
@@ -427,31 +418,71 @@ describe('TrashCanCommand tests', () => {
     },
   );
 
-  test('should fall back to GMP delete for unsupported native trash entities', async () => {
-    const response = createResponse({});
-    const fetchMock = testing.fn();
-    testing.stubGlobal('fetch', fetchMock);
-    const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-      buildUrl: ReturnType<typeof testing.fn>;
-      session: ReturnType<typeof createSession>;
-    };
-    fakeHttp.buildUrl = testing.fn(
-      (path: string) => `https://yafvs.example/${path}`,
-    );
-    fakeHttp.session = createSession();
-    fakeHttp.session.token = 'test-token';
+  test.each([
+    ['alert', 'alert'],
+    ['credential', 'credential'],
+    ['reportformat', 'report_format'],
+    ['task', 'task'],
+  ] as const)(
+    'should permanently delete retained %s trash entities through the typed GMP bridge',
+    async (entityType, resourceType) => {
+      const response = createResponse({});
+      const fetchMock = testing.fn();
+      testing.stubGlobal('fetch', fetchMock);
+      const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
+        buildUrl: ReturnType<typeof testing.fn>;
+        session: ReturnType<typeof createSession>;
+      };
+      fakeHttp.buildUrl = testing.fn(
+        (path: string) => `https://yafvs.example/${path}`,
+      );
+      fakeHttp.session = createSession();
+      fakeHttp.session.token = 'test-token';
+      const cmd = new TrashCanCommand(fakeHttp);
+
+      await cmd.delete({id: '1234', entityType});
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(fakeHttp.request).toHaveBeenCalledWith('post', {
+        data: {
+          cmd: 'delete_from_trash',
+          [`${resourceType}_id`]: '1234',
+          resource_type: resourceType,
+        },
+      });
+    },
+  );
+
+  test('should reject an untyped permanent delete without a network request', async () => {
+    const fakeHttp = createHttp(createResponse({}));
     const cmd = new TrashCanCommand(fakeHttp);
 
-    await cmd.delete({id: '1234', entityType: 'task'});
+    await expect(cmd.delete({id: '1234'} as never)).rejects.toThrow(
+      'Trashcan permanent delete is unavailable for undefined',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'delete_from_trash',
-        task_id: '1234',
-        resource_type: 'task',
-      },
-    });
+  test('should reject unsupported permanent delete types without a network request', async () => {
+    const fakeHttp = createHttp(createResponse({}));
+    const cmd = new TrashCanCommand(fakeHttp);
+
+    await expect(cmd.delete({id: '1234', entityType: 'host'})).rejects.toThrow(
+      'Trashcan permanent delete is unavailable for host',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
+  });
+
+  test('should not fall back to GMP when native permanent delete is unavailable', async () => {
+    const fakeHttp = createHttp(createResponse({}));
+    const cmd = new TrashCanCommand(fakeHttp);
+
+    await expect(
+      cmd.delete({id: '1234', entityType: 'filter'}),
+    ).rejects.toThrow(
+      'Native Trashcan permanent delete is unavailable for filter',
+    );
+    expect(fakeHttp.request).not.toHaveBeenCalled();
   });
 
   test('should not fall back to GMP when supported native trash delete fails', async () => {
@@ -476,20 +507,6 @@ describe('TrashCanCommand tests', () => {
       cmd.delete({id: '1234', entityType: 'filter'}),
     ).rejects.toThrow('Native API request failed with status 409');
     expect(fakeHttp.request).not.toHaveBeenCalled();
-  });
-
-  test('should allow to delete an host from the trashcan', async () => {
-    const response = createResponse({});
-    const fakeHttp = createHttp(response);
-    const cmd = new TrashCanCommand(fakeHttp);
-    await cmd.delete({id: '1234', entityType: 'host'});
-    expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-      data: {
-        cmd: 'delete_from_trash',
-        asset_id: '1234',
-        resource_type: 'asset',
-      },
-    });
   });
 
   test('should load trashcan rows through native redacted item API when available', async () => {

@@ -20,8 +20,8 @@ fn inherited_function(source: &str, name: &str) -> String {
 #[test]
 fn trashcan_restore_allowlists_remain_narrow_and_typed() {
     let gsa_restore = GSA_TRASHCAN
-        .split_once("const LEGACY_RESTORE_RESOURCE_TYPES = {")
-        .expect("typed GSA legacy restore map must exist")
+        .split_once("const LEGACY_TRASHCAN_RESOURCE_TYPES = {")
+        .expect("typed GSA legacy trashcan map must exist")
         .1
         .split_once("} as const")
         .expect("typed GSA legacy restore map must terminate")
@@ -63,14 +63,50 @@ fn trashcan_restore_allowlists_remain_narrow_and_typed() {
     }
     assert_eq!(native_paths.matches(':').count(), 8);
 
-    let restore = inherited_function(GSAD_GMP, "restore_gmp");
+    let allowlist = inherited_function(
+        GSAD_GMP,
+        "trashcan_compatibility_resource_type_is_supported",
+    );
     for resource_type in ["alert", "credential", "report_format", "task"] {
         assert!(
-            restore.contains(&format!("g_strcmp0 (resource_type, \"{resource_type}\")")),
-            "gsad restore allowlist missing {resource_type}"
+            allowlist.contains(&format!("g_strcmp0 (resource_type, \"{resource_type}\")")),
+            "gsad trashcan compatibility allowlist missing {resource_type}"
         );
     }
-    assert_eq!(restore.matches("g_strcmp0 (resource_type,").count(), 4);
+    assert_eq!(allowlist.matches("g_strcmp0 (resource_type,").count(), 4);
+
+    let restore = inherited_function(GSAD_GMP, "restore_gmp");
+    assert!(restore.contains("trashcan_compatibility_resource_type_is_supported (resource_type)"));
+}
+
+#[test]
+fn trashcan_permanent_delete_allowlists_remain_narrow_and_fail_closed() {
+    let gsa_delete = GSA_TRASHCAN
+        .split_once("async delete(")
+        .expect("GSA delete method must exist")
+        .1
+        .split_once("  async emptyPreview(")
+        .expect("GSA delete method must end before empty preview")
+        .0;
+    assert!(gsa_delete.contains("supportsNativeTrashcanDelete(entityType)"));
+    assert!(gsa_delete.contains("if (!canUseNativeApi(this.http))"));
+    assert!(gsa_delete.contains("Native Trashcan permanent delete is unavailable"));
+    assert!(gsa_delete.contains("Trashcan permanent delete is unavailable"));
+    assert!(gsa_delete.contains("resource_type: resourceType"));
+    assert!(gsa_delete.contains("[`${resourceType}_id`]: id"));
+    assert!(!gsa_delete.contains("apiType("));
+    assert!(!gsa_delete.contains("cmdApiType"));
+
+    let delete_from_trash = inherited_function(GSAD_GMP, "delete_from_trash_gmp");
+    assert!(
+        delete_from_trash
+            .contains("trashcan_compatibility_resource_type_is_supported (resource_type)")
+    );
+    assert!(delete_from_trash.contains("Unsupported resource_type for the trash delete"));
+    assert!(
+        delete_from_trash
+            .contains("delete_resource (connection, resource_type, credentials, params, TRUE")
+    );
 }
 
 #[test]

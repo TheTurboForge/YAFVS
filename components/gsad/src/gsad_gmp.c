@@ -1533,6 +1533,15 @@ move_resource_to_trash (gvm_connection_t *connection, const char *type,
                           response_data);
 }
 
+static gboolean
+trashcan_compatibility_resource_type_is_supported (const gchar *resource_type)
+{
+  return g_strcmp0 (resource_type, "alert") == 0
+         || g_strcmp0 (resource_type, "credential") == 0
+         || g_strcmp0 (resource_type, "report_format") == 0
+         || g_strcmp0 (resource_type, "task") == 0;
+}
+
 /**
  * @brief Delete a resource from the trashcan
  *
@@ -1553,6 +1562,19 @@ delete_from_trash_gmp (gvm_connection_t *connection,
   resource_type = params_value (params, "resource_type");
 
   CHECK_VARIABLE_INVALID (resource_type, "Delete from Trashcan");
+
+  if (!trashcan_compatibility_resource_type_is_supported (resource_type))
+    {
+      gsad_command_response_data_set_status_code (response_data,
+                                                  MHD_HTTP_BAD_REQUEST);
+      return gsad_http_create_gsad_message (
+        credentials,
+        "An internal error occurred while permanently deleting a resource. "
+        "The resource was not deleted. "
+        "Diagnostics: Unsupported resource_type for the trash delete "
+        "compatibility bridge.",
+        response_data);
+    }
 
   return delete_resource (connection, resource_type, credentials, params, TRUE,
                           response_data);
@@ -4096,10 +4118,7 @@ restore_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   CHECK_VARIABLE_INVALID (target_id, "Restore")
   CHECK_VARIABLE_INVALID (resource_type, "Restore")
 
-  if (g_strcmp0 (resource_type, "alert") != 0
-      && g_strcmp0 (resource_type, "credential") != 0
-      && g_strcmp0 (resource_type, "report_format") != 0
-      && g_strcmp0 (resource_type, "task") != 0)
+  if (!trashcan_compatibility_resource_type_is_supported (resource_type))
     {
       gsad_command_response_data_set_status_code (response_data,
                                                   MHD_HTTP_BAD_REQUEST);

@@ -34,7 +34,7 @@ import {
 } from 'gmp/native-api/trashcan';
 import {YES_VALUE} from 'gmp/parser';
 import {map} from 'gmp/utils/array';
-import {apiType, type EntityType} from 'gmp/utils/entity-type';
+import {type EntityType} from 'gmp/utils/entity-type';
 import {isDefined} from 'gmp/utils/identity';
 
 export interface TrashCanGetData {
@@ -58,7 +58,7 @@ export interface TrashCanEmptyParams {
   expectedSnapshotDigest: string;
 }
 
-const LEGACY_RESTORE_RESOURCE_TYPES = {
+const LEGACY_TRASHCAN_RESOURCE_TYPES = {
   alert: 'alert',
   credential: 'credential',
   reportformat: 'report_format',
@@ -222,7 +222,7 @@ class TrashCanCommand extends HttpCommand {
       return;
     }
 
-    const resourceType = LEGACY_RESTORE_RESOURCE_TYPES[entityType];
+    const resourceType = LEGACY_TRASHCAN_RESOURCE_TYPES[entityType];
     if (resourceType === undefined) {
       throw new Error(`Trashcan restore is unavailable for ${entityType}`);
     }
@@ -235,20 +235,27 @@ class TrashCanCommand extends HttpCommand {
   }
 
   async delete({id, entityType}: {id: string; entityType: EntityType}) {
-    if (
-      supportsNativeTrashcanDelete(entityType) &&
-      canUseNativeApi(this.http)
-    ) {
+    if (supportsNativeTrashcanDelete(entityType)) {
+      if (!canUseNativeApi(this.http)) {
+        throw new Error(
+          `Native Trashcan permanent delete is unavailable for ${entityType}`,
+        );
+      }
       await deleteNativeTrashcanEntity(this.http, {id, entityType});
       return;
     }
-    const cmdApiType = apiType(entityType);
-    const cmd = 'delete_from_trash';
-    const typeId = cmdApiType + '_id';
+
+    const resourceType = LEGACY_TRASHCAN_RESOURCE_TYPES[entityType];
+    if (resourceType === undefined) {
+      throw new Error(
+        `Trashcan permanent delete is unavailable for ${entityType}`,
+      );
+    }
+
     await this.httpPostWithTransform({
-      cmd,
-      [typeId]: id,
-      resource_type: cmdApiType,
+      cmd: 'delete_from_trash',
+      [`${resourceType}_id`]: id,
+      resource_type: resourceType,
     });
   }
 

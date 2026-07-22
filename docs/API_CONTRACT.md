@@ -422,14 +422,17 @@ automation metadata, so these endpoints stay inside the authenticated operator
 boundary. Create, modify, clone, export, and delete actions remain inherited
 until native write semantics are designed.
 
-Native Trashcan summary reads are counts-only at
-`/api/v1/trashcan/summary`. The endpoint returns all supported Trashcan
-resource types with `resource_type`, `title`, and `count`, plus an aggregate
-`total`. It intentionally excludes row-level Trashcan payloads, identifiers,
-names, comments, credential data, target hosts, scanner fields, scan-config
-preferences, alert method data, `results_trash`, and child trash tables.
-Row-level Trashcan resource reads and restore/delete/empty mutations remain
-inherited because credential/target/scanner trash data is secret-adjacent.
+Native Trashcan summary, redacted row inventory, confirmation-bound emptying,
+and eight typed resource lifecycles are available through `/api/v1/trashcan`
+routes. The native inventory intentionally excludes credential secrets, target
+hosts, scanner connection fields, scan-config preferences, alert method data,
+`results_trash`, and child trash tables. Filter, override, port list, scan
+config, scanner, schedule, tag, and target restore and permanent delete are
+native-only and fail closed if the native API is unavailable. Alert,
+credential, report-format, and task restore and permanent delete retain a
+declared four-family browser/GMP compatibility bridge while those native
+owners remain incomplete. Separately classified raw GMP behavior remains
+outside this browser contract.
 
 Native report-format rows include report-format identity, summary/description,
 extension/content type, trust state, active/predefined/configurable/deprecated

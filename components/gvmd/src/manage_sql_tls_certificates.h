@@ -1,4 +1,5 @@
 /* Copyright (C) 2019-2022 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -23,9 +24,6 @@ tls_certificate_select_columns ();
 
 gchar *
 tls_certificate_extra_where (const char *);
-
-int
-delete_tls_certificate (const char *, int);
 
 void
 delete_tls_certificates_user (user_t);

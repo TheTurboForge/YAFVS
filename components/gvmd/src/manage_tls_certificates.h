@@ -1,4 +1,5 @@
 /* Copyright (C) 2019-2022 Greenbone AG
+ * YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -66,17 +67,6 @@ tls_certificate_in_use (tls_certificate_t);
 
 int
 tls_certificate_writable (tls_certificate_t);
-
-int
-create_tls_certificate (const char *, const char *, const char *, int,
-                        tls_certificate_t *);
-
-int
-copy_tls_certificate (const char*, const char*, const char*,
-                      tls_certificate_t*);
-
-int
-modify_tls_certificate (const gchar *, const gchar *, const gchar *, int);
 
 char*
 tls_certificate_uuid (tls_certificate_t);

@@ -28,7 +28,6 @@ gsad_init_validator ()
                      "|(create_host)"
                      "|(create_target)"
                      "|(create_task)"
-                     "|(create_tls_certificate)"
                      "|(create_user)"
                      "|(delete_asset)"
                      "|(delete_config)"
@@ -38,7 +37,6 @@ gsad_init_validator ()
                      "|(delete_schedule)"
                      "|(delete_target)"
                      "|(delete_task)"
-                     "|(delete_tls_certificate)"
                      "|(delete_user)"
                      "|(download_credential)"
                      "|(download_ssl_cert)"
@@ -108,7 +106,6 @@ gsad_init_validator ()
                      "|(save_my_settings)"
                      "|(save_target)"
                      "|(save_task)"
-                     "|(save_tls_certificate)"
                      "|(save_user)"
                      "|(start_task)"
                      "|(stop_task)"
@@ -405,7 +402,6 @@ gsad_init_validator ()
   gvm_validator_alias (validator, "tag_id", "id");
   gvm_validator_alias (validator, "target_id", "id");
   gvm_validator_alias (validator, "task_id", "id");
-  gvm_validator_alias (validator, "tls_certificate_id", "id");
   gvm_validator_alias (validator, "user_id", "id");
   gvm_validator_alias (validator, "report_format_ids:value", "id");
   gvm_validator_alias (validator, "report_result_id", "id");

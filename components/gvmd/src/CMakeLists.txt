@@ -223,12 +223,10 @@ set(
   gmp.c
   gmp_base.c
   gmp_configs.c
-  gmp_delete.c
   gmp_get.c
   gmp_integration_configs.c
   gmp_logout.c
   gmp_report_formats.c
-  gmp_tls_certificates.c
 )
 
 set(ALL_SQL_SRC sql.c sql_pg.c)

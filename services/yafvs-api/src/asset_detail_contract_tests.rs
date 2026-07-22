@@ -52,10 +52,13 @@ const GSAD_GMP: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_GMP_H: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
 const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GVMD_GMP: &str = include_str!("../../../components/gvmd/src/gmp.c");
-const GVMD_GMP_TLS_CERTIFICATES: &str =
-    include_str!("../../../components/gvmd/src/gmp_tls_certificates.c");
-const GVMD_GMP_TLS_CERTIFICATES_H: &str =
-    include_str!("../../../components/gvmd/src/gmp_tls_certificates.h");
+const GVMD_CMAKE: &str = include_str!("../../../components/gvmd/src/CMakeLists.txt");
+const GVMD_GMP_SCHEMA: &str =
+    include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
+const GVMD_TLS_SQL: &str =
+    include_str!("../../../components/gvmd/src/manage_sql_tls_certificates.c");
+const READ_API_ROUTES: &str = include_str!("read_api_routes.rs");
+const DIRECT_API_CONTRACT: &str = include_str!("direct_api_contract.rs");
 const GVMD_COMMAND_INVENTORY: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
 
 #[test]
@@ -118,8 +121,14 @@ fn tls_certificate_reads_and_browser_deletes_are_native_only() {
     for retired in [
         "get_tls_certificate_gmp",
         "get_tls_certificates_gmp",
+        "create_tls_certificate_gmp",
+        "save_tls_certificate_gmp",
+        "delete_tls_certificate_gmp",
         "ELSE (get_tls_certificate)",
         "ELSE (get_tls_certificates)",
+        "ELSE (create_tls_certificate)",
+        "ELSE (delete_tls_certificate)",
+        "ELSE (save_tls_certificate)",
     ] {
         assert!(!GSAD_GMP.contains(retired), "gsad still exposes {retired}");
         assert!(
@@ -127,42 +136,28 @@ fn tls_certificate_reads_and_browser_deletes_are_native_only() {
             "gsad still declares {retired}"
         );
     }
-    for retired in ["|(get_tls_certificate)", "|(get_tls_certificates)"] {
+    for retired in [
+        "|(get_tls_certificate)",
+        "|(get_tls_certificates)",
+        "|(create_tls_certificate)",
+        "|(delete_tls_certificate)",
+        "|(save_tls_certificate)",
+        "tls_certificate_id",
+    ] {
         assert!(
             !GSAD_VALIDATOR.contains(retired),
             "gsad validator still accepts {retired}"
         );
     }
-    for retired in [
-        "CLIENT_GET_TLS_CERTIFICATES",
-        "ELSE_GET_START (tls_certificates, TLS_CERTIFICATES)",
-        "CASE_GET_END (TLS_CERTIFICATES, tls_certificates)",
-    ] {
-        assert!(
-            !GVMD_GMP.contains(retired),
-            "GMP parser still exposes {retired}"
-        );
-    }
-    for retired in [
-        "get_tls_certificates_t",
-        "get_tls_certificates_data",
-        "get_tls_certificates_start",
-        "get_tls_certificates_run",
-    ] {
-        assert!(
-            !GVMD_GMP_TLS_CERTIFICATES.contains(retired),
-            "dedicated GMP TLS module still exposes {retired}"
-        );
-        assert!(
-            !GVMD_GMP_TLS_CERTIFICATES_H.contains(retired),
-            "dedicated GMP TLS header still exposes {retired}"
-        );
-    }
-    assert!(!GVMD_COMMAND_INVENTORY.contains("{\"GET_TLS_CERTIFICATES\""));
-    assert!(!GSA_TLS_CERTIFICATE_COMMAND.contains("super.get"));
-    assert!(!GSA_TLS_CERTIFICATE_COMMAND.contains("getElementFromRoot"));
-    assert!(!GSA_TLS_CERTIFICATE_COMMAND.contains("getEntitiesResponse"));
-
+    let bulk_delete = GSAD_GMP
+        .split_once("bulk_delete_gmp (")
+        .expect("bulk delete handler")
+        .1
+        .split_once("/* Extra attributes */")
+        .expect("bulk delete must precede XML synthesis")
+        .0;
+    assert!(bulk_delete.contains("g_ascii_strcasecmp (type, \"tls_certificate\") == 0"));
+    assert!(bulk_delete.contains("must use the native API"));
     let bulk_export = GSAD_GMP
         .split_once("bulk_export_gmp (")
         .expect("bulk export handler")
@@ -172,37 +167,99 @@ fn tls_certificate_reads_and_browser_deletes_are_native_only() {
         .0;
     assert!(bulk_export.contains("g_ascii_strcasecmp (type, \"tls_certificate\") == 0"));
 
-    for retained in [
-        "create_tls_certificate_gmp",
-        "save_tls_certificate_gmp",
-        "delete_tls_certificate_gmp",
-    ] {
-        assert!(GSAD_GMP.contains(retained), "gsad must retain {retained}");
-    }
-    for retained in [
+    for retired in [
+        "CLIENT_GET_TLS_CERTIFICATES",
+        "ELSE_GET_START (tls_certificates, TLS_CERTIFICATES)",
+        "CASE_GET_END (TLS_CERTIFICATES, tls_certificates)",
+        "CLIENT_CREATE_TLS_CERTIFICATE",
+        "CLIENT_DELETE_TLS_CERTIFICATE",
+        "CLIENT_MODIFY_TLS_CERTIFICATE",
         "create_tls_certificate_start",
         "modify_tls_certificate_start",
+        "delete_start (\"tls_certificate\"",
     ] {
         assert!(
-            GVMD_GMP_TLS_CERTIFICATES.contains(retained),
-            "GMP TLS mutation module must retain {retained}"
+            !GVMD_GMP.contains(retired),
+            "GMP parser still exposes {retired}"
         );
     }
-    for retained in [
+    for retired in ["gmp_delete.c", "gmp_tls_certificates.c"] {
+        assert!(
+            !GVMD_CMAKE.contains(retired),
+            "GVMD build still includes {retired}"
+        );
+    }
+    for retired in [
+        "{\"GET_TLS_CERTIFICATES\"",
         "{\"CREATE_TLS_CERTIFICATE\"",
         "{\"DELETE_TLS_CERTIFICATE\"",
         "{\"MODIFY_TLS_CERTIFICATE\"",
     ] {
         assert!(
-            GVMD_COMMAND_INVENTORY.contains(retained),
-            "GMP help must retain separately classified mutation {retained}"
+            !GVMD_COMMAND_INVENTORY.contains(retired),
+            "GMP help still exposes {retired}"
         );
     }
+    for retired in [
+        "<name>get_tls_certificates</name>",
+        "<name>create_tls_certificate</name>",
+        "<name>delete_tls_certificate</name>",
+        "<name>modify_tls_certificate</name>",
+    ] {
+        assert!(
+            !GVMD_GMP_SCHEMA.contains(retired),
+            "GMP schema still exposes {retired}"
+        );
+    }
+    for retired in [
+        "\ncreate_tls_certificate (",
+        "\ncopy_tls_certificate (",
+        "\nmodify_tls_certificate (",
+        "\ndelete_tls_certificate (",
+    ] {
+        assert!(
+            !GVMD_TLS_SQL.contains(retired),
+            "raw TLS SQL wrapper remains: {retired}"
+        );
+    }
+
+    assert!(!GSA_TLS_CERTIFICATE_COMMAND.contains("super.get"));
+    assert!(!GSA_TLS_CERTIFICATE_COMMAND.contains("getElementFromRoot"));
+    assert!(!GSA_TLS_CERTIFICATE_COMMAND.contains("getEntitiesResponse"));
     assert!(!GSA_TLS_CERTIFICATE_COMMAND.contains("super.delete"));
     assert!(GSA_TLS_CERTIFICATE_COMMAND.contains("deleteNativeTlsCertificate"));
     assert!(GSA_TLS_CERTIFICATE_COMMAND.contains("async deleteByIds(ids)"));
+    assert!(GSA_TLS_CERTIFICATE_COMMAND.contains("fetchNativeTlsCertificate"));
     assert!(GSA_TLS_CERTIFICATE_COMMAND.contains("certificate.isWritable()"));
-    assert!(GSA_CAPABILITIES.contains("'get_tls_certificates'"));
+    for retired in [
+        "'create_tls_certificate'",
+        "'delete_tls_certificate'",
+        "'get_tls_certificates'",
+        "'modify_tls_certificate'",
+    ] {
+        assert!(
+            !GSA_CAPABILITIES.contains(retired),
+            "legacy GSA capability remains: {retired}"
+        );
+    }
+    for retained in [
+        "make_tls_certificate_from_base64",
+        "get_or_make_tls_certificate_source",
+        "add_tls_certificates_from_report_host",
+        "delete_tls_certificates_user",
+        "inherit_tls_certificates",
+        "tls_certificate_in_use",
+        "tls_certificate_writable",
+    ] {
+        assert!(
+            GVMD_TLS_SQL.contains(retained),
+            "retained TLS behavior missing: {retained}"
+        );
+    }
+    assert!(READ_API_ROUTES.contains("/api/v1/tls-certificates"));
+    assert!(DIRECT_API_CONTRACT.contains(
+        "(&Method::DELETE, [\"\", \"api\", \"v1\", \"tls-certificates\", certificate_id])"
+    ));
 }
 
 #[test]

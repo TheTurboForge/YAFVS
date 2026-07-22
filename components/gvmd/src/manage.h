@@ -397,9 +397,6 @@ resource_id_exists (const char *, const char *);
 int
 trash_id_exists (const char *, const char *);
 
-int
-delete_resource (const char *, const char *, int);
-
 
 
 /* Events and Alerts. */

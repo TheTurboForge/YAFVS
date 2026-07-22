@@ -6825,6 +6825,17 @@ bulk_delete_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
         response_data);
     }
 
+  if (g_ascii_strcasecmp (type, "tls_certificate") == 0)
+    {
+      gsad_command_response_data_set_status_code (response_data,
+                                                  MHD_HTTP_BAD_REQUEST);
+      return gsad_http_create_gsad_message (
+        credentials,
+        "TLS certificate deletion must use the native API; raw GMP/XML bulk "
+        "deletion is not supported.",
+        response_data);
+    }
+
   if (g_ascii_strcasecmp (type, "tag") == 0)
     {
       gsad_command_response_data_set_status_code (response_data,
@@ -7453,192 +7464,6 @@ save_asset_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   return html;
 }
 
-/**
- * @brief Create a TLS certificate.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-create_tls_certificate_gmp (gvm_connection_t *connection,
-                            gsad_credentials_t *credentials, params_t *params,
-                            gsad_command_response_data_t *response_data)
-{
-  entity_t entity = NULL;
-  const gchar *name, *comment, *trust, *certificate_bin;
-  size_t certificate_size;
-  gchar *certificate_b64;
-  gchar *ret;
-
-  name = params_value (params, "name");
-  comment = params_value (params, "comment");
-  trust = params_value (params, "trust");
-  certificate_bin = params_value (params, "certificate_bin");
-  certificate_size = params_value_size (params, "certificate_bin");
-
-  certificate_b64 =
-    (certificate_size > 0)
-      ? g_base64_encode ((guchar *) certificate_bin, certificate_size)
-      : g_strdup ("");
-
-  CHECK_VARIABLE_INVALID (name, "Create TLS Certificate");
-  CHECK_VARIABLE_INVALID (comment, "Create TLS Certificate");
-  CHECK_VARIABLE_INVALID (trust, "Create TLS Certificate");
-
-  switch (gmpf (connection, credentials, NULL, &entity, response_data,
-                "<create_tls_certificate>"
-                "<name>%s</name>"
-                "<comment>%s</comment>"
-                "<trust>%s</trust>"
-                "<certificate>%s</certificate>"
-                "</create_tls_certificate>",
-                name, comment, trust, certificate_b64))
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a TLS certificate. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a TLS certificate. "
-        "It is unclear whether the TLS certificate has been created or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while creating a TLS certificate. "
-        "It is unclear whether the TLS certificate has been created or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  ret = response_from_entity (connection, credentials, params, entity,
-                              "Create TLS Certificate", response_data);
-
-  free_entity (entity);
-  g_free (certificate_b64);
-  return ret;
-}
-
-/**
- * @brief Modify a TLS certificate.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-save_tls_certificate_gmp (gvm_connection_t *connection,
-                          gsad_credentials_t *credentials, params_t *params,
-                          gsad_command_response_data_t *response_data)
-{
-  entity_t entity = NULL;
-  const gchar *tls_certificate_id, *name, *comment, *trust, *certificate_bin;
-  size_t certificate_size;
-  gchar *certificate_b64;
-  gchar *ret;
-
-  tls_certificate_id = params_value (params, "tls_certificate_id");
-  name = params_value (params, "name");
-  comment = params_value (params, "comment");
-  trust = params_value (params, "trust");
-  certificate_bin = params_value (params, "certificate_bin");
-  certificate_size = params_value_size (params, "certificate_bin");
-
-  certificate_b64 =
-    (certificate_size > 0)
-      ? g_base64_encode ((guchar *) certificate_bin, certificate_size)
-      : g_strdup ("");
-
-  CHECK_VARIABLE_INVALID (tls_certificate_id, "Save TLS Certificate");
-  CHECK_VARIABLE_INVALID (name, "Save TLS Certificate");
-  CHECK_VARIABLE_INVALID (comment, "Save TLS Certificate");
-  CHECK_VARIABLE_INVALID (trust, "Save TLS Certificate");
-
-  switch (gmpf (connection, credentials, NULL, &entity, response_data,
-                "<modify_tls_certificate tls_certificate_id=\"%s\">"
-                "<name>%s</name>"
-                "<comment>%s</comment>"
-                "<trust>%s</trust>"
-                "<certificate>%s</certificate>"
-                "</modify_tls_certificate>",
-                tls_certificate_id, name, comment, trust, certificate_b64))
-    {
-    case 0:
-      break;
-    case 1:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a TLS certificate. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    case 2:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a TLS certificate. "
-        "It is unclear whether the TLS certificate has been saved or not. "
-        "Diagnostics: Failure to receive response from manager daemon.",
-        response_data);
-    default:
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while saving a TLS certificate. "
-        "It is unclear whether the TLS certificate has been saved or not. "
-        "Diagnostics: Internal Error.",
-        response_data);
-    }
-
-  ret = response_from_entity (connection, credentials, params, entity,
-                              "Save TLS Certificate", response_data);
-
-  free_entity (entity);
-  g_free (certificate_b64);
-  return ret;
-}
-
-/**
- * @brief Delete a TLS certificate.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-delete_tls_certificate_gmp (gvm_connection_t *connection,
-                            gsad_credentials_t *credentials, params_t *params,
-                            gsad_command_response_data_t *response_data)
-{
-  return move_resource_to_trash (connection, "tls_certificate", credentials,
-                                 params, response_data);
-}
 
 /**
  * @brief Change user password
@@ -8480,7 +8305,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (create_host)
   ELSE (create_task)
   ELSE (create_target)
-  ELSE (create_tls_certificate)
   ELSE (create_user)
   ELSE (delete_asset)
   ELSE (delete_alert)
@@ -8490,7 +8314,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_schedule)
   ELSE (delete_target)
   ELSE (delete_task)
-  ELSE (delete_tls_certificate)
   ELSE (delete_user)
   ELSE (move_task)
   ELSE (renew_session)
@@ -8501,7 +8324,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (save_credential)
   ELSE (save_target)
   ELSE (save_task)
-  ELSE (save_tls_certificate)
   ELSE (save_user)
   ELSE (start_task)
   ELSE (stop_task)

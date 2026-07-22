@@ -73,12 +73,10 @@
 
 #include "gmp.h"
 #include "gmp_base.h"
-#include "gmp_delete.h"
 #include "gmp_get.h"
 #include "gmp_configs.h"
 #include "gmp_integration_configs.h"
 #include "gmp_logout.h"
-#include "gmp_tls_certificates.h"
 #include "manage.h"
 #include "manage_acl.h"
 #include "manage_alerts.h"
@@ -2243,7 +2241,6 @@ typedef enum
   CLIENT_CREATE_TASK_SCHEDULE_PERIODS,
   CLIENT_CREATE_TASK_TARGET,
   CLIENT_CREATE_TASK_USAGE_TYPE,
-  CLIENT_CREATE_TLS_CERTIFICATE,
   CLIENT_CREATE_USER,
   CLIENT_CREATE_USER_COMMENT,
   CLIENT_CREATE_USER_COPY,
@@ -2259,7 +2256,6 @@ typedef enum
   CLIENT_DELETE_SCHEDULE,
   CLIENT_DELETE_TARGET,
   CLIENT_DELETE_TASK,
-  CLIENT_DELETE_TLS_CERTIFICATE,
   CLIENT_DELETE_USER,
   CLIENT_GET_AGGREGATES,
   CLIENT_GET_AGGREGATES_DATA_COLUMN,
@@ -2352,7 +2348,6 @@ typedef enum
   CLIENT_MODIFY_TASK_SCHEDULE_PERIODS,
   CLIENT_MODIFY_TASK_TARGET,
   CLIENT_MODIFY_TASK_SCANNER,
-  CLIENT_MODIFY_TLS_CERTIFICATE,
   CLIENT_MODIFY_USER,
   CLIENT_MODIFY_USER_COMMENT,
   CLIENT_MODIFY_USER_NAME,
@@ -2564,12 +2559,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             create_task_data->alerts = make_array ();
             set_client_state (CLIENT_CREATE_TASK);
           }
-        else if (strcasecmp ("CREATE_TLS_CERTIFICATE", element_name) == 0)
-          {
-            create_tls_certificate_start (gmp_parser, attribute_names,
-                                          attribute_values);
-            set_client_state (CLIENT_CREATE_TLS_CERTIFICATE);
-          }
         else if (strcasecmp ("CREATE_USER", element_name) == 0)
           set_client_state (CLIENT_CREATE_USER);
         else if (strcasecmp ("DELETE_ALERT", element_name) == 0)
@@ -2660,12 +2649,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             else
               delete_task_data->ultimate = 0;
             set_client_state (CLIENT_DELETE_TASK);
-          }
-        else if (strcasecmp ("DELETE_TLS_CERTIFICATE", element_name) == 0)
-          {
-            delete_start ("tls_certificate", "TLS Certificate",
-                          attribute_names, attribute_values);
-            set_client_state (CLIENT_DELETE_TLS_CERTIFICATE);
           }
         else if (strcasecmp ("DELETE_USER", element_name) == 0)
           {
@@ -3234,12 +3217,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               &modify_task_data->task_id);
             modify_task_data->alerts = make_array ();
             set_client_state (CLIENT_MODIFY_TASK);
-          }
-        else if (strcasecmp ("MODIFY_TLS_CERTIFICATE", element_name) == 0)
-          {
-            modify_tls_certificate_start (gmp_parser, attribute_names,
-                                          attribute_values);
-            set_client_state (CLIENT_MODIFY_TLS_CERTIFICATE);
           }
         else if (strcasecmp ("MODIFY_USER", element_name) == 0)
           {
@@ -12291,11 +12268,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         set_client_state (CLIENT_AUTHENTIC);
         break;
 
-      case CLIENT_DELETE_TLS_CERTIFICATE:
-        delete_run (gmp_parser, error);
-        set_client_state (CLIENT_AUTHENTIC);
-        break;
-
       case CLIENT_DELETE_USER:
         if (delete_user_data->user_id || delete_user_data->name)
           switch (delete_user (delete_user_data->user_id,
@@ -13742,12 +13714,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         break;
       CLOSE (CLIENT_CREATE_TASK_PREFERENCES_PREFERENCE, VALUE);
 
-      case CLIENT_CREATE_TLS_CERTIFICATE:
-        if (create_tls_certificate_element_end (gmp_parser, error,
-                                                element_name))
-          set_client_state (CLIENT_AUTHENTIC);
-        break;
-
       case CLIENT_CREATE_USER:
         {
           gchar *errdesc;
@@ -14880,13 +14846,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         break;
       CLOSE (CLIENT_MODIFY_TASK_PREFERENCES_PREFERENCE, VALUE);
 
-      case CLIENT_MODIFY_TLS_CERTIFICATE:
-        if (modify_tls_certificate_element_end (gmp_parser,
-                                                error,
-                                                element_name))
-          set_client_state (CLIENT_AUTHENTIC);
-        break;
-
       case CLIENT_MODIFY_USER:
         {
           if ((modify_user_data->name == NULL
@@ -15641,10 +15600,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
       APPEND (CLIENT_CREATE_TASK_USAGE_TYPE,
               &create_task_data->usage_type);
 
-      case CLIENT_CREATE_TLS_CERTIFICATE:
-        create_tls_certificate_element_text (text, text_len);
-        break;
-
 
       APPEND (CLIENT_CREATE_USER_COMMENT,
               &create_user_data->comment);
@@ -15739,10 +15694,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
       APPEND (CLIENT_MODIFY_TARGET_SSH_LSC_CREDENTIAL_PORT,
               &modify_target_data->ssh_lsc_port);
 
-
-      case CLIENT_MODIFY_TLS_CERTIFICATE:
-        modify_tls_certificate_element_text (text, text_len);
-        break;
 
       default:
         /* Just pass over the text. */

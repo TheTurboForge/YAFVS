@@ -412,7 +412,6 @@ gsad_init_validator ()
 
   /* Beware, the rule must be defined before the alias. */
 
-  gvm_validator_alias (validator, "add_tag", "boolean");
   gvm_validator_alias (validator, "authorized", "boolean");
   gvm_validator_alias (validator, "update_to_latest", "boolean");
   gvm_validator_alias (validator, "accept_invalid_certs", "boolean");

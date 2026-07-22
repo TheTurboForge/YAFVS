@@ -26,6 +26,16 @@ fn inherited_function(source: &str, name: &str) -> String {
 }
 
 #[test]
+fn legacy_gsad_task_create_cannot_issue_a_nested_tag_mutation() {
+    let gsad_create = inherited_function(GSAD_GMP_C, "create_task_gmp");
+    assert!(!gsad_create.contains("add_tag"));
+    assert!(!gsad_create.contains("tag_id"));
+    assert!(!gsad_create.contains("<modify_tag"));
+    assert!(!gsad_create.contains("Create Task and Tag"));
+    assert!(!GSAD_VALIDATOR_C.contains("gvm_validator_alias (validator, \"add_tag\""));
+}
+
+#[test]
 fn inherited_osp_start_checks_target_permission_and_creates_report_before_scanner_work() {
     let run_osp_task = inherited_function(MANAGE_C, "run_osp_task");
     for required in [

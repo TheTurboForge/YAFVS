@@ -1726,11 +1726,10 @@ create_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   const char *name, *comment, *config_id, *target_id, *scanner_type;
   const char *scanner_id, *schedule_id, *schedule_periods;
   const char *max_checks, *max_hosts;
-  const char *add_tag, *tag_id, *auto_delete, *auto_delete_data;
+  const char *auto_delete, *auto_delete_data;
   const char *apply_overrides, *min_qod, *usage_type;
   params_t *alerts;
 
-  add_tag = params_value (params, "add_tag");
   apply_overrides = params_value (params, "apply_overrides");
   auto_delete = "keep";
   auto_delete_data = params_value (params, "auto_delete_data");
@@ -1746,7 +1745,6 @@ create_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   scanner_type = params_value (params, "scanner_type");
   schedule_id = params_value (params, "schedule_id");
   schedule_periods = params_value (params, "schedule_periods");
-  tag_id = params_value (params, "tag_id");
   target_id = params_value (params, "target_id");
   usage_type = params_value (params, "usage_type");
   CHECK_VARIABLE_INVALID (scanner_type, "Create Task");
@@ -1790,11 +1788,6 @@ create_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   CHECK_VARIABLE_INVALID (max_checks, "Create Task");
   CHECK_VARIABLE_INVALID (auto_delete_data, "Create Task");
   CHECK_VARIABLE_INVALID (max_hosts, "Create Task");
-
-  if (add_tag && strcmp (add_tag, "1") == 0)
-    {
-      CHECK_VARIABLE_INVALID (tag_id, "Create Task");
-    }
 
   command = g_string_new ("<create_task>");
 
@@ -1906,74 +1899,10 @@ create_task_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
 
   if (gmp_success (entity))
     {
-      if (add_tag && strcmp (add_tag, "1") == 0)
-        {
-          const char *new_task_id = entity_attribute (entity, "id");
-          gchar *tag_command;
-          entity_t tag_entity;
-
-          tag_command = g_markup_printf_escaped ("<modify_tag tag_id=\"%s\">"
-                                                 "<resources action=\"add\">"
-                                                 "<resource id=\"%s\"/>"
-                                                 "</resources>"
-                                                 "</modify_tag>",
-                                                 tag_id, new_task_id);
-
-          ret = gmp (connection, credentials, NULL, &tag_entity, response_data,
-                     tag_command);
-
-          g_free (tag_command);
-
-          switch (ret)
-            {
-            case 0:
-              break;
-            case 1:
-              free_entity (entity);
-              gsad_command_response_data_set_status_code (
-                response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-              return gsad_http_create_gsad_message (
-                credentials,
-                "An internal error occurred while creating a new tag. "
-                "No new tag was created. "
-                "Diagnostics: Failure to send command to manager daemon.",
-                response_data);
-            case 2:
-              free_entity (entity);
-              gsad_command_response_data_set_status_code (
-                response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-              return gsad_http_create_gsad_message (
-                credentials,
-                "An internal error occurred while creating a new tag. "
-                "It is unclear whether the tag has been created or not. "
-                "Diagnostics: Failure to receive response from manager daemon.",
-                response_data);
-            default:
-              free_entity (entity);
-              gsad_command_response_data_set_status_code (
-                response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-              return gsad_http_create_gsad_message (
-                credentials,
-                "An internal error occurred while creating a new task. "
-                "It is unclear whether the tag has been created or not. "
-                "Diagnostics: Internal Error.",
-                response_data);
-            }
-
-          if (entity_attribute (entity, "id"))
-            params_add (params, "task_id", entity_attribute (entity, "id"));
-          html =
-            response_from_entity (connection, credentials, params, tag_entity,
-                                  "Create Task and Tag", response_data);
-          free_entity (tag_entity);
-        }
-      else
-        {
-          if (entity_attribute (entity, "id"))
-            params_add (params, "task_id", entity_attribute (entity, "id"));
-          html = response_from_entity (connection, credentials, params, entity,
-                                       "Create Task", response_data);
-        }
+      if (entity_attribute (entity, "id"))
+        params_add (params, "task_id", entity_attribute (entity, "id"));
+      html = response_from_entity (connection, credentials, params, entity,
+                                   "Create Task", response_data);
     }
   else
     {

@@ -15,9 +15,58 @@ pub(crate) struct CredentialWriteRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CredentialTrashState {
+    pub(crate) internal_id: i32,
+    pub(crate) uuid: String,
+    pub(crate) owner_id: Option<i32>,
+    pub(crate) name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CredentialWriteRecordWithInternalId {
+    pub(crate) internal_id: i32,
+    pub(crate) uuid: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CredentialWriteState {
     pub(crate) internal_id: i32,
     pub(crate) owner_id: Option<i32>,
+}
+
+pub(crate) async fn load_credential_trash_state(
+    tx: &Transaction<'_>,
+    credential_id: &str,
+) -> Result<CredentialTrashState, ApiError> {
+    let credential_id = parse_uuid(credential_id)?.to_string();
+    tx.query_opt(credential_trash_state_sql(), &[&credential_id])
+        .await
+        .map_err(|error| map_credential_write_db_error(error, "load credential trash state"))?
+        .map(|row| CredentialTrashState {
+            internal_id: row.get(0),
+            uuid: row.get(1),
+            owner_id: row.get(2),
+            name: row.get(3),
+        })
+        .ok_or(ApiError::NotFound)
+}
+
+pub(crate) async fn ensure_credential_uuid_not_live(
+    tx: &Transaction<'_>,
+    credential_uuid: &str,
+) -> Result<(), ApiError> {
+    let count: i64 = tx
+        .query_one(credential_live_uuid_count_sql(), &[&credential_uuid])
+        .await
+        .map_err(|error| map_credential_write_db_error(error, "check credential UUID collision"))?
+        .get(0);
+    if count == 0 {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "credential UUID already exists in live state".to_string(),
+        ))
+    }
 }
 
 pub(crate) fn require_credential_write_operator(
@@ -28,6 +77,34 @@ pub(crate) fn require_credential_write_operator(
         return Err(ApiError::Forbidden);
     };
     Ok(operator)
+}
+
+pub(crate) async fn query_credential_write_record_with_internal_id(
+    tx: &Transaction<'_>,
+    sql: &str,
+    params: &[&(dyn ToSql + Sync)],
+    action: &'static str,
+) -> Result<CredentialWriteRecordWithInternalId, ApiError> {
+    tx.query_opt(sql, params)
+        .await
+        .map_err(|error| map_credential_write_db_error(error, action))?
+        .map(|row| CredentialWriteRecordWithInternalId {
+            internal_id: row.get(0),
+            uuid: row.get(1),
+        })
+        .ok_or(ApiError::NotFound)
+}
+
+pub(crate) async fn execute_credential_write_sql(
+    tx: &Transaction<'_>,
+    sql: &str,
+    params: &[&(dyn ToSql + Sync)],
+    action: &'static str,
+) -> Result<(), ApiError> {
+    tx.execute(sql, params)
+        .await
+        .map_err(|error| map_credential_write_db_error(error, action))?;
+    Ok(())
 }
 
 pub(crate) async fn resolve_credential_write_operator_owner(

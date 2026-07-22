@@ -1534,12 +1534,6 @@ move_resource_to_trash (gvm_connection_t *connection, const char *type,
 }
 
 static gboolean
-trashcan_restore_resource_type_is_supported (const gchar *resource_type)
-{
-  return g_strcmp0 (resource_type, "credential") == 0;
-}
-
-static gboolean
 trashcan_delete_resource_type_is_supported (const gchar *resource_type)
 {
   return g_strcmp0 (resource_type, "credential") == 0
@@ -4096,83 +4090,6 @@ delete_target_gmp (gvm_connection_t *connection,
 {
   return move_resource_to_trash (connection, "target", credentials, params,
                                  response_data);
-}
-
-/**
- * @brief Restore a resource, get all trash, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials    Username and password for authentication.
- * @param[in]  params         Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-restore_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
-             params_t *params, gsad_command_response_data_t *response_data)
-{
-  gchar *ret;
-  entity_t entity;
-  const char *target_id;
-  const char *resource_type;
-
-  target_id = params_value (params, "target_id");
-  resource_type = params_value (params, "resource_type");
-
-  CHECK_VARIABLE_INVALID (target_id, "Restore")
-  CHECK_VARIABLE_INVALID (resource_type, "Restore")
-
-  if (!trashcan_restore_resource_type_is_supported (resource_type))
-    {
-      gsad_command_response_data_set_status_code (response_data,
-                                                  MHD_HTTP_BAD_REQUEST);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while restoring a resource. "
-        "The resource was not restored. "
-        "Diagnostics: Unsupported resource_type for the restore "
-        "compatibility bridge.",
-        response_data);
-    }
-
-  /* The declared type authorizes this compatibility bridge only.  gvmd still
-   * performs its existing generic UUID lookup for the fixed restore XML. */
-
-  if (gvm_connection_sendf (connection,
-                            "<restore"
-                            " id=\"%s\"/>",
-                            target_id)
-      == -1)
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while restoring a resource. "
-        "The resource was not deleted. "
-        "Diagnostics: Failure to send command to manager daemon.",
-        response_data);
-    }
-
-  if (read_entity_and_string_c (connection, &entity, NULL))
-    {
-      gsad_command_response_data_set_status_code (
-        response_data, MHD_HTTP_INTERNAL_SERVER_ERROR);
-      return gsad_http_create_gsad_message (
-        credentials,
-        "An internal error occurred while restoring a resource. "
-        "It is unclear whether the resource has been restored or not. "
-        "Diagnostics: Failure to read response from manager daemon.",
-        response_data);
-    }
-
-  /* Cleanup, and return trash page. */
-
-  ret = response_from_entity (connection, credentials, params, entity,
-                              "Restore", response_data);
-  free_entity (entity);
-  return ret;
 }
 
 
@@ -10256,7 +10173,6 @@ exec_gmp_post (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (delete_user)
   ELSE (move_task)
   ELSE (renew_session)
-  ELSE (restore)
   ELSE (save_asset)
   ELSE (save_setting)
   ELSE (save_config)

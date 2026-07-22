@@ -1020,6 +1020,7 @@ native_api_post_path_is_allowed (const gchar *path)
   const gchar *tasks_path = "/api/v1/tasks";
   const gchar *trashcan_empty_path = "/api/v1/trashcan/empty";
   const gchar *scope_prefix = "/api/v1/scopes/";
+  const gchar *credential_prefix = "/api/v1/credentials/";
   const gchar *filter_prefix = "/api/v1/filters/";
   const gchar *override_prefix = "/api/v1/overrides/";
   const gchar *port_list_prefix = "/api/v1/port-lists/";
@@ -1112,6 +1113,12 @@ native_api_post_path_is_allowed (const gchar *path)
              || is_uuid_segment_with_suffix (id, deliver_report_suffix)
              || is_uuid_segment_with_suffix (id, restore_suffix)
              || is_uuid_segment_with_suffix (id, test_suffix);
+    }
+
+  if (g_str_has_prefix (path, credential_prefix))
+    {
+      const gchar *id = path + strlen (credential_prefix);
+      return is_uuid_segment_with_suffix (id, restore_suffix);
     }
 
   if (g_str_has_prefix (path, scope_prefix))

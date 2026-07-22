@@ -1296,33 +1296,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "yafvs-api"
-version = "0.1.0-alpha.0"
-dependencies = [
- "axum",
- "base64",
- "deadpool-postgres",
- "libc",
- "pdf-writer",
- "quick-xml",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "thiserror",
- "time",
- "tokio",
- "tokio-postgres",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "yafvs-domain",
-]
-
-[[package]]
-name = "yafvs-domain"
-version = "0.1.0-alpha.0"
-
-[[package]]
 name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1636,6 +1609,33 @@ dependencies = [
  "unicode-xid",
  "wasmparser",
 ]
+
+[[package]]
+name = "yafvs-api"
+version = "0.1.0-alpha.0"
+dependencies = [
+ "axum",
+ "base64",
+ "deadpool-postgres",
+ "libc",
+ "pdf-writer",
+ "quick-xml",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror",
+ "time",
+ "tokio",
+ "tokio-postgres",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "yafvs-domain",
+]
+
+[[package]]
+name = "yafvs-domain"
+version = "0.1.0-alpha.0"
 
 [[package]]
 name = "zmij"

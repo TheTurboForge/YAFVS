@@ -15,7 +15,9 @@ use crate::{
     auth::DirectApiOperator,
     credential_payloads::CredentialAssetItem,
     credential_write_db::*,
-    credential_write_transactions::execute_credential_patch_transaction,
+    credential_write_transactions::{
+        execute_credential_patch_transaction, execute_credential_restore_transaction,
+    },
     credential_write_validation::{
         CredentialCreateRequest, CredentialPatchRequest, ValidatedCredentialCreate,
         validate_credential_create_request, validate_credential_patch_request,
@@ -47,6 +49,40 @@ pub(crate) async fn create_credential(
     Ok((
         StatusCode::CREATED,
         Json(load_credential_asset_detail(&client, &credential_id).await?),
+    ))
+}
+
+pub(crate) async fn restore_credential(
+    State(state): State<AppState>,
+    Path(credential_id): Path<String>,
+    operator: Option<Extension<DirectApiOperator>>,
+) -> Result<Json<CredentialAssetItem>, ApiError> {
+    let operator = require_credential_write_operator(operator)?;
+    let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
+    let tx = client.transaction().await.map_err(|error| {
+        map_credential_write_db_error(error, "begin restore credential transaction")
+    })?;
+    resolve_credential_write_operator_owner(&tx, &operator).await?;
+    tx.batch_execute(
+        "LOCK TABLE credentials, credentials_trash, credentials_data, credentials_trash_data, targets_trash_login_data, scanners_trash, tag_resources, tag_resources_trash IN SHARE ROW EXCLUSIVE MODE;",
+    )
+    .await
+    .map_err(|error| map_credential_write_db_error(error, "lock credential restore tables"))?;
+    let trash = load_credential_trash_state(&tx, &credential_id).await?;
+    let owner_id = ensure_credential_is_human_owned(trash.owner_id)?;
+    ensure_credential_uuid_not_live(&tx, &trash.uuid).await?;
+    ensure_unique_credential_name(&tx, &trash.name, -1, owner_id).await?;
+    let record = execute_credential_restore_transaction(&tx, trash.internal_id).await?;
+    tx.commit().await.map_err(|error| {
+        map_credential_write_db_error(error, "commit restore credential transaction")
+    })?;
+
+    Ok(Json(
+        load_credential_asset_detail(&client, &record.uuid)
+            .await
+            .map_err(|error| {
+                mutation_committed_response_unavailable(error, "restore credential response reload")
+            })?,
     ))
 }
 

@@ -13,11 +13,116 @@ use crate::{
     errors::ApiError,
 };
 
+const GVMD_MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
+
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> CredentialPatchRequest {
     CredentialPatchRequest {
         name: name.map(str::to_string),
         comment: comment.map(str::to_string),
     }
+}
+
+#[test]
+fn credential_restore_preserves_secret_rows_without_loading_them_into_rust() {
+    let inherited = GVMD_MANAGE_SQL
+        .split_once("  /* Credential. */")
+        .expect("imported credential restore block")
+        .1
+        .split_once("  /* Override. */")
+        .expect("imported credential restore end")
+        .0;
+    for required in [
+        "INSERT INTO credentials",
+        "INSERT INTO credentials_data",
+        "FROM credentials_trash_data",
+        "UPDATE targets_trash_login_data",
+        "UPDATE scanners_trash",
+        "tags_set_locations (\"credential\"",
+        "DELETE FROM credentials_trash_data",
+        "DELETE FROM credentials_trash",
+    ] {
+        assert!(
+            inherited.contains(required),
+            "imported credential restore authority missing {required}"
+        );
+    }
+
+    let metadata = credential_restore_metadata_sql();
+    assert!(metadata.contains("FROM credentials_trash"));
+    assert!(metadata.contains("allow_insecure"));
+    assert!(metadata.contains("RETURNING id::integer, uuid::text"));
+    let data = credential_restore_data_sql();
+    assert!(data.contains("SELECT $2, type, value"));
+    assert!(data.contains("FROM credentials_trash_data"));
+    assert!(!data.contains("RETURNING"));
+    for sql in [
+        credential_restore_target_references_sql(),
+        credential_restore_scanner_references_sql(),
+        credential_restore_tag_locations_sql(),
+        credential_restore_trash_tag_locations_sql(),
+    ] {
+        assert!(sql.contains("credential = $2") || sql.contains("resource = $2"));
+        assert!(sql.contains("= $1"));
+    }
+}
+
+#[test]
+fn credential_restore_is_operator_guarded_atomic_and_redacted() {
+    let handler_source = include_str!("credential_writes.rs");
+    let handler = handler_source
+        .split_once("pub(crate) async fn restore_credential")
+        .expect("credential restore handler")
+        .1;
+    for required in [
+        "require_credential_write_operator(operator)?",
+        "resolve_credential_write_operator_owner(&tx, &operator).await?",
+        "credentials_trash_data",
+        "targets_trash_login_data",
+        "scanners_trash",
+        "load_credential_trash_state",
+        "ensure_credential_is_human_owned",
+        "ensure_credential_uuid_not_live",
+        "ensure_unique_credential_name",
+        "execute_credential_restore_transaction",
+        "tx.commit()",
+        "load_credential_asset_detail",
+    ] {
+        assert!(
+            handler.contains(required),
+            "credential restore missing {required}"
+        );
+    }
+    assert!(!handler.contains("credentials_data.value"));
+
+    let transaction = include_str!("credential_write_transactions.rs")
+        .split_once("pub(crate) async fn execute_credential_restore_transaction")
+        .expect("credential restore transaction")
+        .1;
+    for ordered in [
+        "credential_restore_metadata_sql",
+        "credential_restore_data_sql",
+        "credential_restore_target_references_sql",
+        "credential_restore_scanner_references_sql",
+        "credential_restore_tag_locations_sql",
+        "credential_restore_trash_tag_locations_sql",
+        "credential_delete_trash_data_sql",
+        "credential_delete_trash_metadata_sql",
+    ] {
+        assert!(
+            transaction.contains(ordered),
+            "restore transaction missing {ordered}"
+        );
+    }
+    assert!(
+        transaction.find("credential_restore_data_sql").unwrap()
+            < transaction
+                .find("credential_delete_trash_data_sql")
+                .unwrap()
+    );
+    assert!(
+        !transaction.contains("permissions"),
+        "retired inherited row-level permission mutations must stay absent"
+    );
 }
 
 fn create_request(credential_type: CredentialCreateType) -> CredentialCreateRequest {

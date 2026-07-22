@@ -58,12 +58,8 @@ export interface TrashCanEmptyParams {
   expectedSnapshotDigest: string;
 }
 
-const LEGACY_RESTORE_RESOURCE_TYPES = {
-  credential: 'credential',
-} as const satisfies Partial<Record<EntityType, string>>;
-
 const LEGACY_DELETE_RESOURCE_TYPES = {
-  ...LEGACY_RESTORE_RESOURCE_TYPES,
+  credential: 'credential',
   task: 'task',
   reportformat: 'report_format',
 } as const satisfies Partial<Record<EntityType, string>>;
@@ -225,16 +221,7 @@ class TrashCanCommand extends HttpCommand {
       return;
     }
 
-    const resourceType = LEGACY_RESTORE_RESOURCE_TYPES[entityType];
-    if (resourceType === undefined) {
-      throw new Error(`Trashcan restore is unavailable for ${entityType}`);
-    }
-
-    await this.httpPostWithTransform({
-      cmd: 'restore',
-      target_id: id,
-      resource_type: resourceType,
-    });
+    throw new Error(`Trashcan restore is unavailable for ${entityType}`);
   }
 
   async delete({id, entityType}: {id: string; entityType: EntityType}) {

@@ -59,6 +59,7 @@ const createNativeTrashcanCommand = () => {
 describe('TrashCanCommand tests', () => {
   test.each([
     ['alert', 'alerts'],
+    ['credential', 'credentials'],
     ['filter', 'filters'],
     ['override', 'overrides'],
     ['portlist', 'port-lists'],
@@ -111,36 +112,6 @@ describe('TrashCanCommand tests', () => {
           body: JSON.stringify({}),
         },
       );
-    },
-  );
-
-  test.each([['credential', 'credential']] as const)(
-    'should restore retained %s trash entities through the typed GMP bridge',
-    async (entityType, resourceType) => {
-      const response = createResponse({});
-      const fetchMock = testing.fn();
-      testing.stubGlobal('fetch', fetchMock);
-      const fakeHttp = createHttp(response) as ReturnType<typeof createHttp> & {
-        buildUrl: ReturnType<typeof testing.fn>;
-        session: ReturnType<typeof createSession>;
-      };
-      fakeHttp.buildUrl = testing.fn(
-        (path: string) => `https://yafvs.example/${path}`,
-      );
-      fakeHttp.session = createSession();
-      fakeHttp.session.token = 'test-token';
-      const cmd = new TrashCanCommand(fakeHttp);
-
-      await cmd.restore({id: '1234', entityType});
-
-      expect(fetchMock).not.toHaveBeenCalled();
-      expect(fakeHttp.request).toHaveBeenCalledWith('post', {
-        data: {
-          cmd: 'restore',
-          target_id: '1234',
-          resource_type: resourceType,
-        },
-      });
     },
   );
 

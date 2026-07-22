@@ -349,6 +349,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "credential-redacted-metadata-export-read",
         "credential-redacted-metadata-detail-read",
         "credential-redacted-metadata-list-read",
+        "credential-trash-restore",
         "credential-metadata-modify",
         "credential-up-usk-create",
         "cpe-catalog-detail-read",
@@ -6985,9 +6986,9 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         stop_suffix = post_constants.get("stop_suffix")
         replace_target_suffix = post_constants.get("replace_target_suffix")
         replace_configuration_suffix = post_constants.get("replace_configuration_suffix")
-        for prefix_variable in ("alert_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix", "task_prefix"):
+        for prefix_variable in ("alert_prefix", "credential_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix", "task_prefix"):
             prefix = post_constants.get(prefix_variable)
-            if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
+            if prefix_variable != "credential_prefix" and prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{clone_suffix}")
             if prefix_variable == "alert_prefix" and prefix and test_suffix and f"is_uuid_segment_with_suffix (id, test_suffix)" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{test_suffix}")
@@ -7166,9 +7167,9 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
         resources_suffix = post_constants.get("resources_suffix")
         ranges_suffix = post_constants.get("ranges_suffix")
         verify_suffix = post_constants.get("verify_suffix")
-        for prefix_variable in ("alert_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix", "task_prefix"):
+        for prefix_variable in ("alert_prefix", "credential_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix", "task_prefix"):
             prefix = post_constants.get(prefix_variable)
-            if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
+            if prefix_variable != "credential_prefix" and prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{clone_suffix}")
             if prefix_variable == "alert_prefix" and prefix and test_suffix and f"is_uuid_segment_with_suffix (id, test_suffix)" in post_function_body:
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{test_suffix}")
@@ -7977,7 +7978,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["guarded native username/password and username/SSH-key credential creation", "native-credentials-from-csv", "future GSA native credential create"],
                 "residual_inherited": [
-                    "Secret updates, other credential types, clone, restore, and delete remain inherited.",
+                    "Secret updates, other credential types, clone, and delete remain inherited; restore is native.",
                     "Passwords, passphrases, and private keys are write-only and are never returned by the native API."
                 ],
             },
@@ -7998,6 +7999,17 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "status": "implemented_internal_and_browser_proxied",
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser credential metadata PATCH for command-level metadata-only saves", "direct native credential name/comment metadata modification"],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/credentials/{credential_id}/restore",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser credential restore", "direct native credential restore"],
+                "residual_inherited": [
+                    "Credential permanent delete, clone, secret mutation, and download/export semantics remain inherited.",
+                    "Restore copies opaque secret rows transactionally but returns only redacted metadata."
+                ],
             },
             {
                 "endpoint": "/api/v1/users",

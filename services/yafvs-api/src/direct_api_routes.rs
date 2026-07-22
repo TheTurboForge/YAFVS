@@ -20,7 +20,7 @@ use crate::{
         MAX_AUTHENTICATION_SETTINGS_BODY_BYTES, authentication_settings,
         update_ldap_authentication_settings, update_radius_authentication_settings,
     },
-    credential_writes::{create_credential, patch_credential},
+    credential_writes::{create_credential, patch_credential, restore_credential},
     filter_writes::{
         clone_filter, create_filter, delete_filter, hard_delete_filter, patch_filter,
         restore_filter,
@@ -214,6 +214,10 @@ pub(crate) fn direct_native_api_router(
             .route(
                 "/api/v1/credentials/:credential_id",
                 patch(patch_credential),
+            )
+            .route(
+                "/api/v1/credentials/:credential_id/restore",
+                post(restore_credential),
             )
             .route("/api/v1/credentials", post(create_credential))
             .route("/api/v1/scanners", post(create_scanner))

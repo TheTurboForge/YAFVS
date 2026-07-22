@@ -295,7 +295,7 @@ fn credential_patch_route_is_direct_write_control_metadata_only() {
         "x-yafvs-safety-contract: write-control-v1",
         "x-yafvs-side-effect: metadata-write",
         "CredentialPatchRequest",
-        "Secret updates, allow_insecure, credential type changes, target/scanner links, export, download, clone, restore, and delete remain on inherited compatibility paths.",
+        "Secret updates, allow_insecure mutation, credential type changes, target/scanner link mutation, export, download, clone, and delete remain on inherited compatibility paths; restore is separately native.",
     ] {
         assert!(
             block.contains(required),

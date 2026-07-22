@@ -186,6 +186,7 @@ const NATIVE_TRASH_PATHS: Partial<Record<EntityType, string>> = {
 
 const RESTORE_PATHS: Partial<Record<EntityType, string>> = {
   ...NATIVE_TRASH_PATHS,
+  credential: 'credentials',
   task: 'tasks',
 };
 

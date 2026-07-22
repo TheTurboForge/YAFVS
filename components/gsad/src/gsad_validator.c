@@ -136,7 +136,6 @@ gsad_init_validator ()
                      "|(move_task)"
                      "|(ping)"
                      "|(renew_session)"
-                     "|(restore)"
                      "|(test_alert)"
                      "|(save_asset)"
                      "|(save_setting)"

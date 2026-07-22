@@ -146,8 +146,8 @@ host-binding posture tracked outside this development API.
   restore/trash, scan-config
   metadata/clone/restore/trash, schedule metadata/clone/restore/trash, target
   metadata/create/clone/restore/trash, selected alert metadata, credential
-  name/comment metadata, scanner metadata, task metadata, guarded task start
-  and stop, and strict New-task target replacement. Other valid-token
+  name/comment metadata and restore, scanner metadata, task metadata and
+  restore, guarded task start and stop, and strict New-task target replacement. Other valid-token
   non-GET requests return JSON `405 method_not_allowed`. The enforced route set
   is the `APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS` list in
   `services/yafvs-api/src/direct_api_contract_tests.rs` plus OpenAPI
@@ -423,8 +423,9 @@ boundary. Create, modify, clone, export, and delete actions remain inherited
 until native write semantics are designed.
 
 Native Trashcan summary, redacted row inventory, confirmation-bound emptying,
-nine complete typed resource lifecycles, and native task restore are available through `/api/v1/trashcan`
-routes. The native inventory intentionally excludes credential secrets, target
+nine complete typed resource lifecycles, and native task and credential restore
+are available through `/api/v1/trashcan` and resource-specific restore routes.
+The native inventory intentionally excludes credential secrets, target
 hosts, scanner connection fields, scan-config preferences, alert method data,
 `results_trash`, and child trash tables. Alert, filter, override, port list,
 scan config, scanner, schedule, tag, and target restore and permanent delete
@@ -436,10 +437,14 @@ Task restore also moves preserved result evidence and task/report/result tag
 locations back to live state, remaps result-tag row identities through stable
 result UUIDs after reinsertion, invalidates report counts for safe recalculation,
 and rejects any non-live task dependency. Retired inherited row-level permission
-mutations are not reintroduced. Credential restore plus credential,
-report-format, and task permanent delete retain declared browser/GMP
-compatibility while those native owners remain incomplete. Report-format
-restore is deliberately unavailable:
+mutations are not reintroduced. Credential restore copies opaque secret rows
+inside PostgreSQL without loading or returning them, restores trash-side
+target/scanner references and tag locations, preserves `allow_insecure`, and
+returns only redacted credential metadata. All supported browser restore
+operations are therefore native and the generic GSA/gsad GMP restore bridge is
+removed. Credential, report-format, and task permanent delete retain declared
+browser/GMP compatibility while those native owners remain incomplete.
+Report-format restore is deliberately unavailable:
 it could reintroduce a retired custom executable report format. Separately
 classified raw GMP behavior remains outside this browser contract.
 

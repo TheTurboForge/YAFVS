@@ -271,7 +271,11 @@ describe('TrashCanPage tests', () => {
 
     const cancelButton = screen.getByRole('button', {name: /Cancel/i});
     fireEvent.click(cancelButton);
-    expect(cancelButton).not.toBeVisible();
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('button', {name: /Cancel/i}),
+      ).not.toBeInTheDocument();
+    });
   });
 
   test('Should render native trashcan summary counts when available', async () => {

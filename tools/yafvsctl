@@ -5954,6 +5954,17 @@ OPENAPI_TAG_SCANNER_SELECTION_SCHEMA_EXPECTED_VALUES = {
     "properties.expected_count.minimum": "1",
     "properties.expected_count.maximum": "100000",
 }
+OPENAPI_TAG_TARGET_SELECTION_SCHEMA_EXPECTED_VALUES = {
+    "type": "object",
+    "additionalProperties": "false",
+    "properties.resource_type.type": "string",
+    "properties.resource_type.const": "target",
+    "properties.search.type": "string",
+    "properties.search.maxLength": "4096",
+    "properties.expected_count.type": "integer",
+    "properties.expected_count.minimum": "1",
+    "properties.expected_count.maximum": "100000",
+}
 OPENAPI_TAG_CREDENTIAL_SELECTION_SCHEMA_EXPECTED_VALUES = {
     "type": "object",
     "additionalProperties": "false",
@@ -6001,6 +6012,11 @@ def openapi_tag_write_schema_contract_drift(repo_root: Path | None) -> dict[str,
         ),
         "TagScannerResourceSelection": (
             OPENAPI_TAG_SCANNER_SELECTION_SCHEMA_EXPECTED_VALUES,
+            "[resource_type, expected_count]",
+            {"resource_type", "search", "expected_count"},
+        ),
+        "TagTargetResourceSelection": (
+            OPENAPI_TAG_TARGET_SELECTION_SCHEMA_EXPECTED_VALUES,
             "[resource_type, expected_count]",
             {"resource_type", "search", "expected_count"},
         ),

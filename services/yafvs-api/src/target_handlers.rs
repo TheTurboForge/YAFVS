@@ -17,7 +17,7 @@ use crate::{
         ApiQuery, Collection, CollectionQuery, collection_total_with_empty_page_probe,
         normalize_collection_query, sort_clause,
     },
-    target_query_sql::target_sql,
+    target_query_sql::{target_collection_predicate_sql, target_sql},
     task_target_payloads::{TargetItem, target_from_row, target_from_row_with_user_tags},
     user_tags::ReportUserTag,
 };
@@ -29,12 +29,14 @@ pub(crate) async fn targets(
     let params = normalize_collection_query(query, TARGET_DEFAULT_SORT)?;
     let sort_sql = sort_clause(&params.sort, TARGET_SORT_FIELDS)?;
     let sql = target_sql(
-        "($1 = ''\n\
-            OR lower(uuid) = lower($1)\n\
-            OR lower(name) LIKE '%' || lower($1) || '%'\n\
-            OR lower(comment) LIKE '%' || lower($1) || '%'\n\
-            OR lower(coalesce(port_list_name, '')) LIKE '%' || lower($1) || '%'\n\
-            OR lower(hosts) LIKE '%' || lower($1) || '%')",
+        &target_collection_predicate_sql(
+            "uuid",
+            "name",
+            "comment",
+            "port_list_name",
+            "hosts",
+            "$1",
+        ),
         &sort_sql,
         "LIMIT $2 OFFSET $3",
     );

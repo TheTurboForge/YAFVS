@@ -19,6 +19,7 @@ import Credential from 'gmp/models/credential';
 import PortList from 'gmp/models/port-list';
 import Scanner from 'gmp/models/scanner';
 import Tag from 'gmp/models/tag';
+import Target from 'gmp/models/target';
 import Task from 'gmp/models/task';
 import BulkTags from 'web/entities/BulkTags';
 import SelectionType from 'web/utils/SelectionType';
@@ -53,6 +54,107 @@ describe('BulkTags tests', () => {
     );
     const dialog = screen.getDialog();
     expect(dialog).toBeInTheDocument();
+  });
+
+  test('should use a typed collection selection for all filtered targets', async () => {
+    const entities = [
+      new Target({id: '1', name: 'Production'}),
+      new Target({id: '2', name: 'Production backup'}),
+    ];
+    const entitiesCounts = new CollectionCounts({filtered: 5, all: 8});
+    const filter = Filter.fromString(
+      'search=production first=1 rows=10 sort=name',
+    );
+    const onClose = testing.fn();
+    const getAllTags = testing
+      .fn()
+      .mockResolvedValue({data: [new Tag({id: 'tag-1', name: 'Managed'})]});
+    const getTag = testing.fn().mockResolvedValue({
+      data: new Tag({id: 'tag-1', name: 'Managed', resourceType: 'target'}),
+    });
+    const saveTag = testing.fn().mockResolvedValue({data: {id: 'tag-1'}});
+    const gmp = {
+      tags: {getAll: getAllTags},
+      tag: {get: getTag, save: saveTag},
+    };
+    const {render} = rendererWith({gmp, store: true});
+    render(
+      <BulkTags
+        entities={entities}
+        entitiesCounts={entitiesCounts}
+        filter={filter}
+        selectedEntities={[]}
+        selectionType={SelectionType.SELECTION_FILTER}
+        onClose={onClose}
+      />,
+    );
+
+    const select = screen.getSelectElement();
+    const selectItems = await getSelectItemElementsForSelect(select);
+    fireEvent.click(selectItems[0]);
+    await wait();
+    fireEvent.click(screen.getDialogSaveButton());
+    await wait();
+
+    expect(saveTag).toHaveBeenCalledWith({
+      active: true,
+      comment: '',
+      filter: undefined,
+      id: 'tag-1',
+      name: 'Managed',
+      resourceIds: undefined,
+      resourceSelection: {
+        resourceType: 'target',
+        search: 'production',
+        expectedCount: 5,
+      },
+      resourceType: 'target',
+      resourcesAction: 'add',
+      value: '',
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  test('should reject unsupported filtered target criteria without broadening the selection', async () => {
+    const entities = [new Target({id: '1', name: 'Production'})];
+    const entitiesCounts = new CollectionCounts({filtered: 1, all: 8});
+    const filter = Filter.fromString(
+      'hosts~production first=1 rows=10 sort=name',
+    );
+    const getAllTags = testing
+      .fn()
+      .mockResolvedValue({data: [new Tag({id: 'tag-1', name: 'Managed'})]});
+    const getTag = testing.fn().mockResolvedValue({
+      data: new Tag({id: 'tag-1', name: 'Managed', resourceType: 'target'}),
+    });
+    const saveTag = testing.fn().mockResolvedValue({data: {id: 'tag-1'}});
+    const gmp = {
+      tags: {getAll: getAllTags},
+      tag: {get: getTag, save: saveTag},
+    };
+    const {render} = rendererWith({gmp, store: true});
+    render(
+      <BulkTags
+        entities={entities}
+        entitiesCounts={entitiesCounts}
+        filter={filter}
+        selectedEntities={[]}
+        selectionType={SelectionType.SELECTION_FILTER}
+        onClose={testing.fn()}
+      />,
+    );
+
+    const select = screen.getSelectElement();
+    const selectItems = await getSelectItemElementsForSelect(select);
+    fireEvent.click(selectItems[0]);
+    await wait();
+    fireEvent.click(screen.getDialogSaveButton());
+    await wait();
+
+    expect(saveTag).not.toHaveBeenCalled();
+    expect(screen.getDialog()).toHaveTextContent(
+      'Filtered target tagging supports only one literal search',
+    );
   });
 
   test('should allow to tag all filtered entities', () => {

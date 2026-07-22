@@ -3015,7 +3015,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-and-resource-assignment-write
       summary: Atomically update tag metadata and optional resource assignments
-      description: Updates tag metadata and resource assignments. Explicit IDs and typed collection selections use a native database transaction. A resource_type change is accepted only together with resources.action=set and explicit IDs, so old-type assignments are cleared atomically before the new selection is applied. Transitional raw filter expressions remain on gvmd's compatibility path while the remaining typed selectors migrate.
+      description: Updates tag metadata and resource assignments. Explicit IDs and typed collection selections use a native database transaction. A resource_type change is accepted only together with resources.action=set and explicit IDs, so old-type assignments are cleared atomically before the new selection is applied. The transitional raw-filter compatibility field has no remaining first-party browser caller and remains on gvmd's compatibility path pending removal.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -3294,7 +3294,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: resource-assignment-write
       summary: Add, remove, or replace active tag resource assignments
-      description: Adds, removes, or replaces assignments for the tag's existing resource type using bounded explicit resource_ids, a typed port-list, credential, or scanner resource_selection, or one transitional gvmd resource_filter. Explicit IDs and typed selections use native database transactions; raw filter expressions use gvmd's compatibility path. The three selection forms are mutually exclusive. set with none clears all current assignments.
+      description: Adds, removes, or replaces assignments for the tag's existing resource type using bounded explicit resource_ids, a typed port-list, credential, scanner, or target resource_selection, or one transitional gvmd resource_filter. Explicit IDs and typed selections use native database transactions; raw filter expressions use gvmd's compatibility path. The three selection forms are mutually exclusive. set with none clears all current assignments.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -10087,7 +10087,7 @@ components:
           type: string
           minLength: 1
           maxLength: 16384
-          description: A transitional gvmd resource filter retained while the remaining typed selectors migrate. Mutually exclusive with resource_ids and resource_selection.
+          description: A transitional gvmd raw-filter compatibility field with no remaining first-party browser caller. Mutually exclusive with resource_ids and resource_selection and retained temporarily pending removal.
         resource_selection:
           $ref: '#/components/schemas/TagResourceSelection'
           description: Typed collection selection. Currently accepted only with action=add.
@@ -10096,12 +10096,14 @@ components:
         - $ref: '#/components/schemas/TagPortListResourceSelection'
         - $ref: '#/components/schemas/TagCredentialResourceSelection'
         - $ref: '#/components/schemas/TagScannerResourceSelection'
+        - $ref: '#/components/schemas/TagTargetResourceSelection'
       discriminator:
         propertyName: resource_type
         mapping:
           port_list: '#/components/schemas/TagPortListResourceSelection'
           credential: '#/components/schemas/TagCredentialResourceSelection'
           scanner: '#/components/schemas/TagScannerResourceSelection'
+          target: '#/components/schemas/TagTargetResourceSelection'
     TagPortListResourceSelection:
       type: object
       required: [resource_type, expected_count]
@@ -10117,6 +10119,23 @@ components:
         predefined:
           type: boolean
           description: Optional exact predefined-state predicate.
+        expected_count:
+          type: integer
+          minimum: 1
+          maximum: 100000
+          description: Number of rows shown as matching when the operator confirmed the action. The transaction fails on drift before mutation.
+    TagTargetResourceSelection:
+      type: object
+      required: [resource_type, expected_count]
+      additionalProperties: false
+      properties:
+        resource_type:
+          type: string
+          const: target
+        search:
+          type: string
+          maxLength: 4096
+          description: Optional literal case-insensitive search over exact target UUID or partial target name, comment, port-list name, and hosts. This is data, not a filter expression.
         expected_count:
           type: integer
           minimum: 1

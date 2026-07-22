@@ -80,13 +80,29 @@ fn tag_resource_selection_is_closed_bounded_and_exclusive() {
             expected_count: 4,
         }
     );
+    let target = validate_tag_resource_update_request(
+        serde_json::from_str(
+            r#"{"action":"add","resource_selection":{"resource_type":"target","search":"production","expected_count":5}}"#,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        target.resource_selection.unwrap(),
+        ValidatedTagResourceSelection::Target {
+            search: Some("production".to_string()),
+            expected_count: 5,
+        }
+    );
     for value in [
-        r#"{"action":"add","resource_selection":{"resource_type":"target","expected_count":1}}"#,
+        r#"{"action":"add","resource_selection":{"resource_type":"result","expected_count":1}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":1,"unknown":true}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"credential","expected_count":1,"predefined":true}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"credential","expected_count":1,"credential_type":"bad\ntype"}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"scanner","expected_count":1,"predefined":true}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"scanner","expected_count":1,"search":"bad\nsearch"}}"#,
+        r#"{"action":"add","resource_selection":{"resource_type":"target","expected_count":1,"predefined":true}}"#,
+        r#"{"action":"add","resource_selection":{"resource_type":"target","expected_count":1,"search":"bad\nsearch"}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":0}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":100001}}"#,
         r#"{"action":"add","resource_selection":{"resource_type":"port_list","search":"bad\nsearch","expected_count":1}}"#,
@@ -111,6 +127,46 @@ fn tag_resource_selection_is_closed_bounded_and_exclusive() {
             Err(_) => true,
         }
     );
+}
+
+#[test]
+fn tag_target_selection_stays_native_bounded_and_lock_ordered() {
+    let handlers = include_str!("tag_writes.rs");
+    assert!(handlers.contains(
+        "LOCK TABLE port_lists, targets, tags, tag_resources IN SHARE ROW EXCLUSIVE MODE"
+    ));
+    let transactions = include_str!("tag_write_transactions.rs");
+    assert!(transactions.contains("tag_target_selection_sql()"));
+    assert!(transactions.contains("&[&search, &selection_limit]"));
+    let selector = crate::target_query_sql::tag_target_selection_sql();
+    let collection_predicate = crate::target_query_sql::target_collection_predicate_sql(
+        "uuid",
+        "name",
+        "comment",
+        "port_list_name",
+        "hosts",
+        "$1",
+    );
+    let selector_predicate = crate::target_query_sql::target_collection_predicate_sql(
+        "t.uuid",
+        "coalesce(t.name, '')",
+        "coalesce(t.comment, '')",
+        "pl.name",
+        "coalesce(t.hosts, '')",
+        "$1",
+    );
+    let collection = crate::target_query_sql::target_sql(
+        &collection_predicate,
+        "name ASC",
+        "LIMIT $2 OFFSET $3",
+    );
+    assert!(selector.contains(&selector_predicate));
+    assert!(collection.contains(&collection_predicate));
+    assert!(selector.contains("LEFT JOIN port_lists"));
+    assert!(selector.contains("strpos(lower"));
+    assert!(!selector.contains("LIKE"));
+    assert!(selector.contains("LIMIT $2"));
+    assert!(selector.contains("FOR UPDATE OF t"));
 }
 
 #[test]

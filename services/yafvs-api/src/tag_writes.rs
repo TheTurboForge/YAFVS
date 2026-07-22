@@ -218,6 +218,12 @@ fn tag_resource_update_lock_sql(selection: Option<&ValidatedTagResourceSelection
             // same global order and stabilize the selected collection.
             "LOCK TABLE scanners, tags, tag_resources IN SHARE ROW EXCLUSIVE MODE;"
         }
+        Some(ValidatedTagResourceSelection::Target { .. }) => {
+            // Target create/patch and port-list lifecycle writers acquire
+            // port_lists before targets. Preserve that order, stabilize the
+            // joined port-list-name predicate, then acquire tag tables.
+            "LOCK TABLE port_lists, targets, tags, tag_resources IN SHARE ROW EXCLUSIVE MODE;"
+        }
         None => "LOCK TABLE tags, tag_resources IN SHARE ROW EXCLUSIVE MODE;",
     }
 }

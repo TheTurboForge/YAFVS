@@ -95,3 +95,32 @@ pub(crate) fn target_sql(filtered_predicate: &str, sort_sql: &str, limit_clause:
           ORDER BY {sort_sql}, name ASC {limit_clause};"#
     )
 }
+
+/// Shared with typed target tag selection. UUID matching remains exact while
+/// name, comment, port-list name, and hosts use literal case-insensitive search.
+pub(crate) fn target_collection_predicate_sql(
+    uuid_expression: &str,
+    name_expression: &str,
+    comment_expression: &str,
+    port_list_name_expression: &str,
+    hosts_expression: &str,
+    search_parameter: &str,
+) -> String {
+    format!(
+        "({search_parameter} = ''\n             OR lower({uuid_expression}) = lower({search_parameter})\n             OR strpos(lower({name_expression}), lower({search_parameter})) > 0\n             OR strpos(lower({comment_expression}), lower({search_parameter})) > 0\n             OR strpos(lower(coalesce({port_list_name_expression}, '')), lower({search_parameter})) > 0\n             OR strpos(lower({hosts_expression}), lower({search_parameter})) > 0)"
+    )
+}
+
+pub(crate) fn tag_target_selection_sql() -> String {
+    format!(
+        "SELECT t.id::integer, t.uuid::text, t.owner::integer\n           FROM targets t\n      LEFT JOIN port_lists pl ON pl.id = t.port_list\n          WHERE {}\n          ORDER BY t.id ASC\n          LIMIT $2\n          FOR UPDATE OF t;",
+        target_collection_predicate_sql(
+            "t.uuid",
+            "coalesce(t.name, '')",
+            "coalesce(t.comment, '')",
+            "pl.name",
+            "coalesce(t.hosts, '')",
+            "$1",
+        )
+    )
+}

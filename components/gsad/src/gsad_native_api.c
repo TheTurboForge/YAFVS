@@ -891,7 +891,8 @@ native_api_delete_path_is_allowed (const gchar *path)
   if (g_str_has_prefix (path, alert_prefix))
     {
       const gchar *id = path + strlen (alert_prefix);
-      return is_uuid_segment (id, strlen (id));
+      return is_uuid_segment (id, strlen (id))
+             || is_uuid_segment_with_suffix (id, trash_suffix);
     }
 
   if (g_str_has_prefix (path, scanner_prefix))
@@ -1109,6 +1110,7 @@ native_api_post_path_is_allowed (const gchar *path)
       const gchar *id = path + strlen (alert_prefix);
       return is_uuid_segment_with_suffix (id, clone_suffix)
              || is_uuid_segment_with_suffix (id, deliver_report_suffix)
+             || is_uuid_segment_with_suffix (id, restore_suffix)
              || is_uuid_segment_with_suffix (id, test_suffix);
     }
 

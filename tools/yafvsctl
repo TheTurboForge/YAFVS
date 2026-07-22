@@ -338,7 +338,9 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "alert-deliver-report",
         "alert-email-smb-syslog-snmp-scp-start-task-create",
         "alert-test-actions",
+        "alert-trash-hard-delete",
         "alert-trash-move",
+        "alert-trash-restore",
         "authentication-provider-settings-read",
         "cert-bund-advisory-catalog-detail-read",
         "cert-bund-advisory-list-read",
@@ -535,6 +537,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
 )
 OPENAPI_ALLOWED_INHERITED_STILL_OWNS_VALUES = frozenset(
     {
+        "raw-gmp-alert-trash-control",
         "delivery-payload-mutations",
         "credential-secrets-writes-and-deletes",
         "credential-secret-updates-non-up-usk-types-and-deletes",
@@ -6989,6 +6992,8 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
                 templates.add(f"{prefix.rstrip('/')}/{{}}{test_suffix}")
             if prefix_variable == "alert_prefix" and prefix and deliver_report_suffix and f"is_uuid_segment_with_suffix (id, deliver_report_suffix)" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{deliver_report_suffix}")
+            if prefix_variable == "alert_prefix" and prefix and restore_suffix and f"is_uuid_segment_with_suffix (id, restore_suffix)" in post_function_body:
+                templates.add(f"{prefix.rstrip('/')}/{{}}{restore_suffix}")
             if prefix_variable != "alert_prefix" and prefix and restore_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{restore_suffix}")
         user_management_prefix = post_constants.get("USER_MANAGEMENT_USER_PREFIX")
@@ -7094,6 +7099,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         delete_constants = {**global_constants, **c_string_constants(delete_function_body)}
         trash_suffix = delete_constants.get("trash_suffix")
         for prefix_variable in (
+            "alert_prefix",
             "filter_prefix",
             "host_identifier_prefix",
             "host_operating_system_prefix",
@@ -7167,6 +7173,8 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{test_suffix}")
             if prefix_variable == "alert_prefix" and prefix and deliver_report_suffix and f"is_uuid_segment_with_suffix (id, deliver_report_suffix)" in post_function_body:
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{deliver_report_suffix}")
+            if prefix_variable == "alert_prefix" and prefix and restore_suffix and f"is_uuid_segment_with_suffix (id, restore_suffix)" in post_function_body:
+                operations.add(f"POST {prefix.rstrip('/')}/{{}}{restore_suffix}")
             if prefix_variable != "alert_prefix" and prefix and restore_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{restore_suffix}")
         tag_prefix = post_constants.get("tag_prefix")
@@ -7334,7 +7342,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
             prefix = delete_constants.get(prefix_variable)
             if prefix and f"g_str_has_prefix (path, {prefix_variable})" in delete_function_body:
                 operations.add(f"DELETE {prefix.rstrip('/')}/{{}}")
-                if prefix_variable not in {"alert_prefix", "host_identifier_prefix", "host_operating_system_prefix", "host_prefix", "scope_prefix", "scope_report_prefix", "task_prefix", "tls_certificate_prefix"} and trash_suffix and "trash_suffix" in delete_function_body:
+                if prefix_variable not in {"host_identifier_prefix", "host_operating_system_prefix", "host_prefix", "scope_prefix", "scope_report_prefix", "task_prefix", "tls_certificate_prefix"} and trash_suffix and "trash_suffix" in delete_function_body:
                     operations.add(f"DELETE {prefix.rstrip('/')}/{{}}{trash_suffix}")
         user_management_prefix = delete_constants.get("USER_MANAGEMENT_USER_PREFIX")
         if user_management_prefix and "is_user_management_user_path (path)" in delete_function_body:
@@ -8339,7 +8347,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "direct_access": "direct_write_control",
                 "replacement_candidates": ["same-origin browser alert name/comment metadata PATCH", "direct native alert name/comment metadata modification"],
                 "notes": [
-                    "Metadata write only; alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, export, restore, hard-delete, and delivery-payload mutation remain inherited.",
+                    "Metadata write only; alert active state, event/condition/method data, delivery payloads, credentials, destinations, task links, export, and delivery-payload mutation remain inherited.",
                 ],
             },
             {
@@ -8350,7 +8358,29 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["same-origin browser alert trash move", "direct native alert trash move"],
                 "notes": [
                     "Moves alert metadata, child condition/event/method data, task references, and tag links to trash; visible live task-linked alerts are rejected.",
-                    "Delivery-payload mutation, inherited XML export, restore, and hard-delete remain inherited.",
+                    "Delivery-payload mutation and inherited XML export remain inherited.",
+                ],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/alerts/{alert_id}/restore",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser alert restore", "direct native alert restore"],
+                "notes": [
+                    "Restores metadata, condition/event/method rows, task references, and live/trash tag references in one PostgreSQL transaction.",
+                    "Conflicting live UUID/name state, non-live filter locations, ownerless rows, and malformed locations fail closed; the response remains redacted.",
+                ],
+            },
+            {
+                "method": "delete",
+                "endpoint": "/api/v1/alerts/{alert_id}/trash",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser alert permanent delete", "direct native alert permanent delete"],
+                "notes": [
+                    "Deletes only trash-side alert metadata, condition/event/method rows, and live/trash tag references.",
+                    "Any non-live task-alert location blocks deletion; location-zero rows remain a separate live-ID namespace.",
                 ],
             },
             {
@@ -8361,7 +8391,7 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["same-origin browser alert clone", "direct native alert clone"],
                 "notes": [
                     "Clones existing alert metadata and delivery child rows without accepting client-supplied delivery payloads.",
-                    "Delivery-payload mutation, inherited XML export, restore, and hard-delete remain inherited.",
+                    "Delivery-payload mutation and inherited XML export remain inherited.",
                 ],
             },
             {

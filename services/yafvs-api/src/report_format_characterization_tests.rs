@@ -12,11 +12,16 @@ const MANAGE_REPORT_FORMATS_C: &str =
 const MANAGE_SQL_REPORT_FORMATS_C: &str =
     include_str!("../../../components/gvmd/src/manage_sql_report_formats.c");
 const GVMD_GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
+const GVMD_MANAGE_COMMANDS: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
 const GVMD_GMP_SCHEMA: &str =
     include_str!("../../../components/gvmd/src/schema_formats/XML/GMP.xml.in");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
+const GSAD_GMP_H: &str = include_str!("../../../components/gsad/src/gsad_gmp.h");
+const GSAD_VALIDATOR: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
 const GSA_REPORT_FORMAT_COMMAND: &str =
     include_str!("../../../components/gsa/src/gmp/commands/report-format.ts");
+const GSA_REPORT_FORMATS_COMMAND: &str =
+    include_str!("../../../components/gsa/src/gmp/commands/report-formats.ts");
 const GSA_REPORT_FORMAT_CAPABILITIES: &str =
     include_str!("../../../components/gsa/src/gmp/capabilities/capabilities.ts");
 const GSA_REPORT_FORMAT_TABLE: &str =
@@ -31,6 +36,92 @@ fn inherited_function(source: &str, name: &str) -> String {
     let tail = &source[start..];
     let end = tail.find("\n/**").unwrap_or(tail.len());
     tail[..end].to_string()
+}
+
+#[test]
+fn dedicated_report_format_xml_transport_is_retired_without_losing_shared_semantics() {
+    for source in [GSA_REPORT_FORMAT_COMMAND, GSA_REPORT_FORMATS_COMMAND] {
+        for retired in [
+            "extends EntityCommand",
+            "extends EntitiesCommand",
+            "getElementFromRoot",
+            "getEntitiesResponse",
+            "getAggregates",
+            "cmd: 'get_report_format",
+        ] {
+            assert!(!source.contains(retired), "GSA still contains {retired}");
+        }
+        assert!(source.contains("extends HttpCommand"));
+    }
+    assert!(GSA_REPORT_FORMAT_CAPABILITIES.contains("'get_report_formats'"));
+
+    for retired in [
+        "get_report_format_gmp",
+        "get_report_formats_gmp",
+        "export_report_format_gmp",
+        "export_report_formats_gmp",
+        "ELSE (get_report_format)",
+        "ELSE (get_report_formats)",
+        "ELSE (export_report_format)",
+        "ELSE (export_report_formats)",
+    ] {
+        assert!(!GSAD_GMP_C.contains(retired));
+        assert!(!GSAD_GMP_H.contains(retired));
+    }
+    for retired in [
+        "|(get_report_format)",
+        "|(get_report_formats)",
+        "|(export_report_format)",
+        "|(export_report_formats)",
+    ] {
+        assert!(!GSAD_VALIDATOR.contains(retired));
+    }
+
+    for retired in [
+        "get_report_formats_data",
+        "CLIENT_GET_REPORT_FORMATS",
+        "handle_get_report_formats",
+    ] {
+        assert!(!GVMD_GMP_C.contains(retired));
+    }
+    assert!(!GVMD_MANAGE_COMMANDS.contains("{\"GET_REPORT_FORMATS\""));
+    assert!(GVMD_MANAGE_COMMANDS.contains("\"GET_REPORT_FORMATS\","));
+    assert!(GVMD_MANAGE_COMMANDS.contains("\"GET_FILTERS\","));
+    let native_acl = inherited_function(GVMD_MANAGE_COMMANDS, "valid_gmp_command");
+    assert!(native_acl.contains("native_acl_operations"));
+    assert!(!GVMD_GMP_SCHEMA.contains("<name>get_report_formats</name>"));
+    assert!(GVMD_GMP_SCHEMA.contains("GET_REPORT_FORMATS, CREATE_REPORT_FORMAT"));
+
+    let bulk_export = inherited_function(GSAD_GMP_C, "bulk_export_gmp");
+    let rejection = bulk_export
+        .find("g_ascii_strcasecmp (type, \"report_format\") == 0")
+        .expect("generic gsad bulk export must reject report formats");
+    let synthesis = bulk_export
+        .find("export_many")
+        .expect("generic gsad bulk export synthesis marker must remain");
+    assert!(rejection < synthesis);
+    for resource_type in ["filter", "port_list", "report_format", "tag", "vuln"] {
+        assert!(
+            bulk_export.contains(&format!(
+                "g_ascii_strcasecmp (type, \"{resource_type}\") == 0"
+            )),
+            "case-insensitive XML bulk-export rejection missing for {resource_type}"
+        );
+    }
+
+    for retained in [
+        "init_report_format_iterator",
+        "find_report_format_with_permission",
+        "apply_report_format",
+        "create_report_format_from_file",
+    ] {
+        assert!(
+            MANAGE_REPORT_FORMATS_C.contains(retained)
+                || MANAGE_SQL_REPORT_FORMATS_C.contains(retained),
+            "shared report-format behavior was lost: {retained}"
+        );
+    }
+    assert!(GVMD_GMP_C.contains("\"get_report_formats\""));
 }
 
 fn openapi_path_block(path: &str) -> String {

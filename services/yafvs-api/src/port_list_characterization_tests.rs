@@ -154,7 +154,7 @@ fn port_list_native_metadata_export_no_longer_uses_singular_gsad_xml_export() {
 
     let bulk_export = inherited_function(GSAD_GMP_C, "bulk_export_gmp");
     assert!(
-        bulk_export.contains("str_equal (type, \"port_list\")"),
+        bulk_export.contains("g_ascii_strcasecmp (type, \"port_list\") == 0"),
         "generic bulk export must reject port_list after native JSON metadata export replacement"
     );
 

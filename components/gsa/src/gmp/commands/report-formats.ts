@@ -4,8 +4,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 
-import EntitiesCommand from 'gmp/commands/entities';
-import type {HttpCommandInputParams} from 'gmp/commands/http';
+import HttpCommand, {type HttpCommandInputParams} from 'gmp/commands/http';
 import {
   filterFromCommandParams,
   nativeCollectionMeta,
@@ -14,8 +13,7 @@ import {
 import type Http from 'gmp/http/http';
 import Response from 'gmp/http/response';
 import type Filter from 'gmp/models/filter';
-import type {Element} from 'gmp/models/model';
-import ReportFormat from 'gmp/models/report-format';
+import type ReportFormat from 'gmp/models/report-format';
 import {
   exportNativeReportFormatsMetadata,
   fetchNativeReportFormats,
@@ -27,13 +25,9 @@ const shouldExportAllByFilter = (filter: Filter): boolean => {
   return Number.isFinite(rows) && rows < 0;
 };
 
-export class ReportFormatsCommand extends EntitiesCommand<ReportFormat> {
+export class ReportFormatsCommand extends HttpCommand {
   constructor(http: Http) {
-    super(http, 'report_format', ReportFormat);
-  }
-
-  getEntitiesResponse(): Element {
-    return {};
+    super(http);
   }
 
   export(entities: ReportFormat[]) {
@@ -86,9 +80,7 @@ export class ReportFormatsCommand extends EntitiesCommand<ReportFormat> {
     });
   }
 
-  async getAll(
-    params: HttpCommandInputParams = {},
-  ) {
+  async getAll(params: HttpCommandInputParams = {}) {
     const filter = filterFromCommandParams(params).all();
     const reportFormats: ReportFormat[] = [];
     let total = Number.POSITIVE_INFINITY;

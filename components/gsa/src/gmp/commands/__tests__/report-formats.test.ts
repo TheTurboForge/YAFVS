@@ -30,6 +30,15 @@ const createNativeHttp = (response?: Parameters<typeof createHttp>[0]) => {
 };
 
 describe('ReportFormatsCommand tests', () => {
+  test('should expose report-format collection as read-only', () => {
+    const cmd = new ReportFormatsCommand(createNativeHttp());
+
+    expect('delete' in cmd).toEqual(false);
+    expect('deleteByIds' in cmd).toEqual(false);
+    expect('deleteByFilter' in cmd).toEqual(false);
+    expect('getAggregates' in cmd).toEqual(false);
+  });
+
   test('should expose report-format detail as read-only', () => {
     const cmd = new ReportFormatCommand(createNativeHttp());
 

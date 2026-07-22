@@ -186,10 +186,6 @@ get_target (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
             gsad_command_response_data_t *);
 
 static char *
-get_report_format (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                   const char *, gsad_command_response_data_t *);
-
-static char *
 get_scanner (gvm_connection_t *, gsad_credentials_t *, params_t *, const char *,
              gsad_command_response_data_t *);
 
@@ -5137,46 +5133,6 @@ export_preference_file_gmp (gvm_connection_t *connection,
 }
 
 /**
- * @brief Export a report format.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Report format XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_report_format_gmp (gvm_connection_t *connection,
-                          gsad_credentials_t *credentials, params_t *params,
-                          gsad_command_response_data_t *response_data)
-{
-  return export_resource (connection, "report_format", credentials, params,
-                          response_data);
-}
-
-/**
- * @brief Export a list of Report Formats.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]   credentials          Username and password for authentication.
- * @param[in]   params               Request parameters.
- * @param[out]  response_data        Extra data return for the HTTP response.
- *
- * @return Report Formats XML on success.  Enveloped XML
- *         on error.
- */
-char *
-export_report_formats_gmp (gvm_connection_t *connection,
-                           gsad_credentials_t *credentials, params_t *params,
-                           gsad_command_response_data_t *response_data)
-{
-  return export_many (connection, "report_format", credentials, params,
-                      response_data);
-}
-
-/**
  * @brief Delete report, get task status, envelope the result.
  *
  * @param[in]  connection     Connection to manager.
@@ -6227,61 +6183,6 @@ delete_schedule_gmp (gvm_connection_t *connection,
   return move_resource_to_trash (connection, "schedule", credentials, params,
                                  response_data);
 }
-static char *
-get_report_format (gvm_connection_t *connection,
-                   gsad_credentials_t *credentials, params_t *params,
-                   const char *extra_xml,
-                   gsad_command_response_data_t *response_data)
-{
-  gmp_arguments_t *arguments;
-  arguments = gmp_arguments_new ();
-
-  gmp_arguments_add (arguments, "alerts", "1");
-  gmp_arguments_add (arguments, "params", "1");
-
-  return get_one (connection, "report_format", credentials, params, extra_xml,
-                  arguments, response_data);
-}
-
-/**
- * @brief Get one report format, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_report_format_gmp (gvm_connection_t *connection,
-                       gsad_credentials_t *credentials, params_t *params,
-                       gsad_command_response_data_t *response_data)
-{
-  return get_report_format (connection, credentials, params, NULL,
-                            response_data);
-}
-
-/**
- * @brief Get all Report Formats, envelope the result.
- *
- * @param[in]  connection     Connection to manager.
- * @param[in]  credentials  Username and password for authentication.
- * @param[in]  params       Request parameters.
- * @param[out] response_data  Extra data return for the HTTP response.
- *
- * @return Enveloped XML object.
- */
-char *
-get_report_formats_gmp (gvm_connection_t *connection,
-                        gsad_credentials_t *credentials, params_t *params,
-                        gsad_command_response_data_t *response_data)
-{
-  return get_many (connection, "report_formats", credentials, params, NULL,
-                   response_data);
-}
-
-
 
 /**
  * @brief Get resource names, envelope the result.
@@ -7282,16 +7183,19 @@ bulk_export_gmp (gvm_connection_t *connection, gsad_credentials_t *credentials,
   CHECK_VARIABLE_INVALID (type, "Bulk Export")
   CHECK_VARIABLE_INVALID (bulk_select, "Bulk Export")
 
-  if (str_equal (type, "filter") || str_equal (type, "port_list")
-      || str_equal (type, "tag") || str_equal (type, "vuln"))
+  if (g_ascii_strcasecmp (type, "filter") == 0
+      || g_ascii_strcasecmp (type, "port_list") == 0
+      || g_ascii_strcasecmp (type, "report_format") == 0
+      || g_ascii_strcasecmp (type, "tag") == 0
+      || g_ascii_strcasecmp (type, "vuln") == 0)
     {
       gsad_command_response_data_set_status_code (response_data,
                                                   MHD_HTTP_BAD_REQUEST);
       return gsad_http_create_gsad_message (
         credentials,
-        "Filter, port-list, tag, and vulnerability XML bulk export are no "
-        "longer supported. Use the native JSON metadata export endpoints "
-        "instead.",
+        "Filter, port-list, report-format, tag, and vulnerability XML bulk "
+        "export are no longer supported. Use the native JSON metadata export "
+        "endpoints instead.",
         response_data);
     }
 
@@ -8602,8 +8506,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (export_override)
   ELSE (export_overrides)
   ELSE (export_preference_file)
-  ELSE (export_report_format)
-  ELSE (export_report_formats)
   ELSE (export_result)
   ELSE (export_results)
   ELSE (export_scanner)
@@ -8633,8 +8535,6 @@ exec_gmp_get (gsad_http_connection_t *con, gsad_connection_info_t *con_info,
   ELSE (get_port_lists)
   ELSE (get_report)
   ELSE (get_reports)
-  ELSE (get_report_format)
-  ELSE (get_report_formats)
   ELSE (get_resource_names)
   ELSE (get_scanner)
   ELSE (get_scanners)

@@ -240,13 +240,6 @@ char *
 export_preference_file_gmp (gvm_connection_t *, gsad_credentials_t *,
                             params_t *, gsad_command_response_data_t *);
 char *
-export_report_format_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                          gsad_command_response_data_t *);
-char *
-export_report_formats_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                           gsad_command_response_data_t *);
-
-char *
 get_port_list_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
 char *
@@ -287,13 +280,6 @@ export_slave_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
 char *
 export_slaves_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
                    gsad_command_response_data_t *);
-
-char *
-get_report_format_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                       gsad_command_response_data_t *);
-char *
-get_report_formats_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,
-                        gsad_command_response_data_t *);
 
 char *
 get_resource_names_gmp (gvm_connection_t *, gsad_credentials_t *, params_t *,

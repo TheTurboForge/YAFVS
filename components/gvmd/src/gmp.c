@@ -1232,28 +1232,6 @@ get_reports_data_reset (get_reports_data_t *data)
 }
 
 /**
- * @brief Command data for the get_report_formats command.
- */
-typedef struct
-{
-  get_data_t get;        ///< Get args.
-  int alerts;   ///< Boolean.  Whether to include alerts that use Report Format
-  int params;            ///< Boolean.  Whether to include params.
-} get_report_formats_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-get_report_formats_data_reset (get_report_formats_data_t *data)
-{
-  get_data_reset (&data->get);
-  memset (data, 0, sizeof (get_report_formats_data_t));
-}
-
-/**
  * @brief Command data for the get_resource_names command.
  */
 typedef struct
@@ -2026,7 +2004,6 @@ typedef union
   get_port_lists_data_t get_port_lists;               ///< get_port_lists
   get_preferences_data_t get_preferences;             ///< get_preferences
   get_reports_data_t get_reports;                     ///< get_reports
-  get_report_formats_data_t get_report_formats;       ///< get_report_formats
   get_resource_names_data_t get_resource_names;       ///< get_resource_names
   scope_command_data_t get_scope;                     ///< get_scope
   scope_command_data_t get_scopes;                    ///< get_scopes
@@ -2236,12 +2213,6 @@ static get_preferences_data_t *get_preferences_data
  */
 static get_reports_data_t *get_reports_data
  = &(command_data.get_reports);
-
-/**
- * @brief Parser callback data for GET_REPORT_FORMATS.
- */
-static get_report_formats_data_t *get_report_formats_data
- = &(command_data.get_report_formats);
 
 /**
  * @brief Parser callback data for GET_RESOURCE_NAMES.
@@ -2542,7 +2513,6 @@ typedef enum
   CLIENT_GET_PORT_LISTS,
   CLIENT_GET_PREFERENCES,
   CLIENT_GET_REPORTS,
-  CLIENT_GET_REPORT_FORMATS,
   CLIENT_GET_RESOURCE_NAMES,
   CLIENT_GET_SCOPE,
   CLIENT_GET_SCOPES,
@@ -3328,29 +3298,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
               }
 
             set_client_state (CLIENT_GET_REPORTS);
-          }
-
-        else if (strcasecmp ("GET_REPORT_FORMATS", element_name) == 0)
-          {
-            const gchar* attribute;
-
-            get_data_parse_attributes (&get_report_formats_data->get,
-                                       "report_format",
-                                       attribute_names,
-                                       attribute_values);
-            if (find_attribute (attribute_names, attribute_values,
-                                "alerts", &attribute))
-              get_report_formats_data->alerts = strcmp (attribute, "0");
-            else
-              get_report_formats_data->alerts = 0;
-
-            if (find_attribute (attribute_names, attribute_values,
-                                "params", &attribute))
-              get_report_formats_data->params = strcmp (attribute, "0");
-            else
-              get_report_formats_data->params = 0;
-
-            set_client_state (CLIENT_GET_REPORT_FORMATS);
           }
 
         else if (strcasecmp ("GET_RESOURCE_NAMES", element_name) == 0)
@@ -10214,331 +10161,6 @@ handle_get_reports (gmp_parser_t *gmp_parser, GError **error)
   get_reports_data_reset (get_reports_data);
   set_client_state (CLIENT_AUTHENTIC);
 }
-
-/**
- * @brief Handle end of GET_REPORT_FORMATS element.
- *
- * @param[in]  gmp_parser   GMP parser.
- * @param[in]  error        Error parameter.
- */
-static void
-handle_get_report_formats (gmp_parser_t *gmp_parser, GError **error)
-{
-  if (get_report_formats_data->params &&
-      get_report_formats_data->get.trash)
-    SEND_TO_CLIENT_OR_FAIL
-     (XML_ERROR_SYNTAX ("get_report_formats",
-                        "Params given with trash"));
-  else
-    {
-      iterator_t report_formats;
-      int count, filtered, ret, first;
-
-      INIT_GET (report_format, Report Format);
-
-      ret = init_report_format_iterator (&report_formats,
-                                          &get_report_formats_data->get);
-      if (ret)
-        {
-          switch (ret)
-            {
-              case 1:
-                if (send_find_error_to_client ("get_report_formats",
-                                               "report_format",
-                                               get_report_formats_data->get.id,
-                                               gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case 2:
-                if (send_find_error_to_client
-                      ("get_report_formats", "filter",
-                       get_report_formats_data->get.filt_id, gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                break;
-              case -1:
-                SEND_TO_CLIENT_OR_FAIL
-                  (XML_INTERNAL_ERROR ("get_report_formats"));
-                break;
-            }
-          get_report_formats_data_reset (get_report_formats_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          return;
-        }
-
-      SEND_GET_START ("report_format");
-      while (1)
-        {
-          time_t trust_time;
-
-          ret = get_next (&report_formats,
-                          &get_report_formats_data->get, &first, &count,
-                          init_report_format_iterator);
-          if (ret == 1)
-            break;
-          if (ret == -1)
-            {
-              internal_error_send_to_client (error);
-              return;
-            }
-
-          SEND_GET_COMMON (report_format,
-                            &get_report_formats_data->get,
-                            &report_formats);
-
-          trust_time = report_format_iterator_trust_time
-                        (&report_formats);
-
-          SENDF_TO_CLIENT_OR_FAIL
-           ("<extension>%s</extension>"
-            "<content_type>%s</content_type>"
-            "<summary>%s</summary>"
-            "<description>%s</description>"
-            "<predefined>%i</predefined>"
-            "<report_type>%s</report_type>",
-            report_format_iterator_extension (&report_formats),
-            report_format_iterator_content_type (&report_formats),
-            report_format_iterator_summary (&report_formats),
-            report_format_iterator_description (&report_formats),
-            get_report_formats_data->get.trash
-              ? trash_report_format_predefined
-                 (get_iterator_resource (&report_formats))
-              : report_format_predefined
-                 (get_iterator_resource (&report_formats)),
-            report_format_iterator_report_type (&report_formats) ?: "");
-
-          if (resource_id_deprecated ("report_format",
-                                      get_iterator_uuid (&report_formats)))
-            {
-              SENDF_TO_CLIENT_OR_FAIL ("<deprecated>1</deprecated>");
-            }
-
-          if (get_report_formats_data->alerts)
-            {
-              iterator_t alerts;
-              int invisible_alerts = 0;
-
-              SEND_TO_CLIENT_OR_FAIL ("<alerts>");
-              init_report_format_alert_iterator (&alerts,
-                                          get_iterator_resource
-                                            (&report_formats));
-              while (next (&alerts))
-                {
-                  if (report_format_alert_iterator_readable (&alerts) == 0)
-                    {
-                      /* Only show alerts the user may see. */
-                      invisible_alerts ++;
-                      continue;
-                    }
-
-                  SENDF_TO_CLIENT_OR_FAIL
-                   ("<alert id=\"%s\">"
-                    "<name>%s</name>"
-                    "</alert>",
-                    report_format_alert_iterator_uuid (&alerts),
-                    report_format_alert_iterator_name (&alerts));
-                }
-              cleanup_iterator (&alerts);
-              SENDF_TO_CLIENT_OR_FAIL ("</alerts>"
-                                       "<invisible_alerts>"
-                                       "%d"
-                                       "</invisible_alerts>",
-                                       invisible_alerts);
-            }
-
-          if (get_report_formats_data->params
-              || get_report_formats_data->get.details)
-            {
-              iterator_t params;
-              init_report_format_param_iterator
-                (&params, get_iterator_resource (&report_formats),
-                get_report_formats_data->get.trash, 1, NULL);
-              while (next (&params))
-                {
-                  long long int min, max;
-                  iterator_t options;
-
-                  SENDF_TO_CLIENT_OR_FAIL
-                   ("<param>"
-                    "<name>%s</name>"
-                    "<type>%s",
-                    report_format_param_iterator_name (&params),
-                    report_format_param_iterator_type_name (&params));
-
-                  min = report_format_param_iterator_type_min (&params);
-                  if (min > LLONG_MIN)
-                    SENDF_TO_CLIENT_OR_FAIL ("<min>%lli</min>", min);
-
-                  max = report_format_param_iterator_type_max (&params);
-                  if (max < LLONG_MAX)
-                    SENDF_TO_CLIENT_OR_FAIL ("<max>%lli</max>", max);
-
-                  if (report_format_param_iterator_type (&params)
-                      == REPORT_FORMAT_PARAM_TYPE_REPORT_FORMAT_LIST)
-                    {
-                      const char *value;
-                      const char *fallback;
-                      value = report_format_param_iterator_value (&params);
-                      fallback = report_format_param_iterator_fallback
-                                    (&params);
-
-                      SENDF_TO_CLIENT_OR_FAIL
-                        ("</type><value>%s",
-                         value ? value : "");
-                      if (value)
-                        {
-                          gchar **ids, **current_id;
-                          ids = g_strsplit (value, ",", -1);
-                          current_id = ids;
-                          while (*current_id)
-                            {
-                              report_format_t value_rf;
-                              gchar *name;
-                              find_report_format_with_permission
-                                    (*current_id, &value_rf,
-                                     "get_report_formats");
-                              name = value_rf ? report_format_name (value_rf)
-                                              : NULL;
-
-                              SENDF_TO_CLIENT_OR_FAIL
-                                ("<report_format id=\"%s\">"
-                                 "<name>%s</name>"
-                                 "</report_format>",
-                                 *current_id,
-                                 name ? name : "");
-
-                              g_free (name);
-                              current_id ++;
-                            }
-                          g_strfreev (ids);
-                        }
-
-                      SENDF_TO_CLIENT_OR_FAIL
-                        ("</value><default>%s",
-                         fallback ? fallback : "");
-                      if (fallback)
-                        {
-                          gchar **ids, **current_id;
-                          ids = g_strsplit (fallback, ",", -1);
-                          current_id = ids;
-                          while (*current_id)
-                            {
-                              report_format_t value_rf;
-                              gchar *name;
-                              find_report_format_with_permission
-                                    (*current_id, &value_rf,
-                                     "get_report_formats");
-                              name = value_rf ? report_format_name (value_rf)
-                                              : NULL;
-
-                              SENDF_TO_CLIENT_OR_FAIL
-                                ("<report_format id=\"%s\">"
-                                 "<name>%s</name>"
-                                 "</report_format>",
-                                 *current_id,
-                                 name ? name : "");
-
-                              g_free (name);
-                              current_id ++;
-                            }
-                          g_strfreev (ids);
-                        }
-
-                      SENDF_TO_CLIENT_OR_FAIL
-                        ("</default>");
-                    }
-                  else
-                    {
-                      SENDF_TO_CLIENT_OR_FAIL
-                        ("</type>"
-                         "<value>%s</value>"
-                         "<default>%s</default>",
-                         report_format_param_iterator_value (&params),
-                         report_format_param_iterator_fallback (&params));
-                    }
-
-                  report_format_param_type_t param_type;
-                  param_type = report_format_param_iterator_type (&params);
-                  if (param_type == REPORT_FORMAT_PARAM_TYPE_SELECTION
-                      || param_type == REPORT_FORMAT_PARAM_TYPE_MULTI_SELECTION)
-                    {
-                      SEND_TO_CLIENT_OR_FAIL ("<options>");
-                      init_param_option_iterator
-                        (&options,
-                        report_format_param_iterator_param
-                          (&params),
-                        1,
-                        NULL);
-                      while (next (&options))
-                        SENDF_TO_CLIENT_OR_FAIL
-                         ("<option>%s</option>",
-                          param_option_iterator_value (&options));
-                      cleanup_iterator (&options);
-                      SEND_TO_CLIENT_OR_FAIL ("</options>");
-                    }
-
-                  SEND_TO_CLIENT_OR_FAIL ("</param>");
-                }
-              cleanup_iterator (&params);
-            }
-
-          if (get_report_formats_data->get.details)
-            {
-              file_iterator_t files;
-              if (init_report_format_file_iterator
-                    (&files, get_iterator_resource (&report_formats)))
-                {
-                  cleanup_iterator (&report_formats);
-                  error_send_to_client (error);
-                  return;
-                }
-              while (next_file (&files))
-                {
-                  gchar *content = file_iterator_content_64 (&files);
-                  SENDF_TO_CLIENT_OR_FAIL
-                   ("<file name=\"%s\">%s</file>",
-                    file_iterator_name (&files),
-                    content);
-                  g_free (content);
-                }
-              cleanup_file_iterator (&files);
-
-              SENDF_TO_CLIENT_OR_FAIL
-               ("<signature>%s</signature>",
-                report_format_iterator_signature (&report_formats));
-            }
-
-          SENDF_TO_CLIENT_OR_FAIL
-           ("<trust>%s<time>%s</time></trust>"
-            "<active>%i</active>",
-            get_report_formats_data->get.trash
-              ? report_format_iterator_trust (&report_formats)
-              : (report_format_predefined (get_iterator_resource
-                                            (&report_formats))
-                  ? "yes"
-                  : report_format_iterator_trust (&report_formats)),
-            iso_time (&trust_time),
-            report_format_iterator_active (&report_formats));
-
-          SEND_TO_CLIENT_OR_FAIL ("</report_format>");
-          count++;
-        }
-      cleanup_iterator (&report_formats);
-      filtered = get_report_formats_data->get.id
-                  ? 1
-                  : report_format_count (&get_report_formats_data->get);
-      SEND_GET_END ("report_format", &get_report_formats_data->get,
-                    count, filtered);
-    }
-  get_report_formats_data_reset (get_report_formats_data);
-  set_client_state (CLIENT_AUTHENTIC);
-}
-
 /**
  * @brief Assign resource iterator with an init iterator based on the type
  * in the get command data.
@@ -13594,10 +13216,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
       case CLIENT_GET_REPORTS:
         handle_get_reports (gmp_parser, error);
-        break;
-
-      case CLIENT_GET_REPORT_FORMATS:
-        handle_get_report_formats (gmp_parser, error);
         break;
 
       case CLIENT_GET_RESOURCE_NAMES:

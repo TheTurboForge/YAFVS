@@ -26,6 +26,7 @@ const GSA_ZH_TW_LOCALE: &str =
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GVMD_CMAKE: &str = include_str!("../../../components/gvmd/CMakeLists.txt");
 const GVMD_GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
+const GVMD_MANAGE_COMMANDS: &str = include_str!("../../../components/gvmd/src/manage_commands.c");
 const GVMD_INSTALL: &str = include_str!("../../../components/gvmd/INSTALL.md");
 const MANAGE_ALERTS_C: &str = include_str!("../../../components/gvmd/src/manage_alerts.c");
 const MANAGE_ALERTS_H: &str = include_str!("../../../components/gvmd/src/manage_alerts.h");
@@ -350,6 +351,16 @@ fn openapi_operation_block(path_block: &str, method: &str) -> String {
 
 #[test]
 fn generic_gvmd_alert_create_and_modify_entry_points_are_removed() {
+    let public_commands = GVMD_MANAGE_COMMANDS
+        .split_once("command_t gmp_commands[]")
+        .expect("public GMP command registry must exist")
+        .1
+        .split_once("{NULL, NULL}};")
+        .expect("public GMP command registry must terminate")
+        .0;
+    assert!(!public_commands.contains("CREATE_ALERT"));
+    assert!(GVMD_MANAGE_COMMANDS.contains("\"CREATE_ALERT\""));
+
     for retired in ["\ncreate_alert (", "\nmodify_alert ("] {
         assert!(
             !MANAGE_SQL_ALERTS_C.contains(retired),
@@ -595,9 +606,7 @@ fn native_retained_alert_create_methods_are_guarded_and_broad_mutation_routes_re
         "alert clone must stay closed without direct write-control"
     );
 
-    for path in [
-        "/api/v1/alerts/12345678-1234-1234-1234-123456789abc/test",
-    ] {
+    for path in ["/api/v1/alerts/12345678-1234-1234-1234-123456789abc/test"] {
         assert!(
             !direct_api_v1_path_is_allowed(path),
             "alert delivery/control path must not be direct allowlisted: {path}"

@@ -78,7 +78,6 @@ command_t gmp_commands[]
     {"GET_PORT_LISTS", "Get all port lists."},
     {"GET_PREFERENCES", "Get preferences for all available NVTs."},
     {"GET_REPORTS", "Get all reports."},
-    {"GET_REPORT_FORMATS", "Get all report formats."},
     {"GET_SCOPE", "Get one reporting scope."},
     {"GET_SCOPES", "Get reporting scopes."},
     {"GET_SCANNERS", "Get all scanners."},
@@ -120,6 +119,10 @@ command_t gmp_commands[]
 /* Native control paths can retain gvmd ACL operation keys after their public
  * GMP parser, help, and schema surfaces are removed. */
 static const char *native_acl_operations[] = {
+  "CREATE_ALERT",
+  "CREATE_SCHEDULE",
+  "GET_FILTERS",
+  "GET_REPORT_FORMATS",
   "MODIFY_SCHEDULE",
   NULL
 };

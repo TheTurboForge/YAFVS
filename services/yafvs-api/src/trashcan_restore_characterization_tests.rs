@@ -91,7 +91,6 @@ fn trashcan_inventory_is_native_only_and_has_no_gmp_fallback() {
         ("get_credentials_data", "credential"),
         ("get_overrides_data", "override"),
         ("get_port_lists_data", "port_list"),
-        ("get_report_formats_data", "report_format"),
         ("get_scanners_data", "scanner"),
         ("get_schedules_data", "schedule"),
         ("get_tags_data", "tag"),
@@ -106,6 +105,7 @@ fn trashcan_inventory_is_native_only_and_has_no_gmp_fallback() {
             "raw manager trash compatibility lost {resource_type} attribute parsing"
         );
     }
+    assert!(!GVMD_GMP.contains("get_report_formats_data"));
     assert!(
         !GVMD_GMP.contains("get_filters_data"),
         "saved-filter trash inventory and lifecycle are native; GET_FILTERS must stay retired"

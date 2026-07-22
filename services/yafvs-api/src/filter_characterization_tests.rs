@@ -77,7 +77,8 @@ fn dedicated_get_filters_xml_transport_is_retired_without_losing_shared_filter_s
     ] {
         assert!(!GVMD_GMP.contains(retired));
     }
-    assert!(!MANAGE_COMMANDS.contains("GET_FILTERS"));
+    assert!(!MANAGE_COMMANDS.contains("{\"GET_FILTERS\""));
+    assert!(MANAGE_COMMANDS.contains("\"GET_FILTERS\","));
     for retired in [
         "filter_count (",
         "filter_iterator_type (",
@@ -120,7 +121,7 @@ fn dedicated_get_filters_xml_transport_is_retired_without_losing_shared_filter_s
 
     let bulk_export = inherited_function(GSAD_GMP_C, "bulk_export_gmp");
     let rejection = bulk_export
-        .find("str_equal (type, \"filter\")")
+        .find("g_ascii_strcasecmp (type, \"filter\") == 0")
         .expect("generic gsad bulk export must reject saved filters");
     let synthesis = bulk_export
         .find("export_many")
@@ -399,5 +400,5 @@ fn openapi_documents_filter_metadata_patch_and_trash_move_boundary() {
     assert!(!GSAD_GMP_C.contains("export_filter_gmp"));
     assert!(!GSAD_GMP_C.contains("export_filters_gmp"));
     let bulk_export = inherited_function(GSAD_GMP_C, "bulk_export_gmp");
-    assert!(bulk_export.contains("str_equal (type, \"filter\")"));
+    assert!(bulk_export.contains("g_ascii_strcasecmp (type, \"filter\") == 0"));
 }

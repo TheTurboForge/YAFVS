@@ -161,6 +161,7 @@ fn native_schedule_write_acl_key_is_not_a_public_gmp_command() {
     assert!(!public_commands.contains("CREATE_SCHEDULE"));
     assert!(!public_commands.contains("MODIFY_SCHEDULE"));
     assert!(MANAGE_COMMANDS.contains("native_acl_operations"));
+    assert!(MANAGE_COMMANDS.contains("\"CREATE_SCHEDULE\""));
     assert!(MANAGE_COMMANDS.contains("\"MODIFY_SCHEDULE\""));
     assert!(!GMP_XML_SCHEMA.contains("<name>create_schedule</name>"));
     assert!(!GMP_XML_SCHEMA.contains("<name>modify_schedule</name>"));

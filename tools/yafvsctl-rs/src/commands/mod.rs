@@ -22,6 +22,7 @@ mod feed_generation;
 mod gvmd_retirement;
 mod gvmd_smoke;
 mod license;
+mod license_policy;
 mod native_api_request;
 mod native_bulk_modify_schedules;
 mod native_delete_overrides;

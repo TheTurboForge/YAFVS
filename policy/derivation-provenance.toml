@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+schema_version = 1
+policy_epoch = "8c6ac269b23a1e8080e314a83e26754865e5b0f8"
+source_suffixes = ["c", "h", "cc", "cpp", "rs", "py", "js", "jsx", "ts", "tsx", "sql"]
+allowed_derivations = ["original", "behavioral-reimplementation", "adaptation", "translation"]
+
+# `original` means written for YAFVS without adapting source expression. Behavioral
+# reimplementation may use documented behavior and independently anchored tests.
+# Adaptation and translation both require an exact YAFVS-Source-Provenance marker.
+[[review_surfaces]]
+id = "native-manager-gvmd-derivation"
+path = "services/yafvs-api/"
+status = "legal-review-required"
+question = "Classify native manager/API code as independent behavioral reimplementation or an adaptation of AGPL-3.0-or-later gvmd, and confirm the resulting distribution license obligation."

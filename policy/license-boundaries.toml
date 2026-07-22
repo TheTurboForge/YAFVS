@@ -1,0 +1,141 @@
+# SPDX-FileCopyrightText: 2026 Robert Pelfrey <Robert@Pelfrey.de>
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+schema_version = 1
+policy_epoch = "8c6ac269b23a1e8080e314a83e26754865e5b0f8"
+
+# The longest matching prefix governs newly added source. This is a guardrail,
+# not a claim that every inherited file under the prefix has one uniform license.
+[[path_rules]]
+id = "yafvs-default"
+prefix = ""
+allowed_licenses = ["GPL-3.0-or-later"]
+
+[[path_rules]]
+id = "openvas-scanner-gpl2"
+prefix = "components/openvas-scanner/"
+allowed_licenses = ["GPL-2.0-only", "GPL-2.0-or-later"]
+
+[[path_rules]]
+id = "openvas-scanner-separate-compose-tests"
+prefix = "components/openvas-scanner/compose/tests/"
+allowed_licenses = ["AGPL-3.0-or-later", "GPL-2.0-only", "GPL-2.0-or-later"]
+
+[[path_rules]]
+id = "gvm-libs-gpl2-plus"
+prefix = "components/gvm-libs/"
+allowed_licenses = ["GPL-2.0-or-later"]
+
+[[path_rules]]
+id = "openvas-smb-gpl2-plus"
+prefix = "components/openvas-smb/"
+allowed_licenses = ["GPL-2.0-or-later"]
+
+[[path_rules]]
+id = "gvmd-agpl"
+prefix = "components/gvmd/"
+allowed_licenses = ["AGPL-3.0-or-later", "GPL-2.0-or-later"]
+
+[[path_rules]]
+id = "gsa-agpl"
+prefix = "components/gsa/"
+allowed_licenses = ["AGPL-3.0-or-later", "GPL-3.0-or-later"]
+
+[[path_rules]]
+id = "gsad-agpl"
+prefix = "components/gsad/"
+allowed_licenses = ["AGPL-2.0-or-later", "AGPL-3.0-or-later", "GPL-2.0-or-later"]
+
+[[path_rules]]
+id = "ospd-openvas-agpl"
+prefix = "components/ospd-openvas/"
+allowed_licenses = ["AGPL-3.0-or-later", "GPL-2.0-or-later"]
+
+[[path_rules]]
+id = "notus-agpl"
+prefix = "components/notus-scanner/"
+allowed_licenses = ["AGPL-3.0-or-later"]
+
+[[path_rules]]
+id = "pg-gvm-gpl3"
+prefix = "components/pg-gvm/"
+allowed_licenses = ["AGPL-3.0-or-later", "GPL-2.0-or-later", "GPL-3.0-or-later"]
+
+[[path_rules]]
+id = "feed-sync-gpl3"
+prefix = "components/greenbone-feed-sync/"
+allowed_licenses = ["GPL-3.0-or-later"]
+
+[[artifacts]]
+id = "openvas-scanner"
+concluded_license = "GPL-2.0-only"
+
+[[artifacts]]
+id = "gvm-libs"
+concluded_license = "GPL-2.0-or-later"
+
+[[artifacts]]
+id = "openvas-smb"
+concluded_license = "GPL-2.0-or-later"
+
+[[artifacts]]
+id = "gvmd"
+concluded_license = "AGPL-3.0-or-later"
+
+[[artifacts]]
+id = "gsad"
+concluded_license = "AGPL-3.0-or-later"
+
+[[artifacts]]
+id = "yafvs-domain"
+concluded_license = "GPL-3.0-or-later"
+
+[[artifacts]]
+id = "yafvs-api"
+concluded_license = "GPL-3.0-or-later"
+
+[[artifacts]]
+id = "yafvsctl"
+concluded_license = "GPL-3.0-or-later"
+
+[[dependency_edges]]
+from = "openvas-scanner"
+to = "gvm-libs"
+relationship = "dynamic-link"
+rationale = "The inherited scanner executable links the GPL-2.0-or-later GVM libraries."
+
+[[dependency_edges]]
+from = "openvas-scanner"
+to = "openvas-smb"
+relationship = "dynamic-link"
+rationale = "SMB scanner integration uses the GPL-2.0-or-later openvas-smb library."
+
+[[dependency_edges]]
+from = "gvmd"
+to = "gvm-libs"
+relationship = "dynamic-link"
+rationale = "The inherited AGPL manager links the GPL-2.0-or-later GVM libraries."
+
+[[dependency_edges]]
+from = "gsad"
+to = "gvm-libs"
+relationship = "dynamic-link"
+rationale = "The inherited AGPL web daemon links the GPL-2.0-or-later GVM libraries."
+
+[[dependency_edges]]
+from = "yafvs-api"
+to = "yafvs-domain"
+relationship = "static-link"
+rationale = "The native API consumes the shared GPL-3.0-or-later Rust domain crate."
+
+[[dependency_edges]]
+from = "yafvsctl"
+to = "yafvs-domain"
+relationship = "static-link"
+rationale = "The Rust control CLI consumes the shared GPL-3.0-or-later domain crate."
+
+[[dependency_edges]]
+from = "yafvs-api"
+to = "openvas-scanner"
+relationship = "process"
+rationale = "Manager/API and scanner remain separately built processes communicating through explicit runtime interfaces."

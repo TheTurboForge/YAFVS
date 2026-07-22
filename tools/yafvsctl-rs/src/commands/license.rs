@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use super::common::{git_tracked_files, metadata, run_git};
+use super::license_policy::license_policy_findings;
 use super::repository::component_specs;
 use crate::process::{CommandRunner, SystemCommandRunner};
 use crate::result::{Finding, ResultEnvelope, make_result};
@@ -233,6 +234,8 @@ pub(crate) fn command_license_report_with_runner(
             ),
         )),
     }
+
+    findings.extend(license_policy_findings(repo_root, runner));
 
     match git_tracked_files(runner, repo_root) {
         Some(paths) => {

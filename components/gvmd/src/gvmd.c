@@ -2315,18 +2315,6 @@ gvmd (int argc, char** argv, char *env[])
   static gchar *delete_user = NULL;
   static gchar *inheritor = NULL;
   static gchar *user = NULL;
-  static gchar *create_scanner = NULL;
-  static gchar *modify_scanner = NULL;
-  static gchar *scanner_host = NULL;
-  static gchar *scanner_port = NULL;
-  static gchar *scanner_type = NULL;
-  static gchar *scanner_ca_pub = NULL;
-  static gchar *scanner_credential = NULL;
-  static gchar *scanner_key_pub = NULL;
-  static gchar *scanner_key_priv = NULL;
-  static gchar *scanner_relay_host = NULL;
-  static gchar *scanner_relay_port = NULL;
-  static int scanner_no_default_certs = 0;
   static int scanner_connection_retry = SCANNER_CONNECTION_RETRY_DEFAULT;
   static int schedule_timeout = SCHEDULE_TIMEOUT_DEFAULT;
   static int affected_products_query_size
@@ -2334,7 +2322,6 @@ gvmd (int argc, char** argv, char *env[])
   static int secinfo_fast_init = SECINFO_FAST_INIT_DEFAULT;
   static int secinfo_commit_size = SECINFO_COMMIT_SIZE_DEFAULT;
   static int secinfo_update_strategy = 0;
-  static gchar *delete_scanner = NULL;
   static gchar *verify_scanner = NULL;
   static gchar *priorities = "NORMAL";
   static gchar *dh_params = NULL;
@@ -2352,7 +2339,6 @@ gvmd (int argc, char** argv, char *env[])
   static gchar *manager_port_string = NULL;
   static gchar *manager_port_string_2 = NULL;
   static gchar *modify_setting = NULL;
-  static gchar *scanner_name = NULL;
   static gchar *rc_name = NULL;
   static gchar *relay_mapper = NULL;
   static gchar *relays_path = NULL;
@@ -2420,10 +2406,6 @@ gvmd (int argc, char** argv, char *env[])
           " and exit."
           " With no other options given, a 4096 bit RSA key is created.",
           NULL },
-        { "create-scanner", '\0', 0, G_OPTION_ARG_STRING,
-          &create_scanner,
-          "Create global scanner <scanner> and exit.",
-          "<scanner>" },
         { "create-user", '\0', 0, G_OPTION_ARG_STRING,
           &create_user,
           "Create admin user <username> and exit.",
@@ -2453,10 +2435,6 @@ gvmd (int argc, char** argv, char *env[])
           &decrypt_all_credentials,
           NULL,
           NULL },
-        { "delete-scanner", '\0', 0, G_OPTION_ARG_STRING,
-          &delete_scanner,
-          "Delete scanner <scanner-uuid> and exit.",
-          "<scanner-uuid>" },
         { "delete-user", '\0', 0, G_OPTION_ARG_STRING,
           &delete_user,
           "Delete user <username> and exit.",
@@ -2622,10 +2600,6 @@ gvmd (int argc, char** argv, char *env[])
           "Minimum memory in MiB for feed updates. Default: 0."
           " Feed updates are skipped if less physical memory is available.",
           "<number>" },
-        { "modify-scanner", '\0', 0, G_OPTION_ARG_STRING,
-          &modify_scanner,
-          "Modify scanner <scanner-uuid> and exit.",
-          "<scanner-uuid>" },
         { "modify-setting", '\0', 0, G_OPTION_ARG_STRING,
           &modify_setting,
           "Modify setting <uuid> and exit.",
@@ -2696,63 +2670,11 @@ gvmd (int argc, char** argv, char *env[])
           &role,
           "Role for --create-user and --get-users.",
           "<role>" },
-        { "scanner-ca-pub", '\0', 0, G_OPTION_ARG_STRING,
-          &scanner_ca_pub,
-          "Scanner CA Certificate path for --[create|modify]-scanner.",
-          "<scanner-ca-pub>" },
         { "scanner-connection-retry", '\0', 0, G_OPTION_ARG_INT,
           &scanner_connection_retry,
           "Number of auto retries if scanner connection is lost in a running task,"
           " default: "G_STRINGIFY (SCANNER_CONNECTION_RETRY_DEFAULT),
           "<number>" },
-        { "scanner-credential", '\0', 0, G_OPTION_ARG_STRING,
-          &scanner_credential,
-          "Scanner credential for --create-scanner and --modify-scanner."
-          " Can be blank to unset or a credential UUID."
-          " If omitted, a new credential can be created instead.",
-          "<scanner-credential>" },
-        { "scanner-host", '\0', 0, G_OPTION_ARG_STRING,
-          &scanner_host,
-          "Scanner host or socket for --create-scanner and --modify-scanner.",
-          "<scanner-host>" },
-        { "scanner-key-priv", '\0', 0, G_OPTION_ARG_STRING,
-          &scanner_key_priv,
-          "Scanner private key path for --[create|modify]-scanner"
-          " if --scanner-credential is not given.",
-          "<scanner-key-private>" },
-        { "scanner-key-pub", '\0', 0, G_OPTION_ARG_STRING,
-          &scanner_key_pub,
-          "Scanner Certificate path for --[create|modify]-scanner"
-          " if --scanner-credential is not given.",
-          "<scanner-key-public>" },
-        { "scanner-name", '\0', 0, G_OPTION_ARG_STRING,
-          &scanner_name,
-          "Name for --modify-scanner.",
-          "<name>" },
-        { "scanner-port", '\0', 0, G_OPTION_ARG_STRING,
-          &scanner_port,
-          "Scanner port for --create-scanner and --modify-scanner."
-          " Default is " G_STRINGIFY (GVMD_PORT) ".",
-          "<scanner-port>" },
-        { "scanner-relay-host", '\0', 0, G_OPTION_ARG_STRING,
-          &scanner_relay_host,
-          "Scanner relay host or socket for --create-scanner and"
-          " --modify-scanner.",
-          "<scanner-relay-host>" },
-        { "scanner-relay-port", '\0', 0, G_OPTION_ARG_STRING,
-          &scanner_relay_port,
-          "Scanner relay port for --create-scanner and --modify-scanner.",
-          "<scanner-relay-port>" },
-        { "scanner-type", '\0', 0, G_OPTION_ARG_STRING,
-          &scanner_type,
-          "Scanner type for --create-scanner and --modify-scanner."
-          " Either 'OpenVAS', 'OSP', 'OSP-Sensor'"
-          " or a number as used in GMP.",
-          "<scanner-type>" },
-        { "no-default-certs", '\0', 0, G_OPTION_ARG_NONE,
-          &scanner_no_default_certs,
-          "Bypass reading/validating scanner default certificate files for "
-          "--create-scanner.", NULL },
         { "scan-handler-active-time", '\0', 0, G_OPTION_ARG_INT,
           &scan_handler_active_time,
           "Minimum time in seconds which queued scan handlers will keep"
@@ -3442,117 +3364,6 @@ gvmd (int argc, char** argv, char *env[])
       return EXIT_SUCCESS;
     }
 
-  if (create_scanner)
-    {
-      int ret;
-      scanner_type_t type;
-      char *stype;
-
-      /* Create the scanner and then exit. */
-
-      setproctitle ("Creating scanner");
-
-      if (option_lock (&lockfile_checking))
-        return EXIT_FAILURE;
-
-      if (!scanner_host)
-        {
-          printf ("A --scanner-host is required\n");
-          return EXIT_FAILURE;
-        }
-      if (!scanner_port)
-        scanner_port = G_STRINGIFY (GVMD_PORT);
-      if (!scanner_ca_pub)
-        scanner_ca_pub = CACERT;
-      if (!scanner_key_pub)
-        scanner_key_pub = CLIENTCERT;
-      if (!scanner_key_priv)
-        scanner_key_priv = CLIENTKEY;
-
-      if (!scanner_type || !strcasecmp (scanner_type, "OpenVAS"))
-        type = SCANNER_TYPE_OPENVAS;
-      else if (!strcasecmp (scanner_type, "OSP-Sensor"))
-        type = SCANNER_TYPE_OSP_SENSOR;
-      else if (!strcasecmp (scanner_type, "openvasd"))
-        type = SCANNER_TYPE_OPENVASD;
-      else if (!strcasecmp (scanner_type, "openvasd-sensor"))
-        type = SCANNER_TYPE_OPENVASD_SENSOR;
-      else
-        {
-          type = atoi (scanner_type);
-          if (scanner_type_valid (type) == 0
-              || type == SCANNER_TYPE_CVE)
-            {
-              fprintf (stderr, "Invalid scanner type value.\n");
-              return EXIT_FAILURE;
-            }
-        }
-      stype = g_strdup_printf ("%u", type);
-      ret = manage_create_scanner (log_config, &database, create_scanner,
-                                   scanner_host, scanner_port, stype,
-                                   scanner_ca_pub, scanner_credential,
-                                   scanner_key_pub, scanner_key_priv,
-                                   scanner_relay_host, scanner_relay_port,
-                                   scanner_no_default_certs);
-      g_free (stype);
-      log_config_free ();
-      if (ret)
-        return EXIT_FAILURE;
-      return EXIT_SUCCESS;
-    }
-
-  if (modify_scanner)
-    {
-      int ret;
-      char *stype;
-
-      /* Modify the scanner and then exit. */
-
-      setproctitle ("Modifying scanner");
-
-      if (option_lock (&lockfile_checking))
-        return EXIT_FAILURE;
-
-      if (scanner_type)
-        {
-          scanner_type_t type;
-
-          if (strcasecmp (scanner_type, "OpenVAS") == 0)
-            type = SCANNER_TYPE_OPENVAS;
-          else if (!strcasecmp (scanner_type, "OSP-Sensor"))
-            type = SCANNER_TYPE_OSP_SENSOR;
-          else if (!strcasecmp (scanner_type, "openvasd"))
-            type = SCANNER_TYPE_OPENVASD;
-          else if (!strcasecmp (scanner_type, "openvasd-sensor"))
-            type = SCANNER_TYPE_OPENVASD_SENSOR;
-          else
-            {
-              type = atoi (scanner_type);
-              if (scanner_type_valid (type) == 0
-                  || type == SCANNER_TYPE_CVE)
-                {
-                  fprintf (stderr, "Invalid scanner type value.\n");
-                  return EXIT_FAILURE;
-                }
-            }
-
-          stype = g_strdup_printf ("%u", type);
-        }
-      else
-        stype = NULL;
-
-      ret = manage_modify_scanner (log_config, &database, modify_scanner,
-                                   scanner_name, scanner_host, scanner_port,
-                                   stype, scanner_ca_pub, scanner_credential,
-                                   scanner_key_pub, scanner_key_priv,
-                                   scanner_relay_host, scanner_relay_port);
-      g_free (stype);
-      log_config_free ();
-      if (ret)
-        return EXIT_FAILURE;
-      return EXIT_SUCCESS;
-    }
-
   if (check_alerts)
     {
       int ret;
@@ -3661,22 +3472,6 @@ gvmd (int argc, char** argv, char *env[])
         return EXIT_FAILURE;
 
       ret = manage_get_scanners (log_config, &database);
-      log_config_free ();
-      if (ret)
-        return EXIT_FAILURE;
-      return EXIT_SUCCESS;
-    }
-
-  if (delete_scanner)
-    {
-      int ret;
-
-      setproctitle ("Deleting scanner");
-
-      if (option_lock (&lockfile_checking))
-        return EXIT_FAILURE;
-
-      ret = manage_delete_scanner (log_config, &database, delete_scanner);
       log_config_free ();
       if (ret)
         return EXIT_FAILURE;

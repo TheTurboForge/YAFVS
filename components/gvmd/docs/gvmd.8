@@ -31,9 +31,6 @@ Check if client connection was closed every NUMBER seconds. 0 to disable. Defaul
 \fB--create-encryption-key\f1
 Create a new credential encryption key, set it as the new default and exit. With no other options given, a 4096 bit RSA key is created. 
 .TP
-\fB--create-scanner=\fISCANNER\fB\f1
-Create global scanner SCANNER and exit.
-.TP
 \fB--create-user=\fIUSERNAME\fB\f1
 Create admin user USERNAME and exit.
 .TP
@@ -45,9 +42,6 @@ Use HOST as database host or socket directory for PostgreSQL.
 .TP
 \fB--db-port=\fIPORT\fB\f1
 Use PORT as database port or socket extension for PostgreSQL.
-.TP
-\fB--delete-scanner=\fISCANNER-UUID\fB\f1
-Delete scanner SCANNER-UUID and exit.
 .TP
 \fB--delete-user=\fIUSERNAME\fB\f1
 Delete user USERNAME and exit.
@@ -142,9 +136,6 @@ Migrate the database and exit.
 \fB--min-mem-feed-update=\fINUMBER\fB\f1
 Minimum memory in MiB for feed updates. Default: 0. Feed updates are skipped if less physical memory is available. 
 .TP
-\fB--modify-scanner=\fISCANNER-UUID\fB\f1
-Modify scanner SCANNER-UUID and exit.
-.TP
 \fB--modify-setting=\fIUUID\fB\f1
 Modify setting UUID and exit.
 .TP
@@ -185,40 +176,6 @@ Path to an externally managed JSON file used to automatically update the relays 
 .TP
 \fB--role=\fIROLE\fB\f1
 Role for --create-user and --get-users.
-.TP
-\fB--scanner-ca-pub=\fISCANNER-CA-PUB\fB\f1
-Scanner CA Certificate path for --[create|modify]-scanner.
-.TP
-\fB--scanner-credential=\fISCANNER-CREDENTIAL\fB\f1
-Scanner credential for --create-scanner and --modify-scanner.
-
-Can be blank to unset or a credential UUID. If omitted, a new credential can be created instead.
-.TP
-\fB--scanner-host=\fISCANNER-HOST\fB\f1
-Scanner host or socket for --create-scanner and --modify-scanner.
-.TP
-\fB--scanner-key-priv=\fISCANNER-KEY-PRIVATE\fB\f1
-Scanner private key path for --[create|modify]-scanner if --scanner-credential is not given.
-.TP
-\fB--scanner-key-pub=\fISCANNER-KEY-PUBLIC\fB\f1
-Scanner Certificate path for --[create|modify]-scanner if --scanner-credential is not given.
-.TP
-\fB--scanner-name=\fINAME\fB\f1
-Name for --modify-scanner.
-.TP
-\fB--scanner-port=\fISCANNER-PORT\fB\f1
-Scanner port for --create-scanner and --modify-scanner.
-.TP
-\fB--scanner-relay-host=\fISCANNER-HOST\fB\f1
-Scanner relay host or socket for --create-scanner and --modify-scanner. 
-.TP
-\fB--scanner-relay-port=\fISCANNER-PORT\fB\f1
-Scanner relay port for --create-scanner and --modify-scanner.
-.TP
-\fB--scanner-type=\fISCANNER-TYPE\fB\f1
-Scanner type for --create-scanner and --modify-scanner.
-
-Either 'OpenVAS', 'GMP', 'OSP-Sensor' or a number as used in GMP.
 .TP
 \fB--scanner-connection-retry=\fINUMBER\fB\f1
 Number of auto retries if scanner connection is lost in a running task.

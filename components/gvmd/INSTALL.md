@@ -298,9 +298,11 @@ Get the UUID of the `OpenVAS Default` scanner:
 
     gvmd --get-scanners
 
-Update the path (example, path needs to be adapted accordingly):
-
-    gvmd --modify-scanner=<uuid of OpenVAS Default scanner> --scanner-host=<install-prefix>/var/run/ospd/ospd-openvas.sock
+Update the built-in scanner socket through YAFVS native scanner configuration.
+The authenticated scanner full-configuration replacement endpoint owns the
+host/socket and relay fields; the removed gvmd scanner mutation options cannot
+update them. See the [YAFVS API contract](../../docs/API_CONTRACT.md) for the
+native write-control contract.
 
 ## Logging Configuration
 
@@ -506,42 +508,14 @@ Finally, reset all credentials, by hand.
 
 ## Updating Scanner Certificates
 
-If you have changed the CA certificate used to sign the server and client
-certificates or the client certificate itself you will need to update the
-certificates in Manager database as well.
-
-The database can be updated using the following command:
-
-    gvmd --modify-scanner <uuid> \
-         --scanner-ca-pub <cacert> \
-         --scanner-key-pub <clientcert> \
-         --scanner-key-priv <clientkey>
-
-Where:
-- `<uuid>`
-
-  refers to the UUID used by OpenVAS Manager to identify the scanner;
-  the UUID can be retrieved with `gvmd --get-scanners`.
-
-- `<cacert>`
-
-  refers to the certificate of the CA used to sign the scanner certificate.
-  Leaving this empty will delete the CA certificate of the scanner. This option
-  can be dropped if the scanner uses a certificate that corresponds with the
-  default CA certificate of Manager.
-
-- `<clientcert>`
-
-  refers to the certificate Manager uses to authenticate when
-  connecting to the scanner. For a default OSP scanner setup
-  with self-signed certificates this would be
-  `/var/lib/gvm/CA/clientcert.pem`.
-
-- `<clientkey>`
-  refers to the private key Manager uses to authenticate when
-  connecting to the scanner. For a default OSP scanner setup
-  with self-signed certificates this would be
-  `/var/lib/gvm/private/CA/clientkey.pem`.
+If you change scanner trust or client-authentication material, update the
+scanner through YAFVS native scanner configuration. The authenticated
+full-configuration replacement contract owns the CA bundle and certificate
+credential reference together with host, port, type, and relay configuration;
+the removed gvmd scanner mutation options cannot update them. The scanner UUID
+can still be read with `gvmd --get-scanners` or the native scanner metadata
+endpoint. See the [YAFVS API contract](../../docs/API_CONTRACT.md) for the
+native write-control contract.
 
 To set just a new default CA certificate:
 

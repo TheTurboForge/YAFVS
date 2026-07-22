@@ -7,6 +7,8 @@ use axum::http::Method;
 use crate::direct_api::{direct_api_v1_method_is_allowed, direct_api_v1_path_is_allowed};
 
 const MANAGE_SQL_C: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
+const MANAGE_H: &str = include_str!("../../../components/gvmd/src/manage.h");
+const GVMD_C: &str = include_str!("../../../components/gvmd/src/gvmd.c");
 const GMP_C: &str = include_str!("../../../components/gvmd/src/gmp.c");
 const GSAD_GMP_C: &str = include_str!("../../../components/gsad/src/gsad_gmp.c");
 const GSAD_VALIDATOR_C: &str = include_str!("../../../components/gsad/src/gsad_validator.c");
@@ -22,6 +24,58 @@ fn inherited_function(source: &str, name: &str) -> String {
     let tail = &source[start..];
     let end = tail.find("\n/**").unwrap_or(tail.len());
     tail[..end].to_string()
+}
+
+#[test]
+fn retired_cli_scanner_mutations_and_writers_stay_absent_while_verify_remains() {
+    for retired in [
+        "--create-scanner",
+        "--modify-scanner",
+        "--delete-scanner",
+        "--scanner-ca-pub",
+        "--scanner-credential",
+        "--scanner-host",
+        "--scanner-key-priv",
+        "--scanner-key-pub",
+        "--scanner-name",
+        "--scanner-port",
+        "--scanner-relay-host",
+        "--scanner-relay-port",
+        "--scanner-type",
+        "--no-default-certs",
+        "manage_create_scanner",
+        "manage_modify_scanner",
+        "manage_delete_scanner",
+    ] {
+        assert!(
+            !GVMD_C.contains(retired),
+            "gvmd CLI still exposes {retired}"
+        );
+    }
+    for retired in [
+        "manage_create_scanner (",
+        "manage_modify_scanner (",
+        "manage_delete_scanner (",
+        "create_scanner (",
+        "modify_scanner (",
+        "delete_scanner (",
+        "insert_scanner (",
+    ] {
+        assert!(
+            !MANAGE_H.contains(retired),
+            "manage.h still declares {retired}"
+        );
+        assert!(
+            !MANAGE_SQL_C.contains(retired),
+            "manage_sql.c still defines or calls {retired}"
+        );
+    }
+    assert!(GVMD_C.contains("\"verify-scanner\""));
+    assert!(GVMD_C.contains("manage_verify_scanner ("));
+    assert!(MANAGE_H.contains("manage_verify_scanner ("));
+    assert!(MANAGE_H.contains("verify_scanner ("));
+    assert!(MANAGE_SQL_C.contains("manage_verify_scanner ("));
+    assert!(MANAGE_SQL_C.contains("verify_scanner ("));
 }
 
 fn openapi_path_block(path: &str) -> String {
@@ -41,83 +95,6 @@ fn openapi_path_block(path: &str) -> String {
             }
         })
         .unwrap_or_else(|| tail.to_string())
-}
-
-#[test]
-fn retained_cli_create_scanner_couples_metadata_host_relay_ca_and_credentials() {
-    let create = inherited_function(MANAGE_SQL_C, "create_scanner");
-    for required in [
-        "acl_user_may (\"create_scanner\") == 0",
-        "resource_with_name_exists (name, \"scanner\", 0)",
-        "scanner_type_valid (itype) == 0",
-        "check_scanner_feature (",
-        "SCANNER_FEATURE_OPENVASD_DISABLED",
-        "scanner_type_supports_unix_sockets (itype)",
-        "gvm_get_host_type (host) == -1",
-        "get_single_relay_from_file (itype",
-        "CREATE_SCANNER_INVALID_RELAY_PORT",
-        "find_credential_with_permission",
-        "SELECT type != 'cc' FROM credentials",
-        "UPDATE scanners SET credential = %llu WHERE id = %llu;",
-        "sql_commit ();",
-    ] {
-        assert!(
-            create.contains(required),
-            "create_scanner missing {required}"
-        );
-    }
-}
-
-#[test]
-fn retained_cli_modify_scanner_revalidates_connectivity_fields_and_secret_links() {
-    let modify = inherited_function(MANAGE_SQL_C, "modify_scanner");
-    for required in [
-        "acl_user_may (\"modify_scanner\") == 0",
-        "find_scanner_with_permission (scanner_id, &scanner, \"modify_scanner\")",
-        "scanner_type_valid (itype) == 0",
-        "check_scanner_feature (",
-        "scanner_type_supports_unix_sockets (itype)",
-        "gvm_get_host_type (used_host) == -1",
-        "MODIFY_SCANNER_INVALID_RELAY_HOST",
-        "find_credential_with_permission (credential_id, &credential",
-        "SELECT type != 'cc' FROM credentials WHERE id = %llu;",
-        "resource_with_name_exists (name, \"scanner\", scanner)",
-        "UPDATE scanners SET name = %s, comment = %s, type = %d,",
-        "UPDATE scanners SET ca_pub = '%s' WHERE id = %llu;",
-        "UPDATE scanners SET credential = %llu WHERE id = %llu;",
-        "UPDATE scanners SET credential = NULL WHERE id = %llu;",
-    ] {
-        assert!(
-            modify.contains(required),
-            "modify_scanner missing {required}"
-        );
-    }
-}
-
-#[test]
-fn retained_internal_delete_scanner_has_predefined_in_use_trash_and_tag_semantics() {
-    let delete = inherited_function(MANAGE_SQL_C, "delete_scanner");
-    for required in [
-        "acl_user_may (\"delete_scanner\") == 0",
-        "strcmp (scanner_id, SCANNER_UUID_CVE) == 0",
-        "strcmp (scanner_id, SCANNER_UUID_DEFAULT) == 0",
-        "find_scanner_with_permission (scanner_id, &scanner, \"delete_scanner\")",
-        "find_trash (\"scanner\", scanner_id, &scanner)",
-        "WHERE scanner = %llu",
-        "LOCATION_TABLE",
-        "INSERT INTO scanners_trash",
-        "UPDATE tasks",
-        "permissions_set_locations (\"scanner\"",
-        "tags_set_locations (\"scanner\"",
-        "permissions_set_orphans (\"scanner\"",
-        "tags_remove_resource (\"scanner\"",
-        "DELETE FROM scanners WHERE id = %llu;",
-    ] {
-        assert!(
-            delete.contains(required),
-            "delete_scanner missing {required}"
-        );
-    }
 }
 
 #[test]

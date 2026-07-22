@@ -244,9 +244,10 @@ intentionally omits relay configuration. Direct scanner metadata export reuses
 the same redacted detail JSON for scriptable operator reads. Remote scanner
 certificate context, remote TLS/relay verification, external relay-file
 synchronization, legacy file export/download, credential/certificate download
-context, and deeper scanner control remain inherited. Browser and GMP/XML
-scanner lifecycle mutations are removed; native Rust owns the retained scanner
-writes.
+context, and deeper scanner control remain inherited. Browser, GMP/XML, and
+gvmd CLI scanner lifecycle mutations are removed; native Rust owns the retained
+scanner writes. The retained gvmd verification path and external relay-file
+synchronization remain inherited compatibility behavior.
 Port-list list/detail reads are browser-proxied, including port ranges and target
 backlinks. Port-list typed create, metadata/range update, clone, trash, restore,
 hard-delete, and exported-XML import with explicit TCP/UDP ranges are native

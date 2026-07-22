@@ -28,16 +28,15 @@ The `openvas-scanner` repository provides helper scripts and examples to generat
 Detailed examples and scripts are available here:  
 [openvas-scanner: rust/examples/tls](https://github.com/greenbone/openvas-scanner/tree/main/rust/examples/tls)
 
-### Example: Configure certificates for a scanner
+### Configure certificates for a scanner
 
-```bash
-gvmd --modify-scanner <scanner_uuid> \
-  --scanner-ca-pub=server.pem \
-  --scanner-key-pub=client.pem \
-  --scanner-key-priv=client.rsa \
-  --scanner-host="localhost" \
-  --scanner-port=<port>
-```
+YAFVS native scanner configuration owns scanner endpoint, relay, and
+certificate references. Use the authenticated native full-configuration
+replacement contract documented in the
+[YAFVS API contract](../../../docs/API_CONTRACT.md); the removed `gvmd`
+scanner mutation options cannot configure these values. Remote TLS/relay
+verification and external relay-file synchronization remain inherited
+compatibility behavior.
 
 ---
 

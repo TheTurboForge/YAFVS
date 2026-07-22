@@ -1870,75 +1870,11 @@ credential_encrypted_value (credential_t, const char*);
 #define SCANNER_CONNECTION_RETRY_DEFAULT 3
 
 int
-manage_create_scanner (GSList *, const db_conn_info_t *, const char *,
-                       const char *, const char *, const char *, const char *,
-                       const char *, const char *, const char *,
-                       const char *, const char *, int);
-
-int
-manage_modify_scanner (GSList *, const db_conn_info_t *, const char *,
-                       const char *, const char *, const char *, const char *,
-                       const char *, const char *, const char *, const char *,
-                       const char *, const char *);
-
-int
-manage_delete_scanner (GSList *, const db_conn_info_t *, const gchar *);
-
-int
 manage_verify_scanner (GSList *, const db_conn_info_t *, const gchar *);
 
 int
 manage_get_scanners (GSList *, const db_conn_info_t *);
 
-
-typedef enum {
-  CREATE_SCANNER_INTERNAL_ERROR = -1,         ///< Internal error
-  CREATE_SCANNER_SUCCESS = 0,                 ///< Success
-  CREATE_SCANNER_ALREADY_EXISTS,              ///< Scanner already exists
-  CREATE_SCANNER_MISSING_TYPE,                ///< Missing type
-  CREATE_SCANNER_MISSING_HOST,                ///< Missing host
-  CREATE_SCANNER_CREDENTIAL_NOT_FOUND,        ///< Credential not found
-  CREATE_SCANNER_CREDENTIAL_NOT_CC,           ///< Credential must have type "cc"
-  CREATE_SCANNER_INVALID_TYPE,                ///< Invalid type
-  CREATE_SCANNER_INVALID_PORT,                ///< Invalid port
-  CREATE_SCANNER_INVALID_HOST,                ///< Invalid host
-  CREATE_SCANNER_INVALID_RELAY_PORT,          ///< Invalid relay port
-  CREATE_SCANNER_INVALID_RELAY_HOST,          ///< Invalid relay host
-  CREATE_SCANNER_UNIX_SOCKET_UNSUPPORTED,     ///< Type doesn't support UNIX sockets
-  CREATE_SCANNER_OPENVASD_DISABLED,           ///< openvasd feature is disabled
-  CREATE_SCANNER_PERMISSION_DENIED = 99       ///< Permission denied
-} create_scanner_return_t;
-
-create_scanner_return_t
-create_scanner (const char*, const char *, const char *, const char *,
-                const char *, scanner_t *, const char *, const char *,
-                const char *, const char *);
-
-typedef enum {
-  MODIFY_SCANNER_INTERNAL_ERROR = -1,         ///< Internal error
-  MODIFY_SCANNER_SUCCESS = 0,                 ///< Success
-  MODIFY_SCANNER_ALREADY_EXISTS,              ///< Scanner already exists
-  MODIFY_SCANNER_MISSING_ID,                  ///< Missing scanner id
-  MODIFY_SCANNER_NOT_FOUND,                   ///< Scanner not found
-  MODIFY_SCANNER_CREDENTIAL_NOT_FOUND,        ///< Credential not found
-  MODIFY_SCANNER_CREDENTIAL_NOT_CC,           ///< Credential must have type "cc"
-  MODIFY_SCANNER_INVALID_TYPE,                ///< Invalid type
-  MODIFY_SCANNER_INVALID_PORT,                ///< Invalid port
-  MODIFY_SCANNER_INVALID_HOST,                ///< Invalid host
-  MODIFY_SCANNER_INVALID_RELAY_PORT,          ///< Invalid relay port
-  MODIFY_SCANNER_INVALID_RELAY_HOST,          ///< Invalid relay host
-  MODIFY_SCANNER_UNIX_SOCKET_UNSUPPORTED,     ///< Type doesn't support UNIX sockets
-  MODIFY_SCANNER_OPENVASD_DISABLED,           ///< openvasd feature is disabled
-  MODIFY_SCANNER_PERMISSION_DENIED = 99       ///< Permission denied
-} modify_scanner_return_t;
-
-modify_scanner_return_t
-modify_scanner (const char*, const char*, const char*, const char *,
-                const char *, const char *, const char *, const char *,
-                const char *, const char *);
-
-int
-delete_scanner (const char *, int);
 
 gboolean
 find_scanner_with_permission (const char *, scanner_t *, const char *);

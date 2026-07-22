@@ -783,12 +783,6 @@ mod tests {
                 first_resource_access: "find_credential_with_permission",
             },
             LegacyTrashCountWriter {
-                file: "components/gvmd/src/manage_sql.c",
-                source: manage_sql,
-                definition: "delete_scanner (const char *scanner_id, int ultimate)",
-                first_resource_access: "find_scanner_with_permission",
-            },
-            LegacyTrashCountWriter {
                 file: "components/gvmd/src/manage_sql_users.c",
                 source: users,
                 definition: "delete_user (const char *user_id_arg, const char *name_arg,",
@@ -822,7 +816,7 @@ mod tests {
 
         assert_eq!(
             writers.len(),
-            9,
+            8,
             "the remaining legacy trash writer inventory is explicit"
         );
         assert_eq!(
@@ -833,25 +827,6 @@ mod tests {
         for writer in &writers {
             assert_legacy_trash_count_writer_has_users_gate(writer);
         }
-
-        let scanner_delete = c_function_block(
-            manage_sql,
-            "delete_scanner (const char *scanner_id, int ultimate)",
-        );
-        let predefined_check = c_marker_offset(
-            scanner_delete,
-            "strcmp (scanner_id, SCANNER_UUID_CVE)",
-            "delete_scanner predefined guard",
-        );
-        let predefined_return = c_marker_offset(
-            scanner_delete,
-            "return 3;",
-            "delete_scanner predefined guard",
-        );
-        assert!(
-            scanner_delete[predefined_check..predefined_return].contains("sql_rollback ()"),
-            "predefined scanner rejection must close the transaction and release the users gate"
-        );
     }
 
     #[test]

@@ -1815,6 +1815,7 @@ class YAFVSCtlTests(unittest.TestCase):
                 self.assertNotIn(marker, source, f"{label} still exposes {marker}")
 
         gsa_scanner = (root / "components" / "gsa" / "src" / "gmp" / "commands" / "scanner.ts").read_text(encoding="utf-8")
+        gvmd_cli = (root / "components" / "gvmd" / "src" / "gvmd.c").read_text(encoding="utf-8")
         manage_sql = (root / "components" / "gvmd" / "src" / "manage_sql.c").read_text(encoding="utf-8")
         manage_h = (root / "components" / "gvmd" / "src" / "manage.h").read_text(encoding="utf-8")
         native_write_source = (root / "services" / "yafvs-api" / "src" / "scanner_writes.rs").read_text(encoding="utf-8")
@@ -1826,16 +1827,40 @@ class YAFVSCtlTests(unittest.TestCase):
             self.assertIn(retained, capabilities)
         self.assertNotIn("copy_scanner (", manage_sql)
         self.assertNotIn("copy_scanner (", manage_h)
-        for retained in (
-            "create_scanner (",
-            "modify_scanner (",
-            "delete_scanner (",
-            "verify_scanner (",
+        for retired in (
             "manage_create_scanner (",
             "manage_modify_scanner (",
             "manage_delete_scanner (",
+            "create_scanner (",
+            "modify_scanner (",
+            "delete_scanner (",
+            "insert_scanner (",
         ):
+            self.assertNotIn(retired, manage_sql)
+            self.assertNotIn(retired, manage_h)
+        for retired in (
+            "--create-scanner",
+            "--modify-scanner",
+            "--delete-scanner",
+            "--scanner-ca-pub",
+            "--scanner-credential",
+            "--scanner-host",
+            "--scanner-key-priv",
+            "--scanner-key-pub",
+            "--scanner-name",
+            "--scanner-port",
+            "--scanner-relay-host",
+            "--scanner-relay-port",
+            "--scanner-type",
+            "--no-default-certs",
+        ):
+            self.assertNotIn(retired, gvmd_cli)
+        for retained in ("verify_scanner (", "manage_verify_scanner ("):
             self.assertIn(retained, manage_sql)
+        self.assertIn("manage_verify_scanner (", manage_h)
+        self.assertIn("verify_scanner (", manage_h)
+        self.assertIn("\"verify-scanner\"", gvmd_cli)
+        self.assertIn("ret = manage_verify_scanner (", gvmd_cli)
         gsad_source = retired_sources["gsad dispatch"].read_text(encoding="utf-8")
         gvmd_source = retired_sources["gvmd parser"].read_text(encoding="utf-8")
         self.assertIn("get_scanner_gmp", gsad_source)

@@ -231,10 +231,12 @@ evidence = [
   "services/yafvs-api/src/scanner_writes.rs::create_scanner",
   "services/yafvs-api/src/scanner_writes.rs::clone_scanner",
   "tools/tests/test_yafvsctl.py::def test_legacy_scanner_mutation_commands_are_removed_full_stack",
+  "services/yafvs-api/src/scanner_control_characterization_tests.rs::retired_cli_scanner_mutations_and_writers_stay_absent_while_verify_remains",
+  "components/gvmd/src/manage_sql.c::verify_scanner",
 ]
 independent_authority = ["components/gvmd/src/manage.h::SCANNER_TYPE_OPENVAS = 2"]
 dependencies = ["manager-coded-semantics"]
-notes = "Rust owns scanner registry lifecycle mutations and the browser/GMP create, clone, modify, and delete surfaces are retired. Verification, remote TLS/relay configuration, capability discovery, and the remaining manager CLI/internal callers still need migration before this responsibility is native-owned."
+notes = "Rust owns scanner registry lifecycle mutations; browser, GMP/XML, and duplicate gvmd CLI mutation surfaces plus their C database writers are retired. Remote verification, external relay-file synchronization, and deeper capability discovery remain inherited, so this responsibility stays migrating."
 
 [[responsibilities]]
 id = "feed-sync-generation"

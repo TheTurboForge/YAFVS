@@ -321,10 +321,10 @@ losslessly. Live non-hidden task references block trash, and trash-side task
 references block hard-delete. Inherited paths remain only for remote TLS/relay
 verification, external relay-file synchronization, credential/certificate
 download context, legacy file export/download formats, and deeper scanner-control
-behavior. The browser-side and GMP/XML
-create/copy/modify/delete scanner commands are removed; retained manager CLI
-and internal scanner functions continue to own the explicitly listed
-compatibility behavior until those responsibilities migrate. Direct scriptable
+behavior. The browser-side, GMP/XML, and gvmd CLI create/copy/modify/delete
+scanner commands are removed. Retained manager internals own only the explicitly
+listed verification and relay-file synchronization compatibility behavior until
+those responsibilities migrate. Direct scriptable
 `GET /api/v1/scanners/{scanner_id}/export` returns the same redacted scanner
 detail JSON for metadata export; it does not replace legacy scanner file export
 or scanner-control behavior. Native scanner reads do not expose credential

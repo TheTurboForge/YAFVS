@@ -76,15 +76,6 @@
         <p>Create a new credential encryption key, set it as the new default
            and exit. With no other options given, a 4096 bit RSA key is
            created.</p>
-
-
-
-      <p><b>--create-scanner=<em>SCANNER</em></b></p>
-
-        <p>Create global scanner SCANNER and exit.</p>
-
-
-
       <p><b>--create-user=<em>USERNAME</em></b></p>
 
         <p>Create admin user USERNAME and exit.</p>
@@ -94,15 +85,6 @@
       <p><b>-d, --database=<em>NAME</em></b></p>
 
         <p>Use NAME as database for PostgreSQL.</p>
-
-
-
-      <p><b>--delete-scanner=<em>SCANNER-UUID</em></b></p>
-
-        <p>Delete scanner SCANNER-UUID and exit.</p>
-
-
-
       <p><b>--delete-user=<em>USERNAME</em></b></p>
 
         <p>Delete user USERNAME and exit.</p>
@@ -292,15 +274,6 @@
           Minimum memory in MiB for feed updates. Default: 0.
           Feed updates are skipped if less physical memory is available.
         </p>
-
-
-
-      <p><b>--modify-scanner=<em>SCANNER-UUID</em></b></p>
-
-        <p>Modify scanner SCANNER-UUID and exit.</p>
-
-
-
       <p><b>--modify-setting=<em>UUID</em></b></p>
 
         <p>Modify setting UUID and exit.</p>
@@ -397,73 +370,6 @@
       <p><b>--role=<em>ROLE</em></b></p>
 
         <p>Role for --create-user and --get-users.</p>
-
-
-
-      <p><b>--scanner-ca-pub=<em>SCANNER-CA-PUB</em></b></p>
-
-        <p>Scanner CA Certificate path for --[create|modify]-scanner.</p>
-
-
-
-      <p><b>--scanner-credential=<em>SCANNER-CREDENTIAL</em></b></p>
-
-        <p>Scanner credential for --create-scanner and --modify-scanner.</p>
-        <p>Can be blank to unset or a credential UUID. If omitted, a new
-          credential can be created instead.</p>
-
-
-
-      <p><b>--scanner-host=<em>SCANNER-HOST</em></b></p>
-
-        <p>Scanner host or socket for --create-scanner and --modify-scanner.</p>
-
-
-
-      <p><b>--scanner-key-priv=<em>SCANNER-KEY-PRIVATE</em></b></p>
-
-        <p>Scanner private key path for --[create|modify]-scanner
-          if --scanner-credential is not given.</p>
-
-
-
-      <p><b>--scanner-key-pub=<em>SCANNER-KEY-PUBLIC</em></b></p>
-
-        <p>Scanner Certificate path for --[create|modify]-scanner
-          if --scanner-credential is not given.</p>
-
-
-
-      <p><b>--scanner-name=<em>NAME</em></b></p>
-
-        <p>Name for --modify-scanner.</p>
-
-
-
-      <p><b>--scanner-port=<em>SCANNER-PORT</em></b></p>
-
-        <p>Scanner port for --create-scanner and --modify-scanner.</p>
-
-
-
-      <p><b>--scanner-relay-host=<em>SCANNER-HOST</em></b></p>
-
-        <p>Scanner relay host or socket for --create-scanner and
-           --modify-scanner.</p>
-
-
-
-      <p><b>--scanner-relay-port=<em>SCANNER-PORT</em></b></p>
-
-        <p>Scanner relay port for --create-scanner and --modify-scanner.</p>
-
-
-
-      <p><b>--scanner-type=<em>SCANNER-TYPE</em></b></p>
-
-        <p>Scanner type for --create-scanner and --modify-scanner.</p>
-        <p>Either 'OpenVAS', 'GMP', 'OSP-Sensor' or a number
-           as used in GMP.</p>
 
 
 

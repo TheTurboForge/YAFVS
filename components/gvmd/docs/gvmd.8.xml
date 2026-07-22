@@ -91,12 +91,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       </optdesc>
     </option>
     <option>
-      <p><opt>--create-scanner=<arg>SCANNER</arg></opt></p>
-      <optdesc>
-        <p>Create global scanner SCANNER and exit.</p>
-      </optdesc>
-    </option>
-    <option>
       <p><opt>--create-user=<arg>USERNAME</arg></opt></p>
       <optdesc>
         <p>Create admin user USERNAME and exit.</p>
@@ -118,12 +112,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       <p><opt>--db-port=<arg>PORT</arg></opt></p>
       <optdesc>
         <p>Use PORT as database port or socket extension for PostgreSQL.</p>
-      </optdesc>
-    </option>
-    <option>
-      <p><opt>--delete-scanner=<arg>SCANNER-UUID</arg></opt></p>
-      <optdesc>
-        <p>Delete scanner SCANNER-UUID and exit.</p>
       </optdesc>
     </option>
     <option>
@@ -333,12 +321,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       </optdesc>
     </option>
     <option>
-      <p><opt>--modify-scanner=<arg>SCANNER-UUID</arg></opt></p>
-      <optdesc>
-        <p>Modify scanner SCANNER-UUID and exit.</p>
-      </optdesc>
-    </option>
-    <option>
       <p><opt>--modify-setting=<arg>UUID</arg></opt></p>
       <optdesc>
         <p>Modify setting UUID and exit.</p>
@@ -438,75 +420,6 @@ SPDX-License-Identifier: AGPL-3.0-or-later
       <p><opt>--role=<arg>ROLE</arg></opt></p>
       <optdesc>
         <p>Role for --create-user and --get-users.</p>
-      </optdesc>
-    </option>
-    <option>
-      <p><opt>--scanner-ca-pub=<arg>SCANNER-CA-PUB</arg></opt></p>
-      <optdesc>
-        <p>Scanner CA Certificate path for --[create|modify]-scanner.</p>
-      </optdesc>
-    </option>
-    <option>
-      <p><opt>--scanner-credential=<arg>SCANNER-CREDENTIAL</arg></opt></p>
-      <optdesc>
-        <p>Scanner credential for --create-scanner and --modify-scanner.</p>
-        <p>Can be blank to unset or a credential UUID. If omitted, a new
-          credential can be created instead.</p>
-      </optdesc>
-    </option>
-    <option>
-      <p><opt>--scanner-host=<arg>SCANNER-HOST</arg></opt></p>
-      <optdesc>
-        <p>Scanner host or socket for --create-scanner and --modify-scanner.</p>
-      </optdesc>
-    </option>
-    <option>
-      <p><opt>--scanner-key-priv=<arg>SCANNER-KEY-PRIVATE</arg></opt></p>
-      <optdesc>
-        <p>Scanner private key path for --[create|modify]-scanner
-          if --scanner-credential is not given.</p>
-      </optdesc>
-    </option>
-    <option>
-      <p><opt>--scanner-key-pub=<arg>SCANNER-KEY-PUBLIC</arg></opt></p>
-      <optdesc>
-        <p>Scanner Certificate path for --[create|modify]-scanner
-          if --scanner-credential is not given.</p>
-      </optdesc>
-    </option>
-    <option>
-      <p><opt>--scanner-name=<arg>NAME</arg></opt></p>
-      <optdesc>
-        <p>Name for --modify-scanner.</p>
-      </optdesc>
-    </option>
-    <option>
-      <p><opt>--scanner-port=<arg>SCANNER-PORT</arg></opt></p>
-      <optdesc>
-        <p>Scanner port for --create-scanner and --modify-scanner.</p>
-      </optdesc>
-    </option>
-    <option>
-      <p><opt>--scanner-relay-host=<arg>SCANNER-HOST</arg></opt></p>
-      <optdesc>
-        <p>
-          Scanner relay host or socket for --create-scanner and
-          --modify-scanner.
-        </p>
-      </optdesc>
-    </option>
-    <option>
-      <p><opt>--scanner-relay-port=<arg>SCANNER-PORT</arg></opt></p>
-      <optdesc>
-        <p>Scanner relay port for --create-scanner and --modify-scanner.</p>
-      </optdesc>
-    </option>
-    <option>
-      <p><opt>--scanner-type=<arg>SCANNER-TYPE</arg></opt></p>
-      <optdesc>
-        <p>Scanner type for --create-scanner and --modify-scanner.</p>
-        <p>Either 'OpenVAS', 'GMP', 'OSP-Sensor' or a number
-           as used in GMP.</p>
       </optdesc>
     </option>
     <option>

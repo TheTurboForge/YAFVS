@@ -1,3 +1,5 @@
+<!-- YAFVS modifications Copyright (C) 2026 Robert Pelfrey <Robert@Pelfrey.de>. -->
+
 General Installation Instructions for OSPD-based Scanners
 =========================================================
 
@@ -102,23 +104,12 @@ It is also possible to register an OSP daemon at the Greenbone Vulnerability
 Manager and then use GMP clients to control the OSP daemon, for example the
 web interface GSA.
 
-You can register either via the GUI (`Configuration -> Scanners`) and create
-a new Scanner there.
-
-Or you can create a scanner via `gvmd` command line (adjust host,
-port, paths, etc. for your daemon):
-
-     gvmd --create-scanner="OSP Scanner" --scanner-host=127.0.0.1 --scanner-port=1234 \
-          --scanner-type="OSP" --scanner-ca-pub=/usr/var/lib/gvm/CA/cacert.pem \
-          --scanner-key-pub=/usr/var/lib/gvm/CA/clientcert.pem \
-          --scanner-key-priv=/usr/var/lib/gvm/private/CA/clientkey.pem 
-
-or for local running ospd-scanner via file socket:
-
-    gvmd --create-scanner="OSP Scanner" --scanner-type="OSP" --scanner-host=/var/run/ospd-scanner.sock
-
-Please note that the scanner created via `gvmd` like above will be created with
-read permissions to all pre-configured roles.
+Register the OSP daemon through YAFVS native scanner configuration. The
+authenticated native scanner create and full-configuration replacement
+contracts own the name, host/socket, port, type, relay, and certificate
+references; the removed `gvmd` scanner mutation options cannot create or modify
+scanners. See the [YAFVS API contract](../../../docs/API_CONTRACT.md) for the
+native write-control contract.
 
 Check whether Greenbone Vulnerability Manager can connect to the OSP daemon:
 
@@ -129,9 +120,7 @@ Check whether Greenbone Vulnerability Manager can connect to the OSP daemon:
     $ gvmd --verify-scanner=3566ddf1-cecf-4491-8bcc-5d62a87404c3
     Scanner version: 1.0.
 
-Of course, using GMP via command line tools provided by
-[gvm-tools](https://github.com/greenbone/gvm-tools) to register an OSP Scanner
-is also possible as a third option.
+Use the native scanner configuration contract rather than GMP/XML or the removed gvmd mutation options when registering an OSP scanner.
 
 
 Documentation

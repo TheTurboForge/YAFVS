@@ -35,6 +35,8 @@ struct PathRule {
 struct Artifact {
     id: String,
     concluded_license: String,
+    #[serde(default)]
+    manifest: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -49,6 +51,7 @@ struct DependencyEdge {
 struct DerivationPolicy {
     schema_version: u32,
     policy_epoch: String,
+    dco_epoch: String,
     source_suffixes: Vec<String>,
     allowed_derivations: Vec<String>,
     #[serde(default)]
@@ -125,6 +128,8 @@ pub(super) fn license_policy_findings(
         }
     }
     findings.push(artifact_graph_finding(&boundary));
+    findings.push(cargo_path_dependency_finding(repo_root, &boundary));
+    findings.push(dco_finding(repo_root, runner, &derivation.dco_epoch));
     findings.push(review_surface_finding(&derivation));
     findings
 }
@@ -167,6 +172,9 @@ fn validate_policy_shape(boundary: &BoundaryPolicy, derivation: &DerivationPolic
     }
     if boundary.policy_epoch != derivation.policy_epoch {
         errors.push("policy epochs do not match".to_string());
+    }
+    if derivation.dco_epoch.trim().is_empty() {
+        errors.push("DCO epoch must not be empty".to_string());
     }
     if !boundary
         .path_rules
@@ -487,6 +495,189 @@ fn is_gpl3_or_agpl3(license: &str) -> bool {
     license.starts_with("GPL-3.0") || license.starts_with("AGPL-3.0")
 }
 
+fn cargo_path_dependency_finding(repo_root: &Path, policy: &BoundaryPolicy) -> Finding {
+    let configured_manifests = policy
+        .artifacts
+        .iter()
+        .filter_map(|artifact| {
+            artifact
+                .manifest
+                .as_ref()
+                .map(|manifest| (repo_root.join(manifest), artifact))
+        })
+        .collect::<Vec<_>>();
+    let mut manifest_artifacts = BTreeMap::new();
+    for (manifest, artifact) in &configured_manifests {
+        if let Ok(canonical) = fs::canonicalize(manifest) {
+            manifest_artifacts.insert(canonical, *artifact);
+        }
+    }
+
+    let mut checked = Vec::new();
+    let mut violations = Vec::new();
+    for (manifest, artifact) in configured_manifests {
+        let source_root = manifest.parent().unwrap_or(repo_root);
+        let source_root =
+            fs::canonicalize(source_root).unwrap_or_else(|_| source_root.to_path_buf());
+        let Ok(text) = fs::read_to_string(&manifest) else {
+            violations.push(json!({
+                "artifact": artifact.id,
+                "manifest": manifest.strip_prefix(repo_root).unwrap_or(&manifest),
+                "error": "manifest is missing or unreadable",
+            }));
+            continue;
+        };
+        let Ok(value) = toml::from_str::<toml::Value>(&text) else {
+            violations.push(json!({
+                "artifact": artifact.id,
+                "manifest": manifest.strip_prefix(repo_root).unwrap_or(&manifest),
+                "error": "manifest is invalid TOML",
+            }));
+            continue;
+        };
+        let mut dependencies = Vec::new();
+        collect_cargo_path_dependencies(&value, &mut dependencies);
+        for (name, relative) in dependencies {
+            let dependency_manifest = source_root.join(&relative).join("Cargo.toml");
+            let Ok(canonical) = fs::canonicalize(&dependency_manifest) else {
+                violations.push(json!({
+                    "artifact": artifact.id,
+                    "dependency": name,
+                    "path": relative,
+                    "error": "path dependency manifest is missing",
+                }));
+                continue;
+            };
+            if canonical.starts_with(&source_root) {
+                checked.push(json!({
+                    "artifact": artifact.id,
+                    "dependency": name,
+                    "relationship": "internal-path",
+                    "path": canonical.strip_prefix(repo_root).unwrap_or(&canonical),
+                }));
+                continue;
+            }
+            let target_artifact = manifest_artifacts.get(&canonical).copied();
+            let target_license = target_artifact
+                .map(|target| target.concluded_license.clone())
+                .or_else(|| cargo_manifest_license(&canonical));
+            let declared = target_artifact.is_some_and(|target| {
+                policy.dependency_edges.iter().any(|edge| {
+                    edge.from == artifact.id
+                        && edge.to == target.id
+                        && matches!(edge.relationship.as_str(), "static-link" | "dynamic-link")
+                })
+            });
+            let incompatible = artifact.concluded_license == "GPL-2.0-only"
+                && target_license.as_deref().is_some_and(is_gpl3_or_agpl3);
+            let row = json!({
+                "artifact": artifact.id,
+                "artifact_license": artifact.concluded_license,
+                "dependency": name,
+                "dependency_artifact": target_artifact.map(|target| target.id.as_str()),
+                "dependency_license": target_license,
+                "path": canonical.strip_prefix(repo_root).unwrap_or(&canonical),
+                "declared_edge": declared,
+                "incompatible": incompatible,
+            });
+            if declared && !incompatible && row["dependency_license"].is_string() {
+                checked.push(row);
+            } else {
+                violations.push(row);
+            }
+        }
+    }
+    Finding::new(
+        if violations.is_empty() {
+            "pass"
+        } else {
+            "fail"
+        },
+        "license.cargo-path-dependencies",
+        if violations.is_empty() {
+            "Configured Rust path dependencies are declared and license-compatible.".to_string()
+        } else {
+            "A Rust path dependency is undeclared, unlicensed, missing, or license-incompatible."
+                .to_string()
+        },
+    )
+    .with_details(json!({ "checked": checked, "violations": violations }))
+}
+
+fn collect_cargo_path_dependencies(value: &toml::Value, found: &mut Vec<(String, String)>) {
+    let Some(table) = value.as_table() else {
+        return;
+    };
+    for (key, value) in table {
+        if matches!(
+            key.as_str(),
+            "dependencies" | "dev-dependencies" | "build-dependencies"
+        ) {
+            if let Some(dependencies) = value.as_table() {
+                for (name, dependency) in dependencies {
+                    if let Some(path) = dependency
+                        .as_table()
+                        .and_then(|table| table.get("path"))
+                        .and_then(toml::Value::as_str)
+                    {
+                        found.push((name.clone(), path.to_string()));
+                    }
+                }
+            }
+        } else {
+            collect_cargo_path_dependencies(value, found);
+        }
+    }
+}
+
+fn cargo_manifest_license(manifest: &Path) -> Option<String> {
+    let text = fs::read_to_string(manifest).ok()?;
+    let value = toml::from_str::<toml::Value>(&text).ok()?;
+    value
+        .get("package")?
+        .get("license")?
+        .as_str()
+        .map(str::to_string)
+}
+
+fn dco_finding(repo_root: &Path, runner: &dyn CommandRunner, epoch: &str) -> Finding {
+    let range = format!("{epoch}..HEAD");
+    let Some(output) = run_git(runner, repo_root, &["log", "--format=%H%x1f%B%x1e", &range]) else {
+        return Finding::new(
+            "fail",
+            "license.commit-dco",
+            "Could not inspect commits for Developer Certificate of Origin sign-offs.".to_string(),
+        );
+    };
+    let missing = output
+        .split('\u{1e}')
+        .filter_map(|record| {
+            let (commit, body) = record.trim().split_once('\u{1f}')?;
+            (!body.lines().any(valid_signoff)).then(|| commit.to_string())
+        })
+        .collect::<Vec<_>>();
+    Finding::new(
+        if missing.is_empty() { "pass" } else { "fail" },
+        "license.commit-dco",
+        if missing.is_empty() {
+            "Commits after the DCO epoch contain Signed-off-by attestations.".to_string()
+        } else {
+            "Commits after the DCO epoch are missing Signed-off-by attestations.".to_string()
+        },
+    )
+    .with_details(json!({ "epoch": epoch, "missing_commits": missing }))
+}
+
+fn valid_signoff(line: &str) -> bool {
+    let Some(value) = line.strip_prefix("Signed-off-by: ") else {
+        return false;
+    };
+    let Some((name, address)) = value.rsplit_once(" <") else {
+        return false;
+    };
+    !name.trim().is_empty() && address.ends_with('>') && address[..address.len() - 1].contains('@')
+}
+
 fn review_surface_finding(policy: &DerivationPolicy) -> Finding {
     let open = policy
         .review_surfaces
@@ -599,10 +790,12 @@ mod tests {
                 Artifact {
                     id: "scanner".to_string(),
                     concluded_license: "GPL-2.0-only".to_string(),
+                    manifest: None,
                 },
                 Artifact {
                     id: "manager".to_string(),
                     concluded_license: "GPL-3.0-or-later".to_string(),
+                    manifest: None,
                 },
             ],
             dependency_edges: vec![DependencyEdge {
@@ -625,10 +818,12 @@ mod tests {
                 Artifact {
                     id: "scanner".to_string(),
                     concluded_license: "GPL-2.0-only".to_string(),
+                    manifest: None,
                 },
                 Artifact {
                     id: "manager".to_string(),
                     concluded_license: "AGPL-3.0-or-later".to_string(),
+                    manifest: None,
                 },
             ],
             dependency_edges: vec![DependencyEdge {
@@ -651,6 +846,7 @@ mod tests {
         let policy = DerivationPolicy {
             schema_version: 1,
             policy_epoch: "epoch".to_string(),
+            dco_epoch: "dco-epoch".to_string(),
             source_suffixes: vec!["rs".to_string()],
             allowed_derivations: vec!["original".to_string(), "adaptation".to_string()],
             review_surfaces: Vec::new(),
@@ -665,5 +861,56 @@ mod tests {
         );
         assert_eq!(finding.status, "fail");
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn cargo_path_dependency_checks_the_real_manifest_edge() {
+        let root = root();
+        fs::create_dir_all(root.join("scanner")).unwrap();
+        fs::create_dir_all(root.join("manager")).unwrap();
+        fs::write(
+            root.join("scanner/Cargo.toml"),
+            "[package]\nname = \"scanner\"\nversion = \"0.1.0\"\nlicense = \"GPL-2.0-only\"\n[dependencies]\nmanager = { path = \"../manager\" }\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("manager/Cargo.toml"),
+            "[package]\nname = \"manager\"\nversion = \"0.1.0\"\nlicense = \"GPL-3.0-or-later\"\n",
+        )
+        .unwrap();
+        let policy = BoundaryPolicy {
+            schema_version: 1,
+            policy_epoch: "epoch".to_string(),
+            path_rules: vec![rule("", &["GPL-3.0-or-later"])],
+            artifacts: vec![
+                Artifact {
+                    id: "scanner".to_string(),
+                    concluded_license: "GPL-2.0-only".to_string(),
+                    manifest: Some("scanner/Cargo.toml".to_string()),
+                },
+                Artifact {
+                    id: "manager".to_string(),
+                    concluded_license: "GPL-3.0-or-later".to_string(),
+                    manifest: Some("manager/Cargo.toml".to_string()),
+                },
+            ],
+            dependency_edges: vec![DependencyEdge {
+                from: "scanner".to_string(),
+                to: "manager".to_string(),
+                relationship: "static-link".to_string(),
+                rationale: "test edge".to_string(),
+            }],
+        };
+        assert_eq!(cargo_path_dependency_finding(&root, &policy).status, "fail");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn dco_signoff_requires_a_name_and_email_shape() {
+        assert!(valid_signoff(
+            "Signed-off-by: Robert Pelfrey <Robert@Pelfrey.de>"
+        ));
+        assert!(!valid_signoff("Signed-off-by: no-address"));
+        assert!(!valid_signoff("signed-off-by: Robert <r@example.test>"));
     }
 }

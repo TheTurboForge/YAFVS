@@ -69,6 +69,7 @@ allowed_licenses = ["GPL-3.0-or-later"]
 [[artifacts]]
 id = "openvas-scanner"
 concluded_license = "GPL-2.0-only"
+manifest = "components/openvas-scanner/rust/Cargo.toml"
 
 [[artifacts]]
 id = "gvm-libs"
@@ -89,14 +90,17 @@ concluded_license = "AGPL-3.0-or-later"
 [[artifacts]]
 id = "yafvs-domain"
 concluded_license = "GPL-3.0-or-later"
+manifest = "crates/yafvs-domain/Cargo.toml"
 
 [[artifacts]]
 id = "yafvs-api"
 concluded_license = "GPL-3.0-or-later"
+manifest = "services/yafvs-api/Cargo.toml"
 
 [[artifacts]]
 id = "yafvsctl"
 concluded_license = "GPL-3.0-or-later"
+manifest = "tools/yafvsctl-rs/Cargo.toml"
 
 [[dependency_edges]]
 from = "openvas-scanner"

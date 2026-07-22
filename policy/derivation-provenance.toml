@@ -3,6 +3,7 @@
 
 schema_version = 1
 policy_epoch = "8c6ac269b23a1e8080e314a83e26754865e5b0f8"
+dco_epoch = "f68260ea09c26d2a989edb7ea9d50f29d10b1a69"
 source_suffixes = ["c", "h", "cc", "cpp", "rs", "py", "js", "jsx", "ts", "tsx", "sql"]
 allowed_derivations = ["original", "behavioral-reimplementation", "adaptation", "translation"]
 

@@ -37,6 +37,39 @@ Useful ideas are welcome as design signal, but maintainers may choose a
 different implementation to preserve YAFVS direction, security boundaries,
 license/provenance obligations, and validation standards.
 
+## License And Provenance
+
+Every commit after the project's DCO policy epoch must carry a Developer
+Certificate of Origin sign-off. Use `git commit --signoff`; the sign-off states
+that you have the right to submit the work under the licenses governing its
+destination. The Quality Gate rejects unsigned new commits.
+
+New source files must carry SPDX copyright and license headers and a derivation
+classification near the top of the file:
+
+```text
+YAFVS-Derivation: original
+```
+
+The other accepted values are `behavioral-reimplementation`, `adaptation`, and
+`translation`. Any value other than `original` must also identify the exact
+source in a `YAFVS-Source-Provenance:` marker, including the upstream project,
+commit or release, path, and source license. Do not describe adapted or
+translated source as an original or behavioral reimplementation.
+
+Destination directories have machine-readable allowed-license rules in
+`policy/license-boundaries.toml`. In particular, GPL-3.0 or AGPL-3.0 code must
+not be linked into the GPL-2.0-only scanner artifact. Communicating separate
+programs and linked code are recorded as different relationships; changing a
+boundary requires updating the policy and providing build evidence, not merely
+changing a label.
+
+Dependencies, generated code, vendored material, copied tests, and translated
+implementations all require source and license provenance. A dependency change
+must preserve its lockfile and the applicable artifact's complete license/SBOM
+closure. Feed data and other databases remain governed by their own source
+terms and must not be treated as source-code dependencies.
+
 ## Memory Safety
 
 New security-sensitive backend functionality should use Rust unless a narrow

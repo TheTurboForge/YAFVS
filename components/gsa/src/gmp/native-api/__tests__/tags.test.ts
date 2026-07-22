@@ -214,27 +214,18 @@ describe('TagCommand', () => {
     });
   });
 
-  test('saves all-filtered assignment without exposing GMP or XML', async () => {
-    const fetchMock = testing
-      .fn()
-      .mockResolvedValue(jsonResponse({id: 'tag-1'}));
-    testing.stubGlobal('fetch', fetchMock);
-
-    await new TagCommand(createNativeHttp()).save({
-      active: true,
-      filter: 'rows=-1 severity>7',
-      id: 'tag-1',
-      name: 'High severity',
-      resourceType: 'result',
-      resourcesAction: 'add',
-    });
-
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.resources).toEqual({
-      action: 'add',
-      resource_filter: 'rows=-1 severity>7',
-    });
-    expect(body.resource_type).toBeUndefined();
+  test('rejects the retired raw filtered assignment input', () => {
+    const command = new TagCommand(createNativeHttp());
+    expect(() =>
+      command.save({
+        active: true,
+        id: 'tag-1',
+        name: 'High severity',
+        resourceType: 'result',
+        resourcesAction: 'add',
+        filter: 'rows=-1 severity>7',
+      } as Parameters<typeof command.save>[0] & {filter: string}),
+    ).toThrow('Raw tag resource filters are not supported');
   });
 
   test('saves a typed port-list collection selection', async () => {
@@ -289,10 +280,6 @@ describe('native tag resource assignments', () => {
     const http = createNativeHttp();
 
     await updateNativeTagResources(http, 'tag-1', {
-      action: 'add',
-      filter: 'rows=-1 name~production',
-    });
-    await updateNativeTagResources(http, 'tag-1', {
       action: 'set',
       resourceIds: [],
     });
@@ -338,21 +325,17 @@ describe('native tag resource assignments', () => {
     });
 
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
-      action: 'add',
-      resource_filter: 'rows=-1 name~production',
-    });
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
       action: 'set',
       resource_ids: [],
     });
-    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
       action: 'add',
       resource_selection: {
         resource_type: 'port_list',
         expected_count: 2,
       },
     });
-    expect(JSON.parse(fetchMock.mock.calls[5][1].body)).toEqual({
+    expect(JSON.parse(fetchMock.mock.calls[4][1].body)).toEqual({
       action: 'add',
       resource_selection: {
         resource_type: 'target',
@@ -360,7 +343,7 @@ describe('native tag resource assignments', () => {
         expected_count: 5,
       },
     });
-    expect(JSON.parse(fetchMock.mock.calls[3][1].body)).toEqual({
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({
       action: 'add',
       resource_selection: {
         resource_type: 'credential',
@@ -369,7 +352,7 @@ describe('native tag resource assignments', () => {
         expected_count: 3,
       },
     });
-    expect(JSON.parse(fetchMock.mock.calls[4][1].body)).toEqual({
+    expect(JSON.parse(fetchMock.mock.calls[3][1].body)).toEqual({
       action: 'add',
       resource_selection: {
         resource_type: 'scanner',
@@ -377,7 +360,7 @@ describe('native tag resource assignments', () => {
         expected_count: 4,
       },
     });
-    expect(JSON.parse(fetchMock.mock.calls[6][1].body)).toEqual({
+    expect(JSON.parse(fetchMock.mock.calls[5][1].body)).toEqual({
       action: 'add',
       resource_selection: {
         resource_type: 'user',

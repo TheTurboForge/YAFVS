@@ -207,7 +207,6 @@ mod ssh_host_key_pins;
 mod startup;
 #[cfg(test)]
 mod tag_characterization_tests;
-mod tag_control;
 mod tag_payloads;
 mod tag_query_sql;
 mod tag_resource_helpers;

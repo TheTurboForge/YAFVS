@@ -521,23 +521,20 @@ class EntitiesContainer<TModel extends Model> extends React.Component<
     const entitiesType = getEntityType(entities[0]);
 
     let resourceIds: string[] | undefined;
-    let filter: Filter | undefined;
     let resourceSelection: NativeTagResourceSelectionInput | undefined;
     if (selectionType === SelectionType.SELECTION_USER) {
       resourceIds = map(selected, res => res.id as string);
-      filter = undefined;
     } else if (selectionType === SelectionType.SELECTION_PAGE_CONTENTS) {
       resourceIds = map(entities, entity => entity.id as string);
-      filter = undefined;
     } else {
-      filter = (loadedFilter as Filter).all();
+      const filter = (loadedFilter as Filter).all();
       resourceSelection = nativeTagResourceSelectionFromFilter(
         entitiesType,
         filter,
         (entitiesCounts as CollectionCounts).filtered,
       );
-      if (resourceSelection !== undefined) {
-        filter = undefined;
+      if (resourceSelection === undefined) {
+        throw new Error(`Filtered ${entitiesType} tagging is not supported`);
       }
     }
 
@@ -545,7 +542,6 @@ class EntitiesContainer<TModel extends Model> extends React.Component<
       .save({
         active: true,
         comment,
-        filter,
         id: id as string,
         name: name as string,
         resourceIds,

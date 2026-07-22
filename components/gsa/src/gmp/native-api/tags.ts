@@ -124,7 +124,6 @@ export interface NativeTagPatchInput {
 export interface NativeTagResourceUpdateInput {
   action: 'add' | 'remove' | 'set';
   resourceIds?: string[];
-  filter?: Filter | string;
   resourceSelection?: NativeTagResourceSelectionInput;
 }
 
@@ -167,7 +166,6 @@ export interface TagCommandCreateParams {
 }
 
 export interface TagCommandSaveParams extends TagCommandCreateParams {
-  filter?: Filter | string;
   id: string;
   resourceSelection?: NativeTagResourceSelectionInput;
   resourcesAction?: 'add' | 'remove' | 'set';
@@ -202,10 +200,8 @@ const nativeTagResourceSelectionPayload = (
 const nativeTagResourceUpdatePayload = ({
   action,
   resourceIds,
-  filter,
   resourceSelection,
 }: NativeTagResourceUpdateInput) => {
-  const resourceFilter = filterString(filter);
   return {
     action,
     ...(resourceSelection !== undefined
@@ -213,9 +209,7 @@ const nativeTagResourceUpdatePayload = ({
           resource_selection:
             nativeTagResourceSelectionPayload(resourceSelection),
         }
-      : resourceFilter !== undefined && resourceFilter !== ''
-        ? {resource_filter: resourceFilter}
-        : {resource_ids: resourceIds ?? []}),
+      : {resource_ids: resourceIds ?? []}),
   };
 };
 
@@ -673,20 +667,28 @@ export class TagCommand {
     return createNativeTag(this.http, args);
   }
 
-  save({
-    id,
-    name,
-    comment = '',
-    active,
-    filter,
-    resourceIds = [],
-    resourceSelection,
-    resourceType,
-    resourcesAction,
-    value = '',
-  }: TagCommandSaveParams) {
+  save(args: TagCommandSaveParams) {
+    if (
+      'filter' in args &&
+      filterString(
+        (args as TagCommandSaveParams & {filter?: Filter | string}).filter,
+      )
+    ) {
+      throw new Error('Raw tag resource filters are not supported');
+    }
+    const {
+      id,
+      name,
+      comment = '',
+      active,
+      resourceIds = [],
+      resourceSelection,
+      resourceType,
+      resourcesAction,
+      value = '',
+    } = args;
     if (resourcesAction === undefined) {
-      if (filterString(filter) || resourceSelection !== undefined) {
+      if (resourceSelection !== undefined) {
         throw new Error('Native tag save selection requires a resource action');
       }
       return patchNativeTag(this.http, id, {active, comment, name, value});
@@ -700,7 +702,6 @@ export class TagCommand {
       resources: {
         action: resourcesAction,
         resourceIds,
-        filter,
         resourceSelection,
       },
     });

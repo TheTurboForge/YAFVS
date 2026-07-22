@@ -179,7 +179,6 @@ const BulkTags = <TEntity extends Model>({
   const handleAddMultiTag = useCallback(
     ({comment, id, name, value = ''}: TagsDialogData) => {
       let tagEntitiesIds: string[] | undefined = undefined;
-      let loadedFilter: string | undefined = undefined;
       let resourceSelection: NativeTagResourceSelectionInput | undefined =
         undefined;
 
@@ -198,7 +197,9 @@ const BulkTags = <TEntity extends Model>({
           return Promise.reject(error);
         }
         if (resourceSelection === undefined) {
-          loadedFilter = filter.all().toFilterString();
+          return Promise.reject(
+            new Error(`Filtered ${entitiesType} tagging is not supported`),
+          );
         }
       }
 
@@ -206,7 +207,6 @@ const BulkTags = <TEntity extends Model>({
         .save({
           active: true,
           comment,
-          filter: loadedFilter,
           id: id as string,
           name: name as string,
           resourceIds: tagEntitiesIds,

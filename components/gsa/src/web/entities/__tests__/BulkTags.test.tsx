@@ -99,7 +99,6 @@ describe('BulkTags tests', () => {
     expect(saveTag).toHaveBeenCalledWith({
       active: true,
       comment: '',
-      filter: undefined,
       id: 'tag-1',
       name: 'Managed',
       resourceIds: undefined,
@@ -227,7 +226,6 @@ describe('BulkTags tests', () => {
     expect(saveTag).toHaveBeenCalledWith({
       active: true,
       comment: '',
-      filter: undefined,
       id: 'tag-1',
       name: 'Managed',
       resourceIds: undefined,
@@ -327,7 +325,6 @@ describe('BulkTags tests', () => {
     expect(saveTag).toHaveBeenCalledWith({
       active: true,
       comment: '',
-      filter: undefined,
       id: 'tag-1',
       name: 'Managed',
       resourceIds: undefined,
@@ -427,7 +424,6 @@ describe('BulkTags tests', () => {
     expect(saveTag).toHaveBeenCalledWith({
       active: true,
       comment: '',
-      filter: undefined,
       id: 'tag-1',
       name: 'Managed',
       resourceIds: undefined,
@@ -677,7 +673,6 @@ describe('BulkTags tests', () => {
     expect(saveTag).toHaveBeenCalledWith({
       active: true,
       comment: '',
-      filter: undefined,
       id: '2',
       name: undefined,
       resourceIds: ['1', '2'],

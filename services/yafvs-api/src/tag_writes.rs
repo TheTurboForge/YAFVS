@@ -12,9 +12,7 @@ use crate::{
     app_state::AppState,
     auth::DirectApiOperator,
     errors::ApiError,
-    gvmd_control::{gvmd_control_secret, gvmd_control_socket_path},
     path_ids::parse_uuid,
-    tag_control::{request_tag_modify, request_tag_resource_update},
     tag_payloads::TagAssetItem,
     tag_write_db::*,
     tag_write_transactions::*,
@@ -117,18 +115,6 @@ pub(crate) async fn patch_tag(
     let operator = require_tag_write_operator(operator)?;
     let request = validate_tag_patch_request(request)?;
     parse_uuid(&tag_id)?;
-    if tag_patch_requires_control(&request) {
-        let control_secret = gvmd_control_secret()?;
-        request_tag_modify(
-            &gvmd_control_socket_path(),
-            &control_secret,
-            operator.user_uuid(),
-            &tag_id,
-            &request,
-        )
-        .await?;
-        return Ok(Json(load_committed_tag_detail(&state, &tag_id).await?));
-    }
     let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let tx = client
         .transaction()
@@ -250,13 +236,6 @@ fn tag_resource_update_lock_sql(selection: Option<&ValidatedTagResourceSelection
     }
 }
 
-fn tag_patch_requires_control(request: &crate::tag_write_validation::ValidatedTagPatch) -> bool {
-    request
-        .resources
-        .as_ref()
-        .is_some_and(|resources| resources.resource_filter.is_some())
-}
-
 pub(crate) async fn clone_tag(
     State(state): State<AppState>,
     Path(tag_id): Path<String>,
@@ -326,18 +305,6 @@ pub(crate) async fn update_tag_resources(
     let operator = require_tag_write_operator(operator)?;
     let request = validate_tag_resource_update_request(request)?;
     parse_uuid(&tag_id)?;
-    if request.resource_filter.is_some() {
-        let control_secret = gvmd_control_secret()?;
-        request_tag_resource_update(
-            &gvmd_control_socket_path(),
-            &control_secret,
-            operator.user_uuid(),
-            &tag_id,
-            &request,
-        )
-        .await?;
-        return Ok(Json(load_committed_tag_detail(&state, &tag_id).await?));
-    }
     let mut client = state.pool.get().await.map_err(|_| ApiError::Database)?;
     let tx = client
         .transaction()
@@ -411,20 +378,6 @@ pub(crate) async fn update_tag_resources(
         .map_err(|error| map_tag_commit_error(error, "commit tag resource transaction"))?;
 
     Ok(Json(tag))
-}
-
-async fn load_committed_tag_detail(
-    state: &AppState,
-    tag_id: &str,
-) -> Result<TagAssetItem, ApiError> {
-    let client = state
-        .pool
-        .get()
-        .await
-        .map_err(|_| ApiError::MutationCommittedResponseUnavailable)?;
-    load_tag_write_detail(&client, tag_id)
-        .await
-        .map_err(|_| ApiError::MutationCommittedResponseUnavailable)
 }
 
 fn tag_write_location_headers(tag_id: &str) -> Result<HeaderMap, ApiError> {

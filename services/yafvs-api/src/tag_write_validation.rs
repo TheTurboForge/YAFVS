@@ -13,7 +13,6 @@ use crate::{
 pub(crate) const MAX_TAG_TEXT_BYTES: usize = 4096;
 pub(crate) const MAX_TAG_RESOURCE_ID_BYTES: usize = 4096;
 pub(crate) const MAX_TAG_RESOURCE_WRITE_IDS: usize = 200;
-pub(crate) const MAX_TAG_RESOURCE_FILTER_BYTES: usize = 16_384;
 pub(crate) const MAX_TAG_RESOURCE_SELECTION_MATCHES: u32 = 100_000;
 
 #[derive(Debug, Deserialize)]
@@ -112,8 +111,6 @@ pub(crate) struct TagResourceUpdateRequest {
     #[serde(default)]
     pub(crate) resource_ids: Option<Vec<String>>,
     #[serde(default)]
-    pub(crate) resource_filter: Option<String>,
-    #[serde(default)]
     pub(crate) resource_selection: Option<TagResourceSelectionRequest>,
 }
 
@@ -141,7 +138,6 @@ pub(crate) struct ValidatedTagPatch {
 pub(crate) struct ValidatedTagResourceUpdate {
     pub(crate) action: TagResourceUpdateAction,
     pub(crate) resource_ids: Vec<String>,
-    pub(crate) resource_filter: Option<String>,
     pub(crate) resource_selection: Option<ValidatedTagResourceSelection>,
 }
 
@@ -192,19 +188,16 @@ pub(crate) fn validate_tag_resource_update_request(
 ) -> Result<ValidatedTagResourceUpdate, ApiError> {
     let resource_ids_present = request.resource_ids.is_some();
     let resource_ids = validate_tag_resource_ids(request.resource_ids.unwrap_or_default(), true)?;
-    let resource_filter = normalize_tag_resource_filter(request.resource_filter)?;
     let resource_selection = validate_tag_resource_selection_request(request.resource_selection)?;
     validate_tag_resource_selection(
         request.action,
         resource_ids_present,
         !resource_ids.is_empty(),
-        resource_filter.as_deref(),
         resource_selection.as_ref(),
     )?;
     Ok(ValidatedTagResourceUpdate {
         action: request.action,
         resource_ids,
-        resource_filter,
         resource_selection,
     })
 }
@@ -213,16 +206,12 @@ fn validate_tag_resource_selection(
     action: TagResourceUpdateAction,
     resource_ids_present: bool,
     resource_ids_nonempty: bool,
-    resource_filter: Option<&str>,
     resource_selection: Option<&ValidatedTagResourceSelection>,
 ) -> Result<(), ApiError> {
-    let selection_count = resource_ids_present as usize
-        + resource_filter.is_some() as usize
-        + resource_selection.is_some() as usize;
+    let selection_count = resource_ids_present as usize + resource_selection.is_some() as usize;
     if selection_count > 1 {
         return Err(ApiError::BadRequest(
-            "resource_ids, resource_filter, and resource_selection are mutually exclusive"
-                .to_string(),
+            "resource_ids and resource_selection are mutually exclusive".to_string(),
         ));
     }
     if resource_selection.is_some() && action != TagResourceUpdateAction::Add {
@@ -232,12 +221,10 @@ fn validate_tag_resource_selection(
     }
     if action != TagResourceUpdateAction::Set
         && !resource_ids_nonempty
-        && resource_filter.is_none()
         && resource_selection.is_none()
     {
         return Err(ApiError::BadRequest(
-            "add and remove require resource_ids, resource_filter, or resource_selection"
-                .to_string(),
+            "add and remove require resource_ids or resource_selection".to_string(),
         ));
     }
     Ok(())
@@ -413,25 +400,6 @@ pub(crate) fn validate_tag_patch_request(
     } else {
         Ok(validated)
     }
-}
-
-fn normalize_tag_resource_filter(value: Option<String>) -> Result<Option<String>, ApiError> {
-    value
-        .map(|value| {
-            let value = value.trim().to_string();
-            if value.is_empty() {
-                return Err(ApiError::BadRequest(
-                    "resource_filter must not be empty when provided".to_string(),
-                ));
-            }
-            if value.len() > MAX_TAG_RESOURCE_FILTER_BYTES || value.chars().any(char::is_control) {
-                return Err(ApiError::BadRequest(format!(
-                    "resource_filter must be printable text up to {MAX_TAG_RESOURCE_FILTER_BYTES} bytes"
-                )));
-            }
-            Ok(value)
-        })
-        .transpose()
 }
 
 pub(crate) fn validate_tag_clone_request(

@@ -10,7 +10,6 @@ const MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c")
 const MANAGE_SQL_TAGS: &str = include_str!("../../../components/gvmd/src/manage_sql_tags.c");
 const MANAGE_TAGS: &str = include_str!("../../../components/gvmd/src/manage_tags.c");
 const YAFVS_CONTROL: &str = include_str!("../../../components/gvmd/src/yafvs_control.c");
-const TAG_CONTROL: &str = include_str!("tag_control.rs");
 const TAG_WRITES: &str = include_str!("tag_writes.rs");
 const GSA_TAGS: &str = include_str!("../../../components/gsa/src/gmp/native-api/tags.ts");
 const GSA_TAG_SELECTION: &str =
@@ -85,9 +84,9 @@ fn every_live_filtered_bulk_tag_page_has_a_typed_selector() {
 #[test]
 fn tag_creation_has_no_transitional_filter_control_path() {
     assert!(!YAFVS_CONTROL.contains("\"tag-create "));
-    assert!(!TAG_CONTROL.contains("request_tag_create"));
-    assert!(!TAG_CONTROL.contains("tag_create_command"));
+    assert!(!YAFVS_CONTROL.contains("\"tag-modify "));
     assert!(!TAG_WRITES.contains("request_tag_create"));
+    assert!(!TAG_WRITES.contains("request_tag_modify"));
 
     let gsa_create = GSA_TAGS
         .split_once("export const createNativeTag")
@@ -97,6 +96,7 @@ fn tag_creation_has_no_transitional_filter_control_path() {
         .expect("native GSA tag patch adapter must follow create")
         .0;
     assert!(!gsa_create.contains("resource_filter"));
+    assert!(!GSA_TAGS.contains("resource_filter"));
 }
 
 fn openapi_path_block(path: &str) -> String {
@@ -361,14 +361,14 @@ fn openapi_tag_contract_replaces_filter_and_resource_type_tail() {
     assert!(!create_block.contains("resource_filter"));
     let resource_block = openapi_path_block("/tags/{tag_id}/resources");
     assert!(!resource_block.contains("x-yafvs-inherited-still-owns"));
-    assert!(resource_block.contains("resource_filter"));
+    assert!(!resource_block.contains("resource_filter"));
     let patch_block = openapi_path_block("/tags/{tag_id}");
     assert!(
         patch_block
             .contains("x-yafvs-replaces: tag-metadata-resource-type-and-atomic-assignment-write")
     );
-    assert!(patch_block.contains("typed collection selections"));
-    assert!(patch_block.contains("raw filter expressions"));
+    assert!(patch_block.contains("typed collection selectors"));
+    assert!(!patch_block.contains("raw filter expressions"));
     let clone_block = openapi_path_block("/tags/{tag_id}/clone");
     assert!(clone_block.contains("x-yafvs-replaces: tag-clone"));
     assert!(clone_block.contains("x-yafvs-safety-contract: write-control-v1"));

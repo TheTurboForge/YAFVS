@@ -374,7 +374,6 @@ describe('EntitiesContainer', () => {
     expect(saveTag).toHaveBeenCalledWith({
       active: true,
       comment: '',
-      filter: undefined,
       id: 'tag-1',
       name: 'Managed',
       resourceIds: undefined,

@@ -267,7 +267,7 @@ fn tag_scanner_selection_stays_native_bounded_and_lock_ordered() {
 #[test]
 fn tag_port_list_selection_stays_native_parameterized_and_pre_mutation() {
     let handlers = include_str!("tag_writes.rs");
-    assert!(handlers.contains("resource_filter.is_some()"));
+    assert!(!handlers.contains("resource_filter"));
     assert!(handlers.contains("LOCK TABLE port_lists, tags, tag_resources"));
     let transactions = include_str!("tag_write_transactions.rs");
     assert!(transactions.contains("tag_port_list_selection_sql()"));
@@ -679,43 +679,7 @@ fn tag_patch_request_supports_atomic_resource_selection_and_requires_a_field() {
 }
 
 #[test]
-fn tag_patch_uses_gvmd_control_only_for_filter_selection() {
-    let metadata = validate_tag_patch_request(
-        serde_json::from_str(r#"{"name":"renamed"}"#).expect("metadata patch"),
-    )
-    .expect("valid metadata patch");
-    assert!(!tag_patch_requires_control(&metadata));
-
-    let explicit_set = validate_tag_patch_request(
-        serde_json::from_str(
-            r#"{"resource_type":"target","resources":{"action":"set","resource_ids":["12345678-1234-1234-1234-123456789abc"]}}"#,
-        )
-        .expect("explicit resource patch"),
-    )
-    .expect("valid explicit resource patch");
-    assert!(!tag_patch_requires_control(&explicit_set));
-
-    let filtered = validate_tag_patch_request(
-        serde_json::from_str(
-            r#"{"resources":{"action":"add","resource_filter":"name~production"}}"#,
-        )
-        .expect("filtered resource patch"),
-    )
-    .expect("valid filtered resource patch");
-    assert!(tag_patch_requires_control(&filtered));
-
-    let typed = validate_tag_patch_request(
-        serde_json::from_str(
-            r#"{"resources":{"action":"add","resource_selection":{"resource_type":"port_list","expected_count":1}}}"#,
-        )
-        .expect("typed resource patch"),
-    )
-    .expect("valid typed resource patch");
-    assert!(!tag_patch_requires_control(&typed));
-}
-
-#[test]
-fn tag_resource_update_request_supports_explicit_ids_filters_and_empty_set() {
+fn tag_resource_update_request_supports_explicit_ids_typed_selection_and_empty_set() {
     let request: TagResourceUpdateRequest = serde_json::from_str(
         r#"{"action":"add","resource_ids":["12345678-1234-1234-1234-123456789abc","12345678-1234-1234-1234-123456789abc","cpe:/a:example:product:1"]}"#,
     )
@@ -754,19 +718,16 @@ fn tag_resource_update_request_supports_explicit_ids_filters_and_empty_set() {
         )
         .is_err()
     );
-    let filtered = validate_tag_resource_update_request(
+    assert!(
         serde_json::from_str::<TagResourceUpdateRequest>(
             r#"{"action":"add","resource_filter":"name~x"}"#,
         )
-        .expect("filter selection deserializes"),
-    )
-    .expect("filter selection validates");
-    assert_eq!(filtered.resource_filter.as_deref(), Some("name~x"));
+        .is_err()
+    );
     assert!(matches!(
         validate_tag_resource_update_request(TagResourceUpdateRequest {
             action: TagResourceUpdateAction::Add,
             resource_ids: Some(Vec::new()),
-            resource_filter: None,
             resource_selection: None,
         }),
         Err(ApiError::BadRequest(_))
@@ -775,7 +736,6 @@ fn tag_resource_update_request_supports_explicit_ids_filters_and_empty_set() {
         validate_tag_resource_update_request(TagResourceUpdateRequest {
             action: TagResourceUpdateAction::Remove,
             resource_ids: Some(vec!["bad\nresource".to_string()]),
-            resource_filter: None,
             resource_selection: None,
         }),
         Err(ApiError::BadRequest(_))
@@ -787,7 +747,6 @@ fn tag_resource_update_request_supports_explicit_ids_filters_and_empty_set() {
                 "12345678-1234-1234-1234-123456789abc".to_string();
                 MAX_TAG_RESOURCE_WRITE_IDS + 1
             ]),
-            resource_filter: None,
             resource_selection: None,
         }),
         Err(ApiError::BadRequest(_))
@@ -807,14 +766,12 @@ fn tag_resource_update_request_rejects_ambiguous_selection_and_bad_ids() {
         )
         .is_err()
     );
-    let mixed: TagResourceUpdateRequest = serde_json::from_str(
-        r#"{"action":"add","resource_ids":["12345678-1234-1234-1234-123456789abc"],"resource_filter":"name~prod"}"#,
-    )
-    .unwrap();
-    assert!(matches!(
-        validate_tag_resource_update_request(mixed),
-        Err(ApiError::BadRequest(_))
-    ));
+    assert!(
+        serde_json::from_str::<TagResourceUpdateRequest>(
+            r#"{"action":"add","resource_ids":["12345678-1234-1234-1234-123456789abc"],"resource_filter":"name~prod"}"#,
+        )
+        .is_err()
+    );
     assert!(
         serde_json::from_str::<TagResourceUpdateRequest>(
             r#"{"action":"add","resource_ids":["12345678-1234-1234-1234-123456789abc"],"resources_filter":"name~prod"}"#,
@@ -831,7 +788,6 @@ fn tag_resource_update_request_rejects_ambiguous_selection_and_bad_ids() {
         validate_tag_resource_update_request(TagResourceUpdateRequest {
             action: TagResourceUpdateAction::Add,
             resource_ids: Some(vec![" ".to_string()]),
-            resource_filter: None,
             resource_selection: None,
         }),
         Err(ApiError::BadRequest(_))
@@ -840,7 +796,6 @@ fn tag_resource_update_request_rejects_ambiguous_selection_and_bad_ids() {
         validate_tag_resource_update_request(TagResourceUpdateRequest {
             action: TagResourceUpdateAction::Add,
             resource_ids: Some(vec!["x".repeat(MAX_TAG_RESOURCE_ID_BYTES + 1)]),
-            resource_filter: None,
             resource_selection: None,
         }),
         Err(ApiError::BadRequest(_))
@@ -885,7 +840,6 @@ fn tag_write_plans_keep_mutation_steps_explicit() {
     let set_resource_update = ValidatedTagResourceUpdate {
         action: TagResourceUpdateAction::Set,
         resource_ids: vec!["12345678-1234-1234-1234-123456789abc".to_string()],
-        resource_filter: None,
         resource_selection: None,
     };
     assert_eq!(
@@ -937,7 +891,6 @@ fn tag_write_plans_keep_mutation_steps_explicit() {
         resources: Some(ValidatedTagResourceUpdate {
             action: TagResourceUpdateAction::Set,
             resource_ids: vec!["12345678-1234-1234-1234-123456789abc".to_string()],
-            resource_filter: None,
             resource_selection: None,
         }),
     };
@@ -981,7 +934,6 @@ fn tag_write_plans_keep_mutation_steps_explicit() {
     let resource_update = ValidatedTagResourceUpdate {
         action: TagResourceUpdateAction::Remove,
         resource_ids: vec!["12345678-1234-1234-1234-123456789abc".to_string()],
-        resource_filter: None,
         resource_selection: None,
     };
     assert_eq!(

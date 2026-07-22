@@ -3015,7 +3015,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-and-resource-assignment-write
       summary: Atomically update tag metadata and optional resource assignments
-      description: Updates tag metadata and resource assignments. Explicit IDs and typed collection selections use a native database transaction. A resource_type change is accepted only together with resources.action=set and explicit IDs, so old-type assignments are cleared atomically before the new selection is applied. Transitional raw filter expressions have no remaining first-party browser caller and remain on gvmd's compatibility path pending removal.
+      description: Updates tag metadata and resource assignments through a native database transaction. A resource_type change is accepted only together with resources.action=set and explicit IDs, so old-type assignments are cleared atomically before the new selection is applied. Filtered browser actions use bounded typed collection selectors rather than raw manager filter expressions.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -3049,10 +3049,6 @@ paths:
           $ref: '#/components/responses/TooManyRequests'
         '500':
           $ref: '#/components/responses/InternalError'
-        '502':
-          $ref: '#/components/responses/BadGateway'
-        '503':
-          $ref: '#/components/responses/ServiceUnavailable'
     delete:
       operationId: deleteTagsByTagId
       x-yafvs-direct: true
@@ -3294,7 +3290,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: resource-assignment-write
       summary: Add, remove, or replace active tag resource assignments
-      description: Adds, removes, or replaces assignments for the tag's existing resource type using bounded explicit resource_ids, a typed port-list, credential, scanner, target, or user resource_selection, or one transitional gvmd resource_filter. Explicit IDs and typed selections use native database transactions; raw filter expressions use gvmd's compatibility path. The three selection forms are mutually exclusive. set with none clears all current assignments.
+      description: Adds, removes, or replaces assignments for the tag's existing resource type using bounded explicit resource_ids or a typed port-list, credential, scanner, target, or user resource_selection. Both selection forms use native database transactions and are mutually exclusive. set with an empty resource_ids array clears all current assignments.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -10080,14 +10076,9 @@ components:
         resource_ids:
           type: array
           maxItems: 200
-          description: Explicit resource ids. Mutually exclusive with resource_filter and resource_selection. May be empty only for set, which clears all assignments.
+          description: Explicit resource ids. Mutually exclusive with resource_selection. May be empty only for set, which clears all assignments.
           items:
             type: string
-        resource_filter:
-          type: string
-          minLength: 1
-          maxLength: 16384
-          description: A transitional gvmd raw-filter compatibility field with no remaining first-party browser caller. Mutually exclusive with resource_ids and resource_selection and retained temporarily pending removal.
         resource_selection:
           $ref: '#/components/schemas/TagResourceSelection'
           description: Typed collection selection. Currently accepted only with action=add.

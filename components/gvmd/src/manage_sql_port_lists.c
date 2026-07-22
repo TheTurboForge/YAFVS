@@ -1958,7 +1958,6 @@ migrate_predefined_port_lists ()
        SETTING_UUID_FEED_IMPORT_OWNER);
 }
 
-
 
 /* Startup. */
 

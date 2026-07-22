@@ -172,7 +172,7 @@ const writeNativeJson = async <T>(
   return (await response.json()) as T;
 };
 
-const RESTORE_PATHS: Partial<Record<EntityType, string>> = {
+const NATIVE_TRASH_PATHS: Partial<Record<EntityType, string>> = {
   alert: 'alerts',
   filter: 'filters',
   override: 'overrides',
@@ -184,12 +184,22 @@ const RESTORE_PATHS: Partial<Record<EntityType, string>> = {
   target: 'targets',
 };
 
+const RESTORE_PATHS: Partial<Record<EntityType, string>> = {
+  ...NATIVE_TRASH_PATHS,
+  task: 'tasks',
+};
+
+const DELETE_PATHS = NATIVE_TRASH_PATHS;
+
 export const supportsNativeTrashcanRestore = (
   entityType?: EntityType,
 ): entityType is keyof typeof RESTORE_PATHS =>
   entityType !== undefined && RESTORE_PATHS[entityType] !== undefined;
 
-export const supportsNativeTrashcanDelete = supportsNativeTrashcanRestore;
+export const supportsNativeTrashcanDelete = (
+  entityType?: EntityType,
+): entityType is keyof typeof DELETE_PATHS =>
+  entityType !== undefined && DELETE_PATHS[entityType] !== undefined;
 
 export const fetchNativeTrashcanSummary = async (
   gmp: NativeTrashcanApiGmp,
@@ -380,7 +390,7 @@ export const deleteNativeTrashcanEntity = async (
   gmp: NativeTrashcanApiGmp,
   {id, entityType}: NativeTrashcanRestoreArgs,
 ): Promise<void> => {
-  const path = RESTORE_PATHS[entityType];
+  const path = DELETE_PATHS[entityType];
   if (path === undefined) {
     throw new Error(`Native trash delete is not available for ${entityType}`);
   }

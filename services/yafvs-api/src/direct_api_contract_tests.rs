@@ -375,6 +375,11 @@ const APPROVED_NATIVE_WRITE_ROUTE_CONTRACTS: &[NativeWriteRouteContract] = &[
         safety_contract: "write-control-v1",
     },
     NativeWriteRouteContract {
+        method: "post",
+        path: "/api/v1/tasks/:task_id/restore",
+        safety_contract: "write-control-v1",
+    },
+    NativeWriteRouteContract {
         method: "patch",
         path: "/api/v1/tasks/:task_id",
         safety_contract: "write-control-v1",
@@ -798,6 +803,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("/api/v1/port-lists/:port_list_id/restore"));
     assert!(browser_routes.contains("/api/v1/scan-configs/:scan_config_id/restore"));
     assert!(browser_routes.contains("/api/v1/schedules/:schedule_id/restore"));
+    assert!(browser_routes.contains("/api/v1/tasks/:task_id/restore"));
     assert!(browser_routes.contains("/api/v1/tags/:tag_id/restore"));
     assert!(browser_routes.contains("/api/v1/targets/:target_id/restore"));
     assert!(browser_routes.contains("/api/v1/scanners/:scanner_id/restore"));
@@ -842,6 +848,7 @@ fn browser_proxy_write_router_is_secret_gated_and_narrow() {
     assert!(browser_routes.contains("post(browser_proxy_restore_port_list)"));
     assert!(browser_routes.contains("post(browser_proxy_restore_scan_config)"));
     assert!(browser_routes.contains("post(browser_proxy_restore_schedule)"));
+    assert!(browser_routes.contains("post(browser_proxy_restore_task)"));
     assert!(browser_routes.contains("post(browser_proxy_restore_tag)"));
     assert!(browser_routes.contains("post(browser_proxy_restore_target)"));
     assert!(browser_routes.contains("post(browser_proxy_update_tag_resources)"));

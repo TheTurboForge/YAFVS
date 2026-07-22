@@ -67,6 +67,7 @@ describe('TrashCanCommand tests', () => {
     ['schedule', 'schedules'],
     ['tag', 'tags'],
     ['target', 'targets'],
+    ['task', 'tasks'],
   ] as const)(
     'should restore supported %s trash entities through native API',
     async (entityType, path) => {
@@ -113,10 +114,7 @@ describe('TrashCanCommand tests', () => {
     },
   );
 
-  test.each([
-    ['credential', 'credential'],
-    ['task', 'task'],
-  ] as const)(
+  test.each([['credential', 'credential']] as const)(
     'should restore retained %s trash entities through the typed GMP bridge',
     async (entityType, resourceType) => {
       const response = createResponse({});

@@ -6,6 +6,25 @@ pub(crate) fn task_write_operator_owner_sql() -> &'static str {
     "SELECT id::integer FROM users WHERE uuid = $1;"
 }
 
+pub(crate) fn task_trash_state_sql() -> &'static str {
+    "SELECT id::integer,
+            owner::integer,
+            run_status::integer,
+            coalesce(target_location, -1) = 0
+              AND coalesce(config_location, -1) = 0
+              AND coalesce(schedule_location, -1) = 0
+              AND coalesce(scanner_location, -1) = 0
+              AND NOT EXISTS (
+                    SELECT 1
+                      FROM task_alerts
+                     WHERE task = tasks.id
+                       AND coalesce(alert_location, -1) <> 0)
+       FROM tasks
+      WHERE uuid = $1
+        AND coalesce(hidden, 0) = 2
+        AND coalesce(usage_type, 'scan') = 'scan';"
+}
+
 pub(crate) fn task_assignable_schedule_state_sql() -> &'static str {
     "SELECT id::integer,
             owner::integer,
@@ -13,6 +32,79 @@ pub(crate) fn task_assignable_schedule_state_sql() -> &'static str {
                                     timezone), 0)::integer
        FROM schedules
       WHERE uuid = $1;"
+}
+
+pub(crate) fn task_restore_task_tag_locations_sql() -> &'static str {
+    "UPDATE tag_resources
+        SET resource_location = 0
+      WHERE resource_type = 'task'
+        AND resource = $1;"
+}
+
+pub(crate) fn task_restore_task_trash_tag_locations_sql() -> &'static str {
+    "UPDATE tag_resources_trash
+        SET resource_location = 0
+      WHERE resource_type = 'task'
+        AND resource = $1;"
+}
+
+pub(crate) fn task_restore_report_tag_locations_sql() -> &'static str {
+    "UPDATE tag_resources
+        SET resource_location = 0
+      WHERE resource_type = 'report'
+        AND resource IN (SELECT id FROM reports WHERE task = $1);"
+}
+
+pub(crate) fn task_restore_report_trash_tag_locations_sql() -> &'static str {
+    "UPDATE tag_resources_trash
+        SET resource_location = 0
+      WHERE resource_type = 'report'
+        AND resource IN (SELECT id FROM reports WHERE task = $1);"
+}
+
+pub(crate) fn task_restore_result_tag_locations_sql() -> &'static str {
+    "UPDATE tag_resources AS link
+        SET resource_location = 0,
+            resource = restored.id
+       FROM results AS restored
+      WHERE link.resource_type = 'result'
+        AND link.resource_uuid = restored.uuid
+        AND restored.task = $1;"
+}
+
+pub(crate) fn task_restore_result_trash_tag_locations_sql() -> &'static str {
+    "UPDATE tag_resources_trash AS link
+        SET resource_location = 0,
+            resource = restored.id
+       FROM results AS restored
+      WHERE link.resource_type = 'result'
+        AND link.resource_uuid = restored.uuid
+        AND restored.task = $1;"
+}
+
+pub(crate) fn task_restore_results_insert_sql() -> &'static str {
+    "INSERT INTO results
+        (uuid, task, host, port, nvt, result_nvt, type, description, report,
+         nvt_version, severity, qod, qod_type, owner, date, hostname, path)
+     SELECT uuid, task, host, port, nvt, result_nvt, type, description, report,
+            nvt_version, severity, qod, qod_type, owner, date, hostname, path
+       FROM results_trash
+      WHERE report IN (SELECT id FROM reports WHERE task = $1);"
+}
+
+pub(crate) fn task_delete_trash_results_sql() -> &'static str {
+    "DELETE FROM results_trash
+      WHERE report IN (SELECT id FROM reports WHERE task = $1);"
+}
+
+pub(crate) fn task_mark_live_restored_sql() -> &'static str {
+    "UPDATE tasks
+        SET hidden = 0,
+            modification_time = m_now()
+      WHERE id = $1
+        AND coalesce(hidden, 0) = 2
+        AND coalesce(usage_type, 'scan') = 'scan'
+      RETURNING uuid::text;"
 }
 
 pub(crate) fn task_assignable_alert_state_sql() -> &'static str {

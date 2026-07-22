@@ -60,11 +60,11 @@ export interface TrashCanEmptyParams {
 
 const LEGACY_RESTORE_RESOURCE_TYPES = {
   credential: 'credential',
-  task: 'task',
 } as const satisfies Partial<Record<EntityType, string>>;
 
 const LEGACY_DELETE_RESOURCE_TYPES = {
   ...LEGACY_RESTORE_RESOURCE_TYPES,
+  task: 'task',
   reportformat: 'report_format',
 } as const satisfies Partial<Record<EntityType, string>>;
 

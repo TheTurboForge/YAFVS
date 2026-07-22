@@ -46,7 +46,7 @@ use crate::{
     task_target_replace::{TaskTargetReplaceResponse, replace_task_target},
     task_target_replace_validation::TaskTargetReplaceRequest,
     task_write_validation::{TaskCreateRequest, TaskPatchRequest, TaskReplaceRequest},
-    task_writes::{clone_task, create_task, delete_task, patch_task, replace_task},
+    task_writes::{clone_task, create_task, delete_task, patch_task, replace_task, restore_task},
     tls_certificate_writes::delete_tls_certificate,
 };
 
@@ -59,6 +59,16 @@ pub(crate) async fn browser_proxy_create_alert(
     let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
     let request = parse_alert_create_payload(payload)?;
     create_alert(State(state), Some(Extension(operator)), Ok(Json(request))).await
+}
+
+pub(crate) async fn browser_proxy_restore_task(
+    State(state): State<AppState>,
+    Extension(auth): Extension<BrowserProxyAuth>,
+    Path(task_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<Json<TaskItem>, ApiError> {
+    let operator = browser_proxy_operator_from_headers(&state, &auth, &headers).await?;
+    restore_task(State(state), Path(task_id), Some(Extension(operator))).await
 }
 
 pub(crate) async fn browser_proxy_clone_scanner(

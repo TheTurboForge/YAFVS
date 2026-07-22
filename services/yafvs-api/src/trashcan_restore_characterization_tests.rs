@@ -33,25 +33,21 @@ fn trashcan_restore_allowlists_remain_narrow_and_typed() {
         .split_once("} as const")
         .expect("typed GSA legacy restore map must terminate")
         .0;
-    for (entity_type, resource_type) in [
-        ("credential", "credential"),
-        ("task", "task"),
-    ] {
-        assert!(
-            gsa_restore.contains(&format!("{entity_type}: '{resource_type}'")),
-            "GSA legacy restore map missing {entity_type} -> {resource_type}"
-        );
-    }
-    assert_eq!(gsa_restore.matches(':').count(), 2);
+    let (entity_type, resource_type) = ("credential", "credential");
+    assert!(
+        gsa_restore.contains(&format!("{entity_type}: '{resource_type}'")),
+        "GSA legacy restore map missing {entity_type} -> {resource_type}"
+    );
+    assert_eq!(gsa_restore.matches(':').count(), 1);
     assert!(!gsa_restore.contains("alert"));
     assert!(!gsa_restore.contains("reportformat"));
 
-    let native_paths = GSA_NATIVE_TRASHCAN
-        .split_once("const RESTORE_PATHS: Partial<Record<EntityType, string>> = {")
-        .expect("native restore map must exist")
+    let native_common_paths = GSA_NATIVE_TRASHCAN
+        .split_once("const NATIVE_TRASH_PATHS: Partial<Record<EntityType, string>> = {")
+        .expect("native common trash map must exist")
         .1
         .split_once("};")
-        .expect("native restore map must terminate")
+        .expect("native common trash map must terminate")
         .0;
     for entity_type in [
         "alert",
@@ -65,28 +61,38 @@ fn trashcan_restore_allowlists_remain_narrow_and_typed() {
         "target",
     ] {
         assert!(
-            native_paths.contains(&format!("{entity_type}:")),
-            "native restore map missing {entity_type}"
+            native_common_paths.contains(&format!("{entity_type}:")),
+            "native common trash map missing {entity_type}"
         );
     }
-    assert_eq!(native_paths.matches(':').count(), 9);
+    assert_eq!(native_common_paths.matches(':').count(), 9);
+
+    let native_restore_paths = GSA_NATIVE_TRASHCAN
+        .split_once("const RESTORE_PATHS: Partial<Record<EntityType, string>> = {")
+        .expect("native restore map must exist")
+        .1
+        .split_once("};")
+        .expect("native restore map must terminate")
+        .0;
+    assert!(native_restore_paths.contains("...NATIVE_TRASH_PATHS"));
+    assert!(native_restore_paths.contains("task: 'tasks'"));
+    assert_eq!(native_restore_paths.matches(':').count(), 1);
 
     let allowlist = inherited_function(GSAD_GMP, "trashcan_restore_resource_type_is_supported");
     let restore_allowlist = allowlist
         .split_once("\nstatic gboolean\ntrashcan_delete_resource_type_is_supported")
         .expect("gsad restore allowlist must end before the delete allowlist")
         .0;
-    for resource_type in ["credential", "task"] {
-        assert!(
-            restore_allowlist.contains(&format!("g_strcmp0 (resource_type, \"{resource_type}\")")),
-            "gsad trashcan restore allowlist missing {resource_type}"
-        );
-    }
+    let resource_type = "credential";
+    assert!(
+        restore_allowlist.contains(&format!("g_strcmp0 (resource_type, \"{resource_type}\")")),
+        "gsad trashcan restore allowlist missing {resource_type}"
+    );
     assert_eq!(
         restore_allowlist
             .matches("g_strcmp0 (resource_type,")
             .count(),
-        2
+        1
     );
     assert!(!restore_allowlist.contains("\"alert\""));
     assert!(!restore_allowlist.contains("report_format"));
@@ -120,9 +126,8 @@ fn trashcan_permanent_delete_allowlists_remain_narrow_and_fail_closed() {
     );
     let delete_allowlist =
         inherited_function(GSAD_GMP, "trashcan_delete_resource_type_is_supported");
-    assert!(
-        delete_allowlist.contains("trashcan_restore_resource_type_is_supported (resource_type)")
-    );
+    assert!(delete_allowlist.contains("g_strcmp0 (resource_type, \"credential\")"));
+    assert!(delete_allowlist.contains("g_strcmp0 (resource_type, \"task\")"));
     assert!(delete_allowlist.contains("g_strcmp0 (resource_type, \"report_format\")"));
     assert!(delete_from_trash.contains("Unsupported resource_type for the trash delete"));
     assert!(

@@ -16,9 +16,48 @@ pub(crate) struct TaskWriteRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TaskTrashState {
+    pub(crate) internal_id: i32,
+    pub(crate) owner_id: Option<i32>,
+    pub(crate) run_status: TaskStatus,
+    pub(crate) references_are_live: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct TaskWriteRecordWithInternalId {
     pub(crate) internal_id: i32,
     pub(crate) uuid: String,
+}
+
+pub(crate) async fn load_task_trash_state(
+    tx: &Transaction<'_>,
+    task_id: &str,
+) -> Result<TaskTrashState, ApiError> {
+    let task_id = parse_uuid(task_id)?.to_string();
+    let row = tx
+        .query_opt(task_trash_state_sql(), &[&task_id])
+        .await
+        .map_err(|error| map_task_write_db_error(error, "load task trash state"))?
+        .ok_or(ApiError::NotFound)?;
+    Ok(TaskTrashState {
+        internal_id: row.get(0),
+        owner_id: row.get(1),
+        run_status: TaskStatus::from_database(row.get(2))?,
+        references_are_live: row.get(3),
+    })
+}
+
+pub(crate) fn ensure_task_restore_references_are_live(
+    references_are_live: bool,
+) -> Result<(), ApiError> {
+    if references_are_live {
+        Ok(())
+    } else {
+        Err(ApiError::Conflict(
+            "task restore requires its target, scan config, schedule, scanner, and alerts to be live"
+                .to_string(),
+        ))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

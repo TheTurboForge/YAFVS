@@ -95,6 +95,57 @@ pub(crate) async fn execute_task_create_transaction(
     Ok(record)
 }
 
+pub(crate) async fn execute_task_restore_transaction(
+    tx: &Transaction<'_>,
+    task_internal_id: i32,
+) -> Result<TaskWriteRecord, ApiError> {
+    for (sql, action) in [
+        (
+            task_restore_task_tag_locations_sql(),
+            "move task tag links to live location",
+        ),
+        (
+            task_restore_task_trash_tag_locations_sql(),
+            "move trashed task tag links to live location",
+        ),
+        (
+            task_restore_report_tag_locations_sql(),
+            "move report tag links to live location",
+        ),
+        (
+            task_restore_report_trash_tag_locations_sql(),
+            "move trashed report tag links to live location",
+        ),
+        (task_restore_results_insert_sql(), "restore task results"),
+        (
+            task_restore_result_tag_locations_sql(),
+            "remap result tag links to restored live identities",
+        ),
+        (
+            task_restore_result_trash_tag_locations_sql(),
+            "remap trashed result tag links to restored live identities",
+        ),
+        (
+            task_delete_trash_results_sql(),
+            "delete trash results after task restore",
+        ),
+        (
+            task_delete_report_counts_sql(),
+            "invalidate report counts after task restore",
+        ),
+    ] {
+        execute_task_write_sql(tx, sql, &[&task_internal_id], action).await?;
+    }
+
+    query_task_write_record(
+        tx,
+        task_mark_live_restored_sql(),
+        &[&task_internal_id],
+        "mark restored task as live",
+    )
+    .await
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn execute_task_replace_transaction(
     tx: &Transaction<'_>,

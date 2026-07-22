@@ -505,6 +505,7 @@ OPENAPI_ALLOWED_REPLACES_VALUES = frozenset(
         "task-list-read",
         "task-retained-editor-configuration-modify",
         "task-target-clone-rebind-delete",
+        "task-trash-restore",
         "task-trash-move",
         "task-start",
         "task-stop",
@@ -6984,7 +6985,7 @@ def native_api_gsad_proxy_allowlist_templates(repo_root: Path | None) -> tuple[l
         stop_suffix = post_constants.get("stop_suffix")
         replace_target_suffix = post_constants.get("replace_target_suffix")
         replace_configuration_suffix = post_constants.get("replace_configuration_suffix")
-        for prefix_variable in ("alert_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
+        for prefix_variable in ("alert_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix", "task_prefix"):
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 templates.add(f"{prefix.rstrip('/')}/{{}}{clone_suffix}")
@@ -7165,7 +7166,7 @@ def native_api_gsad_proxy_write_allowlist_operations(repo_root: Path | None) -> 
         resources_suffix = post_constants.get("resources_suffix")
         ranges_suffix = post_constants.get("ranges_suffix")
         verify_suffix = post_constants.get("verify_suffix")
-        for prefix_variable in ("alert_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix"):
+        for prefix_variable in ("alert_prefix", "filter_prefix", "override_prefix", "port_list_prefix", "scan_config_prefix", "scanner_prefix", "schedule_prefix", "tag_prefix", "target_prefix", "task_prefix"):
             prefix = post_constants.get(prefix_variable)
             if prefix and clone_suffix and f"g_str_has_prefix (path, {prefix_variable})" in post_function_body:
                 operations.add(f"POST {prefix.rstrip('/')}/{{}}{clone_suffix}")
@@ -8981,6 +8982,16 @@ def summarize_native_tooling(items: list[dict[str, Any]], repo_root: Path | None
                 "replacement_candidates": ["same-origin browser task stop through private gvmd control", "guarded direct native task stop"],
                 "residual_inherited": [
                     "Task resume and other scanner-control workflows remain inherited until separately migrated."
+                ],
+            },
+            {
+                "method": "post",
+                "endpoint": "/api/v1/tasks/{task_id}/restore",
+                "status": "implemented_internal_and_browser_proxied",
+                "direct_access": "direct_write_control",
+                "replacement_candidates": ["same-origin browser task restore", "direct native task restore"],
+                "residual_inherited": [
+                    "Task hard-delete, resume, inherited file export, and other scanner-control workflows remain inherited until separately migrated."
                 ],
             },
             {

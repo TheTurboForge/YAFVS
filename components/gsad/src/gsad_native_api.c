@@ -1192,6 +1192,7 @@ native_api_post_path_is_allowed (const gchar *path)
     {
       const gchar *id = path + strlen (task_prefix);
       return is_uuid_segment_with_suffix (id, clone_suffix)
+             || is_uuid_segment_with_suffix (id, restore_suffix)
              || is_uuid_segment_with_suffix (id, start_suffix)
              || is_uuid_segment_with_suffix (id, stop_suffix)
              || is_uuid_segment_with_suffix (id, replace_configuration_suffix)

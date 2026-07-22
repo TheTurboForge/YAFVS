@@ -7,7 +7,7 @@ use crate::{
     task_status::TaskStatus,
     task_write_db::{
         ensure_task_configuration_mutable, ensure_task_is_human_owned,
-        ensure_task_not_in_use_for_native_trash,
+        ensure_task_not_in_use_for_native_trash, ensure_task_restore_references_are_live,
     },
     task_write_sql::*,
     task_write_validation::{
@@ -20,6 +20,8 @@ use crate::{
 const OPENAPI: &str = include_str!("../../../api/openapi/yafvs-v1.yaml");
 const GVMD_OSP: &str = include_str!("../../../components/gvmd/src/manage_osp.c");
 const GVMD_OPENVASD: &str = include_str!("../../../components/gvmd/src/manage_openvasd.c");
+const GVMD_MANAGE_SQL: &str = include_str!("../../../components/gvmd/src/manage_sql.c");
+const GVMD_MANAGE_PG: &str = include_str!("../../../components/gvmd/src/manage_pg.c");
 const VALID_TARGET_ID: &str = "11111111-1111-4111-8111-111111111111";
 const VALID_CONFIG_ID: &str = "22222222-2222-4222-8222-222222222222";
 const VALID_SCANNER_ID: &str = "33333333-3333-4333-8333-333333333333";
@@ -44,6 +46,144 @@ fn create_request(name: &str) -> TaskCreateRequest {
         min_qod: 70,
         tag_id: None,
     }
+}
+
+#[test]
+fn task_restore_rejects_active_state_and_any_nonlive_reference() {
+    assert!(ensure_task_restore_references_are_live(true).is_ok());
+    assert!(matches!(
+        ensure_task_restore_references_are_live(false),
+        Err(ApiError::Conflict(_))
+    ));
+    assert!(matches!(
+        ensure_task_not_in_use_for_native_trash(TaskStatus::Running),
+        Err(ApiError::Conflict(_))
+    ));
+
+    let state = task_trash_state_sql();
+    for required in [
+        "coalesce(hidden, 0) = 2",
+        "coalesce(target_location, -1) = 0",
+        "coalesce(config_location, -1) = 0",
+        "coalesce(schedule_location, -1) = 0",
+        "coalesce(scanner_location, -1) = 0",
+        "coalesce(alert_location, -1) <> 0",
+    ] {
+        assert!(state.contains(required), "task trash state missing {required}");
+    }
+}
+
+#[test]
+fn task_restore_handler_is_operator_guarded_and_transactional() {
+    let source = include_str!("task_writes.rs");
+    let handler = source
+        .split_once("pub(crate) async fn restore_task")
+        .expect("restore task handler must exist")
+        .1;
+    for required in [
+        "require_task_write_operator(operator)?",
+        "resolve_task_write_operator_owner(&tx, &operator).await?",
+        "LOCK TABLE tasks, task_alerts, reports, report_counts, results, results_trash, tag_resources, tag_resources_trash",
+        "load_task_trash_state",
+        "ensure_task_is_human_owned",
+        "ensure_task_not_in_use_for_native_trash",
+        "ensure_task_restore_references_are_live",
+        "execute_task_restore_transaction",
+        "tx.commit()",
+        "load_task_detail",
+    ] {
+        assert!(handler.contains(required), "task restore handler missing {required}");
+    }
+    assert!(
+        handler.find("ensure_task_restore_references_are_live").unwrap()
+            < handler.find("execute_task_restore_transaction").unwrap()
+    );
+}
+
+#[test]
+fn task_restore_sql_matches_imported_manager_authority_and_fails_closed() {
+    let inherited = GVMD_MANAGE_SQL
+        .split_once("  /* Task. */")
+        .expect("inherited task restore block")
+        .1
+        .split_once("  sql_rollback ();\n  return 2;")
+        .expect("inherited task restore end")
+        .0;
+    for required in [
+        "target_location",
+        "config_location",
+        "schedule_location",
+        "scanner_location",
+        "alert_location",
+        "permissions_set_locations (\"task\"",
+        "tags_set_locations (\"task\"",
+        "INSERT INTO results",
+        "FROM results_trash",
+        "DELETE FROM results_trash",
+        "DELETE FROM report_counts",
+        "UPDATE tasks SET hidden = 0",
+    ] {
+        assert!(inherited.contains(required), "imported restore authority missing {required}");
+    }
+
+    for sql in [
+        task_restore_task_tag_locations_sql(),
+        task_restore_task_trash_tag_locations_sql(),
+        task_restore_report_tag_locations_sql(),
+        task_restore_report_trash_tag_locations_sql(),
+    ] {
+        assert!(sql.contains("resource_location = 0"));
+    }
+    for sql in [
+        task_restore_result_tag_locations_sql(),
+        task_restore_result_trash_tag_locations_sql(),
+    ] {
+        assert!(sql.contains("resource_location = 0"));
+        assert!(sql.contains("resource = restored.id"));
+        assert!(sql.contains("link.resource_uuid = restored.uuid"));
+        assert!(sql.contains("FROM results AS restored"));
+        assert!(sql.contains("restored.task = $1"));
+        assert!(!sql.contains("SELECT id FROM results_trash"));
+    }
+    for marker in [
+        "CREATE TABLE IF NOT EXISTS results\"",
+        "CREATE TABLE IF NOT EXISTS results_trash\"",
+    ] {
+        let table = GVMD_MANAGE_PG
+            .split_once(marker)
+            .unwrap_or_else(|| panic!("imported schema must define {marker}"))
+            .1;
+        assert!(
+            table.starts_with("\n       \" (id SERIAL PRIMARY KEY,"),
+            "{marker} must independently allocate row identities"
+        );
+    }
+    assert!(task_restore_results_insert_sql().contains("INSERT INTO results"));
+    assert!(task_restore_results_insert_sql().contains("FROM results_trash"));
+    assert!(task_delete_trash_results_sql().contains("DELETE FROM results_trash"));
+    assert!(task_mark_live_restored_sql().contains("hidden = 0"));
+    assert!(task_mark_live_restored_sql().contains("coalesce(hidden, 0) = 2"));
+
+    let transaction = include_str!("task_write_transactions.rs")
+        .split_once("pub(crate) async fn execute_task_restore_transaction")
+        .expect("task restore transaction")
+        .1;
+    assert!(
+        transaction.find("task_restore_results_insert_sql").unwrap()
+            < transaction.find("task_restore_result_tag_locations_sql").unwrap()
+    );
+    assert!(
+        transaction.find("task_restore_result_tag_locations_sql").unwrap()
+            < transaction.find("task_delete_trash_results_sql").unwrap()
+    );
+    assert!(
+        transaction.find("task_delete_report_counts_sql").unwrap()
+            < transaction.find("task_mark_live_restored_sql").unwrap()
+    );
+    assert!(
+        !transaction.contains("permissions"),
+        "retired inherited row-level permission mutations must not be reintroduced"
+    );
 }
 
 fn patch_request(name: Option<&str>, comment: Option<&str>) -> TaskPatchRequest {

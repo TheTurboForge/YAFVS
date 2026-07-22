@@ -9,24 +9,6 @@
 
 #include "manage_resources.h"
 
-char*
-tag_uuid (tag_t);
-
-int
-copy_tag (const char *, const char *, const char *, tag_t *);
-
-int
-delete_tag (const char *, int);
-
-int
-create_tag (const char *, const char *, const char *, const char *,
-            array_t *, const char *, const char *, tag_t *, gchar **);
-
-int
-modify_tag (const char *, const char *, const char *, const char *,
-            const char *, array_t *, const char *, const char *, const char*,
-            gchar **);
-
 int
 init_resource_tag_iterator (iterator_t *, const char *, resource_t, int,
                             const char *, int);

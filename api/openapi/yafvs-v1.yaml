@@ -86,7 +86,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: result-list-and-effective-overrides-read
       summary: List top-level scan results
-      description: Read-only scan result list backed by gvmd/PostgreSQL. Rows include page-bounded effective override metadata for display; result tag mutation, exports, and actions remain on inherited compatibility paths.
+      description: Read-only scan result list backed by gvmd/PostgreSQL. Rows include page-bounded effective override metadata for display. Result-tag assignment uses the separate native tag contract; exports and other result actions remain on inherited compatibility paths.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -124,7 +124,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: result-detail-metadata-tags-and-overrides-read
       summary: Read one scan result metadata row
-      description: Read-only raw result detail backed by gvmd/PostgreSQL. Native detail includes result/NVT explanatory text, NVT-level EPSS context, active result user tags, and effective active override metadata for display. Inherited paths still own result exports, actions, tag mutation, and richer compatibility-only detail surfaces; override creation and mutation use the native override lifecycle.
+      description: Read-only raw result detail backed by gvmd/PostgreSQL. Native detail includes result/NVT explanatory text, NVT-level EPSS context, active result user tags, and effective active override metadata for display. Result-tag assignment uses the separate native tag contract; inherited paths still own result exports, other actions, and richer compatibility-only detail surfaces. Override creation and mutation use the native override lifecycle.
       parameters:
         - $ref: '#/components/parameters/ResultId'
       responses:
@@ -157,7 +157,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: result-metadata-export-read
       summary: Export one scan result metadata row
-      description: Direct scriptable result metadata export backed by the same PostgreSQL loader as result detail. This returns native JSON metadata, NVT context, active result tags, and effective active override display metadata only; bulk result export, result actions, result tag mutation, override create/modify/delete/export workflows, and other legacy result actions remain outside this endpoint.
+      description: Direct scriptable result metadata export backed by the same PostgreSQL loader as result detail. This returns native JSON metadata, NVT context, active result tags, and effective active override display metadata only. Result-tag assignment uses the separate native tag contract; bulk result export, result actions, override create/modify/delete/export workflows, and other legacy result actions remain outside this endpoint.
       parameters:
         - $ref: '#/components/parameters/ResultId'
       responses:
@@ -835,7 +835,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: operating-system-asset-metadata-export-read
       summary: Export operating-system metadata JSON
-      description: Direct scriptable operating-system metadata export backed by gvmd/PostgreSQL. This returns the same native operating-system detail JSON with aggregate host/severity metadata and active user tags. Operating-system writes, deletes, export, tag writes/actions, and richer history remain inherited.
+      description: Direct scriptable operating-system metadata export backed by gvmd/PostgreSQL. This returns the same native operating-system detail JSON with aggregate host/severity metadata and active user tags. Tag assignment uses the separate native tag contract; operating-system writes, deletes, legacy export, other actions, and richer history remain inherited.
       parameters:
         - $ref: '#/components/parameters/OperatingSystemId'
       responses:
@@ -868,7 +868,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: host-asset-list-read
       summary: List top-level host assets
-      description: Inherited host asset view backed by gvmd/PostgreSQL host identifiers, details, and severity state. Native direct write-control can create manual IP host assets, patch host comments, hard-delete operator-owned hosts, delete individual host identifiers, and delete host operating-system links. XML export, target creation, user-tag writes, raw report-host detail expansion, credential/privacy-sensitive identifiers, operating-system catalog deletion, and report/result/port/application history remain inherited.
+      description: Inherited host asset view backed by gvmd/PostgreSQL host identifiers, details, and severity state. Native direct write-control can create manual IP host assets, patch host comments, hard-delete operator-owned hosts, delete individual host identifiers, and delete host operating-system links. Tag assignment uses the separate native tag contract; XML export, target creation, raw report-host detail expansion, credential/privacy-sensitive identifiers, operating-system catalog deletion, and report/result/port/application history remain inherited.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -907,7 +907,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Create a manual host asset
-      description: Direct write-control endpoint for creating an operator-owned manual host asset from an IPv4 or IPv6 address plus optional comment. The endpoint mirrors inherited manual host creation by inserting a host row and a User-sourced ip identifier. It intentionally excludes hostname/MAC/OS identifier creation, report-derived asset creation, target creation, tag writes/actions, export, scanner/feed control, and rich host history semantics.
+      description: Direct write-control endpoint for creating an operator-owned manual host asset from an IPv4 or IPv6 address plus optional comment. The endpoint mirrors inherited manual host creation by inserting a host row and a User-sourced ip identifier. Tag assignment uses the separate native tag contract. This endpoint intentionally excludes hostname/MAC/OS identifier creation, report-derived asset creation, target creation, export, scanner/feed control, and rich host history semantics.
       requestBody:
         required: true
         content:
@@ -946,7 +946,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: host-asset-detail-info-read
       summary: Read one top-level host asset
-      description: Host asset metadata backed by gvmd/PostgreSQL host, host identifier, host operating-system, severity, whitelisted host detail state, and active user tags. Native direct write-control can patch the host comment, hard-delete the operator-owned host, delete individual host identifiers, and delete host operating-system links. This endpoint intentionally excludes XML export, target creation, user-tag writes, raw report-host detail expansion, credential/privacy-sensitive identifiers, operating-system catalog deletion, and report/result/port/application history.
+      description: Host asset metadata backed by gvmd/PostgreSQL host, host identifier, host operating-system, severity, whitelisted host detail state, and active user tags. Native direct write-control can patch the host comment, hard-delete the operator-owned host, delete individual host identifiers, and delete host operating-system links. Tag assignment uses the separate native tag contract. This endpoint intentionally excludes XML export, target creation, raw report-host detail expansion, credential/privacy-sensitive identifiers, operating-system catalog deletion, and report/result/port/application history.
       parameters:
         - $ref: '#/components/parameters/HostId'
       responses:
@@ -983,7 +983,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Update host comment
-      description: Direct write-control endpoint for updating any human-owned host asset comment only. Any authenticated stack operator may continue this work; the host's existing owner remains attribution. Ownerless hosts remain protected. Host name, OS catalog/detail/severity evidence, target creation, tag writes/actions, XML export, and report-derived asset behavior remain inherited.
+      description: Direct write-control endpoint for updating any human-owned host asset comment only. Any authenticated stack operator may continue this work; the host's existing owner remains attribution. Ownerless hosts remain protected. Tag assignment uses the separate native tag contract; host name, OS catalog/detail/severity evidence, target creation, XML export, and report-derived asset behavior remain inherited.
       parameters:
         - $ref: '#/components/parameters/HostId'
       requestBody:
@@ -1133,7 +1133,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: host-asset-metadata-export-read
       summary: Export host metadata JSON
-      description: Direct scriptable host metadata export backed by gvmd/PostgreSQL. This returns the same native host detail JSON with whitelisted identifiers, operating-system references, selected host detail fields, and active user tags. XML export, target creation, user-tag writes, raw report-host detail expansion, credential/privacy-sensitive identifiers, and report/result/port/application history remain inherited.
+      description: Direct scriptable host metadata export backed by gvmd/PostgreSQL. This returns the same native host detail JSON with whitelisted identifiers, operating-system references, selected host detail fields, and active user tags. Tag assignment uses the separate native tag contract; XML export, target creation, raw report-host detail expansion, credential/privacy-sensitive identifiers, and report/result/port/application history remain inherited.
       parameters:
         - $ref: '#/components/parameters/HostId'
       responses:
@@ -1268,7 +1268,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tls-certificate-asset-metadata-export-read
       summary: Export TLS certificate metadata JSON
-      description: Direct scriptable TLS certificate metadata export backed by gvmd/PostgreSQL. This returns the same native TLS certificate detail JSON with source provenance and active user tags. Certificate bytes are exposed only through the explicit certificate endpoint; tag writes/actions, scanner-control, feed-control, rich history, and other write behavior remain inherited.
+      description: Direct scriptable TLS certificate metadata export backed by gvmd/PostgreSQL. This returns the same native TLS certificate detail JSON with source provenance and active user tags. Certificate bytes are exposed only through the explicit certificate endpoint. Tag assignment uses the separate native tag contract; scanner-control, feed-control, rich history, and other certificate behavior remain inherited.
       parameters:
         - $ref: '#/components/parameters/TlsCertificateId'
       responses:
@@ -1301,7 +1301,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tls-certificate-pem-download-read
       summary: Read TLS certificate PEM source data
-      description: Read-only TLS certificate byte source for browser PEM download. This endpoint returns the stored certificate text only, separated from metadata detail so ordinary detail/list payloads stay compact and free of byte blobs. Tag writes/actions, scanner-control, feed-control, rich history, and other write behavior remain inherited.
+      description: Read-only TLS certificate byte source for browser PEM download. This endpoint returns the stored certificate text only, separated from metadata detail so ordinary detail/list payloads stay compact and free of byte blobs. Tag assignment uses the separate native tag contract; scanner-control, feed-control, rich history, and other certificate behavior remain inherited.
       parameters:
         - $ref: '#/components/parameters/TlsCertificateId'
       responses:
@@ -3068,7 +3068,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tag-metadata-read
       summary: List tags
-      description: Read-only tag metadata backed by gvmd/PostgreSQL. Explicit native resource assignment and atomic resource-type replacement support native-safe resource ids, including catalog-backed Security Information ids. Filter-based resource actions remain on the isolated compatibility path while their native query contract is designed.
+      description: Read-only tag metadata backed by gvmd/PostgreSQL. Explicit native resource assignment and atomic resource-type replacement support native-safe resource ids, including catalog-backed Security Information ids. Browser filtered assignment uses bounded typed native selectors; unsupported resource types and unbounded raw manager filter expressions fail closed.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -3106,7 +3106,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-and-resource-assignment-write
       summary: Create tag metadata and optional resource assignments
-      description: Creates an operator-owned tag and an optional bounded explicit resource-id set in one native database transaction. Filter-expression selection is intentionally not part of the create contract; the browser creates tags from explicit selected resources.
+      description: Creates an operator-owned tag and an optional bounded explicit resource-id set in one native database transaction. Filter-expression selection is intentionally not part of the create contract; the browser creates tags from explicit selected resources. Raw GMP tag creation and copy-on-create are retired.
       requestBody:
         required: true
         content:
@@ -3228,7 +3228,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-and-resource-assignment-write
       summary: Atomically update tag metadata and optional resource assignments
-      description: Updates tag metadata and resource assignments through a native database transaction. A resource_type change is accepted only together with resources.action=set and explicit IDs, so old-type assignments are cleared atomically before the new selection is applied. Filtered browser actions use bounded typed collection selectors rather than raw manager filter expressions.
+      description: Updates tag metadata and resource assignments through a native database transaction. A resource_type change is accepted only together with resources.action=set and explicit IDs, so old-type assignments are cleared atomically before the new selection is applied. Filtered browser actions use bounded typed collection selectors rather than raw manager filter expressions. Raw GMP tag modification is retired.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -3275,7 +3275,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Move tag to trash
-      description: Direct write-control endpoint for moving a live tag, its active assignments, and tag-as-resource locations to the trashcan when the tag resource type is supported by native explicit resource writes. Export and broader security-information/filter side paths remain inherited; permanent deletion requires the explicit trash hard-delete endpoint.
+      description: Direct write-control endpoint for moving a live tag, its active assignments, and tag-as-resource locations to the trashcan when the tag resource type is supported by native explicit resource writes. Unsupported resource types and unbounded raw filter expressions fail closed; raw GMP tag deletion is retired. Permanent deletion requires the explicit trash hard-delete endpoint.
       parameters:
         - $ref: '#/components/parameters/TagId'
       responses:
@@ -3306,7 +3306,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tag-metadata-export-read
       summary: Export tag metadata
-      description: Scriptable JSON metadata export for one tag. Bulk tag JSON export is composed from native tag reads; filter-based resource actions remain a compatibility path on adjacent tag operations.
+      description: Scriptable JSON metadata export for one tag. Bulk tag JSON export is composed from native tag reads. Filtered assignment is available only through bounded typed native selectors; unbounded raw manager filter expressions are unsupported.
       parameters:
         - $ref: '#/components/parameters/TagId'
       responses:
@@ -3344,7 +3344,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Clone tag metadata and assignments
-      description: Direct write-control endpoint for copying any human-owned live tag into a new tag owned by the direct API operator when the tag resource type is supported by native explicit resource writes. The clone copies comment, value, resource type, active state, and existing resource assignments; optional name/comment fields override copied metadata. Unsupported resource classes and filter-based bulk actions remain inherited.
+      description: Direct write-control endpoint for copying any human-owned live tag into a new tag owned by the direct API operator when the tag resource type is supported by native explicit resource writes. The clone copies comment, value, resource type, active state, and existing resource assignments; optional name/comment fields override copied metadata. Unsupported resource classes and unbounded raw filter expressions fail closed; raw GMP copy-on-create is retired.
       parameters:
         - $ref: '#/components/parameters/TagId'
       requestBody:
@@ -3393,7 +3393,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-write
       summary: Restore tag from trash
-      description: Direct write-control endpoint for restoring a trashed tag and its trash assignments to live state when the tag resource type is supported by native explicit resource writes. Export and broader security-information/filter side paths remain inherited.
+      description: Direct write-control endpoint for restoring a trashed tag and its trash assignments to live state when the tag resource type is supported by native explicit resource writes. Unsupported resource types and unbounded raw filter expressions fail closed. The tag-specific branch of generic GMP RESTORE is retired; generic RESTORE for other resource families remains separate compatibility behavior.
       parameters:
         - $ref: '#/components/parameters/TagId'
       responses:
@@ -3433,7 +3433,7 @@ paths:
       x-yafvs-safety-contract: write-control-v1
       x-yafvs-side-effect: metadata-delete
       summary: Permanently delete trashed tag
-      description: Direct write-control endpoint for permanently deleting a tag that is already in the trashcan when the tag resource type is supported by native explicit resource writes. Live tags must first be moved to trash; export and broader security-information/filter side paths remain inherited.
+      description: Direct write-control endpoint for permanently deleting a tag that is already in the trashcan when the tag resource type is supported by native explicit resource writes. Live tags must first be moved to trash. Unsupported resource types and unbounded raw filter expressions fail closed; raw GMP tag deletion is retired.
       parameters:
         - $ref: '#/components/parameters/TagId'
       responses:
@@ -3462,7 +3462,7 @@ paths:
       x-yafvs-maturity: live-read
       x-yafvs-replaces: tag-resource-reference-read
       summary: List assigned tag resource references
-      description: Read-only active-table tag resource references for a strict whitelist of asset, report/result UUID-backed, User, and security-information resource types. Security-information resource mutation, filter-based bulk actions, trash behavior, permissions, and other unsafe resource classes remain on inherited compatibility paths.
+      description: Read-only active-table tag resource references for a strict whitelist of asset, report/result UUID-backed, User, and security-information resource types. Supported mutations use native explicit assignments or bounded typed selectors. Unsupported resource classes and unbounded raw filter expressions fail closed rather than falling back to GMP.
       parameters:
         - $ref: '#/components/parameters/TagId'
         - $ref: '#/components/parameters/Page'
@@ -9648,7 +9648,7 @@ components:
             $ref: '#/components/schemas/HostAssetDetailMetadata'
         user_tags:
           type: array
-          description: Active user tags attached directly to this host asset. Write/tag actions remain inherited.
+          description: Active user tags attached directly to this host asset. Assignment uses the separate native tag contract.
           items:
             $ref: '#/components/schemas/ReportUserTag'
     TlsCertificateAssetCollection:
@@ -9673,7 +9673,7 @@ components:
                 $ref: '#/components/schemas/TlsCertificateSource'
             user_tags:
               type: array
-              description: Active user tags attached directly to this TLS certificate asset. Write/tag actions remain inherited.
+              description: Active user tags attached directly to this TLS certificate asset. Assignment uses the separate native tag contract.
               items:
                 $ref: '#/components/schemas/ReportUserTag'
     TlsCertificatePem:
@@ -9708,7 +9708,7 @@ components:
                 $ref: '#/components/schemas/ScannerTaskReference'
             user_tags:
               type: array
-              description: Active user tags attached directly to this scanner. Write/tag actions remain inherited.
+              description: Active user tags attached directly to this scanner. Assignment uses the separate native tag contract.
               items:
                 $ref: '#/components/schemas/ReportUserTag'
     ScannerVerifyResult:
@@ -10097,7 +10097,7 @@ components:
                 $ref: '#/components/schemas/ScanConfigTaskReference'
             user_tags:
               type: array
-              description: Active user tags attached directly to this scan config. Write/tag actions remain inherited.
+              description: Active user tags attached directly to this scan config. Assignment uses the separate native tag contract.
               items:
                 $ref: '#/components/schemas/ReportUserTag'
     ScanConfigPreferences:
@@ -11971,7 +11971,7 @@ components:
           type: string
         user_tags:
           type: array
-          description: Active user tags attached directly to this result. Tag mutation remains inherited.
+          description: Active user tags attached directly to this result. Assignment uses the separate native tag contract.
           items:
             $ref: '#/components/schemas/ReportUserTag'
         overrides:
@@ -12194,7 +12194,7 @@ components:
           format: date-time
         user_tags:
           type: array
-          description: Active user tags attached directly to this operating system. Write/tag actions remain inherited.
+          description: Active user tags attached directly to this operating system. Assignment uses the separate native tag contract.
           items:
             $ref: '#/components/schemas/ReportUserTag'
     HostAssetOperatingSystem:
@@ -13525,7 +13525,7 @@ components:
           properties:
             user_tags:
               type: array
-              description: Active user tags attached directly to this schedule. Write/tag actions remain inherited.
+              description: Active user tags attached directly to this schedule. Assignment uses the separate native tag contract.
               items:
                 $ref: '#/components/schemas/ReportUserTag'
     NvtFamily:

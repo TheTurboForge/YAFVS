@@ -21699,46 +21699,6 @@ manage_restore (const char *id)
       return 0;
     }
 
-  /* Tag */
-
-  if (find_trash ("tag", id, &resource))
-    {
-      sql_rollback ();
-      return -1;
-    }
-
-  if (resource)
-    {
-      tag_t restored_tag;
-
-      sql ("INSERT INTO tags"
-           " (uuid, owner, name, comment, creation_time,"
-           "  modification_time, resource_type, active, value)"
-           " SELECT uuid, owner, name, comment, creation_time,"
-           "        modification_time, resource_type, active, value"
-           " FROM tags_trash WHERE id = %llu;",
-           resource);
-
-      restored_tag = sql_last_insert_id ();
-
-      sql ("INSERT INTO tag_resources"
-           "  (tag, resource_type, resource, resource_uuid, resource_location)"
-           " SELECT"
-           "   %llu, resource_type, resource, resource_uuid, resource_location"
-           " FROM tag_resources_trash WHERE tag = %llu;",
-           restored_tag, resource);
-
-      sql ("DELETE FROM tag_resources_trash WHERE tag = %llu",
-           resource);
-
-      permissions_set_locations ("tag", resource, restored_tag,
-                                 LOCATION_TABLE);
-
-      sql ("DELETE FROM tags_trash WHERE id = %llu;", resource);
-      sql_commit ();
-      return 0;
-    }
-
   /* Target. */
 
   if (find_trash ("target", id, &resource))

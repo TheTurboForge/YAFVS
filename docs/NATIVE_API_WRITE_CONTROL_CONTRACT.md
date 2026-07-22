@@ -58,29 +58,28 @@ Before any scope write route is implemented, the contract must state:
 Scope-report generation is a separate native report-generation workflow. It
 was deliberately implemented after the first scope metadata-write slice.
 
-## Second Candidate: Tag Metadata And Explicit Active-Resource Assignment
+## Native Tag Lifecycle And Assignment
 
-The next approved direct write-control slice is tag metadata plus explicit
-native-safe active-resource assignment:
+The native tag contract owns the supported operator lifecycle:
 
-- `POST /api/v1/tags` creates tag metadata for a supported resource type without
-  assigning resources.
-- `PATCH /api/v1/tags/{tag_id}` updates only name, comment, value, and active
-  state.
-- `DELETE /api/v1/tags/{tag_id}` deletes only tags with zero assigned
-  resources.
-- `POST /api/v1/tags/{tag_id}/resources` adds or removes explicit UUID resource
-  assignments for the tag's existing resource type, only for native-safe
-  active-table resource types.
-- Filter-based bulk assignment, set/replace semantics, security-information
-  resource mutation, resource-type patching, clone/copy, export, trash behavior,
-  credentials, users, reports, and results remain inherited until those
-  semantics receive a separate contract.
+- `POST /api/v1/tags` creates tag metadata with an optional bounded explicit
+  resource-id set.
+- `PATCH /api/v1/tags/{tag_id}` updates metadata and can atomically replace the
+  resource type and assignment set.
+- `DELETE /api/v1/tags/{tag_id}` moves a supported live tag and its assignments
+  to trash.
+- Native clone, restore, trash hard-delete, metadata export, and explicit
+  add/remove/set assignment endpoints complete the supported lifecycle.
+- Browser all-filtered assignment uses closed, resource-specific native
+  selectors with a confirmed match count instead of raw manager filter
+  expressions.
 
-This slice is intentionally not full inherited `create_tag`/`modify_tag` parity;
-it is a bounded metadata and explicit active-resource assignment surface that
-does not accept filter terms or opaque GMP/XML mutation semantics and rejects
-deletion while a tag still has assigned resources.
+The raw gvmd/GMP `CREATE_TAG` (including copy-on-create), `MODIFY_TAG`, and
+`DELETE_TAG` paths are retired, as is the tag-specific branch of generic GMP
+`RESTORE`. Generic `RESTORE` remains available only as separately classified
+compatibility behavior for other resource families. Unsupported tag resource
+types and unbounded raw filter expressions fail closed; they do not fall back
+to the legacy manager.
 
 ### First-Slice Scope Write Semantics
 

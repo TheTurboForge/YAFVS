@@ -79,25 +79,27 @@ asset/security-info lists including Hosts, TLS Certificates, Operating Systems,
 Scanners, Scan Configs, Filters, Tags, and Overrides, NVT
 detail Information fields, and every scope-report evidence tab through the authenticated same-origin
 `gsad` proxy defined in `docs/NATIVE_API_AUTH_BOUNDARY.md`.
-NVT detail Information fields now read native catalog metadata through the
-authenticated `gsad` proxy while inherited GMP context still owns preferences,
-User Tags, override creation/list context, export, selector/config expansion,
-feed-control, scanner-control, and write semantics.
+NVT detail Information fields now read native catalog metadata and active User
+Tags through the authenticated `gsad` proxy. Tag assignment uses the separate
+native tag contract; inherited GMP context still owns preferences, override
+creation/list context, export, selector/config expansion, feed-control,
+scanner-control, and other NVT actions.
 Operating System detail Information fields now read native metadata through the
-authenticated `gsad` proxy while inherited GMP context still owns retained
-actions and tag writes/actions. Active OS User Tags are included in the native
-detail payload.
+authenticated `gsad` proxy, including active OS User Tags. Tag assignment uses
+the separate native tag contract; inherited GMP context still owns retained
+non-tag actions.
 Host detail Information fields now read native metadata through the authenticated
 `gsad` proxy while direct host metadata export reuses the same read-only detail
-JSON for scriptable operator reads. Inherited GMP context still owns writes, XML export, target
-creation, delete identifier, tag writes/actions, and GMP-only `details=1`
-behavior. The native metadata uses `hosts.uuid`, bounded safe identifier/source
+JSON for scriptable operator reads. Tag assignment uses the separate native tag
+contract. Inherited GMP context still owns other writes, XML export, target
+creation, delete identifier, and GMP-only `details=1` behavior. The native metadata uses `hosts.uuid`, bounded safe identifier/source
 metadata, host OS associations, latest whitelisted host details, and active host
 User Tags.
 TLS Certificate detail Information fields, active User Tags, validity/trust
 status, and source provenance now read native metadata through the authenticated
-`gsad` proxy while inherited GMP context still owns certificate download bytes,
-legacy export, delete, tag writes/actions, and retained actions. Direct TLS
+`gsad` proxy. Tag assignment uses the separate native tag contract; inherited
+GMP context still owns certificate download bytes, legacy export, delete, and
+retained non-tag actions. Direct TLS
 certificate metadata export reuses the same read-only detail JSON. The native detail
 remains read-only metadata/source provenance and intentionally excludes stored
 certificate bytes and file-transfer semantics.
@@ -255,8 +257,11 @@ inherited. Tag list/detail metadata reads are browser-proxied, including
 resource type/count, active state, and value; tag assigned-resource expansion is
 browser-proxied only for read-only strict-whitelist id/type/name references;
 tag metadata export and supported create, modify, clone, enable/disable,
-trash, restore, hard-delete, and assignment writes are native. Unsupported raw
-resource types and gvmd raw mutation compatibility remain inherited. Scan-config list reads are browser-proxied,
+trash, restore, hard-delete, and assignment writes are native. The raw
+gvmd/GMP tag create, copy-on-create, modify, delete, and tag-specific generic
+restore paths are retired; unsupported resource types and unbounded raw filter
+expressions fail closed. Generic GMP restore for other resource families is a
+separate retained compatibility path. Scan-config list reads are browser-proxied,
 and scan-config metadata
 detail exists for internal automation; rich detail tabs, scanner/NVT
 preferences, selector/family expansion, import/export, and writes remain

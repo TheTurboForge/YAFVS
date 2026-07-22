@@ -331,11 +331,12 @@ Native operating-system asset rows include the `oss.uuid` identity, CPE/name,
 title, latest/highest/average host severity, current best-OS host count, all
 associated host count, and timestamps from gvmd/PostgreSQL asset tables. The
 detail endpoint returns the same bounded metadata plus active User Tags for one
-OS asset by UUID; delete, export, tag writes/actions, and other asset writes
-remain inherited until native write semantics are designed.
+OS asset by UUID. Tag assignment uses the separate native tag contract; delete,
+legacy XML export, and other OS asset writes remain inherited until native write
+semantics are designed.
 Direct scriptable `GET /api/v1/operating-systems/{os_id}/export` returns the
 same native detail JSON for metadata export; it does not replace legacy OS
-asset export/delete/tag-action behavior.
+asset export/delete behavior.
 
 Native host asset detail rows use the `hosts.uuid` identity and return the
 existing host asset summary plus bounded safe metadata from `host_identifiers`,
@@ -344,8 +345,8 @@ existing host asset summary plus bounded safe metadata from `host_identifiers`,
 and canonicalizes UUID path IDs before parameterized PostgreSQL queries. It also
 returns active User Tags attached directly to the host. Native write-control
 can create manual IP hosts, patch host comments, and hard-delete operator-owned
-hosts. The detail surface intentionally excludes delete-identifier behavior,
-XML export, target creation from host, tag writes/actions,
+hosts. Tag assignment uses the separate native tag contract. The detail surface
+intentionally excludes delete-identifier behavior, XML export, target creation from host,
 credential/privacy-sensitive identifiers, raw `report_host_details` expansion,
 report/result/port/application history, GMP-only `details=1` semantics, and
 all other writes.
@@ -360,12 +361,12 @@ gvmd/PostgreSQL asset tables. The detail endpoint returns the same bounded
 metadata plus active User Tags, inherited-style validity/trust status, and
 source provenance rows with source UUIDs, timestamps, TLS version metadata,
 locations, resolved host asset IDs when available, and origins. It intentionally
-excludes stored certificate bytes, export/delete behavior, tag writes/actions,
-and other asset writes until native write and file-transfer semantics are
-designed.
+excludes stored certificate bytes, export/delete behavior, and other asset
+writes until native write and file-transfer semantics are designed. Tag
+assignment uses the separate native tag contract.
 Direct scriptable `GET /api/v1/tls-certificates/{certificate_id}/export`
 returns the same native detail JSON for metadata export; it does not replace
-legacy certificate byte export/download or delete/tag-action behavior.
+legacy certificate byte export/download or delete behavior.
 
 Native saved filter rows include filter identity, type, term, timestamps, and
 alert backlink references. Filter terms can reveal operator search logic,
@@ -379,8 +380,11 @@ operator boundary. Native assigned-resource expansion is limited to read-only
 strict-whitelist references for the current tag detail Assigned Items tab.
 Tag metadata export and the supported create, modify, clone, enable/disable,
 trash, restore, hard-delete, and explicit or typed-filter assignment lifecycles
-are native. Unsupported raw resource types and gvmd raw mutation compatibility
-remain inherited and separately classified.
+are native. The raw gvmd/GMP tag create, copy-on-create, modify, delete, and
+tag-specific generic restore paths are retired. Unsupported resource types and
+unbounded raw filter expressions are rejected rather than delegated to the
+legacy manager; generic GMP restore for other resource families remains a
+separate compatibility concern.
 
 Native scan-config rows include config identity, owner, comment, family/NVT
 counts, growth flags, predefined/deprecated state, in-use state, and
@@ -444,8 +448,8 @@ target/scanner references and tag locations, preserves `allow_insecure`, and
 returns only redacted credential metadata. Credential hard-delete blocks trash
 target/scanner/alert-delivery references and deletes opaque secret rows without
 selecting, returning, or logging their values. All supported browser restore
-operations are therefore native and the generic GSA/gsad GMP restore bridge is
-removed. Only task permanent delete retains declared browser/GMP compatibility
+operations are therefore native; the generic GSA/gsad GMP restore bridge is removed.
+Only task permanent delete retains declared browser/GMP compatibility
 while that native owner remains incomplete. Individual
 report-format restore and permanent delete are deliberately unavailable: gvmd
 has no retained command handler, and restoring a row could reintroduce a
@@ -515,9 +519,10 @@ helpers to stitch raw XML report payloads together client-side.
 result row plus result description and NVT explanatory fields for the existing
 Information view. The GSA result detail page tries this native detail first and
 falls back to inherited GMP when the native read fails. The native detail does
-not replace inherited result export/action behavior, result-tag mutation, or
-still-unmigrated rich detail surfaces. Effective override display and override
-create/mutation workflows use the native override contract.
+not replace inherited result export/action behavior or still-unmigrated rich
+detail surfaces. Result-tag mutation uses the separate native tag assignment
+contract; it does not fall back to raw GMP. Effective override display and
+override create/mutation workflows use the native override contract.
 `runtime-report-export --json` and the raw report Results tab now read native
 raw-report detail/result-row endpoints, then write or render their familiar
 JSON/table views. The

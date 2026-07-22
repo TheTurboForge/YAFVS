@@ -42,7 +42,6 @@ command_t gmp_commands[]
     {"CREATE_REPORT_FORMAT", "Create a report format."},
     {"CREATE_SCOPE", "Create a reporting scope."},
     {"CREATE_SCANNER", "Create a scanner."},
-    {"CREATE_TAG", "Create a tag."},
     {"CREATE_TARGET", "Create a target."},
     {"CREATE_TASK", "Create a task."},
     {"CREATE_TLS_CERTIFICATE", "Create a TLS certificate."},
@@ -59,7 +58,6 @@ command_t gmp_commands[]
     {"DELETE_SCOPE", "Delete a reporting scope."},
     {"DELETE_SCANNER", "Delete a scanner."},
     {"DELETE_SCHEDULE", "Delete a schedule."},
-    {"DELETE_TAG", "Delete a tag."},
     {"DELETE_TARGET", "Delete a target."},
     {"DELETE_TASK", "Delete a task."},
     {"DELETE_TLS_CERTIFICATE", "Delete a TLS certificate."},
@@ -100,7 +98,6 @@ command_t gmp_commands[]
     {"MODIFY_SCOPE", "Modify a reporting scope."},
     {"MODIFY_SCANNER", "Modify an existing scanner."},
     {"MODIFY_SETTING", "Modify an existing setting."},
-    {"MODIFY_TAG", "Modify an existing tag."},
     {"MODIFY_TARGET", "Modify an existing target."},
     {"MODIFY_TASK", "Update an existing task."},
     {"MODIFY_TLS_CERTIFICATE", "Modify an existing TLS certificate."},
@@ -120,10 +117,13 @@ command_t gmp_commands[]
 static const char *native_acl_operations[] = {
   "CREATE_ALERT",
   "CREATE_SCHEDULE",
+  "CREATE_TAG",
+  "DELETE_TAG",
   "GET_FILTERS",
   "GET_REPORT_FORMATS",
   "GET_TAGS",
   "MODIFY_SCHEDULE",
+  "MODIFY_TAG",
   NULL
 };
 

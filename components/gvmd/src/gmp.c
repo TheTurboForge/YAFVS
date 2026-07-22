@@ -577,40 +577,6 @@ create_target_data_reset (create_target_data_t *data)
 }
 
 /**
- * @brief Command data for the create_tag command.
- */
-typedef struct
-{
-  char *active;           ///< Whether the tag is active.
-  array_t *resource_ids;  ///< IDs of the resource to which to attach the tag.
-  char *resource_type;    ///< Type of the resource to which to attach the tag.
-  char *resources_filter; ///< Filter used to select resources.
-  char *comment;          ///< Comment to add to the tag.
-  char *name;             ///< Name of the tag.
-  char *value;            ///< Value of the tag.
-  char *copy;             ///< UUID of resource to copy.
-} create_tag_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-create_tag_data_reset (create_tag_data_t *data)
-{
-  free (data->active);
-  array_free (data->resource_ids);
-  free (data->resource_type);
-  free (data->resources_filter);
-  free (data->comment);
-  free (data->name);
-  free (data->value);
-  free (data->copy);
-  memset (data, 0, sizeof (create_tag_data_t));
-}
-
-/**
  * @brief Command data for the create_task command.
  */
 typedef struct
@@ -837,28 +803,6 @@ delete_schedule_data_reset (delete_schedule_data_t *data)
   free (data->schedule_id);
 
   memset (data, 0, sizeof (delete_schedule_data_t));
-}
-
-/**
- * @brief Command data for the delete_tag command.
- */
-typedef struct
-{
-  char *tag_id;      ///< ID of tag to delete.
-  int ultimate;      ///< Boolean.  Whether to remove entirely or to trashcan.
-} delete_tag_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-delete_tag_data_reset (delete_tag_data_t *data)
-{
-  free (data->tag_id);
-
-  memset (data, 0, sizeof (delete_tag_data_t));
 }
 
 /**
@@ -1552,44 +1496,6 @@ modify_user_data_reset (modify_user_data_t * data)
 }
 
 /**
- * @brief Command data for the modify_tag command.
- */
-typedef struct
-{
-  char *tag_id;           ///< UUID of the tag.
-  char *active;           ///< Whether the tag is active.
-  array_t *resource_ids;  ///< IDs of the resource to which to attach the tag.
-  char *resource_type;    ///< Type of the resource to which to attach the tag.
-  char *resources_action; ///< Resources edit action, e.g. "remove" or "add".
-  char *resources_filter; ///< Filter used to select resources.
-  char *comment;          ///< Comment to add to the tag.
-  char *name;             ///< Name of the tag.
-  char *value;            ///< Value of the tag.
-  int  resource_count;    ///< Number of attach tags.
-} modify_tag_data_t;
-
-/**
- * @brief Reset command data.
- *
- * @param[in]  data  Command data.
- */
-static void
-modify_tag_data_reset (modify_tag_data_t *data)
-{
-  free (data->tag_id);
-  free (data->active);
-  array_free (data->resource_ids);
-  free (data->resource_type);
-  free (data->resources_action);
-  free (data->resources_filter);
-  free (data->comment);
-  free (data->name);
-  free (data->value);
-
-  memset (data, 0, sizeof (modify_tag_data_t));
-}
-
-/**
  * @brief Command data for the modify_setting command.
  */
 typedef struct
@@ -1958,7 +1864,6 @@ typedef union
 {
   create_asset_data_t create_asset;                   ///< create_asset
   create_credential_data_t create_credential;         ///< create_credential
-  create_tag_data_t create_tag;                       ///< create_tag
   create_target_data_t create_target;                 ///< create_target
   create_task_data_t create_task;                     ///< create_task
   create_user_data_t create_user;                     ///< create_user
@@ -1968,7 +1873,6 @@ typedef union
   delete_alert_data_t delete_alert;                   ///< delete_alert
   delete_report_data_t delete_report;                 ///< delete_report
   delete_schedule_data_t delete_schedule;             ///< delete_schedule
-  delete_tag_data_t delete_tag;                       ///< delete_tag
   delete_target_data_t delete_target;                 ///< delete_target
   delete_task_data_t delete_task;                     ///< delete_task
   delete_user_data_t delete_user;                     ///< delete_user
@@ -1997,7 +1901,6 @@ typedef union
   modify_config_data_t modify_config;                 ///< modify_config
   modify_credential_data_t modify_credential;         ///< modify_credential
   modify_setting_data_t modify_setting;               ///< modify_setting
-  modify_tag_data_t modify_tag;                       ///< modify_tag
   modify_target_data_t modify_target;                 ///< modify_target
   modify_task_data_t modify_task;                     ///< modify_task
   modify_user_data_t modify_user;                     ///< modify_user
@@ -2040,12 +1943,6 @@ static create_asset_data_t *create_asset_data
  */
 static create_credential_data_t *create_credential_data
  = (create_credential_data_t*) &(command_data.create_credential);
-
-/**
- * @brief Parser callback data for CREATE_TAG.
- */
-static create_tag_data_t *create_tag_data
- = (create_tag_data_t*) &(command_data.create_tag);
 
 /**
  * @brief Parser callback data for CREATE_TARGET.
@@ -2101,12 +1998,6 @@ static delete_report_data_t *delete_report_data
  */
 static delete_schedule_data_t *delete_schedule_data
  = (delete_schedule_data_t*) &(command_data.delete_schedule);
-
-/**
- * @brief Parser callback data for DELETE_TAG.
- */
-static delete_tag_data_t *delete_tag_data
- = (delete_tag_data_t*) &(command_data.delete_tag);
 
 /**
  * @brief Parser callback data for DELETE_TARGET.
@@ -2271,12 +2162,6 @@ static modify_setting_data_t *modify_setting_data
  = &(command_data.modify_setting);
 
 /**
- * @brief Parser callback data for MODIFY_TAG.
- */
-static modify_tag_data_t *modify_tag_data
- = (modify_tag_data_t*) &(command_data.modify_tag);
-
-/**
  * @brief Parser callback data for MODIFY_TARGET.
  */
 static modify_target_data_t *modify_target_data
@@ -2401,15 +2286,6 @@ typedef enum
   CLIENT_CREATE_CREDENTIAL_PRIVACY_PASSWORD,
   CLIENT_CREATE_CREDENTIAL_REALM,
   CLIENT_CREATE_CREDENTIAL_TYPE,
-  CLIENT_CREATE_TAG,
-  CLIENT_CREATE_TAG_ACTIVE,
-  CLIENT_CREATE_TAG_COMMENT,
-  CLIENT_CREATE_TAG_COPY,
-  CLIENT_CREATE_TAG_NAME,
-  CLIENT_CREATE_TAG_RESOURCES,
-  CLIENT_CREATE_TAG_RESOURCES_RESOURCE,
-  CLIENT_CREATE_TAG_RESOURCES_TYPE,
-  CLIENT_CREATE_TAG_VALUE,
   CLIENT_CREATE_TARGET,
   CLIENT_CREATE_TARGET_ALIVE_TESTS,
   CLIENT_CREATE_TARGET_ALIVE_TESTS_ALIVE_TEST,
@@ -2465,7 +2341,6 @@ typedef enum
   CLIENT_DELETE_CREDENTIAL,
   CLIENT_DELETE_REPORT,
   CLIENT_DELETE_SCHEDULE,
-  CLIENT_DELETE_TAG,
   CLIENT_DELETE_TARGET,
   CLIENT_DELETE_TASK,
   CLIENT_DELETE_TLS_CERTIFICATE,
@@ -2526,14 +2401,6 @@ typedef enum
   CLIENT_MODIFY_SETTING,
   CLIENT_MODIFY_SETTING_NAME,
   CLIENT_MODIFY_SETTING_VALUE,
-  CLIENT_MODIFY_TAG,
-  CLIENT_MODIFY_TAG_ACTIVE,
-  CLIENT_MODIFY_TAG_COMMENT,
-  CLIENT_MODIFY_TAG_NAME,
-  CLIENT_MODIFY_TAG_RESOURCES,
-  CLIENT_MODIFY_TAG_RESOURCES_RESOURCE,
-  CLIENT_MODIFY_TAG_RESOURCES_TYPE,
-  CLIENT_MODIFY_TAG_VALUE,
   CLIENT_MODIFY_TARGET,
   CLIENT_MODIFY_TARGET_ALIVE_TESTS,
   CLIENT_MODIFY_TARGET_ALIVE_TESTS_ALIVE_TEST,
@@ -2772,11 +2639,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             gvm_append_string (&create_credential_data->name, "");
             set_client_state (CLIENT_CREATE_CREDENTIAL);
           }
-        else if (strcasecmp ("CREATE_TAG", element_name) == 0)
-          {
-            create_tag_data->resource_ids = NULL;
-            set_client_state (CLIENT_CREATE_TAG);
-          }
         else if (strcasecmp ("CREATE_TARGET", element_name) == 0)
           {
             create_target_data->alive_tests
@@ -2862,18 +2724,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
             else
               delete_schedule_data->ultimate = 0;
             set_client_state (CLIENT_DELETE_SCHEDULE);
-          }
-        else if (strcasecmp ("DELETE_TAG", element_name) == 0)
-          {
-            const gchar* attribute;
-            append_attribute (attribute_names, attribute_values, "tag_id",
-                              &delete_tag_data->tag_id);
-            if (find_attribute (attribute_names, attribute_values,
-                                "ultimate", &attribute))
-              delete_tag_data->ultimate = strcmp (attribute, "0");
-            else
-              delete_tag_data->ultimate = 0;
-            set_client_state (CLIENT_DELETE_TAG);
           }
         else if (strcasecmp ("DELETE_TARGET", element_name) == 0)
           {
@@ -3464,13 +3314,6 @@ gmp_xml_handle_start_element (/* unused */ GMarkupParseContext* context,
                               "setting_id",
                               &modify_setting_data->setting_id);
             set_client_state (CLIENT_MODIFY_SETTING);
-          }
-        else if (strcasecmp ("MODIFY_TAG", element_name) == 0)
-          {
-            modify_tag_data->resource_ids = NULL;
-            append_attribute (attribute_names, attribute_values, "tag_id",
-                              &modify_tag_data->tag_id);
-            set_client_state (CLIENT_MODIFY_TAG);
           }
         else if (strcasecmp ("MODIFY_TARGET", element_name) == 0)
           {
@@ -12837,7 +12680,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
 
 
       CASE_DELETE (SCHEDULE, schedule, "Schedule");
-      CASE_DELETE (TAG, tag, "Tag");
       CASE_DELETE (TARGET, target, "Target");
 
       case CLIENT_DELETE_TASK:
@@ -13629,166 +13471,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
       CLOSE (CLIENT_CREATE_CREDENTIAL, REALM);
       CLOSE (CLIENT_CREATE_CREDENTIAL, TYPE);
 
-
-      case CLIENT_CREATE_TAG:
-        {
-          tag_t new_tag;
-
-          if (create_tag_data->resource_ids)
-            array_terminate (create_tag_data->resource_ids);
-
-          if (create_tag_data->copy)
-            switch (copy_tag (create_tag_data->name,
-                              create_tag_data->comment,
-                              create_tag_data->copy,
-                              &new_tag))
-              {
-                case 0:
-                  {
-                    char *uuid;
-                    uuid = tag_uuid (new_tag);
-                    SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_tag"),
-                                             uuid);
-                    log_event ("tag", "Tag", uuid, "created");
-                    free (uuid);
-                    break;
-                  }
-                case 1:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_tag",
-                                      "Tag exists already"));
-                  log_event_fail ("tag", "Tag", NULL, "created");
-                  break;
-                case 2:
-                  if (send_find_error_to_client ("create_tag", "tag",
-                                                 create_tag_data->copy,
-                                                 gmp_parser))
-                    {
-                      error_send_to_client (error);
-                      return;
-                    }
-                  log_event_fail ("tag", "Tag", NULL, "created");
-                  break;
-                case 99:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_ERROR_SYNTAX ("create_tag",
-                                      "Permission denied"));
-                  log_event_fail ("tag", "Tag", NULL, "created");
-                  break;
-                case -1:
-                default:
-                  SEND_TO_CLIENT_OR_FAIL
-                   (XML_INTERNAL_ERROR ("create_tag"));
-                  log_event_fail ("tag", "Tag", NULL, "created");
-                  break;
-              }
-          else if (create_tag_data->name == NULL)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_tag",
-                                "A NAME element is required"));
-          else if (strlen (create_tag_data->name) == 0)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_tag",
-                                "Name must be"
-                                " at least one character long"));
-          else if (create_tag_data->resource_ids == NULL)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_tag",
-                                "A RESOURCES element with TYPE element"
-                                " is required"));
-          else if (create_tag_data->resource_type == NULL)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_tag",
-                                "RESOURCES requires"
-                                " a TYPE element"));
-          else if (valid_db_resource_type (create_tag_data->resource_type) == 0
-                    && valid_subtype (create_tag_data->resource_type) == 0)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_tag",
-                                "TYPE in RESOURCES must be"
-                                " a valid resource type."));
-          else if (strcasecmp (create_tag_data->resource_type, "tag") == 0)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("create_tag",
-                                "TYPE in RESOURCES must not"
-                                " be 'tag'."));
-          else
-            {
-              gchar *error_extra = NULL;
-              switch (create_tag (create_tag_data->name,
-                                  create_tag_data->comment,
-                                  create_tag_data->value,
-                                  create_tag_data->resource_type,
-                                  create_tag_data->resource_ids,
-                                  create_tag_data->resources_filter,
-                                  create_tag_data->active,
-                                  &new_tag, &error_extra))
-                {
-                  case 0:
-                    {
-                      char *uuid;
-                      uuid = tag_uuid (new_tag);
-                      SENDF_TO_CLIENT_OR_FAIL (XML_OK_CREATED_ID ("create_tag"),
-                                               uuid);
-                      log_event ("tag", "Tag", uuid, "created");
-                      free (uuid);
-                      break;
-                    }
-                  case 1:
-                    if (send_find_error_to_client ("create_tag", "resource",
-                                                   error_extra,
-                                                   gmp_parser))
-                      {
-                        error_send_to_client (error);
-                        g_free (error_extra);
-                        return;
-                      }
-                    g_free (error_extra);
-                    log_event_fail ("tag", "Tag", NULL, "created");
-                    break;
-                  case 2:
-                    SEND_TO_CLIENT_OR_FAIL
-                      ("<create_tag_response"
-                       " status=\"" STATUS_ERROR_MISSING "\""
-                       " status_text=\"No resources found for filter\"/>");
-                    log_event_fail ("tag", "Tag", NULL, "created");
-                    break;
-                  case 3:
-                    SEND_TO_CLIENT_OR_FAIL
-                     (XML_ERROR_SYNTAX ("create_tag",
-                                        "Too many resources selected"));
-                    log_event_fail ("tag", "Tag", NULL, "created");
-                    break;
-                  case 99:
-                    SEND_TO_CLIENT_OR_FAIL
-                     (XML_ERROR_SYNTAX ("create_tag",
-                                        "Permission denied"));
-                    log_event_fail ("tag", "Tag", NULL, "created");
-                    break;
-                  case -1:
-                    SEND_TO_CLIENT_OR_FAIL
-                     (XML_INTERNAL_ERROR ("create_tag"));
-                    log_event_fail ("tag", "Tag", NULL, "created");
-                    break;
-                }
-            }
-          g_debug ("trying reset");
-          create_tag_data_reset (create_tag_data);
-          g_debug ("trying set client state");
-          set_client_state (CLIENT_AUTHENTIC);
-
-          break;
-        }
-
-      CLOSE (CLIENT_CREATE_TAG, ACTIVE);
-      CLOSE (CLIENT_CREATE_TAG, RESOURCES);
-      CLOSE (CLIENT_CREATE_TAG, COPY);
-      CLOSE (CLIENT_CREATE_TAG, COMMENT);
-      CLOSE (CLIENT_CREATE_TAG, NAME);
-      CLOSE (CLIENT_CREATE_TAG, VALUE);
-
-      CLOSE (CLIENT_CREATE_TAG_RESOURCES, TYPE);
-      CLOSE (CLIENT_CREATE_TAG_RESOURCES, RESOURCE);
 
       case CLIENT_CREATE_TARGET:
         {
@@ -14995,133 +14677,6 @@ gmp_xml_handle_end_element (/* unused */ GMarkupParseContext* context,
         break;
       CLOSE (CLIENT_MODIFY_SETTING, NAME);
       CLOSE (CLIENT_MODIFY_SETTING, VALUE);
-
-      case CLIENT_MODIFY_TAG:
-        {
-          gchar *error_extra = NULL;
-
-          if (modify_tag_data->resource_ids)
-            array_terminate (modify_tag_data->resource_ids);
-
-          if (modify_tag_data->tag_id == NULL)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("modify_tag",
-                                "A tag_id attribute is required"));
-          else if (modify_tag_data->name
-                   && strcmp(modify_tag_data->name, "") == 0)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("modify_tag",
-                                "name must be at least one"
-                                " character long or omitted completely"));
-          else if (modify_tag_data->resource_type &&
-                   valid_db_resource_type (modify_tag_data->resource_type) == 0
-                   && valid_subtype (modify_tag_data->resource_type) == 0)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("modify_tag",
-                                "TYPE in RESOURCES must be"
-                                " a valid resource type."));
-          else if (modify_tag_data->resource_type
-                   && strcasecmp (modify_tag_data->resource_type, "tag") == 0)
-            SEND_TO_CLIENT_OR_FAIL
-             (XML_ERROR_SYNTAX ("modify_tag",
-                                "TYPE in RESOURCES must not"
-                                " be 'tag'."));
-          else switch (modify_tag (modify_tag_data->tag_id,
-                                   modify_tag_data->name,
-                                   modify_tag_data->comment,
-                                   modify_tag_data->value,
-                                   modify_tag_data->resource_type,
-                                   modify_tag_data->resource_ids,
-                                   modify_tag_data->resources_filter,
-                                   modify_tag_data->resources_action,
-                                   modify_tag_data->active,
-                                   &error_extra))
-            {
-              case 0:
-                SENDF_TO_CLIENT_OR_FAIL (XML_OK ("modify_tag"));
-                log_event ("tag", "Tag", modify_tag_data->tag_id,
-                           "modified");
-                break;
-              case 1:
-                if (send_find_error_to_client ("modify_tag", "tag",
-                                               modify_tag_data->tag_id,
-                                               gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    return;
-                  }
-                log_event_fail ("tag", "Tag", modify_tag_data->tag_id,
-                                "modified");
-                break;
-              case 2:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_tag",
-                                    "A tag_id is required"));
-                log_event_fail ("tag", "Tag", modify_tag_data->tag_id,
-                                "modified");
-                break;
-              case 3:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_tag",
-                                    "RESOURCES action must be"
-                                    " 'add', 'set', 'remove'"
-                                    " or empty."));
-                log_event_fail ("tag", "Tag", modify_tag_data->tag_id,
-                                "modified");
-                break;
-              case 4:
-                if (send_find_error_to_client ("modify_tag", "resource",
-                                                error_extra,
-                                                gmp_parser))
-                  {
-                    error_send_to_client (error);
-                    g_free (error_extra);
-                    return;
-                  }
-                g_free (error_extra);
-                log_event_fail ("tag", "Tag", NULL, "modified");
-                break;
-              case 5:
-                SEND_TO_CLIENT_OR_FAIL
-                  ("<modify_tag_response"
-                    " status=\"" STATUS_ERROR_MISSING "\""
-                    " status_text=\"No resources found for filter\"/>");
-                log_event_fail ("tag", "Tag", NULL, "modified");
-                break;
-              case 6:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_tag",
-                                    "Too many resources selected"));
-                log_event_fail ("tag", "Tag", NULL, "modified");
-                break;
-              case 99:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_ERROR_SYNTAX ("modify_tag",
-                                    "Permission denied"));
-                log_event_fail ("tag", "Tag", modify_tag_data->tag_id,
-                                "modified");
-                break;
-              default:
-                SEND_TO_CLIENT_OR_FAIL
-                 (XML_INTERNAL_ERROR ("modify_tag"));
-                log_event_fail ("tag", "Tag", modify_tag_data->tag_id,
-                                "modified");
-                break;
-            }
-
-          modify_tag_data_reset (modify_tag_data);
-          set_client_state (CLIENT_AUTHENTIC);
-          break;
-        }
-
-      CLOSE (CLIENT_MODIFY_TAG, ACTIVE);
-      CLOSE (CLIENT_MODIFY_TAG, RESOURCES);
-      CLOSE (CLIENT_MODIFY_TAG, COMMENT);
-      CLOSE (CLIENT_MODIFY_TAG, NAME);
-      CLOSE (CLIENT_MODIFY_TAG, VALUE);
-
-      CLOSE (CLIENT_MODIFY_TAG_RESOURCES, RESOURCE);
-      CLOSE (CLIENT_MODIFY_TAG_RESOURCES, TYPE);
 
       case CLIENT_MODIFY_TARGET:
         {
@@ -16605,23 +16160,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
 
 
 
-      APPEND (CLIENT_CREATE_TAG_ACTIVE,
-              &create_tag_data->active);
-
-      APPEND (CLIENT_CREATE_TAG_RESOURCES_TYPE,
-              &create_tag_data->resource_type);
-
-      APPEND (CLIENT_CREATE_TAG_COPY,
-              &create_tag_data->copy);
-
-      APPEND (CLIENT_CREATE_TAG_COMMENT,
-              &create_tag_data->comment);
-
-      APPEND (CLIENT_CREATE_TAG_NAME,
-              &create_tag_data->name);
-
-      APPEND (CLIENT_CREATE_TAG_VALUE,
-              &create_tag_data->value);
 
 
       APPEND (CLIENT_CREATE_TARGET_EXCLUDE_HOSTS,
@@ -16752,20 +16290,6 @@ gmp_xml_handle_text (/* unused */ GMarkupParseContext* context,
 
 
 
-      APPEND (CLIENT_MODIFY_TAG_ACTIVE,
-              &modify_tag_data->active);
-
-      APPEND (CLIENT_MODIFY_TAG_RESOURCES_TYPE,
-              &modify_tag_data->resource_type);
-
-      APPEND (CLIENT_MODIFY_TAG_COMMENT,
-              &modify_tag_data->comment);
-
-      APPEND (CLIENT_MODIFY_TAG_NAME,
-              &modify_tag_data->name);
-
-      APPEND (CLIENT_MODIFY_TAG_VALUE,
-              &modify_tag_data->value);
 
 
       APPEND (CLIENT_MODIFY_TARGET_EXCLUDE_HOSTS,

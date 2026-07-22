@@ -91,6 +91,16 @@ fn dedicated_get_tags_xml_transport_is_retired_without_losing_shared_semantics()
     for retained in ["TAG_ITERATOR_FILTER_COLUMNS", "TAG_ITERATOR_COLUMNS"] {
         assert!(MANAGE_SQL_TAGS_H.contains(retained));
     }
+    for retained in ["tags_remove_resource (", "tags_set_locations ("] {
+        assert!(
+            MANAGE_SQL_TAGS.contains(retained),
+            "shared tag lifecycle helper was lost: {retained}"
+        );
+        assert!(
+            MANAGE_SQL_TAGS_H.contains(retained),
+            "shared tag lifecycle declaration was lost: {retained}"
+        );
+    }
     assert!(!MANAGE_SQL_TAGS_H.contains("TAG_ITERATOR_TRASH_COLUMNS"));
     let select_columns = inherited_function(MANAGE_SQL, "type_select_columns");
     assert!(select_columns.contains("strcasecmp (type, \"TAG\") == 0"));
@@ -100,10 +110,6 @@ fn dedicated_get_tags_xml_transport_is_retired_without_losing_shared_semantics()
     assert!(filter_columns.contains("TAG_ITERATOR_FILTER_COLUMNS"));
 
     for retained in [
-        "copy_tag (",
-        "create_tag (",
-        "modify_tag (",
-        "delete_tag (",
         "init_resource_tag_iterator (",
         "resource_tag_iterator_uuid",
         "resource_tag_iterator_name",
@@ -114,11 +120,11 @@ fn dedicated_get_tags_xml_transport_is_retired_without_losing_shared_semantics()
     ] {
         assert!(
             MANAGE_SQL_TAGS.contains(retained),
-            "shared or raw tag implementation was lost: {retained}"
+            "shared tag implementation was lost: {retained}"
         );
         assert!(
             MANAGE_TAGS_H.contains(retained),
-            "shared or raw tag declaration was lost: {retained}"
+            "shared tag declaration was lost: {retained}"
         );
     }
     for (consumer, source) in [
@@ -364,71 +370,71 @@ fn inherited_tag_schema_has_live_trash_and_resource_tables() {
 }
 
 #[test]
-fn inherited_copy_tag_copies_metadata_and_all_resource_assignments() {
-    let copy_tag = inherited_function(MANAGE_SQL_TAGS, "copy_tag");
-    for required in [
-        "copy_resource (\"tag\", name, comment, tag_id",
-        "value, resource_type, active",
-        "if (new_tag_return)",
-        "*new_tag_return = new_tag",
-        "INSERT INTO tag_resources",
-        "resource_type, resource, resource_uuid, resource_location",
-        "FROM tag_resources",
-        "WHERE tag = %llu",
-    ] {
-        assert!(copy_tag.contains(required), "copy_tag missing {required}");
-    }
-}
-
-#[test]
-fn inherited_delete_tag_has_live_trash_already_trash_and_hard_delete_paths() {
-    let delete_tag = inherited_function(MANAGE_SQL_TAGS, "delete_tag");
-    for required in [
-        "sql_begin_immediate ()",
-        "acl_user_may (\"delete_tag\")",
-        "find_tag_with_permission (tag_id, &tag, \"delete_tag\")",
-        "find_trash (\"tag\", tag_id, &tag)",
-        "if (ultimate == 0)",
-        "It's already in the trashcan.",
-        "permissions_set_orphans (\"tag\", tag, LOCATION_TRASH)",
-        "DELETE FROM tag_resources_trash WHERE tag",
-        "DELETE FROM tags_trash WHERE id",
-        "INSERT INTO tags_trash",
-        "INSERT INTO tag_resources_trash",
-        "permissions_set_locations (\"tag\"",
-        "permissions_set_orphans (\"tag\", tag, LOCATION_TABLE)",
-        "tags_remove_resource (\"tag\", tag, LOCATION_TABLE)",
-        "DELETE FROM tag_resources WHERE tag",
-        "DELETE FROM tags WHERE id",
-        "sql_commit ()",
+fn raw_gmp_tag_mutation_and_tag_specific_generic_restore_are_retired() {
+    for retired in [
+        "CLIENT_CREATE_TAG",
+        "CLIENT_DELETE_TAG",
+        "CLIENT_MODIFY_TAG",
+        "create_tag_data",
+        "delete_tag_data",
+        "modify_tag_data",
+        "strcasecmp (\"CREATE_TAG\"",
+        "strcasecmp (\"DELETE_TAG\"",
+        "strcasecmp (\"MODIFY_TAG\"",
     ] {
         assert!(
-            delete_tag.contains(required),
-            "delete_tag missing {required}"
+            !GVMD_GMP.contains(retired),
+            "raw GMP tag residue: {retired}"
         );
     }
-}
-
-#[test]
-fn inherited_modify_tag_owns_set_add_remove_and_filter_resource_semantics() {
-    let modify_tag = inherited_function(MANAGE_SQL_TAGS, "modify_tag");
-    for required in [
-        "resources_action == NULL",
-        "strcmp (resources_action, \"set\") == 0",
-        "DELETE FROM tag_resources WHERE tag = %llu",
-        "strcmp (resources_action, \"add\")",
-        "strcmp (resources_action, \"remove\")",
-        "tag_remove_resources_list",
-        "tag_add_resources_list",
-        "resources_filter && strcmp (resources_filter, \"\")",
-        "tag_remove_resources_filter",
-        "tag_add_resources_filter",
+    for retired in [
+        "\ntag_uuid (",
+        "\ncopy_tag (",
+        "\ndelete_tag (",
+        "\ncreate_tag (",
+        "\nmodify_tag (",
+        "\nfind_tag_with_permission (",
+        "\ntag_add_resource (",
+        "\ntag_add_resource_uuid (",
+        "\ntag_add_resources_list (",
+        "\ntag_add_resources_filter (",
+        "\ntag_remove_resources_list (",
+        "\ntag_remove_resources_filter (",
     ] {
         assert!(
-            modify_tag.contains(required),
-            "modify_tag missing inherited resource mutation branch {required}"
+            !MANAGE_SQL_TAGS.contains(retired),
+            "raw tag SQL writer residue: {retired}"
+        );
+        assert!(
+            !MANAGE_TAGS_H.contains(retired),
+            "raw tag writer declaration residue: {retired}"
         );
     }
+
+    for retired in ["CREATE_TAG", "DELETE_TAG", "MODIFY_TAG"] {
+        assert!(
+            !MANAGE_COMMANDS.contains(&format!("{{\"{retired}\"")),
+            "retired command remains public: {retired}"
+        );
+        assert!(
+            MANAGE_COMMANDS.contains(&format!("\"{retired}\",")),
+            "native ACL operation key was lost: {retired}"
+        );
+    }
+    for retired in ["create_tag", "delete_tag", "modify_tag"] {
+        assert!(
+            !GMP_SCHEMA.contains(&format!("<name>{retired}</name>")),
+            "retired live schema command remains: {retired}"
+        );
+    }
+    assert!(GMP_SCHEMA.contains("CREATE_TAG, GET_TAGS, MODIFY_TAG"));
+
+    let restore = inherited_function(MANAGE_SQL, "manage_restore");
+    assert!(!restore.contains("find_trash (\"tag\""));
+    assert!(!restore.contains("FROM tags_trash"));
+    assert!(!restore.contains("FROM tag_resources_trash WHERE tag"));
+    assert!(restore.contains("find_trash (\"target\""));
+    assert!(MANAGE_COMMANDS.contains("{\"RESTORE\""));
 }
 
 #[test]
@@ -516,7 +522,9 @@ fn openapi_tag_contract_replaces_filter_and_resource_type_tail() {
             .contains("x-yafvs-replaces: tag-metadata-resource-type-and-atomic-assignment-write")
     );
     assert!(patch_block.contains("typed collection selectors"));
-    assert!(!patch_block.contains("raw filter expressions"));
+    assert!(patch_block.contains("raw manager filter expressions"));
+    assert!(patch_block.contains("Raw GMP tag modification is retired"));
+    assert!(!patch_block.contains("remain inherited"));
     let clone_block = openapi_path_block("/tags/{tag_id}/clone");
     assert!(clone_block.contains("x-yafvs-replaces: tag-clone"));
     assert!(clone_block.contains("x-yafvs-safety-contract: write-control-v1"));
